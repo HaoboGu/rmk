@@ -21,8 +21,9 @@ use {
 
 use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use crate::combo::Combo;
+use crate::config::{Hand, KeyInfo};
 use crate::descriptor::KeyboardReport;
-use crate::event::{KeyboardEvent, KeyboardEventPos};
+use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::input_device::Runnable;
@@ -363,9 +364,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_key_action(&mut self, key_action: &KeyAction, event: KeyboardEvent, is_combo: bool) -> LoopState {
         // When pressing a morse key, check flow tap first.
         if event.pressed
-            && self.keymap.borrow().behavior.tap_hold.enable_hrm
+            && self.keymap.borrow().behavior.morse.enable_flow_tap
             && key_action.is_morse()
-            && self.last_press_time.elapsed() < self.keymap.borrow().behavior.tap_hold.prior_idle_time
+            && self.last_press_time.elapsed() < self.keymap.borrow().behavior.morse.prior_idle_time
         {
             // It's in key streak, trigger the first tap action
             debug!("Flow tap detected, trigger tap action for current morse key");
@@ -377,7 +378,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             self.process_key_action_normal(action, event).await;
             // Push back after triggered press
             let now = Instant::now();
-            let time_out = now + Self::morse_timeout(&self.keymap.borrow().behavior, key_action);
+            let time_out = now + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, key_action, true);
             self.held_buffer.push(HeldKey::new(
                 event,
                 *key_action,
@@ -411,7 +412,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 debug!("Current key is buffered, return LoopState::Queue");
                 let press_time = Instant::now();
                 let timeout_time = if key_action.is_morse() {
-                    press_time + Self::morse_timeout(&self.keymap.borrow().behavior, key_action)
+                    press_time + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, key_action, true)
                 } else {
                     press_time
                 };
@@ -622,6 +623,28 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         (keyboard_state_updated, decision_for_current_key)
     }
 
+    fn get_hand(key_info: &Option<[[KeyInfo; COL]; ROW]>, pos: KeyPos) -> Hand {
+        key_info
+            .map(|info| info[pos.row as usize][pos.col as usize].hand)
+            .unwrap_or_else(|| {
+                if COL >= ROW {
+                    // Horizontal
+                    if pos.col < (COL as u8 / 2) {
+                        Hand::Left
+                    } else {
+                        Hand::Right
+                    }
+                } else {
+                    // Vertical
+                    if pos.row < (ROW as u8 / 2) {
+                        Hand::Left
+                    } else {
+                        Hand::Right
+                    }
+                }
+            })
+    }
+
     /// Make decisions for current key and each held key.
     ///
     /// This function iterates all held keys and makes decision for them if a special mode is triggered, such as permissive hold, etc.
@@ -672,14 +695,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                 // The remaining keys are not same as the current key, check only morse keys
                 if held_key.event.pos != event.pos && held_key.action.is_morse() {
-                    let (tap_hold_mode, unilateral_tap) =
-                        Self::tap_hold_mode(&self.keymap.borrow().behavior, &held_key.action);
+                    let mode =
+                        Self::tap_hold_mode(&self.keymap.borrow().behavior, held_key.event.pos, &held_key.action);
 
                     if event.pressed {
                         // The current key is being pressed
 
                         // Check morse key mode
-                        match tap_hold_mode {
+                        match mode {
                             MorseMode::PermissiveHold => {
                                 // Permissive hold mode checks key releases, so push current key press into buffer.
                                 decision_for_current_key = KeyBehaviorDecision::Buffer;
@@ -692,25 +715,39 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 let _ = decisions.push((held_key.event.pos, HeldKeyDecision::HoldOnOtherKeyPress));
                                 decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
                             }
-                            _ => (),
+                            _ => {}
                         }
                     } else {
+                        let unilateral_tap = Self::is_unilateral_tap_enabled(
+                            &self.keymap.borrow().behavior,
+                            held_key.event.pos,
+                            &held_key.action,
+                        );
+
                         // 1. Check unilateral tap of held key
                         // Note: `decision for current key == Release` means that current held key is pressed AFTER the current releasing key,
                         // releasing a key should not trigger unilateral tap of keys which are pressed AFTER the released key
                         if unilateral_tap
                             && event.pos != held_key.event.pos
                             && decision_for_current_key != KeyBehaviorDecision::Release
-                            && event.pos.is_same_hand::<ROW, COL>(held_key.event.pos)
+                            && let KeyboardEventPos::Key(pos1) = held_key.event.pos
+                            && let KeyboardEventPos::Key(pos2) = event.pos
                         {
-                            debug!("Unilateral tap triggered, resolve morse key as tapping");
-                            let _ = decisions.push((held_key.event.pos, HeldKeyDecision::UnilateralTap));
-                            continue;
+                            let key_info = &self.keymap.borrow().behavior.key_info;
+
+                            let hand1 = Self::get_hand(key_info, pos1);
+                            let hand2 = Self::get_hand(key_info, pos2);
+
+                            if hand1 == hand2 && hand1 != Hand::Unknown {
+                                //if same hand
+                                debug!("Unilateral tap triggered, resolve morse key as tapping");
+                                let _ = decisions.push((held_key.event.pos, HeldKeyDecision::UnilateralTap));
+                                continue;
+                            }
                         }
 
                         // The current key is being released, check only the held key in permissive hold mode
-                        if decision_for_current_key != KeyBehaviorDecision::Release
-                            && tap_hold_mode == MorseMode::PermissiveHold
+                        if decision_for_current_key != KeyBehaviorDecision::Release && mode == MorseMode::PermissiveHold
                         {
                             debug!("Permissive hold!");
                             // Check first current releasing key is in the buffer, AND after the current key
@@ -2191,8 +2228,8 @@ mod test {
         }
     }
 
-    fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'static, 5, 14, 2> {
-        static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
+    fn create_test_keyboard_with_config(config: BehaviorConfig<5, 14>) -> Keyboard<'static, 5, 14, 2> {
+        static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig<5, 14>> = static_cell::StaticCell::new();
         let behavior_config = BEHAVIOR_CONFIG.init(config);
 
         // Box::leak is acceptable in tests

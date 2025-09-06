@@ -2,6 +2,7 @@ use heapless::Vec;
 use rmk_types::action::Action;
 
 use crate::MAX_PATTERNS_PER_KEY;
+use crate::config::MorseProfile;
 
 /// MorsePattern is a sequence of maximum 15 taps or holds that can be encoded into an u16:
 /// 0x1 when empty, then 0 for tap or 1 for hold shifted from the right
@@ -71,34 +72,39 @@ impl MorsePattern {
 /// The maximum number of taps is limited to 15 by the internal u16 representation of MorsePattern.
 /// There is a lists of (pattern, corresponding action) pairs for each morse key:
 /// The number of pairs is limited by MAX_PATTERNS_PER_KEY, which is a const generic parameter.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Morse {
-    /// The timeout time for each operation in milliseconds
-    pub timeout_ms: u16,
-    /// The decision mode of the morse key
-    pub mode: MorseMode,
-    /// If the unilateral tap is enabled
-    pub unilateral_tap: bool,
+    /// The profile of this morse key, which defines the timing parameters, etc.
+    /// if some of its fields are filled with None, the positional override given in KeyInfo,
+    /// or the defaults given in MorsesConfig will be used instead.
+    pub profile: MorseProfile,
     /// The list of pattern -> action pairs, which can be triggered
     pub actions: Vec<(MorsePattern, Action), MAX_PATTERNS_PER_KEY>,
-    //TODO: introduce settings to set gap and hold timeout separately
 }
 
 impl Default for Morse {
     fn default() -> Self {
         Self {
-            timeout_ms: 250,
-            mode: MorseMode::HoldOnOtherPress,
-            unilateral_tap: false,
+            profile: MorseProfile::default(),
             actions: Vec::default(),
         }
     }
 }
 
 impl Morse {
-    pub fn new_from_vial(tap: Action, hold: Action, hold_after_tap: Action, double_tap: Action, timeout: u16) -> Self {
-        let mut result = Self::default();
+    pub fn new_from_vial(
+        tap: Action,
+        hold: Action,
+        hold_after_tap: Action,
+        double_tap: Action,
+        profile: MorseProfile,
+    ) -> Self {
+        let mut result = Self {
+            profile: profile,
+            ..Default::default()
+        };
+
         if tap != Action::No {
             _ = result.actions.push((TAP, tap));
         }
@@ -111,7 +117,6 @@ impl Morse {
         if hold_after_tap != Action::No {
             _ = result.actions.push((HOLD_AFTER_TAP, hold_after_tap));
         }
-        result.timeout_ms = timeout;
         result
     }
 
@@ -120,11 +125,13 @@ impl Morse {
     pub fn new_with_actions(
         tap_actions: Vec<Action, MAX_PATTERNS_PER_KEY>,
         hold_actions: Vec<Action, MAX_PATTERNS_PER_KEY>,
-        timeout: u16,
+        profile: MorseProfile,
     ) -> Self {
         assert!(MAX_PATTERNS_PER_KEY >= 4, "MAX_PATTERNS_PER_KEY must be at least 4");
-        let mut result = Self::default();
-        result.timeout_ms = timeout;
+        let mut result = Self {
+            profile: profile,
+            ..Default::default()
+        };
 
         let mut pattern = 0b1u16;
         for item in tap_actions.iter() {
@@ -149,21 +156,22 @@ impl Morse {
         max_length
     }
 
-    /// Checks all stored patterns if more than one continuation found for the given pattern, none, otherwise the unique completion
+    /// Checks all stored patterns if more than one continuation found for the given pattern, None,
+    /// otherwise the unique completion
     pub fn try_predict_final_action(&self, pattern_start: MorsePattern) -> Option<Action> {
-        let mut first: Option<&Action> = None;
-        // Check whether current pattern matches an output Action
-        // If not, don't do prediction
+        // Check whether current pattern matches any of the legal patterns
+        // If not, return early
         if self.actions.iter().find(|&a| a.0 == pattern_start).is_none() {
-            return None;
+            return None; //the user made a mistake while entering the pattern
         }
 
+        let mut first: Option<&Action> = None;
         for pair in self.actions.iter() {
             // If pair.pattern starts with the given pattern_start
             if pair.0.starts_with(pattern_start) {
                 if let Some(action) = first {
                     if *action != pair.1 {
-                        return None;
+                        return None; //the solution is not unique, so must wait for possible continuation
                     }
                 } else {
                     first = Some(&pair.1);
@@ -171,14 +179,7 @@ impl Morse {
             }
         }
 
-        if let Some(action) = first {
-            Some(*action)
-        } else {
-            // if first is None here, that means: the user made a mistake while entering the pattern
-            // We could use error correction heuristics when the pattern is finished with idle
-            // (return the action of the least distance pattern)?
-            None
-        }
+        first.copied()
     }
 
     pub fn get(&self, pattern: MorsePattern) -> Option<Action> {
@@ -220,13 +221,14 @@ impl Morse {
 /// Mode for morse key behavior
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[repr(u8)]
 pub enum MorseMode {
-    /// Normal mode, the decision is made when timeout
-    Normal,
     /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
     /// When another key is pressed and released during the current morse key is held,
     /// the hold action of current morse key will be triggered
     PermissiveHold,
     /// Trigger hold immediately if any other non-morse key is pressed when the current morse key is held
     HoldOnOtherPress,
+    /// Normal mode, the decision is made when timeout
+    Normal,
 }

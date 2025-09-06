@@ -2,7 +2,7 @@ pub mod common;
 
 use embassy_time::Duration;
 use rmk::combo::Combo;
-use rmk::config::{BehaviorConfig, CombosConfig, TapHoldConfig};
+use rmk::config::{BehaviorConfig, CombosConfig, MorseProfile, MorsesConfig};
 use rmk::k;
 use rmk::keyboard::Keyboard;
 use rmk::morse::MorseMode;
@@ -16,26 +16,34 @@ use crate::common::{KC_LGUI, KC_LSHIFT};
 
 fn create_hold_on_other_key_press_keyboard() -> Keyboard<'static, 1, 5, 2> {
     create_simple_morse_keyboard(BehaviorConfig {
-        tap_hold: TapHoldConfig {
-            enable_hrm: false,
-            mode: MorseMode::HoldOnOtherPress,
-            unilateral_tap: false,
-            ..TapHoldConfig::default()
+        morse: MorsesConfig {
+            enable_flow_tap: false,
+            default_profile: MorseProfile::new(
+                Some(false),
+                Some(MorseMode::HoldOnOtherPress),
+                Some(250u16),
+                Some(250u16),
+            ),
+            ..Default::default()
         },
-        ..BehaviorConfig::default()
+        ..Default::default()
     })
 }
 
 fn create_hold_on_other_key_press_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
-    let combo_key = KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT)); //TODO TapHoldMode::HoldOnOtherPress, false
-    let combo_key_2 = KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI)); //TODO TapHoldMode::HoldOnOtherPress, false
-    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1)); //TODO TapHoldMode::HoldOnOtherPress, false
+    let combo_key = KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT));
+    let combo_key_2 = KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI));
+    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1));
     create_simple_morse_keyboard(BehaviorConfig {
-        tap_hold: TapHoldConfig {
-            enable_hrm: false,
-            mode: MorseMode::HoldOnOtherPress,
-            unilateral_tap: false,
-            ..TapHoldConfig::default()
+        morse: MorsesConfig {
+            enable_flow_tap: false,
+            default_profile: MorseProfile::new(
+                Some(false),
+                Some(MorseMode::HoldOnOtherPress),
+                Some(250u16),
+                Some(250u16),
+            ),
+            ..MorsesConfig::default()
         },
         combo: CombosConfig {
             combos: heapless::Vec::from_iter([

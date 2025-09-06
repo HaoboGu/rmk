@@ -878,24 +878,6 @@ impl KeyCode {
         KeyCode::No <= self && self <= KeyCode::RGui
     }
 
-    /// Returns `true` if the keycode is on the home row of qwerty layout
-    pub fn is_home_row(self) -> bool {
-        match self {
-            KeyCode::A
-            | KeyCode::S
-            | KeyCode::D
-            | KeyCode::F
-            | KeyCode::G
-            | KeyCode::H
-            | KeyCode::J
-            | KeyCode::K
-            | KeyCode::L
-            | KeyCode::Semicolon
-            | KeyCode::Quote => true,
-            _ => false,
-        }
-    }
-
     /// Returns `true` if the keycode is a letter
     pub fn is_letter(self) -> bool {
         KeyCode::A <= self && self <= KeyCode::Z
