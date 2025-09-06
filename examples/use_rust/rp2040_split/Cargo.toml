@@ -11,14 +11,14 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = ["split", "rp2040_bl"] }
-embassy-time = { version = "0.4", features = ["defmt"] }
-embassy-rp = { version = "0.7", features = [
+embassy-time = { version = "0.5", features = ["defmt"] }
+embassy-rp = { version = "0.8", features = [
     "rp2040",
     "defmt",
     "time-driver",
     "critical-section-impl",
 ] }
-embassy-executor = { version = "0.8", features = [
+embassy-executor = { version = "0.9", features = [
     "defmt",
     "arch-cortex-m",
     "executor-thread",
@@ -30,9 +30,6 @@ defmt = "1.0"
 defmt-rtt = "1.0"
 panic-probe = { version = "1.0", features = ["print-defmt"] }
 static_cell = "2"
-
-[patch.crates-io]
-embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 
 
 # [features]
