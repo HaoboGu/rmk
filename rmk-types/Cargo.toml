@@ -20,7 +20,13 @@ strum = { version = "0.27", default-features = false, features = ["derive"] }
 bitfield-struct = "0.11"
 
 [features]
+default = ["per_key_profile"] #TODO remove per_key_profile from defaults
+## If you want to customize each tap hold (TH LT MT) key's profile separately (the positional configuration in matrix map is not enough)
+## then you may enable this feature - Warning: it will increase the RAM usage of the keymaps with ROW*COL*LAYER_NUM*32bits
+per_key_profile = []
+
 defmt = [
     "dep:defmt",
     "postcard/defmt",
 ]
+

@@ -26,3 +26,9 @@ pest_derive = "2.8"
 
 [lib]
 proc-macro = true
+
+[features]
+default = ["per_key_profile"] #TODO remove per_key_profile from defaults
+## If you want to customize each tap hold (TH LT MT) key's profile separately (the positional configuration in matrix map is not enough)
+## then you may enable this feature - Warning: it will increase the RAM usage of the keymaps with ROW*COL*LAYER_NUM*32bits
+per_key_profile = []

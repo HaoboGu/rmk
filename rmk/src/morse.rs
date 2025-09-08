@@ -1,8 +1,7 @@
 use heapless::Vec;
-use rmk_types::action::Action;
+use rmk_types::action::{Action, MorseProfile};
 
 use crate::MAX_PATTERNS_PER_KEY;
-use crate::config::MorseProfile;
 
 /// MorsePattern is a sequence of maximum 15 taps or holds that can be encoded into an u16:
 /// 0x1 when empty, then 0 for tap or 1 for hold shifted from the right
@@ -216,19 +215,4 @@ impl Morse {
             }
         }
     }
-}
-
-/// Mode for morse key behavior
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[repr(u8)]
-pub enum MorseMode {
-    /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
-    /// When another key is pressed and released during the current morse key is held,
-    /// the hold action of current morse key will be triggered
-    PermissiveHold,
-    /// Trigger hold immediately if any other non-morse key is pressed when the current morse key is held
-    HoldOnOtherPress,
-    /// Normal mode, the decision is made when timeout
-    Normal,
 }

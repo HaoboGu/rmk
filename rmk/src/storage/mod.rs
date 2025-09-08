@@ -10,7 +10,7 @@ use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
-use rmk_types::action::{EncoderAction, KeyAction};
+use rmk_types::action::{EncoderAction, KeyAction, MorseProfile};
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
 use rmk_types::mouse_button::MouseButtons;
@@ -26,7 +26,7 @@ use {
 
 use crate::channel::FLASH_CHANNEL;
 use crate::combo::Combo;
-use crate::config::{self, MorseProfile, StorageConfig};
+use crate::config::{self, StorageConfig};
 use crate::fork::{Fork, StateBits};
 use crate::morse::{Morse, MorsePattern};
 #[cfg(all(feature = "_ble", feature = "split"))]
@@ -1631,13 +1631,12 @@ macro_rules! read_storage {
 
 #[cfg(test)]
 mod tests {
-    use rmk_types::action::Action;
+    use rmk_types::action::{Action, MorseMode, MorseProfile};
     use rmk_types::keycode::KeyCode;
     use sequential_storage::map::Value;
 
     use super::*;
-    use crate::config::MorseProfile;
-    use crate::morse::{HOLD, MorseMode, TAP};
+    use crate::morse::{HOLD, TAP};
 
     #[test]
     fn test_morse_serialization_deserialization() {

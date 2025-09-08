@@ -7,10 +7,11 @@ pub use ble_config::BleBatteryConfig;
 use embassy_time::Duration;
 use heapless::Vec;
 use macro_config::KeyboardMacrosConfig;
+use rmk_types::action::{MorseMode, MorseProfile};
 
 use crate::combo::Combo;
 use crate::fork::Fork;
-use crate::morse::{Morse, MorseMode};
+use crate::morse::Morse;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MORSE_MAX_NUM};
 
 /// Internal configurations for RMK keyboard.
@@ -85,135 +86,6 @@ impl Default for MorsesConfig {
             default_profile: MorseProfile::new(Some(false), Some(MorseMode::Normal), Some(250u16), Some(250u16)),
             morses: Vec::new(),
         }
-    }
-}
-
-/// Configuration for morse, tap dance and tap-hold
-/// to save some RAM space, manually packed into 32 bits
-#[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct MorseProfile(u32);
-
-impl MorseProfile {
-    /// If the previous key is on the same "hand", the current key will be determined as a tap
-    pub fn unilateral_tap(self) -> Option<bool> {
-        match self.0 & 0x0000_C000 {
-            0x0000_C000 => Some(true),
-            0x0000_8000 => Some(false),
-            _ => None,
-        }
-    }
-    pub fn with_unilateral_tap(self, b: Option<bool>) -> Self {
-        Self(
-            (self.0 & 0xFFFF_3FFF)
-                | match b {
-                    Some(true) => 0x0000_C000,
-                    Some(false) => 0x0000_8000,
-                    None => 0,
-                },
-        )
-    }
-
-    /// The decision mode of the morse/tap-hold key
-    /// - If neither of them is set, the decision is made when timeout
-    /// - If permissive_hold is set, same as QMK's permissive hold:
-    ///   When another key is pressed and released while the current morse key is held,
-    ///   the hold action of current morse key will be triggered
-    ///   https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
-    /// - if hold_on_other_press is set - triggers hold immediately if any other non-morse
-    ///   key is pressed while the current morse key is held    
-    pub fn mode(self) -> Option<MorseMode> {
-        match self.0 & 0xC000_0000 {
-            0xC000_0000 => Some(MorseMode::Normal),
-            0x8000_0000 => Some(MorseMode::HoldOnOtherPress),
-            0x4000_0000 => Some(MorseMode::PermissiveHold),
-            _ => None,
-        }
-    }
-    pub fn with_mode(self, m: Option<MorseMode>) -> Self {
-        Self(
-            (self.0 & 0x3FFF_FFFF)
-                | match m {
-                    Some(MorseMode::Normal) => 0xC000_0000,
-                    Some(MorseMode::HoldOnOtherPress) => 0x8000_0000,
-                    Some(MorseMode::PermissiveHold) => 0x4000_0000,
-                    None => 0,
-                },
-        )
-    }
-
-    /// If the key is pressed longer than this, it is accepted as `hold` (in milliseconds)
-    /// /// if given, should not be zero
-    pub fn hold_timeout_ms(self) -> Option<u16> {
-        // NonZero
-        let t = (self.0 & 0x3FFF) as u16;
-        if t == 0 { None } else { Some(t) }
-    }
-    pub fn with_hold_timeout_ms(self, t: Option<u16>) -> Self {
-        if let Some(t) = t {
-            Self((self.0 & 0xFFFF_C000) | (t as u32 & 0x3FFF))
-        } else {
-            Self(self.0 & 0xFFFF_C000)
-        }
-    }
-
-    /// The time elapsed from the last release of a key is longer than this, it will break the morse pattern (in milliseconds)
-    /// if given, should not be zero
-    pub fn gap_timeout_ms(self) -> Option<u16> {
-        // NonZero
-        let t = ((self.0 >> 16) & 0x3FFF) as u16;
-        if t == 0 { None } else { Some(t) }
-    }
-    pub fn with_gap_timeout_ms(self, t: Option<u16>) -> Self {
-        if let Some(t) = t {
-            Self((self.0 & 0xC000_FFFF) | ((t as u32 & 0x3FFF) << 16))
-        } else {
-            Self(self.0 & 0xC000_FFFF)
-        }
-    }
-
-    pub fn new(
-        unilateral_tap: Option<bool>,
-        mode: Option<MorseMode>,
-        hold_timeout_ms: Option<u16>,
-        gap_timeout_ms: Option<u16>,
-    ) -> Self {
-        let mut v = 0u32;
-        if let Some(t) = hold_timeout_ms {
-            //zero value also considered as None!
-            v = (t & 0x3FFF) as u32;
-        }
-
-        if let Some(t) = gap_timeout_ms {
-            //zero value also considered as None!
-            v |= ((t & 0x3FFF) as u32) << 16;
-        }
-
-        if let Some(b) = unilateral_tap {
-            v |= if b { 0x0000_C000 } else { 0x0000_8000 };
-        }
-
-        if let Some(m) = mode {
-            v |= match m {
-                MorseMode::Normal => 0xC000_0000,
-                MorseMode::HoldOnOtherPress => 0x8000_0000,
-                MorseMode::PermissiveHold => 0x4000_0000,
-            };
-        }
-
-        MorseProfile(v)
-    }
-}
-
-impl From<u32> for MorseProfile {
-    fn from(v: u32) -> Self {
-        MorseProfile(v)
-    }
-}
-
-impl Into<u32> for MorseProfile {
-    fn into(self) -> u32 {
-        self.0
     }
 }
 

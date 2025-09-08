@@ -2,10 +2,10 @@
 pub mod common;
 
 use heapless::Vec;
-use rmk::config::{BehaviorConfig, MorseProfile, MorsesConfig, PerKeyConfig};
+use rmk::config::{BehaviorConfig, MorsesConfig, PerKeyConfig};
 use rmk::keyboard::Keyboard;
-use rmk::morse::{Morse, MorseMode};
-use rmk::types::action::Action;
+use rmk::morse::Morse;
+use rmk::types::action::{Action, MorseMode, MorseProfile};
 use rmk::types::keycode::KeyCode;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{k, td};
