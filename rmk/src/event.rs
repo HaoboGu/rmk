@@ -167,6 +167,8 @@ pub enum ControllerEvent {
     SplitCentral(bool),
     /// Lock state led indicator
     KeyboardIndicator(LedIndicator),
+    /// Sleep state changed
+    Sleep(bool),
     /// Ble state changed
     #[cfg(feature = "_ble")]
     BleState(u8, crate::ble::BleState),
