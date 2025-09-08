@@ -19,10 +19,9 @@ The `matrix_map` is a string built from `(row, col, <hand> : <profile_name>)` tu
 The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](keyboard_matrix.md), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts. 
 With the help of this matrix map, the configuration of non-regular key matrices can be intuitively arranged in your key maps. (Triple quote mark `"""` is used to limit multi-line strings)
 
-The `<hand>` field is optional and used only if `enable_flow_tap = true` and `unilateral_tap = true` are set in a key's profile:
-`<hand>` is sed to associate each key to the left or right hand using the `L` or `R` values. This information is used during unilateral tap processing.
+The `<hand>` field is optional and should only be used when `unilateral_tap = true` is set in a key’s profile. By assigning `L` or `R` to `<hand>`, each key can be associated with either the left or right hand.
 
-The `<profile_name>` is also optional, if given, selects a key profile from `behavior.morse.profiles` to override the defaults set in `behavior.morse`.
+The `<profile_name>` is also optional, if given, it selects a key profile from [`behavior.morse.profiles`](behavior/#fine-tuning) to override the default settings defined in `behavior.morse`. For defining a key profile, please refer to [behavior](behavior/#fine-tuning) doc
 
 ```toml
 # split ortho example for matrix map, with L/R hand information filled and home row, thumb keys have profile names:
@@ -40,10 +39,10 @@ matrix_map = """
 # default profile for morse, tap dance and tap-hold keys:
 [behavior.morse]
 enable_flow_tap = true, 
-prior_idle_time = "120ms", 
-hold_on_other_press = true, 
-hold_timeout = "250ms", 
-gap_timeout = "250ms" }
+prior_idle_time = "120ms"
+hold_on_other_press = true 
+hold_timeout = "250ms"
+gap_timeout = "250ms"
 
 [behavior.morse.profiles]
 # matrix_map may refer these to override the defaults given in [behavior.morse] for some key positions by referring these profiles by their name
