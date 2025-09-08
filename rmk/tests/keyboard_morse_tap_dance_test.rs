@@ -2,9 +2,9 @@
 pub mod common;
 
 use heapless::Vec;
-use rmk::config::{BehaviorConfig, MorsesConfig};
+use rmk::config::{BehaviorConfig, MorseProfile, MorsesConfig};
 use rmk::keyboard::Keyboard;
-use rmk::morse::Morse;
+use rmk::morse::{Morse, MorseMode};
 use rmk::types::action::Action;
 use rmk::types::keycode::KeyCode;
 use rmk::types::modifier::ModifierCombination;
@@ -21,35 +21,43 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
 
     let behavior_config = BehaviorConfig {
         morse: MorsesConfig {
+            enable_flow_tap: false,
+            default_profile: MorseProfile::new(
+                Some(false),
+                Some(MorseMode::HoldOnOtherPress),
+                Some(250u16),
+                Some(250u16),
+            ),
             morses: Vec::from_slice(&[
                 Morse::new_from_vial(
                     Action::Key(KeyCode::A),
                     Action::Key(KeyCode::B),
                     Action::Key(KeyCode::C),
                     Action::Key(KeyCode::D),
-                    250,
+                    MorseProfile::default(),
                 ),
                 Morse::new_from_vial(
                     Action::Key(KeyCode::X),
                     Action::Key(KeyCode::Y),
                     Action::Key(KeyCode::Z),
                     Action::Key(KeyCode::Space),
-                    250,
+                    MorseProfile::default(),
                 ),
                 Morse::new_from_vial(
                     Action::Key(KeyCode::Kp1),
                     Action::Modifier(ModifierCombination::LSHIFT),
                     Action::Key(KeyCode::Kp2),
                     Action::Modifier(ModifierCombination::LGUI),
-                    250,
+                    MorseProfile::default(),
                 ),
             ])
             .unwrap(),
+            ..Default::default()
         },
         ..Default::default()
     };
 
-    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
+    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig<1, 4>> = static_cell::StaticCell::new();
     let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
     Keyboard::new(wrap_keymap(keymap, behavior_config))
 }

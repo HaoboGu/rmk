@@ -12,13 +12,13 @@ mod macro_test {
     use crate::common::{KC_LSHIFT, wrap_keymap};
     use crate::{kc_to_u8, key_sequence_test};
 
-    fn create_simple_macro_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'static, 1, 2, 1> {
+    fn create_simple_macro_keyboard(behavior_config: BehaviorConfig<1, 2>) -> Keyboard<'static, 1, 2, 1> {
         let keymap = [[[
             KeyAction::Single(Action::Key(KeyCode::Macro0)),
             KeyAction::Single(Action::Key(KeyCode::Macro1)),
         ]]];
-        static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
-        let behavior_config: &'static mut BehaviorConfig = BEHAVIOR_CONFIG.init(behavior_config);
+        static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig<1, 2>> = static_cell::StaticCell::new();
+        let behavior_config: &'static mut BehaviorConfig<1, 2> = BEHAVIOR_CONFIG.init(behavior_config);
         Keyboard::new(wrap_keymap(keymap, behavior_config))
     }
 
@@ -33,7 +33,7 @@ mod macro_test {
             .expect("too many elements")];
 
             let macro_data = define_macro_sequences(macro_sequences);
-            let mut config = BehaviorConfig::default();
+            let mut config = BehaviorConfig::<1, 2>::default();
             config.keyboard_macros.macro_sequences = macro_data;
 
             let keyboard = create_simple_macro_keyboard(config);
@@ -56,7 +56,7 @@ mod macro_test {
             let macro_sequences = &[to_macro_sequence("AbCd123456")];
 
             let macro_data = define_macro_sequences(macro_sequences);
-            let mut config = BehaviorConfig::default();
+            let mut config = BehaviorConfig::<1, 2>::default();
             config.keyboard_macros.macro_sequences = macro_data;
 
             let keyboard = create_simple_macro_keyboard(config);
@@ -101,7 +101,7 @@ mod macro_test {
             let macro_sequences = &[Vec::from_slice(&[MacroOperation::Tap(KeyCode::A)]).expect("too many elements")];
 
             let macro_data = define_macro_sequences(macro_sequences);
-            let mut config = BehaviorConfig::default();
+            let mut config = BehaviorConfig::<1, 2>::default();
             config.keyboard_macros.macro_sequences = macro_data;
 
             let keyboard = create_simple_macro_keyboard(config);
@@ -130,7 +130,7 @@ mod macro_test {
             .expect("too many elements")];
 
             let macro_data = define_macro_sequences(macro_sequences);
-            let mut config = BehaviorConfig::default();
+            let mut config = BehaviorConfig::<1, 2>::default();
             config.keyboard_macros.macro_sequences = macro_data;
 
             let keyboard = create_simple_macro_keyboard(config);
@@ -162,7 +162,7 @@ mod macro_test {
             .expect("too many elements")];
 
             let macro_data = define_macro_sequences(macro_sequences);
-            let mut config = BehaviorConfig::default();
+            let mut config = BehaviorConfig::<1, 2>::default();
             config.keyboard_macros.macro_sequences = macro_data;
 
             let keyboard = create_simple_macro_keyboard(config);

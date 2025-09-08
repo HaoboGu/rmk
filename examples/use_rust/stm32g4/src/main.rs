@@ -51,7 +51,7 @@ async fn main(_spawner: Spawner) {
 
     // Initialize the keymap
     let mut default_keymap = keymap::get_default_keymap();
-    let mut behavior_config = BehaviorConfig::default();
+    let mut behavior_config = BehaviorConfig::<{ ROW }, { COL }>::default();
     // let storage_config = StorageConfig::default();
 
     let keymap = initialize_keymap(&mut default_keymap, &mut behavior_config).await;

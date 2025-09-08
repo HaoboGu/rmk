@@ -9,7 +9,7 @@ use rmk::{k, lt, mt, td};
 
 use crate::common::wrap_keymap;
 
-pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'static, 1, 5, 2> {
+pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig<1, 5>) -> Keyboard<'static, 1, 5, 2> {
     let keymap = [
         [[
             k!(A),
@@ -39,11 +39,12 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard
     let behavior_config = BehaviorConfig {
         morse: MorsesConfig {
             morses: Vec::from_slice(&[morse0]).unwrap(),
+            ..behavior_config.morse
         },
         ..behavior_config
     };
 
-    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
+    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig<1, 5>> = static_cell::StaticCell::new();
     let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
     Keyboard::new(wrap_keymap(keymap, behavior_config))
 }
