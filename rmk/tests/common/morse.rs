@@ -1,5 +1,5 @@
 use heapless::Vec;
-use rmk::config::{BehaviorConfig, MorsesConfig};
+use rmk::config::{BehaviorConfig, KeyInfo, MorsesConfig};
 use rmk::keyboard::Keyboard;
 use rmk::morse::{Morse, MorsePattern};
 use rmk::types::action::Action;
@@ -9,7 +9,10 @@ use rmk::{k, lt, mt, td};
 
 use crate::common::wrap_keymap;
 
-pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig<1, 5>) -> Keyboard<'static, 1, 5, 2> {
+pub fn create_simple_morse_keyboard(
+    behavior_config: BehaviorConfig,
+    key_info: Option<[[KeyInfo; 5]; 1]>,
+) -> Keyboard<'static, 1, 5, 2> {
     let keymap = [
         [[
             k!(A),
@@ -44,7 +47,9 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig<1, 5>) -> Ke
         ..behavior_config
     };
 
-    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig<1, 5>> = static_cell::StaticCell::new();
+    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
     let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
-    Keyboard::new(wrap_keymap(keymap, behavior_config))
+    static KEY_INFO: static_cell::StaticCell<Option<[[KeyInfo; 5]; 1]>> = static_cell::StaticCell::new();
+    let key_info = KEY_INFO.init(key_info);
+    Keyboard::new(wrap_keymap(keymap, key_info, behavior_config))
 }

@@ -15,46 +15,52 @@ use crate::common::morse::create_simple_morse_keyboard;
 use crate::common::{KC_LGUI, KC_LSHIFT};
 
 fn create_hold_on_other_key_press_keyboard() -> Keyboard<'static, 1, 5, 2> {
-    create_simple_morse_keyboard(BehaviorConfig {
-        morse: MorsesConfig {
-            enable_flow_tap: false,
-            default_profile: MorseProfile::new(
-                Some(false),
-                Some(MorseMode::HoldOnOtherPress),
-                Some(250u16),
-                Some(250u16),
-            ),
+    create_simple_morse_keyboard(
+        BehaviorConfig {
+            morse: MorsesConfig {
+                enable_flow_tap: false,
+                default_profile: MorseProfile::new(
+                    Some(false),
+                    Some(MorseMode::HoldOnOtherPress),
+                    Some(250u16),
+                    Some(250u16),
+                ),
+                ..Default::default()
+            },
             ..Default::default()
         },
-        ..Default::default()
-    })
+        None,
+    )
 }
 
 fn create_hold_on_other_key_press_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
     let combo_key = KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT));
     let combo_key_2 = KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI));
     let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1));
-    create_simple_morse_keyboard(BehaviorConfig {
-        morse: MorsesConfig {
-            enable_flow_tap: false,
-            default_profile: MorseProfile::new(
-                Some(false),
-                Some(MorseMode::HoldOnOtherPress),
-                Some(250u16),
-                Some(250u16),
-            ),
-            ..MorsesConfig::default()
+    create_simple_morse_keyboard(
+        BehaviorConfig {
+            morse: MorsesConfig {
+                enable_flow_tap: false,
+                default_profile: MorseProfile::new(
+                    Some(false),
+                    Some(MorseMode::HoldOnOtherPress),
+                    Some(250u16),
+                    Some(250u16),
+                ),
+                ..MorsesConfig::default()
+            },
+            combo: CombosConfig {
+                combos: heapless::Vec::from_iter([
+                    Combo::new([combo_key, combo_key_2], k!(X), None),
+                    Combo::new([k!(A), combo_key], k!(Y), None),
+                    Combo::new([combo_key, combo_key_2, combo_key_3], k!(Z), None),
+                ]),
+                timeout: Duration::from_millis(50),
+            },
+            ..BehaviorConfig::default()
         },
-        combo: CombosConfig {
-            combos: heapless::Vec::from_iter([
-                Combo::new([combo_key, combo_key_2], k!(X), None),
-                Combo::new([k!(A), combo_key], k!(Y), None),
-                Combo::new([combo_key, combo_key_2, combo_key_3], k!(Z), None),
-            ]),
-            timeout: Duration::from_millis(50),
-        },
-        ..BehaviorConfig::default()
-    })
+        None,
+    )
 }
 
 rusty_fork_test! {

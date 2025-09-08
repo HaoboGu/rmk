@@ -13,6 +13,7 @@ fn one_shot_config_with_short_timeout() -> OneShotConfig {
 mod one_shot_test {
     use std::cell::RefCell;
 
+    use rmk::config::KeyInfo;
     use rmk::keyboard::Keyboard;
     use rmk::keymap::KeyMap;
     use rmk::types::action::KeyAction;
@@ -44,20 +45,24 @@ mod one_shot_test {
     ];
 
     fn create_test_keyboard() -> Keyboard<'static, 1, 6, 2> {
-        static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig<1, 6>> = static_cell::StaticCell::new();
+        static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
         let behavior_config = BEHAVIOR_CONFIG.init(BehaviorConfig::default());
-        let keymap: &RefCell<KeyMap<1, 6, 2>> = wrap_keymap(KEYMAP, behavior_config);
+        static KEY_INFO: static_cell::StaticCell<Option<[[KeyInfo; 6]; 1]>> = static_cell::StaticCell::new();
+        let key_info = KEY_INFO.init(None);
+        let keymap: &RefCell<KeyMap<1, 6, 2>> = wrap_keymap(KEYMAP, key_info, behavior_config);
         Keyboard::new(keymap)
     }
 
     /// Create test keyboard with short timeout
     fn create_test_keyboard_with_short_timeout() -> Keyboard<'static, 1, 6, 2> {
-        static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig<1, 6>> = static_cell::StaticCell::new();
+        static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
         let behavior_config = BEHAVIOR_CONFIG.init(BehaviorConfig {
             one_shot: one_shot_config_with_short_timeout(),
             ..BehaviorConfig::default()
         });
-        let keymap: &RefCell<KeyMap<1, 6, 2>> = wrap_keymap(KEYMAP, behavior_config);
+        static KEY_INFO: static_cell::StaticCell<Option<[[KeyInfo; 6]; 1]>> = static_cell::StaticCell::new();
+        let key_info = KEY_INFO.init(None);
+        let keymap: &RefCell<KeyMap<1, 6, 2>> = wrap_keymap(KEYMAP, key_info, behavior_config);
         Keyboard::new(keymap)
     }
 

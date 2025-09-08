@@ -39,7 +39,7 @@ impl Default for Hand {
 
 /// Config for configurable action behavior
 #[derive(Debug, Default)]
-pub struct BehaviorConfig<const ROW_NUM: usize, const COL_NUM: usize> {
+pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap: TapConfig,
     pub one_shot: OneShotConfig,
@@ -48,7 +48,6 @@ pub struct BehaviorConfig<const ROW_NUM: usize, const COL_NUM: usize> {
     pub morse: MorsesConfig,
     pub keyboard_macros: KeyboardMacrosConfig,
     pub mouse_key: MouseKeyConfig,
-    pub key_info: Option<[[KeyInfo; COL_NUM]; ROW_NUM]>,
 }
 
 /// Configurations for morse behavior
