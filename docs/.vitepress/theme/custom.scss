@@ -160,8 +160,8 @@
             margin-top: 0;
             border-top-right-radius: calc(24 / 16 * var(--default));
             border-bottom-right-radius: calc(24 / 16 * var(--default));
-            padding: calc(4 / 16 * var(--default)) calc(12 / 16 * var(--default))
-              calc(4 / 16 * var(--default)) calc(8 / 16 * var(--default));
+            padding: calc(4 / 16 * var(--default)) calc(12 / 16 * var(--default)) calc(4 / 16 * var(--default))
+              calc(8 / 16 * var(--default));
           }
           .indicator {
             top: 0;
@@ -301,7 +301,7 @@
               padding: 0;
               .text {
                 font-size: calc(0.875 * var(--default));
-                span[class^='vpi-'] {
+                span[class^="vpi-"] {
                   width: calc(1 * var(--default));
                   height: calc(1 * var(--default));
                 }
@@ -347,7 +347,7 @@
             .icon {
               width: calc(1.125 * var(--default));
               height: calc(1.125 * var(--default));
-              [class^='vpi-'] {
+              [class^="vpi-"] {
                 top: calc(3 / 16 * var(--default));
                 left: calc(3 / 16 * var(--default));
                 width: calc(0.75 * var(--default));
@@ -368,7 +368,7 @@
             width: calc(2.25 * var(--default));
             height: calc(2.25 * var(--default));
             > svg,
-            > [class^='vpi-social-'] {
+            > [class^="vpi-social-"] {
               width: calc(1.25 * var(--default));
               height: calc(1.25 * var(--default));
             }
@@ -467,8 +467,8 @@
                       margin-top: calc(0.5 * var(--default));
                     }
                     input {
-                      margin: calc(3 / 16 * var(--default)) calc(0.5 * var(--default))
-                        calc(3 / 16 * var(--default)) calc(0.25 * var(--default));
+                      margin: calc(3 / 16 * var(--default)) calc(0.5 * var(--default)) calc(3 / 16 * var(--default))
+                        calc(0.25 * var(--default));
                       width: calc(13 / 16 * var(--default));
                       height: calc(13 / 16 * var(--default));
                     }
@@ -564,12 +564,8 @@
                     font-size: var(--default);
                     letter-spacing: 0;
                     line-height: calc(1.75 * var(--default));
-                    img {
-                      height: calc(1.25 * var(--default));
-                      width: calc(6.5 * var(--default));
-                    }
                   }
-                  div[class*='language-'] {
+                  div[class*="language-"] {
                     border-radius: var(--default);
                     margin: var(--default) 0;
                     button.copy {
@@ -614,6 +610,24 @@
                   .badge-container {
                     gap: calc(1 / 2 * var(--default)) !important;
                     margin: var(--default) 0 !important;
+                    img {
+                      height: calc(20 / 16 * var(--default));
+                    }
+                    #crates-io {
+                      img {
+                        width: calc(102 / 16 * var(--default));
+                      }
+                    }
+                    #docs-rs {
+                      img {
+                        width: calc(86 / 16 * var(--default));
+                      }
+                    }
+                    #github-actions {
+                      img {
+                        width: calc(105 / 16 * var(--default));
+                      }
+                    }
                   }
                   .custom-block {
                     margin: var(--default) 0;
@@ -629,7 +643,7 @@
                     p {
                       padding: calc(0 * var(--default)) calc(1 * var(--default));
                     }
-                    div[class*='language-'] {
+                    div[class*="language-"] {
                       margin: calc(1 * var(--default)) calc(1 * var(--default));
                       button.copy {
                         top: calc(0.55 * var(--default));
@@ -657,8 +671,7 @@
                   .pager-link {
                     border: calc(1 / 16 * var(--default)) solid var(--vp-c-divider);
                     border-radius: calc(0.5 * var(--default));
-                    padding: calc(11 / 16 * var(--default)) var(--default)
-                      calc(13 / 16 * var(--default));
+                    padding: calc(11 / 16 * var(--default)) var(--default) calc(13 / 16 * var(--default));
                     width: 100%;
                     height: 100%;
                     transition: border-color 0.25s;

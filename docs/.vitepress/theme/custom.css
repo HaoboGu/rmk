@@ -1,10 +1,11 @@
 /* 覆盖默认变量 */
 :root {
   --vp-c-brand-1: #ff8800;
-  --vp-c-brand-2: #ff9e33;
-  --vp-c-brand-3: #ffb666;
-  --vp-c-brand-4-bg: #fff2e3;
-  --vp-code-color: #ff8800;
+  --vp-c-brand-2: #ffa14d;
+  --vp-c-brand-3: #ffc999;
+  --vp-c-brand-4-bg: #fff2e699;
+
+  --vp-code-color:var(--vp-c-brand-1);
 
   --vp-c-text-1: #212529;
   --vp-c-text-2: #343a40;
@@ -37,10 +38,10 @@
 /* 暗黑模式 */
 
 .dark {
-  --vp-c-brand-1: #da9d41;
-  --vp-c-brand-2: #ffca7a;
+  --vp-c-brand-1: #ff9900;
+  --vp-c-brand-2: #e68a00;
   --vp-c-brand-3: #da9d41;
-  --vp-c-brand-4-bg: #473a28;
+  --vp-c-brand-4-bg: #473a2899;
 
   --vp-c-text-1: #d7d7d7;
   --vp-c-text-2: #919191;
@@ -242,6 +243,7 @@ aside:hover {
 /* color */
 /* item：hover */
 .VPSidebarItem .item:hover {
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   background-color: var(--vp-sidebar-bg-2);
   .text {
     font-weight: 500;
@@ -250,6 +252,7 @@ aside:hover {
 }
 /* item:pick */
 .VPSidebarItem .item:active {
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   background-color: var(--vp-sidebar-bg-3);
   .text {
     font-weight: 500;
