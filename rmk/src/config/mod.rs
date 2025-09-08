@@ -232,6 +232,17 @@ pub struct KeyInfo {
     pub morse_profile_override: MorseProfile,
 }
 
+#[derive(Debug, Default)]
+pub struct PerKeyConfig<const ROW: usize, const COL: usize> {
+    pub key_info: Option<[[KeyInfo; COL]; ROW]>,
+}
+
+impl<const ROW: usize, const COL: usize> PerKeyConfig<ROW, COL> {
+    pub fn new(key_info: Option<[[KeyInfo; COL]; ROW]>) -> Self {
+        Self { key_info }
+    }
+}
+
 /// Config for one shot behavior
 #[derive(Clone, Copy, Debug)]
 pub struct OneShotConfig {

@@ -2,7 +2,7 @@
 pub mod common;
 
 use heapless::Vec;
-use rmk::config::{BehaviorConfig, KeyInfo, MorseProfile, MorsesConfig};
+use rmk::config::{BehaviorConfig, MorseProfile, MorsesConfig, PerKeyConfig};
 use rmk::keyboard::Keyboard;
 use rmk::morse::{Morse, MorseMode};
 use rmk::types::action::Action;
@@ -59,9 +59,9 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
 
     static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
     let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
-    static KEY_INFO: static_cell::StaticCell<Option<[[KeyInfo; 4]; 1]>> = static_cell::StaticCell::new();
-    let key_info = KEY_INFO.init(None);
-    Keyboard::new(wrap_keymap(keymap, key_info, behavior_config))
+    static KEY_CONFIG: static_cell::StaticCell<PerKeyConfig<1, 4>> = static_cell::StaticCell::new();
+    let per_key_config = KEY_CONFIG.init(PerKeyConfig::default());
+    Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
 
 rusty_fork_test! {

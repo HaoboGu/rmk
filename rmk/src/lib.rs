@@ -63,8 +63,9 @@ pub use {embassy_futures, futures, heapless, rmk_macro as macros, rmk_types as t
 #[cfg(feature = "storage")]
 use {embassy_futures::select::select, embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 
+use crate::config::PerKeyConfig;
+use crate::keyboard::LOCK_LED_STATES;
 use crate::state::ConnectionState;
-use crate::{config::KeyInfo, keyboard::LOCK_LED_STATES};
 
 #[cfg(feature = "_ble")]
 pub mod ble;
@@ -101,7 +102,7 @@ pub mod via;
 pub async fn initialize_keymap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
     default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     behavior_config: &'a mut config::BehaviorConfig,
-    key_info: &'a mut Option<[[KeyInfo; COL]; ROW]>,
+    key_info: &'a mut PerKeyConfig<ROW, COL>,
 ) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>> {
     RefCell::new(KeyMap::new(default_keymap, None, behavior_config, key_info).await)
 }
@@ -116,7 +117,7 @@ pub async fn initialize_encoder_keymap<
     default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
     behavior_config: &'a mut config::BehaviorConfig,
-    key_info: &'a mut Option<[[KeyInfo; COL]; ROW]>,
+    key_info: &'a mut PerKeyConfig<ROW, COL>,
 ) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
     RefCell::new(KeyMap::new(default_keymap, Some(default_encoder_map), behavior_config, key_info).await)
 }
@@ -135,7 +136,7 @@ pub async fn initialize_encoder_keymap_and_storage<
     flash: F,
     storage_config: &config::StorageConfig,
     behavior_config: &'a mut config::BehaviorConfig,
-    key_info: &'a mut Option<[[KeyInfo; COL]; ROW]>,
+    key_info: &'a mut PerKeyConfig<ROW, COL>,
 ) -> (
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
@@ -174,7 +175,7 @@ pub async fn initialize_keymap_and_storage<
     flash: F,
     storage_config: &config::StorageConfig,
     behavior_config: &'a mut config::BehaviorConfig,
-    key_info: &'a mut Option<[[KeyInfo; COL]; ROW]>,
+    key_info: &'a mut PerKeyConfig<ROW, COL>,
 ) -> (
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, 0>>,
     Storage<F, ROW, COL, NUM_LAYER, 0>,

@@ -14,7 +14,7 @@ use rmk::types::keycode::KeyCode;
 use rmk::types::modifier::ModifierCombination;
 use rusty_fork::rusty_fork_test;
 
-use crate::common::morse::create_simple_morse_keyboard;
+use crate::common::morse::create_morse_keyboard;
 use crate::common::{KC_LGUI, KC_LSHIFT};
 
 fn create_hrm_keyboard() -> Keyboard<'static, 1, 5, 2> {
@@ -40,7 +40,7 @@ fn create_hrm_keyboard() -> Keyboard<'static, 1, 5, 2> {
             ..Default::default()
         },
     ]]);
-    create_simple_morse_keyboard(
+    create_morse_keyboard(
         BehaviorConfig {
             // All unknown hand, not home row
             morse: MorsesConfig {
@@ -65,7 +65,7 @@ fn create_hrm_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
     let combo_key_2 = KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI));
     let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1));
 
-    let key_info = Some([[
+    let key_info: Option<[[KeyInfo; 5]; 1]> = Some([[
         KeyInfo {
             hand: Hand::Left,
             ..Default::default()
@@ -88,7 +88,7 @@ fn create_hrm_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
         },
     ]]);
 
-    create_simple_morse_keyboard(
+    create_morse_keyboard(
         BehaviorConfig {
             //hrm = MorseMode::PermissiveHold, true
             morse: MorsesConfig {

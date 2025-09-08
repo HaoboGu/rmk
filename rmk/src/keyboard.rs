@@ -695,12 +695,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                 // The remaining keys are not same as the current key, check only morse keys
                 if held_key.event.pos != event.pos && held_key.action.is_morse() {
-                    let mode = Self::tap_hold_mode(
-                        self.keymap.borrow().behavior,
-                        self.keymap.borrow().key_info,
-                        held_key.event.pos,
-                        &held_key.action,
-                    );
+                    let mode = Self::tap_hold_mode(&self.keymap.borrow(), held_key.event.pos, &held_key.action);
 
                     if event.pressed {
                         // The current key is being pressed
@@ -723,8 +718,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         }
                     } else {
                         let unilateral_tap = Self::is_unilateral_tap_enabled(
-                            self.keymap.borrow().behavior,
-                            self.keymap.borrow().key_info,
+                            &self.keymap.borrow(),
                             held_key.event.pos,
                             &held_key.action,
                         );
@@ -738,7 +732,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             && let KeyboardEventPos::Key(pos1) = held_key.event.pos
                             && let KeyboardEventPos::Key(pos2) = event.pos
                         {
-                            let key_info = &self.keymap.borrow().key_info;
+                            let key_info = &self.keymap.borrow().key_config.key_info;
 
                             let hand1 = Self::get_hand(key_info, pos1);
                             let hand2 = Self::get_hand(key_info, pos2);
@@ -2171,7 +2165,7 @@ mod test {
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use crate::config::{BehaviorConfig, CombosConfig, ForksConfig};
+    use crate::config::{BehaviorConfig, CombosConfig, ForksConfig, PerKeyConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
     use crate::fork::Fork;
     use crate::{a, k, layer, mo, th};
@@ -2241,9 +2235,9 @@ mod test {
         let keymap = Box::new(get_keymap());
         let leaked_keymap = Box::leak(keymap);
 
-        static KEY_INFO: static_cell::StaticCell<Option<[[KeyInfo; 14]; 5]>> = static_cell::StaticCell::new();
-        let key_info = KEY_INFO.init(None);
-        let keymap = block_on(KeyMap::new(leaked_keymap, None, behavior_config, key_info));
+        static KEY_CONFIG: static_cell::StaticCell<PerKeyConfig<5, 14>> = static_cell::StaticCell::new();
+        let per_key_config = KEY_CONFIG.init(PerKeyConfig::default());
+        let keymap = block_on(KeyMap::new(leaked_keymap, None, behavior_config, per_key_config));
         let keymap_cell = RefCell::new(keymap);
         let keymap_ref = Box::leak(Box::new(keymap_cell));
 

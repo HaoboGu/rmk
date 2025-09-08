@@ -16,7 +16,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_tap() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 1, true, 10],  // Press mt!(B, LShift)
                 // Release before hold timeout
@@ -32,7 +32,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_hold() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 1, true, 10],  // Press mt!(B, LShift)
                 [0, 1, false, 300], // Release B after hold timeout
@@ -47,7 +47,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_1() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 10], // Press A
@@ -66,7 +66,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_2() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 10], // Press A
@@ -85,7 +85,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_3() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 1, true, 10], // Press mt!(B, LShift)
@@ -104,7 +104,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_4() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 1, true, 10], // Press mt!(B, LShift)
@@ -123,7 +123,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_5() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 0, false, 10], // Release A
@@ -142,7 +142,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_6() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 1, false, 10], // Release mt!(B, LShift)
@@ -161,7 +161,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_timeout_1() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 10], // Press A
@@ -180,7 +180,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_timeout_2() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 10], // Press A
@@ -199,7 +199,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_timeout_3() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 1, true, 10], // Press mt!(B, LShift)
@@ -218,7 +218,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_timeout_4() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 1, true, 10], // Press mt!(B, LShift)
@@ -237,7 +237,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_timeout_5() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 0, false, 10], // Release A
@@ -256,7 +256,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_timeout_6() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 1, false, 270], // Release mt!(B, LShift)
@@ -275,7 +275,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_timeout_7() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 1, true, 10], // Press mt!(B, LShift)
@@ -294,7 +294,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_timeout_8() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 10], // Press A
@@ -313,7 +313,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_timeout_9() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 260], // Press A
@@ -332,7 +332,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_mt_timeout_10() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 260], // Press A
@@ -351,7 +351,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_1() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 3, true, 10], // Press lt!(1, D)
                 [0, 0, true, 10], // Press A
@@ -370,7 +370,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_2() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 3, true, 10], // Press lt!(1, D)
                 [0, 0, true, 10], // Press A
@@ -389,7 +389,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_3() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 3, true, 10], // Press lt!(1, D)
@@ -408,7 +408,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_4() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 3, true, 10], // Press lt!(1, D)
@@ -427,7 +427,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_5() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 0, false, 10], // Release A
@@ -446,7 +446,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_6() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 3, true, 10], // Press lt!(1, D)
                 [0, 3, false, 10], // Release lt!(1, D)
@@ -465,7 +465,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_timeout_1() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 3, true, 10], // Press lt!(1, D)
                 [0, 0, true, 10], // Press A
@@ -482,7 +482,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_timeout_2() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 3, true, 10], // Press lt!(1, D)
                 [0, 0, true, 10], // Press A
@@ -499,7 +499,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_timeout_3() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 3, true, 10], // Press lt!(1, D)
@@ -516,7 +516,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_timeout_4() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 3, true, 10], // Press lt!(1, D)
@@ -533,7 +533,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_timeout_5() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 0, false, 10], // Release A
@@ -550,7 +550,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_timeout_6() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 3, true, 10], // Press lt!(1, D)
                 [0, 3, false, 270], // Release lt!(1, D)
@@ -567,7 +567,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_timeout_7() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 3, true, 10], // Press lt!(1, D)
@@ -584,7 +584,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_timeout_8() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 3, true, 10], // Press lt!(1, D)
                 [0, 0, true, 10], // Press A
@@ -601,7 +601,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_timeout_9() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 3, true, 10], // Press lt!(1, D)
                 [0, 0, true, 260], // Press A -> Kp1 on layer 1
@@ -618,7 +618,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_lt_timeout_10() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 3, true, 10], // Press lt!(1, D)
                 [0, 0, true, 260], // Press A -> Kp1 on layer 1
@@ -635,7 +635,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_multi_hold() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, lshift)
                 [0, 2, true, 10], // Press mt!(C, lgui)
@@ -658,7 +658,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_hold_after_last_tapping() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 1, true, 10],  // Press mt!(B, LShift)
                 [0, 1, false, 100], // Release B
@@ -677,7 +677,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_hold_after_last_tapping_timeout() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 1, true, 10],  // Press mt!(B, LShift)
                 [0, 1, false, 100], // Release B
@@ -697,7 +697,7 @@ rusty_fork_test! {
     fn test_morse_rolling() {
         // For normal mode, each morse keys are independently resolved
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 [0, 0, true, 30], // Press A
                 [0, 1, true, 10], // Press mt!(B, LShift)
@@ -737,7 +737,7 @@ rusty_fork_test! {
                         timeout: Duration::from_millis(50),
                     },
                     ..BehaviorConfig::default()
-                }, None),
+                }),
             sequence: [
                 [0, 1, true, 20],  // Press mt!(B, LShift)
                 [0, 2, true, 60],  // Press mt!(C, LGui)
@@ -769,7 +769,7 @@ rusty_fork_test! {
                         timeout: Duration::from_millis(50),
                     },
                     ..BehaviorConfig::default()
-                }, None),
+                }),
             sequence: [
                 [0, 1, true, 20],  // Press mt!(B, LShift)
                 [0, 2, true, 20],  // Press mt!(C, LGui)
@@ -786,7 +786,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_abc_c() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 //C
                 [0, 4, true, 300],
@@ -808,7 +808,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_abc_s_o_s() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 //S
                 [0, 4, true, 300],
@@ -848,7 +848,7 @@ rusty_fork_test! {
     #[test]
     fn test_morse_rmk() {
         key_sequence_test! {
-            keyboard: create_simple_morse_keyboard(BehaviorConfig::default(), None),
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 //R .-.
                 [0, 4, true, 300],

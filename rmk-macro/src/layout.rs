@@ -9,7 +9,8 @@ use rmk_config::{KEYCODE_ALIAS, KeyboardTomlConfig};
 pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
     let num_encoder = keyboard_config.get_board_config().unwrap().get_num_encoder();
     let total_num_encoder = num_encoder.iter().sum::<usize>();
-    // TODO: config encoder in keyboard.toml
+
+    // TODO: config encoder actions in keyboard.toml
     let encoders = vec![quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No))}; total_num_encoder];
 
     let (layout, _key_info) = keyboard_config.get_layout_config().unwrap();

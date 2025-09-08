@@ -7,14 +7,14 @@ use {
     crate::event::ControllerEvent,
 };
 
+use crate::COMBO_MAX_NUM;
 use crate::combo::Combo;
-use crate::config::BehaviorConfig;
+use crate::config::{BehaviorConfig, PerKeyConfig};
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
 #[cfg(feature = "matrix_tester")]
 use crate::matrix::MatrixState;
-use crate::{COMBO_MAX_NUM, config::KeyInfo};
 #[cfg(feature = "storage")]
 use crate::{boot::reboot_keyboard, storage::Storage};
 
@@ -37,7 +37,7 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     encoder_layer_cache: [[u8; 2]; NUM_ENCODER],
     /// Options for configurable action behavior
     pub(crate) behavior: &'a mut BehaviorConfig,
-    pub key_info: &'a mut Option<[[KeyInfo; COL]; ROW]>,
+    pub key_config: &'a mut PerKeyConfig<ROW, COL>,
     /// Publisher for controller channel
     #[cfg(feature = "controller")]
     controller_pub: ControllerPub,
@@ -65,7 +65,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         behavior: &'a mut BehaviorConfig,
-        key_info: &'a mut Option<[[KeyInfo; COL]; ROW]>,
+        key_info: &'a mut PerKeyConfig<ROW, COL>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
 
@@ -85,7 +85,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             layer_cache: [[0; COL]; ROW],
             encoder_layer_cache: [[0; 2]; NUM_ENCODER],
             behavior,
-            key_info,
+            key_config: key_info,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
             #[cfg(feature = "matrix_tester")]
@@ -98,7 +98,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
         behavior: &'a mut BehaviorConfig,
-        key_info: &'a mut Option<[[KeyInfo; COL]; ROW]>,
+        key_config: &'a mut PerKeyConfig<ROW, COL>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
         fill_vec(&mut behavior.combo.combos);
@@ -144,7 +144,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             layer_cache: [[0; COL]; ROW],
             encoder_layer_cache: [[0; 2]; NUM_ENCODER],
             behavior,
-            key_info,
+            key_config,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
             #[cfg(feature = "matrix_tester")]

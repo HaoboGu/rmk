@@ -428,7 +428,6 @@ pub struct BehaviorConfig {
     pub macros: Option<MacrosConfig>,
     pub fork: Option<ForksConfig>,
     pub morse: Option<MorsesConfig>,
-    pub key_info: Option<Vec<Vec<KeyInfo>>>,
 }
 
 /// Per Key configurations profiles for morse, tap-hold, etc.

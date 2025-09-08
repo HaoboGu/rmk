@@ -1,7 +1,7 @@
 use embassy_time::{Duration, Instant};
 use rmk_types::action::{Action, KeyAction};
 
-use crate::config::{BehaviorConfig, KeyInfo};
+use crate::config::BehaviorConfig;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::keyboard::Keyboard;
 use crate::keyboard::held_buffer::{HeldKey, KeyState};
@@ -206,7 +206,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         hold_timeout_needed: bool,
     ) -> Duration {
         let behavior_config = &keymap.behavior;
-        let key_info = &keymap.key_info;
+        let key_info = &keymap.key_config.key_info;
         //first: try to look for a per-key profile config
         if let KeyAction::Morse(index) = key_action
             && let Some(morse) = behavior_config.morse.morses.get(*index as usize)
@@ -253,11 +253,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Decides and returns the morse mode
     /// based on configuration for the given key action / key position
     pub fn tap_hold_mode(
-        behavior_config: &BehaviorConfig,
-        key_info: &Option<[[KeyInfo; COL]; ROW]>,
+        keymap: &KeyMap<ROW, COL, NUM_LAYER, NUM_ENCODER>,
         pos: KeyboardEventPos,
         key_action: &KeyAction,
     ) -> MorseMode {
+        let behavior_config = &keymap.behavior;
+        let key_info = &keymap.key_config.key_info;
         //first: try to look for a per-key profile config
         if let KeyAction::Morse(index) = key_action
             && let Some(morse) = behavior_config.morse.morses.get(*index as usize)
@@ -285,11 +286,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Decides and returns the morse mode
     /// based on configuration for the given key action / key position
     pub fn is_unilateral_tap_enabled(
-        behavior_config: &BehaviorConfig,
-        key_info: &Option<[[KeyInfo; COL]; ROW]>,
+        keymap: &KeyMap<ROW, COL, NUM_LAYER, NUM_ENCODER>,
         pos: KeyboardEventPos,
         key_action: &KeyAction,
     ) -> bool {
+        let behavior_config = &keymap.behavior;
+        let key_info = &keymap.key_config.key_info;
         //first: try to look for a per-key profile config
         if let KeyAction::Morse(index) = key_action
             && let Some(morse) = behavior_config.morse.morses.get(*index as usize)
