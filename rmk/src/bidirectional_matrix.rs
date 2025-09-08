@@ -80,8 +80,6 @@ impl<
                 for scan_y_idx in scan_y_start_current..self.scan_map[scan_x_idx].len() {
                     if let ScanLocation::Pins(in_idx, out_idx) = self.scan_map[scan_x_idx][scan_y_idx] {
                         let [in_pin, out_pin] = self.pins.get_disjoint_mut([in_idx, out_idx]).unwrap();
-                        // Set input pin to input.
-                        in_pin.set_as_input();
                         // Set output pin to high.
                         out_pin.set_as_output();
                         out_pin.set_high().ok();
@@ -107,6 +105,8 @@ impl<
                         }
                         // Pull output pin back to low
                         out_pin.set_low().ok();
+                        out_pin.set_as_input();
+                        Timer::after_micros(1).await;
                     }
                 }
             }
