@@ -1,7 +1,9 @@
 use embedded_hal::digital::{ErrorType, InputPin, OutputPin};
 
 #[cfg(feature = "rp2040_bl")]
-pub mod flex_pin_rp;
+pub mod rp;
+#[cfg(feature = "_nrf_ble")]
+pub mod nrf;
 
 /// Pin that can be switched between input and output.
 pub trait FlexPin: ErrorType + InputPin + OutputPin {
