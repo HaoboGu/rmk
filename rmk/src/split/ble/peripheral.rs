@@ -7,10 +7,11 @@ use trouble_host::prelude::*;
 #[cfg(feature = "storage")]
 use {super::PeerAddress, crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash};
 
+use crate::CONNECTION_STATE;
+use crate::channel::KEY_EVENT_CHANNEL;
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
-use crate::{CONNECTION_STATE, channel::KEY_EVENT_CHANNEL};
 #[cfg(feature = "controller")]
 use crate::{
     channel::{CONTROLLER_CHANNEL, send_controller_event},

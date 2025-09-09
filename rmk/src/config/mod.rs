@@ -39,7 +39,7 @@ impl Default for Hand {
 
 /// Config for configurable action behavior
 #[derive(Debug, Default)]
-pub struct BehaviorConfig<const ROW_NUM: usize, const COL_NUM: usize> {
+pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap: TapConfig,
     pub one_shot: OneShotConfig,
@@ -48,7 +48,6 @@ pub struct BehaviorConfig<const ROW_NUM: usize, const COL_NUM: usize> {
     pub morse: MorsesConfig,
     pub keyboard_macros: KeyboardMacrosConfig,
     pub mouse_key: MouseKeyConfig,
-    pub key_info: Option<[[KeyInfo; COL_NUM]; ROW_NUM]>,
 }
 
 /// Configurations for morse behavior
@@ -231,6 +230,17 @@ pub struct KeyInfo {
     pub hand: Hand,
     /// this gives possibility to override some the default MorseProfile setting in certain key positions (typically home row mods)
     pub morse_profile_override: MorseProfile,
+}
+
+#[derive(Debug, Default)]
+pub struct PerKeyConfig<const ROW: usize, const COL: usize> {
+    pub key_info: Option<[[KeyInfo; COL]; ROW]>,
+}
+
+impl<const ROW: usize, const COL: usize> PerKeyConfig<ROW, COL> {
+    pub fn new(key_info: Option<[[KeyInfo; COL]; ROW]>) -> Self {
+        Self { key_info }
+    }
 }
 
 /// Config for one shot behavior
