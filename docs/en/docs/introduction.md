@@ -20,7 +20,7 @@
 
 </div>
 
-RMK is a Rust keyboard firmware crate with lots of usable features, like layer support, dynamic keymap, vial support, BLE wireless, etc, makes firmware customization easy and accessible.
+RMK is a Rust keyboard firmware framework featuring comprehensive functionality including layer support, dynamic keymap editing, Vial integration, BLE wireless connectivity, and more. It makes keyboard firmware customization easy and accessible.
 
 The following table compares features available from RMK, Keyberon, QMK and ZMK:
 
@@ -33,7 +33,7 @@ The following table compares features available from RMK, Keyberon, QMK and ZMK:
 | Wired split support | ✅ | ✅ | ✅ |  |
 | Wireless split support | ✅ |  |  | ✅ |
 | ARM chips(STM32/nRF/RP2040) support | ✅ | ✅ | ✅ | ✅ |
-| RISC-V & Xtensa chips support | ✅ |  |  |  |
-| Mouse key | ✅ |  | ✅ | Limited |
+| Full RISC-V & Xtensa chips support | ✅ |  |  |  |
 | Keyboard configuration | toml (easy) | Rust code (hard) | json + makefile (medium) | Kconfig + devicetree(hard) |
 | Layers/Macros/Media key support | ✅ | ✅ | ✅ | ✅ |
+| Morse key support | ✅ |  |  |  |
