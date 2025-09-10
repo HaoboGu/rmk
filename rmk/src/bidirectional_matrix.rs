@@ -1,6 +1,4 @@
 use embassy_time::{Instant, Timer};
-#[cfg(feature = "async_matrix")]
-use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
 use crate::{debounce::{DebounceState, DebouncerTrait}, matrix::{KeyState, MatrixTrait}};
 use crate::event::{Event, KeyboardEvent};
@@ -14,8 +12,7 @@ pub enum ScanLocation {
 
 /// Matrix is the physical pcb layout of the keyboard matrix.
 pub struct BidirectionalMatrix<
-    #[cfg(not(feature = "async_matrix"))] Pin: FlexPin,
-    #[cfg(feature = "async_matrix")] Pin: Wait + FlexPin,
+    Pin: FlexPin,
     D: DebouncerTrait,
     const PIN_NUM: usize,
     const ROW: usize,
@@ -29,15 +26,14 @@ pub struct BidirectionalMatrix<
     key_state: [[KeyState; COL]; ROW],
     /// Start scanning
     scan_start: Option<Instant>,
-    /// Current scan pos: (out_idx, in_idx)
+    /// Current scan pos: (row_idx, col_idx)
     scan_pos: (usize, usize),
     /// Scan map
     scan_map: [[ScanLocation; COL]; ROW]
 }
 
 impl<
-    #[cfg(not(feature = "async_matrix"))] Pin: FlexPin,
-    #[cfg(feature = "async_matrix")] Pin: Wait + FlexPin,
+    Pin: FlexPin,
     D: DebouncerTrait,
     const PIN_NUM: usize,
     const ROW: usize,
@@ -58,8 +54,7 @@ impl<
 }
 
 impl<
-    #[cfg(not(feature = "async_matrix"))] Pin: FlexPin,
-    #[cfg(feature = "async_matrix")] Pin: Wait + FlexPin,
+    Pin: FlexPin,
     D: DebouncerTrait,
     const PIN_NUM: usize,
     const ROW: usize,
@@ -69,8 +64,6 @@ impl<
     async fn read_event(&mut self) -> crate::event::Event {
         loop {
             let (scan_x_start, scan_y_start) = self.scan_pos;
-            #[cfg(feature = "async_matrix")]
-            self.wait_for_key().await;
             
             // Scan following the scan map and send report
             // Loop through rows.
@@ -98,11 +91,6 @@ impl<
                             return Event::Key(KeyboardEvent::key(scan_x_idx as u8, scan_y_idx as u8, self.key_state[scan_x_idx][scan_y_idx].pressed));
                         }
                         
-                        // If there's key still pressed, always refresh the self.scan_start
-                        #[cfg(feature = "async_matrix")]
-                        if self.key_state[scan_x_idx][scan_y_idx].pressed {
-                            self.scan_start = Some(Instant::now());
-                        }
                         // Pull output pin back to low
                         out_pin.set_low().ok();
                         out_pin.set_as_input();
@@ -116,8 +104,7 @@ impl<
 }
 
 impl<
-    #[cfg(not(feature = "async_matrix"))] Pin: FlexPin,
-    #[cfg(feature = "async_matrix")] Pin: Wait + FlexPin,
+    Pin: FlexPin,
     D: DebouncerTrait,
     const PIN_NUM: usize,
     const ROW: usize,
