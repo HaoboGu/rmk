@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", default-features = false, features = ["col2row", "defmt"] }
-embassy-time = { version = "0.4", features = ["defmt"] }
+embassy-time = { version = "0.5", features = ["defmt"] }
 # py32-hal = { git = "https://github.com/py32-rs/py32-hal", rev = "3ffc9c2", features = [
 py32-hal = { version = "0.3.0", features = [
     "py32f072c1b", 
@@ -20,7 +20,7 @@ py32-hal = { version = "0.3.0", features = [
     "embassy-usb-driver-impl",
     "time-driver-tim3"
 ] }
-embassy-executor = { version = "0.8", features = [
+embassy-executor = { version = "0.9", features = [
     "defmt",
     "arch-cortex-m",
     "executor-thread",
@@ -33,8 +33,7 @@ panic-probe = { version = "1.0" }
 
 # [patch.crates-io]
 # embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
-# embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
-# 
+# # 
 
 [build-dependencies]
 xz2 = "0.1.7"
