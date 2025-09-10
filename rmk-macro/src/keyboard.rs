@@ -399,7 +399,7 @@ fn expand_key_info_row(
             let config = expand_profile_name(profile_name, profiles);
             key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, morse_profile_override: #config } });
         } else {
-            key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, morse_profile_override: ::rmk::config::MorseProfile::default() } });
+            key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, morse_profile_override: rmk::types::action::MorseProfile::default() } });
         };
     }
     quote! { [#(#key_info), *] }

@@ -125,15 +125,15 @@ fn expand_profile(profile: &MorseProfile) -> proc_macro2::TokenStream {
     let mode = if let Some(enable) = profile.permissive_hold
         && enable
     {
-        quote! { ::core::option::Option::Some(rmk::morse::MorseMode::PermissiveHold) }
+        quote! { ::core::option::Option::Some(rmk::types::action::MorseMode::PermissiveHold) }
     } else if let Some(enable) = profile.hold_on_other_press
         && enable
     {
-        quote! { ::core::option::Option::Some(rmk::morse::MorseMode::HoldOnOtherPress) }
+        quote! { ::core::option::Option::Some(rmk::types::action::MorseMode::HoldOnOtherPress) }
     } else if let Some(enable) = profile.normal_mode
         && enable
     {
-        quote! { ::core::option::Option::Some(rmk::morse::MorseMode::Normal) }
+        quote! { ::core::option::Option::Some(rmk::types::action::MorseMode::Normal) }
     } else {
         quote! { ::core::option::Option::None }
     };
@@ -160,7 +160,7 @@ fn expand_profile(profile: &MorseProfile) -> proc_macro2::TokenStream {
         None => quote! { ::core::option::Option::None },
     };
 
-    quote! { ::rmk::config::MorseProfile::new(#unilateral_tap, #mode, #hold_timeout_ms, #gap_timeout_ms) }
+    quote! { rmk::types::action::MorseProfile::new(#unilateral_tap, #mode, #hold_timeout_ms, #gap_timeout_ms) }
 }
 
 pub(crate) fn expand_profile_name(
@@ -268,7 +268,7 @@ fn expand_morses(
             let morse_profile = expand_profile_name(&profile_name, &profiles);
             quote! { #morse_profile }
         } else {
-            quote! { ::rmk::config::MorseProfile::default() }
+            quote! { rmk::types::action::MorseProfile::default() }
         };
 
         if let Some(morse_actions) = &morse.morse_actions {

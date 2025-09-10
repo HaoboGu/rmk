@@ -151,6 +151,18 @@ macro_rules! tt {
         $crate::types::action::KeyAction::TapHold(
             $crate::types::action::Action::LayerToggle($x),
             $crate::types::action::Action::LayerOn($x),
+            $crate::types::action::MorseProfile::const_default(),
+        )
+    };
+}
+/// Create a layer activate or tap toggle action with profile
+#[macro_export]
+macro_rules! ttp {
+    ($x: literal, $p: expr) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::LayerToggle($x),
+            $crate::types::action::Action::LayerOn($x),
+            $p,
         )
     };
 }
