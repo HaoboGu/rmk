@@ -242,6 +242,10 @@ Available fields (they have the same meaning as in the `[behavior.morse]` sub-ta
 
 Each key profile has an associated name, which may be referred 
 - from the layout.matrix_map (the name is case sensitive), to override the defaults in certain key positions
+- from the tap hold keys in the key map if the third optional parameter is filled: 
+    - `TH(key-tap, key-hold, <profile_name>)`, 
+    - `MT(key, modifier, <profile_name>)`,
+    - `LT(n, key, <profile_name>)`    
 - the Morse keys may also have their per key profile overrides (which is stronger than the positional override) by setting the `profile` field.
 
 The following examples are the typical default configurations:
@@ -359,6 +363,8 @@ morses = [
 HRM = { unilateral_tap = true, permissive_hold = true, hold_timeout = "250ms", gap_timeout = "250ms" }
 # for "real" morse 
 MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_timeout = "200ms" }
+# for "fast" modifiers (for example on thumb keys)
+PN = { hold_on_other_press = true, unilateral_tap = false, hold_timeout = "250ms", gap_timeout = "250ms" }
 ```
 
 ### Using Morse(Tap Dance) in Keymaps
@@ -375,8 +381,7 @@ keymap = [
         ["A", "B", "C"], 
         ["TD(0)", "TD(1)", "TD(2)"],  # Use morse dances 0, 1, and 2
         ["LCtrl", "MO(1)", "LShift"],
-        ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"]
-    ],
+        ["OSL(1)", "LT(2, Kc9, PN)", "LM(1, LShift | LGui)"]  # PN is a morse profile name here 
     [
         ["_", "TT(1)", "TG(2)"],
         ["_", "_", "_"],
