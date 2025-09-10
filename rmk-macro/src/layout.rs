@@ -364,7 +364,7 @@ pub(crate) fn parse_key(key: String, profiles: &Option<HashMap<String, MorseProf
                     let profile = expand_profile_name(keys[2], profiles);
                     quote! { ::rmk::thp!(#ident1, #ident2, #profile) }
                 } else {
-                    quote! { ::rmk::ht!(#ident1, #ident2) }
+                    quote! { ::rmk::th!(#ident1, #ident2) }
                 }
             } else {
                 panic!(
