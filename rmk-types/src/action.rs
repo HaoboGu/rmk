@@ -93,7 +93,7 @@ impl MorseProfile {
             _ => None,
         }
     }
-    pub fn with_unilateral_tap(self, b: Option<bool>) -> Self {
+    pub const fn with_unilateral_tap(self, b: Option<bool>) -> Self {
         Self(
             (self.0 & 0xFFFF_3FFF)
                 | match b {
@@ -120,7 +120,7 @@ impl MorseProfile {
             _ => None,
         }
     }
-    pub fn with_mode(self, m: Option<MorseMode>) -> Self {
+    pub const fn with_mode(self, m: Option<MorseMode>) -> Self {
         Self(
             (self.0 & 0x3FFF_FFFF)
                 | match m {
@@ -139,7 +139,7 @@ impl MorseProfile {
         let t = (self.0 & 0x3FFF) as u16;
         if t == 0 { None } else { Some(t) }
     }
-    pub fn with_hold_timeout_ms(self, t: Option<u16>) -> Self {
+    pub const fn with_hold_timeout_ms(self, t: Option<u16>) -> Self {
         if let Some(t) = t {
             Self((self.0 & 0xFFFF_C000) | (t as u32 & 0x3FFF))
         } else {
@@ -154,7 +154,7 @@ impl MorseProfile {
         let t = ((self.0 >> 16) & 0x3FFF) as u16;
         if t == 0 { None } else { Some(t) }
     }
-    pub fn with_gap_timeout_ms(self, t: Option<u16>) -> Self {
+    pub const fn with_gap_timeout_ms(self, t: Option<u16>) -> Self {
         if let Some(t) = t {
             Self((self.0 & 0xC000_FFFF) | ((t as u32 & 0x3FFF) << 16))
         } else {
@@ -162,7 +162,7 @@ impl MorseProfile {
         }
     }
 
-    pub fn new(
+    pub const fn new(
         unilateral_tap: Option<bool>,
         mode: Option<MorseMode>,
         hold_timeout_ms: Option<u16>,
@@ -255,7 +255,7 @@ impl KeyAction {
 }
 
 /// combo, fork, etc. compares key actions
-/// WARNING: this is not a perfect comparison, we ignore profile config of TapHold!
+/// WARNING: this is not a perfect comparison, we ignores the profile config of TapHold!
 impl PartialEq for KeyAction {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {

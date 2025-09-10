@@ -94,9 +94,9 @@ pub(crate) enum FlashOperationMessage {
     TapCapslockInterval(u16),
     // The prior-idle-time in ms used for in flow tap
     PriorIdleTime(u16),
-    // Timeout time for morse keys in default tap hold profile
+    // Timeout time for morse keys in default morse profile
     MorseHoldTimeout(u16),
-    // Whether the unilateral tap is enabled in default tap hold profile
+    // Whether the unilateral tap is enabled in default morse profile
     UnilateralTap(bool),
 }
 

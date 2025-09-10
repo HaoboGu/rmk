@@ -268,7 +268,7 @@ fn expand_morses(
             let morse_profile = expand_profile_name(&profile_name, &profiles);
             quote! { #morse_profile }
         } else {
-            quote! { rmk::types::action::MorseProfile::default() }
+            quote! { rmk::types::action::MorseProfile::const_default() }
         };
 
         if let Some(morse_actions) = &morse.morse_actions {

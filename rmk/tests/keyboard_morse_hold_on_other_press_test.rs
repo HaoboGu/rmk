@@ -35,6 +35,7 @@ fn create_hold_on_other_key_press_keyboard_with_combo() -> Keyboard<'static, 1, 
         Action::Key(KeyCode::B),
         Action::Modifier(ModifierCombination::LSHIFT),
         MorseProfile::new(
+            //just to test if combo ignores the profile as expected
             Some(false),
             Some(MorseMode::HoldOnOtherPress),
             Some(250u16),
@@ -44,7 +45,7 @@ fn create_hold_on_other_key_press_keyboard_with_combo() -> Keyboard<'static, 1, 
     let combo_key_2 = KeyAction::TapHold(
         Action::Key(KeyCode::C),
         Action::Modifier(ModifierCombination::LGUI),
-        MorseProfile::new(Some(false), Some(MorseMode::Normal), Some(250u16), Some(250u16)),
+        MorseProfile::new(Some(false), Some(MorseMode::Normal), Some(250u16), Some(250u16)), //just to test if combo ignores the profile as expected
     );
     let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1), Default::default());
     create_simple_morse_keyboard(BehaviorConfig {

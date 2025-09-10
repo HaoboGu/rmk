@@ -85,7 +85,7 @@ pub struct Morse {
 impl Default for Morse {
     fn default() -> Self {
         Self {
-            profile: MorseProfile::default(),
+            profile: MorseProfile::const_default(),
             actions: Vec::default(),
         }
     }
