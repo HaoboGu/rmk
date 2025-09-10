@@ -209,6 +209,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let key_info = &keymap.key_config.key_info;
         //first: try to look for a per-key profile config
         match key_action {
+            KeyAction::TapHold(_, _, profile) => {
+                let timeout = if hold_timeout_needed {
+                    profile.hold_timeout_ms()
+                } else {
+                    profile.gap_timeout_ms()
+                };
+
+                if let Some(timeout) = timeout {
+                    return Duration::from_millis(timeout as u64);
+                }
+            }
             KeyAction::Morse(index) => {
                 if let Some(morse) = behavior_config.morse.morses.get(*index as usize) {
                     let timeout = if hold_timeout_needed {
@@ -220,17 +231,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     if let Some(timeout) = timeout {
                         return Duration::from_millis(timeout as u64);
                     }
-                }
-            }
-            KeyAction::TapHold(_, _, profile) => {
-                let timeout = if hold_timeout_needed {
-                    profile.hold_timeout_ms()
-                } else {
-                    profile.gap_timeout_ms()
-                };
-
-                if let Some(timeout) = timeout {
-                    return Duration::from_millis(timeout as u64);
                 }
             }
             _ => {}
@@ -275,15 +275,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let key_info = &keymap.key_config.key_info;
         //first: try to look for a per-key profile config
         match key_action {
+            KeyAction::TapHold(_, _, profile) => {
+                if let Some(mode) = profile.mode() {
+                    return mode;
+                }
+            }
             KeyAction::Morse(index) => {
                 if let Some(morse) = behavior_config.morse.morses.get(*index as usize)
                     && let Some(mode) = morse.profile.mode()
                 {
-                    return mode;
-                }
-            }
-            KeyAction::TapHold(_, _, profile) => {
-                if let Some(mode) = profile.mode() {
                     return mode;
                 }
             }
@@ -317,15 +317,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let key_info = &keymap.key_config.key_info;
         //first: try to look for a per-key profile config
         match key_action {
+            KeyAction::TapHold(_, _, profile) => {
+                if let Some(enabled) = profile.unilateral_tap() {
+                    return enabled;
+                }
+            }
             KeyAction::Morse(index) => {
                 if let Some(morse) = behavior_config.morse.morses.get(*index as usize)
                     && let Some(enabled) = morse.profile.unilateral_tap()
                 {
-                    return enabled;
-                }
-            }
-            KeyAction::TapHold(_, _, profile) => {
-                if let Some(enabled) = profile.unilateral_tap() {
                     return enabled;
                 }
             }

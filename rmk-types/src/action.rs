@@ -215,7 +215,7 @@ impl Into<u32> for MorseProfile {
 
 /// A KeyAction is the action at a keyboard position, stored in keymap.
 /// It can be a single action like triggering a key, or a composite keyboard action like tap/hold
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum KeyAction {
     /// No action. Serialized as 0x0000.
@@ -247,6 +247,26 @@ impl KeyAction {
     /// since their handling have many similarities
     pub fn is_morse(&self) -> bool {
         matches!(self, KeyAction::TapHold(_, _, _) | KeyAction::Morse(_))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        matches!(self, KeyAction::No)
+    }
+}
+
+/// combo, fork, etc. compares key actions
+/// WARNING: this is not a perfect comparison, we ignore profile config of TapHold!
+impl PartialEq for KeyAction {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (KeyAction::No, KeyAction::No) => true,
+            (KeyAction::Transparent, KeyAction::Transparent) => true,
+            (KeyAction::Single(a), KeyAction::Single(b)) => a == b,
+            (KeyAction::Tap(a), KeyAction::Tap(b)) => a == b,
+            (KeyAction::TapHold(a, b, _), KeyAction::TapHold(c, d, _)) => a == c && b == d,
+            (KeyAction::Morse(a), KeyAction::Morse(b)) => a == b,
+            _ => false,
+        }
     }
 }
 

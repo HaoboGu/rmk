@@ -92,15 +92,12 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         }
         0x2000..=0x3FFF => {
             // Modifier tap-hold.
-            // For modifier tap-hold, if it's on the home row, use `new_hrm` instead
-            // HRMs is in permissive hold mode, while other modifier tap-hold is in hold on other key press mode
             let keycode = (via_keycode & 0x00FF).into();
             let modifier = ModifierCombination::from_packed_bits(((via_keycode >> 8) & 0b11111) as u8);
             KeyAction::TapHold(Action::Key(keycode), Action::Modifier(modifier), Default::default())
         }
         0x4000..=0x4FFF => {
             // Layer tap-hold.
-            // Layer tap-hold is in hold on other key press mode by default
             let layer = (via_keycode >> 8) & 0xF;
             let keycode = (via_keycode & 0x00FF).into();
             KeyAction::TapHold(Action::Key(keycode), Action::LayerOn(layer as u8), Default::default())

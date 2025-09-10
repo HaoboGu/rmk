@@ -1221,7 +1221,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
             if let Some(StorageData::ComboData(combo)) = read_data {
                 let mut actions: Vec<KeyAction, COMBO_MAX_LENGTH> = Vec::new();
-                for &action in combo.actions.iter().filter(|&&a| a != KeyAction::No) {
+                for &action in combo.actions.iter().filter(|&&a| !a.is_empty()) {
                     let _ = actions.push(action);
                 }
                 *item = Combo::new(actions, combo.output, item.layer);

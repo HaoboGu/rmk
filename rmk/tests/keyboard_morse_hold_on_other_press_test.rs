@@ -34,12 +34,17 @@ fn create_hold_on_other_key_press_keyboard_with_combo() -> Keyboard<'static, 1, 
     let combo_key = KeyAction::TapHold(
         Action::Key(KeyCode::B),
         Action::Modifier(ModifierCombination::LSHIFT),
-        Default::default(),
+        MorseProfile::new(
+            Some(false),
+            Some(MorseMode::HoldOnOtherPress),
+            Some(250u16),
+            Some(250u16),
+        ),
     );
     let combo_key_2 = KeyAction::TapHold(
         Action::Key(KeyCode::C),
         Action::Modifier(ModifierCombination::LGUI),
-        Default::default(),
+        MorseProfile::new(Some(false), Some(MorseMode::Normal), Some(250u16), Some(250u16)),
     );
     let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1), Default::default());
     create_simple_morse_keyboard(BehaviorConfig {
