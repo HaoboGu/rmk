@@ -226,10 +226,7 @@ pub enum KeyAction {
     Single(Action),
     /// Don't wait the release of the key, auto-release after a time threshold.
     Tap(Action),
-    /// Tap hold action
-    #[cfg(not(feature = "per_key_profile"))]
-    TapHold(Action, Action, ()), //if per_key_profile is not enabled, MorseProfile is replaced with a dummy `()` to eliminate the RAM consumption of MorseProfile
-    #[cfg(feature = "per_key_profile")]
+    /// Tap hold action    
     TapHold(Action, Action, MorseProfile),
 
     /// Morse action, references a morse configuration by index.

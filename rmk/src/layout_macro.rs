@@ -53,32 +53,6 @@ macro_rules! lm {
 
 /// Create a layer activate action or tap key(tap/hold)
 #[macro_export]
-#[cfg(not(feature = "per_key_profile"))]
-macro_rules! lt {
-    ($x: literal, $k: ident) => {
-        $crate::types::action::KeyAction::TapHold(
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$k),
-            $crate::types::action::Action::LayerOn($x),
-            (),
-        )
-    };
-}
-/// Create a layer activate action or tap key(tap/hold) with profile
-#[macro_export]
-#[cfg(not(feature = "per_key_profile"))]
-macro_rules! ltp {
-    ($x: literal, $k: ident, $p: expr) => {
-        $crate::types::action::KeyAction::TapHold(
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$k),
-            $crate::types::action::Action::LayerOn($x),
-            (),
-        )
-    };
-}
-
-/// Create a layer activate action or tap key(tap/hold)
-#[macro_export]
-#[cfg(feature = "per_key_profile")]
 macro_rules! lt {
     ($x: literal, $k: ident) => {
         $crate::types::action::KeyAction::TapHold(
@@ -90,7 +64,6 @@ macro_rules! lt {
 }
 /// Create a layer activate action or tap key(tap/hold) with profile
 #[macro_export]
-#[cfg(feature = "per_key_profile")]
 macro_rules! ltp {
     ($x: literal, $k: ident, $p: expr) => {
         $crate::types::action::KeyAction::TapHold(
@@ -103,32 +76,6 @@ macro_rules! ltp {
 
 /// Create a modifier-tap-hold action
 #[macro_export]
-#[cfg(not(feature = "per_key_profile"))]
-macro_rules! mt {
-    ($k: ident, $m: expr) => {
-        $crate::types::action::KeyAction::TapHold(
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$k),
-            $crate::types::action::Action::Modifier($m),
-            (),
-        )
-    };
-}
-/// Create a modifier-tap-hold action with profile
-#[macro_export]
-#[cfg(not(feature = "per_key_profile"))]
-macro_rules! mtp {
-    ($k: ident, $m: expr, $p: expr) => {
-        $crate::types::action::KeyAction::TapHold(
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$k),
-            $crate::types::action::Action::Modifier($m),
-            (),
-        )
-    };
-}
-
-/// Create a modifier-tap-hold action
-#[macro_export]
-#[cfg(feature = "per_key_profile")]
 macro_rules! mt {
     ($k: ident, $m: expr) => {
         $crate::types::action::KeyAction::TapHold(
@@ -140,7 +87,6 @@ macro_rules! mt {
 }
 /// Create a modifier-tap-hold action with profile
 #[macro_export]
-#[cfg(feature = "per_key_profile")]
 macro_rules! mtp {
     ($k: ident, $m: expr, $p: expr) => {
         $crate::types::action::KeyAction::TapHold(
@@ -153,31 +99,6 @@ macro_rules! mtp {
 
 /// Create a tap-hold action
 #[macro_export]
-#[cfg(not(feature = "per_key_profile"))]
-macro_rules! th {
-    ($t: ident, $h: ident) => {
-        $crate::types::action::KeyAction::TapHold(
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$t),
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$h),
-            (),
-        )
-    };
-}
-/// Create a tap-hold action with profile
-#[macro_export]
-#[cfg(not(feature = "per_key_profile"))]
-macro_rules! thp {
-    ($t: ident, $h: ident, $p: expr) => {
-        $crate::types::action::KeyAction::TapHold(
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$t),
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$h),
-            (),
-        )
-    };
-}
-/// Create a tap-hold action
-#[macro_export]
-#[cfg(feature = "per_key_profile")]
 macro_rules! th {
     ($t: ident, $h: ident) => {
         $crate::types::action::KeyAction::TapHold(
@@ -189,7 +110,6 @@ macro_rules! th {
 }
 /// Create a tap-hold action with profile
 #[macro_export]
-#[cfg(feature = "per_key_profile")]
 macro_rules! thp {
     ($t: ident, $h: ident, $p: expr) => {
         $crate::types::action::KeyAction::TapHold(

@@ -222,8 +222,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                 }
             }
-
-            #[cfg(feature = "per_key_profile")]
             KeyAction::TapHold(_, _, profile) => {
                 let timeout = if hold_timeout_needed {
                     profile.hold_timeout_ms()
@@ -235,7 +233,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     return Duration::from_millis(timeout as u64);
                 }
             }
-
             _ => {}
         }
 
@@ -285,14 +282,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     return mode;
                 }
             }
-
-            #[cfg(feature = "per_key_profile")]
             KeyAction::TapHold(_, _, profile) => {
                 if let Some(mode) = profile.mode() {
                     return mode;
                 }
             }
-
             _ => {}
         }
 
@@ -330,14 +324,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     return enabled;
                 }
             }
-
-            #[cfg(feature = "per_key_profile")]
             KeyAction::TapHold(_, _, profile) => {
                 if let Some(enabled) = profile.unilateral_tap() {
                     return enabled;
                 }
             }
-
             _ => {}
         }
 

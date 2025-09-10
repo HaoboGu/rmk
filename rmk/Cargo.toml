@@ -109,10 +109,7 @@ features = ["split"]
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["col2row", "defmt", "storage", "vial_lock", "per_key_profile"] #remove per_key_profile from defaults
-## If you want to customize each tap hold (TH LT MT) key's profile separately (the positional configuration in matrix map is not enough)
-## then you may enable this feature - Warning: it will increase the RAM usage of the keymaps with ROW*COL*LAYER_NUM*32bits
-per_key_profile = []
+default = ["col2row", "defmt", "storage", "vial_lock"]
 
 ## the matrix tester is optional to store matrix state
 matrix_tester = []
