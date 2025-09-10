@@ -26,7 +26,7 @@ pub struct BidirectionalMatrix<
     key_state: [[KeyState; COL]; ROW],
     /// Start scanning
     scan_start: Option<Instant>,
-    /// Current scan pos: (row_idx, col_idx)
+    /// Current scan pos: (col_idx, row_idx)
     scan_pos: (usize, usize),
     /// Scan map
     scan_map: [[ScanLocation; COL]; ROW]
@@ -67,11 +67,11 @@ impl<
             
             // Scan following the scan map and send report
             // Loop through rows.
-            for scan_x_idx in scan_x_start..self.scan_map.len() {
+            for scan_y_idx in scan_y_start..self.scan_map.len() {
                 // Loop trough cols.
-                let scan_y_start_current = if scan_x_idx == scan_x_start { scan_y_start } else { 0 };
-                for scan_y_idx in scan_y_start_current..self.scan_map[scan_x_idx].len() {
-                    if let ScanLocation::Pins(in_idx, out_idx) = self.scan_map[scan_x_idx][scan_y_idx] {
+                let scan_x_start_current = if scan_y_idx == scan_y_start { scan_x_start } else { 0 };
+                for scan_x_idx in scan_x_start_current..self.scan_map[scan_y_idx].len() {
+                    if let ScanLocation::Pins(in_idx, out_idx) = self.scan_map[scan_y_idx][scan_x_idx] {
                         let [in_pin, out_pin] = self.pins.get_disjoint_mut([in_idx, out_idx]).unwrap();
                         // Set output pin to high.
                         out_pin.set_as_output();
@@ -80,15 +80,15 @@ impl<
                         
                         // Check input pin and debounce
                         let debounce_state = self.debouncer.detect_change_with_debounce(
-                            scan_x_idx,
                             scan_y_idx,
+                            scan_x_idx,
                             in_pin.is_high().ok().unwrap_or_default(),
-                            &self.key_state[scan_x_idx][scan_y_idx],
+                            &self.key_state[scan_y_idx][scan_x_idx],
                         );
                         if let DebounceState::Debounced = debounce_state {
-                            self.key_state[scan_x_idx][scan_y_idx].toggle_pressed();
-                            self.scan_pos = (scan_x_idx, scan_y_idx);
-                            return Event::Key(KeyboardEvent::key(scan_x_idx as u8, scan_y_idx as u8, self.key_state[scan_x_idx][scan_y_idx].pressed));
+                            self.key_state[scan_y_idx][scan_x_idx].toggle_pressed();
+                            self.scan_pos = (scan_y_idx, scan_x_idx);
+                            return Event::Key(KeyboardEvent::key(scan_y_idx as u8, scan_x_idx as u8, self.key_state[scan_y_idx][scan_x_idx].pressed));
                         }
                         
                         // Pull output pin back to low
