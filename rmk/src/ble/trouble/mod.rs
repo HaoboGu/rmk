@@ -163,7 +163,7 @@ pub(crate) async fn run_ble<
     ) = {
         let (mut usb_builder, tx_impl, ep_out) = STORAGE.init_without_build(usb_driver, usb_config);
         let rxvr: kit::RxWorker<&'static Queue, ergot::exports::mutex::raw_impls::cs::CriticalSectionRawMutex, D> =
-            kit::RxWorker::new(STACK.base(), ep_out);
+            kit::RxWorker::new(&STACK, ep_out);
         // let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
         let other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
@@ -300,7 +300,7 @@ pub(crate) async fn run_ble<
         async {
             // Echo task
             use core::pin::pin;
-            let socket = STACK.stack_bounded_endpoint_server::<EchoEndpoint, 4>(Some("echoserver"));
+            let socket = STACK.endpoints().bounded_server::<EchoEndpoint, 4>(Some("echoserver"));
             let socket = pin!(socket);
             let mut hdl = socket.attach();
             loop {

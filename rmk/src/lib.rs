@@ -302,7 +302,7 @@ pub(crate) async fn run_keyboard<
     // The state will be changed to true after the keyboard starts running
     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
     let writer_fut = keyboard_writer.run_writer();
-    let mut vial_service = VialService::new(keymap, vial_config, vial_reader_writer);
+    // let mut vial_service = VialService::new(keymap, vial_config, vial_reader_writer);
 
     let led_fut = async {
         #[cfg(feature = "controller")]
@@ -330,7 +330,11 @@ pub(crate) async fn run_keyboard<
         }
     };
 
-    let via_fut = vial_service.run();
+    let via_fut = async {
+        loop {
+            embassy_time::Timer::after_secs(1000).await;
+        }
+    };
 
     #[cfg(feature = "storage")]
     let storage_fut = storage.run();
