@@ -1,54 +1,307 @@
-# Controller
+# Controller Support
 
-Controller is designed for the output devices. It provides a unified interface for controlling various output devices, like display.
+RMK's controller system provides a unified interface for managing output devices like displays, LEDs, and other peripherals that respond to keyboard events. Controllers are software modules that implement the `Controller` trait and receive events from the keyboard through RMK's event system.
 
-## External Controller
-In RMK, controllers can be out-of-tree. To use those controllers with RMK's  convenient TOML-configuration, you can add relative code for the controller in the `main.rs` or `central.rs`, where the attributes `#[rmk_keyboard]`, `#[rmk_central]` or `#[rmk_peripheral]` are.
+## Overview
 
-In the attributes `#[rmk_keyboard]`, `#[rmk_central]` or `#[rmk_peripheral]`. We can declare a controller as below. The name of the function is unique as the controller's name. And the body of the function returns the controller. The return type can be omitted.
+### What are Controllers?
+
+Controllers in RMK are software modules that manage external hardware components and respond to keyboard events. They provide:
+
+- **Event-driven architecture** that reacts to keyboard state changes
+- **Two execution modes**: event-driven and polling-based
+- **Built-in TOML configuration** for LED indicators (NumLock, CapsLock, ScrollLock)
+- **Custom controller support** through the `#[controller]` attribute
+
+### Built-in Controllers
+
+RMK includes several built-in controllers:
+
+**LED Indicator Controllers:**
+- NumLock, CapsLock, ScrollLock LED indicators
+- Automatic configuration through keyboard.toml
+- Support for active-high and active-low pins
+
+**Battery LED Controller:**
+- Battery level indication with different states
+- Charging state visualization
+- Configurable blinking patterns
+
+## Controller Architecture
+
+### Controller Trait
+
+All controllers must implement the `Controller` trait:
+
 ```rust
-#[rmk_central]
-mod keyboard_central {
-    // ...
+pub trait Controller {
+    /// Type of the received events
+    type Event;
 
-    #[controller]
-    // the controller is named `display_controller`, the return type can be ignored.
-    fn display_controller() {
+    /// Process the received event
+    async fn process_event(&mut self, event: Self::Event);
 
-        // prepare the config for the controller
-        let mut config = ::embassy_nrf::spim::Config::default();
-        config.frequency = ::embassy_nrf::spim::Frequency::M1;
-        let spi = ::embassy_nrf::spim::Spim::new_txonly(p.SPI3, Irqs, p.P0_06, p.P0_05, config);
-        let cs = ::embassy_nrf::gpio::Output::new(
-            p.P0_26,
-            ::embassy_nrf::gpio::Level::High,
-            ::embassy_nrf::gpio::OutputDrive::Standard
-        );
-
-        // initialize the controller
-        let controller = rmk_display::spec::nice_view::create_controller::<_, _, 2>(spi, cs);
-
-        // return the controller
-        controller
-    }
-
-    // ...
+    /// Block waiting for next message
+    async fn next_message(&mut self) -> Self::Event;
 }
 ```
 
-## Bind External Interrupt
-Some external controllers may need interrupt. We can declare the interrupt as well.
+### Execution Modes
+
+Controllers can operate in two modes:
+
+**Event-Driven Controllers:**
+Controllers that react only to events implement `EventController` (auto-implemented for all `Controller`s):
 
 ```rust
-#[rmk_central]
-mod keyboard_central {
-    // ...
+impl Controller for MyEventController {
+    type Event = ControllerEvent;
 
-    // declare the interrupt
-    add_interrupt!{
-        SPIM3 => ::embassy_nrf::spim::InterruptHandler<::embassy_nrf::peripherals::SPI3>;
+    async fn process_event(&mut self, event: Self::Event) {
+        match event {
+            ControllerEvent::KeyboardIndicator(state) => {
+                // Handle LED indicator changes
+            },
+            ControllerEvent::Battery(level) => {
+                // Handle battery level changes  
+            },
+            _ => {}
+        }
     }
 
-    // ...
+    async fn next_message(&mut self) -> Self::Event {
+        self.sub.next_message_pure().await
+    }
+}
+```
+
+**Polling Controllers:**
+Controllers that need periodic updates implement `PollingController`:
+
+```rust
+impl PollingController for MyPollingController {
+    const INTERVAL: embassy_time::Duration = embassy_time::Duration::from_millis(100);
+
+    async fn update(&mut self) {
+        // Periodic update logic (e.g., LED animations, sensor readings)
+    }
+}
+```
+
+## Using Controllers
+
+### TOML Configuration (Built-in Controllers)
+
+Built-in LED indicators can be configured in keyboard.toml:
+
+```toml
+[light]
+# NumLock LED
+numslock.pin = "PIN_1"
+numslock.low_active = false
+
+# CapsLock LED  
+capslock.pin = "PIN_2"
+capslock.low_active = true
+
+# ScrollLock LED
+scrolllock.pin = "PIN_3"
+scrolllock.low_active = false
+```
+
+### Custom Controllers
+
+Custom controllers are declared using the `#[controller]` attribute within your keyboard module:
+
+```rust
+#[rmk_keyboard]
+mod keyboard {
+    // ... keyboard configuration ...
+
+    #[controller]
+    fn my_custom_controller() -> MyCustomController {
+        // Initialize your controller
+        let pin = Output::new(p.PIN_4, Level::Low, OutputDrive::Standard);
+        MyCustomController::new(pin)
+    }
+}
+```
+
+## Controller Events
+
+Controllers receive events from RMK through the `ControllerEvent` enum, which includes:
+
+### Available Events
+
+```rust
+pub enum ControllerEvent {
+    /// Key event with the associated action
+    Key(KeyboardEvent, KeyAction),
+    /// Battery percentage (0-100)
+    Battery(u8),
+    /// Charging state (true = charging, false = not charging)  
+    ChargingState(bool),
+    /// Active layer changed
+    Layer(u8),
+    /// Modifier combination changed
+    Modifier(ModifierCombination),
+    /// Words per minute typing speed
+    Wpm(u16),
+    /// Connection type (USB = 0, BLE = 1)
+    ConnectionType(u8),
+    /// LED indicator states (NumLock, CapsLock, ScrollLock, etc.)
+    KeyboardIndicator(LedIndicator),
+    /// Sleep state changed
+    Sleep(bool),
+    // ... and more
+}
+```
+
+### Event Subscription
+
+Controllers automatically receive events through the CONTROLLER_CHANNEL:
+
+```rust
+use crate::channel::{CONTROLLER_CHANNEL, ControllerSub};
+
+pub struct MyController {
+    sub: ControllerSub,
+    // ... other fields
+}
+
+impl MyController {
+    pub fn new() -> Self {
+        Self {
+            sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
+            // ... initialize other fields
+        }
+    }
+}
+```
+
+## Creating Custom Controllers
+
+### Basic Controller Implementation
+
+Here's a complete example of a custom LED controller:
+
+```rust
+use embedded_hal::digital::StatefulOutputPin;
+use crate::channel::{CONTROLLER_CHANNEL, ControllerSub};
+use crate::controller::Controller;
+use crate::event::ControllerEvent;
+
+pub struct CustomLedController<P: StatefulOutputPin> {
+    pin: P,
+    sub: ControllerSub,
+    state: bool,
+}
+
+impl<P: StatefulOutputPin> CustomLedController<P> {
+    pub fn new(pin: P) -> Self {
+        Self {
+            pin,
+            sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
+            state: false,
+        }
+    }
+}
+
+impl<P: StatefulOutputPin> Controller for CustomLedController<P> {
+    type Event = ControllerEvent;
+
+    async fn process_event(&mut self, event: Self::Event) {
+        match event {
+            ControllerEvent::Layer(layer) => {
+                // Toggle LED based on layer
+                if layer > 0 && !self.state {
+                    let _ = self.pin.set_high();
+                    self.state = true;
+                } else if layer == 0 && self.state {
+                    let _ = self.pin.set_low();
+                    self.state = false;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    async fn next_message(&mut self) -> Self::Event {
+        self.sub.next_message_pure().await
+    }
+}
+```
+
+### Polling Controller Example
+
+For controllers that need periodic updates (like animations):
+
+```rust
+use crate::controller::PollingController;
+
+impl<P: StatefulOutputPin> PollingController for BlinkingController<P> {
+    const INTERVAL: embassy_time::Duration = embassy_time::Duration::from_millis(500);
+
+    async fn update(&mut self) {
+        // Toggle LED every 500ms when active
+        if self.active {
+            self.state = !self.state;
+            if self.state {
+                let _ = self.pin.set_high();
+            } else {
+                let _ = self.pin.set_low();
+            }
+        }
+    }
+}
+```
+
+## Advanced Usage
+
+### Battery State Controller
+
+RMK includes a built-in `BatteryLedController` that demonstrates both event handling and polling:
+
+```rust
+// Events set the state
+ControllerEvent::Battery(level) => {
+    if level < 10 {
+        self.state = BatteryState::Low;
+    } else {
+        self.state = BatteryState::Normal;
+    }
+}
+
+// Polling updates the LED based on state
+async fn update(&mut self) {
+    match self.state {
+        BatteryState::Low => self.pin.toggle(),      // Blink for low battery
+        BatteryState::Normal => self.pin.deactivate(), // Off for normal
+        BatteryState::Charging => self.pin.activate(),  // On when charging
+    }
+}
+```
+
+### Multiple Controllers
+
+You can define multiple controllers in your keyboard module:
+
+```rust
+#[rmk_keyboard]
+mod keyboard {
+    #[controller]
+    fn status_led() -> StatusLedController {
+        StatusLedController::new(p.PIN_1)
+    }
+
+    #[controller] 
+    fn layer_indicator() -> LayerLedController {
+        LayerLedController::new(p.PIN_2)
+    }
+
+    #[controller]
+    fn battery_monitor() -> BatteryController {
+        BatteryController::new(p.PIN_3)
+    }
 }
 ```
