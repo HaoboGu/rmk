@@ -133,7 +133,7 @@ impl MorseProfile {
     }
 
     /// If the key is pressed longer than this, it is accepted as `hold` (in milliseconds)
-    /// /// if given, should not be zero
+    /// if given, should not be zero
     pub fn hold_timeout_ms(self) -> Option<u16> {
         // NonZero
         let t = (self.0 & 0x3FFF) as u16;
