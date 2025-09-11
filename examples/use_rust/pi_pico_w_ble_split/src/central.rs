@@ -19,9 +19,9 @@ use embassy_rp::pio::{self, Pio};
 use embassy_rp::usb::{self, Driver};
 use keymap::{COL, ROW};
 use rand::SeedableRng;
-use rmk::ble::trouble::build_ble_stack;
+use rmk::ble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, KeyboardUsbConfig, PerKeyConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::{join, join3};
 use rmk::input_device::Runnable;
@@ -127,8 +127,15 @@ async fn main(spawner: Spawner) {
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
     let mut behavior_config = BehaviorConfig::default();
-    let (keymap, mut storage) =
-        initialize_keymap_and_storage(&mut default_keymap, flash, &storage_config, &mut behavior_config).await;
+    let mut per_key_config = PerKeyConfig::default();
+    let (keymap, mut storage) = initialize_keymap_and_storage(
+        &mut default_keymap,
+        flash,
+        &storage_config,
+        &mut behavior_config,
+        &mut per_key_config,
+    )
+    .await;
 
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::<ROW, COL>::new();

@@ -5,15 +5,18 @@ use quote::{format_ident, quote};
 use rmk_config::{KEYCODE_ALIAS, KeyboardTomlConfig};
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
+/// Also add `get_default_encoder_map`
 pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
     let num_encoder = keyboard_config.get_board_config().unwrap().get_num_encoder();
     let total_num_encoder = num_encoder.iter().sum::<usize>();
-    // TODO: config encoder in keyboard.toml
+
+    // TODO: config encoder actions in keyboard.toml
     let encoders = vec![quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No))}; total_num_encoder];
 
+    let (layout, _key_info) = keyboard_config.get_layout_config().unwrap();
     let mut layers = vec![];
     let mut encoder_map = vec![];
-    for layer in keyboard_config.get_layout_config().unwrap().keymap {
+    for layer in layout.keymap {
         layers.push(expand_layer(layer));
         encoder_map.push(quote! { [#(#encoders), *] });
     }
@@ -297,36 +300,36 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 );
             }
         }
-        s if s.to_lowercase().starts_with("hrm(") => {
-            let prefix = s.get(0..4).unwrap();
-            if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
-                let keys: Vec<&str> = internal
-                    .split_terminator(",")
-                    .map(|w| w.trim())
-                    .filter(|w| !w.is_empty())
-                    .collect();
-                if keys.len() != 2 {
-                    panic!(
-                        "\n❌ keyboard.toml: HRM(key, modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
-                    );
-                }
-                let ident = get_key_with_alias(keys[0].to_string());
-                let modifiers = parse_modifiers(keys[1]);
+        // s if s.to_lowercase().starts_with("hrm(") => {
+        //     let prefix = s.get(0..4).unwrap();
+        //     if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
+        //         let keys: Vec<&str> = internal
+        //             .split_terminator(",")
+        //             .map(|w| w.trim())
+        //             .filter(|w| !w.is_empty())
+        //             .collect();
+        //         if keys.len() != 2 {
+        //             panic!(
+        //                 "\n❌ keyboard.toml: HRM(key, modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
+        //             );
+        //         }
+        //         let ident = get_key_with_alias(keys[0].to_string());
+        //         let modifiers = parse_modifiers(keys[1]);
 
-                if modifiers.is_empty() {
-                    panic!(
-                        "\n❌ keyboard.toml: modifier in HRM(key, modifier) is not valid! Please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
-                    );
-                }
-                quote! {
-                    ::rmk::hrm!(#ident, #modifiers)
-                }
-            } else {
-                panic!(
-                    "\n❌ keyboard.toml: HRM(key, modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
-                );
-            }
-        }
+        //         if modifiers.is_empty() {
+        //             panic!(
+        //                 "\n❌ keyboard.toml: modifier in HRM(key, modifier) is not valid! Please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
+        //             );
+        //         }
+        //         quote! {
+        //             ::rmk::hrm!(#ident, #modifiers)
+        //         }
+        //     } else {
+        //         panic!(
+        //             "\n❌ keyboard.toml: HRM(key, modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
+        //         );
+        //     }
+        // }
         s if s.to_lowercase().starts_with("th(") => {
             let prefix = s.get(0..3).unwrap();
             if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {

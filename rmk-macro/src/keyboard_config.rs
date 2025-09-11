@@ -11,7 +11,7 @@ pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
 
 pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
     let basic = keyboard_config.get_basic_info();
-    let layout = keyboard_config.get_layout_config().unwrap();
+    let (layout, _key_info) = keyboard_config.get_layout_config().unwrap();
     let board = keyboard_config.get_board_config().unwrap();
     let pid = basic.product_id;
     let vid = basic.vendor_id;

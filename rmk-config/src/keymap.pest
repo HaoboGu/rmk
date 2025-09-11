@@ -118,10 +118,14 @@ key_map = { SOI ~ key_action* ~ EOI }
 // ============================================================================
 // rules for matrix_map parsing
 
-// Define the coordinate structure, capturing row and col numbers
-// Make the rule itself non-silent ({}) so we get pairs for it
-coordinate = { "(" ~ number ~ "," ~ number ~ ")" }
+left_hand = { ^"L" | ^"LH" | ^"Left" }
+right_hand = { ^"R" | ^"RH" | ^"Right" }
+hand = _{ left_hand | right_hand }
+profile = { strict_identifier }
 
-// The main rule: Start, zero or more coordinates or whitespace occurrences, End.
-// This ensures the entire string consists *only* of valid coordinates and whitespace.
-matrix_map = { SOI ~ (coordinate | WHITESPACE)* ~ EOI }
+// Define the key_info structure, capturing row and col numbers, and optionally some extra key information
+keypos_info = { "(" ~ number ~ "," ~ number ~ ("," ~ hand)? ~ (":" ~ profile)? ~ ")" }
+
+// The main rule: Start, zero or more key_info or whitespace occurrences, End.
+// This ensures the entire string consists *only* of valid key_info tuples and whitespace.
+matrix_map = { SOI ~ (keypos_info | WHITESPACE)* ~ EOI }

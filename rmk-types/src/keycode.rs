@@ -1,3 +1,7 @@
+//! Complete keycode definitions.
+//!
+//! This module provides keycode definitions following the USB HID
+//! specification, extended with additional codes
 use strum::{EnumIter, FromRepr};
 
 use crate::{action::Action, modifier::ModifierCombination};
@@ -872,24 +876,6 @@ impl KeyCode {
     /// The basic keycode = simple key + modifier
     pub fn is_basic(self) -> bool {
         KeyCode::No <= self && self <= KeyCode::RGui
-    }
-
-    /// Returns `true` if the keycode is on the home row of qwerty layout
-    pub fn is_home_row(self) -> bool {
-        match self {
-            KeyCode::A
-            | KeyCode::S
-            | KeyCode::D
-            | KeyCode::F
-            | KeyCode::G
-            | KeyCode::H
-            | KeyCode::J
-            | KeyCode::K
-            | KeyCode::L
-            | KeyCode::Semicolon
-            | KeyCode::Quote => true,
-            _ => false,
-        }
     }
 
     /// Returns `true` if the keycode is a letter

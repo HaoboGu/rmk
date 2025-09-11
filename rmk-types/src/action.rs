@@ -1,3 +1,14 @@
+//! Keyboard actions and behaviors.
+//!
+//! This module defines the core action system used in RMK firmware.
+//! Actions represent what happens when a key is pressed, from simple key
+//! presses to complex behaviors like tap-hold, layer switching, and macros.
+//!
+//! Key types:
+//! - [`Action`] - Single operations that keyboards send or execute
+//! - [`KeyAction`] - Complex behaviors that keyboards should behave
+//! - [`EncoderAction`] - Rotary encoder actions
+
 use crate::keycode::KeyCode;
 use crate::modifier::ModifierCombination;
 

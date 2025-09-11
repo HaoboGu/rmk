@@ -8,34 +8,6 @@ tri_layer = { upper = 1, lower = 2, adjust = 3 }
 one_shot = { timeout = "1s" }
 ```
 
-## Tap Hold
-
-In the `tap_hold` sub-table you can configure tap-hold behavior which performs one action when tapped and another action when held.
-
-Available fields:
-
-- `enable_hrm`: Enables HRM (Home Row Mod) mode. When enabled, the `prior_idle_time` setting becomes functional. Defaults to `false`.
-- `permissive_hold`: Enables permissive hold mode. When enabled, hold action will be triggered when a key is pressed and released during tap-hold decision. This option is recommended to set to true when `enable_hrm` is set to true.
-- `unilateral_tap`: (Experimental) Enables unilateral tap mode. When enabled, tap action will be triggered when a key from "same" hand is pressed. In current experimental version, the "opposite" hand is calculated [according to the number of cols/rows](https://github.com/HaoboGu/rmk/blob/c0ef95b1185c25972c62458c878ee9f1a8e1a837/rmk/src/tap_hold.rs#L111-L136). This option is recommended to set to true when `enable_hrm` is set to true.
-- `hold_on_other_press`: Enables hold-on-other-key-press mode. When enabled, hold action will be triggered immediately when any other non-tap-hold key is pressed while a tap-hold key is being held. This provides faster modifier activation without waiting for the timeout. **Priority rules**: When HRM is disabled, permissive hold takes precedence over this feature. When HRM is enabled, this feature works normally. Defaults to `false`.
-- `prior_idle_time`: If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter is effective only when enable_hrm is set to `true`. Defaults to 120ms.
-- `hold_timeout`: Defines the duration a tap-hold key must be pressed to determine hold behavior. If tap-hold key is released within this time, the key is recognized as a "tap". Holding it beyond this duration triggers the "hold" action. Defaults to 250ms.
-- `post_wait_time`: Adds an additional delay after releasing a tap-hold key to check if any keys pressed during the `hold_timeout` are released. This helps accommodate fast typing scenarios where some keys may not be fully released during a hold. Defaults to 50ms
-
-The following are the typical configurations:
-
-```toml
-[behavior]
-# Enable HRM with all tap-hold features
-tap_hold = { enable_hrm = true, permissive_hold = true, unilateral_tap = true, hold_on_other_press = true, prior_idle_time = "120ms", hold_timeout = "250ms" }
-
-# Fast modifiers without HRM
-tap_hold = { enable_hrm = false, hold_on_other_press = true, hold_timeout = "200ms" }
-
-# HRM disabled; unspecified fields keep their defaults
-tap_hold = { enable_hrm = false, hold_timeout = "200ms" }
-```
-
 ## Tri Layer
 
 Tri-layer enables a third layer (often called `adjust`) automatically when two other layers(`upper` and `lower`) are both active.
@@ -126,7 +98,7 @@ operations = [
 ]
 ```
 
-## Morse(Tap Dance)
+## Morse (and Tap Dance)
 
 In the `morse` sub-table, you can configure the keyboard's morse functionality. Morse is a superset of the well-known [tap dance](https://docs.qmk.fm/features/tap_dance), enabling you to assign different actions to various combinations of taps and holds performed within a specific time window.
 
@@ -196,7 +168,7 @@ morses = [
         { pattern = "-...", action = "B" },
         { pattern = "-.-.", action = "C" },
         { pattern = "-..", action = "D" },
-    ] },
+    ], profile = "MRZ" },
 ]
 ```
 
@@ -211,12 +183,6 @@ The three definition methods are mutually exclusive. For any single Morse key de
 Mixing fields from different methods in the same definition is not allowed.
 
 :::
-
-### Common configuration
-
-The following setting applies to all three definition methods:
-
-  - `timeout`: The time window (in milliseconds or seconds) within which taps are considered part of the same morse sequence. Defaults to 200ms if not specified.
 
 ### Global Configuration Limits
 
@@ -237,6 +203,82 @@ Note that the Vial-style method (using `tap`, `hold`, `hold_after_tap`, `double_
 Please note that while the firmware can handle all Morse configurations, Vial can only recognize and edit the four basic Vial-style actions. These correspond to the patterns for single tap (.), hold (-), double tap (..), and hold-after-tap (.-). More complex patterns defined using morse_actions or extended tap_actions will not be visible or editable in Vial.
 :::
 
+### Fine tuning
+
+To fine tune the timing of morse(or tapdance/tap-hold) behavior, it is possible to set the profile of any morse key regardless of its configuration style:
+ - `profile` : refers a profile name from `[behavior.morse.profiles]`
+
+If this is not set then we look for positional profile settings (see `matrix_map`).
+If that is also missing at that key position, then the defaults will be applied from `[behavior.morse]`.
+
+#### Default profile for Morse, TapDance, Tap Hold
+
+In the `[behavior.morse]` sub-table you can configure the default tap-hold/morse behavior.
+
+Available fields:
+
+- `enable_flow_tap`: Enables HRM (Home Row Mod) mode. When enabled, the `prior_idle_time` setting becomes functional. Defaults to `false`.
+- `prior_idle_time`: If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter is effective only when enable_flow_tap is set to `true`. Defaults to 120ms.
+
+- `unilateral_tap`: (Experimental) Enables unilateral tap mode. When enabled, tap action will be triggered when a key from "same" hand is pressed. In current experimental version, the "same" hand is calculated using the `<hand>`, which can be given in `matrix_map`. This option is recommended to set to true when `enable_flow_tap` is set to true.
+
+- The morse mode, which is can be set by enabling one of these:
+    - `permissive_hold`: Enables permissive hold mode. When enabled, hold action will be triggered when a key is pressed and released during tap-hold decision. This option is recommended to set to true when `enable_flow_tap` is set to true.
+    - `hold_on_other_press`: Enables hold-on-other-key-press mode. When enabled, hold action will be triggered immediately when any other non-tap-hold key is pressed while a tap-hold key is being held. This provides faster modifier activation without waiting for the timeout. Defaults to `false`.
+    - `normal_mode` : this is the default mode, when nor the `permissive_hold` nor the `hold_on_other_press` is set.
+
+- `hold_timeout`: Defines the duration a tap-hold key must be pressed to determine hold behavior. If tap-hold key is released within this time, the key is recognized as a "tap". Holding it beyond this duration triggers the "hold" action. Defaults to 250ms.
+- `gap_timeout`: Defines the duration a tap-hold key must be released to terminate a morse sequence. Defaults to 250ms. Note that only morse and tap-dance needs this setting, simple tap-hold does not.
+
+#### Other profiles for Morse, TapDance, Tap Hold fine tuning
+
+In the `morse.profiles` sub-table you can configure individual key profiles, which may be used to override the defaults set in the `[behavior.morse]` sub-table.
+
+Available fields (they have the same meaning as in the `[behavior.morse]` sub-table):
+- Fill `unilateral_tap` if you want to override the default value set in the `[behavior.morse]` sub-table
+- Set either `permissive_hold` or `unilateral_tap` or `normal_mode` to `true` if you want to override the default mode set in the `[behavior.morse]` sub-table
+- Fill `hold_timeout` if you want to override the default value set in the `[behavior.morse]` sub-table
+- Fill `gap_timeout` if you want to override the default value set in the `[behavior.morse]` sub-table
+
+Each key profile has an associated name, which may be referred 
+- from the layout.matrix_map (the name is case sensitive), to override the defaults in certain key positions
+- the Morse keys may also have their per key profile overrides (which is stronger than the positional override) by setting the `profile` field.
+
+The following examples are the typical default configurations:
+
+```toml
+# This default setting enables HRM with all tap-hold features; additionally for home row keys, use the "HRM" profile below,
+[behavior.morse]
+enable_flow_tap = true, 
+prior_idle_time = "120ms"
+hold_on_other_press = true
+hold_timeout = "250ms"
+gap_timeout = "250ms"
+
+# This default setting enables fast modifiers without HRM
+[behavior.morse]
+enable_flow_tap = false 
+hold_on_other_press = true 
+hold_timeout = "200ms"
+gap_timeout = "200ms"
+
+# This default setting is the most basic configuration
+[behavior.morse]
+enable_flow_tap = false 
+hold_timeout = "250ms"
+gap_timeout = "250ms"
+
+[behavior.morse.profiles]
+# This profile is recommended on the home row, when enable_flow_tap = true, and the hold action activates a layer or acts as a modifier (aka home row mod)
+HRM = { unilateral_tap = true, permissive_hold = true, hold_timeout = "250ms", gap_timeout = "250ms" }
+
+# This profile is recommended when the hold action activates a layer or acts as a modifier (without HRM) (for example thumb keys)
+FH = { hold_on_other_press = true, unilateral_tap = false, hold_timeout = "200ms", gap_timeout = "200ms" }
+
+# This profile is recommended for "real" morse keys
+MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_timeout = "200ms" }
+```
+
 ### Comprehensive Example
 
 Here is a comprehensive example of morse configuration:
@@ -249,21 +291,29 @@ morse_max_num = 9
 max_patterns_per_key = 36
 
 [behavior.morse]
+# default profile for morse, tap dance and tap-hold keys:
+enable_flow_tap = true, 
+prior_idle_time = "120ms",  # flow_tap needs this
+hold_on_other_press = true,
+hold_timeout = "250ms", 
+gap_timeout = "250ms",
+
+# list of morse (tap dance) keys:
 morses = [
   # td(0): Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
-  { tap = "F1", hold = "MO(1)", double_tap = "F2" },
+  { tap = "F1", double_tap = "F2", hold = "MO(1)" },
   
-  # td(1): Modifier key that outputs Ctrl on tap, Alt on double tap, Shift on hold
-  { tap = "LCtrl", hold = "LShift", double_tap = "LAlt" },
+  # td(1): Modifier key that outputs Shift on hold, Alt on hold after tap, 
+  { tap = "LCtrl", hold = "LShift", hold_after_tap = "LAlt" },
   
   # td(2): Navigation key that outputs Tab on tap, Escape on double tap, layer 2 on hold
-  { tap = "Tab", hold = "MO(2)", double_tap = "Escape", timeout = "250ms" },
+  { tap = "Tab", hold = "MO(2)", double_tap = "Escape" },
   
   # td(3): Extended morse for function keys
-  { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"], timeout = "300ms" }
+  { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"] }
 
   # td(4): the morse ABC
-  { timeout = "250ms", morse_actions = [
+  { morse_actions = [
       { pattern = ".-", action = "A" }, 
       { pattern = "-...", action = "B" }, 
       { pattern = "-.-.", action = "C" }, 
@@ -300,8 +350,15 @@ morses = [
       { pattern = "---..", action = "Kc8" }, 
       { pattern = "----.", action = "Kc9" }, 
       { pattern = "-----", action = "Kc0" }
-    ] }
+    ], profile = "MRZ" }
 ]
+
+# these can be used to override the default morse profile given in [behavior.morse]
+[behavior.morse.profiles]
+# for home row mod
+HRM = { unilateral_tap = true, permissive_hold = true, hold_timeout = "250ms", gap_timeout = "250ms" }
+# for "real" morse 
+MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_timeout = "200ms" }
 ```
 
 ### Using Morse(Tap Dance) in Keymaps

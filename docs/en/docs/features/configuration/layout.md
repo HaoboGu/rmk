@@ -15,9 +15,46 @@ matrix_map = """
 """
 ```
 
-The `matrix_map` is a string built from `(row, col)` coordinate pairs, listed in the same order as you want to define your keys in your key map. The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](keyboard_matrix.md), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts. With the help of this matrix map, the configuration of non-regular key matrices can be intuitively arranged in your key maps. (Triple quote mark `"""` is used to limit multi-line strings
+The `matrix_map` is a string built from `(row, col, <hand> : <profile_name>)` tuples, listed in the same order as you want to define your keys in your key map. 
+The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](keyboard_matrix.md), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts. 
+With the help of this matrix map, the configuration of non-regular key matrices can be intuitively arranged in your key maps. (Triple quote mark `"""` is used to limit multi-line strings)
+
+The `<hand>` field is optional and should only be used when `unilateral_tap = true` is set in a key’s profile. By assigning `L` or `R` to `<hand>`, each key can be associated with either the left or right hand.
+
+The `<profile_name>` is also optional, if given, it selects a key profile from [`behavior.morse.profiles`](behavior/#fine-tuning) to override the default settings defined in `behavior.morse`. For defining a key profile, please refer to [behavior](behavior/#fine-tuning) doc
 
 ```toml
+# split ortho example for matrix map, with L/R hand information filled and home row, thumb keys have profile names:
+[layout]
+rows = 4
+cols = 10
+layers = 3
+matrix_map = """
+(0, 0, L)    (0, 1, L)    (0, 2, L)    (0, 3, L)    (0, 4, L)         (0, 5, R)   (0, 6, R)    (0, 7, R)    (0, 8, R)    (0, 9, R)   
+(1, 0, L:H2) (1, 1, L:H2) (1, 2, L:H1) (1, 3, L:H1) (1, 4, L)         (1, 5, R)   (1, 6, R:H1) (1, 7, R:H1) (1, 8, R:H2) (1, 9, R:H2)
+(2, 0, L)    (2, 1, L)    (2, 2, L)    (2, 3, L)    (2, 4, L)         (2, 5, R)   (2, 6, R)    (2, 7, R)    (2, 8, R)    (2, 9, R)   
+                                       (3, 3, L:T)  (3, 4, L:T)       (3, 5, R:T) (3, 6, R:T) 
+"""
+
+# default profile for morse, tap dance and tap-hold keys:
+[behavior.morse]
+enable_flow_tap = true, 
+prior_idle_time = "120ms"
+hold_on_other_press = true 
+hold_timeout = "250ms"
+gap_timeout = "250ms"
+
+[behavior.morse.profiles]
+# matrix_map may refer these to override the defaults given in [behavior.morse] for some key positions by referring these profiles by their name
+# this example is a home row mod
+H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
+H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
+# thumb tap-hold example
+T = { hold_on_other_press = true, unilateral_tap = false, hold_timeout = "250ms", gap_timeout = "250ms" }
+```
+
+```toml
+# simple numpad example:
 # ┌───┬───┬───┬───┐
 # │NUM│ / │ * │ - │ <-- row 0, col 0..4
 # ├───┼───┼───┼───┤
@@ -112,7 +149,8 @@ The `layer.keys` string should follow several rules:
 
 The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
-5. For modifier-tap-hold, use `MT(key, modifier)` where the modifier can be a chain like explained on point 1. If you're using home-row mod(HRM), you can also use `HRM(key, modifier)` to create a modifier-tap-hold whose configuration is optimized for home-row mod.
+5. For modifier-tap-hold, use `MT(key, modifier)` where the modifier can be a chain like explained on point 1. 
+<!-- If you're using home-row mod(HRM), you can also use `HRM(key, modifier)` to create a modifier-tap-hold whose configuration is optimized for home-row mod. -->
 
 6. For generic key tap-hold, use `TH(key-tap, key-hold)`
 
@@ -120,7 +158,7 @@ The definitions of those operations are same with QMK, you can found [here](http
 
 8. For Morse/Tap Dance, use `TD(n)` or `Morse(n)`, they are same
 
-9. For keyboard macros, use `Macro(n)`
+9.  For keyboard macros, use `Macro(n)`
 
 ## Aliases
 
