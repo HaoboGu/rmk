@@ -87,6 +87,7 @@ impl crate::KeyboardTomlConfig {
                             .to_string(),
                     );
                 }
+                behavior.autoshift = behavior.autoshift.or(default.autoshift);
                 Ok(behavior)
             }
             None => Ok(default),
