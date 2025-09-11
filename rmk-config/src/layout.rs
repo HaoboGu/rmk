@@ -193,18 +193,18 @@ impl KeyboardTomlConfig {
                                         .map_err(|e| format!("Failed to parse col '{}': {}", col_str, e))?;
 
                                     let mut hand = 'C'; // C for center (not specified)
-                                    let mut profile = None; // home_row flag not specified
+                                    let mut profile_name = None; // home_row flag not specified
 
                                     for part in items {
                                         match part.as_rule() {
                                             Rule::left_hand => hand = 'L',
                                             Rule::right_hand => hand = 'R',
-                                            Rule::profile => profile = Some(part.as_str().into()),
+                                            Rule::profile_name => profile_name = Some(part.as_str().into()),
                                             _ => {}
                                         }
                                     }
 
-                                    key_info.push((row, col, hand, profile));
+                                    key_info.push((row, col, hand, profile_name));
                                 }
                                 Rule::EOI | Rule::WHITESPACE => {
                                     // Ignore End Of Input marker

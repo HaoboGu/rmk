@@ -365,7 +365,7 @@ pub(crate) async fn process_vial<
                         for i in 0..VIAL_COMBO_MAX_LENGTH {
                             let action =
                                 from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
-                            if action != KeyAction::No {
+                            if !action.is_empty() {
                                 if n >= COMBO_MAX_LENGTH {
                                     //fail if the combo action buffer is too small
                                     return;

@@ -5,13 +5,13 @@ pub mod common;
 
 use embassy_time::Duration;
 use rmk::combo::Combo;
-use rmk::config::{BehaviorConfig, CombosConfig, Hand, KeyInfo, MorseProfile, MorsesConfig};
+use rmk::config::{BehaviorConfig, CombosConfig, Hand, KeyInfo, MorsesConfig};
 use rmk::k;
 use rmk::keyboard::Keyboard;
-use rmk::morse::MorseMode;
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::KeyCode;
 use rmk::types::modifier::ModifierCombination;
+use rmk_types::action::{MorseMode, MorseProfile};
 use rusty_fork::rusty_fork_test;
 
 use crate::common::morse::create_morse_keyboard;
@@ -61,9 +61,17 @@ fn create_hrm_keyboard() -> Keyboard<'static, 1, 5, 2> {
 }
 
 fn create_hrm_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
-    let combo_key = KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT));
-    let combo_key_2 = KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI));
-    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1));
+    let combo_key = KeyAction::TapHold(
+        Action::Key(KeyCode::B),
+        Action::Modifier(ModifierCombination::LSHIFT),
+        Default::default(),
+    );
+    let combo_key_2 = KeyAction::TapHold(
+        Action::Key(KeyCode::C),
+        Action::Modifier(ModifierCombination::LGUI),
+        Default::default(),
+    );
+    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1), Default::default());
 
     let key_info: Option<[[KeyInfo; 5]; 1]> = Some([[
         KeyInfo {
