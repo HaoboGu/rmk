@@ -39,7 +39,8 @@ usbd-hid = "0.8.2"
 bitfield-struct = "0.11"
 static_cell = "2"
 sequential-storage = "5.0"
-ergot = { git = "https://github.com/jamesmunns/ergot/", features = ["embassy-usb-v0_5"] }
+ergot = { path = "/Users/haobogu/Projects/rust/ergot/crates/ergot", features = ["embassy-usb-v0_5"] }
+mutex               = { version = "1.0.2", features = ["impl-unsafe-cortex-m-single-core"] }
 defmt = { version = "1.0", optional = true }
 log = { version = "0.4", optional = true }
 num_enum = { version = "0.7", default-features = false }
