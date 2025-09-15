@@ -184,7 +184,6 @@ dependencies = [
  "btuuid",
  "defmt 1.0.1",
  "embassy-sync",
- "embassy-time 0.4.0",
  "embedded-io",
  "embedded-io-async",
  "futures-intrusive",
@@ -660,7 +659,7 @@ dependencies = [
  "embassy-futures",
  "embassy-hal-internal",
  "embassy-sync",
- "embassy-time 0.5.0",
+ "embassy-time",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
@@ -755,7 +754,7 @@ dependencies = [
  "embassy-embedded-hal",
  "embassy-hal-internal",
  "embassy-sync",
- "embassy-time 0.5.0",
+ "embassy-time",
  "embassy-time-driver",
  "embassy-time-queue-utils",
  "embassy-usb-driver",
@@ -785,23 +784,6 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "heapless 0.8.0",
-]
-
-[[package]]
-name = "embassy-time"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f820157f198ada183ad62e0a66f554c610cdcd1a9f27d4b316358103ced7a1f8"
-dependencies = [
- "cfg-if",
- "critical-section",
- "defmt 0.3.100",
- "document-features",
- "embassy-time-driver",
- "embedded-hal 0.2.7",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "futures-util",
 ]
 
 [[package]]
@@ -1819,7 +1801,7 @@ dependencies = [
  "embassy-futures",
  "embassy-nrf",
  "embassy-sync",
- "embassy-time 0.5.0",
+ "embassy-time",
  "embassy-usb",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
@@ -1892,7 +1874,7 @@ dependencies = [
  "defmt-rtt",
  "embassy-executor",
  "embassy-nrf",
- "embassy-time 0.5.0",
+ "embassy-time",
  "json",
  "nrf-mpsl",
  "nrf-sdc",
@@ -2320,7 +2302,7 @@ checksum = "fcc842091f2def52017664b53082ecbbeb5c7731092bad69d2c63050401dfd64"
 [[package]]
 name = "trouble-host"
 version = "0.2.4"
-source = "git+https://github.com/haobogu/trouble?rev=c439474#c43947496da11db867e728bd363b4aae2d0e8b58"
+source = "git+https://github.com/embassy-rs/trouble?rev=26ec679#26ec6794d0a976dd91cd694b631c72b16ddf651b"
 dependencies = [
  "aes",
  "bt-hci",
@@ -2328,7 +2310,7 @@ dependencies = [
  "defmt 1.0.1",
  "embassy-futures",
  "embassy-sync",
- "embassy-time 0.4.0",
+ "embassy-time",
  "embedded-io",
  "futures",
  "heapless 0.9.1",
@@ -2344,7 +2326,7 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.2.0"
-source = "git+https://github.com/haobogu/trouble?rev=c439474#c43947496da11db867e728bd363b4aae2d0e8b58"
+source = "git+https://github.com/embassy-rs/trouble?rev=26ec679#26ec6794d0a976dd91cd694b631c72b16ddf651b"
 dependencies = [
  "convert_case 0.8.0",
  "darling",
