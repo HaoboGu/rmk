@@ -7,7 +7,7 @@ use embassy_futures::yield_now;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Timer, with_deadline};
 use heapless::Vec;
-use rmk_types::action::{Action, KeyAction};
+use rmk_types::action::{Action, KeyAction, MorseMode};
 use rmk_types::keycode::KeyCode;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
@@ -21,8 +21,9 @@ use {
 
 use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use crate::combo::Combo;
+use crate::config::{Hand, KeyInfo};
 use crate::descriptor::KeyboardReport;
-use crate::event::{KeyboardEvent, KeyboardEventPos};
+use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::input_device::Runnable;
@@ -30,7 +31,7 @@ use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard_macros::MacroOperation;
 use crate::keymap::KeyMap;
-use crate::morse::{MorseMode, MorsePattern, TAP};
+use crate::morse::{MorsePattern, TAP};
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
 use crate::{FORK_MAX_NUM, boot};
@@ -363,9 +364,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_key_action(&mut self, key_action: &KeyAction, event: KeyboardEvent, is_combo: bool) -> LoopState {
         // When pressing a morse key, check flow tap first.
         if event.pressed
-            && self.keymap.borrow().behavior.tap_hold.enable_hrm
+            && self.keymap.borrow().behavior.morse.enable_flow_tap
             && key_action.is_morse()
-            && self.last_press_time.elapsed() < self.keymap.borrow().behavior.tap_hold.prior_idle_time
+            && self.last_press_time.elapsed() < self.keymap.borrow().behavior.morse.prior_idle_time
         {
             // It's in key streak, trigger the first tap action
             debug!("Flow tap detected, trigger tap action for current morse key");
@@ -377,7 +378,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             self.process_key_action_normal(action, event).await;
             // Push back after triggered press
             let now = Instant::now();
-            let time_out = now + Self::morse_timeout(&self.keymap.borrow().behavior, key_action);
+            let time_out = now + Self::morse_timeout(&self.keymap.borrow(), event.pos, key_action, true);
             self.held_buffer.push(HeldKey::new(
                 event,
                 *key_action,
@@ -411,7 +412,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 debug!("Current key is buffered, return LoopState::Queue");
                 let press_time = Instant::now();
                 let timeout_time = if key_action.is_morse() {
-                    press_time + Self::morse_timeout(&self.keymap.borrow().behavior, key_action)
+                    press_time + Self::morse_timeout(&self.keymap.borrow(), event.pos, key_action, true)
                 } else {
                     press_time
                 };
@@ -622,6 +623,28 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         (keyboard_state_updated, decision_for_current_key)
     }
 
+    fn get_hand(key_info: &Option<[[KeyInfo; COL]; ROW]>, pos: KeyPos) -> Hand {
+        key_info
+            .map(|info| info[pos.row as usize][pos.col as usize].hand)
+            .unwrap_or_else(|| {
+                if COL >= ROW {
+                    // Horizontal
+                    if pos.col < (COL as u8 / 2) {
+                        Hand::Left
+                    } else {
+                        Hand::Right
+                    }
+                } else {
+                    // Vertical
+                    if pos.row < (ROW as u8 / 2) {
+                        Hand::Left
+                    } else {
+                        Hand::Right
+                    }
+                }
+            })
+    }
+
     /// Make decisions for current key and each held key.
     ///
     /// This function iterates all held keys and makes decision for them if a special mode is triggered, such as permissive hold, etc.
@@ -672,14 +695,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                 // The remaining keys are not same as the current key, check only morse keys
                 if held_key.event.pos != event.pos && held_key.action.is_morse() {
-                    let (tap_hold_mode, unilateral_tap) =
-                        Self::tap_hold_mode(&self.keymap.borrow().behavior, &held_key.action);
+                    let mode = Self::tap_hold_mode(&self.keymap.borrow(), held_key.event.pos, &held_key.action);
 
                     if event.pressed {
                         // The current key is being pressed
 
                         // Check morse key mode
-                        match tap_hold_mode {
+                        match mode {
                             MorseMode::PermissiveHold => {
                                 // Permissive hold mode checks key releases, so push current key press into buffer.
                                 decision_for_current_key = KeyBehaviorDecision::Buffer;
@@ -692,25 +714,39 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 let _ = decisions.push((held_key.event.pos, HeldKeyDecision::HoldOnOtherKeyPress));
                                 decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
                             }
-                            _ => (),
+                            _ => {}
                         }
                     } else {
+                        let unilateral_tap = Self::is_unilateral_tap_enabled(
+                            &self.keymap.borrow(),
+                            held_key.event.pos,
+                            &held_key.action,
+                        );
+
                         // 1. Check unilateral tap of held key
                         // Note: `decision for current key == Release` means that current held key is pressed AFTER the current releasing key,
                         // releasing a key should not trigger unilateral tap of keys which are pressed AFTER the released key
                         if unilateral_tap
                             && event.pos != held_key.event.pos
                             && decision_for_current_key != KeyBehaviorDecision::Release
-                            && event.pos.is_same_hand::<ROW, COL>(held_key.event.pos)
+                            && let KeyboardEventPos::Key(pos1) = held_key.event.pos
+                            && let KeyboardEventPos::Key(pos2) = event.pos
                         {
-                            debug!("Unilateral tap triggered, resolve morse key as tapping");
-                            let _ = decisions.push((held_key.event.pos, HeldKeyDecision::UnilateralTap));
-                            continue;
+                            let key_info = &self.keymap.borrow().key_config.key_info;
+
+                            let hand1 = Self::get_hand(key_info, pos1);
+                            let hand2 = Self::get_hand(key_info, pos2);
+
+                            if hand1 == hand2 && hand1 != Hand::Unknown {
+                                //if same hand
+                                debug!("Unilateral tap triggered, resolve morse key as tapping");
+                                let _ = decisions.push((held_key.event.pos, HeldKeyDecision::UnilateralTap));
+                                continue;
+                            }
                         }
 
                         // The current key is being released, check only the held key in permissive hold mode
-                        if decision_for_current_key != KeyBehaviorDecision::Release
-                            && tap_hold_mode == MorseMode::PermissiveHold
+                        if decision_for_current_key != KeyBehaviorDecision::Release && mode == MorseMode::PermissiveHold
                         {
                             debug!("Permissive hold!");
                             // Check first current releasing key is in the buffer, AND after the current key
@@ -2124,15 +2160,15 @@ mod test {
 
     use embassy_futures::block_on;
     use embassy_time::{Duration, Timer};
-    use rmk_types::action::KeyAction;
+    use rmk_types::action::{KeyAction, MorseMode, MorseProfile};
     use rmk_types::modifier::ModifierCombination;
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use crate::config::{BehaviorConfig, CombosConfig, ForksConfig};
+    use crate::config::{BehaviorConfig, CombosConfig, ForksConfig, PerKeyConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
     use crate::fork::Fork;
-    use crate::{a, k, layer, mo, th};
+    use crate::{a, k, layer, mo, th, thp};
 
     // Init logger for tests
     #[ctor::ctor]
@@ -2149,7 +2185,7 @@ mod test {
             layer!([
                 [k!(Grave), k!(Kc1), k!(Kc2), k!(Kc3), k!(Kc4), k!(Kc5), k!(Kc6), k!(Kc7), k!(Kc8), k!(Kc9), k!(Kc0), k!(Minus), k!(Equal), k!(Backspace)],
                 [k!(Tab), k!(Q), k!(W), k!(E), k!(R), k!(T), k!(Y), k!(U), k!(I), k!(O), k!(P), k!(LeftBracket), k!(RightBracket), k!(Backslash)],
-                [k!(Escape), th!(A, LShift), th!(S, LGui), k!(D), k!(F), k!(G), k!(H), k!(J), k!(K), k!(L), k!(Semicolon), k!(Quote), a!(No), k!(Enter)],
+                [k!(Escape), thp!(A, LShift, MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold),None,None)), th!(S, LGui), k!(D), k!(F), k!(G), k!(H), k!(J), k!(K), k!(L), k!(Semicolon), k!(Quote), a!(No), k!(Enter)],
                 [k!(LShift), k!(Z), k!(X), k!(C), k!(V), k!(B), k!(N), k!(M), k!(Comma), k!(Dot), k!(Slash), a!(No), a!(No), k!(RShift)],
                 [k!(LCtrl), k!(LGui), k!(LAlt), a!(No), a!(No), k!(Space), a!(No), a!(No), a!(No), mo!(1), k!(RAlt), a!(No), k!(RGui), k!(RCtrl)]
             ]),
@@ -2199,7 +2235,9 @@ mod test {
         let keymap = Box::new(get_keymap());
         let leaked_keymap = Box::leak(keymap);
 
-        let keymap = block_on(KeyMap::new(leaked_keymap, None, behavior_config));
+        static KEY_CONFIG: static_cell::StaticCell<PerKeyConfig<5, 14>> = static_cell::StaticCell::new();
+        let per_key_config = KEY_CONFIG.init(PerKeyConfig::default());
+        let keymap = block_on(KeyMap::new(leaked_keymap, None, behavior_config, per_key_config));
         let keymap_cell = RefCell::new(keymap);
         let keymap_ref = Box::leak(Box::new(keymap_cell));
 
@@ -2343,7 +2381,7 @@ mod test {
                 keyboard.keymap.borrow_mut().set_action_at(
                     KeyboardEventPos::Key(KeyPos { row: 0, col: 0 }),
                     0,
-                    KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again)),
+                    KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again), Default::default()),
                 );
                 keyboard.keymap.borrow_mut().set_action_at(
                     KeyboardEventPos::Key(KeyPos { row: 2, col: 1 }),

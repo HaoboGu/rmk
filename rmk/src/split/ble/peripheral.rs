@@ -2,12 +2,13 @@ use bt_hci::cmd::le::LeSetPhy;
 use bt_hci::controller::ControllerCmdAsync;
 use embassy_futures::join::join;
 use embassy_futures::select::select;
-use embassy_time::Timer;
+use embassy_time::{Duration, Timer, with_timeout};
 use trouble_host::prelude::*;
 #[cfg(feature = "storage")]
 use {super::PeerAddress, crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash};
 
 use crate::CONNECTION_STATE;
+use crate::channel::KEY_EVENT_CHANNEL;
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
@@ -199,6 +200,13 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
                     select(storage.run(), peripheral.run()).await;
                     info!("Disconnected from the central");
                 }
+                Err(BleHostError::BleHost(Error::Timeout)) => {
+                    // Timeout, wait new keys to continue
+                    error!("Connect to central timeout");
+                    KEY_EVENT_CHANNEL.clear();
+                    let _ = KEY_EVENT_CHANNEL.receive().await;
+                    continue;
+                }
                 Err(e) => {
                     #[cfg(feature = "defmt")]
                     let e = defmt::Debug2Format(&e);
@@ -221,11 +229,44 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
     server: &'b BleSplitPeripheralServer<'_>,
 ) -> Result<GattConnection<'a, 'b, DefaultPacketPool>, BleHostError<C::Error>> {
     let mut advertiser_data = [0; 31];
+    let advertisement = get_peri_advertiser::<C>(id, central_addr, &mut advertiser_data)?;
+
+    let advertiser = peripheral
+        .advertise(&AdvertisementParameters::default(), advertisement)
+        .await?;
+
+    match with_timeout(Duration::from_secs(10), advertiser.accept()).await {
+        Ok(conn_res) => {
+            let conn = conn_res?.with_attribute_server(server)?;
+            info!("[adv] connection established");
+            Ok(conn)
+        }
+        Err(_) => {
+            warn!("[adv] Try update central_addr");
+            // Advertise without central addr
+            let advertisement = get_peri_advertiser::<C>(id, None, &mut advertiser_data)?;
+            let advertiser = peripheral
+                .advertise(&AdvertisementParameters::default(), advertisement)
+                .await?;
+            match with_timeout(Duration::from_secs(300), advertiser.accept()).await {
+                Ok(re) => Ok(re?.with_attribute_server(server)?),
+                Err(_e) => Err(BleHostError::BleHost(Error::Timeout)),
+            }
+        }
+    }
+}
+
+fn get_peri_advertiser<'a, C: Controller>(
+    id: usize,
+    central_addr: Option<[u8; 6]>,
+    advertiser_data: &'a mut [u8; 31],
+) -> Result<Advertisement<'a>, BleHostError<C::Error>> {
     let advertisement = match central_addr {
         Some(addr) => Advertisement::ConnectableNonscannableDirected {
             peer: Address::random(addr),
         },
         None => {
+            info!("No central address provided, so we advertise as undirected");
             // No central address provided, so we advertise as undirected
             AdStructure::encode_slice(
                 &[
@@ -251,14 +292,7 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
             }
         }
     };
-
-    let advertiser = peripheral
-        .advertise(&AdvertisementParameters::default(), advertisement)
-        .await?;
-
-    let conn = advertiser.accept().await?.with_attribute_server(server)?;
-    info!("[adv] connection established");
-    Ok(conn)
+    Ok(advertisement)
 }
 
 /// This is a background task that is required to run forever alongside any other BLE tasks.

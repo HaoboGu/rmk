@@ -1,56 +1,127 @@
 /// Test cases for home row mod(HRM)
 ///
-/// For HRM, `enable_hrm` and `unilateral_tap` is enabled, `prior-idle-time` will be considered.
+/// For HRM, `enable_flow_tap` and `unilateral_tap` is enabled, `prior-idle-time` will be considered.
 pub mod common;
 
 use embassy_time::Duration;
 use rmk::combo::Combo;
-use rmk::config::{BehaviorConfig, CombosConfig, TapHoldConfig};
+use rmk::config::{BehaviorConfig, CombosConfig, Hand, KeyInfo, MorsesConfig};
 use rmk::k;
 use rmk::keyboard::Keyboard;
-use rmk::morse::MorseMode;
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::KeyCode;
 use rmk::types::modifier::ModifierCombination;
+use rmk_types::action::{MorseMode, MorseProfile};
 use rusty_fork::rusty_fork_test;
 
-use crate::common::morse::create_simple_morse_keyboard;
+use crate::common::morse::create_morse_keyboard;
 use crate::common::{KC_LGUI, KC_LSHIFT};
 
 fn create_hrm_keyboard() -> Keyboard<'static, 1, 5, 2> {
-    create_simple_morse_keyboard(BehaviorConfig {
-        tap_hold: TapHoldConfig {
-            enable_hrm: true,
-            mode: MorseMode::PermissiveHold,
-            unilateral_tap: true,
-            ..TapHoldConfig::default()
+    let key_info = Some([[
+        KeyInfo {
+            hand: Hand::Left,
+            ..Default::default()
         },
-        ..BehaviorConfig::default()
-    })
+        KeyInfo {
+            hand: Hand::Left,
+            ..Default::default()
+        },
+        KeyInfo {
+            hand: Hand::Right,
+            ..Default::default()
+        },
+        KeyInfo {
+            hand: Hand::Right,
+            ..Default::default()
+        },
+        KeyInfo {
+            hand: Hand::Right,
+            ..Default::default()
+        },
+    ]]);
+    create_morse_keyboard(
+        BehaviorConfig {
+            // All unknown hand, not home row
+            morse: MorsesConfig {
+                enable_flow_tap: true,
+                prior_idle_time: Duration::from_millis(120),
+                default_profile: MorseProfile::new(
+                    Some(true),
+                    Some(MorseMode::PermissiveHold),
+                    Some(250u16),
+                    Some(250u16),
+                ),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        key_info,
+    )
 }
 
 fn create_hrm_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
-    let combo_key = KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT)); //TODO hrm = TapHoldMode::PermissiveHold, true
-    let combo_key_2 = KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI)); //TODO hrm = TapHoldMode::PermissiveHold, true
-    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1)); //TODO hrm = TapHoldMode::PermissiveHold, true
+    let combo_key = KeyAction::TapHold(
+        Action::Key(KeyCode::B),
+        Action::Modifier(ModifierCombination::LSHIFT),
+        Default::default(),
+    );
+    let combo_key_2 = KeyAction::TapHold(
+        Action::Key(KeyCode::C),
+        Action::Modifier(ModifierCombination::LGUI),
+        Default::default(),
+    );
+    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1), Default::default());
 
-    create_simple_morse_keyboard(BehaviorConfig {
-        tap_hold: TapHoldConfig {
-            enable_hrm: true,
-            mode: MorseMode::PermissiveHold,
-            unilateral_tap: true,
-            ..TapHoldConfig::default()
+    let key_info: Option<[[KeyInfo; 5]; 1]> = Some([[
+        KeyInfo {
+            hand: Hand::Left,
+            ..Default::default()
         },
-        combo: CombosConfig {
-            combos: heapless::Vec::from_iter([
-                Combo::new([combo_key, combo_key_2], k!(X), None),
-                Combo::new([k!(A), combo_key], k!(Y), None),
-                Combo::new([combo_key, combo_key_2, combo_key_3], k!(Z), None),
-            ]),
-            timeout: Duration::from_millis(50),
+        KeyInfo {
+            hand: Hand::Left,
+            ..Default::default()
         },
-        ..BehaviorConfig::default()
-    })
+        KeyInfo {
+            hand: Hand::Right,
+            ..Default::default()
+        },
+        KeyInfo {
+            hand: Hand::Right,
+            ..Default::default()
+        },
+        KeyInfo {
+            hand: Hand::Right,
+            ..Default::default()
+        },
+    ]]);
+
+    create_morse_keyboard(
+        BehaviorConfig {
+            //hrm = MorseMode::PermissiveHold, true
+            morse: MorsesConfig {
+                enable_flow_tap: true,
+                prior_idle_time: Duration::from_millis(120),
+                default_profile: MorseProfile::new(
+                    Some(true),
+                    Some(MorseMode::PermissiveHold),
+                    Some(250u16),
+                    Some(250u16),
+                ),
+                ..Default::default()
+            },
+            combo: CombosConfig {
+                combos: heapless::Vec::from_iter([
+                    Combo::new([combo_key, combo_key_2], k!(X), None),
+                    Combo::new([k!(A), combo_key], k!(Y), None),
+                    Combo::new([combo_key, combo_key_2, combo_key_3], k!(Z), None),
+                ]),
+                timeout: Duration::from_millis(50),
+            },
+            ..BehaviorConfig::default()
+        },
+        key_info,
+    )
 }
 
 rusty_fork_test! {

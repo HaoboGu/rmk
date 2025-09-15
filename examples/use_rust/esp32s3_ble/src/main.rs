@@ -21,7 +21,7 @@ use esp_radio::ble::controller::BleConnector;
 use esp_storage::FlashStorage;
 use rmk::ble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, PerKeyConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
@@ -89,8 +89,15 @@ async fn main(_s: Spawner) {
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
     let mut behavior_config = BehaviorConfig::default();
-    let (keymap, mut storage) =
-        initialize_keymap_and_storage(&mut default_keymap, flash, &storage_config, &mut behavior_config).await;
+    let mut per_key_config = PerKeyConfig::default();
+    let (keymap, mut storage) = initialize_keymap_and_storage(
+        &mut default_keymap,
+        flash,
+        &storage_config,
+        &mut behavior_config,
+        &mut per_key_config,
+    )
+    .await;
 
     // Initialize the matrix and keyboard
     let debouncer = DefaultDebouncer::<ROW, COL>::new();

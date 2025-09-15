@@ -7,10 +7,11 @@ pub use ble_config::BleBatteryConfig;
 use embassy_time::Duration;
 use heapless::Vec;
 use macro_config::KeyboardMacrosConfig;
+use rmk_types::action::{MorseMode, MorseProfile};
 
 use crate::combo::Combo;
 use crate::fork::Fork;
-use crate::morse::{Morse, MorseMode};
+use crate::morse::Morse;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MORSE_MAX_NUM};
 
 /// Internal configurations for RMK keyboard.
@@ -24,12 +25,25 @@ pub struct RmkConfig<'a> {
     pub ble_battery_config: BleBatteryConfig<'a>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Hand {
+    Unknown,
+    Left,
+    Right,
+}
+
+impl Default for Hand {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
 /// Config for configurable action behavior
 #[derive(Debug, Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap: TapConfig,
-    pub tap_hold: TapHoldConfig,
     pub one_shot: OneShotConfig,
     pub combo: CombosConfig,
     pub fork: ForksConfig,
@@ -55,40 +69,50 @@ impl Default for TapConfig {
     }
 }
 
-/// Configuration for morse behavior
+/// Configuration for morse, tap dance, tap-hold and home row mods
 #[derive(Clone, Debug)]
 pub struct MorsesConfig {
+    pub enable_flow_tap: bool,
+    pub prior_idle_time: Duration, //used only when flow tap is enabled
+    pub default_profile: MorseProfile,
+
     pub morses: Vec<Morse, MORSE_MAX_NUM>,
 }
 
 impl Default for MorsesConfig {
     fn default() -> Self {
-        Self { morses: Vec::new() }
+        Self {
+            enable_flow_tap: false,
+            prior_idle_time: Duration::from_millis(120),
+            default_profile: MorseProfile::new(Some(false), Some(MorseMode::Normal), Some(250u16), Some(250u16)),
+            morses: Vec::new(),
+        }
     }
 }
 
-/// Configurations for morse behavior
-#[derive(Clone, Debug)]
-pub struct TapHoldConfig {
-    pub enable_hrm: bool,
-    pub prior_idle_time: Duration,
-    /// Default timeout time for tap or hold
-    pub timeout: Duration,
-    /// Default mode
-    pub mode: MorseMode,
-    /// If the previous key is on the same "hand", the current key will be determined as a tap
-    pub unilateral_tap: bool,
+/// Per key position information about a key
+/// In the future more fields can be added here for the future configurator GUI
+/// - physical key position and orientation
+/// - key size,
+/// - key shape,
+/// - backlight sequence number, etc.
+/// IDEA: For Keyboards with low memory, these should be compile time constants to save RAM?
+#[derive(Clone, Copy, Default, Debug)]
+pub struct KeyInfo {
+    /// store hand information for unilateral_tap processing
+    pub hand: Hand,
+    /// this gives possibility to override some the default MorseProfile setting in certain key positions (typically home row mods)
+    pub morse_profile_override: MorseProfile,
 }
 
-impl Default for TapHoldConfig {
-    fn default() -> Self {
-        Self {
-            enable_hrm: false,
-            unilateral_tap: false,
-            mode: MorseMode::Normal,
-            prior_idle_time: Duration::from_millis(120),
-            timeout: Duration::from_millis(250),
-        }
+#[derive(Debug, Default)]
+pub struct PerKeyConfig<const ROW: usize, const COL: usize> {
+    pub key_info: Option<[[KeyInfo; COL]; ROW]>,
+}
+
+impl<const ROW: usize, const COL: usize> PerKeyConfig<ROW, COL> {
+    pub fn new(key_info: Option<[[KeyInfo; COL]; ROW]>) -> Self {
+        Self { key_info }
     }
 }
 
