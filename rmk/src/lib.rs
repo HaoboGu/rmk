@@ -89,6 +89,8 @@ pub mod keymap;
 pub mod layout_macro;
 pub mod light;
 pub mod matrix;
+#[cfg(feature = "bidirectional")]
+pub mod bidirectional_matrix;
 pub mod morse;
 #[cfg(feature = "split")]
 pub mod split;
