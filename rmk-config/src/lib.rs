@@ -428,7 +428,6 @@ pub struct BehaviorConfig {
     pub macros: Option<MacrosConfig>,
     pub fork: Option<ForksConfig>,
     pub morse: Option<MorsesConfig>,
-    pub key_info: Option<Vec<Vec<KeyInfo>>>,
 }
 
 /// Per Key configurations profiles for morse, tap-hold, etc.
@@ -561,7 +560,7 @@ pub struct MorsesConfig {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MorseConfig {
-    // name of tap hold profile (to address BehaviorConfig::morse.profiles[self.profile])
+    // name of morse profile (to address BehaviorConfig::morse.profiles[self.profile])
     pub profile: Option<String>,
 
     pub tap: Option<String>,

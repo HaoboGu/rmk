@@ -4,56 +4,11 @@ use std::collections::HashMap;
 
 use quote::quote;
 use rmk_config::{
-    CombosConfig, ForksConfig, KeyInfo, KeyboardTomlConfig, MacrosConfig, MorseActionPair,
-    MorseConfig, MorsesConfig, OneShotConfig, TriLayerConfig, MorseProfile, 
+    CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, MorseActionPair, MorseConfig, MorseProfile,
+    MorsesConfig, OneShotConfig, TriLayerConfig,
 };
 
 use crate::layout::{get_key_with_alias, parse_key};
-
-/// Push rows in the key_info
-fn expand_key_info(
-    info: &Vec<Vec<KeyInfo>>,
-    default_profile: &Option<MorsesConfig>,
-) -> proc_macro2::TokenStream {
-    let mut rows = vec![];
-    for row in info {
-        rows.push(expand_key_info_row(row, default_profile));
-    }
-    quote! { ::core::option::Option::Some([#(#rows), *]) }
-}
-
-/// Push keys info in the row
-fn expand_key_info_row(
-    row: &Vec<KeyInfo>,
-    morses_config: &Option<MorsesConfig>,
-) -> proc_macro2::TokenStream {
-    let mut key_info = vec![];
-    for key in row {
-        let hand = match key.hand {
-            'l' | 'L' => quote! { rmk::config::Hand::Left },
-            'r' | 'R' => quote! { rmk::config::Hand::Right },
-            _ => quote! { rmk::config::Hand::Unknown },
-        };
-        if let Some(profile_name) = &key.profile {
-            if let Some(config) = morses_config
-                && let Some(profiles) = &config.profiles
-            {
-                if let Some(profile) = profiles.get(profile_name)
-                {
-                    let config = expand_profile(profile);
-                    key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, morse_profile_override: #config.into() } });
-                } else {
-                    panic!("\n❌ `{:?}` profile name is not found in behavior.morse.profiles", profile_name);
-                }
-            } else {
-                panic!("\n❌ behavior.morse.profiles is missing, so `{:?}` profile name is not found", profile_name);
-            }
-        } else {
-            key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, morse_profile_override: ::rmk::config::MorseProfile::default() } });
-        };
-    }
-    quote! { [#(#key_info), *] }
-}
 
 fn expand_tri_layer(tri_layer: &Option<TriLayerConfig>) -> proc_macro2::TokenStream {
     match tri_layer {
@@ -88,7 +43,10 @@ fn expand_one_shot(one_shot: &Option<OneShotConfig>) -> proc_macro2::TokenStream
     }
 }
 
-fn expand_morse_action_pair(action_pair: &MorseActionPair) -> proc_macro2::TokenStream {
+fn expand_morse_action_pair(
+    action_pair: &MorseActionPair,
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> proc_macro2::TokenStream {
     let mut pattern = 0b1u16;
     for ch in action_pair.pattern.chars() {
         match ch {
@@ -100,13 +58,18 @@ fn expand_morse_action_pair(action_pair: &MorseActionPair) -> proc_macro2::Token
             _ => {}
         }
     }
-    let action = parse_key(action_pair.action.to_owned());
+    let action = parse_key(action_pair.action.to_owned(), profiles);
     quote! { (rmk::morse::MorsePattern::from_u16(#pattern), #action.to_action()) }
 }
 
-fn expand_morse_actions(actions: &Vec<MorseActionPair>) -> proc_macro2::TokenStream {
+fn expand_morse_actions(
+    actions: &Vec<MorseActionPair>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> proc_macro2::TokenStream {
     if actions.len() > 0 {
-        let action_pair_def = actions.iter().map(|action_pair| expand_morse_action_pair(action_pair));
+        let action_pair_def = actions
+            .iter()
+            .map(|action_pair| expand_morse_action_pair(action_pair, profiles));
         quote! {
             actions: ::rmk::heapless::Vec::from_iter([#(#action_pair_def),*]),
         }
@@ -159,13 +122,18 @@ fn expand_morse(morse: &Option<MorsesConfig>) -> proc_macro2::TokenStream {
 }
 
 fn expand_profile(profile: &MorseProfile) -> proc_macro2::TokenStream {
-        
-    let mode = if let Some(enable) = profile.permissive_hold && enable {        
-        quote! { ::core::option::Option::Some(rmk::morse::MorseMode::PermissiveHold) }
-    } else if let Some(enable) = profile.hold_on_other_press && enable {        
-        quote! { ::core::option::Option::Some(rmk::morse::MorseMode::HoldOnOtherPress) }
-    } else if let Some(enable) = profile.normal_mode && enable {        
-        quote! { ::core::option::Option::Some(rmk::morse::MorseMode::Normal) }
+    let mode = if let Some(enable) = profile.permissive_hold
+        && enable
+    {
+        quote! { ::core::option::Option::Some(rmk::types::action::MorseMode::PermissiveHold) }
+    } else if let Some(enable) = profile.hold_on_other_press
+        && enable
+    {
+        quote! { ::core::option::Option::Some(rmk::types::action::MorseMode::HoldOnOtherPress) }
+    } else if let Some(enable) = profile.normal_mode
+        && enable
+    {
+        quote! { ::core::option::Option::Some(rmk::types::action::MorseMode::Normal) }
     } else {
         quote! { ::core::option::Option::None }
     };
@@ -175,33 +143,58 @@ fn expand_profile(profile: &MorseProfile) -> proc_macro2::TokenStream {
     } else {
         quote! { ::core::option::Option::None }
     };
-    
+
     let hold_timeout_ms = match &profile.hold_timeout {
-        Some (t) => {
+        Some(t) => {
             let timeout = t.0 as u16;
             quote! { ::core::option::Option::Some(#timeout) }
-        },
-        None => quote! { ::core::option::Option::None }   
+        }
+        None => quote! { ::core::option::Option::None },
     };
 
     let gap_timeout_ms = match &profile.gap_timeout {
-        Some (t) => {
+        Some(t) => {
             let timeout = t.0 as u16;
             quote! { ::core::option::Option::Some(#timeout) }
-        },
-        None => quote! { ::core::option::Option::None }
+        }
+        None => quote! { ::core::option::Option::None },
     };
 
-    quote! { ::rmk::config::MorseProfile::new(#unilateral_tap, #mode, #hold_timeout_ms, #gap_timeout_ms) }    
+    quote! { rmk::types::action::MorseProfile::new(#unilateral_tap, #mode, #hold_timeout_ms, #gap_timeout_ms) }
 }
 
-fn expand_combos(combos: &Option<CombosConfig>) -> proc_macro2::TokenStream {
+pub(crate) fn expand_profile_name(
+    profile_name: &str,
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> proc_macro2::TokenStream {
+    if let Some(profiles) = profiles {
+        if let Some(profile) = profiles.get(profile_name) {
+            let morse_profile = expand_profile(profile);
+            quote! { #morse_profile }
+        } else {
+            panic!(
+                "\n❌ `{:?}` profile name is not found in behavior.morse.profiles",
+                profile_name
+            );
+        }
+    } else {
+        panic!(
+            "\n❌ behavior.morse.profiles is missing, so `{:?}` profile name is not found",
+            profile_name
+        );
+    }
+}
+
+fn expand_combos(
+    combos: &Option<CombosConfig>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> proc_macro2::TokenStream {
     let default = quote! { ::core::default::Default::default() };
     match combos {
         Some(combos) => {
             let combos_def = combos.combos.iter().map(|combo| {
-                let actions = combo.actions.iter().map(|a| parse_key(a.to_owned()));
-                let output = parse_key(combo.output.to_owned());
+                let actions = combo.actions.iter().map(|a| parse_key(a.to_owned(), profiles));
+                let output = parse_key(combo.output.to_owned(), profiles);
                 let layer = match combo.layer {
                     Some(layer) => quote! { ::core::option::Option::Some(#layer) },
                     None => quote! { ::core::option::Option::None },
@@ -266,21 +259,16 @@ fn expand_macros(macros: &Option<MacrosConfig>) -> proc_macro2::TokenStream {
     }
 }
 
-fn expand_morses(morses: &Vec<MorseConfig>, profiles: &Option<HashMap<String, MorseProfile>>) -> proc_macro2::TokenStream {    
+fn expand_morses(
+    morses: &Vec<MorseConfig>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> proc_macro2::TokenStream {
     let morses_def = morses.iter().map(|morse| {
-        let profile = if let Some(profile_name) = &morse.profile {            
-            if let Some(profiles) = profiles {
-                if let Some(profile) = profiles.get(profile_name) {
-                    let morse_profile = expand_profile(profile);
-                    quote! { #morse_profile.into() }
-                } else {
-                    panic!("\n❌ `{:?}` profile name is not found in behavior.morse.profiles", profile_name);
-                }       
-            } else {
-                panic!("\n❌ behavior.morse.profiles is missing, so `{:?}` profile name is not found", profile_name);
-            }
-        } else {                
-            quote! { ::rmk::config::MorseProfile::default() }
+        let profile = if let Some(profile_name) = &morse.profile {
+            let morse_profile = expand_profile_name(&profile_name, &profiles);
+            quote! { #morse_profile }
+        } else {
+            quote! { rmk::types::action::MorseProfile::const_default() }
         };
 
         if let Some(morse_actions) = &morse.morse_actions {
@@ -288,7 +276,7 @@ fn expand_morses(morses: &Vec<MorseConfig>, profiles: &Option<HashMap<String, Mo
                 panic!("\n❌ keyboard.toml: `morse_actions` cannot be used together with `tap_actions`, `hold_actions`, `tap`, `hold`, `hold_after_tap`, or `double_tap`. Please check the documentation: https://rmk.rs/docs/features/configuration/behavior.html#morse");
             }
 
-            let actions_def = expand_morse_actions(&morse_actions);
+            let actions_def = expand_morse_actions(&morse_actions, profiles);
 
             quote! {
                 ::rmk::morse::Morse {
@@ -307,7 +295,7 @@ fn expand_morses(morses: &Vec<MorseConfig>, profiles: &Option<HashMap<String, Mo
             let tap_actions_def = match &morse.tap_actions {
                 Some(tap_actions) => {
                     let actions = tap_actions.iter().map(|action| {
-                        let parsed_action = parse_key(action.clone());
+                        let parsed_action = parse_key(action.clone(), profiles);
                         quote! { #parsed_action }
                     });
                     quote! { ::rmk::heapless::Vec::from_iter([#(#actions.to_action()),*]) }
@@ -318,7 +306,7 @@ fn expand_morses(morses: &Vec<MorseConfig>, profiles: &Option<HashMap<String, Mo
             let hold_actions_def = match &morse.hold_actions {
                 Some(hold_actions) => {
                     let actions = hold_actions.iter().map(|action| {
-                        let parsed_action = parse_key(action.clone());
+                        let parsed_action = parse_key(action.clone(), profiles);
                         quote! { #parsed_action }
                     });
                     quote! { ::rmk::heapless::Vec::from_iter([#(#actions.to_action()),*]) }
@@ -334,10 +322,10 @@ fn expand_morses(morses: &Vec<MorseConfig>, profiles: &Option<HashMap<String, Mo
                 )
             }
         } else {
-            let tap = parse_key(morse.tap.clone().unwrap_or_else(|| "No".to_string()));
-            let hold = parse_key(morse.hold.clone().unwrap_or_else(|| "No".to_string()));
-            let hold_after_tap = parse_key(morse.hold_after_tap.clone().unwrap_or_else(|| "No".to_string()));
-            let double_tap = parse_key(morse.double_tap.clone().unwrap_or_else(|| "No".to_string()));
+            let tap = parse_key(morse.tap.clone().unwrap_or_else(|| "No".to_string()), profiles);
+            let hold = parse_key(morse.hold.clone().unwrap_or_else(|| "No".to_string()), profiles);
+            let hold_after_tap = parse_key(morse.hold_after_tap.clone().unwrap_or_else(|| "No".to_string()), profiles);
+            let double_tap = parse_key(morse.double_tap.clone().unwrap_or_else(|| "No".to_string()), profiles);
 
             quote! {
                 ::rmk::morse::Morse::new_from_vial(
@@ -351,7 +339,7 @@ fn expand_morses(morses: &Vec<MorseConfig>, profiles: &Option<HashMap<String, Mo
         }
     });
 
-    quote! { morses: ::rmk::heapless::Vec::from_iter([#(#morses_def),*]), }        
+    quote! { morses: ::rmk::heapless::Vec::from_iter([#(#morses_def),*]), }
 }
 
 #[derive(PartialEq, Eq, Default)]
@@ -479,14 +467,17 @@ fn parse_state_combination(states_str: &str) -> StateBitsMacro {
     combination
 }
 
-fn expand_forks(forks: &Option<ForksConfig>) -> proc_macro2::TokenStream {
+fn expand_forks(
+    forks: &Option<ForksConfig>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> proc_macro2::TokenStream {
     let default = quote! { ::core::default::Default::default() };
     match forks {
         Some(forks) => {
             let forks_def = forks.forks.iter().map(|fork| {
-                let trigger = parse_key(fork.trigger.to_owned());
-                let negative_output = parse_key(fork.negative_output.to_owned());
-                let positive_output = parse_key(fork.positive_output.to_owned());
+                let trigger = parse_key(fork.trigger.to_owned(), profiles);
+                let negative_output = parse_key(fork.negative_output.to_owned(), profiles);
+                let positive_output = parse_key(fork.positive_output.to_owned(), profiles);
                 let match_any  = fork.match_any.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
                 let match_none = fork.match_none.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
                 let kept = fork.kept_modifiers.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
@@ -511,39 +502,29 @@ fn expand_forks(forks: &Option<ForksConfig>) -> proc_macro2::TokenStream {
 }
 
 pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
-    let (behavior, layout) = keyboard_config.get_behavior_config().unwrap();
+    let profiles = &keyboard_config
+        .get_behavior_config()
+        .unwrap()
+        .morse
+        .and_then(|m| m.profiles);
+    let behavior = keyboard_config.get_behavior_config().unwrap();
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
     let one_shot = expand_one_shot(&behavior.one_shot);
-    let combos = expand_combos(&behavior.combo);
+    let combos = expand_combos(&behavior.combo, profiles);
     let macros = expand_macros(&behavior.macros);
-    let forks = expand_forks(&behavior.fork);
+    let forks = expand_forks(&behavior.fork, profiles);
     let morse = expand_morse(&behavior.morse);
 
-    let row = layout.rows as usize;
-    let col = layout.cols as usize;
-    
-    let key_info = if let Some(info) = &behavior.key_info
-        && info.len() == row
-        && info[0].len() == col
-    {
-        expand_key_info(info, &behavior.morse)
-    } else {
-        quote! { ::core::option::Option::None }
-    };
-
     quote! {
-        let mut behavior_config = ::rmk::config::BehaviorConfig::<#row, #col> {
+        let mut behavior_config = ::rmk::config::BehaviorConfig {
             tri_layer: #tri_layer,
             one_shot: #one_shot,
             combo: #combos,
             fork: #forks,
             morse: #morse,
             keyboard_macros: #macros,
-            // keyboard_macros: ::rmk::config::macro_config::KeyboardMacrosConfig::default(),
             mouse_key: ::rmk::config::MouseKeyConfig::default(),
             tap: ::rmk::config::TapConfig::default(),
-
-            key_info: #key_info,
         };
     }
 }

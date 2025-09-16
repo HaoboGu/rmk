@@ -63,6 +63,7 @@ pub use {embassy_futures, futures, heapless, rmk_macro as macros, rmk_types as t
 #[cfg(feature = "storage")]
 use {embassy_futures::select::select, embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 
+use crate::config::PerKeyConfig;
 use crate::keyboard::LOCK_LED_STATES;
 use crate::state::ConnectionState;
 
@@ -88,6 +89,8 @@ pub mod keymap;
 pub mod layout_macro;
 pub mod light;
 pub mod matrix;
+#[cfg(feature = "bidirectional")]
+pub mod bidirectional_matrix;
 pub mod morse;
 #[cfg(feature = "split")]
 pub mod split;
@@ -100,9 +103,10 @@ pub mod via;
 
 pub async fn initialize_keymap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
     default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    behavior_config: &'a mut config::BehaviorConfig<ROW, COL>,
+    behavior_config: &'a mut config::BehaviorConfig,
+    key_info: &'a mut PerKeyConfig<ROW, COL>,
 ) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>> {
-    RefCell::new(KeyMap::new(default_keymap, None, behavior_config).await)
+    RefCell::new(KeyMap::new(default_keymap, None, behavior_config, key_info).await)
 }
 
 pub async fn initialize_encoder_keymap<
@@ -114,9 +118,10 @@ pub async fn initialize_encoder_keymap<
 >(
     default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
-    behavior_config: &'a mut config::BehaviorConfig<ROW, COL>,
+    behavior_config: &'a mut config::BehaviorConfig,
+    key_info: &'a mut PerKeyConfig<ROW, COL>,
 ) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
-    RefCell::new(KeyMap::new(default_keymap, Some(default_encoder_map), behavior_config).await)
+    RefCell::new(KeyMap::new(default_keymap, Some(default_encoder_map), behavior_config, key_info).await)
 }
 
 #[cfg(feature = "storage")]
@@ -132,7 +137,8 @@ pub async fn initialize_encoder_keymap_and_storage<
     default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
     flash: F,
     storage_config: &config::StorageConfig,
-    behavior_config: &'a mut config::BehaviorConfig<ROW, COL>,
+    behavior_config: &'a mut config::BehaviorConfig,
+    key_info: &'a mut PerKeyConfig<ROW, COL>,
 ) -> (
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
@@ -152,6 +158,7 @@ pub async fn initialize_encoder_keymap_and_storage<
             Some(default_encoder_map),
             Some(&mut storage),
             behavior_config,
+            key_info,
         )
         .await,
     );
@@ -169,15 +176,17 @@ pub async fn initialize_keymap_and_storage<
     default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     flash: F,
     storage_config: &config::StorageConfig,
-    behavior_config: &'a mut config::BehaviorConfig<ROW, COL>,
+    behavior_config: &'a mut config::BehaviorConfig,
+    key_info: &'a mut PerKeyConfig<ROW, COL>,
 ) -> (
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, 0>>,
     Storage<F, ROW, COL, NUM_LAYER, 0>,
 ) {
     let mut storage = Storage::new(flash, default_keymap, &None, storage_config, &behavior_config).await;
 
-    let keymap =
-        RefCell::new(KeyMap::new_from_storage(default_keymap, None, Some(&mut storage), behavior_config).await);
+    let keymap = RefCell::new(
+        KeyMap::new_from_storage(default_keymap, None, Some(&mut storage), behavior_config, key_info).await,
+    );
     (keymap, storage)
 }
 

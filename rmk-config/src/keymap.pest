@@ -14,6 +14,7 @@ strict_identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 loose_identifier = @{ (!( "(" | ")" | "," | "@" | WHITESPACE ) ~ ANY)+ }
 
 keycode_name = @{ loose_identifier }
+profile_name = { strict_identifier }
 
 // Number (for layer indices)
 number = @{ ASCII_DIGIT+ }
@@ -63,7 +64,7 @@ mo_action = { ^"MO" ~ "(" ~ layer_reference ~ ")" }
 lm_action = { ^"LM" ~ "(" ~ layer_reference ~ "," ~ modifier_combination ~ ")" }
 
 // Rule 4.4: LT(n, key) - Layer Activate or Tap Key (Tap/Hold)
-lt_action = { ^"LT" ~ "(" ~ layer_reference ~ "," ~ keycode_name ~ ")" }
+lt_action = { ^"LT" ~ "(" ~ layer_reference ~ "," ~ keycode_name ~ ("," ~ profile_name)? ~ ")" }
 
 // Rule 4.5: OSL(n) - One-Shot Layer
 osl_action = { ^"OSL" ~ "(" ~ layer_reference ~ ")" }
@@ -84,32 +85,26 @@ layer_action = _{
 }
 
 // Rule 5: MT(key, modifier) - Modifier Tap-Hold
-mt_action = { ^"MT" ~ "(" ~ keycode_name ~ "," ~ modifier_combination ~ ")" }
+mt_action = { ^"MT" ~ "(" ~ keycode_name ~ "," ~ modifier_combination ~ ("," ~ profile_name)? ~ ")" }
 
 // Rule 6: TH(key-tap, key-hold) - Generic Tap-Hold
-th_action = { ^"TH" ~ "(" ~ keycode_name ~ "," ~ keycode_name ~ ")" }
-
-// Grouping for Tap/Hold Actions
-tap_hold_action = _{ mt_action | th_action }
+th_action = { ^"TH" ~ "(" ~ keycode_name ~ "," ~ keycode_name ~ ("," ~ profile_name)? ~ ")" }
 
 // Rule 7: SHIFTED(key)
 shifted_action = { ^"SHIFTED" ~ "(" ~ keycode_name ~ ")" }
 
 // Rule 8: TD(n)/MORSE(n) - Morse index (in Vial its simplest form is known as "Tap Dance", so the TD name is used)
-morse_name = @{
-    ^"TD" | ^"MORSE"
-}
-morse_action = { morse_name ~ "(" ~ number ~ ")" }
+morse_action = { (^"TD" | ^"MORSE") ~ "(" ~ number ~ ")" }
 
 // Rule 9: Macro(n) - Trigger Macro
-trigger_macro_action = { ^"Macro" ~ "(" ~ number ~ ")" }
+trigger_macro_action = { ^"MACRO" ~ "(" ~ number ~ ")" }
 
 // --- Top Level Rules ---
 
 // A single key action entry in the map
 // Order is important: more specific function-like rules first, then aliases/specials, then simple keycodes.
 key_action = _{ // Consume surrounding whitespace/comments implicitly
-    wm_action | osm_action | layer_action | tap_hold_action | shifted_action | morse_action | trigger_macro_action | no_action | transparent_action | simple_keycode
+    wm_action | osm_action | layer_action | mt_action | th_action | shifted_action | morse_action | trigger_macro_action | no_action | transparent_action | simple_keycode
 }
 
 // The entire key map string: Start, zero or more key actions, End.
@@ -121,10 +116,9 @@ key_map = { SOI ~ key_action* ~ EOI }
 left_hand = { ^"L" | ^"LH" | ^"Left" }
 right_hand = { ^"R" | ^"RH" | ^"Right" }
 hand = _{ left_hand | right_hand }
-profile = { strict_identifier }
 
 // Define the key_info structure, capturing row and col numbers, and optionally some extra key information
-keypos_info = { "(" ~ number ~ "," ~ number ~ ("," ~ hand)? ~ (":" ~ profile)? ~ ")" }
+keypos_info = { "(" ~ number ~ "," ~ number ~ ("," ~ hand)? ~ (":" ~ profile_name)? ~ ")" }
 
 // The main rule: Start, zero or more key_info or whitespace occurrences, End.
 // This ensures the entire string consists *only* of valid key_info tuples and whitespace.

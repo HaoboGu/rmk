@@ -728,8 +728,8 @@ rusty_fork_test! {
                     combo: CombosConfig {
                         combos: heapless::Vec::from_iter([
                             Combo::new(
-                                [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT)),
-                                 KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI))],
+                                [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT), Default::default()),
+                                 KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI), Default::default())],
                                 k!(X),
                                 None,
                             )
@@ -760,8 +760,8 @@ rusty_fork_test! {
                     combo: CombosConfig {
                         combos: heapless::Vec::from_iter([
                             Combo::new(
-                                [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT)),
-                                 KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI))],
+                                [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT), Default::default()),
+                                 KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI), Default::default())],
                                 k!(X),
                                 None,
                             )

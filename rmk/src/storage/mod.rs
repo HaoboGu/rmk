@@ -10,7 +10,7 @@ use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
-use rmk_types::action::{EncoderAction, KeyAction};
+use rmk_types::action::{EncoderAction, KeyAction, MorseProfile};
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
 use rmk_types::mouse_button::MouseButtons;
@@ -26,7 +26,7 @@ use {
 
 use crate::channel::FLASH_CHANNEL;
 use crate::combo::Combo;
-use crate::config::{self, MorseProfile, StorageConfig};
+use crate::config::{self, StorageConfig};
 use crate::fork::{Fork, StateBits};
 use crate::morse::{Morse, MorsePattern};
 #[cfg(all(feature = "_ble", feature = "split"))]
@@ -94,9 +94,9 @@ pub(crate) enum FlashOperationMessage {
     TapCapslockInterval(u16),
     // The prior-idle-time in ms used for in flow tap
     PriorIdleTime(u16),
-    // Timeout time for morse keys in default tap hold profile
+    // Timeout time for morse keys in default morse profile
     MorseHoldTimeout(u16),
-    // Whether the unilateral tap is enabled in default tap hold profile
+    // Whether the unilateral tap is enabled in default morse profile
     UnilateralTap(bool),
 }
 
@@ -753,14 +753,7 @@ pub async fn new_storage_for_split_peripheral<F: AsyncNorFlash>(
     flash: F,
     storage_config: StorageConfig,
 ) -> Storage<F, 0, 0, 0, 0> {
-    Storage::<F, 0, 0, 0, 0>::new(
-        flash,
-        &[],
-        &None,
-        &storage_config,
-        &config::BehaviorConfig::<0, 0>::default(),
-    )
-    .await
+    Storage::<F, 0, 0, 0, 0>::new(flash, &[], &None, &storage_config, &config::BehaviorConfig::default()).await
 }
 
 pub struct Storage<
@@ -806,7 +799,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         storage_config: &StorageConfig,
-        behavior_config: &config::BehaviorConfig<ROW, COL>,
+        behavior_config: &config::BehaviorConfig,
     ) -> Self {
         // Check storage setting
         assert!(
@@ -1228,7 +1221,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
             if let Some(StorageData::ComboData(combo)) = read_data {
                 let mut actions: Vec<KeyAction, COMBO_MAX_LENGTH> = Vec::new();
-                for &action in combo.actions.iter().filter(|&&a| a != KeyAction::No) {
+                for &action in combo.actions.iter().filter(|&&a| !a.is_empty()) {
                     let _ = actions.push(action);
                 }
                 *item = Combo::new(actions, combo.output, item.layer);
@@ -1282,7 +1275,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
     pub(crate) async fn read_behavior_config(
         &mut self,
-        behavior_config: &mut config::BehaviorConfig<ROW, COL>,
+        behavior_config: &mut config::BehaviorConfig,
     ) -> Result<(), ()> {
         if let Some(StorageData::BehaviorConfig(c)) = fetch_item::<u32, StorageData, _>(
             &mut self.flash,
@@ -1314,7 +1307,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         &mut self,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
-        behavior: &config::BehaviorConfig<ROW, COL>,
+        behavior: &config::BehaviorConfig,
     ) -> Result<(), ()> {
         let mut cache = NoCache::new();
         // Save storage config
@@ -1431,7 +1424,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         &mut self,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: &Option<&[[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
-        behavior: &config::BehaviorConfig<ROW, COL>,
+        behavior: &config::BehaviorConfig,
     ) -> Result<(), SSError<F::Error>> {
         let mut cache = NoCache::new();
 
@@ -1638,13 +1631,12 @@ macro_rules! read_storage {
 
 #[cfg(test)]
 mod tests {
-    use rmk_types::action::Action;
+    use rmk_types::action::{Action, MorseMode, MorseProfile};
     use rmk_types::keycode::KeyCode;
     use sequential_storage::map::Value;
 
     use super::*;
-    use crate::config::MorseProfile;
-    use crate::morse::{HOLD, MorseMode, TAP};
+    use crate::morse::{HOLD, TAP};
 
     #[test]
     fn test_morse_serialization_deserialization() {
