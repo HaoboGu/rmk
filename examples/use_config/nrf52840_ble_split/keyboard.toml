@@ -37,29 +37,37 @@ capslock.low_active = true
 numslock.pin = "P0_01"
 numslock.low_active = false
 
-[behavior]
-tap_hold = { enable_hrm = true, prior_idle_time = "120ms", hold_timeout = "250ms" }
+# default profile for morse, tap dance and tap-hold keys:
+[behavior.morse]
+enable_flow_tap = true
+prior_idle_time = "120ms"
+hold_timeout = "240ms"
+gap_timeout = "230ms"
 
-[[behavior.tap_dance.tap_dances]]
+[behavior.morse.profiles]
+# matrix_map may refer these to override the defaults given in [behavior.morse] for some key positions - this example is a home row mod
+H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
+H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
+
+# list of morse (tap dance) keys:
+[[behavior.morse.morses]]
 tap = "A"
 hold = "WM(A, LShift)"
 double_tap = "CapsLock"
 hold_after_tap = "A"
-timeout = "150ms"
+profile = "H2"
 
-[[behavior.tap_dance.tap_dances]]
+[[behavior.morse.morses]]
 tap = "Space"
 hold = "LCtrl"
 
-[[behavior.tap_dance.tap_dances]]
+[[behavior.morse.morses]]
 tap_actions = ["F1", "F2", "F3", "F4"]  # 1 tap = F1, 2 taps = F2, 3 taps = F3, 4 taps = F4
 hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)"]  # Hold after 1 tap = layer 1, etc.
-timeout = "200ms"
 
-[[behavior.tap_dance.tap_dances]]
+[[behavior.morse.morses]]
 tap_actions = ["Tab", "Escape", "CapsLock"]  # 1 tap = Tab, 2 taps = Escape, 3 taps = CapsLock
 hold_actions = ["LCtrl", "LAlt", "LShift"]  # Hold after 1 tap = Ctrl, etc.
-timeout = "250ms"
 
 [split]
 connection = "ble"

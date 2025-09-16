@@ -21,7 +21,7 @@ use {
 
 use super::ble_server::CCCD_TABLE_SIZE;
 use crate::NUM_BLE_PROFILE;
-use crate::ble::trouble::ACTIVE_PROFILE;
+use crate::ble::ACTIVE_PROFILE;
 use crate::channel::BLE_PROFILE_CHANNEL;
 use crate::state::CONNECTION_TYPE;
 
@@ -43,13 +43,15 @@ impl Default for ProfileInfo {
         Self {
             slot_num: 0,
             removed: false,
-            info: BondInformation {
-                identity: Identity {
+            info: BondInformation::new(
+                Identity {
                     bd_addr: BdAddr::default(),
                     irk: None,
                 },
-                ltk: LongTermKey(0),
-            },
+                LongTermKey(0),
+                SecurityLevel::NoEncryption,
+                false,
+            ),
             cccd_table: CccdTable::<CCCD_TABLE_SIZE>::default(),
         }
     }
@@ -209,6 +211,12 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             .position(|info| info.slot_num == active_profile)
         {
             // Check whether the CCCD table is the same as the current one
+            debug!(
+                "Updating profile {} CCCD table: {:?} from {:?}",
+                active_profile,
+                table,
+                self.bonded_devices[index].cccd_table.inner()
+            );
             if self.bonded_devices[index].cccd_table.inner() == table.inner() {
                 info!("Skip updating same CCCD table");
                 return;

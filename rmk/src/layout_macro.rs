@@ -10,7 +10,9 @@ macro_rules! layer {
 #[macro_export]
 macro_rules! k {
     ($k: ident) => {
-        $crate::action::KeyAction::Single($crate::action::Action::Key($crate::keycode::KeyCode::$k))
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::Key(
+            $crate::types::keycode::KeyCode::$k,
+        ))
     };
 }
 
@@ -18,8 +20,8 @@ macro_rules! k {
 #[macro_export]
 macro_rules! wm {
     ($x: ident, $m: expr) => {
-        $crate::action::KeyAction::Single($crate::action::Action::KeyWithModifier(
-            $crate::keycode::KeyCode::$x,
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::KeyWithModifier(
+            $crate::types::keycode::KeyCode::$x,
             $m,
         ))
     };
@@ -29,7 +31,7 @@ macro_rules! wm {
 #[macro_export]
 macro_rules! a {
     ($a: ident) => {
-        $crate::action::KeyAction::$a
+        $crate::types::action::KeyAction::$a
     };
 }
 
@@ -37,7 +39,7 @@ macro_rules! a {
 #[macro_export]
 macro_rules! mo {
     ($x: literal) => {
-        $crate::action::KeyAction::Single($crate::action::Action::LayerOn($x))
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::LayerOn($x))
     };
 }
 
@@ -45,7 +47,7 @@ macro_rules! mo {
 #[macro_export]
 macro_rules! lm {
     ($x: literal, $m: expr) => {
-        $crate::action::KeyAction::Single($crate::action::Action::LayerOnWithModifier($x, $m))
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::LayerOnWithModifier($x, $m))
     };
 }
 
@@ -53,10 +55,22 @@ macro_rules! lm {
 #[macro_export]
 macro_rules! lt {
     ($x: literal, $k: ident) => {
-        $crate::action::KeyAction::Morse($crate::morse::Morse::new_layer_tap_hold(
-            $crate::action::Action::Key($crate::keycode::KeyCode::$k),
-            $x,
-        ))
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$k),
+            $crate::types::action::Action::LayerOn($x),
+            $crate::types::action::MorseProfile::const_default(),
+        )
+    };
+}
+/// Create a layer activate action or tap key(tap/hold) with profile
+#[macro_export]
+macro_rules! ltp {
+    ($x: literal, $k: ident, $p: expr) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$k),
+            $crate::types::action::Action::LayerOn($x),
+            $p,
+        )
     };
 }
 
@@ -64,21 +78,22 @@ macro_rules! lt {
 #[macro_export]
 macro_rules! mt {
     ($k: ident, $m: expr) => {
-        $crate::action::KeyAction::Morse($crate::morse::Morse::new_modifier_tap_hold(
-            $crate::action::Action::Key($crate::keycode::KeyCode::$k),
-            $m,
-        ))
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$k),
+            $crate::types::action::Action::Modifier($m),
+            $crate::types::action::MorseProfile::const_default(),
+        )
     };
 }
-
-/// Create a modifier-tap-hold action which is on the home row.
+/// Create a modifier-tap-hold action with profile
 #[macro_export]
-macro_rules! hrm {
-    ($k: ident, $m: expr) => {
-        $crate::action::KeyAction::Morse($crate::morse::Morse::new_hrm(
-            $crate::action::Action::Key($crate::keycode::KeyCode::$k),
-            $m,
-        ))
+macro_rules! mtp {
+    ($k: ident, $m: expr, $p: expr) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$k),
+            $crate::types::action::Action::Modifier($m),
+            $p,
+        )
     };
 }
 
@@ -86,10 +101,22 @@ macro_rules! hrm {
 #[macro_export]
 macro_rules! th {
     ($t: ident, $h: ident) => {
-        $crate::action::KeyAction::Morse($crate::morse::Morse::new_tap_hold(
-            $crate::action::Action::Key($crate::keycode::KeyCode::$t),
-            $crate::action::Action::Key($crate::keycode::KeyCode::$h),
-        ))
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$t),
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$h),
+            $crate::types::action::MorseProfile::const_default(),
+        )
+    };
+}
+/// Create a tap-hold action with profile
+#[macro_export]
+macro_rules! thp {
+    ($t: ident, $h: ident, $p: expr) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$t),
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::$h),
+            $p,
+        )
     };
 }
 
@@ -97,7 +124,7 @@ macro_rules! th {
 #[macro_export]
 macro_rules! osl {
     ($x: literal) => {
-        $crate::action::KeyAction::Single($crate::action::Action::OneShotLayer($x))
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::OneShotLayer($x))
     };
 }
 
@@ -105,7 +132,7 @@ macro_rules! osl {
 #[macro_export]
 macro_rules! osm {
     ($m: expr) => {
-        $crate::action::KeyAction::Single($crate::action::Action::OneShotModifier($m))
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::OneShotModifier($m))
     };
 }
 
@@ -113,7 +140,7 @@ macro_rules! osm {
 #[macro_export]
 macro_rules! tg {
     ($x: literal) => {
-        $crate::action::KeyAction::Single($crate::action::Action::LayerToggle($x))
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::LayerToggle($x))
     };
 }
 
@@ -121,10 +148,22 @@ macro_rules! tg {
 #[macro_export]
 macro_rules! tt {
     ($x: literal) => {
-        $crate::action::KeyAction::Morse($crate::morse::Morse::new_layer_tap_hold(
-            $crate::action::Action::LayerToggle($x),
-            $x,
-        ))
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::LayerToggle($x),
+            $crate::types::action::Action::LayerOn($x),
+            $crate::types::action::MorseProfile::const_default(),
+        )
+    };
+}
+/// Create a layer activate or tap toggle action with profile
+#[macro_export]
+macro_rules! ttp {
+    ($x: literal, $p: expr) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::LayerToggle($x),
+            $crate::types::action::Action::LayerOn($x),
+            $p,
+        )
     };
 }
 
@@ -132,7 +171,7 @@ macro_rules! tt {
 #[macro_export]
 macro_rules! to {
     ($x: literal) => {
-        $crate::action::KeyAction::Single($crate::action::Action::LayerToggleOnly($x))
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::LayerToggleOnly($x))
     };
 }
 
@@ -140,7 +179,7 @@ macro_rules! to {
 #[macro_export]
 macro_rules! df {
     ($x: literal) => {
-        $crate::action::KeyAction::Single($crate::action::Action::DefaultLayer($x))
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::DefaultLayer($x))
     };
 }
 
@@ -150,7 +189,7 @@ macro_rules! shifted {
     ($x: ident) => {
         $crate::wm!(
             $x,
-            $crate::keycode::ModifierCombination::new_from(false, false, false, true, false)
+            $crate::types::modifier::ModifierCombination::new_from(false, false, false, true, false)
         )
     };
 }
@@ -159,14 +198,31 @@ macro_rules! shifted {
 #[macro_export]
 macro_rules! encoder {
     ($clockwise: expr, $counter_clockwise: expr) => {
-        $crate::action::EncoderAction::new($clockwise, $counter_clockwise)
+        $crate::types::action::EncoderAction::new($clockwise, $counter_clockwise)
     };
 }
 
-/// Create a tap dance action
+/// Create a Morse(index) action (in Vial its simplest form is known as "Tap Dance", so `td` name is used)
 #[macro_export]
 macro_rules! td {
     ($index: literal) => {
-        $crate::action::KeyAction::TapDance($index)
+        $crate::types::action::KeyAction::Morse($index)
+    };
+}
+
+/// Create a Morse(index) action (in Vial it will appear as "Tap Dance")
+#[macro_export]
+macro_rules! morse {
+    ($index: literal) => {
+        $crate::types::action::KeyAction::Morse($index)
+    };
+}
+
+// Create a macro trigger action
+// Use `macros` because `macro` is a key word in Rust
+#[macro_export]
+macro_rules! macros {
+    ($index: literal) => {
+        $crate::action::KeyAction::Single($crate::action::Action::TriggerMacro($index))
     };
 }

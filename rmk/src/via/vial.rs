@@ -1,13 +1,17 @@
 use core::cell::RefCell;
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use num_enum::FromPrimitive;
+use embassy_time::Duration;
+use rmk_types::action::KeyAction;
+use rmk_types::protocol::vial::{
+    SettingKey, VIAL_COMBO_MAX_LENGTH, VIAL_EP_SIZE, VIAL_PROTOCOL_VERSION, VialCommand, VialDynamic,
+};
 
-use crate::action::KeyAction;
 use crate::combo::Combo;
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
 use crate::keymap::KeyMap;
+use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, TAP};
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 #[cfg(feature = "storage")]
 use crate::{
@@ -15,49 +19,7 @@ use crate::{
     channel::FLASH_CHANNEL,
     storage::{ComboData, FlashOperationMessage},
 };
-use crate::{COMBO_MAX_NUM, TAP_DANCE_MAX_NUM};
-
-/// Vial communication commands.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[repr(u8)]
-pub(crate) enum VialCommand {
-    GetKeyboardId = 0x00,
-    GetSize = 0x01,
-    GetKeyboardDef = 0x02,
-    GetEncoder = 0x03,
-    SetEncoder = 0x04,
-    GetUnlockStatus = 0x05,
-    UnlockStart = 0x06,
-    UnlockPoll = 0x07,
-    Lock = 0x08,
-    QmkSettingsQuery = 0x09,
-    QmkSettingsGet = 0x0A,
-    QmkSettingsSet = 0x0B,
-    QmkSettingsReset = 0x0C,
-    DynamicEntryOp = 0x0D, /* operate on tapdance, combos, etc */
-    #[num_enum(default)]
-    Unhandled = 0xFF,
-}
-
-/// Vial dynamic commands.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
-#[repr(u8)]
-pub(crate) enum VialDynamic {
-    DynamicVialGetNumberOfEntries = 0x00,
-    DynamicVialTapDanceGet = 0x01,
-    DynamicVialTapDanceSet = 0x02,
-    DynamicVialComboGet = 0x03,
-    DynamicVialComboSet = 0x04,
-    DynamicVialKeyOverrideGet = 0x05,
-    DynamicVialKeyOverrideSet = 0x06,
-    #[num_enum(default)]
-    Unhandled = 0xFF,
-}
-
-const VIAL_PROTOCOL_VERSION: u32 = 6;
-const VIAL_EP_SIZE: usize = 32;
-const VIAL_COMBO_MAX_LENGTH: usize = 4;
+use crate::{COMBO_MAX_NUM, MORSE_MAX_NUM};
 
 /// Note: vial uses little endian, while via uses big endian
 pub(crate) async fn process_vial<
@@ -73,7 +35,7 @@ pub(crate) async fn process_vial<
     keymap: &RefCell<KeyMap<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 ) {
     // report.output_data[0] == 0xFE -> vial commands
-    let vial_command = VialCommand::from_primitive(report.output_data[1]);
+    let vial_command = report.output_data[1].into();
     debug!("Received vial command: {:?}", vial_command);
     match vial_command {
         VialCommand::GetKeyboardId => {
@@ -151,84 +113,215 @@ pub(crate) async fn process_vial<
             #[cfg(not(feature = "vial_lock"))]
             error!("Vial lock feature is not enabled");
         }
-        VialCommand::QmkSettingsQuery => {
+        VialCommand::BehaviorSettingQuery => {
             report.input_data.fill(0xFF);
+            let value = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
+            if value <= 7 {
+                LittleEndian::write_u16(&mut report.input_data[0..2], 0x02);
+                LittleEndian::write_u16(&mut report.input_data[2..4], 0x06);
+                LittleEndian::write_u16(&mut report.input_data[4..6], 0x07);
+                LittleEndian::write_u16(&mut report.input_data[6..8], 0x12);
+                LittleEndian::write_u16(&mut report.input_data[8..10], 0x13);
+                LittleEndian::write_u16(&mut report.input_data[10..12], 0x1A);
+                LittleEndian::write_u16(&mut report.input_data[12..14], 0x1B);
+            }
+        }
+        VialCommand::GetBehaviorSetting => {
+            report.input_data.fill(0xFF);
+            let value = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
+            match value.into() {
+                SettingKey::None => (),
+                SettingKey::ComboTimeout => {
+                    report.input_data[0] = 0;
+                    let combo_timeout = keymap.borrow().behavior.combo.timeout.as_millis() as u16;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], combo_timeout);
+                }
+                SettingKey::MorseTimeout => {
+                    report.input_data[0] = 0;
+                    let tapping_term = keymap
+                        .borrow()
+                        .behavior
+                        .morse
+                        .default_profile
+                        .hold_timeout_ms()
+                        .unwrap_or(0);
+                    LittleEndian::write_u16(&mut report.input_data[1..3], tapping_term);
+                }
+                SettingKey::OneShotTimeout => {
+                    report.input_data[0] = 0;
+                    let one_shot_timeout = keymap.borrow().behavior.one_shot.timeout.as_millis() as u16;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], one_shot_timeout);
+                }
+                SettingKey::TapInterval => {
+                    report.input_data[0] = 0;
+                    let tap_interval = keymap.borrow().behavior.tap.tap_interval;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], tap_interval);
+                }
+                SettingKey::TapCapslockInterval => {
+                    report.input_data[0] = 0;
+                    let tap_interval = keymap.borrow().behavior.tap.tap_interval;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], tap_interval);
+                }
+                SettingKey::UnilateralTap => {
+                    report.input_data[0] = 0;
+                    let unilateral_tap = keymap
+                        .borrow()
+                        .behavior
+                        .morse
+                        .default_profile
+                        .unilateral_tap()
+                        .unwrap_or(false);
+                    if unilateral_tap {
+                        report.input_data[1] = 1;
+                    } else {
+                        report.input_data[1] = 0;
+                    };
+                }
+                SettingKey::PriorIdleTime => {
+                    report.input_data[0] = 0;
+                    let prior_idle_time = keymap.borrow().behavior.morse.prior_idle_time.as_millis() as u16;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], prior_idle_time);
+                }
+            }
+        }
+        VialCommand::SetBehaviorSetting => {
+            let key = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
+            match key.into() {
+                SettingKey::None => (),
+                SettingKey::ComboTimeout => {
+                    let combo_timeout = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.combo.timeout = Duration::from_millis(combo_timeout as u64);
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::ComboTimeout(combo_timeout))
+                        .await;
+                }
+                SettingKey::MorseTimeout => {
+                    let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    let old = keymap.borrow().behavior.morse.default_profile;
+                    keymap.borrow_mut().behavior.morse.default_profile = old.with_hold_timeout_ms(Some(timeout_time));
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::MorseHoldTimeout(timeout_time))
+                        .await;
+                }
+                SettingKey::OneShotTimeout => {
+                    let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.one_shot.timeout = Duration::from_millis(timeout_time as u64);
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::OneShotTimeout(timeout_time))
+                        .await;
+                }
+                SettingKey::TapInterval => {
+                    let tap_interval = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.tap.tap_interval = tap_interval;
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::TapInterval(tap_interval))
+                        .await;
+                }
+                SettingKey::TapCapslockInterval => {
+                    let tap_capslock_interval = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.tap.tap_capslock_interval = tap_capslock_interval;
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::TapCapslockInterval(tap_capslock_interval))
+                        .await;
+                }
+                SettingKey::UnilateralTap => {
+                    let old = keymap.borrow().behavior.morse.default_profile;
+                    keymap.borrow_mut().behavior.morse.default_profile =
+                        old.with_unilateral_tap(Some(report.output_data[4] == 1));
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::UnilateralTap(report.output_data[4] == 1))
+                        .await;
+                }
+                SettingKey::PriorIdleTime => {
+                    let prior_idle_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.morse.prior_idle_time = Duration::from_millis(prior_idle_time as u64);
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::PriorIdleTime(prior_idle_time))
+                        .await;
+                }
+            }
         }
         VialCommand::DynamicEntryOp => {
-            let vial_dynamic = VialDynamic::from_primitive(report.output_data[2]);
+            let vial_dynamic = report.output_data[2].into();
             match vial_dynamic {
                 VialDynamic::DynamicVialGetNumberOfEntries => {
                     debug!("DynamicEntryOp - DynamicVialGetNumberOfEntries");
-                    report.input_data[0] = core::cmp::min(TAP_DANCE_MAX_NUM, 255) as u8; // Tap dance entries
+                    report.input_data[0] = core::cmp::min(MORSE_MAX_NUM, 255) as u8; // Tap dance entries
                     report.input_data[1] = core::cmp::min(COMBO_MAX_NUM, 255) as u8; // Combo entries
                     // TODO: Support dynamic key override
                     report.input_data[2] = 0; // Key override entries
                     report.input_data[31] = 1 // Enable caps word
                 }
-                VialDynamic::DynamicVialTapDanceGet => {
-                    debug!("DynamicEntryOp - DynamicVialTapDanceGet");
+                VialDynamic::DynamicVialMorseGet => {
+                    debug!("DynamicEntryOp - DynamicVialMorseGet");
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
-                    let tap_dance_idx = report.output_data[3] as usize;
-                    let tap_dances = &keymap.borrow().behavior.tap_dance.tap_dances;
-                    if let Some(tap_dance) = tap_dances.get(tap_dance_idx) {
-                        // Pack tap dance data into report
+                    let morse_idx = report.output_data[3] as usize;
+                    let morses = &keymap.borrow().behavior.morse.morses;
+                    if let Some(morse) = morses.get(morse_idx) {
+                        // Pack morse data into report
                         LittleEndian::write_u16(
                             &mut report.input_data[1..3],
-                            to_via_keycode(KeyAction::Single(tap_dance.0.tap_action(0))),
+                            to_via_keycode(morse.get(TAP).map_or(KeyAction::No, |a| KeyAction::Single(a))),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[3..5],
-                            to_via_keycode(KeyAction::Single(tap_dance.0.hold_action(0))),
+                            to_via_keycode(morse.get(HOLD).map_or(KeyAction::No, |a| KeyAction::Single(a))),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[5..7],
-                            to_via_keycode(KeyAction::Single(tap_dance.0.tap_action(1))),
+                            to_via_keycode(morse.get(DOUBLE_TAP).map_or(KeyAction::No, |a| KeyAction::Single(a))),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[7..9],
-                            to_via_keycode(KeyAction::Single(tap_dance.0.hold_action(1))),
+                            to_via_keycode(
+                                morse
+                                    .get(HOLD_AFTER_TAP)
+                                    .map_or(KeyAction::No, |a| KeyAction::Single(a)),
+                            ),
                         );
-                        LittleEndian::write_u16(&mut report.input_data[9..11], tap_dance.0.timeout_ms);
+                        LittleEndian::write_u16(&mut report.input_data[9..11], 250); //dummy morse.timeout_ms
                     } else {
                         report.input_data[1..11].fill(0);
                     }
                 }
-                VialDynamic::DynamicVialTapDanceSet => {
-                    debug!("DynamicEntryOp - DynamicVialTapDanceSet");
+                VialDynamic::DynamicVialMorseSet => {
+                    debug!("DynamicEntryOp - DynamicVialMorseSet");
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
-                    use crate::tap_dance::TapDance;
-                    let tap_dance_idx = report.output_data[3] as usize;
-                    let tap_dances = &mut keymap.borrow_mut().behavior.tap_dance.tap_dances;
+                    let morse_idx = report.output_data[3] as usize;
+                    let morses = &mut keymap.borrow_mut().behavior.morse.morses;
 
-                    if tap_dance_idx < tap_dances.len() {
-                        // Extract tap dance data from report
-                        let tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[4..6]));
-                        let hold = from_via_keycode(LittleEndian::read_u16(&report.output_data[6..8]));
-                        let double_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[8..10]));
-                        let hold_after_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[10..12]));
-                        let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
+                    if morse_idx < morses.len() {
+                        // Update the morse in keymap
+                        if let Some(morse) = morses.get_mut(morse_idx) {
+                            // Extract morse (also known as "tap dance" in vial)
+                            let tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[4..6]));
+                            let hold = from_via_keycode(LittleEndian::read_u16(&report.output_data[6..8]));
+                            let double_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[8..10]));
+                            let hold_after_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[10..12]));
+                            //let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
 
-                        let new_tap_dance = TapDance::new_from_vial(
-                            tap.to_action(),
-                            hold.to_action(),
-                            hold_after_tap.to_action(),
-                            double_tap.to_action(),
-                            timeout_ms,
-                        );
+                            morse.put(TAP, tap.to_action());
+                            morse.put(DOUBLE_TAP, double_tap.to_action());
+                            morse.put(HOLD, hold.to_action());
+                            morse.put(HOLD_AFTER_TAP, hold_after_tap.to_action());
+                            //morse.timeout_ms = timeout_ms;
 
-                        // Update the tap dance in keymap
-                        if let Some(tap_dance) = tap_dances.get_mut(tap_dance_idx) {
-                            *tap_dance = new_tap_dance.clone();
-                        }
-
-                        #[cfg(feature = "storage")]
-                        {
-                            // Save to storage
-                            FLASH_CHANNEL
-                                .send(FlashOperationMessage::WriteTapDance(tap_dance_idx as u8, new_tap_dance))
-                                .await;
+                            #[cfg(feature = "storage")]
+                            {
+                                // Save to storage
+                                FLASH_CHANNEL
+                                    .send(FlashOperationMessage::WriteMorse(morse_idx as u8, morse.clone()))
+                                    .await;
+                            }
                         }
                     }
                 }
@@ -272,7 +365,7 @@ pub(crate) async fn process_vial<
                         for i in 0..VIAL_COMBO_MAX_LENGTH {
                             let action =
                                 from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
-                            if action != KeyAction::No {
+                            if !action.is_empty() {
                                 if n >= COMBO_MAX_LENGTH {
                                     //fail if the combo action buffer is too small
                                     return;

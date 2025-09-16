@@ -21,11 +21,13 @@ use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
-use rmk::ble::trouble::build_ble_stack;
+use rmk::ble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{
+    BehaviorConfig, BleBatteryConfig, KeyboardUsbConfig, PerKeyConfig, RmkConfig, StorageConfig, VialConfig,
+};
 use rmk::controller::EventController as _;
-use rmk::controller::led_indicator::{KeyboardIndicator, KeyboardIndicatorController};
+use rmk::controller::led_indicator::KeyboardIndicatorController;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::{join, join4};
 use rmk::input_device::Runnable;
@@ -185,14 +187,17 @@ async fn main(spawner: Spawner) {
     // Initialze keyboard stuffs
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
-    let behavior_config = BehaviorConfig::default();
-    let mut encoder_map = keymap::get_default_encoder_map();
+    let mut behavior_config = BehaviorConfig::default();
+    behavior_config.morse.enable_flow_tap = true;
+    let mut encoder_map: [[rmk::types::action::EncoderAction; _]; _] = keymap::get_default_encoder_map();
+    let mut key_config = PerKeyConfig::default();
     let (keymap, mut storage) = initialize_encoder_keymap_and_storage(
         &mut default_keymap,
         &mut encoder_map,
         flash,
         &storage_config,
-        behavior_config,
+        &mut behavior_config,
+        &mut key_config,
     )
     .await;
 
@@ -226,7 +231,7 @@ async fn main(spawner: Spawner) {
             embassy_nrf::gpio::OutputDrive::Standard,
         ),
         false,
-        KeyboardIndicator::CapsLock,
+        rmk::types::led_indicator::LedIndicatorType::CapsLock,
     );
 
     // Start

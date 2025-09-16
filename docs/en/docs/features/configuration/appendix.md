@@ -52,7 +52,7 @@ rows = 5
 cols = 4
 # Number of layers. Be careful, since large layer number takes more flash and RAM
 layers = 3
-# keypad example:
+# keypad example: (for the key in position (2,1) the `H1` profile is activated)
 # ┌───┬───┬───┬───┐
 # │NUM│ / │ * │ - │ <-- row 0, col 0..4
 # ├───┼───┼───┼───┤
@@ -65,11 +65,11 @@ layers = 3
 # │   0   │ . │ T │
 # └───────┴───┴───┘
 matrix_map = """
-(0,0) (0,1) (0,2) (0,3)
-(1,0) (1,1) (1,2) (1,3)
-(2,0) (2,1) (2,2)
-(3,0) (3,1) (3,2) (3,3)
-(4,0)       (4,1)
+(0,0,R) (0,1,R)    (0,2,R) (0,3,R)
+(1,0,R) (1,1,R)    (1,2,R) (1,3,R)
+(2,0,R) (2,1,R:H1) (2,2,R)
+(3,0,R) (3,1,R)    (3,2,R) (3,3,R)
+(4,0,R)            (4,1,R)
 """
 
 # here are the aliases for the example layer.keys below
@@ -109,12 +109,74 @@ MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
 
 # Behavior configuration, if you don't want to customize anything, just ignore this section
 [behavior]
-# Tap Hold configuration
-tap_hold = { enable_hrm = true, permissive_hold = true, unilateral_tap = true, prior_idle_time = "120ms", hold_timeout = "250ms" }
 # Tri Layer configuration
 tri_layer = { upper = 1, lower = 2, adjust = 3 }
 # One Shot configuration
 one_shot = { timeout = "1s" }
+
+[behavior.morse]
+# default profile for morse, tap dance and tap-hold keys:
+enable_flow_tap = true
+prior_idle_time = "120ms"
+hold_on_other_press = true
+unilateral_false = false
+hold_timeout = "250ms"
+gap_timeout = "250ms"
+
+# list of morse (tap dance) keys:
+morses = [
+  # TD(0) Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
+  { tap = "F1", hold = "MO(1)", double_tap = "F2" },
+
+  # TD(1) Extended tap dance representation for function keys  
+  { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"] }
+
+  # TD(2) Morse code like representation
+  { morse_actions = [
+      {pattern = ".-", action = "A"}, 
+      {pattern = "-...", action = "B"}, 
+      {pattern = "-.-.", action = "C"}, 
+      {pattern = "-..", action = "D"}, 
+      {pattern = ".", action = "E"}, 
+      {pattern = "..-.", action = "F"}, 
+      {pattern = "--.", action = "G"}, 
+      {pattern = "....", action = "H"}, 
+      {pattern = "..", action = "I"}, 
+      {pattern = ".---", action = "J"}, 
+      {pattern = "-.-", action = "K"}, 
+      {pattern = ".-..", action = "L"}, 
+      {pattern = "--", action = "M"}, 
+      {pattern = "-.", action = "N"}, 
+      {pattern = "---", action = "O"}, 
+      {pattern = ".--.", action = "P"}, 
+      {pattern = "--.-", action = "Q"}, 
+      {pattern = ".-.", action = "R"}, 
+      {pattern = "...", action = "S"}, 
+      {pattern = "-", action = "T"}, 
+      {pattern = "..-", action = "U"}, 
+      {pattern = "...-", action = "V"}, 
+      {pattern = ".--", action = "W"}, 
+      {pattern = "-..-", action = "X"}, 
+      {pattern = "-.--", action = "Y"}, 
+      {pattern = "--..", action = "Z"}, 
+      {pattern = ".----", action = "Kc1"}, 
+      {pattern = "..---", action = "Kc2"}, 
+      {pattern = "...--", action = "Kc3"}, 
+      {pattern = "....-", action = "Kc4"}, 
+      {pattern = ".....", action = "Kc5"}, 
+      {pattern = "-....", action = "Kc6"}, 
+      {pattern = "--...", action = "Kc7"}, 
+      {pattern = "---..", action = "Kc8"}, 
+      {pattern = "----.", action = "Kc9"}, 
+      {pattern = "-----", action = "Kc0"}
+    ], profile = "MRZ" }
+]
+
+[behavior.morse.profiles]
+# matrix_map may refer these to override the defaults given in [behavior.morse] for some key positions - this example is a home row mod
+H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
+H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
+MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_timeout = "200ms" }
 
 # Combo configuration
 [behavior.combo]
@@ -128,18 +190,6 @@ combos = [
 [[behavior.macro.macros]]
 operations = [
     { operation = "text", text = "Hello" }
-]
-
-[behavior.tap_dance]
-tap_dances = [
-  # Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
-  { tap = "F1", hold = "MO(1)", double_tap = "F2" },
-  # Extended tap dance for function keys
-  {
-    tap_actions = ["F1", "F2", "F3", "F4", "F5"],
-    hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"],
-    timeout = "300ms"
-  }
 ]
 
 # Fork configuration
@@ -201,11 +251,11 @@ combo_max_num = 8
 combo_max_length = 4
 # Maximum number of forks for conditional key actions
 fork_max_num = 8
-# Maximum number of tap dances keyboard can store
-# (Each tap dance is a programmable multi-tap/hold key)
-tap_dance_max_num = 8
-# Maximum number of taps per tap dance (default: 2, min: 2, max: 256)
-tap_dance_max_tap = 2
+# Maximum number of morse keys keyboard can store (max 256)
+# (Each morse key is a programmable multi-tap/hold key)
+morse_max_num = 8
+# Maximum number of patterns a morse key can handle
+max_patterns_per_key = 36
 # Macro space size in bytes for storing sequences
 macro_space_size = 256
 # Default debounce time in ms

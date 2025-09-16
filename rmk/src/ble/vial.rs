@@ -1,6 +1,5 @@
 #![cfg(feature = "vial")]
-
-use crate::ble::trouble::Server;
+use crate::ble::Server;
 use crate::channel::VIAL_READ_CHANNEL;
 use crate::descriptor::ViaReport;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};

@@ -1,7 +1,6 @@
-use num_enum::FromPrimitive;
+use rmk_types::keycode::{KeyCode, from_ascii, to_ascii};
 
 use crate::MACRO_SPACE_SIZE;
-use crate::keycode::{KeyCode, from_ascii, to_ascii};
 use crate::keymap::fill_vec;
 
 /// encoded with the two bytes, content at the third byte
@@ -45,7 +44,7 @@ impl MacroOperation {
             (0, _) => (MacroOperation::End, offset),
             (1, 1) => {
                 if idx + 2 < macro_sequences.len() {
-                    let keycode = KeyCode::from_primitive(macro_sequences[idx + 2] as u16);
+                    let keycode = (macro_sequences[idx + 2] as u16).into();
                     (MacroOperation::Tap(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)
@@ -53,7 +52,7 @@ impl MacroOperation {
             }
             (1, 2) => {
                 if idx + 2 < macro_sequences.len() {
-                    let keycode = KeyCode::from_primitive(macro_sequences[idx + 2] as u16);
+                    let keycode = (macro_sequences[idx + 2] as u16).into();
                     (MacroOperation::Press(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)
@@ -61,7 +60,7 @@ impl MacroOperation {
             }
             (1, 3) => {
                 if idx + 2 < macro_sequences.len() {
-                    let keycode = KeyCode::from_primitive(macro_sequences[idx + 2] as u16);
+                    let keycode = (macro_sequences[idx + 2] as u16).into();
                     (MacroOperation::Release(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)

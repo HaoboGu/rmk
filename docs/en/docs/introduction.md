@@ -1,18 +1,18 @@
-# RMK introdution
+# RMK introduction
 
 <div class="badge-container" style="display: flex; gap: 0.5rem; align-items: center; justify-content: start;   margin: 1rem 0;">
 
-<div>
+<div id="crates-io">
 
 [![Crates.io](https://img.shields.io/crates/v/rmk)](https://crates.io/crates/rmk)
 
 </div>
-<div>
+<div id="docs-rs">
 
 [![Docs](https://img.shields.io/docsrs/rmk)](https://docs.rs/rmk/latest/rmk/)
 
 </div>
-<div>
+<div id="github-actions">
 
 [![Build](https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg)](https://github.com/HaoboGu/rmk/actions)
 
@@ -20,7 +20,7 @@
 
 </div>
 
-RMK is a Rust keyboard firmware crate with lots of usable features, like layer support, dynamic keymap, vial support, BLE wireless, etc, makes firmware customization easy and accessible.
+RMK is a Rust keyboard firmware framework featuring comprehensive functionality including layer support, dynamic keymap editing, Vial integration, BLE wireless connectivity, and more. It makes keyboard firmware customization easy and accessible.
 
 The following table compares features available from RMK, Keyberon, QMK and ZMK:
 
@@ -33,7 +33,7 @@ The following table compares features available from RMK, Keyberon, QMK and ZMK:
 | Wired split support | ✅ | ✅ | ✅ |  |
 | Wireless split support | ✅ |  |  | ✅ |
 | ARM chips(STM32/nRF/RP2040) support | ✅ | ✅ | ✅ | ✅ |
-| RISC-V & Xtensa chips support | ✅ |  |  |  |
-| Mouse key | ✅ |  | ✅ | Limited |
+| Full RISC-V & Xtensa chips support | ✅ |  |  |  |
 | Keyboard configuration | toml (easy) | Rust code (hard) | json + makefile (medium) | Kconfig + devicetree(hard) |
 | Layers/Macros/Media key support | ✅ | ✅ | ✅ | ✅ |
+| [Morse key](./features/configuration/behavior.md#morse-and-tap-dance) support | ✅ |  |  |  |

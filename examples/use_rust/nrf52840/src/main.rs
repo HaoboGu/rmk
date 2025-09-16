@@ -16,7 +16,7 @@ use embassy_nrf::usb::{self, Driver};
 use embassy_nrf::{bind_interrupts, peripherals};
 use keymap::{COL, ROW};
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, PerKeyConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
@@ -65,9 +65,16 @@ async fn main(_spawner: Spawner) {
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
     let storage_config = StorageConfig::default();
-    let behavior_config = BehaviorConfig::default();
-    let (keymap, mut storage) =
-        initialize_keymap_and_storage(&mut default_keymap, flash, &storage_config, behavior_config).await;
+    let mut behavior_config = BehaviorConfig::default();
+    let mut per_key_config = PerKeyConfig::default();
+    let (keymap, mut storage) = initialize_keymap_and_storage(
+        &mut default_keymap,
+        flash,
+        &storage_config,
+        &mut behavior_config,
+        &mut per_key_config,
+    )
+    .await;
 
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::<ROW, COL>::new();

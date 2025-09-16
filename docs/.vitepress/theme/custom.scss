@@ -1,19 +1,10 @@
 :root {
-  --default: clamp(1rem, 1.1vw , 2rem);
+  --default: clamp(1rem, 1.1vw, 1.2rem);
   --vp-fluid-sidebar: calc(20 * var(--default));
   --vp-sidebar-padding: calc(2 * var(--default));
   --vp-nav-height: calc(4 * var(--default));
 }
 
-@media (min-width: 960px) {
-  .VPHero {
-    .container {
-      .tagline {
-        max-width: 540px;
-      }
-    }
-  }
-}
 @media (min-width: 1440px) {
   :root {
     --vp-layout-max-width: min(92vw, 2400px);
@@ -573,10 +564,6 @@
                     font-size: var(--default);
                     letter-spacing: 0;
                     line-height: calc(1.75 * var(--default));
-                    img {
-                      height: calc(1.25 * var(--default));
-                      width: calc(6.5 * var(--default));
-                    }
                   }
                   div[class*="language-"] {
                     border-radius: var(--default);
@@ -623,6 +610,24 @@
                   .badge-container {
                     gap: calc(1 / 2 * var(--default)) !important;
                     margin: var(--default) 0 !important;
+                    img {
+                      height: calc(20 / 16 * var(--default));
+                    }
+                    #crates-io {
+                      img {
+                        width: calc(102 / 16 * var(--default));
+                      }
+                    }
+                    #docs-rs {
+                      img {
+                        width: calc(86 / 16 * var(--default));
+                      }
+                    }
+                    #github-actions {
+                      img {
+                        width: calc(105 / 16 * var(--default));
+                      }
+                    }
                   }
                   .custom-block {
                     margin: var(--default) 0;
@@ -688,29 +693,29 @@
     }
   }
 }
-@media (min-width: 2560px) { 
-  // .VPSidebar {
-  //   margin-left:  calc(10 * var(--default)); 
-  // }
-  // .VPNav {
-  //   padding: 0 calc(10 * var(--default)) ;
-  // }
-
-  // .Layout .VPContent.has-sidebar {
-  //     padding-left: calc(27 * var(--default));
-  //     padding-right: calc(12 * var(--default));
-  // }
-}
-@media (min-width: 3860px) { 
-  // .VPSidebar {
-  //   margin-left:  calc(15 * var(--default)); 
-  // }
-  // .VPNav {
-  //   padding: 0 calc(15 * var(--default)) ;
-  // }
+@media (min-width: 2560px) {
+  .VPSidebar {
+    margin-left: calc(15 * var(--default));
+  }
+  .VPNav {
+    padding: 0 calc(15 * var(--default));
+  }
 
   .Layout .VPContent.has-sidebar {
-      padding-left: calc(32 * var(--default));
-      padding-right: calc(17 * var(--default));
+    padding-left: calc(32 * var(--default));
+    padding-right: calc(17 * var(--default));
+  }
+}
+@media (min-width: 3860px) {
+  .VPSidebar {
+    margin-left: calc(35 * var(--default));
+  }
+  .VPNav {
+    padding: 0 calc(35 * var(--default));
+  }
+
+  .Layout .VPContent.has-sidebar {
+    padding-left: calc(52 * var(--default));
+    padding-right: calc(37 * var(--default));
   }
 }

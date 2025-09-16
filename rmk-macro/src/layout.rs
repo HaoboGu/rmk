@@ -1,48 +1,58 @@
 //! Initialize default keymap from config
+use std::collections::HashMap;
 
+use crate::behavior::expand_profile_name;
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
-use rmk_config::{KEYCODE_ALIAS, KeyboardTomlConfig};
+use rmk_config::{KEYCODE_ALIAS, KeyboardTomlConfig, MorseProfile};
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
+/// Also add `get_default_encoder_map`
 pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
+    let profiles = &keyboard_config
+        .get_behavior_config()
+        .unwrap()
+        .morse
+        .and_then(|m| m.profiles);
     let num_encoder = keyboard_config.get_board_config().unwrap().get_num_encoder();
     let total_num_encoder = num_encoder.iter().sum::<usize>();
-    // TODO: config encoder in keyboard.toml
+
+    // TODO: config encoder actions in keyboard.toml
     let encoders = vec![quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No))}; total_num_encoder];
 
+    let (layout, _key_info) = keyboard_config.get_layout_config().unwrap();
     let mut layers = vec![];
     let mut encoder_map = vec![];
-    for layer in keyboard_config.get_layout_config().unwrap().keymap {
-        layers.push(expand_layer(layer));
+    for layer in layout.keymap {
+        layers.push(expand_layer(layer, profiles));
         encoder_map.push(quote! { [#(#encoders), *] });
     }
 
     quote! {
-        pub const fn get_default_keymap() -> [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] {
+        pub const fn get_default_keymap() -> [[[::rmk::types::action::KeyAction; COL]; ROW]; NUM_LAYER] {
             [#(#layers), *]
         }
 
-        pub const fn get_default_encoder_map() -> [[::rmk::action::EncoderAction; NUM_ENCODER]; NUM_LAYER] {
+        pub const fn get_default_encoder_map() -> [[::rmk::types::action::EncoderAction; NUM_ENCODER]; NUM_LAYER] {
             [#(#encoder_map), *]
         }
     }
 }
 
 /// Push rows in the layer
-fn expand_layer(layer: Vec<Vec<String>>) -> TokenStream2 {
+fn expand_layer(layer: Vec<Vec<String>>, profiles: &Option<HashMap<String, MorseProfile>>) -> TokenStream2 {
     let mut rows = vec![];
     for row in layer {
-        rows.push(expand_row(row));
+        rows.push(expand_row(row, profiles));
     }
     quote! { [#(#rows), *] }
 }
 
 /// Push keys in the row
-fn expand_row(row: Vec<String>) -> TokenStream2 {
+fn expand_row(row: Vec<String>, profiles: &Option<HashMap<String, MorseProfile>>) -> TokenStream2 {
     let mut keys = vec![];
     for key in row {
-        keys.push(parse_key(key));
+        keys.push(parse_key(key, profiles));
     }
     quote! { [#(#keys), *] }
 }
@@ -78,7 +88,7 @@ impl quote::ToTokens for ModifierCombinationMacro {
         let ctrl = self.ctrl;
 
         tokens.extend(quote! {
-            ::rmk::keycode::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl)
+            ::rmk::types::modifier::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl)
         });
     }
 }
@@ -121,7 +131,7 @@ fn parse_modifiers(modifiers_str: &str) -> ModifierCombinationMacro {
 }
 
 /// Parse the key string at a single position
-pub(crate) fn parse_key(key: String) -> TokenStream2 {
+pub(crate) fn parse_key(key: String, profiles: &Option<HashMap<String, MorseProfile>>) -> TokenStream2 {
     if !key.is_empty() && (key.trim_start_matches("_").is_empty() || key.to_lowercase() == "trns") {
         return quote! { ::rmk::a!(Transparent) };
     } else if !key.is_empty() && key == "No" {
@@ -232,15 +242,19 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 .map(|w| w.trim())
                 .filter(|w| !w.is_empty())
                 .collect();
-            if keys.len() != 2 {
+            if keys.len() < 2 || keys.len() > 3 {
                 panic!(
                     "\n❌ keyboard.toml: LT(layer, key) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
                 );
             }
             let layer = keys[0].parse::<u8>().unwrap();
             let key = get_key_with_alias(keys[1].to_string());
-            quote! {
-                ::rmk::lt!(#layer, #key)
+
+            if keys.len() == 3 {
+                let profile = expand_profile_name(keys[2], profiles);
+                quote! { ::rmk::ltp!(#layer, #key, #profile) }
+            } else {
+                quote! { ::rmk::lt!(#layer, #key) }
             }
         }
         s if s.to_lowercase().starts_with("tt(") => {
@@ -275,7 +289,7 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                     .map(|w| w.trim())
                     .filter(|w| !w.is_empty())
                     .collect();
-                if keys.len() != 2 {
+                if keys.len() < 2 || keys.len() > 3 {
                     panic!(
                         "\n❌ keyboard.toml: MT(key, modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
                     );
@@ -288,8 +302,11 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                         "\n❌ keyboard.toml: modifier in MT(key, modifier) is not valid! Please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
                     );
                 }
-                quote! {
-                    ::rmk::mt!(#ident, #modifiers)
+                if keys.len() == 3 {
+                    let profile = expand_profile_name(keys[2], profiles);
+                    quote! { ::rmk::mtp!(#ident, #modifiers, #profile) }
+                } else {
+                    quote! { ::rmk::mt!(#ident, #modifiers) }
                 }
             } else {
                 panic!(
@@ -297,36 +314,36 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 );
             }
         }
-        s if s.to_lowercase().starts_with("hrm(") => {
-            let prefix = s.get(0..4).unwrap();
-            if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
-                let keys: Vec<&str> = internal
-                    .split_terminator(",")
-                    .map(|w| w.trim())
-                    .filter(|w| !w.is_empty())
-                    .collect();
-                if keys.len() != 2 {
-                    panic!(
-                        "\n❌ keyboard.toml: HRM(key, modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
-                    );
-                }
-                let ident = get_key_with_alias(keys[0].to_string());
-                let modifiers = parse_modifiers(keys[1]);
+        // s if s.to_lowercase().starts_with("hrm(") => {
+        //     let prefix = s.get(0..4).unwrap();
+        //     if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
+        //         let keys: Vec<&str> = internal
+        //             .split_terminator(",")
+        //             .map(|w| w.trim())
+        //             .filter(|w| !w.is_empty())
+        //             .collect();
+        //         if keys.len() != 2 {
+        //             panic!(
+        //                 "\n❌ keyboard.toml: HRM(key, modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
+        //             );
+        //         }
+        //         let ident = get_key_with_alias(keys[0].to_string());
+        //         let modifiers = parse_modifiers(keys[1]);
 
-                if modifiers.is_empty() {
-                    panic!(
-                        "\n❌ keyboard.toml: modifier in HRM(key, modifier) is not valid! Please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
-                    );
-                }
-                quote! {
-                    ::rmk::hrm!(#ident, #modifiers)
-                }
-            } else {
-                panic!(
-                    "\n❌ keyboard.toml: HRM(key, modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
-                );
-            }
-        }
+        //         if modifiers.is_empty() {
+        //             panic!(
+        //                 "\n❌ keyboard.toml: modifier in HRM(key, modifier) is not valid! Please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
+        //             );
+        //         }
+        //         quote! {
+        //             ::rmk::hrm!(#ident, #modifiers)
+        //         }
+        //     } else {
+        //         panic!(
+        //             "\n❌ keyboard.toml: HRM(key, modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
+        //         );
+        //     }
+        // }
         s if s.to_lowercase().starts_with("th(") => {
             let prefix = s.get(0..3).unwrap();
             if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
@@ -335,7 +352,7 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                     .map(|w| w.trim())
                     .filter(|w| !w.is_empty())
                     .collect();
-                if keys.len() != 2 {
+                if keys.len() < 2 || keys.len() > 3 {
                     panic!(
                         "\n❌ keyboard.toml: TH(key_tap, key_hold) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
                     );
@@ -343,8 +360,11 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 let ident1 = get_key_with_alias(keys[0].to_string());
                 let ident2 = get_key_with_alias(keys[1].to_string());
 
-                quote! {
-                    ::rmk::th!(#ident1, #ident2)
+                if keys.len() == 3 {
+                    let profile = expand_profile_name(keys[2], profiles);
+                    quote! { ::rmk::thp!(#ident1, #ident2, #profile) }
+                } else {
+                    quote! { ::rmk::th!(#ident1, #ident2) }
                 }
             } else {
                 panic!(
@@ -372,6 +392,12 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
             let index = get_number(s.clone(), s.get(0..3).unwrap(), ")");
             quote! {
                 ::rmk::td!(#index)
+            }
+        }
+        s if s.to_lowercase().starts_with("m(") => {
+            let index = get_number(s.clone(), s.get(0..2).unwrap(), ")");
+            quote! {
+                ::rmk::m!(#index)
             }
         }
         _ => {

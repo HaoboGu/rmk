@@ -7,8 +7,7 @@ use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::{Instant, Timer};
 use embassy_usb::class::hid::HidReaderWriter;
 use embassy_usb::driver::Driver;
-use num_enum::{FromPrimitive as _, TryFromPrimitive as _};
-use protocol::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
+use rmk_types::protocol::vial::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
 use vial::process_vial;
 
 use crate::config::VialConfig;
@@ -22,7 +21,6 @@ use crate::{CONNECTION_STATE, MACRO_SPACE_SIZE, boot};
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 pub(crate) mod keycode_convert;
-mod protocol;
 mod vial;
 #[cfg(feature = "vial_lock")]
 mod vial_lock;
@@ -112,15 +110,14 @@ impl<
 
         // `report.input_data` is initialized using `report.output_data`
         report.input_data = report.output_data;
-        let via_command = ViaCommand::from_primitive(command_id);
         // debug!("Received via command: {}, report: {:02X?}", via_command, report.output_data);
-        match via_command {
+        match command_id.into() {
             ViaCommand::GetProtocolVersion => {
                 BigEndian::write_u16(&mut report.input_data[1..3], VIA_PROTOCOL_VERSION);
             }
             ViaCommand::GetKeyboardValue => {
                 // Check the second u8
-                match ViaKeyboardInfo::try_from_primitive(report.output_data[1]) {
+                match report.output_data[1].try_into() {
                     Ok(v) => match v {
                         ViaKeyboardInfo::Uptime => {
                             let value = Instant::now().as_millis() as u32;
@@ -151,12 +148,12 @@ impl<
                         }
                         _ => (),
                     },
-                    Err(e) => error!("Invalid subcommand: {} of GetKeyboardValue", e.number),
+                    Err(e) => error!("Invalid subcommand: {} of GetKeyboardValue", e),
                 }
             }
             ViaCommand::SetKeyboardValue => {
                 // Check the second u8
-                match ViaKeyboardInfo::try_from_primitive(report.output_data[1]) {
+                match report.output_data[1].try_into() {
                     Ok(v) => match v {
                         #[cfg(feature = "storage")]
                         ViaKeyboardInfo::LayoutOptions => {
@@ -171,7 +168,7 @@ impl<
                         }
                         _ => (),
                     },
-                    Err(e) => error!("Invalid subcommand: {} of GetKeyboardValue", e.number),
+                    Err(e) => error!("Invalid subcommand: {} of GetKeyboardValue", e),
                 }
             }
             ViaCommand::DynamicKeymapGetKeyCode => {
@@ -329,7 +326,7 @@ impl<
                     .enumerate()
                     .for_each(|(i, a)| {
                         let via_keycode = LittleEndian::read_u16(&report.output_data[idx..idx + 2]);
-                        let action: crate::action::KeyAction = from_via_keycode(via_keycode);
+                        let action: rmk_types::action::KeyAction = from_via_keycode(via_keycode);
                         *a = action;
                         idx += 2;
                         let current_offset = offset as usize + i;

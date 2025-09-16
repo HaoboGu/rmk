@@ -1,9 +1,9 @@
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "controller")]
+use {rmk_types::action::KeyAction, rmk_types::led_indicator::LedIndicator, rmk_types::modifier::ModifierCombination};
 
 use crate::input_device::rotary_encoder::Direction;
-#[cfg(feature = "controller")]
-use crate::{action::KeyAction, keycode::ModifierCombination, light::LedIndicator};
 
 /// Raw events from input devices and keyboards
 ///
@@ -80,43 +80,6 @@ impl KeyboardEventPos {
     pub(crate) fn rotary_encoder_pos(id: u8, direction: Direction) -> Self {
         Self::RotaryEncoder(RotaryEncoderPos { id, direction })
     }
-
-    pub(crate) fn is_same_hand<const ROW: usize, const COL: usize>(&self, pos: Self) -> bool {
-        match (self, pos) {
-            (Self::Key(_), Self::Key(_)) => self.get_hand::<ROW, COL>() == pos.get_hand::<ROW, COL>(),
-            _ => false,
-        }
-    }
-
-    pub(crate) fn get_hand<const ROW: usize, const COL: usize>(&self) -> Hand {
-        if let Self::Key(pos) = self {
-            if COL >= ROW {
-                // Horizontal
-                if pos.col < (COL as u8 / 2) {
-                    Hand::Left
-                } else {
-                    Hand::Right
-                }
-            } else {
-                // Vertical
-                if pos.row < (ROW as u8 / 2) {
-                    Hand::Left
-                } else {
-                    Hand::Right
-                }
-            }
-        } else {
-            // TODO: handle rotary encoder
-            Hand::Left
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Hand {
-    Right,
-    Left,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
@@ -204,9 +167,11 @@ pub enum ControllerEvent {
     SplitCentral(bool),
     /// Lock state led indicator
     KeyboardIndicator(LedIndicator),
+    /// Sleep state changed
+    Sleep(bool),
     /// Ble state changed
     #[cfg(feature = "_ble")]
-    BleState(u8, crate::ble::trouble::BleState),
+    BleState(u8, crate::ble::BleState),
     /// Ble profile changed
     #[cfg(feature = "_ble")]
     BleProfile(u8),

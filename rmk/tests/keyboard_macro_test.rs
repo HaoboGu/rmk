@@ -2,11 +2,11 @@ pub mod common;
 
 mod macro_test {
     use heapless::Vec;
-    use rmk::action::{Action, KeyAction};
-    use rmk::config::BehaviorConfig;
+    use rmk::config::{BehaviorConfig, PerKeyConfig};
     use rmk::keyboard::Keyboard;
     use rmk::keyboard_macros::{MacroOperation, define_macro_sequences, to_macro_sequence};
-    use rmk::keycode::KeyCode;
+    use rmk::types::action::{Action, KeyAction};
+    use rmk::types::keycode::KeyCode;
     use rusty_fork::rusty_fork_test;
 
     use crate::common::{KC_LSHIFT, wrap_keymap};
@@ -17,8 +17,11 @@ mod macro_test {
             KeyAction::Single(Action::Key(KeyCode::Macro0)),
             KeyAction::Single(Action::Key(KeyCode::Macro1)),
         ]]];
-
-        Keyboard::new(wrap_keymap(keymap, behavior_config))
+        static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
+        let behavior_config: &'static mut BehaviorConfig = BEHAVIOR_CONFIG.init(behavior_config);
+        static KEY_CONFIG: static_cell::StaticCell<PerKeyConfig<1, 2>> = static_cell::StaticCell::new();
+        let per_key_config = KEY_CONFIG.init(PerKeyConfig::default());
+        Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
     }
 
     rusty_fork_test! {

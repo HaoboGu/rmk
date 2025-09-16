@@ -1,18 +1,49 @@
 # Storage
 
-The `[storage]` section defines storage related configs. Storage feature is required to persist keymap data, it's strongly recommended to make it enabled(and it's enabled by default!). RMK will automatically use the last two section of chip's internal flash as the pre-served storage space. For some chips, there's also predefined default configuration, such as [nRF52840](https://github.com/HaoboGu/rmk/blob/main/rmk-config/src/default_config/nrf52840.toml). If you don't want to change the default setting, just ignore this section.
+RMK's storage system provides persistent data storage for keyboard settings, keymaps, and system configuration. It uses your microcontroller's internal flash memory to save changes between power cycles.
+
+
+::: tip
+For most users, the [default storage configuration](https://github.com/HaoboGu/rmk/tree/main/rmk-config/src/default_config) works perfectly. If there's no default config for your chip, the **last two sectors** will be used. In most cases, you only need to modify settings for advanced use cases or when troubleshooting storage-related issues.
+:::
+
+The `[storage]` section in `keyboard.toml` configures RMK's storage.
+
+## Configuration Options
 
 ```toml
 [storage]
-# Storage feature is enabled by default
+# Enable/disable storage feature (default: true)
 enabled = true
-# Start address of local storage, MUST BE start of a sector.
-# If start_addr is set to 0(this is the default value), the last `num_sectors` sectors will be used.
-start_addr = 0x00000000
-# How many sectors are used for storage, the default value is 2
+
+# Number of flash sectors to allocate (default: 2)
 num_sectors = 2
-# Clear storage at keyboard boot.
-# Set it to true will reset the storage(including keymap, BLE bond info, etc.) at each reboot.
-# This option is useful when testing the firmware.
+
+# Storage start address (default: 0 = auto-allocate from end)
+start_addr = 0x00000000
+
+# Clear all storage data on boot, including keymap, BLE bonds, etc
 clear_storage = false
+
+# Clear only layout/keymap data, preserve BLE bonds
+clear_layout = false
+```
+
+### Rust API Configuration
+
+For advanced users using the Rust API directly:
+
+```rust
+use rmk::config::{RmkConfig, StorageConfig};
+
+let storage_config = StorageConfig {
+    start_addr: 0x70000,    // Custom start address
+    num_sectors: 2,         // Number of sectors
+    ..Default::default()
+};
+
+let rmk_config = RmkConfig {
+    storage_config,
+    ..Default::default()
+};
 ```

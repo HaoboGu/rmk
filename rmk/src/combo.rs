@@ -1,7 +1,7 @@
 use heapless::Vec;
+use rmk_types::action::KeyAction;
 
 use crate::COMBO_MAX_LENGTH;
-use crate::action::KeyAction;
 use crate::event::KeyboardEvent;
 
 #[derive(Clone, Debug)]
@@ -38,7 +38,7 @@ impl Combo {
 
     /// Update the combo's state when a key is pressed.
     /// Returns true if the combo is updated.
-    pub(crate) fn update(&mut self, key_action: KeyAction, key_event: KeyboardEvent, active_layer: u8) -> bool {
+    pub(crate) fn update(&mut self, key_action: &KeyAction, key_event: KeyboardEvent, active_layer: u8) -> bool {
         if !key_event.pressed || self.actions.is_empty() || self.is_triggered {
             // Ignore combo that without actions
             return false;
@@ -50,7 +50,7 @@ impl Combo {
             }
         }
 
-        let action_idx = self.actions.iter().position(|&a| a == key_action);
+        let action_idx = self.actions.iter().position(|&a| a == *key_action);
         if let Some(i) = action_idx {
             self.state |= 1 << i;
         } else if !self.is_all_pressed() {
@@ -61,8 +61,8 @@ impl Combo {
 
     /// Update the combo's state when a key is released
     /// When the combo is fully released from triggered state, this function returns true
-    pub(crate) fn update_released(&mut self, key_action: KeyAction) -> bool {
-        if let Some(i) = self.actions.iter().position(|&a| a == key_action) {
+    pub(crate) fn update_released(&mut self, key_action: &KeyAction) -> bool {
+        if let Some(i) = self.actions.iter().position(|&a| a == *key_action) {
             self.state &= !(1 << i);
         }
 
@@ -83,7 +83,7 @@ impl Combo {
             return self.output;
         }
 
-        if self.output == KeyAction::No {
+        if self.output.is_empty() {
             return self.output;
         }
 

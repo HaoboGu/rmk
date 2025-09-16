@@ -1,4 +1,4 @@
-use rmk::action::{EncoderAction, KeyAction};
+use rmk::types::action::{EncoderAction, KeyAction};
 use rmk::{a, encoder, k, mo};
 pub(crate) const COL: usize = 7;
 pub(crate) const ROW: usize = 8;

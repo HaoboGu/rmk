@@ -18,7 +18,8 @@ central = [
     "esp-hal/esp32c6",
     "esp-hal-embassy/esp32c6",
     "esp-println/esp32c6",
-    "esp-wifi/esp32c6",
+    "esp-radio/esp32c6",
+    "esp-preempt/esp32c6",
     "esp-bootloader-esp-idf/esp32c6",
 ]
 peripheral = [
@@ -28,7 +29,8 @@ peripheral = [
     "esp-hal/esp32c3",
     "esp-hal-embassy/esp32c3",
     "esp-println/esp32c3",
-    "esp-wifi/esp32c3",
+    "esp-radio/esp32c3",
+    "esp-preempt/esp32c3",
     "esp-bootloader-esp-idf/esp32c3",
 ]
 
@@ -40,9 +42,8 @@ rmk = { path = "../../../rmk", default-features = false, features = [
     "storage",
     "vial",
 ] }
-embassy-executor = { version = "0.7.0" }
+embassy-executor = { version = "0.9" }
 esp-backtrace = { version = "0.17", features = [
-    "exception-handler",
     "panic-handler",
     "println",
 ] }
@@ -51,9 +52,10 @@ esp-hal = { version = "1.0.0-rc.0", features = ["unstable"] }
 esp-hal-embassy = { version = "0.9" }
 esp-alloc = { version = "0.8.0" }
 esp-println = { version = "0.15.0", features = ["log-04"] }
-esp-wifi = { version = "0.15.0", features = ["ble"] }
+esp-radio = { version = "0.15.0", features = ["ble", "unstable"] }
+esp-preempt = { version = "0.0.1" }
 esp-bootloader-esp-idf = { version = "0.2.0", features = ["log-04"] }
-bt-hci = { version = "0.3" }
+bt-hci = { version = "0.4" }
 rand_core = { version = "0.6", default-features = false }
 
 [build-dependencies]
@@ -93,4 +95,12 @@ opt-level = 3
 overflow-checks = false
 
 [patch.crates-io]
-embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
+esp-backtrace = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
+esp-storage = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
+esp-hal = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
+esp-hal-embassy = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
+esp-alloc = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
+esp-println = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
+esp-radio = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
+esp-preempt = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
+esp-bootloader-esp-idf = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }

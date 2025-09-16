@@ -102,7 +102,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                     let sdc = ::defmt::unwrap!(build_sdc(sdc_p, &mut rng, &*mpsl, &mut sdc_mem));
                     let ble_addr = #ble_addr;
                     let mut host_resources = ::rmk::HostResources::new();
-                    let stack = ::rmk::ble::trouble::build_ble_stack(sdc, ble_addr, &mut rng_gen, &mut host_resources).await;
+                    let stack = ::rmk::ble::build_ble_stack(sdc, ble_addr, &mut rng_gen, &mut host_resources).await;
                 },
                 _ => quote! {},
             };
@@ -164,7 +164,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                     let mut rosc_rng = ::embassy_rp::clocks::RoscRng {};
                     use rand_core::SeedableRng;
                     let mut rng = ::rand_chacha::ChaCha12Rng::from_rng(&mut rosc_rng).unwrap();
-                    let stack = ::rmk::ble::trouble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
+                    let stack = ::rmk::ble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
                 }
             } else {
                 quote! {
@@ -180,16 +180,19 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                 let p = ::esp_hal::init(::esp_hal::Config::default().with_cpu_clock(::esp_hal::clock::CpuClock::max()));
                 ::esp_alloc::heap_allocator!(size: 72 * 1024);
                 let timg0 = ::esp_hal::timer::timg::TimerGroup::new(p.TIMG0);
-                let mut rng = ::esp_hal::rng::Trng::new(p.RNG, p.ADC1);
-                let init = ::esp_wifi::init(timg0.timer0, rng.rng.clone()).unwrap();
+                ::esp_preempt::init(timg0.timer0);
+                let _trng_source = ::esp_hal::rng::TrngSource::new(p.RNG, p.ADC1);
+                let mut rng = ::esp_hal::rng::Trng::try_new().unwrap();
+                static RADIO: ::static_cell::StaticCell<::esp_radio::Controller<'static>> = ::static_cell::StaticCell::new();
+                let radio = RADIO.init(::esp_radio::init().unwrap());
                 let systimer = ::esp_hal::timer::systimer::SystemTimer::new(p.SYSTIMER);
                 ::esp_hal_embassy::init(systimer.alarm0);
                 let bluetooth = p.BT;
-                let connector = ::esp_wifi::ble::controller::BleConnector::new(&init, bluetooth);
+                let connector = ::esp_radio::ble::controller::BleConnector::new(radio, bluetooth);
                 let controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
                 let ble_addr = #ble_addr;
                 let mut host_resources = ::rmk::HostResources::new();
-                let stack = ::rmk::ble::trouble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
+                let stack = ::rmk::ble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
             }
         }
     }
