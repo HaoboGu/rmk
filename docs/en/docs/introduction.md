@@ -36,4 +36,4 @@ The following table compares features available from RMK, Keyberon, QMK and ZMK:
 | Full RISC-V & Xtensa chips support | ✅ |  |  |  |
 | Keyboard configuration | toml (easy) | Rust code (hard) | json + makefile (medium) | Kconfig + devicetree(hard) |
 | Layers/Macros/Media key support | ✅ | ✅ | ✅ | ✅ |
-| Morse key support | ✅ |  |  |  |
+| [Morse key](./features/configuration/behavior.md#morse-and-tap-dance) support | ✅ |  |  |  |
