@@ -4,11 +4,12 @@
 /// This eliminates the need to manually hold the shift key for capitals and symbols.
 pub mod common;
 
-use rmk::action::Action;
-use rmk::config::{AutoShiftConfig, AutoShiftKeySet, BehaviorConfig};
+use rmk::config::{AutoShiftConfig, AutoShiftKeySet, BehaviorConfig, PerKeyConfig};
 use rmk::keyboard::Keyboard;
-use rmk::keycode::{KeyCode, ModifierCombination};
+use rmk::types::action::Action;
+use rmk::types::keycode::KeyCode;
 use rmk::{k, mt};
+use rmk_types::modifier::ModifierCombination;
 use rusty_fork::rusty_fork_test;
 
 use crate::common::KC_LSHIFT;
@@ -18,11 +19,11 @@ use crate::common::wrap_keymap;
 fn create_autoshift_test_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'static, 1, 5, 2> {
     let keymap = [
         [[
-            k!(A),                            // Position (0,0): Letter A
-            k!(Kc1),                          // Position (0,1): Number 1
-            k!(Semicolon),                    // Position (0,2): Symbol ;
-            mt!(D, ModifierCombination::GUI), // Position (0,3): D with GUI (regular tap-hold)
-            k!(E),                            // Position (0,4): Letter E
+            k!(A),                             // Position (0,0): Letter A
+            k!(Kc1),                           // Position (0,1): Number 1
+            k!(Semicolon),                     // Position (0,2): Symbol ;
+            mt!(D, ModifierCombination::LGUI), // Position (0,3): D with GUI (regular tap-hold)
+            k!(E),                             // Position (0,4): Letter E
         ]],
         [[k!(Kp1), k!(Kp2), k!(Kp3), k!(Kp4), k!(Kp5)]],
     ];
@@ -30,7 +31,9 @@ fn create_autoshift_test_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'
     use static_cell::StaticCell;
     static BEHAVIOR_CONFIG: StaticCell<BehaviorConfig> = StaticCell::new();
     let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
-    Keyboard::new(wrap_keymap(keymap, behavior_config))
+    static KEY_CONFIG: static_cell::StaticCell<PerKeyConfig<1, 5>> = static_cell::StaticCell::new();
+    let per_key_config = KEY_CONFIG.init(PerKeyConfig::default());
+    Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
 
 fn create_autoshift_keyboard() -> Keyboard<'static, 1, 5, 2> {
@@ -60,12 +63,6 @@ fn create_autoshift_keyboard_disabled() -> Keyboard<'static, 1, 5, 2> {
 rusty_fork_test! {
     #[test]
     fn test_autoshift_key_classification() {
-        let config = AutoShiftKeySet {
-            letters: true,
-            numbers: true,
-            symbols: true,
-        };
-
         // Test letters
         assert!(KeyCode::A.supports_autoshift(true, true, true));
         assert!(KeyCode::Z.supports_autoshift(true, true, true));
@@ -92,7 +89,7 @@ rusty_fork_test! {
         // Test letter shifting
         if let Some(Action::KeyWithModifier(key, modifier)) = KeyCode::A.get_shifted_action() {
             assert_eq!(key, KeyCode::A);
-            assert_eq!(modifier, ModifierCombination::SHIFT);
+            assert_eq!(modifier, ModifierCombination::LSHIFT);
         } else {
             panic!("Expected shifted action for letter A");
         }
@@ -100,7 +97,7 @@ rusty_fork_test! {
         // Test number shifting
         if let Some(Action::KeyWithModifier(key, modifier)) = KeyCode::Kc1.get_shifted_action() {
             assert_eq!(key, KeyCode::Kc1);
-            assert_eq!(modifier, ModifierCombination::SHIFT);
+            assert_eq!(modifier, ModifierCombination::LSHIFT);
         } else {
             panic!("Expected shifted action for number 1");
         }
@@ -108,7 +105,7 @@ rusty_fork_test! {
         // Test symbol shifting
         if let Some(Action::KeyWithModifier(key, modifier)) = KeyCode::Semicolon.get_shifted_action() {
             assert_eq!(key, KeyCode::Semicolon);
-            assert_eq!(modifier, ModifierCombination::SHIFT);
+            assert_eq!(modifier, ModifierCombination::LSHIFT);
         } else {
             panic!("Expected shifted action for semicolon");
         }

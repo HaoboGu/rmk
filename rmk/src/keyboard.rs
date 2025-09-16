@@ -7,7 +7,7 @@ use embassy_futures::yield_now;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Timer, with_deadline};
 use heapless::Vec;
-use rmk_types::action::{Action, KeyAction, MorseMode};
+use rmk_types::action::{Action, KeyAction, MorseMode, MorseProfile};
 use rmk_types::keycode::KeyCode;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
@@ -261,10 +261,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Check if a key action is an AutoShift-generated TapHold action
     fn is_autoshift_key(&self, action: &KeyAction) -> bool {
-        if let KeyAction::TapHold(tap_action, _) = action {
-            if let Action::Key(keycode) = tap_action {
+        if let KeyAction::TapHold(tap, hold, _) = action {
+            if let Action::Key(tap_key) = tap
+                && let Action::KeyWithModifier(hold_key, ModifierCombination::LSHIFT) = hold
+                && tap_key == hold_key
+            {
                 let behavior_config = &self.keymap.borrow().behavior;
-                return keycode.supports_autoshift(
+                return tap_key.supports_autoshift(
                     behavior_config.autoshift.enabled_keys.letters,
                     behavior_config.autoshift.enabled_keys.numbers,
                     behavior_config.autoshift.enabled_keys.symbols,
@@ -298,7 +301,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn create_autoshift_action(&self, action: &KeyAction) -> KeyAction {
         if let KeyAction::Single(Action::Key(keycode)) = action {
             if let Some(shifted_action) = keycode.get_shifted_action() {
-                return KeyAction::TapHold(Action::Key(*keycode), shifted_action);
+                return KeyAction::TapHold(Action::Key(*keycode), shifted_action, MorseProfile::default());
             }
         }
         *action
