@@ -364,7 +364,7 @@ impl Value<'_> for StorageData {
             }
             #[cfg(feature = "_ble")]
             StorageData::BondInfo(b) => {
-                if buffer.len() < 40 + CCCD_TABLE_SIZE * 4 {
+                if buffer.len() < 42 + CCCD_TABLE_SIZE * 4 {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::BleBondInfo as u8;
@@ -374,25 +374,33 @@ impl Value<'_> for StorageData {
                     Some(irk) => irk.to_le_bytes(),
                     None => [0; 16],
                 };
+                let security_level = match b.info.security_level {
+                    SecurityLevel::NoEncryption => 0,
+                    SecurityLevel::Encrypted => 1,
+                    SecurityLevel::EncryptedAuthenticated => 2,
+                };
+                let is_bonded = if b.info.is_bonded { 1 } else { 0 };
                 buffer[1] = b.slot_num;
                 buffer[2..18].copy_from_slice(&ltk);
-                buffer[18..24].copy_from_slice(address.raw());
-                buffer[24..40].copy_from_slice(&irk);
+                buffer[18] = security_level;
+                buffer[19] = is_bonded;
+                buffer[20..26].copy_from_slice(address.raw());
+                buffer[26..42].copy_from_slice(&irk);
                 let cccd_table = b.cccd_table.inner();
                 for i in 0..CCCD_TABLE_SIZE {
                     match cccd_table.get(i) {
                         Some(cccd) => {
                             let handle: u16 = cccd.0;
                             let cccd: u16 = cccd.1.raw();
-                            buffer[40 + i * 4..42 + i * 4].copy_from_slice(&handle.to_le_bytes());
-                            buffer[42 + i * 4..44 + i * 4].copy_from_slice(&cccd.to_le_bytes());
+                            buffer[42 + i * 4..44 + i * 4].copy_from_slice(&handle.to_le_bytes());
+                            buffer[44 + i * 4..46 + i * 4].copy_from_slice(&cccd.to_le_bytes());
                         }
                         None => {
-                            buffer[40 + i * 4..44 + i * 4].copy_from_slice(&[0, 0, 0, 0]);
+                            buffer[42 + i * 4..46 + i * 4].copy_from_slice(&[0, 0, 0, 0]);
                         }
                     };
                 }
-                Ok(40 + CCCD_TABLE_SIZE * 4)
+                Ok(42 + CCCD_TABLE_SIZE * 4)
             }
         }
     }
@@ -595,36 +603,27 @@ impl Value<'_> for StorageData {
                 }
                 #[cfg(feature = "_ble")]
                 StorageKeys::BleBondInfo => {
-                    if buffer.len() < 40 + CCCD_TABLE_SIZE * 4 {
+                    if buffer.len() < 42 + CCCD_TABLE_SIZE * 4 {
                         return Err(SerializationError::BufferTooSmall);
                     }
                     let slot_num = buffer[1];
                     let ltk = LongTermKey::from_le_bytes(buffer[2..18].try_into().unwrap());
-                    let address = BdAddr::new(buffer[18..24].try_into().unwrap());
-                    let irk = IdentityResolvingKey::from_le_bytes(buffer[24..40].try_into().unwrap());
-                    // Use all 0s as the empty irk
-                    let info = if irk.0 == 0 {
-                        BondInformation::new(
-                            Identity {
-                                bd_addr: address,
-                                irk: None,
-                            },
-                            ltk,
-                        )
-                    } else {
-                        BondInformation::new(
-                            Identity {
-                                bd_addr: address,
-                                irk: Some(irk),
-                            },
-                            ltk,
-                        )
+                    let security_level = match buffer[18] {
+                        1 => SecurityLevel::Encrypted,
+                        2 => SecurityLevel::EncryptedAuthenticated,
+                        _ => SecurityLevel::NoEncryption,
                     };
+                    let is_bonded = buffer[19] == 1;
+                    let address = BdAddr::new(buffer[20..26].try_into().unwrap());
+                    let irk = IdentityResolvingKey::from_le_bytes(buffer[26..42].try_into().unwrap());
+                    // Use all 0s as the empty irk
+                    let irk = if irk.0 == 0 { None } else { Some(irk) };
+                    let info = BondInformation::new(Identity { bd_addr: address, irk }, ltk, security_level, is_bonded);
                     // Read info:
                     let mut cccd_table_values = [(0u16, CCCD::default()); CCCD_TABLE_SIZE];
                     for i in 0..CCCD_TABLE_SIZE {
-                        let handle = u16::from_le_bytes(buffer[40 + i * 4..42 + i * 4].try_into().unwrap());
-                        let cccd = u16::from_le_bytes(buffer[42 + i * 4..44 + i * 4].try_into().unwrap());
+                        let handle = u16::from_le_bytes(buffer[42 + i * 4..44 + i * 4].try_into().unwrap());
+                        let cccd = u16::from_le_bytes(buffer[44 + i * 4..46 + i * 4].try_into().unwrap());
                         cccd_table_values[i] = (handle, cccd.into());
                     }
                     Ok(StorageData::BondInfo(ProfileInfo {

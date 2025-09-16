@@ -507,15 +507,20 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 info!("[gatt] disconnected: {:?}", reason);
                 break;
             }
-            GattConnectionEvent::Bonded { bond_info } => {
-                info!("[gatt] bonded: {:?}", bond_info);
-                let profile_info = ProfileInfo {
-                    slot_num: ACTIVE_PROFILE.load(Ordering::SeqCst),
-                    info: bond_info,
-                    removed: false,
-                    cccd_table: server.get_cccd_table(conn.raw()).unwrap_or_default(),
-                };
-                UPDATED_PROFILE.signal(profile_info);
+            GattConnectionEvent::PairingComplete { security_level, bond } => {
+                info!("[gatt] pairing complete: {:?}", security_level);
+                if let Some(bond_info) = bond {
+                    let profile_info = ProfileInfo {
+                        slot_num: ACTIVE_PROFILE.load(Ordering::SeqCst),
+                        info: bond_info,
+                        removed: false,
+                        cccd_table: server.get_cccd_table(conn.raw()).unwrap(),
+                    };
+                    UPDATED_PROFILE.signal(profile_info);
+                }
+            }
+            GattConnectionEvent::PairingFailed(err) => {
+                error!("[gatt] pairing error: {:?}", err);
             }
             GattConnectionEvent::Gatt { event: gatt_event } => {
                 let mut cccd_updated = false;
@@ -528,7 +533,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             debug!("Read GATT Event to Unknown: {:?}", event.handle());
                         }
 
-                        if conn.raw().encrypted() {
+                        if conn.raw().security_level()?.encrypted() {
                             None
                         } else {
                             Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
@@ -580,7 +585,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             debug!("Write GATT Event to Unknown: {:?}", event.handle());
                         }
 
-                        if conn.raw().encrypted() {
+                        if conn.raw().security_level()?.encrypted() {
                             None
                         } else {
                             Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
@@ -614,20 +619,42 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 }
             }
             GattConnectionEvent::PhyUpdated { tx_phy, rx_phy } => {
-                info!("[gatt] PhyUpdated: {:?}, {:?}", tx_phy, rx_phy);
+                info!("[gatt] PhyUpdated: {:?}, {:?}", tx_phy, rx_phy)
             }
             GattConnectionEvent::ConnectionParamsUpdated {
                 conn_interval,
                 peripheral_latency,
                 supervision_timeout,
-            } => {
-                info!(
-                    "[gatt] ConnectionParamsUpdated: {:?}ms, {:?}, {:?}ms",
-                    conn_interval.as_millis(),
-                    peripheral_latency,
-                    supervision_timeout.as_millis()
-                );
-            }
+            } => info!(
+                "[gatt] ConnectionParamsUpdated: {:?}ms, {:?}, {:?}ms",
+                conn_interval.as_millis(),
+                peripheral_latency,
+                supervision_timeout.as_millis()
+            ),
+            GattConnectionEvent::RequestConnectionParams {
+                min_connection_interval,
+                max_connection_interval,
+                max_latency,
+                supervision_timeout,
+            } => info!(
+                "[gatt] RequestConnectionParams: interval: ({:?}, {:?})ms, {:?}, {:?}ms",
+                min_connection_interval.as_millis(),
+                max_connection_interval.as_millis(),
+                max_latency,
+                supervision_timeout.as_millis(),
+            ),
+            GattConnectionEvent::DataLengthUpdated {
+                max_tx_octets,
+                max_tx_time,
+                max_rx_octets,
+                max_rx_time,
+            } => info!(
+                "[gatt] DataLengthUpdated: tx/rx octets: ({:?}, {:?}), tx/rx time: ({:?}, {:?})",
+                max_tx_octets, max_rx_octets, max_tx_time, max_rx_time
+            ),
+            GattConnectionEvent::PassKeyDisplay(pass_key) => info!("[gatt] PassKeyDisplay: {:?}", pass_key),
+            GattConnectionEvent::PassKeyConfirm(pass_key) => info!("[gatt] PassKeyConfirm: {:?}", pass_key),
+            GattConnectionEvent::PassKeyInput => warn!("[gatt] PassKeyInput event, should not happen"),
         }
     }
     info!("[gatt] task finished");
@@ -691,7 +718,9 @@ async fn advertise<'a, 'b, C: Controller>(
         Ok(conn_res) => {
             let conn = conn_res?.with_attribute_server(server)?;
             info!("[adv] connection established");
-
+            if let Err(e) = conn.raw().set_bondable(true) {
+                error!("Set bondable error: {:?}", e);
+            };
             Ok(conn)
         }
         Err(_) => Err(BleHostError::BleHost(Error::Timeout)),
@@ -740,7 +769,8 @@ pub(crate) async fn set_conn_params<
             min_connection_interval: Duration::from_millis(15),
             max_connection_interval: Duration::from_millis(15),
             max_latency: 30,
-            event_length: Duration::from_secs(0),
+            min_event_length: Duration::from_secs(0),
+            max_event_length: Duration::from_secs(0),
             supervision_timeout: Duration::from_secs(6),
         },
     )
@@ -756,7 +786,8 @@ pub(crate) async fn set_conn_params<
             min_connection_interval: Duration::from_micros(7500),
             max_connection_interval: Duration::from_micros(7500),
             max_latency: 99,
-            event_length: Duration::from_secs(0),
+            min_event_length: Duration::from_secs(0),
+            max_event_length: Duration::from_secs(0),
             supervision_timeout: Duration::from_secs(5),
         },
     )

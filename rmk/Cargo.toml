@@ -19,8 +19,8 @@ embedded-io-async = { version = "0.6" }
 embedded-storage = { version = "0.3", optional = true }
 embedded-storage-async = { version = "0.4", optional = true }
 
-embassy-embedded-hal = { version = "0.4" }
-embassy-time = { version = "0.4" }
+embassy-embedded-hal = { version = "0.5" }
+embassy-time = { version = "0.5" }
 embassy-usb = { version = "0.5", features = [
     "usbd-hid",
     "max-interface-count-8",
@@ -28,14 +28,14 @@ embassy-usb = { version = "0.5", features = [
 ] }
 embassy-sync = { version = "0.7" }
 embassy-futures = { version = "0.1" }
-embassy-executor = { version = "0.8" }
+embassy-executor = { version = "0.9" }
 embassy-usb-logger = { version = "0.5", optional = true }
 
 futures = { version = "0.3", default-features = false, features = [
     "async-await",
 ] }
 
-heapless = "0.8"
+heapless = "0.9"
 usbd-hid = "0.8.2"
 bitfield-struct = "0.11"
 static_cell = "2"
@@ -54,23 +54,23 @@ paste = "1"
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { version = "0.2.4", features = [
+trouble-host = { version = "0.2.4", git = "https://github.com/embassy-rs/trouble", rev = "26ec679", features = [
     "gatt",
     "scan",
     "derive",
     "security",
 ], optional = true }
 rand_core = { version = "0.6", optional = true }
-bt-hci = { version = "0.3", optional = true }
+bt-hci = { version = "0.4", optional = true }
 
 # nRF dependencies
-embassy-nrf = { version = "0.6", features = [
+embassy-nrf = { version = "0.7", features = [
     "unstable-pac",
     "time",
 ], optional = true }
 
 # RP2040 dependencies
-embassy-rp = { version = "0.7", optional = true }
+embassy-rp = { version = "0.8", optional = true }
 embassy-hal-internal = { version = "0.3.0", optional = true }
 rp-pac = { version = "7.0.0", optional = true }
 pio = { version = "0.3.0", optional = true }
@@ -88,6 +88,7 @@ critical-section = { version = "1.2", optional = true }
 [dev-dependencies]
 # A hack for enabling 'std' feature in testing, ref: https://github.com/rust-lang/cargo/issues/2911
 rmk = { path = ".", default-features = false, features = ["std", "log"] }
+critical-section = "1.2"
 env_logger = "0.11"
 ctor = "0.5.0"
 rusty-fork = "0.3.0"
@@ -144,7 +145,7 @@ defmt = [
     "postcard/use-defmt",
     "trouble-host?/defmt",
     "bt-hci?/defmt",
-    "heapless/defmt-03",
+    "heapless/defmt",
 ]
 
 log = ["dep:log", "trouble-host?/log"]
