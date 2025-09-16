@@ -1,6 +1,8 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
 runner = "probe-rs run --chip STM32F411CEUx"
 # runner = "probe-rs run --chip STM32F407VETx"
+
+# Use flip-link overflow check: https://github.com/knurling-rs/flip-link
 linker = "flip-link"
 
 [build]

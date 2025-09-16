@@ -10,12 +10,14 @@ mod vial;
 use embassy_executor::Spawner;
 use keymap::{COL, ROW};
 use py32_hal::bind_interrupts;
-use py32_hal::flash::Flash;
+// use py32_hal::flash::Flash;
 use py32_hal::gpio::{Input, Output};
 use py32_hal::rcc::{HsiFs, Pll, PllMul, PllSource, Sysclk};
 use py32_hal::usb::{Driver, InterruptHandler};
+use {defmt_rtt as _, panic_probe as _};
+
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, KeyboardUsbConfig, RmkConfig, VialConfig};
+use rmk::config::{BehaviorConfig, KeyboardUsbConfig, PerKeyConfig, RmkConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
@@ -25,7 +27,6 @@ use rmk::matrix::Matrix;
 // use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use rmk::{run_devices, run_rmk};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
-use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     USB => InterruptHandler<py32_hal::peripherals::USB>;
@@ -54,7 +55,7 @@ async fn main(_spawner: Spawner) {
     let keyboard_usb_config = KeyboardUsbConfig {
         vid: 0x4c4b,
         pid: 0x4643,
-        manufacturer: "Haobo",
+        manufacturer: "RMK & py32-rs",
         product_name: "RMK Keyboard",
         serial_number: "vial:f64c2b3c:000001",
     };
@@ -68,25 +69,31 @@ async fn main(_spawner: Spawner) {
         ..Default::default()
     };
 
-    let f = Flash::new_blocking(p.FLASH);
+    // let f = Flash::new_blocking(p.MPI2);
 
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
     let mut behavior_config = BehaviorConfig::default();
-    let keymap = rmk::initialize_keymap(&mut default_keymap, &mut behavior_config).await;
+    // let storage_config = StorageConfig::default();
+    let mut per_key_config = PerKeyConfig::default();
+    let keymap = rmk::initialize_keymap(&mut default_keymap, &mut behavior_config, &mut per_key_config).await;
     // let (keymap, mut storage) = initialize_keymap_and_storage(
     //     &mut default_keymap,
     //     async_flash_wrapper(f),
     //     &storage_config,
-    //     behavior_config,
+    //     &mut behavior_config,
+    //     &mut per_key_config,
     // )
     // .await;
 
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::<ROW, COL>::new();
-    // let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
-    let mut matrix = rmk::matrix::TestMatrix::<ROW, COL>::new();
+    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
+
+    // if let Some(_) = sifli_hal::rcc::get_clk_dll2_freq() {
+    //     panic!();
+    // }
 
     // Start
     join3(
