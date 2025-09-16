@@ -50,8 +50,6 @@ fn main() {
 
     // Set the linker script of the defmt
     println!("cargo:rustc-link-arg=-Tdefmt.x");
-
-    println!("cargo:rustc-linker=flip-link");
 }
 
 fn generate_vial_config() {

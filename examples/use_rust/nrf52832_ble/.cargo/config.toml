@@ -1,5 +1,7 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
 runner = "probe-run --chip nRF52832_xxAA"
+
+# Use flip-link overflow check: https://github.com/knurling-rs/flip-link
 linker = "flip-link"
 
 [build]
