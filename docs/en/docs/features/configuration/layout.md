@@ -21,7 +21,7 @@ With the help of this matrix map, the configuration of non-regular key matrices 
 
 The `<hand>` field is optional and should only be used when `unilateral_tap = true` is set in a key’s profile. By assigning `L` or `R` to `<hand>`, each key can be associated with either the left or right hand.
 
-The `<profile_name>` is also optional, if given, it selects a key profile from [`behavior.morse.profiles`](behavior/#fine-tuning) to override the default settings defined in `behavior.morse`. For defining a key profile, please refer to [behavior](behavior/#fine-tuning) doc
+The `<profile_name>` is also optional, if given, it selects a key profile from [`behavior.morse.profiles`](./behavior.md#fine-tuning) to override the default settings defined in `behavior.morse`. For defining a key profile, please refer to [behavior](./behavior.md#fine-tuning) doc
 Please note that the profile name is case sensitive.
 
 ```toml
