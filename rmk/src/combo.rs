@@ -83,7 +83,7 @@ impl Combo {
             return self.output;
         }
 
-        if self.output == KeyAction::No {
+        if self.output.is_empty() {
             return self.output;
         }
 

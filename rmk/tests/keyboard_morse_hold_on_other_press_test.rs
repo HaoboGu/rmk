@@ -2,13 +2,13 @@ pub mod common;
 
 use embassy_time::Duration;
 use rmk::combo::Combo;
-use rmk::config::{BehaviorConfig, CombosConfig, MorseProfile, MorsesConfig};
+use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig};
 use rmk::k;
 use rmk::keyboard::Keyboard;
-use rmk::morse::MorseMode;
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::KeyCode;
 use rmk::types::modifier::ModifierCombination;
+use rmk_types::action::{MorseMode, MorseProfile};
 use rusty_fork::rusty_fork_test;
 
 use crate::common::morse::create_simple_morse_keyboard;
@@ -31,9 +31,23 @@ fn create_hold_on_other_key_press_keyboard() -> Keyboard<'static, 1, 5, 2> {
 }
 
 fn create_hold_on_other_key_press_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
-    let combo_key = KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT));
-    let combo_key_2 = KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI));
-    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1));
+    let combo_key = KeyAction::TapHold(
+        Action::Key(KeyCode::B),
+        Action::Modifier(ModifierCombination::LSHIFT),
+        MorseProfile::new(
+            //just to test if combo ignores the profile as expected
+            Some(false),
+            Some(MorseMode::HoldOnOtherPress),
+            Some(250u16),
+            Some(250u16),
+        ),
+    );
+    let combo_key_2 = KeyAction::TapHold(
+        Action::Key(KeyCode::C),
+        Action::Modifier(ModifierCombination::LGUI),
+        MorseProfile::new(Some(false), Some(MorseMode::Normal), Some(250u16), Some(250u16)), //just to test if combo ignores the profile as expected
+    );
+    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1), Default::default());
     create_simple_morse_keyboard(BehaviorConfig {
         morse: MorsesConfig {
             enable_flow_tap: false,

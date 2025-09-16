@@ -1,8 +1,17 @@
-# Beginners Guide
+# Creating Your Firmware
 
-There are two methods for compiling your RMK firmware:
+RMK offers two methods for compiling your keyboard firmware:
 
-1. **Cloud compilation**: compile the firmware using Github Actions, no need to install anything to your computer, ideal for new beginners
-2. **Local compilation**: compile the firmware at your local machine. This method unlocks more options to do with your firmware, such as using a development version or the Rust API
+### 1. Cloud Compilation
+Compile your firmware using GitHub Actions with zero local setup required. This method is perfect for:
+- New users who want to get started quickly
+- Users who prefer not to install development tools locally  
 
-Choose your preferred method from the sidebar to get started.
+### 2. Local Compilation
+Compile firmware on your local machine. This method offers:
+- Complete control over the build process
+- Ability to do more customization or use Rust API
+
+## Next Steps
+
+Select your preferred compilation method from the navigation menu to continue with detailed instructions.

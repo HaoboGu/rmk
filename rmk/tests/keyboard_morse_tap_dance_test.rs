@@ -2,10 +2,10 @@
 pub mod common;
 
 use heapless::Vec;
-use rmk::config::{BehaviorConfig, MorseProfile, MorsesConfig, PerKeyConfig};
+use rmk::config::{BehaviorConfig, MorsesConfig, PerKeyConfig};
 use rmk::keyboard::Keyboard;
-use rmk::morse::{Morse, MorseMode};
-use rmk::types::action::Action;
+use rmk::morse::Morse;
+use rmk::types::action::{Action, MorseMode, MorseProfile};
 use rmk::types::keycode::KeyCode;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{k, td};
@@ -34,21 +34,21 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
                     Action::Key(KeyCode::B),
                     Action::Key(KeyCode::C),
                     Action::Key(KeyCode::D),
-                    MorseProfile::default(),
+                    MorseProfile::const_default(),
                 ),
                 Morse::new_from_vial(
                     Action::Key(KeyCode::X),
                     Action::Key(KeyCode::Y),
                     Action::Key(KeyCode::Z),
                     Action::Key(KeyCode::Space),
-                    MorseProfile::default(),
+                    MorseProfile::const_default(),
                 ),
                 Morse::new_from_vial(
                     Action::Key(KeyCode::Kp1),
                     Action::Modifier(ModifierCombination::LSHIFT),
                     Action::Key(KeyCode::Kp2),
                     Action::Modifier(ModifierCombination::LGUI),
-                    MorseProfile::default(),
+                    MorseProfile::const_default(),
                 ),
             ])
             .unwrap(),

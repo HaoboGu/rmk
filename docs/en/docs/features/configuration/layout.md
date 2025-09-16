@@ -21,7 +21,8 @@ With the help of this matrix map, the configuration of non-regular key matrices 
 
 The `<hand>` field is optional and should only be used when `unilateral_tap = true` is set in a key’s profile. By assigning `L` or `R` to `<hand>`, each key can be associated with either the left or right hand.
 
-The `<profile_name>` is also optional, if given, it selects a key profile from [`behavior.morse.profiles`](behavior/#fine-tuning) to override the default settings defined in `behavior.morse`. For defining a key profile, please refer to [behavior](behavior/#fine-tuning) doc
+The `<profile_name>` is also optional, if given, it selects a key profile from [`behavior.morse.profiles`](./behavior.md#fine-tuning) to override the default settings defined in `behavior.morse`. For defining a key profile, please refer to [behavior](./behavior.md#fine-tuning) doc
+Please note that the profile name is case sensitive.
 
 ```toml
 # split ortho example for matrix map, with L/R hand information filled and home row, thumb keys have profile names:
@@ -140,7 +141,7 @@ The `layer.keys` string should follow several rules:
    1. Use `DF(n)` to create a switch default layer action, `n` is the layer number
    2. Use `MO(n)` to create a layer activate action, `n` is the layer number
    3. Use `LM(n, modifier)` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`
-   4. Use `LT(n, key)` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html)
+   4. Use `LT(n, key, <profile_name>)` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html)
    5. Use `OSL(n)` to create a one-shot layer action, `n` is the layer number
    6. Use `OSM(modifier)` to create a one-shot modifier action. The modifier can be chained in the same way as `WM`
    7. Use `TT(n)` to create a layer activate or tap toggle action, `n` is the layer number
@@ -149,16 +150,24 @@ The `layer.keys` string should follow several rules:
 
 The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
-5. For modifier-tap-hold, use `MT(key, modifier)` where the modifier can be a chain like explained on point 1. 
+5. For modifier-tap-hold, use `MT(key, modifier, <profile_name>)` where the modifier can be a chain like explained on point 1. 
 <!-- If you're using home-row mod(HRM), you can also use `HRM(key, modifier)` to create a modifier-tap-hold whose configuration is optimized for home-row mod. -->
 
-6. For generic key tap-hold, use `TH(key-tap, key-hold)`
+6. For generic key tap-hold, use `TH(key-tap, key-hold, <profile_name>)`
 
 7. For shifted key, use `SHIFTED(key)`
 
 8. For Morse/Tap Dance, use `TD(n)` or `Morse(n)`, they are same
 
 9.  For keyboard macros, use `Macro(n)`
+
+The optional `<profile_name>` can be used to select morse profile (per key) from `[behavior.morse.profiles]` for the tap hold like keys. 
+If not given, the default profile defined in `[behavior.morse]` will be used, except when `matrix_map` used to override the default profile for some keys positions by similarly referring to the profiles by their name - see the example above for more details.
+Please note that the profile name is case sensitive.
+
+::: tip
+If you want to use Vial, the positional profile override is recommended instead of per key override, since Vial does not support the profile configuration of tap hold keys, so the profile information will likely be lost.
+:::
 
 ## Aliases
 
