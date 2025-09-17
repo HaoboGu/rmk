@@ -10,9 +10,9 @@ use rmk_types::protocol::vial::{
 use crate::combo::Combo;
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
+use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
 use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, TAP};
-use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 #[cfg(feature = "storage")]
 use crate::{
     COMBO_MAX_LENGTH,

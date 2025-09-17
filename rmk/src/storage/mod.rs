@@ -26,9 +26,9 @@ use {
     crate::MORSE_MAX_NUM,
     crate::combo::Combo,
     crate::fork::{Fork, StateBits},
+    crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode},
     crate::morse::Morse,
     crate::morse::MorsePattern,
-    crate::via::keycode_convert::{from_via_keycode, to_via_keycode},
     sequential_storage::map::fetch_all_items,
 };
 #[cfg(feature = "_ble")]

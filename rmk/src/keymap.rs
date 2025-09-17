@@ -1,10 +1,13 @@
-#[cfg(feature = "storage")]
-use embedded_storage_async::nor_flash::NorFlash;
 use rmk_types::action::{EncoderAction, KeyAction};
 #[cfg(feature = "controller")]
 use {
     crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
     crate::event::ControllerEvent,
+};
+#[cfg(feature = "storage")]
+use {
+    crate::{boot::reboot_keyboard, storage::Storage},
+    embedded_storage_async::nor_flash::NorFlash,
 };
 
 use crate::COMBO_MAX_NUM;
@@ -13,10 +16,8 @@ use crate::config::{BehaviorConfig, PerKeyConfig};
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
-#[cfg(feature = "matrix_tester")]
+#[cfg(feature = "vial_lock")]
 use crate::matrix::MatrixState;
-#[cfg(feature = "vial")]
-use crate::{boot::reboot_keyboard, storage::Storage};
 
 /// Keymap represents the stack of layers.
 ///
@@ -42,7 +43,7 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     #[cfg(feature = "controller")]
     controller_pub: ControllerPub,
     /// Matrix state
-    #[cfg(feature = "matrix_tester")]
+    #[cfg(feature = "vial_lock")]
     pub(crate) matrix_state: MatrixState<ROW, COL>,
 }
 
@@ -88,11 +89,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             key_config: key_info,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
-            #[cfg(feature = "matrix_tester")]
+            #[cfg(feature = "vial_lock")]
             matrix_state: MatrixState::new(),
         }
     }
-    #[cfg(all(feature = "storage", feature = "vial"))]
+
+    #[cfg(feature = "storage")]
     pub async fn new_from_storage<F: NorFlash>(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
@@ -147,7 +149,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             key_config,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
-            #[cfg(feature = "matrix_tester")]
+            #[cfg(feature = "vial_lock")]
             matrix_state: MatrixState::new(),
         }
     }

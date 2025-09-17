@@ -20,12 +20,12 @@ use {
 #[cfg(not(feature = "_no_usb"))]
 use {
     crate::descriptor::{CompositeReport, KeyboardReport, ViaReport},
+    crate::host::UsbHostReaderWriter,
     crate::light::UsbLedReader,
     crate::state::get_connection_type,
     crate::usb::UsbKeyboardWriter,
     crate::usb::{USB_ENABLED, USB_REMOTE_WAKEUP, USB_SUSPENDED},
     crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder},
-    crate::via::UsbVialReaderWriter,
     embassy_futures::select::{Either, Either4, select4},
     embassy_usb::driver::Driver,
 };
@@ -42,8 +42,8 @@ use crate::ble::device_info::{PnPID, VidSource};
 use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 #[cfg(feature = "vial")]
-use crate::ble::vial::BleViaServer;
-use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL, VIAL_READ_CHANNEL};
+use crate::ble::vial::{BleViaServer, VIAL_READ_CHANNEL};
+use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
@@ -59,6 +59,7 @@ pub(crate) mod ble_server;
 pub(crate) mod device_info;
 pub(crate) mod led;
 pub(crate) mod profile;
+#[cfg(feature = "vial")]
 pub(crate) mod vial;
 
 #[derive(Clone, Copy, Debug)]
@@ -292,7 +293,7 @@ pub(crate) async fn run_ble<
                                     storage,
                                     USB_SUSPENDED.wait(),
                                     UsbLedReader::new(&mut keyboard_reader),
-                                    UsbVialReaderWriter::new(&mut vial_reader_writer),
+                                    UsbHostReaderWriter::new(&mut vial_reader_writer),
                                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
                                     rmk_config.vial_config,
                                 );
@@ -347,7 +348,7 @@ pub(crate) async fn run_ble<
                             storage,
                             core::future::pending::<()>(), // Run forever until BLE connected
                             UsbLedReader::new(&mut keyboard_reader),
-                            UsbVialReaderWriter::new(&mut vial_reader_writer),
+                            UsbHostReaderWriter::new(&mut vial_reader_writer),
                             UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
                             rmk_config.vial_config,
                         );
@@ -553,6 +554,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             }
                         } else if event.handle() == output_via.handle {
                             debug!("Got via packet: {:?}", event.data());
+                            #[cfg(feature = "vial")]
                             if event.data().len() == 32 {
                                 let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
                                 VIAL_READ_CHANNEL.send(data).await;

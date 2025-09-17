@@ -1,5 +1,3 @@
-#![cfg(feature = "vial")]
-
 use core::cell::RefCell;
 use core::sync::atomic::Ordering;
 
@@ -14,12 +12,13 @@ use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
 use crate::event::KeyboardEventPos;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
+use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
 use crate::state::ConnectionState;
-use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::{CONNECTION_STATE, MACRO_SPACE_SIZE, boot};
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
+
 pub(crate) mod keycode_convert;
 mod vial;
 #[cfg(feature = "vial_lock")]
@@ -129,7 +128,7 @@ impl<
                             BigEndian::write_u32(&mut report.input_data[2..6], layout_option);
                         }
                         ViaKeyboardInfo::SwitchMatrixState => {
-                            #[cfg(feature = "matrix_tester")]
+                            #[cfg(feature = "vial_lock")]
                             {
                                 #[cfg(not(feature = "vial_lock"))]
                                 {

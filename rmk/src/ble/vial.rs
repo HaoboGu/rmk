@@ -1,12 +1,14 @@
-#![cfg(feature = "vial")]
+use embassy_sync::channel::Channel;
 use ssmarshal::serialize;
 use trouble_host::prelude::*;
 use usbd_hid::descriptor::SerializedDescriptor;
 
 use crate::ble::Server;
-use crate::channel::VIAL_READ_CHANNEL;
 use crate::descriptor::ViaReport;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
+use crate::{RawMutex, VIAL_CHANNEL_SIZE};
+
+pub(crate) static VIAL_READ_CHANNEL: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE> = Channel::new();
 
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
 pub(crate) struct ViaService {

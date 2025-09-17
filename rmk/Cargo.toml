@@ -112,11 +112,11 @@ cortex-m = { version = "0.7" }
 [features]
 default = ["col2row", "defmt", "storage", "vial", "vial_lock"]
 
-## Enable vial support
-vial = []
+## Enable host configurator support
+host = []
 
-## Enable matrix tester in vial.
-matrix_tester = ["vial"]
+## Enable vial support
+vial = ["host"]
 
 ## Enable vial lock feature
 vial_lock = ["vial"]
