@@ -194,7 +194,6 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
 #[cfg(test)]
 mod test {
     use super::*;
-
     use crate::keycode::{from_ascii, to_ascii};
 
     #[test]

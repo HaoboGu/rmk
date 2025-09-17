@@ -4,12 +4,11 @@ use usbd_hid::descriptor::SerializedDescriptor;
 
 use super::battery_service::BatteryService;
 use super::device_info::DeviceInformationService;
+#[cfg(feature = "vial")]
+use super::vial::ViaService;
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::descriptor::{CompositeReport, CompositeReportType, KeyboardReport};
 use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
-
-#[cfg(feature = "vial")]
-use super::vial::ViaService;
 
 // Used for saving the CCCD table
 pub(crate) const CCCD_TABLE_SIZE: usize = _CCCD_TABLE_SIZE;

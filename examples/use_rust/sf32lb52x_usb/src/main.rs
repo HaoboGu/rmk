@@ -10,12 +10,6 @@ mod vial;
 use defmt::info;
 use embassy_executor::Spawner;
 use keymap::{COL, ROW};
-use sifli_hal::bind_interrupts;
-use sifli_hal::gpio::{Input, Output};
-use sifli_hal::rcc::{ClkSysSel, ConfigOption, DllConfig, UsbConfig, UsbSel};
-use sifli_hal::usb::{Driver, InterruptHandler};
-use {defmt_rtt as _, panic_probe as _};
-
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, KeyboardUsbConfig, PerKeyConfig, RmkConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
@@ -26,7 +20,12 @@ use rmk::matrix::Matrix;
 // use rmk::storage::async_flash_wrapper;
 // use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use rmk::{run_devices, run_rmk};
+use sifli_hal::bind_interrupts;
+use sifli_hal::gpio::{Input, Output};
+use sifli_hal::rcc::{ClkSysSel, ConfigOption, DllConfig, UsbConfig, UsbSel};
+use sifli_hal::usb::{Driver, InterruptHandler};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     USBC => InterruptHandler<sifli_hal::peripherals::USBC>;

@@ -14,8 +14,6 @@ use py32_hal::bind_interrupts;
 use py32_hal::gpio::{Input, Output};
 use py32_hal::rcc::{HsiFs, Pll, PllMul, PllSource, Sysclk};
 use py32_hal::usb::{Driver, InterruptHandler};
-use {defmt_rtt as _, panic_probe as _};
-
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, KeyboardUsbConfig, PerKeyConfig, RmkConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
@@ -27,6 +25,7 @@ use rmk::matrix::Matrix;
 // use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use rmk::{run_devices, run_rmk};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     USB => InterruptHandler<py32_hal::peripherals::USB>;

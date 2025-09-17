@@ -1,13 +1,14 @@
 use embassy_time::{Instant, Timer};
 
-use crate::{debounce::{DebounceState, DebouncerTrait}, matrix::{KeyState, MatrixTrait}};
+use crate::debounce::{DebounceState, DebouncerTrait};
+use crate::driver::flex_pin::FlexPin;
 use crate::event::{Event, KeyboardEvent};
 use crate::input_device::InputDevice;
-use crate::driver::flex_pin::FlexPin;
+use crate::matrix::{KeyState, MatrixTrait};
 
 pub enum ScanLocation {
     Pins(usize, usize),
-    Ignore
+    Ignore,
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.
@@ -29,16 +30,11 @@ pub struct BidirectionalMatrix<
     /// Current scan pos: (col_idx, row_idx)
     scan_pos: (usize, usize),
     /// Scan map
-    scan_map: [[ScanLocation; COL]; ROW]
+    scan_map: [[ScanLocation; COL]; ROW],
 }
 
-impl<
-    Pin: FlexPin,
-    D: DebouncerTrait,
-    const PIN_NUM: usize,
-    const ROW: usize,
-    const COL: usize,
-> BidirectionalMatrix<Pin, D, PIN_NUM, ROW, COL>
+impl<Pin: FlexPin, D: DebouncerTrait, const PIN_NUM: usize, const ROW: usize, const COL: usize>
+    BidirectionalMatrix<Pin, D, PIN_NUM, ROW, COL>
 {
     /// Create a matrix from input and output pins.
     pub fn new(pins: [Pin; PIN_NUM], debouncer: D, scan_map: [[ScanLocation; COL]; ROW]) -> Self {
@@ -48,23 +44,18 @@ impl<
             key_state: [[KeyState::new(); COL]; ROW],
             scan_start: None,
             scan_pos: (0, 0),
-            scan_map
+            scan_map,
         }
     }
 }
 
-impl<
-    Pin: FlexPin,
-    D: DebouncerTrait,
-    const PIN_NUM: usize,
-    const ROW: usize,
-    const COL: usize,
-> InputDevice for BidirectionalMatrix<Pin, D, PIN_NUM, ROW, COL>
+impl<Pin: FlexPin, D: DebouncerTrait, const PIN_NUM: usize, const ROW: usize, const COL: usize> InputDevice
+    for BidirectionalMatrix<Pin, D, PIN_NUM, ROW, COL>
 {
     async fn read_event(&mut self) -> crate::event::Event {
         loop {
             let (scan_x_start, scan_y_start) = self.scan_pos;
-            
+
             // Scan following the scan map and send report
             // Loop through rows.
             for scan_y_idx in scan_y_start..self.scan_map.len() {
@@ -77,7 +68,7 @@ impl<
                         out_pin.set_as_output();
                         out_pin.set_high().ok();
                         Timer::after_micros(1).await;
-                        
+
                         // Check input pin and debounce
                         let debounce_state = self.debouncer.detect_change_with_debounce(
                             scan_y_idx,
@@ -88,9 +79,13 @@ impl<
                         if let DebounceState::Debounced = debounce_state {
                             self.key_state[scan_y_idx][scan_x_idx].toggle_pressed();
                             self.scan_pos = (scan_y_idx, scan_x_idx);
-                            return Event::Key(KeyboardEvent::key(scan_y_idx as u8, scan_x_idx as u8, self.key_state[scan_y_idx][scan_x_idx].pressed));
+                            return Event::Key(KeyboardEvent::key(
+                                scan_y_idx as u8,
+                                scan_x_idx as u8,
+                                self.key_state[scan_y_idx][scan_x_idx].pressed,
+                            ));
                         }
-                        
+
                         // Pull output pin back to low
                         out_pin.set_low().ok();
                         out_pin.set_as_input();
@@ -103,13 +98,8 @@ impl<
     }
 }
 
-impl<
-    Pin: FlexPin,
-    D: DebouncerTrait,
-    const PIN_NUM: usize,
-    const ROW: usize,
-    const COL: usize,
-> MatrixTrait for BidirectionalMatrix<Pin, D, PIN_NUM, ROW, COL>
+impl<Pin: FlexPin, D: DebouncerTrait, const PIN_NUM: usize, const ROW: usize, const COL: usize> MatrixTrait
+    for BidirectionalMatrix<Pin, D, PIN_NUM, ROW, COL>
 {
     const ROW: usize = ROW;
     const COL: usize = COL;

@@ -17,19 +17,6 @@ use rmk_types::mouse_button::MouseButtons;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_item, store_item};
-#[cfg(feature = "_ble")]
-use {
-    crate::ble::ble_server::CCCD_TABLE_SIZE,
-    crate::ble::profile::ProfileInfo,
-    trouble_host::{BondInformation, IdentityResolvingKey, LongTermKey, prelude::*},
-};
-
-use crate::channel::FLASH_CHANNEL;
-use crate::config::StorageConfig;
-#[cfg(all(feature = "_ble", feature = "split"))]
-use crate::split::ble::PeerAddress;
-use crate::{BUILD_HASH, config};
-
 #[cfg(feature = "vial")]
 use {
     crate::COMBO_MAX_LENGTH,
@@ -44,6 +31,18 @@ use {
     crate::via::keycode_convert::{from_via_keycode, to_via_keycode},
     sequential_storage::map::fetch_all_items,
 };
+#[cfg(feature = "_ble")]
+use {
+    crate::ble::ble_server::CCCD_TABLE_SIZE,
+    crate::ble::profile::ProfileInfo,
+    trouble_host::{BondInformation, IdentityResolvingKey, LongTermKey, prelude::*},
+};
+
+use crate::channel::FLASH_CHANNEL;
+use crate::config::StorageConfig;
+#[cfg(all(feature = "_ble", feature = "split"))]
+use crate::split::ble::PeerAddress;
+use crate::{BUILD_HASH, config};
 
 /// Signal to synchronize the flash operation status, usually used outside of the flash task.
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.

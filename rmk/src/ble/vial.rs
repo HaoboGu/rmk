@@ -1,11 +1,12 @@
 #![cfg(feature = "vial")]
+use ssmarshal::serialize;
+use trouble_host::prelude::*;
+use usbd_hid::descriptor::SerializedDescriptor;
+
 use crate::ble::Server;
 use crate::channel::VIAL_READ_CHANNEL;
 use crate::descriptor::ViaReport;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
-use ssmarshal::serialize;
-use trouble_host::prelude::*;
-use usbd_hid::descriptor::SerializedDescriptor;
 
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
 pub(crate) struct ViaService {
