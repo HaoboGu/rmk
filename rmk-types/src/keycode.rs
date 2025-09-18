@@ -4,7 +4,7 @@
 //! specification, extended with additional codes
 use strum::{EnumIter, FromRepr};
 
-use crate::modifier::ModifierCombination;
+use crate::{action::Action, modifier::ModifierCombination};
 
 /// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
 /// Use flat representation of keycodes.
@@ -1055,6 +1055,37 @@ impl KeyCode {
             KeyCode::SystemWake => Some(SystemControlKey::WakeUp),
             _ => None,
         }
+    }
+
+    /// Check if this keycode supports AutoShift based on the provided configuration
+    pub fn supports_autoshift(self, letters: bool, numbers: bool, symbols: bool) -> bool {
+        if KeyCode::A <= self && self <= KeyCode::Z {
+            letters
+        } else if KeyCode::Kc1 <= self && self <= KeyCode::Kc0 {
+            numbers
+        } else if matches!(
+            self,
+            KeyCode::Semicolon
+                | KeyCode::Quote
+                | KeyCode::Comma
+                | KeyCode::Dot
+                | KeyCode::Slash
+                | KeyCode::Grave
+                | KeyCode::LeftBracket
+                | KeyCode::RightBracket
+                | KeyCode::Backslash
+                | KeyCode::Minus
+                | KeyCode::Equal
+        ) {
+            symbols
+        } else {
+            false
+        }
+    }
+
+    /// Get the shifted version of this keycode as an Action
+    pub fn get_shifted_action(self) -> Option<Action> {
+        Some(Action::KeyWithModifier(self, ModifierCombination::LSHIFT))
     }
 }
 
