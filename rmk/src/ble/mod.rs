@@ -1,6 +1,23 @@
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
+use crate::ble::battery_service::BleBatteryServer;
+use crate::ble::ble_server::{BleHidServer, Server};
+use crate::ble::device_info::{PnPID, VidSource};
+use crate::ble::host_service::BleHostServer;
+use crate::ble::led::BleLedReader;
+use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
+use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
+use crate::config::RmkConfig;
+use crate::hid::{DummyWriter, RunnableHidWriter};
+use crate::host::run_host_communicate_task;
+use crate::keymap::KeyMap;
+#[cfg(feature = "split")]
+use crate::split::ble::central::CENTRAL_SLEEP;
+use crate::state::{ConnectionState, ConnectionType};
+#[cfg(feature = "usb_log")]
+use crate::usb::add_usb_logger;
+use crate::{CONNECTION_STATE, run_keyboard};
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join;
@@ -36,31 +53,13 @@ use {
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
 };
 
-use crate::ble::battery_service::BleBatteryServer;
-use crate::ble::ble_server::{BleHidServer, Server};
-use crate::ble::device_info::{PnPID, VidSource};
-use crate::ble::led::BleLedReader;
-use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
-#[cfg(feature = "vial")]
-use crate::ble::vial::{BleViaServer, VIAL_READ_CHANNEL};
-use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
-use crate::config::RmkConfig;
-use crate::hid::{DummyWriter, RunnableHidWriter};
-use crate::keymap::KeyMap;
-#[cfg(feature = "split")]
-use crate::split::ble::central::CENTRAL_SLEEP;
-use crate::state::{ConnectionState, ConnectionType};
-#[cfg(feature = "usb_log")]
-use crate::usb::add_usb_logger;
-use crate::{CONNECTION_STATE, run_keyboard};
-
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;
+#[cfg(feature = "host")]
+pub(crate) mod host_service;
 pub(crate) mod led;
 pub(crate) mod profile;
-#[cfg(feature = "vial")]
-pub(crate) mod vial;
 
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -130,18 +129,18 @@ pub(crate) async fn run_ble<
 
     // Initialize usb device and usb hid reader/writer
     #[cfg(not(feature = "_no_usb"))]
-    let (mut _usb_builder, mut keyboard_reader, mut keyboard_writer, mut other_writer, mut vial_reader_writer) = {
+    let (mut _usb_builder, mut keyboard_reader, mut keyboard_writer, mut other_writer, mut host_reader_writer) = {
         let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
         let other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
-        let vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
+        let host_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
         let (keyboard_reader, keyboard_writer) = keyboard_reader_writer.split();
         (
             usb_builder,
             keyboard_reader,
             keyboard_writer,
             other_writer,
-            vial_reader_writer,
+            host_reader_writer,
         )
     };
 
@@ -288,14 +287,16 @@ pub(crate) async fn run_ble<
                                 // Re-send the consumed flag
                                 USB_ENABLED.signal(());
                                 let usb_fut = run_keyboard(
-                                    keymap,
                                     #[cfg(feature = "storage")]
-                                    storage,
+                                    storage.run(),
                                     USB_SUSPENDED.wait(),
+                                    run_host_communicate_task(
+                                        keymap,
+                                        UsbHostReaderWriter::new(&mut host_reader_writer),
+                                        rmk_config.vial_config,
+                                    ),
                                     UsbLedReader::new(&mut keyboard_reader),
-                                    UsbHostReaderWriter::new(&mut vial_reader_writer),
                                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
-                                    rmk_config.vial_config,
                                 );
                                 select(usb_fut, profile_manager.update_profile()).await;
                             }
@@ -341,16 +342,21 @@ pub(crate) async fn run_ble<
                         }
                     }
                     ConnectionType::Ble => {
+                        use crate::host::run_host_communicate_task;
+
                         info!("BLE priority mode, running USB keyboard while advertising");
                         let usb_fut = run_keyboard(
-                            keymap,
                             #[cfg(feature = "storage")]
-                            storage,
+                            storage.run(),
                             core::future::pending::<()>(), // Run forever until BLE connected
+                            #[cfg(feature = "host")]
+                            run_host_communicate_task(
+                                keymap,
+                                UsbHostReaderWriter::new(&mut host_reader_writer),
+                                rmk_config.vial_config,
+                            ),
                             UsbLedReader::new(&mut keyboard_reader),
-                            UsbHostReaderWriter::new(&mut vial_reader_writer),
                             UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
-                            rmk_config.vial_config,
                         );
                         match select3(adv_fut, usb_fut, profile_manager.update_profile()).await {
                             Either3::First(Ok(conn)) => {
@@ -481,9 +487,9 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let output_keyboard = server.hid_service.output_keyboard;
     let hid_control_point = server.hid_service.hid_control_point;
     let input_keyboard = server.hid_service.input_keyboard;
-    let output_via = server.via_service.output_via;
-    let input_via = server.via_service.input_via;
-    let via_control_point = server.via_service.hid_control_point;
+    let output_host = server.host_service.output_data;
+    let input_host = server.host_service.input_data;
+    let host_control_point = server.host_service.hid_control_point;
     let battery_level = server.battery_service.level;
     let mouse = server.composite_service.mouse_report;
     let media = server.composite_service.media_report;
@@ -552,17 +558,19 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             } else {
                                 warn!("Wrong keyboard state data: {:?}", event.data());
                             }
-                        } else if event.handle() == output_via.handle {
-                            debug!("Got via packet: {:?}", event.data());
-                            #[cfg(feature = "vial")]
+                        } else if event.handle() == output_host.handle {
+                            debug!("Got host packet: {:?}", event.data());
+                            #[cfg(feature = "host")]
                             if event.data().len() == 32 {
+                                use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;
+
                                 let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
-                                VIAL_READ_CHANNEL.send(data).await;
+                                HOST_GUI_INPUT_CHANNEL.send(data).await;
                             } else {
-                                warn!("Wrong via packet data: {:?}", event.data());
+                                warn!("Wrong host packet data: {:?}", event.data());
                             }
                         } else if event.handle() == input_keyboard.cccd_handle.expect("No CCCD for input keyboard")
-                            || event.handle() == input_via.cccd_handle.expect("No CCCD for input via")
+                            || event.handle() == input_host.cccd_handle.expect("No CCCD for input host")
                             || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
                             || event.handle() == media.cccd_handle.expect("No CCCD for media report")
                             || event.handle() == system_control.cccd_handle.expect("No CCCD for system report")
@@ -571,7 +579,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             // CCCD write event
                             cccd_updated = true;
                         } else if event.handle() == hid_control_point.handle
-                            || event.handle() == via_control_point.handle
+                            || event.handle() == host_control_point.handle
                             || event.handle() == media_control_point.handle
                         {
                             info!("Write GATT Event to Control Point: {:?}", event.handle());
@@ -824,7 +832,7 @@ async fn run_ble_keyboard<
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     let ble_hid_server = BleHidServer::new(&server, &conn);
-    let ble_via_server = BleViaServer::new(&server, &conn);
+    let ble_host_server = BleHostServer::new(&server, &conn);
     let ble_led_reader = BleLedReader {};
     let mut ble_battery_server = BleBatteryServer::new(&server, &conn);
 
@@ -857,14 +865,13 @@ async fn run_ble_keyboard<
     };
 
     run_keyboard(
-        keymap,
         #[cfg(feature = "storage")]
-        storage,
+        storage.run(),
         communication_task,
+        #[cfg(feature = "host")]
+        run_host_communicate_task(keymap, ble_host_server, rmk_config.vial_config),
         ble_led_reader,
-        ble_via_server,
         ble_hid_server,
-        rmk_config.vial_config,
     )
     .await;
 }

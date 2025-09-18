@@ -4,8 +4,8 @@ use usbd_hid::descriptor::SerializedDescriptor;
 
 use super::battery_service::BatteryService;
 use super::device_info::DeviceInformationService;
-#[cfg(feature = "vial")]
-use super::vial::ViaService;
+#[cfg(feature = "host")]
+use super::host_service::HostService;
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::descriptor::{CompositeReport, CompositeReportType, KeyboardReport};
 use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
@@ -19,17 +19,17 @@ pub(crate) const CCCD_TABLE_SIZE: usize = _CCCD_TABLE_SIZE;
 // the flag was on, for some reason. I suspect it might have something to do with
 // the `gatt_server` macro, but I'm not sure. So we need 2 versions of the Server
 // struct, one with vial support, and one without.
-#[cfg(feature = "vial")]
+#[cfg(feature = "host")]
 #[gatt_server]
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
     pub(crate) hid_service: HidService,
-    pub(crate) via_service: ViaService,
+    pub(crate) host_service: HostService,
     pub(crate) composite_service: CompositeService,
     pub(crate) device_info_service: DeviceInformationService,
 }
 
-#[cfg(not(feature = "vial"))]
+#[cfg(not(feature = "host"))]
 #[gatt_server]
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,

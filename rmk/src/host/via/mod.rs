@@ -1,5 +1,4 @@
 use core::cell::RefCell;
-use core::sync::atomic::Ordering;
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::{Instant, Timer};
@@ -76,9 +75,7 @@ impl<
             match self.process().await {
                 Ok(_) => continue,
                 Err(e) => {
-                    if CONNECTION_STATE.load(Ordering::Relaxed)
-                        == <ConnectionState as Into<bool>>::into(ConnectionState::Disconnected)
-                    {
+                    if ConnectionState::Disconnected == ConnectionState::from(&CONNECTION_STATE) {
                         Timer::after_millis(1000).await;
                     } else {
                         error!("Process vial error: {:?}", e);
