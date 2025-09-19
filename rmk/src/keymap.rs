@@ -107,6 +107,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         fill_vec(&mut behavior.fork.forks); // Is this needed? (has no Vial support)
         fill_vec(&mut behavior.morse.morses);
 
+        #[cfg(feature = "vial")]
         if let Some(storage) = storage {
             if {
                 Ok(())

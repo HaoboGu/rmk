@@ -9,28 +9,10 @@ use embassy_sync::signal::Signal;
 use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-use heapless::Vec;
-use rmk_types::action::{EncoderAction, KeyAction, MorseProfile};
-use rmk_types::led_indicator::LedIndicator;
-use rmk_types::modifier::ModifierCombination;
-use rmk_types::mouse_button::MouseButtons;
+use rmk_types::action::{EncoderAction, KeyAction};
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_item, store_item};
-#[cfg(feature = "vial")]
-use {
-    crate::COMBO_MAX_LENGTH,
-    crate::COMBO_MAX_NUM,
-    crate::FORK_MAX_NUM,
-    crate::MACRO_SPACE_SIZE,
-    crate::MORSE_MAX_NUM,
-    crate::combo::Combo,
-    crate::fork::{Fork, StateBits},
-    crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode},
-    crate::morse::Morse,
-    crate::morse::MorsePattern,
-    sequential_storage::map::fetch_all_items,
-};
 #[cfg(feature = "_ble")]
 use {
     crate::ble::ble_server::CCCD_TABLE_SIZE,
@@ -40,6 +22,8 @@ use {
 
 use crate::channel::FLASH_CHANNEL;
 use crate::config::StorageConfig;
+#[cfg(feature = "vial")]
+use crate::host::{storage_types::KeymapKey, via::storage::VialData};
 #[cfg(all(feature = "_ble", feature = "split"))]
 use crate::split::ble::PeerAddress;
 use crate::{BUILD_HASH, config};
@@ -71,35 +55,11 @@ pub(crate) enum FlashOperationMessage {
     LayoutOptions(u32),
     // Default layer number
     DefaultLayer(u8),
-    // Write macro
+    // Vial Flash Message
     #[cfg(feature = "vial")]
-    WriteMacro([u8; MACRO_SPACE_SIZE]),
-    // Write a key in keymap
-    #[cfg(feature = "vial")]
-    KeymapKey {
-        layer: u8,
-        col: u8,
-        row: u8,
-        action: KeyAction,
-    },
-    // Write encoder configuration
-    #[cfg(feature = "vial")]
-    EncoderKey {
-        idx: u8,
-        layer: u8,
-        action: EncoderAction,
-    },
+    VialMessage(VialData),
     // Current saved connection type
     ConnectionType(u8),
-    // Write combo
-    #[cfg(feature = "vial")]
-    WriteCombo(ComboData),
-    // Write fork
-    #[cfg(feature = "vial")]
-    WriteFork(ForkData),
-    // Write tap dance
-    #[cfg(feature = "vial")]
-    WriteMorse(u8, Morse),
     // Timeout time for combos
     ComboTimeout(u16),
     // Timeout time for one-shot keys
@@ -182,19 +142,9 @@ pub(crate) enum StorageData {
     StorageConfig(LocalStorageConfig),
     LayoutConfig(LayoutConfig),
     BehaviorConfig(BehaviorConfig),
-    #[cfg(feature = "vial")]
-    KeymapKey(KeymapKey),
-    #[cfg(feature = "vial")]
-    EncoderConfig(EncoderConfig),
-    #[cfg(feature = "vial")]
-    MacroData([u8; MACRO_SPACE_SIZE]),
-    #[cfg(feature = "vial")]
-    ComboData(ComboData),
     ConnectionType(u8),
     #[cfg(feature = "vial")]
-    ForkData(ForkData),
-    #[cfg(feature = "vial")]
-    MorseData(Morse),
+    VialData(VialData),
     #[cfg(all(feature = "_ble", feature = "split"))]
     PeerAddress(PeerAddress),
     #[cfg(feature = "_ble")]
@@ -206,11 +156,9 @@ pub(crate) enum StorageData {
 /// Get the key to retrieve the keymap key from the storage.
 #[cfg(feature = "vial")]
 pub(crate) fn get_keymap_key<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
-    row: usize,
-    col: usize,
-    layer: usize,
+    keymap_key: &KeymapKey,
 ) -> u32 {
-    0x1000 + (layer * COL * ROW + row * COL + col) as u32
+    0x1000 + (keymap_key.layer as usize * COL * ROW + keymap_key.row as usize * COL + keymap_key.col as usize) as u32
 }
 
 /// Get the key to retrieve the bond info from the storage.
@@ -226,8 +174,8 @@ pub(crate) fn get_combo_key(idx: usize) -> u32 {
 
 /// Get the key to retrieve the encoder config from the storage.
 #[cfg(feature = "vial")]
-pub(crate) fn get_encoder_config_key<const NUM_ENCODER: usize>(idx: usize, layer: usize) -> u32 {
-    0x4000 + (idx + NUM_ENCODER * layer) as u32
+pub(crate) fn get_encoder_config_key<const NUM_ENCODER: usize>(idx: u8, layer: u8) -> u32 {
+    0x4000 + (idx as usize + NUM_ENCODER * layer as usize) as u32
 }
 
 #[cfg(feature = "vial")]
@@ -284,107 +232,7 @@ impl Value<'_> for StorageData {
                 Ok(14)
             }
             #[cfg(feature = "vial")]
-            StorageData::KeymapKey(k) => {
-                buffer[0] = StorageKeys::KeymapConfig as u8;
-                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(k.action));
-                buffer[3] = k.layer as u8;
-                buffer[4] = k.col as u8;
-                buffer[5] = k.row as u8;
-                Ok(6)
-            }
-            #[cfg(feature = "vial")]
-            StorageData::EncoderConfig(e) => {
-                buffer[0] = StorageKeys::EncoderKeys as u8;
-                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(e.action.clockwise()));
-                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(e.action.counter_clockwise()));
-                buffer[5] = e.idx as u8;
-                buffer[6] = e.layer as u8;
-                Ok(7)
-            }
-            #[cfg(feature = "vial")]
-            StorageData::MacroData(d) => {
-                if buffer.len() < MACRO_SPACE_SIZE + 1 {
-                    return Err(SerializationError::BufferTooSmall);
-                }
-                buffer[0] = StorageKeys::MacroData as u8;
-                let mut idx = MACRO_SPACE_SIZE - 1;
-                // Check from the end of the macro buffer, find the first non-zero byte
-                while let Some(b) = d.get(idx) {
-                    if *b != 0 || idx == 0 {
-                        break;
-                    }
-                    idx -= 1;
-                }
-                let data_len = idx + 1;
-                // Macro data length
-                buffer[1..3].copy_from_slice(&(data_len as u16).to_le_bytes());
-                // Macro data
-                buffer[3..3 + data_len].copy_from_slice(&d[..data_len]);
-                Ok(data_len + 3)
-            }
-            #[cfg(feature = "vial")]
-            StorageData::ComboData(combo) => {
-                if buffer.len() < 3 + COMBO_MAX_LENGTH * 2 {
-                    return Err(SerializationError::BufferTooSmall);
-                }
-                buffer[0] = StorageKeys::ComboData as u8;
-                for i in 0..COMBO_MAX_LENGTH {
-                    BigEndian::write_u16(&mut buffer[1 + i * 2..3 + i * 2], to_via_keycode(combo.actions[i]));
-                }
-                BigEndian::write_u16(
-                    &mut buffer[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
-                    to_via_keycode(combo.output),
-                );
-                Ok(3 + COMBO_MAX_LENGTH * 2)
-            }
-            #[cfg(feature = "vial")]
-            StorageData::ForkData(fork) => {
-                if buffer.len() < 13 {
-                    return Err(SerializationError::BufferTooSmall);
-                }
-                buffer[0] = StorageKeys::ForkData as u8;
-                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(fork.fork.trigger));
-                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(fork.fork.negative_output));
-                BigEndian::write_u16(&mut buffer[5..7], to_via_keycode(fork.fork.positive_output));
-
-                BigEndian::write_u16(
-                    &mut buffer[7..9],
-                    fork.fork.match_any.leds.into_bits() as u16 | (fork.fork.match_none.leds.into_bits() as u16) << 8,
-                );
-                BigEndian::write_u16(
-                    &mut buffer[9..11],
-                    fork.fork.match_any.mouse.into_bits() as u16 | (fork.fork.match_none.mouse.into_bits() as u16) << 8,
-                );
-                BigEndian::write_u32(
-                    &mut buffer[11..15],
-                    fork.fork.match_any.modifiers.into_bits() as u32
-                        | (fork.fork.match_none.modifiers.into_bits() as u32) << 8
-                        | (fork.fork.kept_modifiers.into_bits() as u32) << 16
-                        | if fork.fork.bindable { 1 << 24 } else { 0 },
-                );
-                Ok(15)
-            }
-            #[cfg(feature = "vial")]
-            StorageData::MorseData(morse) => {
-                let total_size = 7 + 4 * morse.actions.len();
-                if buffer.len() < total_size {
-                    return Err(SerializationError::BufferTooSmall);
-                }
-                buffer[0] = StorageKeys::MorseData as u8;
-                BigEndian::write_u32(&mut buffer[1..5], morse.profile.into());
-                BigEndian::write_u16(&mut buffer[5..7], morse.actions.len() as u16);
-                let mut i = 7;
-                for (pattern, action) in &morse.actions {
-                    BigEndian::write_u16(
-                        &mut buffer[i..i + 2],
-                        pattern.to_u16(), //pattern
-                    );
-                    BigEndian::write_u16(&mut buffer[i + 2..i + 4], to_via_keycode(KeyAction::Single(*action)));
-                    i += 4;
-                }
-
-                Ok(total_size)
-            }
+            StorageData::VialData(vial_data) => vial_data.serialize_into(buffer),
             StorageData::ConnectionType(ty) => {
                 buffer[0] = StorageKeys::ConnectionType as u8;
                 buffer[1] = *ty;
@@ -478,20 +326,7 @@ impl Value<'_> for StorageData {
                         }))
                     }
                 }
-                StorageKeys::KeymapConfig => {
-                    let action = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
-                    let layer = buffer[3] as usize;
-                    let col = buffer[4] as usize;
-                    let row = buffer[5] as usize;
 
-                    // row, col, layer are used to calculate key only, not used here
-                    Ok(StorageData::KeymapKey(KeymapKey {
-                        row,
-                        col,
-                        layer,
-                        action,
-                    }))
-                }
                 StorageKeys::LayoutConfig => {
                     let default_layer = buffer[1];
                     let layout_option = BigEndian::read_u32(&buffer[2..6]);
@@ -500,6 +335,7 @@ impl Value<'_> for StorageData {
                         layout_option,
                     }))
                 }
+                StorageKeys::ConnectionType => Ok(StorageData::ConnectionType(buffer[1])),
                 StorageKeys::BehaviorConfig => {
                     if buffer.len() < 14 {
                         return Err(SerializationError::BufferTooSmall);
@@ -517,118 +353,12 @@ impl Value<'_> for StorageData {
                     Ok(StorageData::BehaviorConfig(keymap_config))
                 }
                 #[cfg(feature = "vial")]
-                StorageKeys::MacroData => {
-                    if buffer.len() < 3 {
-                        return Err(SerializationError::InvalidData);
-                    }
-                    let mut buf = [0_u8; MACRO_SPACE_SIZE];
-                    let macro_length = u16::from_le_bytes(buffer[1..3].try_into().unwrap()) as usize;
-                    if macro_length > MACRO_SPACE_SIZE + 1 || buffer.len() < 3 + macro_length {
-                        // Check length
-                        return Err(SerializationError::InvalidData);
-                    }
-                    buf[0..macro_length].copy_from_slice(&buffer[3..3 + macro_length]);
-                    Ok(StorageData::MacroData(buf))
-                }
-                #[cfg(feature = "vial")]
-                StorageKeys::ComboData => {
-                    if buffer.len() < 3 + COMBO_MAX_LENGTH * 2 {
-                        return Err(SerializationError::InvalidData);
-                    }
-                    let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
-                    for i in 0..COMBO_MAX_LENGTH {
-                        actions[i] = from_via_keycode(BigEndian::read_u16(&buffer[1 + i * 2..3 + i * 2]));
-                    }
-                    let output = from_via_keycode(BigEndian::read_u16(
-                        &buffer[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
-                    ));
-                    Ok(StorageData::ComboData(ComboData {
-                        idx: 0,
-                        actions,
-                        output,
-                    }))
-                }
-                StorageKeys::ConnectionType => Ok(StorageData::ConnectionType(buffer[1])),
-                #[cfg(feature = "vial")]
-                StorageKeys::EncoderKeys => {
-                    if buffer.len() < 7 {
-                        return Err(SerializationError::BufferTooSmall);
-                    }
-                    let clockwise = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
-                    let counter_clockwise = from_via_keycode(BigEndian::read_u16(&buffer[3..5]));
-                    let idx = buffer[5] as usize;
-                    let layer = buffer[6] as usize;
-
-                    Ok(StorageData::EncoderConfig(EncoderConfig {
-                        idx,
-                        layer,
-                        action: EncoderAction::new(clockwise, counter_clockwise),
-                    }))
-                }
-                #[cfg(feature = "vial")]
-                StorageKeys::ForkData => {
-                    if buffer.len() < 15 {
-                        return Err(SerializationError::InvalidData);
-                    }
-                    let trigger = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
-                    let negative_output = from_via_keycode(BigEndian::read_u16(&buffer[3..5]));
-                    let positive_output = from_via_keycode(BigEndian::read_u16(&buffer[5..7]));
-
-                    let led_masks = BigEndian::read_u16(&buffer[7..9]);
-                    let mouse_masks = BigEndian::read_u16(&buffer[9..11]);
-                    let modifier_masks = BigEndian::read_u32(&buffer[11..15]);
-
-                    let match_any = StateBits {
-                        modifiers: ModifierCombination::from_bits((modifier_masks & 0xFF) as u8),
-                        leds: LedIndicator::from_bits((led_masks & 0xFF) as u8),
-                        mouse: MouseButtons::from_bits((mouse_masks & 0xFF) as u8),
-                    };
-                    let match_none = StateBits {
-                        modifiers: ModifierCombination::from_bits(((modifier_masks >> 8) & 0xFF) as u8),
-                        leds: LedIndicator::from_bits(((led_masks >> 8) & 0xFF) as u8),
-                        mouse: MouseButtons::from_bits(((mouse_masks >> 8) & 0xFF) as u8),
-                    };
-                    let kept_modifiers = ModifierCombination::from_bits(((modifier_masks >> 16) & 0xFF) as u8);
-                    let bindable = (modifier_masks & (1 << 24)) != 0;
-
-                    Ok(StorageData::ForkData(ForkData {
-                        idx: 0,
-                        fork: Fork::new(
-                            trigger,
-                            negative_output,
-                            positive_output,
-                            match_any,
-                            match_none,
-                            kept_modifiers,
-                            bindable,
-                        ),
-                    }))
-                }
-                #[cfg(feature = "vial")]
-                StorageKeys::MorseData => {
-                    if buffer.len() < 7 {
-                        return Err(SerializationError::InvalidData);
-                    }
-                    let profile = MorseProfile::from(BigEndian::read_u32(&buffer[1..5]));
-                    let count = BigEndian::read_u16(&buffer[5..7]) as usize;
-
-                    if buffer.len() < 7 + 4 * count {
-                        return Err(SerializationError::InvalidData);
-                    }
-
-                    let mut morse = Morse::default();
-                    morse.profile = profile;
-
-                    let mut i = 7;
-                    for _ in 0..count {
-                        let pattern = MorsePattern::from_u16(BigEndian::read_u16(&buffer[i..i + 2]));
-                        let key_action = from_via_keycode(BigEndian::read_u16(&buffer[i + 2..i + 4]));
-                        _ = morse.actions.push((pattern, key_action.to_action()));
-                        i += 4;
-                    }
-
-                    Ok(StorageData::MorseData(morse))
-                }
+                StorageKeys::KeymapConfig
+                | StorageKeys::MacroData
+                | StorageKeys::ComboData
+                | StorageKeys::EncoderKeys
+                | StorageKeys::ForkData
+                | StorageKeys::MorseData => VialData::deserialize_from(buffer).map(|d| StorageData::VialData(d)),
                 #[cfg(all(feature = "_ble", feature = "split"))]
                 StorageKeys::PeerAddress => {
                     if buffer.len() < 9 {
@@ -695,36 +425,16 @@ impl StorageData {
         match self {
             StorageData::StorageConfig(_) => StorageKeys::StorageConfig as u32,
             StorageData::LayoutConfig(_) => StorageKeys::LayoutConfig as u32,
-            #[cfg(feature = "vial")]
             StorageData::BehaviorConfig(_) => StorageKeys::BehaviorConfig as u32,
-            StorageData::KeymapKey(_) => {
-                panic!("To get storage key for KeymapKey, use `get_keymap_key` instead");
-            }
-            #[cfg(feature = "vial")]
-            StorageData::EncoderConfig(_) => {
-                panic!("To get encoder config key, use `get_encoder_config_key` instead");
-            }
-            #[cfg(feature = "vial")]
-            StorageData::MacroData(_) => StorageKeys::MacroData as u32,
-            #[cfg(feature = "vial")]
-            StorageData::ComboData(_) => {
-                panic!("To get combo key for ComboData, use `get_combo_key` instead");
-            }
             StorageData::ConnectionType(_) => StorageKeys::ConnectionType as u32,
-            #[cfg(feature = "vial")]
-            StorageData::ForkData(_) => {
-                panic!("To get fork key for ForkData, use `get_fork_key` instead");
-            }
-            #[cfg(feature = "vial")]
-            StorageData::MorseData(_) => {
-                panic!("To get morse key for MorseData, use `get_morse_key` instead");
-            }
             #[cfg(all(feature = "_ble", feature = "split"))]
             StorageData::PeerAddress(p) => get_peer_address_key(p.peer_id),
             #[cfg(feature = "_ble")]
             StorageData::ActiveBleProfile(_) => StorageKeys::ActiveBleProfile as u32,
             #[cfg(feature = "_ble")]
             StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
+            #[cfg(feature = "vial")]
+            StorageData::VialData(_) => panic!("To get key for VialData, use `get_xxx_key` instead"),
         }
     }
 }
@@ -740,45 +450,6 @@ pub(crate) struct LocalStorageConfig {
 pub(crate) struct LayoutConfig {
     default_layer: u8,
     layout_option: u32,
-}
-
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg(feature = "vial")]
-pub(crate) struct KeymapKey {
-    row: usize,
-    col: usize,
-    layer: usize,
-    action: KeyAction,
-}
-
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg(feature = "vial")]
-pub(crate) struct EncoderConfig {
-    /// Encoder index
-    idx: usize,
-    /// Layer
-    layer: usize,
-    /// Encoder action
-    action: EncoderAction,
-}
-
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg(feature = "vial")]
-pub(crate) struct ComboData {
-    pub(crate) idx: usize,
-    pub(crate) actions: [KeyAction; COMBO_MAX_LENGTH],
-    pub(crate) output: KeyAction,
-}
-
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg(feature = "vial")]
-pub(crate) struct ForkData {
-    pub(crate) idx: usize,
-    pub(crate) fork: Fork,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -937,11 +608,12 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 .ok();
             }
         } else if storage_config.clear_layout {
-            debug!("clear_layout=true; overwriting layout items without erase.");
-
-            let encoder_map = encoder_map.as_ref().map(|m| &**m);
-
-            let _ = storage.reset_layout_only(keymap, &encoder_map, behavior_config).await;
+            #[cfg(feature = "vial")]
+            {
+                debug!("clear_layout=true; overwriting layout items without erase.");
+                let encoder_map = encoder_map.as_ref().map(|m| &**m);
+                let _ = storage.reset_layout_only(keymap, &encoder_map, behavior_config).await;
+            }
         }
 
         storage
@@ -983,55 +655,80 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     )
                 }
                 #[cfg(feature = "vial")]
-                FlashOperationMessage::WriteMacro(macro_data) => {
-                    info!("Saving keyboard macro data");
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut storage_cache,
-                        &mut self.buffer,
-                        &(StorageKeys::MacroData as u32),
-                        &StorageData::MacroData(macro_data),
-                    )
-                    .await
-                }
-                #[cfg(feature = "vial")]
-                FlashOperationMessage::KeymapKey {
-                    layer,
-                    col,
-                    row,
-                    action,
-                } => {
-                    let data = StorageData::KeymapKey(KeymapKey {
-                        row: row as usize,
-                        col: col as usize,
-                        layer: layer as usize,
-                        action,
-                    });
-                    let key = get_keymap_key::<ROW, COL, NUM_LAYER>(row as usize, col as usize, layer as usize);
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut storage_cache,
-                        &mut self.buffer,
-                        &key,
-                        &data,
-                    )
-                    .await
-                }
-                #[cfg(feature = "vial")]
-                FlashOperationMessage::WriteCombo(combo) => {
-                    let key = get_combo_key(combo.idx);
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut storage_cache,
-                        &mut self.buffer,
-                        &key,
-                        &StorageData::ComboData(combo),
-                    )
-                    .await
-                }
+                FlashOperationMessage::VialMessage(vial_data) => match vial_data {
+                    VialData::Macro(macro_data) => {
+                        info!("Saving keyboard macro data");
+                        store_item(
+                            &mut self.flash,
+                            self.storage_range.clone(),
+                            &mut storage_cache,
+                            &mut self.buffer,
+                            &(StorageKeys::MacroData as u32),
+                            &StorageData::VialData(VialData::Macro(macro_data)),
+                        )
+                        .await
+                    }
+                    VialData::KeymapKey(keymap_key) => {
+                        let key = get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key);
+                        let data = StorageData::VialData(VialData::KeymapKey(keymap_key));
+                        store_item(
+                            &mut self.flash,
+                            self.storage_range.clone(),
+                            &mut storage_cache,
+                            &mut self.buffer,
+                            &key,
+                            &data,
+                        )
+                        .await
+                    }
+                    VialData::Encoder(encoder_config) => {
+                        let data = VialData::Encoder(encoder_config);
+                        let key = get_encoder_config_key::<NUM_ENCODER>(encoder_config.idx, encoder_config.layer);
+                        store_item(
+                            &mut self.flash,
+                            self.storage_range.clone(),
+                            &mut storage_cache,
+                            &mut self.buffer,
+                            &key,
+                            &data,
+                        )
+                        .await
+                    }
+                    VialData::Combo(combo) => {
+                        let key = get_combo_key(combo.idx);
+                        store_item(
+                            &mut self.flash,
+                            self.storage_range.clone(),
+                            &mut storage_cache,
+                            &mut self.buffer,
+                            &key,
+                            &StorageData::VialData(VialData::Combo(combo)),
+                        )
+                        .await
+                    }
+                    VialData::Fork(fork) => {
+                        store_item(
+                            &mut self.flash,
+                            self.storage_range.clone(),
+                            &mut storage_cache,
+                            &mut self.buffer,
+                            &get_fork_key(fork.idx),
+                            &StorageData::VialData(VialData::Fork(fork)),
+                        )
+                        .await
+                    }
+                    VialData::Morse(id, morse) => {
+                        store_item(
+                            &mut self.flash,
+                            self.storage_range.clone(),
+                            &mut storage_cache,
+                            &mut self.buffer,
+                            &get_morse_key(id),
+                            &StorageData::VialData(VialData::Morse(id, morse)),
+                        )
+                        .await
+                    }
+                },
                 FlashOperationMessage::ConnectionType(ty) => {
                     store_item(
                         &mut self.flash,
@@ -1040,50 +737,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         &mut self.buffer,
                         &(StorageKeys::ConnectionType as u32),
                         &StorageData::ConnectionType(ty),
-                    )
-                    .await
-                }
-                #[cfg(feature = "vial")]
-                FlashOperationMessage::EncoderKey { idx, layer, action } => {
-                    let data = StorageData::EncoderConfig(EncoderConfig {
-                        idx: idx as usize,
-                        layer: layer as usize,
-                        action,
-                    });
-                    let key = get_encoder_config_key::<NUM_ENCODER>(idx as usize, layer as usize);
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut storage_cache,
-                        &mut self.buffer,
-                        &key,
-                        &data,
-                    )
-                    .await
-                }
-                #[cfg(feature = "vial")]
-                FlashOperationMessage::WriteFork(fork) => {
-                    let key = get_fork_key(fork.idx);
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut storage_cache,
-                        &mut self.buffer,
-                        &key,
-                        &StorageData::ForkData(fork),
-                    )
-                    .await
-                }
-                #[cfg(feature = "vial")]
-                FlashOperationMessage::WriteMorse(id, morse) => {
-                    let key = get_morse_key(id);
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut storage_cache,
-                        &mut self.buffer,
-                        &key,
-                        &StorageData::MorseData(morse),
                     )
                     .await
                 }
@@ -1215,140 +868,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         }
     }
 
-    #[cfg(feature = "vial")]
-    pub(crate) async fn read_keymap(
-        &mut self,
-        keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: &mut Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
-    ) -> Result<(), ()> {
-        let mut storage_cache = NoCache::new();
-        // Use fetch_all_items to speed up the keymap reading
-        let mut key_iterator = fetch_all_items::<u32, _, _>(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut storage_cache,
-            &mut self.buffer,
-        )
-        .await
-        .map_err(|e| print_storage_error::<F>(e))?;
-
-        // Read all keymap keys and encoder configs
-        while let Some((_key, item)) = key_iterator
-            .next::<StorageData>(&mut self.buffer)
-            .await
-            .map_err(|e| print_storage_error::<F>(e))?
-        {
-            match item {
-                StorageData::KeymapKey(key) => {
-                    if key.layer < NUM_LAYER && key.row < ROW && key.col < COL {
-                        keymap[key.layer][key.row][key.col] = key.action;
-                    }
-                }
-                StorageData::EncoderConfig(encoder) => {
-                    if let Some(map) = encoder_map {
-                        if encoder.layer < NUM_LAYER && encoder.idx < NUM_ENCODER {
-                            map[encoder.layer][encoder.idx] = encoder.action;
-                        }
-                    }
-                }
-                _ => continue,
-            }
-        }
-
-        Ok(())
-    }
-
-    #[cfg(feature = "vial")]
-    pub(crate) async fn read_macro_cache(&mut self, macro_cache: &mut [u8]) -> Result<(), ()> {
-        // Read storage and send back from send_channel
-        let read_data = fetch_item::<u32, StorageData, _>(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut NoCache::new(),
-            &mut self.buffer,
-            &(StorageKeys::MacroData as u32),
-        )
-        .await
-        .map_err(|e| print_storage_error::<F>(e))?;
-
-        if let Some(StorageData::MacroData(data)) = read_data {
-            // Send data back
-            macro_cache.copy_from_slice(&data);
-        }
-
-        Ok(())
-    }
-
-    #[cfg(feature = "vial")]
-    pub(crate) async fn read_combos(&mut self, combos: &mut Vec<Combo, COMBO_MAX_NUM>) -> Result<(), ()> {
-        for (i, item) in combos.iter_mut().enumerate() {
-            let key = get_combo_key(i);
-            let read_data = fetch_item::<u32, StorageData, _>(
-                &mut self.flash,
-                self.storage_range.clone(),
-                &mut NoCache::new(),
-                &mut self.buffer,
-                &key,
-            )
-            .await
-            .map_err(|e| print_storage_error::<F>(e))?;
-
-            if let Some(StorageData::ComboData(combo)) = read_data {
-                let mut actions: Vec<KeyAction, COMBO_MAX_LENGTH> = Vec::new();
-                for &action in combo.actions.iter().filter(|&&a| !a.is_empty()) {
-                    let _ = actions.push(action);
-                }
-                *item = Combo::new(actions, combo.output, item.layer);
-            }
-        }
-
-        Ok(())
-    }
-
-    #[cfg(feature = "vial")]
-    pub(crate) async fn read_forks(&mut self, forks: &mut Vec<Fork, FORK_MAX_NUM>) -> Result<(), ()> {
-        for (i, item) in forks.iter_mut().enumerate() {
-            let key = get_fork_key(i);
-            let read_data = fetch_item::<u32, StorageData, _>(
-                &mut self.flash,
-                self.storage_range.clone(),
-                &mut NoCache::new(),
-                &mut self.buffer,
-                &key,
-            )
-            .await
-            .map_err(|e| print_storage_error::<F>(e))?;
-
-            if let Some(StorageData::ForkData(fork)) = read_data {
-                *item = fork.fork;
-            }
-        }
-
-        Ok(())
-    }
-
-    #[cfg(feature = "vial")]
-    pub(crate) async fn read_morses(&mut self, morses: &mut Vec<Morse, MORSE_MAX_NUM>) -> Result<(), ()> {
-        for (i, item) in morses.iter_mut().enumerate() {
-            let key = get_morse_key(i as u8);
-            let read_data = fetch_item::<u32, StorageData, _>(
-                &mut self.flash,
-                self.storage_range.clone(),
-                &mut NoCache::new(),
-                &mut self.buffer,
-                &key,
-            )
-            .await
-            .map_err(|e| print_storage_error::<F>(e))?;
-
-            if let Some(StorageData::MorseData(morse)) = read_data {
-                *item = morse;
-            }
-        }
-
-        Ok(())
-    }
-
     pub(crate) async fn read_behavior_config(
         &mut self,
         behavior_config: &mut config::BehaviorConfig,
@@ -1445,22 +964,19 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         for (layer, layer_data) in keymap.iter().enumerate() {
             for (row, row_data) in layer_data.iter().enumerate() {
                 for (col, action) in row_data.iter().enumerate() {
-                    let item = StorageData::KeymapKey(KeymapKey {
-                        row,
-                        col,
-                        layer,
+                    let keymap_key = KeymapKey {
+                        row: row as u8,
+                        col: col as u8,
+                        layer: layer as u8,
                         action: *action,
-                    });
-
-                    let key = get_keymap_key::<ROW, COL, NUM_LAYER>(row, col, layer);
-
+                    };
                     store_item(
                         &mut self.flash,
                         self.storage_range.clone(),
                         &mut cache,
                         &mut self.buffer,
-                        &key,
-                        &item,
+                        &get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key),
+                        &StorageData::VialData(VialData::KeymapKey(keymap_key)),
                     )
                     .await
                     .map_err(|e| print_storage_error::<F>(e))?;
@@ -1473,21 +989,20 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         if let Some(encoder_map) = encoder_map {
             for (layer, layer_data) in encoder_map.iter().enumerate() {
                 for (idx, action) in layer_data.iter().enumerate() {
-                    let item = StorageData::EncoderConfig(EncoderConfig {
-                        idx,
-                        layer,
+                    use crate::host::storage_types::EncoderConfig;
+
+                    let encoder = EncoderConfig {
+                        idx: idx as u8,
+                        layer: layer as u8,
                         action: *action,
-                    });
-
-                    let key = get_encoder_config_key::<NUM_ENCODER>(idx, layer);
-
+                    };
                     store_item(
                         &mut self.flash,
                         self.storage_range.clone(),
                         &mut cache,
                         &mut self.buffer,
-                        &key,
-                        &item,
+                        &get_encoder_config_key::<NUM_ENCODER>(encoder.idx, encoder.layer),
+                        &StorageData::VialData(VialData::Encoder(encoder)),
                     )
                     .await
                     .map_err(|e| print_storage_error::<F>(e))?;
@@ -1540,45 +1055,47 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         )
         .await?;
 
+        // TODO: Generic reset for vial and other hosts
+        #[cfg(feature = "vial")]
         for (layer, layer_data) in keymap.iter().enumerate() {
             for (row, row_data) in layer_data.iter().enumerate() {
                 for (col, action) in row_data.iter().enumerate() {
-                    let item = StorageData::KeymapKey(KeymapKey {
-                        row,
-                        col,
-                        layer,
+                    let keymap_key = KeymapKey {
+                        row: row as u8,
+                        col: col as u8,
+                        layer: layer as u8,
                         action: *action,
-                    });
-                    let key = get_keymap_key::<ROW, COL, NUM_LAYER>(row, col, layer);
+                    };
                     store_item(
                         &mut self.flash,
                         self.storage_range.clone(),
                         &mut cache,
                         &mut self.buffer,
-                        &key,
-                        &item,
+                        &get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key),
+                        &StorageData::VialData(VialData::KeymapKey(keymap_key)),
                     )
                     .await?;
                 }
             }
         }
 
+        // TODO: Generic reset for vial and other hosts
+        #[cfg(feature = "vial")]
         if let Some(encoder_map) = encoder_map {
             for (layer, layer_data) in encoder_map.iter().enumerate() {
                 for (idx, action) in layer_data.iter().enumerate() {
-                    let item = StorageData::EncoderConfig(EncoderConfig {
-                        idx,
-                        layer,
-                        action: *action,
-                    });
-                    let key = get_encoder_config_key::<NUM_ENCODER>(idx, layer);
+                    use crate::host::storage_types::EncoderConfig;
                     store_item(
                         &mut self.flash,
                         self.storage_range.clone(),
                         &mut cache,
                         &mut self.buffer,
-                        &key,
-                        &item,
+                        &get_encoder_config_key::<NUM_ENCODER>(idx as u8, layer as u8),
+                        &StorageData::VialData(VialData::Encoder(EncoderConfig {
+                            idx: idx as u8,
+                            layer: layer as u8,
+                            action: *action,
+                        })),
                     )
                     .await?;
                 }
@@ -1662,7 +1179,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 }
 
-fn print_storage_error<F: AsyncNorFlash>(e: SSError<F::Error>) {
+pub(crate) fn print_storage_error<F: AsyncNorFlash>(e: SSError<F::Error>) {
     match e {
         #[cfg(feature = "defmt")]
         SSError::Storage { value: e } => error!("Flash error: {:?}", defmt::Debug2Format(&e)),
@@ -1684,10 +1201,10 @@ const fn get_buffer_size() -> usize {
         // The buffer size needed = size_of(StorageData) = MACRO_SPACE_SIZE + 8(generally)
         // According to doc of `sequential-storage`, for some flashes it should be aligned in 32 bytes
         // To make sure the buffer works, do this alignment always
-        let buffer_size = if MACRO_SPACE_SIZE < 248 {
+        let buffer_size = if crate::MACRO_SPACE_SIZE < 248 {
             256
         } else {
-            MACRO_SPACE_SIZE + 8
+            crate::MACRO_SPACE_SIZE + 8
         };
 
         // Efficiently round up to the nearest multiple of 32 using bit manipulation.
@@ -1711,125 +1228,4 @@ macro_rules! read_storage {
         )
         .await
     };
-}
-
-#[cfg(test)]
-#[cfg(feature = "vial")]
-mod tests {
-    use rmk_types::action::{Action, MorseMode, MorseProfile};
-    use rmk_types::keycode::KeyCode;
-    use sequential_storage::map::Value;
-
-    use super::*;
-    use crate::morse::{HOLD, TAP};
-
-    #[test]
-    fn test_morse_serialization_deserialization() {
-        let morse = Morse::new_from_vial(
-            Action::Key(KeyCode::A),
-            Action::Key(KeyCode::B),
-            Action::Key(KeyCode::C),
-            Action::Key(KeyCode::D),
-            MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(190u16), Some(180u16)),
-        );
-
-        // Serialization
-        let mut buffer = [0u8; 7 + 4 * 4];
-        let storage_data = StorageData::MorseData(morse.clone());
-        let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
-
-        // Deserialization
-        let deserialized_data = StorageData::deserialize_from(&buffer[..serialized_size]).unwrap();
-
-        // Validation
-        match deserialized_data {
-            StorageData::MorseData(deserialized_morse) => {
-                // actions
-                assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
-                for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
-                    assert_eq!(original, deserialized);
-                }
-                // profile
-                assert_eq!(deserialized_morse.profile, morse.profile);
-            }
-            _ => panic!("Expected MorseData"),
-        }
-    }
-
-    #[test]
-    fn test_morse_with_partial_actions() {
-        // Create a Morse with partial actions
-        let mut morse: Morse = Morse::default();
-        _ = morse.put(TAP, Action::Key(KeyCode::A));
-        _ = morse.put(HOLD, Action::Key(KeyCode::B));
-
-        // Serialization
-        let mut buffer = [0u8; 7 + 4 * 4];
-        let storage_data = StorageData::MorseData(morse.clone());
-        let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
-
-        // Deserialization
-        let deserialized_data = StorageData::deserialize_from(&buffer[..serialized_size]).unwrap();
-
-        // Validation
-        match deserialized_data {
-            StorageData::MorseData(deserialized_morse) => {
-                // actions
-                assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
-                for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
-                    assert_eq!(original, deserialized);
-                }
-                // profile
-                assert_eq!(deserialized_morse.profile, morse.profile);
-            }
-            _ => panic!("Expected MorseData"),
-        }
-    }
-
-    #[test]
-    fn test_morse_with_morse_serialization_deserialization() {
-        let mut morse = Morse {
-            profile: MorseProfile::new(
-                Some(false),
-                Some(MorseMode::HoldOnOtherPress),
-                Some(210u16),
-                Some(220u16),
-            ),
-            actions: Vec::default(),
-        };
-        morse
-            .actions
-            .push((MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::A)))
-            .ok();
-        morse
-            .actions
-            .push((MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::B)))
-            .ok();
-        morse
-            .actions
-            .push((MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::C)))
-            .ok();
-
-        // Serialization
-        let mut buffer = [0u8; 7 + 3 * 4];
-        let storage_data = StorageData::MorseData(morse.clone());
-        let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
-
-        // Deserialization
-        let deserialized_data = StorageData::deserialize_from(&buffer[..serialized_size]).unwrap();
-
-        // Validation
-        match deserialized_data {
-            StorageData::MorseData(deserialized_morse) => {
-                // actions
-                assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
-                for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
-                    assert_eq!(original, deserialized);
-                }
-                // profile
-                assert_eq!(deserialized_morse.profile, morse.profile);
-            }
-            _ => panic!("Expected MorseData"),
-        }
-    }
 }

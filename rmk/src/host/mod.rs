@@ -1,3 +1,4 @@
+pub(crate) mod storage_types;
 pub mod via;
 
 use core::cell::RefCell;
@@ -6,12 +7,10 @@ use core::cell::RefCell;
 pub use via::UsbVialReaderWriter as UsbHostReaderWriter;
 pub(crate) use via::VialService as HostService;
 
-use crate::{
-    config::VialConfig,
-    descriptor::ViaReport,
-    hid::{HidReaderTrait, HidWriterTrait},
-    keymap::KeyMap,
-};
+use crate::config::VialConfig;
+use crate::descriptor::ViaReport;
+use crate::hid::{HidReaderTrait, HidWriterTrait};
+use crate::keymap::KeyMap;
 
 pub(crate) async fn run_host_communicate_task<
     'a,

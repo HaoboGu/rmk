@@ -1,22 +1,6 @@
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
-use crate::ble::battery_service::BleBatteryServer;
-use crate::ble::ble_server::{BleHidServer, Server};
-use crate::ble::device_info::{PnPID, VidSource};
-use crate::ble::host_service::BleHostServer;
-use crate::ble::led::BleLedReader;
-use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
-use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
-use crate::config::RmkConfig;
-use crate::hid::{DummyWriter, RunnableHidWriter};
-use crate::keymap::KeyMap;
-#[cfg(feature = "split")]
-use crate::split::ble::central::CENTRAL_SLEEP;
-use crate::state::{ConnectionState, ConnectionType};
-#[cfg(feature = "usb_log")]
-use crate::usb::add_usb_logger;
-use crate::{CONNECTION_STATE, run_keyboard};
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join;
@@ -51,6 +35,23 @@ use {
     crate::{read_storage, state::CONNECTION_TYPE},
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
 };
+
+use crate::ble::battery_service::BleBatteryServer;
+use crate::ble::ble_server::{BleHidServer, Server};
+use crate::ble::device_info::{PnPID, VidSource};
+use crate::ble::host_service::BleHostServer;
+use crate::ble::led::BleLedReader;
+use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
+use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
+use crate::config::RmkConfig;
+use crate::hid::{DummyWriter, RunnableHidWriter};
+use crate::keymap::KeyMap;
+#[cfg(feature = "split")]
+use crate::split::ble::central::CENTRAL_SLEEP;
+use crate::state::{ConnectionState, ConnectionType};
+#[cfg(feature = "usb_log")]
+use crate::usb::add_usb_logger;
+use crate::{CONNECTION_STATE, run_keyboard};
 
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
