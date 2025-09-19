@@ -9,7 +9,6 @@ use embassy_sync::signal::Signal;
 use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-use rmk_types::action::{EncoderAction, KeyAction};
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_item, store_item};
@@ -19,11 +18,14 @@ use {
     crate::ble::profile::ProfileInfo,
     trouble_host::{BondInformation, IdentityResolvingKey, LongTermKey, prelude::*},
 };
+#[cfg(feature = "vial")]
+use {
+    crate::host::{storage_types::KeymapKey, via::storage::VialData},
+    rmk_types::action::{EncoderAction, KeyAction},
+};
 
 use crate::channel::FLASH_CHANNEL;
 use crate::config::StorageConfig;
-#[cfg(feature = "vial")]
-use crate::host::{storage_types::KeymapKey, via::storage::VialData};
 #[cfg(all(feature = "_ble", feature = "split"))]
 use crate::split::ble::PeerAddress;
 use crate::{BUILD_HASH, config};
@@ -1013,6 +1015,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         Ok(())
     }
 
+    #[cfg(feature = "vial")]
     async fn reset_layout_only(
         &mut self,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
@@ -1056,7 +1059,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         .await?;
 
         // TODO: Generic reset for vial and other hosts
-        #[cfg(feature = "vial")]
         for (layer, layer_data) in keymap.iter().enumerate() {
             for (row, row_data) in layer_data.iter().enumerate() {
                 for (col, action) in row_data.iter().enumerate() {
@@ -1080,7 +1082,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         }
 
         // TODO: Generic reset for vial and other hosts
-        #[cfg(feature = "vial")]
         if let Some(encoder_map) = encoder_map {
             for (layer, layer_data) in encoder_map.iter().enumerate() {
                 for (idx, action) in layer_data.iter().enumerate() {

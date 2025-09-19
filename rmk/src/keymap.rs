@@ -4,7 +4,7 @@ use {
     crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
     crate::event::ControllerEvent,
 };
-#[cfg(feature = "storage")]
+#[cfg(all(feature = "storage", feature = "host"))]
 use {
     crate::{boot::reboot_keyboard, storage::Storage},
     embedded_storage_async::nor_flash::NorFlash,
@@ -94,7 +94,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    #[cfg(feature = "storage")]
+    #[cfg(all(feature = "storage", feature = "host"))]
     pub async fn new_from_storage<F: NorFlash>(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
@@ -107,7 +107,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         fill_vec(&mut behavior.fork.forks); // Is this needed? (has no Vial support)
         fill_vec(&mut behavior.morse.morses);
 
-        #[cfg(feature = "vial")]
         if let Some(storage) = storage {
             if {
                 Ok(())

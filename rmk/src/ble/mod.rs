@@ -1,4 +1,3 @@
-use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
@@ -11,16 +10,19 @@ use rmk_types::led_indicator::LedIndicator;
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
+#[cfg(feature = "host")]
+use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap, core::cell::RefCell};
 #[cfg(feature = "controller")]
 use {
     crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
     crate::event::ControllerEvent,
     embassy_time::Instant,
 };
+#[cfg(all(feature = "host", not(feature = "_no_usb")))]
+use {crate::descriptor::ViaReport, crate::host::UsbHostReaderWriter};
 #[cfg(not(feature = "_no_usb"))]
 use {
-    crate::descriptor::{CompositeReport, KeyboardReport, ViaReport},
-    crate::host::UsbHostReaderWriter,
+    crate::descriptor::{CompositeReport, KeyboardReport},
     crate::light::UsbLedReader,
     crate::state::get_connection_type,
     crate::usb::UsbKeyboardWriter,
@@ -39,20 +41,17 @@ use {
 use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
 use crate::ble::device_info::{PnPID, VidSource};
-use crate::ble::host_service::BleHostServer;
 use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
-use crate::keymap::KeyMap;
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
 use crate::state::{ConnectionState, ConnectionType};
 #[cfg(feature = "usb_log")]
 use crate::usb::add_usb_logger;
 use crate::{CONNECTION_STATE, run_keyboard};
-
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;
@@ -111,12 +110,12 @@ pub(crate) async fn run_ble<
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const ROW: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const COL: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const NUM_LAYER: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const NUM_ENCODER: usize,
 >(
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "host")] keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
@@ -129,20 +128,16 @@ pub(crate) async fn run_ble<
 
     // Initialize usb device and usb hid reader/writer
     #[cfg(not(feature = "_no_usb"))]
-    let (mut _usb_builder, mut keyboard_reader, mut keyboard_writer, mut other_writer, mut host_reader_writer) = {
+    let (mut _usb_builder, mut keyboard_reader, mut keyboard_writer, mut other_writer) = {
         let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
         let other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
-        let host_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
         let (keyboard_reader, keyboard_writer) = keyboard_reader_writer.split();
-        (
-            usb_builder,
-            keyboard_reader,
-            keyboard_writer,
-            other_writer,
-            host_reader_writer,
-        )
+        (usb_builder, keyboard_reader, keyboard_writer, other_writer)
     };
+
+    #[cfg(all(not(feature = "_no_usb"), feature = "host"))]
+    let mut host_reader_writer = add_usb_reader_writer!(&mut _usb_builder, ViaReport, 32, 32);
 
     // Optional usb logger initialization
     #[cfg(all(feature = "usb_log", not(feature = "_no_usb")))]
@@ -310,7 +305,9 @@ pub(crate) async fn run_ble<
                                     &server,
                                     &conn,
                                     &stack,
+                                    #[cfg(feature = "host")]
                                     keymap,
+                                    #[cfg(feature = "host")]
                                     &mut rmk_config,
                                     #[cfg(feature = "storage")]
                                     storage,
@@ -365,7 +362,9 @@ pub(crate) async fn run_ble<
                                         &server,
                                         &conn,
                                         &stack,
+                                        #[cfg(feature = "host")]
                                         keymap,
+                                        #[cfg(feature = "host")]
                                         &mut rmk_config,
                                         #[cfg(feature = "storage")]
                                         storage,
@@ -412,7 +411,9 @@ pub(crate) async fn run_ble<
                             &server,
                             &conn,
                             &stack,
+                            #[cfg(feature = "host")]
                             keymap,
+                            #[cfg(feature = "host")]
                             &mut rmk_config,
                             #[cfg(feature = "storage")]
                             storage,
@@ -486,8 +487,11 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let output_keyboard = server.hid_service.output_keyboard;
     let hid_control_point = server.hid_service.hid_control_point;
     let input_keyboard = server.hid_service.input_keyboard;
+    #[cfg(feature = "host")]
     let output_host = server.host_service.output_data;
+    #[cfg(feature = "host")]
     let input_host = server.host_service.input_data;
+    #[cfg(feature = "host")]
     let host_control_point = server.host_service.hid_control_point;
     let battery_level = server.battery_service.level;
     let mouse = server.composite_service.mouse_report;
@@ -557,19 +561,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             } else {
                                 warn!("Wrong keyboard state data: {:?}", event.data());
                             }
-                        } else if event.handle() == output_host.handle {
-                            debug!("Got host packet: {:?}", event.data());
-                            #[cfg(feature = "host")]
-                            if event.data().len() == 32 {
-                                use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;
-
-                                let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
-                                HOST_GUI_INPUT_CHANNEL.send(data).await;
-                            } else {
-                                warn!("Wrong host packet data: {:?}", event.data());
-                            }
                         } else if event.handle() == input_keyboard.cccd_handle.expect("No CCCD for input keyboard")
-                            || event.handle() == input_host.cccd_handle.expect("No CCCD for input host")
                             || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
                             || event.handle() == media.cccd_handle.expect("No CCCD for media report")
                             || event.handle() == system_control.cccd_handle.expect("No CCCD for system report")
@@ -578,7 +570,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             // CCCD write event
                             cccd_updated = true;
                         } else if event.handle() == hid_control_point.handle
-                            || event.handle() == host_control_point.handle
                             || event.handle() == media_control_point.handle
                         {
                             info!("Write GATT Event to Control Point: {:?}", event.handle());
@@ -594,6 +585,37 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 }
                             }
                         } else {
+                            #[cfg(feature = "host")]
+                            if event.handle() == output_host.handle {
+                                debug!("Got host packet: {:?}", event.data());
+                                if event.data().len() == 32 {
+                                    use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;
+
+                                    let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
+                                    HOST_GUI_INPUT_CHANNEL.send(data).await;
+                                } else {
+                                    warn!("Wrong host packet data: {:?}", event.data());
+                                }
+                            } else if event.handle() == input_host.cccd_handle.expect("No CCCD for input host") {
+                                // CCCD write event
+                                cccd_updated = true;
+                            } else if event.handle() == host_control_point.handle {
+                                info!("Write GATT Event to Control Point: {:?}", event.handle());
+                                #[cfg(feature = "split")]
+                                if event.data().len() == 1 {
+                                    let data = event.data()[0];
+                                    if data == 0 {
+                                        // Enter sleep mode
+                                        CENTRAL_SLEEP.signal(true);
+                                    } else if data == 1 {
+                                        // Wake up
+                                        CENTRAL_SLEEP.signal(false);
+                                    }
+                                }
+                            } else {
+                                debug!("Write GATT Event to Unknown: {:?}", event.handle());
+                            }
+                            #[cfg(not(feature = "host"))]
                             debug!("Write GATT Event to Unknown: {:?}", event.handle());
                         }
 
@@ -818,19 +840,20 @@ async fn run_ble_keyboard<
     'd,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const ROW: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const COL: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const NUM_LAYER: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const NUM_ENCODER: usize,
 >(
     server: &'b Server<'_>,
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     stack: &Stack<'_, C, DefaultPacketPool>,
-    keymap: &'c RefCell<KeyMap<'c, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
-    rmk_config: &'d mut RmkConfig<'static>,
+    #[cfg(feature = "host")] keymap: &'c RefCell<KeyMap<'c, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "host")] rmk_config: &'d mut RmkConfig<'static>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     let ble_hid_server = BleHidServer::new(&server, &conn);
+    #[cfg(feature = "host")]
     let ble_host_server = BleHostServer::new(&server, &conn);
     let ble_led_reader = BleLedReader {};
     let mut ble_battery_server = BleBatteryServer::new(&server, &conn);
