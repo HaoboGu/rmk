@@ -47,10 +47,10 @@ use rmk_types::led_indicator::LedIndicator;
 use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
 pub use trouble_host::prelude::*;
-#[cfg(all(not(feature = "_no_usb"), not(feature = "_ble"), feature = "host"))]
+#[cfg(feature = "host")]
 use {
-    crate::descriptor::ViaReport,
-    crate::host::{UsbHostReaderWriter, run_host_communicate_task},
+    crate::config::VialConfig, crate::descriptor::ViaReport, crate::hid::HidWriterTrait,
+    crate::host::run_host_communicate_task,
 };
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
@@ -81,7 +81,7 @@ pub mod direct_pin;
 pub mod driver;
 pub mod event;
 pub mod fork;
-mod helper;
+pub mod helper_macro;
 pub mod hid;
 #[cfg(feature = "host")]
 pub mod host;
@@ -267,15 +267,6 @@ pub async fn run_rmk<
         // Run all tasks, if one of them fails, wait 1 second and then restart
         embassy_futures::join::join(logger_fut, async {
             loop {
-                // The future itself needs to be created inside the loop,
-                // to ensure that the future won't be re-polled after the future is completed
-                #[cfg(feature = "host")]
-                let host_task = run_host_communicate_task(
-                    keymap,
-                    UsbHostReaderWriter::new(&mut host_reader_writer),
-                    rmk_config.vial_config,
-                );
-
                 let usb_task = async {
                     loop {
                         use embassy_futures::select::{Either, select};
@@ -296,10 +287,14 @@ pub async fn run_rmk<
 
                 run_keyboard(
                     #[cfg(feature = "storage")]
-                    storage.run(),
-                    usb_task,
+                    storage,
                     #[cfg(feature = "host")]
-                    host_task,
+                    keymap,
+                    #[cfg(feature = "host")]
+                    crate::host::UsbHostReaderWriter::new(&mut host_reader_writer),
+                    #[cfg(feature = "host")]
+                    rmk_config.vial_config,
+                    usb_task,
                     UsbLedReader::new(&mut keyboard_reader),
                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
                 )
@@ -313,23 +308,27 @@ pub async fn run_rmk<
 }
 
 // Run keyboard task for once
+//
+// Due to https://github.com/rust-lang/rust/issues/62958, storage/host struct is used now.
+// The corresponding future(commented) will be used after the issue is fixed.
 pub(crate) async fn run_keyboard<
     'a,
     R: HidReaderTrait<ReportType = LedIndicator>,
     W: RunnableHidWriter,
-    Fu: Future<Output = ()>,
-    #[cfg(feature = "host")] HostFu: Future<Output = ()>,
-    #[cfg(feature = "host")] StorageFu: Future<Output = ()>,
-    // #[cfg(feature = "storage")] F: AsyncNorFlash,
-    // #[cfg(feature = "storage")] const ROW: usize,
-    // #[cfg(feature = "storage")] const COL: usize,
-    // #[cfg(feature = "storage")] const NUM_LAYER: usize,
-    // #[cfg(feature = "storage")] const NUM_ENCODER: usize,
+    #[cfg(feature = "storage")] F: AsyncNorFlash,
+    #[cfg(feature = "host")] Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
+    #[cfg(any(feature = "storage", feature = "host"))] const ROW: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const COL: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const NUM_LAYER: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const NUM_ENCODER: usize,
 >(
-    // #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-    #[cfg(feature = "storage")] storage_fut: StorageFu,
-    communication_fut: Fu,
-    #[cfg(feature = "host")] host_task: HostFu,
+    // #[cfg(feature = "storage")] storage_task: impl Future<Output = ()>,
+    #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+    // #[cfg(feature = "host")] host_task: impl Future<Output = ()>,
+    #[cfg(feature = "host")] keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "host")] reader_writer: Rw,
+    #[cfg(feature = "host")] vial_config: VialConfig<'static>,
+    communication_fut: impl Future<Output = ()>,
     mut led_reader: R,
     mut keyboard_writer: W,
 ) {
@@ -361,17 +360,25 @@ pub(crate) async fn run_keyboard<
             }
         }
     };
+    #[cfg(feature = "host")]
+    let host_fut = run_host_communicate_task(keymap, reader_writer, vial_config);
+    #[cfg(feature = "storage")]
+    let storage_fut = storage.run();
 
     #[cfg(feature = "controller")]
     let mut wpm_controller = WpmController::new();
 
+    #[cfg(feature = "storage")]
+    let storage_task = core::pin::pin!(storage_fut.fuse());
+    #[cfg(feature = "host")]
+    let host_task = core::pin::pin!(host_fut.fuse());
     let mut communication_task = core::pin::pin!(communication_fut.fuse());
     let mut led_task = core::pin::pin!(led_fut.fuse());
     let mut writer_task = core::pin::pin!(writer_fut.fuse());
 
     futures::select_biased! {
         _ = communication_task => error!("Communication task has ended"),
-        _ = with_feature!("storage", storage_fut) => error!("Storage task has ended"),
+        _ = with_feature!("storage", storage_task) => error!("Storage task has ended"),
         _ = with_feature!("controller", wpm_controller.polling_loop()) => error!("WPM Controller task ended"),
         _ = led_task => error!("Led task has ended"),
         _ = with_feature!("host", host_task) => error!("Host task ended"),

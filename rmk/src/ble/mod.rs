@@ -10,7 +10,6 @@ use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDAT
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
-use crate::host::run_host_communicate_task;
 use crate::keymap::KeyMap;
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
@@ -288,13 +287,14 @@ pub(crate) async fn run_ble<
                                 USB_ENABLED.signal(());
                                 let usb_fut = run_keyboard(
                                     #[cfg(feature = "storage")]
-                                    storage.run(),
+                                    storage,
+                                    #[cfg(feature = "host")]
+                                    keymap,
+                                    #[cfg(feature = "host")]
+                                    UsbHostReaderWriter::new(&mut host_reader_writer),
+                                    #[cfg(feature = "host")]
+                                    rmk_config.vial_config,
                                     USB_SUSPENDED.wait(),
-                                    run_host_communicate_task(
-                                        keymap,
-                                        UsbHostReaderWriter::new(&mut host_reader_writer),
-                                        rmk_config.vial_config,
-                                    ),
                                     UsbLedReader::new(&mut keyboard_reader),
                                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
                                 );
@@ -342,19 +342,17 @@ pub(crate) async fn run_ble<
                         }
                     }
                     ConnectionType::Ble => {
-                        use crate::host::run_host_communicate_task;
-
                         info!("BLE priority mode, running USB keyboard while advertising");
                         let usb_fut = run_keyboard(
                             #[cfg(feature = "storage")]
-                            storage.run(),
-                            core::future::pending::<()>(), // Run forever until BLE connected
+                            storage,
                             #[cfg(feature = "host")]
-                            run_host_communicate_task(
-                                keymap,
-                                UsbHostReaderWriter::new(&mut host_reader_writer),
-                                rmk_config.vial_config,
-                            ),
+                            keymap,
+                            #[cfg(feature = "host")]
+                            UsbHostReaderWriter::new(&mut host_reader_writer),
+                            #[cfg(feature = "host")]
+                            rmk_config.vial_config,
+                            core::future::pending::<()>(), // Run forever until BLE connected
                             UsbLedReader::new(&mut keyboard_reader),
                             UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
                         );
@@ -866,10 +864,14 @@ async fn run_ble_keyboard<
 
     run_keyboard(
         #[cfg(feature = "storage")]
-        storage.run(),
-        communication_task,
+        storage,
         #[cfg(feature = "host")]
-        run_host_communicate_task(keymap, ble_host_server, rmk_config.vial_config),
+        keymap,
+        #[cfg(feature = "host")]
+        ble_host_server,
+        #[cfg(feature = "host")]
+        rmk_config.vial_config,
+        communication_task,
         ble_led_reader,
         ble_hid_server,
     )

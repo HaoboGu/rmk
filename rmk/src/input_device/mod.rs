@@ -203,21 +203,6 @@ macro_rules! bind_device_and_processor_and_run {
     };
 }
 
-// /// Helper macro for joining all futures
-// #[macro_export]
-// macro_rules! join_all {
-//     ($first:expr, $second:expr, $($rest:expr),*) => {
-//         $crate::futures::future::join(
-//             $first,
-//             $crate::join_all!($second, $($rest),*)
-//         )
-//     };
-//     ($a:expr, $b:expr) => {
-//         $crate::futures::future::join($a, $b)
-//     };
-//     ($single:expr) => { $single };
-// }
-
 /// Macro for binding input processor chain to event channel and running them.
 ///
 /// FIXME: For split keyboard, `EVENT_CHANNEL` is REQUIRED as it's the default channel for receiving events from peripherals.
