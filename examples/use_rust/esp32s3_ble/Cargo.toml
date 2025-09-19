@@ -30,7 +30,7 @@ esp-println = { version = "0.15.0", features = ["esp32s3", "log-04"] }
 esp-radio = { version = "0.15.0", features = ["esp32s3", "unstable", "ble"] }
 esp-preempt = { version = "0.0.1", features = ["esp32s3"] }
 esp-bootloader-esp-idf = { version = "0.2.0", features = ["esp32s3", "log-04"] }
-bt-hci = { version = "0.4" }
+bt-hci = { version = "0.5" }
 rand_core = { version = "0.6", default-features = false }
 static_cell = "2"
 

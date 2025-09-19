@@ -191,6 +191,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "bt-hci"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9172c3df73e30f9bcbf80d0f5a4700fbc6d6771329142d05c06bb7ece7032c7"
+dependencies = [
+ "btuuid",
+ "defmt 1.0.1",
+ "embassy-sync",
+ "embedded-io",
+ "embedded-io-async",
+ "futures-intrusive",
+ "heapless 0.9.1",
+]
+
+[[package]]
 name = "btuuid"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1439,7 +1454,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd8a32e646b425ba916d6ae29171643e15cd800a9b8e8b5cb33990d1b9e4d675"
 dependencies = [
- "bt-hci",
+ "bt-hci 0.4.0",
  "critical-section",
  "defmt 1.0.1",
  "embassy-hal-internal",
@@ -1788,7 +1803,7 @@ name = "rmk"
 version = "0.7.8"
 dependencies = [
  "bitfield-struct",
- "bt-hci",
+ "bt-hci 0.5.0",
  "byteorder",
  "chrono",
  "const-gen",
@@ -1866,7 +1881,7 @@ dependencies = [
 name = "rmk-nrf52840"
 version = "0.2.0"
 dependencies = [
- "bt-hci",
+ "bt-hci 0.5.0",
  "const-gen",
  "cortex-m",
  "cortex-m-rt",
@@ -2305,7 +2320,7 @@ version = "0.2.4"
 source = "git+https://github.com/embassy-rs/trouble?rev=26ec679#26ec6794d0a976dd91cd694b631c72b16ddf651b"
 dependencies = [
  "aes",
- "bt-hci",
+ "bt-hci 0.4.0",
  "cmac",
  "defmt 1.0.1",
  "embassy-futures",
