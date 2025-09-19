@@ -1,4 +1,4 @@
-use embassy_rp::gpio::{Flex, Pull, Level};
+use embassy_rp::gpio::{Flex, Level, Pull};
 
 use crate::driver::flex_pin::FlexPin;
 

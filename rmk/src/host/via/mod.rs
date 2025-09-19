@@ -1,5 +1,4 @@
 use core::cell::RefCell;
-use core::sync::atomic::Ordering;
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::{Instant, Timer};
@@ -12,13 +11,20 @@ use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
 use crate::event::KeyboardEventPos;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
+#[cfg(feature = "storage")]
+use crate::host::storage_types::KeymapKey;
+use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
+#[cfg(feature = "storage")]
+use crate::host::via::storage::VialData;
 use crate::keymap::KeyMap;
 use crate::state::ConnectionState;
-use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::{CONNECTION_STATE, MACRO_SPACE_SIZE, boot};
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
+
 pub(crate) mod keycode_convert;
+#[cfg(feature = "storage")]
+pub(crate) mod storage;
 mod vial;
 #[cfg(feature = "vial_lock")]
 mod vial_lock;
@@ -75,9 +81,7 @@ impl<
             match self.process().await {
                 Ok(_) => continue,
                 Err(e) => {
-                    if CONNECTION_STATE.load(Ordering::Relaxed)
-                        == <ConnectionState as Into<bool>>::into(ConnectionState::Disconnected)
-                    {
+                    if ConnectionState::Disconnected == ConnectionState::from(&CONNECTION_STATE) {
                         Timer::after_millis(1000).await;
                     } else {
                         error!("Process vial error: {:?}", e);
@@ -127,7 +131,7 @@ impl<
                             BigEndian::write_u32(&mut report.input_data[2..6], layout_option);
                         }
                         ViaKeyboardInfo::SwitchMatrixState => {
-                            #[cfg(feature = "matrix_tester")]
+                            #[cfg(feature = "vial_lock")]
                             {
                                 #[cfg(not(feature = "vial_lock"))]
                                 {
@@ -197,12 +201,12 @@ impl<
                 );
                 #[cfg(feature = "storage")]
                 FLASH_CHANNEL
-                    .send(FlashOperationMessage::KeymapKey {
+                    .send(FlashOperationMessage::VialMessage(VialData::KeymapKey(KeymapKey {
                         layer,
                         col,
                         row,
                         action,
-                    })
+                    })))
                     .await;
             }
             ViaCommand::DynamicKeymapReset => {
@@ -270,13 +274,15 @@ impl<
                     .copy_from_slice(&report.output_data[4..4 + size as usize]);
 
                 // Then flush macros to storage
-                #[cfg(feature = "storage")]
+                // #[cfg(feature = "storage")]
                 // let num_zero =
                 //     count_zeros(&self.keymap.borrow_mut().behavior.keyboard_macros.macro_sequences[0..end as usize]);
                 #[cfg(feature = "storage")]
                 {
                     let buf = self.keymap.borrow_mut().behavior.keyboard_macros.macro_sequences;
-                    FLASH_CHANNEL.send(FlashOperationMessage::WriteMacro(buf)).await;
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::VialMessage(VialData::Macro(buf)))
+                        .await;
                     info!("Flush macros to storage")
                 }
             }
@@ -334,12 +340,14 @@ impl<
                             offset, row, col, layer
                         );
                         #[cfg(feature = "storage")]
-                        if let Err(_e) = FLASH_CHANNEL.try_send(FlashOperationMessage::KeymapKey {
-                            layer: layer as u8,
-                            col: col as u8,
-                            row: row as u8,
-                            action,
-                        }) {
+                        if let Err(_e) =
+                            FLASH_CHANNEL.try_send(FlashOperationMessage::VialMessage(VialData::KeymapKey(KeymapKey {
+                                layer: layer as u8,
+                                col: col as u8,
+                                row: row as u8,
+                                action,
+                            })))
+                        {
                             error!("Send keymap setting command error")
                         }
                     });

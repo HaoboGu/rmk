@@ -114,7 +114,7 @@ To use the the PIO UART driver feature, you need to enable the `rp2040_pio` feat
 ```toml
 rmk = { version = "0.7", features = [
     "split",
-    "rp2040_pio", # Enable PIO UART driver for rp2040
+    "rp2040", # Enable PIO UART driver for rp2040
 ] }
 ```
 

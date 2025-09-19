@@ -18,6 +18,7 @@ use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MORSE_MAX_NUM};
 #[derive(Default)]
 pub struct RmkConfig<'a> {
     pub usb_config: KeyboardUsbConfig<'a>,
+    #[cfg(feature = "vial")]
     pub vial_config: VialConfig<'a>,
     #[cfg(feature = "storage")]
     pub storage_config: StorageConfig,

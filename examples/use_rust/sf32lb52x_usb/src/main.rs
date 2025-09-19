@@ -10,12 +10,6 @@ mod vial;
 use defmt::info;
 use embassy_executor::Spawner;
 use keymap::{COL, ROW};
-use sifli_hal::bind_interrupts;
-use sifli_hal::gpio::{Input, Output};
-use sifli_hal::rcc::{ClkSysSel, ConfigOption, DllConfig, UsbConfig, UsbSel};
-use sifli_hal::usb::{Driver, InterruptHandler};
-use {defmt_rtt as _, panic_probe as _};
-
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, KeyboardUsbConfig, PerKeyConfig, RmkConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
@@ -26,7 +20,12 @@ use rmk::matrix::Matrix;
 // use rmk::storage::async_flash_wrapper;
 // use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use rmk::{run_devices, run_rmk};
+use sifli_hal::bind_interrupts;
+use sifli_hal::gpio::{Input, Output};
+use sifli_hal::rcc::{ClkSysSel, ConfigOption, DllConfig, UsbConfig, UsbSel};
+use sifli_hal::usb::{Driver, InterruptHandler};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     USBC => InterruptHandler<sifli_hal::peripherals::USBC>;
@@ -65,12 +64,12 @@ async fn main(_spawner: Spawner) {
         serial_number: "vial:f64c2b3c:000001",
     };
 
-    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]);
+    let _vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]);
     // let storage_config = rmk::config::StorageConfig::default();
 
     let rmk_config = RmkConfig {
         usb_config: keyboard_usb_config,
-        vial_config,
+        // vial_config,
         ..Default::default()
     };
 
@@ -101,7 +100,7 @@ async fn main(_spawner: Spawner) {
         run_devices!((matrix) => EVENT_CHANNEL),
         keyboard.run(),
         // run_rmk(&keymap, driver, &mut storage, rmk_config),
-        run_rmk(&keymap, driver, rmk_config),
+        run_rmk(driver, rmk_config),
     )
     .await;
 }

@@ -13,9 +13,20 @@ pub enum ConnectionType {
     Ble = 1,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum ConnectionState {
     Disconnected,
     Connected,
+}
+
+impl ConnectionState {
+    pub(crate) fn from(state: &AtomicBool) -> Self {
+        if state.load(Ordering::Acquire) {
+            Self::Connected
+        } else {
+            Self::Disconnected
+        }
+    }
 }
 
 impl From<u8> for ConnectionType {

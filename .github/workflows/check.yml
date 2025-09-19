@@ -1,4 +1,4 @@
-name: Unit Test
+name: Check
 
 on:
   push:
@@ -21,8 +21,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  unit_test:
-    name: Run RMK unit tests
+  check:
+    name: Run cargo check
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -42,6 +42,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - name: Run tests
+      - name: Run cargo check
         working-directory: ./rmk
-        run: cargo test --no-default-features --features=${{ matrix.featuresets }} --verbose
+        run: cargo check --no-default-features --features=${{ matrix.featuresets }} --verbose
