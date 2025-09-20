@@ -111,14 +111,14 @@ scrolllock.low_active = false
 
 ### Custom Controllers
 
-Custom controllers are declared using the `#[controller]` attribute within your keyboard module:
+Custom controllers are declared using the `#[controller]` attribute within your keyboard module. The execution mode must be specified with either `event` or `poll` parameter:
 
 ```rust
 #[rmk_keyboard]
 mod keyboard {
     // ... keyboard configuration ...
 
-    #[controller]
+    #[controller(event)]
     fn my_custom_controller() -> MyCustomController {
         // Initialize your controller
         let pin = Output::new(p.PIN_4, Level::Low, OutputDrive::Standard);
@@ -289,17 +289,17 @@ You can define multiple controllers in your keyboard module:
 ```rust
 #[rmk_keyboard]
 mod keyboard {
-    #[controller]
+    #[controller(event)]
     fn status_led() -> StatusLedController {
         StatusLedController::new(p.PIN_1)
     }
 
-    #[controller] 
+    #[controller(event)]
     fn layer_indicator() -> LayerLedController {
         LayerLedController::new(p.PIN_2)
     }
 
-    #[controller]
+    #[controller(poll)]
     fn battery_monitor() -> BatteryController {
         BatteryController::new(p.PIN_3)
     }
