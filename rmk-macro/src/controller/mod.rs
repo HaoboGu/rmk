@@ -6,7 +6,7 @@ use syn::ItemMod;
 use crate::gpio_config::convert_gpio_str_to_output_pin;
 
 /// Expands the controller initialization code based on the keyboard configuration.
-/// Returns a tuple containing: (controller_initialization, controller names)
+/// Returns a tuple containing: (controller_initialization, controller_execution)
 pub(crate) fn expand_controller_init(
     keyboard_config: &KeyboardTomlConfig,
     item_mod: &ItemMod,
@@ -16,7 +16,7 @@ pub(crate) fn expand_controller_init(
 
     let light_config = keyboard_config.get_light_config();
     let mut initializers = TokenStream::new();
-    let mut controller_names = vec![];
+    let mut executors = vec![];
     if let Some(c) = light_config.numslock {
         let p = convert_gpio_str_to_output_pin(&chip, c.pin.clone(), c.low_active);
         let low_active = c.low_active;
@@ -28,7 +28,7 @@ pub(crate) fn expand_controller_init(
             );
         };
         initializers.extend(numlock_init);
-        controller_names.push(quote! { numslock_controller });
+        executors.push(quote! { numslock_controller.event_loop() });
     }
 
     if let Some(c) = light_config.scrolllock {
@@ -42,7 +42,7 @@ pub(crate) fn expand_controller_init(
             );
         };
         initializers.extend(scrollock_init);
-        controller_names.push(quote! { scrolllock_controller });
+        executors.push(quote! { scrolllock_controller.event_loop() });
     }
 
     if let Some(c) = light_config.capslock {
@@ -56,26 +56,39 @@ pub(crate) fn expand_controller_init(
             );
         };
         initializers.extend(capslock_init);
-        controller_names.push(quote! { capslock_controller });
+        executors.push(quote! { capslock_controller.event_loop() });
     }
 
     // external controller
     if let Some((_, items)) = &item_mod.content {
         items.iter().for_each(|item| {
             if let syn::Item::Fn(item_fn) = &item {
-                if item_fn.attrs.iter().any(|attr| attr.path().is_ident("controller")) {
-                    let (custom_init, custom_name) = expand_custom_controller(&item_fn);
-                    initializers.extend(custom_init);
-                    controller_names.push(custom_name);
+                if let Some(attr) = item_fn.attrs.iter().find(|attr| attr.path().is_ident("controller")) {
+                    let _ = attr.parse_nested_meta(|meta| {
+                        let (custom_init, custom_exec) = expand_custom_controller(&item_fn);
+                        initializers.extend(custom_init);
+
+                        if meta.path.is_ident("event") {
+                            // #[controller(event)]
+                            executors.push(quote! { #custom_exec.event_loop() });
+                            return Ok(());
+                        } else if meta.path.is_ident("poll") {
+                            // #[controller(poll)]
+                            executors.push(quote! { #custom_exec.polling_loop() });
+                            return Ok(());
+                        }
+
+                        panic!("\"controller\" attrubute must specify executon mode with #[controller(event)] or #[controller(poll)]")
+                    });
                 }
             }
         });
     }
 
-    (initializers, controller_names)
+    (initializers, executors)
 }
 
-fn expand_custom_controller(fn_item: &syn::ItemFn) -> (TokenStream, TokenStream) {
+fn expand_custom_controller(fn_item: &syn::ItemFn) -> (TokenStream, &syn::Ident) {
     let task_name = &fn_item.sig.ident;
 
     let content = &fn_item.block.stmts;
@@ -85,5 +98,5 @@ fn expand_custom_controller(fn_item: &syn::ItemFn) -> (TokenStream, TokenStream)
         };
     };
 
-    (initializer, quote! { #task_name })
+    (initializer, task_name)
 }

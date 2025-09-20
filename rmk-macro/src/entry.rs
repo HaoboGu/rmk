@@ -90,12 +90,7 @@ pub(crate) fn rmk_entry_select(
                 keyboard.run(),
             };
             let mut tasks = vec![devices_task, keyboard_task];
-            // TODO: Handle polling controllers
-            for controller in controllers {
-                tasks.push(quote! {
-                    #controller.event_loop(),
-                });
-            }
+            tasks.extend(controllers);
             if split_config.connection == "ble" {
                 let rmk_task = quote! {
                     ::rmk::run_rmk(&keymap, #usb_driver_arg &stack, #storage rmk_config),
@@ -183,12 +178,7 @@ pub(crate) fn rmk_entry_default(
     if !processors_task.is_empty() {
         tasks.push(processors_task);
     }
-    // TODO: Handle polling controllers
-    for controller in controllers {
-        tasks.push(quote! {
-            #controller.event_loop()
-        });
-    }
+    tasks.extend(controllers);
     // Remove the storage argument if disabled in config. The feature also needs to be disabled.
     let storage = if keyboard_config.get_storage_config().enabled {
         quote! {&mut storage,}
