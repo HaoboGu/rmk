@@ -16,13 +16,13 @@ rmk = { path = "../../../rmk", features = [
     "async_matrix",
     "adafruit_bl",
 ] }
-nrf-sdc = { version = "0.3", default-features = false, features = [
+nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "61be636", default-features = false, features = [
     "defmt",
     "peripheral",
     "central",
     "nrf52840",
 ] }
-nrf-mpsl = { version = "0.3", default-features = false, features = [
+nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "61be636", default-features = false, features = [
     "defmt",
     "critical-section-impl",
     "nrf52840",

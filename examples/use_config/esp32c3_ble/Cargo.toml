@@ -64,12 +64,12 @@ opt-level = 3
 overflow-checks = false
 
 [patch.crates-io]
-esp-backtrace = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
-esp-storage = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
-esp-hal = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
-esp-hal-embassy = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
-esp-alloc = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
-esp-println = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
-esp-radio = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
-esp-preempt = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
-esp-bootloader-esp-idf = { git = "https://github.com/esp-rs/esp-hal", rev = "35e2082" }
+esp-backtrace = { git = "https://github.com/esp-rs/esp-hal", rev = "3e015df" }
+esp-storage = { git = "https://github.com/esp-rs/esp-hal", rev = "3e015df" }
+esp-hal = { git = "https://github.com/esp-rs/esp-hal", rev = "3e015df" }
+esp-hal-embassy = { git = "https://github.com/esp-rs/esp-hal", rev = "3e015df" }
+esp-alloc = { git = "https://github.com/esp-rs/esp-hal", rev = "3e015df" }
+esp-println = { git = "https://github.com/esp-rs/esp-hal", rev = "3e015df" }
+esp-radio = { git = "https://github.com/esp-rs/esp-hal", rev = "3e015df" }
+esp-preempt = { git = "https://github.com/esp-rs/esp-hal", rev = "3e015df" }
+esp-bootloader-esp-idf = { git = "https://github.com/esp-rs/esp-hal", rev = "3e015df" }
