@@ -180,7 +180,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                 let p = ::esp_hal::init(::esp_hal::Config::default().with_cpu_clock(::esp_hal::clock::CpuClock::max()));
                 ::esp_alloc::heap_allocator!(size: 72 * 1024);
                 let timg0 = ::esp_hal::timer::timg::TimerGroup::new(p.TIMG0);
-                ::esp_preempt::init(timg0.timer0);
+                ::esp_preempt::start(timg0.timer0);
                 let _trng_source = ::esp_hal::rng::TrngSource::new(p.RNG, p.ADC1);
                 let mut rng = ::esp_hal::rng::Trng::try_new().unwrap();
                 static RADIO: ::static_cell::StaticCell<::esp_radio::Controller<'static>> = ::static_cell::StaticCell::new();

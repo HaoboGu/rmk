@@ -72,3 +72,8 @@ debug = true            # no overhead for bare-metal
 opt-level = "z"         # optimize for binary size
 overflow-checks = false
 lto = "fat"
+
+[patch.crates-io]
+cyw43 = { git = "https://github.com/embassy-rs/embassy", rev = "8394e13" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy", rev = "8394e13" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "8394e13" }

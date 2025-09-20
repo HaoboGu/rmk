@@ -40,7 +40,7 @@ async fn main(_s: Spawner) {
     let peripherals = esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
     esp_alloc::heap_allocator!(size: 64 * 1024);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    esp_preempt::init(timg0.timer0);
+    esp_preempt::start(timg0.timer0);
     let _trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
     let mut rng = esp_hal::rng::Trng::try_new().unwrap();
     static RADIO: StaticCell<Controller<'static>> = StaticCell::new();
