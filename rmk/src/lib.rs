@@ -292,7 +292,7 @@ pub async fn run_rmk<
                     keymap,
                     #[cfg(feature = "host")]
                     crate::host::UsbHostReaderWriter::new(&mut host_reader_writer),
-                    #[cfg(feature = "host")]
+                    #[cfg(feature = "vial")]
                     rmk_config.vial_config,
                     usb_task,
                     UsbLedReader::new(&mut keyboard_reader),
@@ -327,7 +327,7 @@ pub(crate) async fn run_keyboard<
     // #[cfg(feature = "host")] host_task: impl Future<Output = ()>,
     #[cfg(feature = "host")] keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(feature = "host")] reader_writer: Rw,
-    #[cfg(feature = "host")] vial_config: VialConfig<'static>,
+    #[cfg(feature = "vial")] vial_config: VialConfig<'static>,
     communication_fut: impl Future<Output = ()>,
     mut led_reader: R,
     mut keyboard_writer: W,

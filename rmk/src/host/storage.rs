@@ -10,7 +10,6 @@ use sequential_storage::map::{SerializationError, Value, fetch_item};
 
 use crate::combo::Combo;
 use crate::fork::{Fork, StateBits};
-use crate::host::storage_types::{ComboData, EncoderConfig, ForkData, KeymapKey};
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::morse::{Morse, MorsePattern};
 use crate::storage::{
@@ -18,9 +17,50 @@ use crate::storage::{
 };
 use crate::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM};
 
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub(crate) struct KeymapKey {
+    pub(crate) row: u8,
+    pub(crate) col: u8,
+    pub(crate) layer: u8,
+    pub(crate) action: KeyAction,
+}
+
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub(crate) struct EncoderConfig {
+    /// Encoder index
+    pub(crate) idx: u8,
+    /// Layer
+    pub(crate) layer: u8,
+    /// Encoder action
+    pub(crate) action: EncoderAction,
+}
+
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub(crate) struct ComboData {
+    /// Combo index
+    pub(crate) idx: usize,
+    /// Combo components
+    pub(crate) actions: [KeyAction; COMBO_MAX_LENGTH],
+    /// Combo output
+    pub(crate) output: KeyAction,
+}
+
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub(crate) struct ForkData {
+    /// Fork index
+    pub(crate) idx: usize,
+    /// Fork instance
+    pub(crate) fork: Fork,
+}
+
+/// Keymap data that can be updated by the host tools like Vial.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) enum VialData {
+pub(crate) enum KeymapData {
     // Write macro
     Macro([u8; MACRO_SPACE_SIZE]),
     // Write a key in keymap
@@ -35,13 +75,13 @@ pub(crate) enum VialData {
     Morse(u8, Morse),
 }
 
-impl Value<'_> for VialData {
+impl Value<'_> for KeymapData {
     fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, sequential_storage::map::SerializationError> {
         if buffer.len() < 6 {
             return Err(SerializationError::BufferTooSmall);
         }
         match self {
-            VialData::KeymapKey(k) => {
+            KeymapData::KeymapKey(k) => {
                 buffer[0] = StorageKeys::KeymapConfig as u8;
                 BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(k.action));
                 buffer[3] = k.layer as u8;
@@ -50,7 +90,7 @@ impl Value<'_> for VialData {
                 Ok(6)
             }
 
-            VialData::Encoder(e) => {
+            KeymapData::Encoder(e) => {
                 buffer[0] = StorageKeys::EncoderKeys as u8;
                 BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(e.action.clockwise()));
                 BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(e.action.counter_clockwise()));
@@ -59,7 +99,7 @@ impl Value<'_> for VialData {
                 Ok(7)
             }
 
-            VialData::Macro(d) => {
+            KeymapData::Macro(d) => {
                 if buffer.len() < MACRO_SPACE_SIZE + 1 {
                     return Err(SerializationError::BufferTooSmall);
                 }
@@ -80,7 +120,7 @@ impl Value<'_> for VialData {
                 Ok(data_len + 3)
             }
 
-            VialData::Combo(combo) => {
+            KeymapData::Combo(combo) => {
                 if buffer.len() < 3 + COMBO_MAX_LENGTH * 2 {
                     return Err(SerializationError::BufferTooSmall);
                 }
@@ -95,7 +135,7 @@ impl Value<'_> for VialData {
                 Ok(3 + COMBO_MAX_LENGTH * 2)
             }
 
-            VialData::Fork(fork) => {
+            KeymapData::Fork(fork) => {
                 if buffer.len() < 13 {
                     return Err(SerializationError::BufferTooSmall);
                 }
@@ -122,7 +162,7 @@ impl Value<'_> for VialData {
                 Ok(15)
             }
 
-            VialData::Morse(_, morse) => {
+            KeymapData::Morse(_, morse) => {
                 let total_size = 7 + 4 * morse.actions.len();
                 if buffer.len() < total_size {
                     return Err(SerializationError::BufferTooSmall);
@@ -159,7 +199,7 @@ impl Value<'_> for VialData {
                     let layer = buffer[3];
                     let col = buffer[4];
                     let row = buffer[5];
-                    Ok(VialData::KeymapKey(KeymapKey {
+                    Ok(KeymapData::KeymapKey(KeymapKey {
                         row,
                         col,
                         layer,
@@ -177,7 +217,7 @@ impl Value<'_> for VialData {
                         return Err(SerializationError::InvalidData);
                     }
                     buf[0..macro_length].copy_from_slice(&buffer[3..3 + macro_length]);
-                    Ok(VialData::Macro(buf))
+                    Ok(KeymapData::Macro(buf))
                 }
 
                 StorageKeys::ComboData => {
@@ -191,7 +231,7 @@ impl Value<'_> for VialData {
                     let output = from_via_keycode(BigEndian::read_u16(
                         &buffer[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
                     ));
-                    Ok(VialData::Combo(ComboData {
+                    Ok(KeymapData::Combo(ComboData {
                         idx: 0,
                         actions,
                         output,
@@ -207,7 +247,7 @@ impl Value<'_> for VialData {
                     let idx = buffer[5];
                     let layer = buffer[6];
 
-                    Ok(VialData::Encoder(EncoderConfig {
+                    Ok(KeymapData::Encoder(EncoderConfig {
                         idx,
                         layer,
                         action: EncoderAction::new(clockwise, counter_clockwise),
@@ -239,7 +279,7 @@ impl Value<'_> for VialData {
                     let kept_modifiers = ModifierCombination::from_bits(((modifier_masks >> 16) & 0xFF) as u8);
                     let bindable = (modifier_masks & (1 << 24)) != 0;
 
-                    Ok(VialData::Fork(ForkData {
+                    Ok(KeymapData::Fork(ForkData {
                         idx: 0,
                         fork: Fork::new(
                             trigger,
@@ -276,7 +316,7 @@ impl Value<'_> for VialData {
                     }
 
                     // The morse id isn't important
-                    Ok(VialData::Morse(0, morse))
+                    Ok(KeymapData::Morse(0, morse))
                 }
                 _ => Err(SerializationError::Custom(2)),
             }
@@ -317,7 +357,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .map_err(|e| print_storage_error::<F>(e))?
         {
             match item {
-                StorageData::VialData(VialData::KeymapKey(key)) => {
+                StorageData::VialData(KeymapData::KeymapKey(key)) => {
                     let layer = key.layer as usize;
                     let row = key.row as usize;
                     let col = key.col as usize;
@@ -325,7 +365,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         keymap[layer][row][col] = key.action;
                     }
                 }
-                StorageData::VialData(VialData::Encoder(encoder)) => {
+                StorageData::VialData(KeymapData::Encoder(encoder)) => {
                     if let Some(map) = encoder_map {
                         let idx = encoder.idx as usize;
                         let layer = encoder.layer as usize;
@@ -354,7 +394,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         .await
         .map_err(|e| print_storage_error::<F>(e))?;
 
-        if let Some(StorageData::VialData(VialData::Macro(data))) = read_data {
+        if let Some(StorageData::VialData(KeymapData::Macro(data))) = read_data {
             // Send data back
             macro_cache.copy_from_slice(&data);
         }
@@ -375,7 +415,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .await
             .map_err(|e| print_storage_error::<F>(e))?;
 
-            if let Some(StorageData::VialData(VialData::Combo(combo))) = read_data {
+            if let Some(StorageData::VialData(KeymapData::Combo(combo))) = read_data {
                 let mut actions: Vec<KeyAction, COMBO_MAX_LENGTH> = Vec::new();
                 for &action in combo.actions.iter().filter(|&&a| !a.is_empty()) {
                     let _ = actions.push(action);
@@ -400,7 +440,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .await
             .map_err(|e| print_storage_error::<F>(e))?;
 
-            if let Some(StorageData::VialData(VialData::Fork(fork))) = read_data {
+            if let Some(StorageData::VialData(KeymapData::Fork(fork))) = read_data {
                 *item = fork.fork;
             }
         }
@@ -421,7 +461,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .await
             .map_err(|e| print_storage_error::<F>(e))?;
 
-            if let Some(StorageData::VialData(VialData::Morse(_, morse))) = read_data {
+            if let Some(StorageData::VialData(KeymapData::Morse(_, morse))) = read_data {
                 *item = morse;
             }
         }
@@ -451,7 +491,7 @@ mod tests {
 
         // Serialization
         let mut buffer = [0u8; 7 + 4 * 4];
-        let storage_data = StorageData::VialData(VialData::Morse(0, morse.clone()));
+        let storage_data = StorageData::VialData(KeymapData::Morse(0, morse.clone()));
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
         // Deserialization
@@ -459,7 +499,7 @@ mod tests {
 
         // Validation
         match deserialized_data {
-            StorageData::VialData(VialData::Morse(_, deserialized_morse)) => {
+            StorageData::VialData(KeymapData::Morse(_, deserialized_morse)) => {
                 // actions
                 assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
                 for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
@@ -481,7 +521,7 @@ mod tests {
 
         // Serialization
         let mut buffer = [0u8; 7 + 4 * 4];
-        let storage_data = StorageData::VialData(VialData::Morse(0, morse.clone()));
+        let storage_data = StorageData::VialData(KeymapData::Morse(0, morse.clone()));
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
         // Deserialization
@@ -489,7 +529,7 @@ mod tests {
 
         // Validation
         match deserialized_data {
-            StorageData::VialData(VialData::Morse(_, deserialized_morse)) => {
+            StorageData::VialData(KeymapData::Morse(_, deserialized_morse)) => {
                 // actions
                 assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
                 for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
@@ -528,7 +568,7 @@ mod tests {
 
         // Serialization
         let mut buffer = [0u8; 7 + 3 * 4];
-        let storage_data = StorageData::VialData(VialData::Morse(0, morse.clone()));
+        let storage_data = StorageData::VialData(KeymapData::Morse(0, morse.clone()));
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
         // Deserialization
@@ -536,7 +576,7 @@ mod tests {
 
         // Validation
         match deserialized_data {
-            StorageData::VialData(VialData::Morse(_, deserialized_morse)) => {
+            StorageData::VialData(KeymapData::Morse(_, deserialized_morse)) => {
                 // actions
                 assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
                 for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {

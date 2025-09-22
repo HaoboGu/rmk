@@ -288,7 +288,7 @@ pub(crate) async fn run_ble<
                                     keymap,
                                     #[cfg(feature = "host")]
                                     UsbHostReaderWriter::new(&mut host_reader_writer),
-                                    #[cfg(feature = "host")]
+                                    #[cfg(feature = "vial")]
                                     rmk_config.vial_config,
                                     USB_SUSPENDED.wait(),
                                     UsbLedReader::new(&mut keyboard_reader),
@@ -348,7 +348,7 @@ pub(crate) async fn run_ble<
                             keymap,
                             #[cfg(feature = "host")]
                             UsbHostReaderWriter::new(&mut host_reader_writer),
-                            #[cfg(feature = "host")]
+                            #[cfg(feature = "vial")]
                             rmk_config.vial_config,
                             core::future::pending::<()>(), // Run forever until BLE connected
                             UsbLedReader::new(&mut keyboard_reader),
@@ -893,7 +893,7 @@ async fn run_ble_keyboard<
         keymap,
         #[cfg(feature = "host")]
         ble_host_server,
-        #[cfg(feature = "host")]
+        #[cfg(feature = "vial")]
         rmk_config.vial_config,
         communication_task,
         ble_led_reader,

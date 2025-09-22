@@ -15,7 +15,7 @@ use crate::keymap::KeyMap;
 use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, TAP};
 #[cfg(feature = "storage")]
 use crate::{
-    COMBO_MAX_LENGTH, channel::FLASH_CHANNEL, host::storage_types::ComboData, host::via::storage::VialData,
+    COMBO_MAX_LENGTH, channel::FLASH_CHANNEL, host::storage::ComboData, host::storage::KeymapData,
     storage::FlashOperationMessage,
 };
 use crate::{COMBO_MAX_NUM, MORSE_MAX_NUM};
@@ -318,7 +318,7 @@ pub(crate) async fn process_vial<
                             {
                                 // Save to storage
                                 FLASH_CHANNEL
-                                    .send(FlashOperationMessage::VialMessage(VialData::Morse(
+                                    .send(FlashOperationMessage::VialMessage(KeymapData::Morse(
                                         morse_idx as u8,
                                         morse.clone(),
                                     )))
@@ -391,7 +391,7 @@ pub(crate) async fn process_vial<
                     };
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
-                        .send(FlashOperationMessage::VialMessage(VialData::Combo(ComboData {
+                        .send(FlashOperationMessage::VialMessage(KeymapData::Combo(ComboData {
                             idx: real_idx,
                             actions,
                             output,
@@ -471,9 +471,9 @@ pub(crate) async fn process_vial<
             // Save the encoder action to the storage after the RefCell is released
             if let Some(encoder) = _encoder {
                 // Save the encoder action to the storage
-                use crate::host::storage_types::EncoderConfig;
+                use crate::host::storage::EncoderConfig;
                 FLASH_CHANNEL
-                    .send(FlashOperationMessage::VialMessage(VialData::Encoder(EncoderConfig {
+                    .send(FlashOperationMessage::VialMessage(KeymapData::Encoder(EncoderConfig {
                         idx: index,
                         layer,
                         action: encoder,
