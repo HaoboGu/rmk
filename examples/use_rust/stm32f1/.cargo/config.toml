@@ -9,3 +9,7 @@ target = "thumbv7m-none-eabi"        # Cortex-M3
 
 [env]
 DEFMT_LOG = "error"
+
+[unstable]
+build-std = ["core"]
+build-std-features = ["panic_immediate_abort"]

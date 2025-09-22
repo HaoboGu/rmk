@@ -93,6 +93,9 @@ pub struct RmkConstantsConfig {
     /// BLE Split Central sleep timeout in minutes (0 = disabled)
     #[serde_inline_default(0)]
     pub split_central_sleep_timeout_minutes: u32,
+    /// Whethe Vial is enabled
+    #[serde_inline_default(true)]
+    pub vial_enabled: bool,
 }
 
 fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
@@ -163,6 +166,7 @@ impl Default for RmkConstantsConfig {
             split_message_channel_size: 4,
             ble_profiles_num: 3,
             split_central_sleep_timeout_minutes: 0,
+            vial_enabled: true,
         }
     }
 }
