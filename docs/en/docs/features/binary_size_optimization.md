@@ -48,7 +48,7 @@ cargo +nightly build --release
 cargo +nightly size --release
 ```
 
-### For `keyboard.toml` users
+## For `keyboard.toml` users
 
 RMK provides several options that you can use to reduce the binary size:
 
@@ -77,9 +77,9 @@ defmt_log = false
 vial_enabled = false
 ```
 
-### For Rust code users
+## For Rust code users
 
-## Use `panic-halt`
+### Use `panic-halt`
 
 By default, RMK uses `panic-probe` to print error messages if panic occurs. But `panic-probe` actually takes lots of flash because the panic call can not be optimized. The solution is to use `panic-halt` instead of `panic-probe`:
 
@@ -100,7 +100,7 @@ The in `main.rs`, use `panic-halt` instead:
 
 ```
 
-## Remove `defmt-rtt`
+### Remove `defmt-rtt`
 
 You can also remove the entire defmt-rtt logger to save flash.
 
@@ -127,7 +127,7 @@ In this case, you have to implement an empty defmt logger.
 
 ```
 
-## Totally remove storage and vial support
+### Totally remove storage and vial support
 
 You can disable `storage` and `vial` feature in `Cargo.toml`:
 
