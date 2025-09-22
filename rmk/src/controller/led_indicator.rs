@@ -36,7 +36,7 @@ impl<P: StatefulOutputPin> Controller for KeyboardIndicatorController<P> {
                     LedIndicatorType::Compose => state.compose(),
                     LedIndicatorType::Kana => state.kana(),
                 };
-                info!("Activating {} {}", self.indicator, activated);
+                info!("Activating {:?} {}", self.indicator, activated);
                 if activated {
                     self.pin.activate();
                 } else {

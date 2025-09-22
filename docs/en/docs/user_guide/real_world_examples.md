@@ -12,6 +12,12 @@ A BLE/USB dual-mode GH60 keyboard using Ebyte's E73 nRF52840 module.
 
 <img src="https://raw.githubusercontent.com/whitelynx/dactyl-lynx-keyboard/refs/heads/main/resources/skeleton-prototype.jpg" width="60%">
 
+## [sessile](https://github.com/willpuckett/sessile)
+
+*Sessile* is an exploration of "minimal" finger travel. You can also read its circuitous [origin story](https://kbd.news/Typing-in-the-upside-down-2603.html).
+
+![sessile](/images/sessile.png)
+
 ## Show your keyboard!
 
 If you're using RMK to build your keyboard, feel free to open a PR adding your project to this page!

@@ -1,7 +1,6 @@
 //! Controller module for RMK
 //!
-//! This module defines the `Controller` trait and several macros for running output device controllers.
-//! The `Controller` trait provides the interface for individual output device controllers, and the macros facilitate their concurrent execution.
+//! This module defines the `Controller` trait and its variations for different modes of execution.
 
 pub mod battery_led;
 pub mod led_indicator;
@@ -9,7 +8,7 @@ pub(crate) mod wpm;
 
 use embassy_futures::select::{Either, select};
 
-/// Common trait for controllers.
+/// This trait provides the interface for individual output device controllers.
 pub trait Controller {
     /// Type of the received events
     type Event;
@@ -36,9 +35,7 @@ pub trait Controller {
 ///     }
 /// }
 ///
-/// impl EventController for MyController { }
-///
-/// // Use the input device
+/// // Use the controller
 /// let c = MyController;
 ///
 /// // Run device simultaneously with RMK
@@ -79,14 +76,14 @@ impl<T: Controller> EventController for T {}
 /// }
 ///
 /// impl PollingController for MyController {
-///     type INTERVAL: embassy_time::Duration = embassy_time::Duration::from_hz(60);
+///     type INTERVAL: embassy_time::Duration = embassy_time::Duration::from_hz(30);
 ///
 ///     async fn update(&mut self) {
 ///         // update periodic
 ///     }
 /// }
 ///
-/// // Use the input device
+/// // Use the controller
 /// let c = MyController;
 ///
 /// // Run device simultaneously with RMK
@@ -102,7 +99,7 @@ pub trait PollingController: Controller {
     /// Interval between `update` calls
     const INTERVAL: embassy_time::Duration;
 
-    /// Update periodically
+    /// Update periodically, will be called according to [`Self::INTERVAL`]
     async fn update(&mut self);
 
     /// Polling loop

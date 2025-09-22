@@ -1,10 +1,11 @@
 //! Initialize default keymap from config
 use std::collections::HashMap;
 
-use crate::behavior::expand_profile_name;
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
 use rmk_config::{KEYCODE_ALIAS, KeyboardTomlConfig, MorseProfile};
+
+use crate::behavior::expand_profile_name;
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
 /// Also add `get_default_encoder_map`

@@ -39,6 +39,10 @@
 
 <img src="https://raw.githubusercontent.com/HaoboGu/rmk/refs/heads/main/docs/images/rmk_ble_keyboard.jpg" width="60%">
 
+### [sessile](https://github.com/willpuckett/sessile)
+
+<img src="https://raw.githubusercontent.com/HaoboGu/rmk/refs/heads/main/docs/images/sessile.png" width="60%">
+
 ## 使用 RMK
 
 ### 选项 1：从模板初始化

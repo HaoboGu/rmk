@@ -1,7 +1,7 @@
 [package]
 name = "rmk-py32f07x"
 version = "0.2.0"
-authors = ["Haobo Gu <haobogu@outlook.com>"]
+authors = ["Haobo Gu <haobogu@outlook.com>", "Decaday<myDecaday@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
 repository = "https://github.com/haobogu/rmk"
@@ -12,11 +12,9 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 rmk = { path = "../../../rmk", default-features = false, features = ["col2row", "defmt"] }
 embassy-time = { version = "0.5", features = ["defmt"] }
-# py32-hal = { git = "https://github.com/py32-rs/py32-hal", rev = "3ffc9c2", features = [
-py32-hal = { version = "0.3.0", features = [
+py32-hal = { version = "0.4.0", features = [
     "py32f072c1b", 
     "memory-x", 
-    "rt", 
     "embassy-usb-driver-impl",
     "time-driver-tim3"
 ] }
@@ -30,10 +28,6 @@ portable-atomic = { version = "1.11", features = ["critical-section"] }
 defmt = "1.0"
 defmt-rtt = "1.0"
 panic-probe = { version = "1.0" }
-
-# [patch.crates-io]
-# embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
-# # 
 
 [build-dependencies]
 xz2 = "0.1.7"

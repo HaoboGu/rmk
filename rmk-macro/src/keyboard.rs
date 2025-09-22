@@ -37,6 +37,7 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
 
     let keyboard_config = read_keyboard_toml_config();
 
+    // Check "storage" feature gate
     if keyboard_config.get_storage_config().enabled != is_feature_enabled(&rmk_features, "storage") {
         if keyboard_config.get_storage_config().enabled {
             panic!(
@@ -45,6 +46,19 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
         } else {
             panic!(
                 "Storage is disabled. The \"storage\" cargo feature must also be disabled, by disabling default features for rmk in your Cargo.toml (and potentially re-adding col2row and defmt, as desired)"
+            )
+        }
+    }
+
+    // Check "vial" feature gate
+    if keyboard_config.rmk.vial_enabled != is_feature_enabled(&rmk_features, "vial") {
+        if keyboard_config.rmk.vial_enabled {
+            panic!(
+                "If the \"vial\" cargo feature is disabled, `rmk.vial_enabled` must be set to false in the keyboard.toml."
+            )
+        } else {
+            panic!(
+                "Storage is disabled. The \"vial\" cargo feature must also be disabled, by disabling default features for rmk in your Cargo.toml (and potentially re-adding col2row and defmt, as desired)"
             )
         }
     }
@@ -131,11 +145,17 @@ fn expand_main(
     let (controller_initializers, controllers) = expand_controller_init(keyboard_config, &item_mod);
     let run_rmk = expand_rmk_entry(keyboard_config, &item_mod, devices, processors, controllers);
 
+    let vial_config = if keyboard_config.rmk.vial_enabled {
+        quote! { vial_config: VIAL_CONFIG,}
+    } else {
+        quote! {}
+    };
+
     let rmk_config = if keyboard_config.get_storage_config().enabled {
         quote! {
             let rmk_config = ::rmk::config::RmkConfig {
                 usb_config: KEYBOARD_USB_CONFIG,
-                vial_config: VIAL_CONFIG,
+                #vial_config
                 storage_config,
                 #set_ble_config
                 ..Default::default()
@@ -145,7 +165,7 @@ fn expand_main(
         quote! {
             let rmk_config = ::rmk::config::RmkConfig {
                 usb_config: KEYBOARD_USB_CONFIG,
-                vial_config: VIAL_CONFIG,
+                #vial_config
                 #set_ble_config
                 ..Default::default()
             };

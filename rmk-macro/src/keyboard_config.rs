@@ -40,6 +40,9 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc
 }
 
 pub(crate) fn expand_vial_config(config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
+    if !config.rmk.vial_enabled {
+        return quote! {};
+    }
     let unlock_keys = if let Some(security_config) = &config.security {
         let keys_expr = security_config
             .unlock_keys
