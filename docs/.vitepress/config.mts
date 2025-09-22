@@ -190,7 +190,6 @@ function sidebarGuide() {
         { text: 'Vial Support', link: 'features/vial_support' },
         { text: 'Wireless', link: 'features/wireless' },
         { text: 'Low-Power', link: 'features/low_power' },
-        { text: 'Storage', link: 'features/storage' },
         { text: 'Split Keyboard', link: 'features/split_keyboard' },
         { text: 'USB Logging', link: 'features/usb_logging' },
         {
