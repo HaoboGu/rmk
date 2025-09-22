@@ -10,14 +10,13 @@ use rmk_types::protocol::vial::{
 use crate::combo::Combo;
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
+use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
 use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, TAP};
-use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 #[cfg(feature = "storage")]
 use crate::{
-    COMBO_MAX_LENGTH,
-    channel::FLASH_CHANNEL,
-    storage::{ComboData, FlashOperationMessage},
+    COMBO_MAX_LENGTH, channel::FLASH_CHANNEL, host::storage::ComboData, host::storage::KeymapData,
+    storage::FlashOperationMessage,
 };
 use crate::{COMBO_MAX_NUM, MORSE_MAX_NUM};
 
@@ -319,7 +318,10 @@ pub(crate) async fn process_vial<
                             {
                                 // Save to storage
                                 FLASH_CHANNEL
-                                    .send(FlashOperationMessage::WriteMorse(morse_idx as u8, morse.clone()))
+                                    .send(FlashOperationMessage::VialMessage(KeymapData::Morse(
+                                        morse_idx as u8,
+                                        morse.clone(),
+                                    )))
                                     .await;
                             }
                         }
@@ -389,11 +391,11 @@ pub(crate) async fn process_vial<
                     };
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
-                        .send(FlashOperationMessage::WriteCombo(ComboData {
+                        .send(FlashOperationMessage::VialMessage(KeymapData::Combo(ComboData {
                             idx: real_idx,
                             actions,
                             output,
-                        }))
+                        })))
                         .await;
                 }
                 VialDynamic::DynamicVialKeyOverrideGet => {
@@ -469,12 +471,13 @@ pub(crate) async fn process_vial<
             // Save the encoder action to the storage after the RefCell is released
             if let Some(encoder) = _encoder {
                 // Save the encoder action to the storage
+                use crate::host::storage::EncoderConfig;
                 FLASH_CHANNEL
-                    .send(FlashOperationMessage::EncoderKey {
+                    .send(FlashOperationMessage::VialMessage(KeymapData::Encoder(EncoderConfig {
                         idx: index,
                         layer,
                         action: encoder,
-                    })
+                    })))
                     .await;
             }
         }

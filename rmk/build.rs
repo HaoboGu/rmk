@@ -14,7 +14,7 @@ fn main() {
     common::set_target_cfgs(&mut cfgs);
 
     // Ensure build.rs is re-run when files change
-    println!("cargo:rerun-if-changed=.git/HEAD");
+    // println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=KEYBOARD_TOML_PATH");
     println!("cargo:rerun-if-env-changed=VIAL_JSON_PATH");
