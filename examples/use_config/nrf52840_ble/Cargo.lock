@@ -177,9 +177,9 @@ dependencies = [
 
 [[package]]
 name = "bt-hci"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a496a585c0e2e00195e558af18342f79afd67598d3edb32e78c006e606a31386"
+checksum = "e9172c3df73e30f9bcbf80d0f5a4700fbc6d6771329142d05c06bb7ece7032c7"
 dependencies = [
  "btuuid",
  "defmt 1.0.1",
@@ -187,7 +187,7 @@ dependencies = [
  "embedded-io",
  "embedded-io-async",
  "futures-intrusive",
- "heapless 0.8.0",
+ "heapless 0.9.1",
 ]
 
 [[package]]
@@ -1399,8 +1399,7 @@ dependencies = [
 [[package]]
 name = "nrf-mpsl"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b74abf5519b4ed790e9e2bda4ed8aba09631f78c1ffb0b2cab82c12b4d8a0076"
+source = "git+https://github.com/alexmoon/nrf-sdc?rev=61be636#61be6361062cbb4dee7239b5ae207270ba562298"
 dependencies = [
  "cortex-m",
  "critical-section",
@@ -1434,9 +1433,8 @@ dependencies = [
 
 [[package]]
 name = "nrf-sdc"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd8a32e646b425ba916d6ae29171643e15cd800a9b8e8b5cb33990d1b9e4d675"
+version = "0.4.0"
+source = "git+https://github.com/alexmoon/nrf-sdc?rev=61be636#61be6361062cbb4dee7239b5ae207270ba562298"
 dependencies = [
  "bt-hci",
  "critical-section",
@@ -2299,8 +2297,9 @@ checksum = "fcc842091f2def52017664b53082ecbbeb5c7731092bad69d2c63050401dfd64"
 
 [[package]]
 name = "trouble-host"
-version = "0.2.4"
-source = "git+https://github.com/embassy-rs/trouble?rev=26ec679#26ec6794d0a976dd91cd694b631c72b16ddf651b"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2bc4ea8620a551c1ec040e21e871de37d2c555d7179fe1fd7d0c167cf8faeb1"
 dependencies = [
  "aes",
  "bt-hci",
@@ -2324,7 +2323,8 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.2.0"
-source = "git+https://github.com/embassy-rs/trouble?rev=26ec679#26ec6794d0a976dd91cd694b631c72b16ddf651b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab5c25c521a9a0cad8c62b86bd3ca9abd6c94842ecf62b64fc56f0d91bb1a426"
 dependencies = [
  "convert_case 0.8.0",
  "darling",

@@ -56,11 +56,6 @@ rand = { version = "0.8.4", default-features = false }
 rand_core = { version = "0.6" }
 rand_chacha = { version = "0.3", default-features = false }
 
-# [patch.crates-io]
-# nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "7ea8107" }
-# nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "7ea8107" }
-
-
 [build-dependencies]
 xz2 = "0.1.7"
 json = "0.12"
