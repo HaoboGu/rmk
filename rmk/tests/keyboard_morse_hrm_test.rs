@@ -1543,4 +1543,27 @@ rusty_fork_test! {
             ]
         };
     }
+
+    #[test]
+    fn test_flow_tap_misorder() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 2, true, 150], // Press mt!(C, LGui)
+                [0, 3, true, 120], // Press lt!(1, D)
+                [0, 2, false, 10], // Release mt!(C, LGui)
+                [0, 4, true, 10], // Press td!(0) -> Flow Tap triggered
+                [0, 3, false, 10], // Release lt!(1, D)
+                [0, 4, false, 10], // Release td!(0)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(D), kc_to_u8!(E), 0, 0, 0, 0]],
+                [0, [0, kc_to_u8!(E), 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
 }

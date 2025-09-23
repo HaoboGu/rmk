@@ -362,37 +362,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     async fn process_key_action(&mut self, key_action: &KeyAction, event: KeyboardEvent, is_combo: bool) -> LoopState {
-        // When pressing a morse key, check flow tap first.
-        if event.pressed
-            && self.keymap.borrow().behavior.morse.enable_flow_tap
-            && key_action.is_morse()
-            && self.last_press_time.elapsed() < self.keymap.borrow().behavior.morse.prior_idle_time
-        {
-            // It's in key streak, trigger the first tap action
-            debug!("Flow tap detected, trigger tap action for current morse key");
-
-            // TODO: Check whether current morse key is in the buffer, if so, remove it from buffer and use the buffered morse pattern?
-            // TODO: Check only morse with modifier?
-
-            let action = Self::action_from_pattern(&self.keymap.borrow().behavior, key_action, TAP); //tap action
-            self.process_key_action_normal(action, event).await;
-            // Push back after triggered press
-            let now = Instant::now();
-            let time_out = now + Self::morse_timeout(&self.keymap.borrow(), event.pos, key_action, true);
-            self.held_buffer.push(HeldKey::new(
-                event,
-                *key_action,
-                KeyState::ProcessedButReleaseNotReportedYet(action),
-                now,
-                time_out,
-            ));
-            return LoopState::OK;
-        }
-
-        // If current key is a release, and it cannot be find in the held buffer or it's already triggered
-        // it's pressed BEFORE any morse key is pressed, set the check_buffer = false
+        // First, make the decision for current key and held keys
         let (decision_for_current_key, decisions) = self.make_decisions_for_keys(key_action, event);
 
+        // Fire held keys if needed
         let (keyboard_state_updated, updated_decision_for_cur_key) =
             self.fire_held_keys(decision_for_current_key, decisions).await;
 
@@ -437,6 +410,21 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 };
                 self.process_key_action_inner(key_action, event).await
             }
+            KeyBehaviorDecision::FlowTap => {
+                let action = Self::action_from_pattern(&self.keymap.borrow().behavior, key_action, TAP); //tap action
+                self.process_key_action_normal(action, event).await;
+                // Push back after triggered press
+                let now = Instant::now();
+                let time_out = now + Self::morse_timeout(&self.keymap.borrow(), event.pos, key_action, true);
+                self.held_buffer.push(HeldKey::new(
+                    event,
+                    *key_action,
+                    KeyState::ProcessedButReleaseNotReportedYet(action),
+                    now,
+                    time_out,
+                ));
+                return LoopState::OK;
+            }
         }
     }
 
@@ -456,11 +444,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // Some decisions of held keys have been made, fire those keys
             // debug!("✅ Decision for held key: {:?}: {:?}", pos, decision)
             match decision {
-                HeldKeyDecision::UnilateralTap => {
+                HeldKeyDecision::UnilateralTap | HeldKeyDecision::FlowTap => {
                     if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
                         if held_key.action.is_morse() {
                             // Unilateral tap of the held key is triggered
-                            debug!("Cleaning buffered morse key due to unilateral tap");
+                            debug!("Cleaning buffered morse key due to unilateral tap or flow tap");
                             match held_key.state {
                                 KeyState::Pressed(_) | KeyState::Holding(_) => {
                                     // In this state pattern is not surely finished,
@@ -471,7 +459,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                         KeyState::Holding(pattern) => pattern,
                                         _ => unreachable!(),
                                     };
-                                    debug!("pattern after unilateral tap: {:?}", pattern);
+                                    debug!("Pattern after unilateral tap or flow tap: {:?}", pattern);
                                     let action = Self::action_from_pattern(
                                         &self.keymap.borrow().behavior,
                                         &held_key.action,
@@ -485,7 +473,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 KeyState::Released(pattern) => {
                                     // In this state pattern is not surely finished,
                                     // however an other key is pressed so terminate the sequence, try to resolve as is
-                                    debug!("pattern after released, unilateral tap: {:?}", pattern);
+                                    debug!("Pattern after released, unilateral tap or flow tap: {:?}", pattern);
                                     let action = Self::action_from_pattern(
                                         &self.keymap.borrow().behavior,
                                         &held_key.action,
@@ -660,6 +648,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let mut decision_for_current_key = KeyBehaviorDecision::Ignore;
         let mut decisions: Vec<(_, HeldKeyDecision), HOLD_BUFFER_SIZE> = Vec::new();
 
+        // When pressing a morse key, check flow tap first.
+        if event.pressed
+            && self.keymap.borrow().behavior.morse.enable_flow_tap
+            && key_action.is_morse()
+            && self.last_press_time.elapsed() < self.keymap.borrow().behavior.morse.prior_idle_time
+        {
+            // It's in key streak, trigger the first tap action
+            debug!("Flow tap detected, trigger tap action for current morse key");
+
+            decision_for_current_key = KeyBehaviorDecision::FlowTap;
+        }
+
         // Whether the held buffer needs to be checked.
         let check_held_buffer = event.pressed
             || self
@@ -699,6 +699,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                     if event.pressed {
                         // The current key is being pressed
+
+                        if decision_for_current_key == KeyBehaviorDecision::FlowTap
+                            && matches!(held_key.state, KeyState::Pressed(_))
+                        {
+                            debug!("Flow tap triggered, resolve buffered morse key as tapping");
+                            // If flow tap of current key is triggered, tapping all held keys
+                            let _ = decisions.push((held_key.event.pos, HeldKeyDecision::FlowTap));
+                            continue;
+                        }
 
                         // Check morse key mode
                         match mode {
@@ -2133,6 +2142,8 @@ pub enum KeyBehaviorDecision {
     Ignore,
     // Release current key
     Release,
+    // Flow tap of current key is triggered
+    FlowTap,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -2142,6 +2153,8 @@ pub enum HeldKeyDecision {
     Ignore,
     // Unilateral tap triggered
     UnilateralTap,
+    // Flow tap triggered, all held morse keys should be triggered as tapping
+    FlowTap,
     // Permissive hold triggered
     PermissiveHold,
     // Hold on other key press triggered
