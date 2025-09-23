@@ -61,7 +61,7 @@ pub fn create_morse_keyboard(
             mt!(B, ModifierCombination::LSHIFT),
             mt!(C, ModifierCombination::LGUI),
             lt!(1, D),
-            td!(0),
+            mt!(E, ModifierCombination::LALT),
         ]],
         [[k!(Kp1), k!(Kp2), k!(Kp3), k!(Kp4), k!(Kp5)]],
     ];
