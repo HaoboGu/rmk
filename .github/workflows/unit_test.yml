@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
 
-env: 
+env:
   CARGO_TERM_COLOR: always
 
 jobs:
@@ -30,9 +30,18 @@ jobs:
           - stable
           - beta
           - nightly
+        featuresets:
+          - "log,std"
+          - "storage"
+          - "vial"
+          - "split"
+          - "split,vial"
+          - "split,storage"
+          - "vial,storage"
+          - "split,vial,storage"
     steps:
       - uses: actions/checkout@v4
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - name: Run tests
         working-directory: ./rmk
-        run: cargo test --no-default-features --features="log, std" --verbose
+        run: cargo test --no-default-features --features=${{ matrix.featuresets }} --verbose

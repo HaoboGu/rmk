@@ -13,14 +13,14 @@ use crate::input_device::InputDevice;
 use crate::state::ConnectionState;
 
 /// Recording the matrix pressed state
-#[cfg(feature = "matrix_tester")]
+#[cfg(feature = "vial_lock")]
 pub struct MatrixState<const ROW: usize, const COL: usize> {
     // 30 bytes is the limited by Vial and 240 keys is enough for
     // most keyborad
     state: [u8; 30],
 }
 
-#[cfg(feature = "matrix_tester")]
+#[cfg(feature = "vial_lock")]
 impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
     const ROW_LEN: usize = (COL + 8) / 8;
     const OUT_OF_BOUNDARY: () = if ROW * Self::ROW_LEN > 30 {

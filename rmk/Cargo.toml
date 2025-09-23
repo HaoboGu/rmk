@@ -54,14 +54,14 @@ paste = "1"
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { version = "0.2.4", git = "https://github.com/embassy-rs/trouble", rev = "26ec679", features = [
+trouble-host = { version = "0.3", features = [
     "gatt",
     "scan",
     "derive",
     "security",
 ], optional = true }
 rand_core = { version = "0.6", optional = true }
-bt-hci = { version = "0.4", optional = true }
+bt-hci = { version = "0.5", optional = true }
 
 # nRF dependencies
 embassy-nrf = { version = "0.7", features = [
@@ -110,24 +110,27 @@ features = ["split"]
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["col2row", "defmt", "storage", "vial_lock"]
+default = ["col2row", "defmt", "storage", "vial", "vial_lock"]
 
-## the matrix tester is optional to store matrix state
-matrix_tester = []
+## Enable host configurator support
+host = []
 
-## the vial lock is optional to lock the vial
-vial_lock = ["matrix_tester"]
+## Enable vial support
+vial = ["host"]
 
-## the storage is optional to save memory
+## Enable vial lock feature
+vial_lock = ["vial"]
+
+## Enable the storage. The storage is optional to save memory
 storage = ["dep:embedded-storage", "dep:embedded-storage-async"]
 
 ## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature by `default-features = false`.
 col2row = []
 
-## Enable bidirectional feature
+## Enable to use bidirectional matrix
 bidirectional = []
 
-## Enable defmt feature
+## Enable defmt support
 defmt = [
     "dep:defmt",
     "rmk-types/defmt",
@@ -148,9 +151,10 @@ defmt = [
     "heapless/defmt",
 ]
 
-log = ["dep:log", "trouble-host?/log"]
-
+## Enable logging via usb
 usb_log = ["dep:embassy-usb-logger", "log"]
+## Use log, this feature cannot be enabled when defmt is enabled
+log = ["dep:log", "trouble-host?/log"]
 
 ## Add std feature for testing
 std = [
@@ -161,23 +165,20 @@ std = [
     "critical-section?/std",
 ]
 
-## Enable async matrix scan
+## Enable async matrix scanning
 async_matrix = ["dep:embedded-hal-async"]
 
 ## Use rapid debouncer
 rapid_debouncer = []
 
-## Feature for split keyboard
+## Enable split keyboard support
 split = []
 
-## Feature for controller devices
+## Enable to use controllers to control other hardwares on the board
 controller = []
 
-## Internal feature that indicates no USB is used, this feature will be auto-activated for some chips
-_no_usb = []
-
-## Enable feature if you want to use RP2040 PIO UART
-rp2040_pio = [
+## Enable feature to use rp2040 specific features, like PIO and bootrom
+rp2040 = [
     "dep:embassy-rp",
     "dep:embassy-hal-internal",
     "dep:rp-pac",
@@ -185,11 +186,11 @@ rp2040_pio = [
     "dep:fixed",
 ]
 
-## Enable feature if you want rp2040 bootloader jumping key
-rp2040_bl = ["dep:embassy-rp"]
-
 ## Enable feature if you're using Adafruit nRF52 bootloader and want bootloader jumping key
 adafruit_bl = ["_nrf_ble"]
+
+## Internal feature that indicates no USB is used, this feature will be auto-activated for some chips
+_no_usb = []
 
 #! ### BLE feature flags
 #!

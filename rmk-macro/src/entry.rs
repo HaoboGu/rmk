@@ -76,6 +76,11 @@ pub(crate) fn rmk_entry_select(
     } else {
         TokenStream2::new()
     };
+    let keymap = if keyboard_config.rmk.vial_enabled {
+        quote! { &keymap, }
+    } else {
+        quote! {}
+    };
     let board = keyboard_config.get_board_config().unwrap();
     let communication = keyboard_config.get_communication_config().unwrap();
     let usb_driver_arg = match communication {
@@ -90,15 +95,10 @@ pub(crate) fn rmk_entry_select(
                 keyboard.run(),
             };
             let mut tasks = vec![devices_task, keyboard_task];
-            // TODO: Handle polling controllers
-            for controller in controllers {
-                tasks.push(quote! {
-                    #controller.event_loop(),
-                });
-            }
+            tasks.extend(controllers);
             if split_config.connection == "ble" {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, #usb_driver_arg &stack, #storage rmk_config),
+                    ::rmk::run_rmk(#keymap #usb_driver_arg &stack, #storage rmk_config),
                 };
                 tasks.push(rmk_task);
                 if !processors.is_empty() {
@@ -120,7 +120,7 @@ pub(crate) fn rmk_entry_select(
                 join_all_tasks(tasks)
             } else if split_config.connection == "serial" {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, #usb_driver_arg #storage rmk_config),
+                    ::rmk::run_rmk(#keymap #usb_driver_arg #storage rmk_config),
                 };
                 tasks.push(rmk_task);
                 if !processors.is_empty() {
@@ -183,37 +183,38 @@ pub(crate) fn rmk_entry_default(
     if !processors_task.is_empty() {
         tasks.push(processors_task);
     }
-    // TODO: Handle polling controllers
-    for controller in controllers {
-        tasks.push(quote! {
-            #controller.event_loop()
-        });
-    }
+    tasks.extend(controllers);
     // Remove the storage argument if disabled in config. The feature also needs to be disabled.
     let storage = if keyboard_config.get_storage_config().enabled {
         quote! {&mut storage,}
     } else {
         TokenStream2::new()
     };
+    // Remove the keymap argument if the vial is disabled
+    let keymap = if keyboard_config.rmk.vial_enabled {
+        quote! { &keymap, }
+    } else {
+        quote! {}
+    };
     let communication = keyboard_config.get_communication_config().unwrap();
     match communication {
         CommunicationConfig::Usb(_) => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(&keymap, driver, #storage rmk_config)
+                ::rmk::run_rmk(#keymap driver, #storage rmk_config)
             };
             tasks.push(rmk_task);
             join_all_tasks(tasks)
         }
         CommunicationConfig::Ble(_) => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(&keymap, &stack, #storage rmk_config)
+                ::rmk::run_rmk(#keymap &stack, #storage rmk_config)
             };
             tasks.push(rmk_task);
             join_all_tasks(tasks)
         }
         CommunicationConfig::Both(_, _) => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(&keymap, driver, &stack, #storage rmk_config)
+                ::rmk::run_rmk(#keymap driver, &stack, #storage rmk_config)
             };
             tasks.push(rmk_task);
             join_all_tasks(tasks)

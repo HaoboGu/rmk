@@ -4,11 +4,8 @@
 #[macro_use]
 mod macros;
 mod keymap;
-mod vial;
 
-use defmt::info;
 use embassy_executor::Spawner;
-use embassy_stm32::flash::Flash;
 use embassy_stm32::gpio::{Input, Level, Output, Speed};
 use embassy_stm32::peripherals::USB;
 use embassy_stm32::usb::{Driver, InterruptHandler};
@@ -17,25 +14,13 @@ use embassy_time::Timer;
 use keymap::{COL, ROW};
 use panic_halt as _;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, PerKeyConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, PerKeyConfig, RmkConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::storage::async_flash_wrapper;
-use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
-use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
-
-#[defmt::global_logger]
-struct Logger;
-
-unsafe impl defmt::Logger for Logger {
-    fn acquire() {}
-    unsafe fn flush() {}
-    unsafe fn release() {}
-    unsafe fn write(_bytes: &[u8]) {}
-}
+use rmk::{initialize_keymap, run_devices, run_rmk};
 
 bind_interrupts!(struct Irqs {
     USB_LP_CAN1_RX0 => InterruptHandler<USB>;
@@ -43,7 +28,6 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
-    info!("RMK start!");
     // RCC config
     let config = Config::default();
 
@@ -65,28 +49,14 @@ async fn main(_spawner: Spawner) {
     let (input_pins, output_pins) =
         config_matrix_pins_stm32!(peripherals: p, input: [PA9, PB8, PB13, PB12], output: [PA13, PA14, PA15]);
 
-    // Use internal flash to emulate eeprom
-    let flash = async_flash_wrapper(Flash::new_blocking(p.FLASH));
-
     // Keyboard config
-    let rmk_config = RmkConfig {
-        vial_config: VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]),
-        ..Default::default()
-    };
+    let rmk_config = RmkConfig { ..Default::default() };
 
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
     let mut behavior_config = BehaviorConfig::default();
-    let storage_config = StorageConfig::default();
     let mut per_key_config = PerKeyConfig::default();
-    let (keymap, mut storage) = initialize_keymap_and_storage(
-        &mut default_keymap,
-        flash,
-        &storage_config,
-        &mut behavior_config,
-        &mut per_key_config,
-    )
-    .await;
+    let keymap = initialize_keymap(&mut default_keymap, &mut behavior_config, &mut per_key_config).await;
 
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::<ROW, COL>::new();
@@ -99,7 +69,7 @@ async fn main(_spawner: Spawner) {
             (matrix) => EVENT_CHANNEL,
         ),
         keyboard.run(),
-        run_rmk(&keymap, driver, &mut storage, rmk_config),
+        run_rmk(driver, rmk_config),
     )
     .await;
 }
