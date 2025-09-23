@@ -3,10 +3,8 @@ use quote::quote;
 use rmk_config::{ChipModel, KeyboardTomlConfig, PinConfig};
 use syn::ItemMod;
 
-use crate::{
-    feature::{get_rmk_features, is_feature_enabled},
-    gpio_config::convert_gpio_str_to_output_pin,
-};
+use crate::feature::{get_rmk_features, is_feature_enabled};
+use crate::gpio_config::convert_gpio_str_to_output_pin;
 
 /// Expands the controller initialization code based on the keyboard configuration.
 /// Returns a tuple containing: (controller_initialization, controller_execution)
