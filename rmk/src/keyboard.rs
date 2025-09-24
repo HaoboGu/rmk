@@ -52,18 +52,6 @@ pub(crate) static LAST_KEY_TIMESTAMP: Signal<crate::RawMutex, u32> = Signal::new
 /// LedIndicator type would be nicer, but that does not have const expr constructor
 pub(crate) static LOCK_LED_STATES: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0u8);
 
-#[derive(Debug)]
-enum LoopState {
-    /// Default state, fire and forget current key event
-    OK,
-    /// Save current event into buffer
-    Queue,
-    /// Flush event buffer
-    Flush,
-    /// Stop keyboard running
-    Stop,
-}
-
 /// State machine for one shot keys
 #[derive(Default)]
 enum OneShotState<T> {
@@ -95,41 +83,22 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
     /// The report is sent using `send_report`.
     async fn run(&mut self) {
         loop {
-            let result = match self.next_buffered_key() {
-                Some(key) => self.process_buffered_key(key).await,
-                None => {
-                    // No buffered tap-hold event, wait for new key
-                    let event = KEY_EVENT_CHANNEL.receive().await;
-                    // Process the key event
-                    self.process_inner(event).await
-                }
+            // TODO: Now the unprocessed_events is only used in one-shot keys and clear peer key.
+            // Maybe it can be removed in the future?
+            if !self.unprocessed_events.is_empty() {
+                // Process unprocessed events
+                let e = self.unprocessed_events.remove(0);
+                debug!("Unprocessed event: {:?}", e);
+                self.process_inner(e).await
+            } else if let Some(key) = self.next_buffered_key() {
+                // Process buffered held key
+                self.process_buffered_key(key).await
+            } else {
+                // No buffered tap-hold event, wait for new key
+                let event = KEY_EVENT_CHANNEL.receive().await;
+                // Process the key event
+                self.process_inner(event).await
             };
-
-            match result {
-                LoopState::Queue => {
-                    // keep unprocessed key events
-                    // every key should be buffered into event list, check in every turn in future
-                    continue;
-                }
-                LoopState::Stop => {
-                    return;
-                }
-                _ => {
-                    // Stop buffering, clean all buffered events
-                    self.clean_buffered_processed_keys();
-
-                    // After processing the key event, check if there are unprocessed events
-                    // This will happen if there's recursion in key processing
-                    if self.held_buffer.keys.is_empty() && !self.unprocessed_events.is_empty() {
-                        while !self.unprocessed_events.is_empty() {
-                            // Process unprocessed events
-                            let e = self.unprocessed_events.remove(0);
-                            debug!("Unprocessed event: {:?}", e);
-                            self.process_inner(e).await;
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -139,7 +108,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 
     /// Unprocessed events
-    unprocessed_events: Vec<KeyboardEvent, 16>,
+    unprocessed_events: Vec<KeyboardEvent, 4>,
 
     /// Buffered held keys
     pub held_buffer: HeldBuffer,
@@ -289,7 +258,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Process the latest buffered key.
     ///
     /// The given holding key is a copy of the buffered key. Only tap-hold keys are considered now.
-    async fn process_buffered_key(&mut self, key: HeldKey) -> LoopState {
+    async fn process_buffered_key(&mut self, key: HeldKey) {
         debug!(
             "Processing buffered key: \nevent: {:?} state: {:?}",
             key.event, key.state
@@ -331,11 +300,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
             _ => (),
         }
-        LoopState::OK
     }
 
     /// Process key changes at (row, col)
-    async fn process_inner(&mut self, event: KeyboardEvent) -> LoopState {
+    async fn process_inner(&mut self, event: KeyboardEvent) {
         #[cfg(feature = "vial_lock")]
         self.keymap.borrow_mut().matrix_state.update(&event);
 
@@ -353,15 +321,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if self.combo_on {
             if let (Some(key_action), is_combo) = self.process_combo(key_action, event).await {
                 self.process_key_action(&key_action, event, is_combo).await
-            } else {
-                LoopState::OK
             }
         } else {
             self.process_key_action(key_action, event, false).await
         }
     }
 
-    async fn process_key_action(&mut self, key_action: &KeyAction, event: KeyboardEvent, is_combo: bool) -> LoopState {
+    async fn process_key_action(&mut self, key_action: &KeyAction, event: KeyboardEvent, is_combo: bool) {
         // First, make the decision for current key and held keys
         let (decision_for_current_key, decisions) = self.make_decisions_for_keys(key_action, event);
 
@@ -382,7 +348,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 self.process_key_action_inner(key_action, event).await
             }
             KeyBehaviorDecision::Buffer => {
-                debug!("Current key is buffered, return LoopState::Queue");
+                debug!("Current key is buffered");
                 let press_time = Instant::now();
                 let timeout_time = if key_action.is_morse() {
                     press_time + Self::morse_timeout(&self.keymap.borrow(), event.pos, key_action, true)
@@ -396,8 +362,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     press_time,
                     timeout_time,
                 ));
-                // Current key is buffered, return LoopState::Queue
-                LoopState::Queue
             }
             KeyBehaviorDecision::Ignore => {
                 debug!("Current key is ignored or not buffered, process normally: {:?}", event);
@@ -423,7 +387,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     now,
                     time_out,
                 ));
-                return LoopState::OK;
             }
         }
     }
@@ -587,7 +550,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     // Check if the normal keys in the buffer should be triggered.
                     let trigger_normal = matches!(decision_for_current_key, KeyBehaviorDecision::CleanBuffer);
 
-                    if trigger_normal && let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
+                    if trigger_normal && let Some(held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
                         debug!("Cleaning buffered normal key");
                         let action = if keyboard_state_updated {
                             self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event)
@@ -599,10 +562,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         assert!(!action.is_morse());
                         debug!("Tap Key {:?} now press down, action: {:?}", held_key.event, action);
                         self.process_key_action_inner(&action, held_key.event).await;
-
-                        // Push back the updated key state
-                        held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action.to_action()); // Morse like actions are not expected here
-                        self.held_buffer.push_without_sort(held_key);
                     }
                 }
                 _ => (),
@@ -769,7 +728,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         (decision_for_current_key, decisions)
     }
 
-    async fn process_key_action_inner(&mut self, original_key_action: &KeyAction, event: KeyboardEvent) -> LoopState {
+    async fn process_key_action_inner(&mut self, original_key_action: &KeyAction, event: KeyboardEvent) {
         // Start forks
         let key_action = self.try_start_forks(original_key_action, event);
 
@@ -798,8 +757,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             self.process_key_action_morse(&key_action, event).await;
         }
         self.try_finish_forks(original_key_action, event);
-
-        LoopState::OK
     }
 
     /// Replaces the incoming key_action if a fork is configured for that key.
@@ -1139,7 +1096,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             match self.osm_state {
                 OneShotState::Initial(m) | OneShotState::Single(m) => {
                     self.osm_state = OneShotState::Single(m);
-
                     let timeout = Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
                     match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
                         Either::First(_) => {

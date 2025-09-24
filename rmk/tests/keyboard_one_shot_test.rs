@@ -141,6 +141,23 @@ mod one_shot_test {
         }
 
         #[test]
+        fn test_osm_rolling_with_tap_hold() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard(),
+                sequence: [
+                    [0, 0, true, 10],   // Press OSM LShift
+                    [0, 3, true, 10],   // Press B (should not have shift)
+                    [0, 0, false, 10],  // Release OSM LShift
+                    [0, 3, false, 10],  // Release B
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // A with LShift
+                    [0, [0, 0, 0, 0, 0, 0]], // All released
+                ]
+            };
+        }
+
+        #[test]
         fn test_osm_combined_modifiers() {
             key_sequence_test! {
                 keyboard: create_test_keyboard(),
