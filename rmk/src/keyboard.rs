@@ -405,7 +405,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // Fire buffered keys
         for (pos, decision) in decisions {
             // Some decisions of held keys have been made, fire those keys
-            // debug!("✅ Decision for held key: {:?}: {:?}", pos, decision)
+            // debug!("✅ Decision for held key: {:?}: {:?}", pos, decision);
             match decision {
                 HeldKeyDecision::UnilateralTap | HeldKeyDecision::FlowTap => {
                     if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
@@ -630,6 +630,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // First, sort by press time
             self.held_buffer.keys.sort_unstable_by_key(|k| k.press_time);
 
+            let mut unresolved_morse = false;
+
             // Check all unresolved held keys, calculate their decision one-by-one
             for held_key in self
                 .held_buffer
@@ -646,9 +648,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
 
                 // Buffered normal keys should be added to the decision list,
-                // they will be processed later according to the decision of current key
-                if !held_key.action.is_morse() && matches!(held_key.state, KeyState::Pressed(_)) {
-                    let _ = decisions.push((held_key.event.pos, HeldKeyDecision::Normal));
+                // they will be processed later according to the decision of current key.
+                if !held_key.action.is_morse() && matches!(held_key.state, KeyState::Pressed(_)) && !unresolved_morse {
+                    // If there's unresolved morse key BEFORE current normal key, don't make decision on this normal key
+                    if !unresolved_morse {
+                        let _ = decisions.push((held_key.event.pos, HeldKeyDecision::Normal));
+                    }
                     continue;
                 }
 
@@ -681,6 +686,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 );
                                 let _ = decisions.push((held_key.event.pos, HeldKeyDecision::HoldOnOtherKeyPress));
                                 decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
+                                continue;
                             }
                             _ => {}
                         }
@@ -720,8 +726,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             // Check first current releasing key is in the buffer, AND after the current key
                             let _ = decisions.push((held_key.event.pos, HeldKeyDecision::PermissiveHold));
                             decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
+                            continue;
                         }
                     }
+
+                    // There's still unresolved morse in the held buffer, set the flag, and don't process other normal keys after this
+                    unresolved_morse = true
                 }
             }
         }

@@ -1059,14 +1059,14 @@ rusty_fork_test! {
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 2, true, 30], // Press mt!(C, LGui)
                 [0, 0, true, 30], // Press A
-                [0, 1, false, 50], // Release mt!(B, LShift) -> In permissive hold mode, this operation resolves `B` and `A`, but not `C`
+                [0, 1, false, 50], // Release mt!(B, LShift)
                 [0, 2, false, 100], // Release mt!(C, LGui)
                 [0, 0, false, 100],  // Release A
             ],
             expected_reports: [
                 [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]],
-                [0, [0, kc_to_u8!(A), 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
                 [0, [kc_to_u8!(C), kc_to_u8!(A), 0, 0, 0, 0]],
                 [0, [0, kc_to_u8!(A), 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],

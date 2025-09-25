@@ -1371,9 +1371,9 @@ rusty_fork_test! {
                 [0, 0, false, 100],  // Release A
             ],
             expected_reports: [
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // FIXME: Maybe B-C-A is the expected order
-                [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]],
-                [0, [0, kc_to_u8!(A), 0, 0, 0, 0]],
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
                 [0, [kc_to_u8!(C), kc_to_u8!(A), 0, 0, 0, 0]],
                 [0, [0, kc_to_u8!(A), 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
@@ -1562,6 +1562,29 @@ rusty_fork_test! {
                 [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
                 [0, [kc_to_u8!(D), kc_to_u8!(E), 0, 0, 0, 0]],
                 [0, [0, kc_to_u8!(E), 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
+    fn test_flow_tap_with_normal_key_misorder() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 2, true, 150], // Press mt!(C, LGui)
+                [0, 3, true, 50], // Press lt!(1, D)
+                [0, 0, true, 50], // Press A
+                [0, 2, false, 50], // Release mt!(C, LGui)
+                [0, 3, false, 50], // Release lt!(1, D)
+                [0, 0, false, 50], // Release A
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(D), kc_to_u8!(A), 0, 0, 0, 0]],
+                [0, [0, kc_to_u8!(A), 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
             ]
         };
