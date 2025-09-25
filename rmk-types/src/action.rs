@@ -252,6 +252,26 @@ impl KeyAction {
     pub fn is_empty(&self) -> bool {
         matches!(self, KeyAction::No)
     }
+
+    pub fn new_mt(keycode: KeyCode, modifier: ModifierCombination) -> Self {
+        let profile = if keycode.is_letter() {
+            MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), None, None)
+        } else {
+            MorseProfile::new(Some(true), Some(MorseMode::HoldOnOtherPress), None, None)
+        };
+
+        Self::TapHold(Action::Key(keycode), Action::Modifier(modifier), profile)
+    }
+
+    pub fn new_lt(keycode: KeyCode, layer: u8) -> Self {
+        let profile = if keycode.is_letter() {
+            MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), None, None)
+        } else {
+            MorseProfile::new(Some(true), Some(MorseMode::HoldOnOtherPress), None, None)
+        };
+
+        Self::TapHold(Action::Key(keycode), Action::LayerOn(layer), profile)
+    }
 }
 
 /// combo, fork, etc. compares key actions

@@ -94,13 +94,15 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             // Modifier tap-hold.
             let keycode = (via_keycode & 0x00FF).into();
             let modifier = ModifierCombination::from_packed_bits(((via_keycode >> 8) & 0b11111) as u8);
-            KeyAction::TapHold(Action::Key(keycode), Action::Modifier(modifier), Default::default())
+            // KeyAction::TapHold(Action::Key(keycode), Action::Modifier(modifier), Default::default())
+            KeyAction::new_mt(keycode, modifier)
         }
         0x4000..=0x4FFF => {
             // Layer tap-hold.
             let layer = (via_keycode >> 8) & 0xF;
             let keycode = (via_keycode & 0x00FF).into();
-            KeyAction::TapHold(Action::Key(keycode), Action::LayerOn(layer as u8), Default::default())
+            // KeyAction::TapHold(Action::Key(keycode), Action::LayerOn(layer as u8), Default::default())
+            KeyAction::new_lt(keycode, layer as u8)
         }
         0x5200..=0x521F => {
             // Activate layer X and deactivate other layers(except default layer)
