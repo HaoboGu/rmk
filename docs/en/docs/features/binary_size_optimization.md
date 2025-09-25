@@ -10,9 +10,15 @@ RMK has included many optimizations by default to of binary size. But there are 
 
 or some errors occur when writing configs to flash, that means that your microcontroller's internal flash is not big enough.
 
+::: tip
+For the minimal example, please checkout `examples/use_rust/stm32f1` and `examples/use_config/stm32f1` example.
+:::
+
 There are several approaches to solve the problem:
 
-## Change `DEFMT_LOG` level
+## Common approaches
+
+### Change `DEFMT_LOG` level
 
 Logging is quite useful when debugging the firmware, but it requires a lot of flash. You can change the default logging level to `error` at `.cargo/config.toml`, to print only error messages and save flash:
 
@@ -24,7 +30,56 @@ Logging is quite useful when debugging the firmware, but it requires a lot of fl
 + DEFMT_LOG = "error"
 ```
 
-## Use `panic-halt`
+### Enable unstable feature
+
+According to [embassy's doc](https://embassy.dev/book/#_my_binary_is_still_big_filled_with_stdfmt_stuff), you can set the following in your `.cargo/config.toml`
+
+```toml
+[unstable]
+build-std = ["core"]
+build-std-features = ["panic_immediate_abort"]
+```
+
+And then compile your project with **nightly** Rust:
+
+```
+cargo +nightly build --release
+# Or
+cargo +nightly size --release
+```
+
+## For `keyboard.toml` users
+
+RMK provides several options that you can use to reduce the binary size:
+
+1. If you don't need storage, you can disable the `storage` feature to save some flash. To disable `storage` feature you need to disable default features of `rmk` crate, and then enable other features you need, for example, "col2row".
+
+2. You can also fully remove `defmt` by removing `defmt` feature from `rmk` crate and similar feature gates from all other dependencies.
+
+3. If you don't need vial support, you can also disable the `vial` feature by disabling default features of `rmk` crate.
+
+```toml
+# Default features `defmt`, `vial`, and `storage` are disabled
+rmk = { version = "0.7", default-features = false, features = ["col2row"] }
+```
+
+If you're using `keyboard.toml`, you'll also need to disable the storage, defmt and vial in toml config:
+
+```toml
+# Disable storage, defmt and vial in keyboard.toml
+[storage]
+enabled = false
+
+[dependency]
+defmt_log = false
+
+[rmk]
+vial_enabled = false
+```
+
+## For Rust code users
+
+### Use `panic-halt`
 
 By default, RMK uses `panic-probe` to print error messages if panic occurs. But `panic-probe` actually takes lots of flash because the panic call can not be optimized. The solution is to use `panic-halt` instead of `panic-probe`:
 
@@ -45,7 +100,7 @@ The in `main.rs`, use `panic-halt` instead:
 
 ```
 
-## Remove `defmt-rtt`
+### Remove `defmt-rtt`
 
 You can also remove the entire defmt-rtt logger to save flash.
 
@@ -72,45 +127,13 @@ In this case, you have to implement an empty defmt logger.
 
 ```
 
-## Enable unstable feature
+### Totally remove storage and vial support
 
-According to [embassy's doc](https://embassy.dev/book/#_my_binary_is_still_big_filled_with_stdfmt_stuff), you can set the following in your `.cargo/config.toml`
-
-```toml
-[unstable]
-build-std = ["core"]
-build-std-features = ["panic_immediate_abort"]
-```
-
-And then compile your project with **nightly** Rust:
-
-```
-cargo +nightly build --release
-# Or
-cargo +nightly size --release
-```
-
-This config will reduce about 4-6kb of binary size furthermore.
-
-After applying all above approaches, total binary size of stm32h7 example can be reduced from about 93KB to 54KB, which means the binary size decreases about 42%!
-
-## Disable `storage` feature and `defmt` feature
-
-If you don't need storage, you can disable the `storage` feature to save some flash. To disable `storage` feature you need to disable default features of `rmk` crate, and then enable features you need manually.
-
-You can also fully remove `defmt` by removing `defmt` feature from `rmk` crate and similar feature gates from all other dependencies.
+You can disable `storage` and `vial` feature in `Cargo.toml`:
 
 ```toml
+# Default features `defmt`, `vial`, and `storage` are disabled
 rmk = { version = "0.7", default-features = false, features = ["col2row"] }
 ```
 
-If you re using `keyboard.toml`, you'll also need to disable the storage or defmt in toml config:
-
-```toml
-# Disable storage and defmt in keyboard.toml
-[storage]
-enabled = false
-
-[dependency]
-defmt_log = false
-```
+And then remove anything no longer needed in `main.rs`.

@@ -3,7 +3,7 @@ import taskLists from 'markdown-it-task-lists'
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-  title: 'rmk',
+  title: 'RMK',
   description: 'RMK keyboard firmware',
   head: [['link', { rel: 'icon', href: '/images/rmk_logo.svg' }]],
   rewrites: {
@@ -190,7 +190,6 @@ function sidebarGuide() {
         { text: 'Vial Support', link: 'features/vial_support' },
         { text: 'Wireless', link: 'features/wireless' },
         { text: 'Low-Power', link: 'features/low_power' },
-        { text: 'Storage', link: 'features/storage' },
         { text: 'Split Keyboard', link: 'features/split_keyboard' },
         { text: 'USB Logging', link: 'features/usb_logging' },
         {

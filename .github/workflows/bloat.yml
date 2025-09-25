@@ -139,6 +139,7 @@ jobs:
             - pi_pico_w_ble_split
           example_type:
             - use_config
+            - use_rust
       outputs:
         size-results: ${{ steps.collect-sizes.outputs.size-results }}
       steps:

@@ -1,10 +1,12 @@
+use std::collections::HashMap;
+
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::{BoardConfig, ChipSeries, KeyboardTomlConfig, MatrixType, UniBodyConfig};
+use rmk_config::{BoardConfig, ChipSeries, KeyInfo, KeyboardTomlConfig, MatrixType, MorseProfile, UniBodyConfig};
 use syn::ItemMod;
 
-use crate::behavior::expand_behavior_config;
+use crate::behavior::{expand_behavior_config, expand_profile_name};
 use crate::bind_interrupt::expand_bind_interrupt;
 use crate::ble::expand_ble_config;
 use crate::chip_init::expand_chip_init;
@@ -35,6 +37,7 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
 
     let keyboard_config = read_keyboard_toml_config();
 
+    // Check "storage" feature gate
     if keyboard_config.get_storage_config().enabled != is_feature_enabled(&rmk_features, "storage") {
         if keyboard_config.get_storage_config().enabled {
             panic!(
@@ -43,6 +46,19 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
         } else {
             panic!(
                 "Storage is disabled. The \"storage\" cargo feature must also be disabled, by disabling default features for rmk in your Cargo.toml (and potentially re-adding col2row and defmt, as desired)"
+            )
+        }
+    }
+
+    // Check "vial" feature gate
+    if keyboard_config.rmk.vial_enabled != is_feature_enabled(&rmk_features, "vial") {
+        if keyboard_config.rmk.vial_enabled {
+            panic!(
+                "If the \"vial\" cargo feature is disabled, `rmk.vial_enabled` must be set to false in the keyboard.toml."
+            )
+        } else {
+            panic!(
+                "Storage is disabled. The \"vial\" cargo feature must also be disabled, by disabling default features for rmk in your Cargo.toml (and potentially re-adding col2row and defmt, as desired)"
             )
         }
     }
@@ -129,11 +145,17 @@ fn expand_main(
     let (controller_initializers, controllers) = expand_controller_init(keyboard_config, &item_mod);
     let run_rmk = expand_rmk_entry(keyboard_config, &item_mod, devices, processors, controllers);
 
+    let vial_config = if keyboard_config.rmk.vial_enabled {
+        quote! { vial_config: VIAL_CONFIG,}
+    } else {
+        quote! {}
+    };
+
     let rmk_config = if keyboard_config.get_storage_config().enabled {
         quote! {
             let rmk_config = ::rmk::config::RmkConfig {
                 usb_config: KEYBOARD_USB_CONFIG,
-                vial_config: VIAL_CONFIG,
+                #vial_config
                 storage_config,
                 #set_ble_config
                 ..Default::default()
@@ -143,7 +165,7 @@ fn expand_main(
         quote! {
             let rmk_config = ::rmk::config::RmkConfig {
                 usb_config: KEYBOARD_USB_CONFIG,
-                vial_config: VIAL_CONFIG,
+                #vial_config
                 #set_ble_config
                 ..Default::default()
             };
@@ -210,7 +232,32 @@ fn expand_main(
     }
 }
 
+// TODO: move this function to a separate folder
 pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
+    let (layout, key_info) = keyboard_config.get_layout_config().unwrap();
+    let profiles = &keyboard_config
+        .get_behavior_config()
+        .unwrap()
+        .morse
+        .and_then(|m| m.profiles);
+    let row = layout.rows as usize;
+    let col = layout.cols as usize;
+
+    let initialize_per_key_config = if key_info.is_empty()
+        || key_info.iter().all(|row| {
+            row.iter().all(|key| {
+                key.hand != 'L' && key.hand != 'l' && key.hand != 'R' && key.hand != 'r' && key.profile.is_none()
+            })
+        })
+        || key_info.len() != row
+        || key_info[0].len() != col
+    {
+        quote! { let mut per_key_config = ::rmk::config::PerKeyConfig::new(::core::option::Option::None); }
+    } else {
+        let key_info_config = expand_key_info(&key_info, profiles);
+        quote! { let mut per_key_config = ::rmk::config::PerKeyConfig::new(#key_info_config); }
+    };
+
     if keyboard_config.get_storage_config().enabled {
         let num_encoders = keyboard_config.get_board_config().unwrap().get_num_encoder();
         let total_num_encoders = num_encoders.iter().sum::<usize>();
@@ -222,6 +269,7 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
                     flash,
                     &rmk_config.storage_config,
                     &mut behavior_config,
+                    &mut per_key_config
                 )
             }
         } else {
@@ -233,6 +281,7 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
                     flash,
                     &rmk_config.storage_config,
                     &mut behavior_config,
+                    &mut per_key_config
                 )
             }
         };
@@ -245,6 +294,7 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
         };
         // Return the keymap and storage initialization code
         quote! {
+            #initialize_per_key_config
             let mut default_keymap = get_default_keymap();
             #default_encoder_keymap
             let (keymap, mut storage) =  #keymap_storage_init.await;
@@ -252,10 +302,12 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
     } else {
         // Return the keymap initialization code
         quote! {
+            #initialize_per_key_config
             let mut default_keymap = get_default_keymap();
             let keymap =  ::rmk::initialize_keymap(
                 &mut default_keymap,
                 &mut behavior_config,
+                &mut per_key_config
             ).await;
         }
     }
@@ -337,4 +389,38 @@ pub(crate) fn expand_matrix_and_keyboard_init(
         let mut keyboard = ::rmk::keyboard::Keyboard::new(&keymap);
         #matrix
     }
+}
+
+/// Push rows in the key_info
+fn expand_key_info(
+    info: &Vec<Vec<KeyInfo>>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> proc_macro2::TokenStream {
+    let mut rows = vec![];
+    for row in info {
+        rows.push(expand_key_info_row(row, profiles));
+    }
+    quote! { ::core::option::Option::Some([#(#rows), *]) }
+}
+
+/// Push keys info in the row
+fn expand_key_info_row(
+    row: &Vec<KeyInfo>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> proc_macro2::TokenStream {
+    let mut key_info = vec![];
+    for key in row {
+        let hand = match key.hand {
+            'l' | 'L' => quote! { rmk::config::Hand::Left },
+            'r' | 'R' => quote! { rmk::config::Hand::Right },
+            _ => quote! { rmk::config::Hand::Unknown },
+        };
+        if let Some(profile_name) = &key.profile {
+            let config = expand_profile_name(profile_name, profiles);
+            key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, morse_profile_override: #config } });
+        } else {
+            key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, morse_profile_override: rmk::types::action::MorseProfile::const_default() } });
+        };
+    }
+    quote! { [#(#key_info), *] }
 }

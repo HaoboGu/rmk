@@ -1,14 +1,22 @@
-# Configuration
+# Keyboard Configuration
 
-RMK provides an easy and accessible way to set up the keyboard with a toml config file, even without Rust code!
+RMK provides a simple and accessible way to configure your keyboard using a TOML configuration file, requiring no Rust programming knowledge!
 
-## Usage
+## Overview
 
-A `toml` file named `keyboard.toml` is used as the configuration file of RMK. The following is the spec of `toml` if you're unfamiliar with toml:
+Keyboard configuration in RMK is handled through a `keyboard.toml` file that defines all aspects of your keyboard setup. TOML is a human-readable configuration format that's easy to understand and edit.
 
+::: tip New to TOML?
+If you're unfamiliar with TOML syntax, check out the TOML Specification:
 - [English](https://toml.io/en/v1.0.0) / [中文](https://toml.io/cn/v1.0.0)
+:::
 
-RMK provides a proc-macro to load the `keyboard.toml` at your projects root: `#[rmk_keyboard]`, add it to your `main.rs` like:
+## Quick Setup
+
+Setting up your keyboard configuration is straightforward:
+
+1. Create a `keyboard.toml` file in your project root
+2. Add the RMK keyboard macro to your `main.rs`:
 
 ```rust
 use rmk::macros::rmk_keyboard;
@@ -17,27 +25,28 @@ use rmk::macros::rmk_keyboard;
 mod my_keyboard {}
 ```
 
-And, that's it! The `#[rmk_keyboard]` macro would load your `keyboard.toml` config and create everything that's needed for creating a RMK keyboard instance.
+That's it! The `#[rmk_keyboard]` macro automatically loads your `keyboard.toml` configuration and generates everything needed for your RMK keyboard.
 
-If you don't want any other customizations beyond the `keyboard.toml`, `#[rmk_keyboard]` macro will just work. For the examples, please check the [`example/use_config`](https://github.com/HaoboGu/rmk/tree/main/examples/use_config) folder.
+For complete examples, explore the [`examples/use_config`](https://github.com/HaoboGu/rmk/tree/main/examples/use_config) directory.
 
-## What's in the config file?
+## Configuration Sections
 
-The config file contains almost EVERYTHING to customize a keyboard. For the full reference of `keyboard.toml`, please refer to [**this doc**](configuration/appendix.md). Also, we have pre-defined default configurations for chips, at [`rmk-config/src/default_config`](https://github.com/HaoboGu/rmk/blob/main/rmk-config/src/default_config) folder. We're going to add default configurations for more chips, contributions are welcome!
+The `keyboard.toml` file contains comprehensive customization options for your keyboard. For the complete specification, refer to [**Configuration Reference**](configuration/appendix.md). 
 
-The following are the available tables and related documentaion available in `keyboard.toml`:
 
-- [Keyboard and matrix](configuration/keyboard_matrix.md): basic information and physical key matrix definition of the keyboard
-- [Layout](configuration/layout.md): layout and default keymap configuration of the keyboard
-- [Split keyboard](configuration/split_keyboard.md): split keyboard configuration
-- [Storage](configuration/storage.md): configuration for storage, which is used for on-board config and keymap
-- [Behavior](configuration/behavior.md): configuration for advanced keyboard behaviors, such as one-shot key, tri-layer, tap-hold(including HRM mode), etc.
-- [Input device](configuration/input_device.md): configuration for input devices, such as rotary encoder, joystick, etc.
-- [Wireless/Bluetooth](configuration/wireless.md): configuration for wireless/bluetooth
-- [Light](configuration/light.md): configuration for lights
-- [RMK config](configuration/rmk_config.md): internal configurations of RMK, such as length of communication channels, number of allowed macros, etc
-- [Appendix](configuration/appendix.md): full spec and references of the `keyboard.toml`
+### Available Configuration Sections
 
-## TODOs:
+The following sections can be configured in your `keyboard.toml`:
 
-- [ ] read vial.json and check whether vial.json is consist of keyboard.toml
+- **[Keyboard and Matrix](configuration/keyboard_matrix.md)** - Basic keyboard information and physical key matrix definition
+- **[Layout](configuration/layout.md)** - Keyboard layout and default keymap configuration  
+- **[Split Keyboard](configuration/split_keyboard.md)** - Configuration for split keyboard setups
+- **[Storage](configuration/storage.md)** - On-board configuration and keymap storage settings
+- **[Behavior](configuration/behavior.md)** - Advanced keyboard behaviors (one-shot keys, tri-layer, tap-hold, morse key, home row mods, etc.)
+- **[Input Devices](configuration/input_device.md)** - Configuration for rotary encoders, joysticks, and other input devices
+- **[Wireless/Bluetooth](configuration/wireless.md)** - Wireless and Bluetooth connectivity settings
+- **[Lighting](configuration/light.md)** - RGB lighting and LED configuration
+- **[RMK Config](configuration/rmk_config.md)** - Internal RMK settings (communication channels, macro limits, etc.)
+- **[Complete Reference](configuration/appendix.md)** - Full specification and examples for `keyboard.toml`
+
+We also provide pre-configured templates for popular microcontroller chips in the [`rmk-config/src/default_config`](https://github.com/HaoboGu/rmk/blob/main/rmk-config/src/default_config) directory. You can use then when generating project using [rmkit](https://github.com/HaoboGu/rmkit). Contributions for additional chip configurations are welcome!

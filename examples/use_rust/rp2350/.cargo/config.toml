@@ -5,6 +5,9 @@
 # Need `brew install picotool`
 runner = "picotool load -u -v -x -t elf"
 
+# Use flip-link overflow check: https://github.com/knurling-rs/flip-link
+linker = "flip-link"
+
 
 [build]
 target = "thumbv8m.main-none-eabihf"

@@ -13,6 +13,7 @@ fn one_shot_config_with_short_timeout() -> OneShotConfig {
 mod one_shot_test {
     use std::cell::RefCell;
 
+    use rmk::config::PerKeyConfig;
     use rmk::keyboard::Keyboard;
     use rmk::keymap::KeyMap;
     use rmk::types::action::KeyAction;
@@ -46,7 +47,9 @@ mod one_shot_test {
     fn create_test_keyboard() -> Keyboard<'static, 1, 6, 2> {
         static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
         let behavior_config = BEHAVIOR_CONFIG.init(BehaviorConfig::default());
-        let keymap: &RefCell<KeyMap<1, 6, 2>> = wrap_keymap(KEYMAP, behavior_config);
+        static KEY_CONFIG: static_cell::StaticCell<PerKeyConfig<1, 6>> = static_cell::StaticCell::new();
+        let per_key_config = KEY_CONFIG.init(PerKeyConfig::default());
+        let keymap: &RefCell<KeyMap<1, 6, 2>> = wrap_keymap(KEYMAP, per_key_config, behavior_config);
         Keyboard::new(keymap)
     }
 
@@ -57,7 +60,9 @@ mod one_shot_test {
             one_shot: one_shot_config_with_short_timeout(),
             ..BehaviorConfig::default()
         });
-        let keymap: &RefCell<KeyMap<1, 6, 2>> = wrap_keymap(KEYMAP, behavior_config);
+        static KEY_CONFIG: static_cell::StaticCell<PerKeyConfig<1, 6>> = static_cell::StaticCell::new();
+        let per_key_config = KEY_CONFIG.init(PerKeyConfig::default());
+        let keymap: &RefCell<KeyMap<1, 6, 2>> = wrap_keymap(KEYMAP, per_key_config, behavior_config);
         Keyboard::new(keymap)
     }
 
@@ -130,6 +135,23 @@ mod one_shot_test {
                     [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift
                     [0, [0, 0, 0, 0, 0, 0]], // All released
                     [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // B without LShift
+                    [0, [0, 0, 0, 0, 0, 0]], // All released
+                ]
+            };
+        }
+
+        #[test]
+        fn test_osm_rolling_with_tap_hold() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard(),
+                sequence: [
+                    [0, 0, true, 10],   // Press OSM LShift
+                    [0, 3, true, 10],   // Press B (should not have shift)
+                    [0, 0, false, 10],  // Release OSM LShift
+                    [0, 3, false, 10],  // Release B
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // A with LShift
                     [0, [0, 0, 0, 0, 0, 0]], // All released
                 ]
             };

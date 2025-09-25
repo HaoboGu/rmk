@@ -1,180 +1,146 @@
-# Input devices
+# Input Device Framework
 
-The definition of input devices varies, but for RMK, we focus on two categories: keys and sensors.
+RMK's input device framework provides a flexible and extensible way to handle various input sources beyond traditional key matrices. This document explains how the framework works and how to implement custom input devices.
 
-- Keys are straightforward — they are essentially switches with two states (pressed/released).
-- Sensors are more complex devices that can produce various types of data, such as joysticks, mice, trackpads, and trackballs.
+## Overview
 
-## Events
+The input device system enables RMK to work with diverse input sources through a unified trait-based architecture:
 
-The event from input devices are defined in `rmk/src/event.rs`. The `Event` is an enum with many variants, but in RMK, there are two types of `Event`:
+- **InputDevice trait** - For hardware that generates input events
+- **InputProcessor trait** - For processing and converting events to HID reports
+- **Event system** - Type-safe event routing through channels
+- **Macro support** - Convenient macros for running devices concurrently
 
-- `KeyboardEvent`: `KeyboardEvent` is the event processed by built-in `Keyboard` with default key processing logic. `Key` and `RotaryEncoder` are now processed as `KeyboardEvent`.
-- Other Events: All other events in the system, such as events from joystick or trackpad. For those events, a custom `Processor` is needed for processing the event.
+## Framework Architecture
 
-## Usage
+The framework follows this data flow:
 
-RMK uses a standard pattern for running the entire system:
+1. **Input Devices** read physical hardware and generate `Event`s
+2. **Events** are sent through channels (KEY_EVENT_CHANNEL for keyboard events, EVENT_CHANNEL for others)
+3. **Input Processors** receive events and convert them into HID reports
+4. **HID Reports** are transmitted via USB/BLE through KEYBOARD_REPORT_CHANNEL
+
+## Event System
+
+### Event Types
+
+Events are defined in `rmk/src/event.rs` with the `Event` enum:
 
 ```rust
-// Create an adc input device and a battery processor which processes adc's event
-let mut adc_device = NrfAdc::new(
-    saadc,
-    [AnalogEventType::Battery],
-    embassy_time::Duration::from_secs(12),
-    None,
-);
-let mut batt_processor = BatteryProcessor::new(2000, 2806, &keymap);
-
-// Start the system with three concurrent tasks
-join3(
-    // Run all input devices and send events to EVENT_CHANNEL
-    run_devices! (
-        (matrix, encoder, adc_device) => EVENT_CHANNEL,
-    ),
-    // Use `encoder_processor` to process the events.
-    run_processor_chain! {
-        rmk::channel::EVENT_CHANNEL => [batt_processor],
-    },
-    // Run the keyboard processor
-    keyboard.run(),
-    // Run the remaining parts of RMK system
-    run_rmk(&keymap, driver, storage, rmk_config),
-)
-.await;
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum Event {
+    /// Standard keyboard events (keys, rotary encoders)
+    Key(KeyboardEvent),
+    /// Multi-touch touchpad events
+    Touchpad(TouchpadEvent),
+    /// Joystick events with x,y,z axes
+    Joystick([AxisEvent; 3]),
+    /// Stream of axis events for variable-axis devices
+    AxisEventStream(AxisEvent),
+    /// Battery percentage event
+    Battery(u16),
+    /// Charging state changed event
+    ChargingState(bool),
+    /// End-of-stream marker for AxisEventStream
+    Eos,
+    /// Custom event with 16-byte payload
+    Custom([u8; 16]),
+}
 ```
 
-Notes:
+### Event Routing
 
-- If the input devices emit only `KeyboardEvent`, use only `run_device!((matrix, device) => EVENT_CHANNEL))` is enough, no `run_processor_chain` is needed. Because all `KeyboardEvent`s are automatically processed by `Keyboard`
-- `EVENT_CHANNEL` are built-in, you can also use your own local channels
-- The events are processed in a chained way, until the processor's `process()` returns `ProcessResult::Stop`. So the order of processors in the `run_processor_chain` matters
-- For advanced use cases, developers can define custom events and procesors to fully control the input logic
-- The keyboard is special -- it receives events only from `KEY_EVENT_CHANNEL` and processes `KeyboardEvent`s only. `KeyboardEvent` from ALL devices are handled by the `Keyboard` processor, then the other events are dispatched to binded processors
+- **KeyboardEvent**: Automatically routed to KEY_EVENT_CHANNEL and processed by the built-in Keyboard processor
+- **Other Events**: Sent to EVENT_CHANNEL and require custom processors for handling
 
-## Implementation new devices
+## Core Traits
 
-RMK's input device framework is designed to provide a simple yet extensible way to handle both keys and sensors. Below is an overview of the framework:
+### InputDevice Trait
 
-![input_device_framework](/images/input_device_framework.excalidraw.svg)
-
-To implement a new input device in RMK, you need to:
-
-1. Create a struct for your device that implements the `InputDevice` trait
-2. Define how it generates events by implementing the `read_event()` method
-3. Use it with `run_devices!` to integrate into RMK's event system
-
-## Input device trait
-
-Input devices such as key matrices or sensors read physical devices and generate events. All input devices in RMK should implement the `InputDevice` trait:
+All input devices must implement this trait:
 
 ```rust
 pub trait InputDevice {
-    /// Read the raw input event
+    /// Read raw input events from the device
     async fn read_event(&mut self) -> Event;
 }
 ```
 
-This trait is used with the `run_devices!` macro to collect events from multiple input devices and send them to a specified channel:
+**Example Implementation (Rotary Encoder):**
 
 ```rust
-// Send events from matrix to EVENT_CHANNEL
-run_devices! (
-    (matrix) => EVENT_CHANNEL,
-)
-```
+impl<A, B, P> InputDevice for RotaryEncoder<A, B, P>
+where
+    A: InputPin + Wait,  // When async_matrix feature is enabled
+    B: InputPin + Wait,
+    P: Phase,
+{
+    async fn read_event(&mut self) -> Event {
+        // Handle pending release event first
+        if let Some(last_action) = self.last_action {
+            embassy_time::Timer::after_millis(5).await;
+            let e = Event::Key(KeyboardEvent::rotary_encoder(self.id, last_action, false));
+            self.last_action = None;
+            return e;
+        }
 
-> Why `run_devices!`?
->
-> Currently, embassy-rs does not support generic tasks. The only option is to join all tasks together to handle multiple input devices concurrently. The `run_devices!` macro helps accomplish this efficiently.
+        loop {
+            // Wait for pin changes asynchronously
+            #[cfg(feature = "async_matrix")]
+            {
+                let (pin_a, pin_b) = self.pins();
+                embassy_futures::select::select(
+                    pin_a.wait_for_any_edge(), 
+                    pin_b.wait_for_any_edge()
+                ).await;
+            }
 
-## Runnable trait
+            let direction = self.update();
+            if direction != Direction::None {
+                self.last_action = Some(direction);
+                return Event::Key(KeyboardEvent::rotary_encoder(self.id, direction, true));
+            }
 
-For components that need to run continuously in a task, RMK provides the `Runnable` trait:
-
-```rust
-pub trait Runnable {
-    async fn run(&mut self);
+            // Prevent busy-loop when not using async
+            #[cfg(not(feature = "async_matrix"))]
+            embassy_time::Timer::after_millis(20).await;
+        }
+    }
 }
 ```
 
-The `Keyboard` type implements this trait to process events and generate reports.
+### InputProcessor Trait
 
-## Event Types
-
-RMK provides a default `Event` enum that is compatible with built-in `InputProcessor`s:
+Custom processors handle non-keyboard events:
 
 ```rust
-#[non_exhaustive]
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum Event {
-    /// Keyboard event
-    Key(KeyboardEvent),
-    /// Multi-touch touchpad
-    Touchpad(TouchpadEvent),
-    /// Joystick, suppose we have x,y,z axes for this joystick
-    Joystick([AxisEvent; 3]),
-    /// An AxisEvent in a stream of events. The receiver should keep receiving events until it receives [`Eos`] event.
-    AxisEventStream(AxisEvent),
-    /// End of the event sequence
-    ///
-    /// This is used with [`AxisEventStream`] to indicate the end of the event sequence.
-    Eos,
-}
-```
-
-The `Event` enum aims to cover raw outputs from common input devices. It also provides a stream-like axis event representation via `AxisEventStream` for devices with a variable number of axes. When using `AxisEventStream`, the `Eos` event must be sent to indicate the end of the sequence.
-
-## Input Processor Trait
-
-Input processors receive events from input devices, process them, and convert the results into HID reports for USB/BLE transmission. All input processors must implement the `InputProcessor` trait:
-
-```rust
-pub trait InputProcessor {
-    /// Process the incoming events, convert them to HID report [`Report`],
-    /// then send the report to the USB/BLE.
-    ///
-    /// Note there might be multiple HID reports are generated for one event,
-    /// so the "sending report" operation should be done in the `process` method.
-    /// The input processor implementor should be aware of this.
-    async fn process(&mut self, event: Event);
-
-    /// Send the processed report.
+pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0> {
+    /// Process incoming events and return processing result
+    async fn process(&mut self, event: Event) -> ProcessResult;
+    
+    /// Send processed reports (default implementation provided)
     async fn send_report(&self, report: Report) {
         KEYBOARD_REPORT_CHANNEL.send(report).await;
     }
+    
+    /// Get the current keymap
+    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>;
 }
 ```
 
-The `process` method is responsible for processing input events and sending HID reports through the report channel. All processors share a common keymap state through `&'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>`.
-
-
-# Input Devices
-
-RMK supports various input devices beyond just key matrices. The input system consists of two main components:
-
-### Input Device Trait
-
-Each input device must implement the `InputDevice` trait, which requires:
-
-- A `read_event()` method to read raw input events
-
-Example implementation:
-
+**ProcessResult enum:**
 ```rust
-struct MyEncoder;
-impl InputDevice for MyEncoder {
-    async fn read_event(&mut self) -> Event {
-        // Read encoder and return events
-        embassy_time::Timer::after_secs(1).await;
-        Event::Key(KeyboardEvent::rotary_encoder(self.id, direction, true));
-    }
+pub enum ProcessResult {
+    /// Continue processing the event with the next processor
+    Continue(Event),
+    /// Stop processing this event
+    Stop,
 }
 ```
 
 ### Runnable Trait
 
-For components that need to continuously run in the background, RMK provides the `Runnable` trait:
+For components that run continuously:
 
 ```rust
 pub trait Runnable {
@@ -182,52 +148,259 @@ pub trait Runnable {
 }
 ```
 
-The `Keyboard` type implements this trait to process events and generate reports.
+The built-in `Keyboard` processor implements this trait and handles all KeyboardEvent processing.
 
-## Input Processors
+## System Integration
 
-Input processors handle events from input devices and convert them into HID reports. A processor:
+### Basic Setup (Keyboard Events Only)
 
-- Receives events from one or more input devices
-- Processes those events into HID reports
-- Sends the reports to USB/BLE
-
-The `InputProcessor` trait defines this behavior with:
-
-- A `process()` method to convert events to reports
-- A `send_report()` method to send processed reports
-
-### Built-in Event Types
-
-RMK provides several built-in event types through the `Event` enum:
-
-- `Key` - Standard keyboard key events
-- `RotaryEncoder` - Rotary encoder rotation events
-- `Touchpad` - Multi-touch touchpad events
-- `Joystick` - Joystick axis events
-- `AxisEventStream` - Stream of axis events for complex input devices
-
-### Running Devices, Processors and RMK
-
-RMK provides a standardized approach for running the entire system with multiple components:
+For keyboards that only generate keyboard events (most common case):
 
 ```rust
-// Start the system with three concurrent tasks
+use rmk::{run_devices, run_rmk};
+use rmk::channel::EVENT_CHANNEL;
+use rmk::futures::future::join3;
+
 join3(
-    // Task 1: Run all input devices and send events to EVENT_CHANNEL
+    // Run input devices
     run_devices! (
-        (matrix, encoder) => EVENT_CHANNEL,
+        (matrix) => EVENT_CHANNEL,
     ),
-    // Task 2: Run the keyboard processor
+    // Run keyboard processor
     keyboard.run(),
-    // Task 3: Run the main RMK system
-    run_rmk(&keymap, driver, storage, rmk_config),
-)
-.await;
+    // Run RMK system
+    run_rmk(&keymap, driver, &mut storage, rmk_config),
+).await;
 ```
 
-This pattern is used across all RMK examples and provides a clean way to:
+### Advanced Setup (Custom Processors)
 
-1. Read events from input devices and send them to a channel
-2. Process those events with a keyboard processor
-3. Handle all RMK system functionality in parallel
+For devices requiring custom processing:
+
+```rust
+use rmk::{run_devices, run_processor_chain};
+
+join3(
+    // Run all input devices
+    run_devices! (
+        (matrix, battery_reader) => EVENT_CHANNEL,
+    ),
+    // Process events through custom processor chain
+    run_processor_chain! {
+        EVENT_CHANNEL => [battery_processor]
+    },
+    // Run keyboard and RMK system
+    join(keyboard.run(), run_rmk(&keymap, driver, &mut storage, rmk_config)),
+).await;
+```
+
+## Built-in Input Devices
+
+RMK includes several built-in input devices:
+
+### Matrix
+The standard keyboard matrix scanner that generates KeyboardEvent for key presses and releases.
+
+### Rotary Encoder
+RMK provides a comprehensive rotary encoder implementation with multiple phase detection algorithms:
+
+```rust
+use rmk::input_device::rotary_encoder::{RotaryEncoder, DefaultPhase};
+
+// Basic encoder with default phase detection
+let encoder = RotaryEncoder::new(pin_a, pin_b, encoder_id);
+
+// Encoder with custom resolution and direction
+let encoder = RotaryEncoder::with_resolution(pin_a, pin_b, resolution, reverse, encoder_id);
+```
+
+**Supported Phase Algorithms:**
+- `DefaultPhase` - Standard quadrature decoding
+- `E8H7Phase` - Optimized for E8H7 encoder type
+- `ResolutionPhase` - Configurable resolution with pulse counting
+
+### Battery Monitoring
+Built-in battery monitoring through ADC and charging state detection:
+
+```rust
+use rmk::input_device::battery::{ChargingStateReader, BatteryProcessor};
+
+// Charging state reader
+let charging_reader = ChargingStateReader::new(charging_pin, low_active);
+
+// Battery processor for ADC values
+let battery_processor = BatteryProcessor::new(adc_measured, adc_total, &keymap);
+```
+
+## Creating Custom Input Devices
+
+### Step 1: Define Your Device Struct
+
+```rust
+use rmk::input_device::InputDevice;
+use rmk::event::Event;
+
+pub struct CustomSensor {
+    adc: MyAdc,
+    threshold: u16,
+    last_value: u16,
+}
+
+impl CustomSensor {
+    pub fn new(adc: MyAdc, threshold: u16) -> Self {
+        Self {
+            adc,
+            threshold,
+            last_value: 0,
+        }
+    }
+}
+```
+
+### Step 2: Implement InputDevice Trait
+
+```rust
+impl InputDevice for CustomSensor {
+    async fn read_event(&mut self) -> Event {
+        loop {
+            let current_value = self.adc.read().await.unwrap_or(0);
+            
+            // Only generate events when value changes significantly
+            if (current_value as i32 - self.last_value as i32).abs() > self.threshold as i32 {
+                self.last_value = current_value;
+                return Event::Custom([
+                    current_value as u8,
+                    (current_value >> 8) as u8,
+                    // ... fill remaining bytes as needed
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                ]);
+            }
+            
+            // Wait before next reading
+            embassy_time::Timer::after_millis(100).await;
+        }
+    }
+}
+```
+
+## Creating Custom Processors
+
+### Step 1: Define Your Processor
+
+```rust
+use rmk::input_device::{InputProcessor, ProcessResult};
+use core::cell::RefCell;
+
+pub struct CustomProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, 0>>,
+}
+
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> 
+    CustomProcessor<'a, ROW, COL, NUM_LAYER> 
+{
+    pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, 0>>) -> Self {
+        Self { keymap }
+    }
+}
+```
+
+### Step 2: Implement InputProcessor Trait
+
+```rust
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> 
+    InputProcessor<'a, ROW, COL, NUM_LAYER> for CustomProcessor<'a, ROW, COL, NUM_LAYER>
+{
+    async fn process(&mut self, event: Event) -> ProcessResult {
+        match event {
+            Event::Custom(data) => {
+                // Process custom event
+                let value = data[0] as u16 | ((data[1] as u16) << 8);
+                
+                // Convert to mouse movement or other HID report
+                if value > 100 {
+                    let mouse_report = MouseReport {
+                        x: (value / 10) as i8,
+                        y: 0,
+                        buttons: 0,
+                        wheel: 0,
+                        pan: 0,
+                    };
+                    
+                    self.send_report(Report::Mouse(mouse_report)).await;
+                }
+                
+                // Stop processing this event
+                ProcessResult::Stop
+            }
+            _ => {
+                // Let other processors handle this event
+                ProcessResult::Continue(event)
+            }
+        }
+    }
+
+    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, 0>> {
+        self.keymap
+    }
+}
+```
+
+## Advanced Patterns
+
+### Multiple Device Types
+
+Run different types of input devices together:
+
+```rust
+run_devices! (
+    (matrix, encoder1, encoder2) => EVENT_CHANNEL,
+    (battery_reader, custom_sensor) => EVENT_CHANNEL,
+)
+```
+
+### Processor Chains
+
+Chain multiple processors for complex event handling:
+
+```rust
+run_processor_chain! {
+    EVENT_CHANNEL => [sensor_processor, battery_processor, custom_processor]
+}
+```
+
+Events are processed in order. If any processor returns `ProcessResult::Stop`, the chain stops for that event.
+
+### Channel Routing
+
+Use different channels for different event types:
+
+```rust
+use rmk::channel::{Channel, blocking_mutex::raw::NoopRawMutex};
+
+// Create custom channel
+static SENSOR_CHANNEL: Channel<NoopRawMutex, Event, 8> = Channel::new();
+
+run_devices! (
+    (matrix) => EVENT_CHANNEL,           // Standard keyboard events
+    (sensors) => SENSOR_CHANNEL,         // Custom sensor events
+)
+```
+
+## Key Concepts
+
+### Event Channels
+- **KEY_EVENT_CHANNEL**: Automatically used for KeyboardEvent by run_devices! macro
+- **EVENT_CHANNEL**: Default channel for non-keyboard events
+- **KEYBOARD_REPORT_CHANNEL**: Output channel for all HID reports
+
+### Async Design
+All input devices run as separate async tasks, enabling:
+- Non-blocking I/O with hardware
+- Concurrent processing of multiple input sources
+- Efficient resource utilization
+
+### Macro Magic
+The `run_devices!` macro automatically:
+- Routes KeyboardEvent to KEY_EVENT_CHANNEL
+- Handles channel overflow by dropping oldest events
+- Joins all device tasks concurrently

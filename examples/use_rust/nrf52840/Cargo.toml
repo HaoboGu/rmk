@@ -13,8 +13,8 @@ license = "MIT OR Apache-2.0"
 rmk = { path = "../../../rmk", features = ["col2row"] }
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7.5"
-embassy-time = { version = "0.4", features = ["tick-hz-32_768", "defmt"] }
-embassy-nrf = { version = "0.6", features = [
+embassy-time = { version = "0.5", features = ["tick-hz-32_768", "defmt"] }
+embassy-nrf = { version = "0.7", features = [
     "defmt",
     "nrf52840",
     "time-driver-rtc1",
@@ -22,7 +22,7 @@ embassy-nrf = { version = "0.6", features = [
     "unstable-pac",
     "time",
 ] }
-embassy-executor = { version = "0.8", features = [
+embassy-executor = { version = "0.9", features = [
     "defmt",
     "arch-cortex-m",
     "executor-thread",
@@ -30,9 +30,6 @@ embassy-executor = { version = "0.8", features = [
 defmt = "1.0"
 defmt-rtt = "1.0"
 panic-probe = { version = "1.0", features = ["print-defmt"] }
-
-[patch.crates-io]
-embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 
 
 [build-dependencies]

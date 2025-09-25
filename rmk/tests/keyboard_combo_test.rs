@@ -6,6 +6,7 @@ use rmk::combo::Combo;
 use rmk::config::CombosConfig;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{k, osm};
+use rmk_types::action::MorseProfile;
 
 // Get tested combo config
 pub fn get_combos_config() -> CombosConfig {
@@ -54,10 +55,10 @@ pub fn get_combos_config() -> CombosConfig {
 }
 
 mod combo_test {
-    use rmk::config::{BehaviorConfig, OneShotConfig, TapHoldConfig};
-    use rmk::morse::MorseMode;
+    use rmk::config::{BehaviorConfig, MorsesConfig, OneShotConfig};
     use rmk::th;
     use rmk::types::keycode::KeyCode;
+    use rmk_types::action::MorseMode;
     use rusty_fork::rusty_fork_test;
 
     use super::*;
@@ -182,11 +183,14 @@ mod combo_test {
             key_sequence_test! {
                 keyboard: {
                     let behavior_config = BehaviorConfig {
-                        tap_hold: TapHoldConfig {
-                            enable_hrm: true,
-                            mode: MorseMode::PermissiveHold,
-                            unilateral_tap: false,
-                            ..TapHoldConfig::default()
+                        morse: MorsesConfig {
+                            default_profile: MorseProfile::new(
+                                Some(false),
+                                Some(MorseMode::PermissiveHold),
+                                Some(250u16),
+                                Some(250u16)
+                            ),
+                            ..Default::default()
                         },
                         combo: CombosConfig {
                             combos: heapless::Vec::from_iter([
@@ -198,7 +202,7 @@ mod combo_test {
                             ]),
                             timeout: Duration::from_millis(50),
                         },
-                        ..BehaviorConfig::default()
+                        ..Default::default()
                     };
                     create_test_keyboard_with_config(behavior_config)
                 },

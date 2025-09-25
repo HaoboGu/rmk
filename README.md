@@ -47,6 +47,10 @@
 
 <img src="https://raw.githubusercontent.com/whitelynx/dactyl-lynx-keyboard/refs/heads/main/resources/skeleton-prototype.jpg" width="60%">
 
+### [sessile](https://github.com/willpuckett/sessile)
+
+<img src="https://raw.githubusercontent.com/HaoboGu/rmk/refs/heads/main/docs/images/sessile.png" width="60%">
+
 ## Getting Started
 
 ### Option 1: Start with a Template

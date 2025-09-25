@@ -1,5 +1,7 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
 runner = "probe-rs run --chip STM32F103CB"
+
+# Use flip-link overflow check: https://github.com/knurling-rs/flip-link
 linker = "flip-link"
 
 [build]
@@ -7,3 +9,7 @@ target = "thumbv7m-none-eabi"        # Cortex-M3
 
 [env]
 DEFMT_LOG = "error"
+
+[unstable]
+build-std = ["core"]
+build-std-features = ["panic_immediate_abort"]

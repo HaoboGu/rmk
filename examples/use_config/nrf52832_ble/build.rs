@@ -52,9 +52,6 @@ fn main() {
 
     // Set the extra linker script from defmt
     println!("cargo:rustc-link-arg=-Tdefmt.x");
-
-    // Use flip-link overflow check: https://github.com/knurling-rs/flip-link
-    println!("cargo:rustc-linker=flip-link");
 }
 
 fn generate_vial_config() {

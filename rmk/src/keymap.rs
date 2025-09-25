@@ -1,22 +1,23 @@
-#[cfg(feature = "storage")]
-use embedded_storage_async::nor_flash::NorFlash;
 use rmk_types::action::{EncoderAction, KeyAction};
 #[cfg(feature = "controller")]
 use {
     crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
     crate::event::ControllerEvent,
 };
+#[cfg(all(feature = "storage", feature = "host"))]
+use {
+    crate::{boot::reboot_keyboard, storage::Storage},
+    embedded_storage_async::nor_flash::NorFlash,
+};
 
 use crate::COMBO_MAX_NUM;
 use crate::combo::Combo;
-use crate::config::BehaviorConfig;
+use crate::config::{BehaviorConfig, PerKeyConfig};
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
-#[cfg(feature = "matrix_tester")]
+#[cfg(feature = "vial_lock")]
 use crate::matrix::MatrixState;
-#[cfg(feature = "storage")]
-use crate::{boot::reboot_keyboard, storage::Storage};
 
 /// Keymap represents the stack of layers.
 ///
@@ -37,11 +38,12 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     encoder_layer_cache: [[u8; 2]; NUM_ENCODER],
     /// Options for configurable action behavior
     pub(crate) behavior: &'a mut BehaviorConfig,
+    pub key_config: &'a mut PerKeyConfig<ROW, COL>,
     /// Publisher for controller channel
     #[cfg(feature = "controller")]
     controller_pub: ControllerPub,
     /// Matrix state
-    #[cfg(feature = "matrix_tester")]
+    #[cfg(feature = "vial_lock")]
     pub(crate) matrix_state: MatrixState<ROW, COL>,
 }
 
@@ -64,6 +66,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         behavior: &'a mut BehaviorConfig,
+        key_info: &'a mut PerKeyConfig<ROW, COL>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
 
@@ -83,18 +86,21 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             layer_cache: [[0; COL]; ROW],
             encoder_layer_cache: [[0; 2]; NUM_ENCODER],
             behavior,
+            key_config: key_info,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
-            #[cfg(feature = "matrix_tester")]
+            #[cfg(feature = "vial_lock")]
             matrix_state: MatrixState::new(),
         }
     }
-    #[cfg(feature = "storage")]
+
+    #[cfg(all(feature = "storage", feature = "host"))]
     pub async fn new_from_storage<F: NorFlash>(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
         behavior: &'a mut BehaviorConfig,
+        key_config: &'a mut PerKeyConfig<ROW, COL>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
         fill_vec(&mut behavior.combo.combos);
@@ -140,9 +146,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             layer_cache: [[0; COL]; ROW],
             encoder_layer_cache: [[0; 2]; NUM_ENCODER],
             behavior,
+            key_config,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
-            #[cfg(feature = "matrix_tester")]
+            #[cfg(feature = "vial_lock")]
             matrix_state: MatrixState::new(),
         }
     }

@@ -1,5 +1,4 @@
 name: Build firmware according to user config file
-
 on:
   workflow_call:
     inputs:
@@ -13,7 +12,8 @@ on:
         default: "vial.json"
         required: false
         type: string
-
+env:
+  LIBSSL: "libssl1.1_1.1.1f-1ubuntu2_amd64.deb"
 jobs:
   get_chip_name:
     runs-on: ubuntu-latest
@@ -21,10 +21,17 @@ jobs:
       chip_name: ${{ steps.capture.outputs.chip_name }}
     steps:
       - uses: cargo-bins/cargo-binstall@main
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            libssl*.deb
+          key: ${{ runner.os }}-libssl
       - name: Install libssl
-        run: wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb && sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
-      - name: Install rmkit 
+        run: |
+          [ ! -f $LIBSSL ] && wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/$LIBSSL
+          sudo dpkg -i $LIBSSL
+      - name: Install rmkit
         run: cargo binstall rmkit -y
       - name: Get chip name
         id: capture
@@ -37,16 +44,22 @@ jobs:
 
           # Save the output as a GitHub Actions output variable
           echo "chip_name=$OUTPUT" >> $GITHUB_OUTPUT
-
   build:
     runs-on: ubuntu-latest
     needs: get_chip_name
     if: needs.get_chip_name.outputs.chip_name != 'esp32s3'
     steps:
       - uses: cargo-bins/cargo-binstall@main
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            libssl*.deb
+          key: ${{ runner.os }}-libssl
       - name: Install libssl
-        run: wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb && sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+        run: |
+          [ ! -f $LIBSSL ] && wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/$LIBSSL
+          sudo dpkg -i $LIBSSL
       - name: Install rmkit, flip-link and cargo-make
         run: cargo binstall cargo-make rmkit flip-link -y
       - name: Create firmware project
@@ -74,9 +87,16 @@ jobs:
     if: needs.get_chip_name.outputs.chip_name == 'esp32s3'
     steps:
       - uses: cargo-bins/cargo-binstall@main
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            libssl*.deb
+          key: ${{ runner.os }}-libssl
       - name: Install libssl
-        run: wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb && sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+        run: |
+          [ ! -f $LIBSSL ] && wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/$LIBSSL
+          sudo dpkg -i $LIBSSL
       - name: Install rmkit, espflash and espup
         run: cargo binstall rmkit espflash espup -y
       - name: Prepare esp environment
@@ -86,7 +106,7 @@ jobs:
         run: rmkit create --keyboard-toml-path ${{ inputs.keyboard_toml_path }} --vial-json-path ${{ inputs.vial_json_path }} --target-dir rmk
       - name: Build firmware for esp32
         working-directory: ./rmk
-        run: . /home/runner/export-esp.sh && cargo +esp build --release 
+        run: . /home/runner/export-esp.sh && cargo +esp build --release
       - name: Get target arch
         id: arch
         run: |
@@ -120,4 +140,3 @@ jobs:
         with:
           name: firmware_bin
           path: rmk/*.bin
-

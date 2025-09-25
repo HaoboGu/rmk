@@ -11,7 +11,7 @@ pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
 
 pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
     let basic = keyboard_config.get_basic_info();
-    let layout = keyboard_config.get_layout_config().unwrap();
+    let (layout, _key_info) = keyboard_config.get_layout_config().unwrap();
     let board = keyboard_config.get_board_config().unwrap();
     let pid = basic.product_id;
     let vid = basic.vendor_id;
@@ -40,6 +40,9 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc
 }
 
 pub(crate) fn expand_vial_config(config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
+    if !config.rmk.vial_enabled {
+        return quote! {};
+    }
     let unlock_keys = if let Some(security_config) = &config.security {
         let keys_expr = security_config
             .unlock_keys
