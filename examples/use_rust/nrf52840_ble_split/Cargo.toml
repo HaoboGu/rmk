@@ -17,18 +17,18 @@ rmk = { path = "../../../rmk", features = [
     "adafruit_bl",
     "controller",
 ] }
-nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "61be636", default-features = false, features = [
+nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "fac511c", default-features = false, features = [
     "defmt",
     "peripheral",
     "central",
     "nrf52840",
 ] }
-nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "61be636", default-features = false, features = [
+nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "fac511c", default-features = false, features = [
     "defmt",
     "critical-section-impl",
     "nrf52840",
 ] }
-bt-hci = { version = "0.5", default-features = false, features = ["defmt"] }
+bt-hci = { version = "0.6", default-features = false, features = ["defmt"] }
 
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.5"

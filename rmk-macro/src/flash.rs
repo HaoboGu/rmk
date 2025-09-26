@@ -32,7 +32,7 @@ pub(crate) fn expand_flash_init(keyboard_config: &KeyboardTomlConfig) -> TokenSt
                 let flash = ::embassy_rp::flash::Flash::<_, ::embassy_rp::flash::Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH1);
             },
             ChipSeries::Esp32 => quote! {
-                let flash = ::rmk::storage::async_flash_wrapper(::esp_storage::FlashStorage::new());
+                let flash = ::rmk::storage::async_flash_wrapper(::esp_storage::FlashStorage::new(p.FLASH));
             },
         }
     );

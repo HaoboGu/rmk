@@ -229,9 +229,9 @@ dependencies = [
 
 [[package]]
 name = "bt-hci"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9172c3df73e30f9bcbf80d0f5a4700fbc6d6771329142d05c06bb7ece7032c7"
+checksum = "bb938a3b4c5cc6c2409275bad789c0346a0495fa071a0acc5d72b9bd3175a2f7"
 dependencies = [
  "btuuid",
  "defmt 1.0.1",
@@ -551,15 +551,15 @@ dependencies = [
 [[package]]
 name = "cyw43"
 version = "0.5.0"
-source = "git+https://github.com/embassy-rs/embassy?rev=8394e13#8394e1320844f6a1342f1bff10215cfd4643fe3a"
+source = "git+https://github.com/embassy-rs/embassy?rev=faacad6#faacad613ea26a28de216cf32ac4cc64f7862d4c"
 dependencies = [
  "bt-hci",
  "cortex-m",
  "cortex-m-rt",
  "defmt 1.0.1",
- "embassy-futures 0.1.2 (git+https://github.com/embassy-rs/embassy?rev=8394e13)",
- "embassy-net-driver-channel 0.3.2 (git+https://github.com/embassy-rs/embassy?rev=8394e13)",
- "embassy-sync 0.7.2 (git+https://github.com/embassy-rs/embassy?rev=8394e13)",
+ "embassy-futures 0.1.2 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
+ "embassy-net-driver-channel 0.3.2 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
+ "embassy-sync 0.7.2 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
  "embassy-time",
  "embedded-hal 1.0.0",
  "embedded-io-async",
@@ -819,7 +819,7 @@ dependencies = [
 [[package]]
 name = "embassy-futures"
 version = "0.1.2"
-source = "git+https://github.com/embassy-rs/embassy?rev=8394e13#8394e1320844f6a1342f1bff10215cfd4643fe3a"
+source = "git+https://github.com/embassy-rs/embassy?rev=faacad6#faacad613ea26a28de216cf32ac4cc64f7862d4c"
 
 [[package]]
 name = "embassy-hal-internal"
@@ -842,7 +842,7 @@ checksum = "524eb3c489760508f71360112bca70f6e53173e6fe48fc5f0efd0f5ab217751d"
 [[package]]
 name = "embassy-net-driver"
 version = "0.2.0"
-source = "git+https://github.com/embassy-rs/embassy?rev=8394e13#8394e1320844f6a1342f1bff10215cfd4643fe3a"
+source = "git+https://github.com/embassy-rs/embassy?rev=faacad6#faacad613ea26a28de216cf32ac4cc64f7862d4c"
 
 [[package]]
 name = "embassy-net-driver-channel"
@@ -858,11 +858,11 @@ dependencies = [
 [[package]]
 name = "embassy-net-driver-channel"
 version = "0.3.2"
-source = "git+https://github.com/embassy-rs/embassy?rev=8394e13#8394e1320844f6a1342f1bff10215cfd4643fe3a"
+source = "git+https://github.com/embassy-rs/embassy?rev=faacad6#faacad613ea26a28de216cf32ac4cc64f7862d4c"
 dependencies = [
- "embassy-futures 0.1.2 (git+https://github.com/embassy-rs/embassy?rev=8394e13)",
- "embassy-net-driver 0.2.0 (git+https://github.com/embassy-rs/embassy?rev=8394e13)",
- "embassy-sync 0.7.2 (git+https://github.com/embassy-rs/embassy?rev=8394e13)",
+ "embassy-futures 0.1.2 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
+ "embassy-net-driver 0.2.0 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
+ "embassy-sync 0.7.2 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
 ]
 
 [[package]]
@@ -954,7 +954,7 @@ dependencies = [
 [[package]]
 name = "embassy-sync"
 version = "0.7.2"
-source = "git+https://github.com/embassy-rs/embassy?rev=8394e13#8394e1320844f6a1342f1bff10215cfd4643fe3a"
+source = "git+https://github.com/embassy-rs/embassy?rev=faacad6#faacad613ea26a28de216cf32ac4cc64f7862d4c"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -967,7 +967,7 @@ dependencies = [
 [[package]]
 name = "embassy-time"
 version = "0.5.0"
-source = "git+https://github.com/embassy-rs/embassy?rev=8394e13#8394e1320844f6a1342f1bff10215cfd4643fe3a"
+source = "git+https://github.com/embassy-rs/embassy?rev=faacad6#faacad613ea26a28de216cf32ac4cc64f7862d4c"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -983,7 +983,7 @@ dependencies = [
 [[package]]
 name = "embassy-time-driver"
 version = "0.2.1"
-source = "git+https://github.com/embassy-rs/embassy?rev=8394e13#8394e1320844f6a1342f1bff10215cfd4643fe3a"
+source = "git+https://github.com/embassy-rs/embassy?rev=faacad6#faacad613ea26a28de216cf32ac4cc64f7862d4c"
 dependencies = [
  "document-features",
 ]
@@ -3487,9 +3487,9 @@ dependencies = [
 
 [[package]]
 name = "trouble-host"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2bc4ea8620a551c1ec040e21e871de37d2c555d7179fe1fd7d0c167cf8faeb1"
+checksum = "78a852f6e193f71732ce3c33661fea2575ba3dac6f48bbe1713059373f96e864"
 dependencies = [
  "aes",
  "bt-hci",
@@ -3512,9 +3512,9 @@ dependencies = [
 
 [[package]]
 name = "trouble-host-macros"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab5c25c521a9a0cad8c62b86bd3ca9abd6c94842ecf62b64fc56f0d91bb1a426"
+checksum = "bcb85bec3a8393c22ca1a7c25c82c2d33689ab412f3487c492fd01a033ede7c2"
 dependencies = [
  "convert_case 0.8.0",
  "darling",
