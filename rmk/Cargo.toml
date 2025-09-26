@@ -54,14 +54,14 @@ paste = "1"
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { version = "0.3", features = [
+trouble-host = { version = "0.4", features = [
     "gatt",
     "scan",
     "derive",
     "security",
 ], optional = true }
 rand_core = { version = "0.6", optional = true }
-bt-hci = { version = "0.5", optional = true }
+bt-hci = { version = "0.6", optional = true }
 
 # nRF dependencies
 embassy-nrf = { version = "0.7", features = [
