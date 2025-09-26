@@ -72,6 +72,7 @@ pub static KEYCODE_ALIAS: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     add_alias!("Dot" = ".");
     add_alias!("Slash" = "slsh", "/");
     add_alias!("CapsLock" = "caps_lock", "caps");
+    add_alias!("CapsWordToggle" = "caps_word", "cword");
     add_alias!("F1");
     add_alias!("F2");
     add_alias!("F3");
