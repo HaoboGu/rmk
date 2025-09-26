@@ -121,6 +121,7 @@ When used in configuration files, all keycodes are case-insensitive.
 | Keycode | Aliases | Usage |
 |---------|---------|-------|
 | `CapsLock` | `caps_lock`, `caps` | Caps Lock |
+| `CapsWordToggle` | `caps_word`, `cword` | Activate Caps Lock for next word only |
 | `ScrollLock` | `scroll_lock`, `scrl`, `brmd` | Scroll Lock or Brightness Down on macOS |
 | `NumLock` | `num_lock`, `num` | Num Lock |
 | `LockingCapsLock` | `locking_caps_lock`, `lcap` | Locking Caps Lock |
