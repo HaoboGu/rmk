@@ -73,13 +73,13 @@ impl MorsePattern {
 /// The number of pairs is limited by MAX_PATTERNS_PER_KEY, which is a const generic parameter.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Morse {
+pub struct Morse<const NUM_PATTERNS: usize = MAX_PATTERNS_PER_KEY> {
     /// The profile of this morse key, which defines the timing parameters, etc.
     /// if some of its fields are filled with None, the positional override given in KeyInfo,
     /// or the defaults given in MorsesConfig will be used instead.
     pub profile: MorseProfile,
     /// The list of pattern -> action pairs, which can be triggered
-    pub actions: Vec<(MorsePattern, Action), MAX_PATTERNS_PER_KEY>,
+    pub actions: Vec<(MorsePattern, Action), NUM_PATTERNS>,
 }
 
 impl Default for Morse {

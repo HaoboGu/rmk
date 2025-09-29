@@ -1,5 +1,5 @@
 use heapless::Vec;
-use rmk::config::{BehaviorConfig, KeyInfo, MorsesConfig, PerKeyConfig};
+use rmk::config::{BehaviorConfig, KeyInfo, MorsesConfig, PositionalConfig};
 use rmk::keyboard::Keyboard;
 use rmk::morse::{Morse, MorsePattern};
 use rmk::types::action::Action;
@@ -46,8 +46,8 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard
 
     static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
     let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
-    static KEY_CONFIG: static_cell::StaticCell<PerKeyConfig<1, 5>> = static_cell::StaticCell::new();
-    let per_key_config = KEY_CONFIG.init(PerKeyConfig::default());
+    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 5>> = static_cell::StaticCell::new();
+    let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
     Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
 
@@ -91,7 +91,7 @@ pub fn create_morse_keyboard(
 
     static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
     let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
-    static KEY_CONFIG: static_cell::StaticCell<PerKeyConfig<1, 5>> = static_cell::StaticCell::new();
-    let per_key_config = KEY_CONFIG.init(PerKeyConfig::new(key_info));
+    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 5>> = static_cell::StaticCell::new();
+    let per_key_config = KEY_CONFIG.init(PositionalConfig::new(key_info));
     Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }

@@ -13,7 +13,7 @@ use embassy_stm32::usb::{Driver, InterruptHandler};
 use embassy_stm32::{Config, bind_interrupts};
 use keymap::{COL, ROW};
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, PerKeyConfig, RmkConfig};
+use rmk::config::{BehaviorConfig, PositionalConfig, RmkConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
@@ -48,7 +48,7 @@ async fn main(_spawner: Spawner) {
     let mut default_keymap = keymap::get_default_keymap();
     let mut behavior_config = BehaviorConfig::default();
     // let storage_config = StorageConfig::default();
-    let mut per_key_config = PerKeyConfig::default();
+    let mut per_key_config = PositionalConfig::default();
     let keymap = initialize_keymap(&mut default_keymap, &mut behavior_config, &mut per_key_config).await;
 
     // Initialize the matrix + keyboard

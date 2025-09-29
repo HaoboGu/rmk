@@ -6,7 +6,7 @@ use quote::quote;
 use rmk_config::{BoardConfig, ChipSeries, KeyInfo, KeyboardTomlConfig, MatrixType, MorseProfile, UniBodyConfig};
 use syn::ItemMod;
 
-use crate::behavior::{expand_behavior_config, expand_profile_name};
+use crate::behavior::expand_behavior_config;
 use crate::bind_interrupt::expand_bind_interrupt;
 use crate::ble::expand_ble_config;
 use crate::chip_init::expand_chip_init;
@@ -252,10 +252,10 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
         || key_info.len() != row
         || key_info[0].len() != col
     {
-        quote! { let mut per_key_config = ::rmk::config::PerKeyConfig::new(::core::option::Option::None); }
+        quote! { let mut per_key_config = ::rmk::config::PositionalConfig::default(); }
     } else {
         let key_info_config = expand_key_info(&key_info, profiles);
-        quote! { let mut per_key_config = ::rmk::config::PerKeyConfig::new(#key_info_config); }
+        quote! { let mut per_key_config = ::rmk::config::PositionalConfig::new(#key_info_config); }
     };
 
     if keyboard_config.get_storage_config().enabled {
@@ -406,7 +406,7 @@ fn expand_key_info(
 /// Push keys info in the row
 fn expand_key_info_row(
     row: &Vec<KeyInfo>,
-    profiles: &Option<HashMap<String, MorseProfile>>,
+    _profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> proc_macro2::TokenStream {
     let mut key_info = vec![];
     for key in row {
@@ -415,12 +415,7 @@ fn expand_key_info_row(
             'r' | 'R' => quote! { rmk::config::Hand::Right },
             _ => quote! { rmk::config::Hand::Unknown },
         };
-        if let Some(profile_name) = &key.profile {
-            let config = expand_profile_name(profile_name, profiles);
-            key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, morse_profile_override: #config } });
-        } else {
-            key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, morse_profile_override: rmk::types::action::MorseProfile::const_default() } });
-        };
+        key_info.push(hand);
     }
     quote! { [#(#key_info), *] }
 }

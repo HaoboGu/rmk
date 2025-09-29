@@ -24,7 +24,7 @@ use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{
-    BehaviorConfig, BleBatteryConfig, KeyboardUsbConfig, PerKeyConfig, RmkConfig, StorageConfig, VialConfig,
+    BehaviorConfig, BleBatteryConfig, KeyboardUsbConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
 use rmk::controller::EventController as _;
 use rmk::controller::led_indicator::KeyboardIndicatorController;
@@ -190,7 +190,7 @@ async fn main(spawner: Spawner) {
     let mut behavior_config = BehaviorConfig::default();
     behavior_config.morse.enable_flow_tap = true;
     let mut encoder_map: [[rmk::types::action::EncoderAction; _]; _] = keymap::get_default_encoder_map();
-    let mut key_config = PerKeyConfig::default();
+    let mut key_config = PositionalConfig::default();
     let (keymap, mut storage) = initialize_encoder_keymap_and_storage(
         &mut default_keymap,
         &mut encoder_map,

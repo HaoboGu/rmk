@@ -21,7 +21,7 @@ use {
 
 use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use crate::combo::Combo;
-use crate::config::{Hand, KeyInfo};
+use crate::config::Hand;
 use crate::descriptor::KeyboardReport;
 use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
 use crate::fork::{ActiveFork, StateBits};
@@ -351,7 +351,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 debug!("Current key is buffered");
                 let press_time = Instant::now();
                 let timeout_time = if key_action.is_morse() {
-                    press_time + Self::morse_timeout(&self.keymap.borrow(), event.pos, key_action, true)
+                    press_time + Self::morse_timeout(&self.keymap.borrow(), key_action, true)
                 } else {
                     press_time
                 };
@@ -379,7 +379,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 self.process_key_action_normal(action, event).await;
                 // Push back after triggered press
                 let now = Instant::now();
-                let time_out = now + Self::morse_timeout(&self.keymap.borrow(), event.pos, key_action, true);
+                let time_out = now + Self::morse_timeout(&self.keymap.borrow(), key_action, true);
                 self.held_buffer.push(HeldKey::new(
                     event,
                     *key_action,
@@ -570,26 +570,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         (keyboard_state_updated, decision_for_current_key)
     }
 
-    fn get_hand(key_info: &Option<[[KeyInfo; COL]; ROW]>, pos: KeyPos) -> Hand {
-        key_info
-            .map(|info| info[pos.row as usize][pos.col as usize].hand)
-            .unwrap_or_else(|| {
-                if COL >= ROW {
-                    // Horizontal
-                    if pos.col < (COL as u8 / 2) {
-                        Hand::Left
-                    } else {
-                        Hand::Right
-                    }
-                } else {
-                    // Vertical
-                    if pos.row < (ROW as u8 / 2) {
-                        Hand::Left
-                    } else {
-                        Hand::Right
-                    }
-                }
-            })
+    fn get_hand(hand_info: &[[Hand; COL]; ROW], pos: KeyPos) -> Hand {
+        let col = pos.col as usize;
+        let row = pos.row as usize;
+        if col < COL && row < ROW {
+            hand_info[row][col]
+        } else {
+            Hand::Unknown
+        }
     }
 
     /// Make decisions for current key and each held key.
@@ -654,7 +642,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                 // The remaining keys are not same as the current key, check only morse keys
                 if held_key.event.pos != event.pos && held_key.action.is_morse() {
-                    let mode = Self::tap_hold_mode(&self.keymap.borrow(), held_key.event.pos, &held_key.action);
+                    let mode = Self::tap_hold_mode(&self.keymap.borrow(), &held_key.action);
 
                     if event.pressed {
                         // The current key is being pressed
@@ -685,11 +673,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             _ => {}
                         }
                     } else {
-                        let unilateral_tap = Self::is_unilateral_tap_enabled(
-                            &self.keymap.borrow(),
-                            held_key.event.pos,
-                            &held_key.action,
-                        );
+                        let unilateral_tap = Self::is_unilateral_tap_enabled(&self.keymap.borrow(), &held_key.action);
 
                         // 1. Check unilateral tap of held key
                         // Note: `decision for current key == Release` means that current held key is pressed AFTER the current releasing key,
@@ -700,10 +684,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             && let KeyboardEventPos::Key(pos1) = held_key.event.pos
                             && let KeyboardEventPos::Key(pos2) = event.pos
                         {
-                            let key_info = &self.keymap.borrow().key_config.key_info;
+                            let hand_info = &self.keymap.borrow().positional_config.hand;
 
-                            let hand1 = Self::get_hand(key_info, pos1);
-                            let hand2 = Self::get_hand(key_info, pos2);
+                            let hand1 = Self::get_hand(hand_info, pos1);
+                            let hand2 = Self::get_hand(hand_info, pos2);
 
                             if hand1 == hand2 && hand1 != Hand::Unknown {
                                 //if same hand
@@ -2134,7 +2118,7 @@ mod test {
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use crate::config::{BehaviorConfig, CombosConfig, ForksConfig, PerKeyConfig};
+    use crate::config::{BehaviorConfig, CombosConfig, ForksConfig, PositionalConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
     use crate::fork::Fork;
     use crate::{a, k, layer, mo, th, thp};
@@ -2204,8 +2188,8 @@ mod test {
         let keymap = Box::new(get_keymap());
         let leaked_keymap = Box::leak(keymap);
 
-        static KEY_CONFIG: static_cell::StaticCell<PerKeyConfig<5, 14>> = static_cell::StaticCell::new();
-        let per_key_config = KEY_CONFIG.init(PerKeyConfig::default());
+        static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<5, 14>> = static_cell::StaticCell::new();
+        let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
         let keymap = block_on(KeyMap::new(leaked_keymap, None, behavior_config, per_key_config));
         let keymap_cell = RefCell::new(keymap);
         let keymap_ref = Box::leak(Box::new(keymap_cell));

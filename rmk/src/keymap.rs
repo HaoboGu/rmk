@@ -12,7 +12,7 @@ use {
 
 use crate::COMBO_MAX_NUM;
 use crate::combo::Combo;
-use crate::config::{BehaviorConfig, PerKeyConfig};
+use crate::config::{BehaviorConfig, PositionalConfig};
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
@@ -38,7 +38,7 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     encoder_layer_cache: [[u8; 2]; NUM_ENCODER],
     /// Options for configurable action behavior
     pub(crate) behavior: &'a mut BehaviorConfig,
-    pub key_config: &'a mut PerKeyConfig<ROW, COL>,
+    pub positional_config: &'a mut PositionalConfig<ROW, COL>,
     /// Publisher for controller channel
     #[cfg(feature = "controller")]
     controller_pub: ControllerPub,
@@ -66,7 +66,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         behavior: &'a mut BehaviorConfig,
-        key_info: &'a mut PerKeyConfig<ROW, COL>,
+        positional_config: &'a mut PositionalConfig<ROW, COL>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
 
@@ -86,7 +86,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             layer_cache: [[0; COL]; ROW],
             encoder_layer_cache: [[0; 2]; NUM_ENCODER],
             behavior,
-            key_config: key_info,
+            positional_config,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
             #[cfg(feature = "vial_lock")]
@@ -100,7 +100,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
         behavior: &'a mut BehaviorConfig,
-        key_config: &'a mut PerKeyConfig<ROW, COL>,
+        positional_config: &'a mut PositionalConfig<ROW, COL>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
         fill_vec(&mut behavior.combo.combos);
@@ -146,7 +146,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             layer_cache: [[0; COL]; ROW],
             encoder_layer_cache: [[0; 2]; NUM_ENCODER],
             behavior,
-            key_config,
+            positional_config,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
             #[cfg(feature = "vial_lock")]

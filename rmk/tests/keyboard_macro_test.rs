@@ -2,7 +2,7 @@ pub mod common;
 
 mod macro_test {
     use heapless::Vec;
-    use rmk::config::{BehaviorConfig, PerKeyConfig};
+    use rmk::config::{BehaviorConfig, PositionalConfig};
     use rmk::keyboard::Keyboard;
     use rmk::keyboard_macros::{MacroOperation, define_macro_sequences, to_macro_sequence};
     use rmk::types::action::{Action, KeyAction};
@@ -19,8 +19,8 @@ mod macro_test {
         ]]];
         static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
         let behavior_config: &'static mut BehaviorConfig = BEHAVIOR_CONFIG.init(behavior_config);
-        static KEY_CONFIG: static_cell::StaticCell<PerKeyConfig<1, 2>> = static_cell::StaticCell::new();
-        let per_key_config = KEY_CONFIG.init(PerKeyConfig::default());
+        static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 2>> = static_cell::StaticCell::new();
+        let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
         Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
     }
 

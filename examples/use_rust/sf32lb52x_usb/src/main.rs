@@ -11,7 +11,7 @@ use defmt::info;
 use embassy_executor::Spawner;
 use keymap::{COL, ROW};
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, KeyboardUsbConfig, PerKeyConfig, RmkConfig, VialConfig};
+use rmk::config::{BehaviorConfig, KeyboardUsbConfig, PositionalConfig, RmkConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
@@ -79,7 +79,7 @@ async fn main(_spawner: Spawner) {
     let mut default_keymap = keymap::get_default_keymap();
     let mut behavior_config = BehaviorConfig::default();
     // let storage_config = StorageConfig::default();
-    let mut per_key_config = PerKeyConfig::default();
+    let mut per_key_config = PositionalConfig::default();
     let keymap = rmk::initialize_keymap(&mut default_keymap, &mut behavior_config, &mut per_key_config).await;
     // let (keymap, mut storage) = initialize_keymap_and_storage(
     //     &mut default_keymap,

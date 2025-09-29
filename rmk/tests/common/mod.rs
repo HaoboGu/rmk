@@ -11,7 +11,7 @@ use embassy_time::{Duration, Timer};
 use futures::join;
 use log::debug;
 use rmk::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
-use rmk::config::{BehaviorConfig, PerKeyConfig};
+use rmk::config::{BehaviorConfig, PositionalConfig};
 use rmk::descriptor::KeyboardReport;
 use rmk::event::KeyboardEvent;
 use rmk::hid::Report;
@@ -152,14 +152,14 @@ pub const fn get_keymap() -> [[[KeyAction; 14]; 5]; 2] {
 pub fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'static, 5, 14, 2> {
     static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
     let behavior_config: &'static mut BehaviorConfig = BEHAVIOR_CONFIG.init(config);
-    static KEY_CONFIG: static_cell::StaticCell<PerKeyConfig<5, 14>> = static_cell::StaticCell::new();
-    let per_key_config = KEY_CONFIG.init(PerKeyConfig::default());
+    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<5, 14>> = static_cell::StaticCell::new();
+    let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
     Keyboard::new(wrap_keymap(get_keymap(), per_key_config, behavior_config))
 }
 
 pub fn wrap_keymap<'a, const R: usize, const C: usize, const L: usize>(
     keymap: [[[KeyAction; C]; R]; L],
-    per_key_config: &'static mut PerKeyConfig<R, C>,
+    per_key_config: &'static mut PositionalConfig<R, C>,
     config: &'static mut BehaviorConfig,
 ) -> &'a mut RefCell<KeyMap<'static, R, C, L>> {
     // Box::leak is acceptable in tests

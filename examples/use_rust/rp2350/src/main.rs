@@ -17,7 +17,7 @@ use embassy_rp::peripherals::USB;
 use embassy_rp::usb::{Driver, InterruptHandler};
 use keymap::{COL, ROW};
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, KeyboardUsbConfig, PerKeyConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, KeyboardUsbConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
@@ -84,7 +84,7 @@ async fn main(_spawner: Spawner) {
     let mut default_keymap = keymap::get_default_keymap();
     let mut behavior_config = BehaviorConfig::default();
     let storage_config = StorageConfig::default();
-    let mut per_key_config = PerKeyConfig::default();
+    let mut per_key_config = PositionalConfig::default();
     let (keymap, mut storage) = initialize_keymap_and_storage(
         &mut default_keymap,
         flash,
