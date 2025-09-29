@@ -97,6 +97,9 @@ function nav() {
           items: [{ text: 'v0.7.8', link: '/docs/introduction' }]
         },
         {
+          items: [{ text: 'main branch', link: 'https://main.rmk.rs/docs/introduction' }]
+        },
+        {
           items: [{ text: 'Migration Guide', link: '/docs/migration_guide' }]
         },
         {
