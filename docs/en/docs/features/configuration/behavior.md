@@ -283,6 +283,7 @@ FH = { hold_on_other_press = true, unilateral_tap = false, hold_timeout = "200ms
 MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_timeout = "200ms" }
 ```
 
+
 ### Comprehensive Example
 
 Here is a comprehensive example of morse configuration:
@@ -365,6 +366,38 @@ HRM = { unilateral_tap = true, permissive_hold = true, hold_timeout = "250ms", g
 MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_timeout = "200ms" }
 # for "fast" modifiers (for example on thumb keys)
 PN = { hold_on_other_press = true, unilateral_tap = false, hold_timeout = "250ms", gap_timeout = "250ms" }
+```
+
+### Assigning the profile to a position
+
+```toml
+# split ortho example for matrix map, with L/R hand information filled and home row, thumb keys have profile names:
+[layout]
+rows = 4
+cols = 10
+layers = 3
+matrix_map = """
+(0, 0, L)    (0, 1, L)    (0, 2, L)    (0, 3, L)    (0, 4, L)         (0, 5, R)   (0, 6, R)    (0, 7, R)    (0, 8, R)    (0, 9, R)   
+(1, 0, L:H2) (1, 1, L:H2) (1, 2, L:H1) (1, 3, L:H1) (1, 4, L)         (1, 5, R)   (1, 6, R:H1) (1, 7, R:H1) (1, 8, R:H2) (1, 9, R:H2)
+(2, 0, L)    (2, 1, L)    (2, 2, L)    (2, 3, L)    (2, 4, L)         (2, 5, R)   (2, 6, R)    (2, 7, R)    (2, 8, R)    (2, 9, R)   
+                                       (3, 3, L:T)  (3, 4, L:T)       (3, 5, R:T) (3, 6, R:T) 
+"""
+
+# default profile for morse, tap dance and tap-hold keys:
+[behavior.morse]
+enable_flow_tap = true, 
+prior_idle_time = "120ms"
+hold_on_other_press = true 
+hold_timeout = "250ms"
+gap_timeout = "250ms"
+
+[behavior.morse.profiles]
+# matrix_map may refer these to override the defaults given in [behavior.morse] for some key positions by referring these profiles by their name
+# this example is a home row mod
+H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
+H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
+# thumb tap-hold example
+T = { hold_on_other_press = true, unilateral_tap = false, hold_timeout = "250ms", gap_timeout = "250ms" }
 ```
 
 ### Using Morse(Tap Dance) in Keymaps
