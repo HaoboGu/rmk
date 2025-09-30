@@ -92,7 +92,7 @@ fn expand_bind_interrupt_for_split_peripheral(chip: &ChipModel, communication: &
                 const L2CAP_MTU: usize = 251;
                 fn build_sdc<'d, const N: usize>(
                     p: ::nrf_sdc::Peripherals<'d>,
-                    rng: &'d mut ::embassy_nrf::rng::Rng<::embassy_nrf::peripherals::RNG, ::embassy_nrf::mode::Async>,
+                    rng: &'d mut ::embassy_nrf::rng::Rng<::embassy_nrf::mode::Async>,
                     mpsl: &'d ::nrf_sdc::mpsl::MultiprotocolServiceLayer,
                     mem: &'d mut ::nrf_sdc::Mem<N>,
                 ) -> Result<::nrf_sdc::SoftdeviceController<'d>, ::nrf_sdc::Error> {

@@ -64,7 +64,7 @@ rand_core = { version = "0.6", optional = true }
 bt-hci = { version = "0.6", optional = true }
 
 # nRF dependencies
-embassy-nrf = { version = "0.7", features = [
+embassy-nrf = { version = "0.8", features = [
     "unstable-pac",
     "time",
 ], optional = true }
