@@ -19,7 +19,8 @@ impl KeyboardTomlConfig {
         let aliases = self.aliases.clone().unwrap_or_default();
         let layers = self.layer.clone().unwrap_or_default();
         let mut layout = self.layout.clone().expect("layout config is required");
-        // temporarily allow both matrix_map and keymap to be set and append the obsolete layout.keymap based layer configurations
+
+        // Temporarily allow both matrix_map and keymap to be set and append the obsolete layout.keymap based layer configurations
         // to the new [[layer]] based layer configurations in the resulting LayoutConfig
 
         // Check alias keys for whitespace
@@ -31,6 +32,7 @@ impl KeyboardTomlConfig {
                 ));
             }
         }
+
         let mut final_layers = Vec::<Vec<Vec<String>>>::new();
         let mut key_info: Vec<Vec<KeyInfo>> =
             vec![vec![KeyInfo::default(); layout.cols as usize]; layout.rows as usize];
@@ -43,7 +45,7 @@ impl KeyboardTomlConfig {
             match Self::parse_matrix_map(matrix_map) {
                 Ok(info) => {
                     let mut coords = Vec::<(u8, u8)>::new();
-                    for (row, col, hand, profile) in &info {
+                    for (row, col, hand) in &info {
                         if *row >= layout.rows || *col >= layout.cols {
                             return Err(format!(
                                 "keyboard.toml: Coordinate ({},{}) in `layout.matrix_map` is out of bounds: ([0..{}], [0..{}]) is the expected range",
@@ -59,13 +61,10 @@ impl KeyboardTomlConfig {
                                 row, col
                             ));
                         } else {
-                            // separate coordinates from key info
+                            // Separate coordinates from key info
                             coords.push((*row, *col));
                             grid_to_sequence[*row as usize][*col as usize] = Some(sequence_number);
-                            key_info[*row as usize][*col as usize] = KeyInfo {
-                                hand: *hand,
-                                profile: profile.clone(),
-                            };
+                            key_info[*row as usize][*col as usize] = KeyInfo { hand: *hand };
                         }
                         sequence_number += 1;
                     }
@@ -169,7 +168,7 @@ impl KeyboardTomlConfig {
 
     /// Parses and validates a matrix_map string using Pest.
     /// Ensures the string contains only valid coordinates and whitespace.
-    fn parse_matrix_map(matrix_map: &str) -> Result<Vec<(u8, u8, char, Option<String>)>, String> {
+    fn parse_matrix_map(matrix_map: &str) -> Result<Vec<(u8, u8, char)>, String> {
         match ConfigParser::parse(Rule::matrix_map, matrix_map) {
             Ok(pairs) => {
                 let mut key_info = Vec::new();
@@ -193,18 +192,16 @@ impl KeyboardTomlConfig {
                                         .map_err(|e| format!("Failed to parse col '{}': {}", col_str, e))?;
 
                                     let mut hand = 'C'; // C for center (not specified)
-                                    let mut profile_name = None; // home_row flag not specified
 
                                     for part in items {
                                         match part.as_rule() {
                                             Rule::left_hand => hand = 'L',
                                             Rule::right_hand => hand = 'R',
-                                            Rule::profile_name => profile_name = Some(part.as_str().into()),
                                             _ => {}
                                         }
                                     }
 
-                                    key_info.push((row, col, hand, profile_name));
+                                    key_info.push((row, col, hand));
                                 }
                                 Rule::EOI | Rule::WHITESPACE => {
                                     // Ignore End Of Input marker

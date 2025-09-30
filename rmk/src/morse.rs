@@ -75,8 +75,7 @@ impl MorsePattern {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Morse<const NUM_PATTERNS: usize = MAX_PATTERNS_PER_KEY> {
     /// The profile of this morse key, which defines the timing parameters, etc.
-    /// if some of its fields are filled with None, the positional override given in KeyInfo,
-    /// or the defaults given in MorsesConfig will be used instead.
+    /// If some of its fields are filled with None, the global default value will be used.
     pub profile: MorseProfile,
     /// The list of pattern -> action pairs, which can be triggered
     pub actions: Vec<(MorsePattern, Action), NUM_PATTERNS>,

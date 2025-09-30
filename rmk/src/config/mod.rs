@@ -91,7 +91,7 @@ impl Default for MorsesConfig {
     }
 }
 
-/// Configuration that's only related to the key's position
+/// Configuration that's only related to the key's position.
 ///
 /// Now only the hand information is included.
 /// In the future more fields can be added here for the future configurator GUI, such as

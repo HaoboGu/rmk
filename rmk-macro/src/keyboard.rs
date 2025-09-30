@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::{BoardConfig, ChipSeries, KeyInfo, KeyboardTomlConfig, MatrixType, MorseProfile, UniBodyConfig};
+use rmk_config::{BoardConfig, ChipSeries, KeyInfo, KeyboardTomlConfig, MatrixType, UniBodyConfig};
 use syn::ItemMod;
 
 use crate::behavior::expand_behavior_config;
@@ -235,26 +233,20 @@ fn expand_main(
 // TODO: move this function to a separate folder
 pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
     let (layout, key_info) = keyboard_config.get_layout_config().unwrap();
-    let profiles = &keyboard_config
-        .get_behavior_config()
-        .unwrap()
-        .morse
-        .and_then(|m| m.profiles);
     let row = layout.rows as usize;
     let col = layout.cols as usize;
 
-    let initialize_per_key_config = if key_info.is_empty()
+    let initialize_positional_config = if key_info.is_empty()
         || key_info.iter().all(|row| {
-            row.iter().all(|key| {
-                key.hand != 'L' && key.hand != 'l' && key.hand != 'R' && key.hand != 'r' && key.profile.is_none()
-            })
+            row.iter()
+                .all(|key| key.hand != 'L' && key.hand != 'l' && key.hand != 'R' && key.hand != 'r')
         })
         || key_info.len() != row
         || key_info[0].len() != col
     {
         quote! { let mut per_key_config = ::rmk::config::PositionalConfig::default(); }
     } else {
-        let key_info_config = expand_key_info(&key_info, profiles);
+        let key_info_config = expand_key_info(&key_info);
         quote! { let mut per_key_config = ::rmk::config::PositionalConfig::new(#key_info_config); }
     };
 
@@ -294,7 +286,7 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
         };
         // Return the keymap and storage initialization code
         quote! {
-            #initialize_per_key_config
+            #initialize_positional_config
             let mut default_keymap = get_default_keymap();
             #default_encoder_keymap
             let (keymap, mut storage) =  #keymap_storage_init.await;
@@ -302,7 +294,7 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
     } else {
         // Return the keymap initialization code
         quote! {
-            #initialize_per_key_config
+            #initialize_positional_config
             let mut default_keymap = get_default_keymap();
             let keymap =  ::rmk::initialize_keymap(
                 &mut default_keymap,
@@ -392,22 +384,16 @@ pub(crate) fn expand_matrix_and_keyboard_init(
 }
 
 /// Push rows in the key_info
-fn expand_key_info(
-    info: &Vec<Vec<KeyInfo>>,
-    profiles: &Option<HashMap<String, MorseProfile>>,
-) -> proc_macro2::TokenStream {
+fn expand_key_info(info: &Vec<Vec<KeyInfo>>) -> proc_macro2::TokenStream {
     let mut rows = vec![];
     for row in info {
-        rows.push(expand_key_info_row(row, profiles));
+        rows.push(expand_key_info_row(row));
     }
     quote! { ::core::option::Option::Some([#(#rows), *]) }
 }
 
 /// Push keys info in the row
-fn expand_key_info_row(
-    row: &Vec<KeyInfo>,
-    _profiles: &Option<HashMap<String, MorseProfile>>,
-) -> proc_macro2::TokenStream {
+fn expand_key_info_row(row: &Vec<KeyInfo>) -> proc_macro2::TokenStream {
     let mut key_info = vec![];
     for key in row {
         let hand = match key.hand {

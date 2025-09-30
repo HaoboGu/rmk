@@ -118,7 +118,7 @@ right_hand = { ^"R" | ^"RH" | ^"Right" }
 hand = _{ left_hand | right_hand }
 
 // Define the key_info structure, capturing row and col numbers, and optionally some extra key information
-keypos_info = { "(" ~ number ~ "," ~ number ~ ("," ~ hand)? ~ (":" ~ profile_name)? ~ ")" }
+keypos_info = { "(" ~ number ~ "," ~ number ~ ("," ~ hand)? ~ ")" }
 
 // The main rule: Start, zero or more key_info or whitespace occurrences, End.
 // This ensures the entire string consists *only* of valid key_info tuples and whitespace.
