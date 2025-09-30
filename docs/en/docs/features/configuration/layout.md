@@ -15,17 +15,12 @@ matrix_map = """
 """
 ```
 
-The `matrix_map` is a string built from `(row, col, <hand> : <profile_name>)` tuples, listed in the same order as you want to define your keys in your key map. 
+The `matrix_map` is a string built from `(row, col, <hand>)` tuples, listed in the same order as you want to define your keys in your key map. 
 
 The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](keyboard_matrix.md), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts. 
 With the help of this matrix map, the configuration of non-regular key matrices can be intuitively arranged in your key maps. (Triple quote mark `"""` is used to limit multi-line strings)
 
-The `<hand>` and `<profile_name>` are both optional, they are generally needed for split ergo keyboards. 
-
-The `<hand>` field is optional and should only be used when `unilateral_tap = true` is set in a key’s profile. By assigning `L` or `R` to `<hand>`, each key can be associated with either the left or right hand.
-
-The `<profile_name>` is also optional, if given, it selects a key profile from [`behavior.morse.profiles`](./behavior.md#fine-tuning) to override the default settings defined in `behavior.morse`. For defining a key profile, please refer to [behavior](./behavior.md#fine-tuning) doc. Please note that the profile name is case sensitive.
-
+The `<hand>` is optional, it should only be used when `unilateral_tap = true`. By assigning `L` or `R` to `<hand>`, each key can be associated with either the left or right hand.
 
 ```toml
 # simple numpad example:
@@ -134,9 +129,7 @@ The definitions of those operations are same with QMK, you can found [here](http
 
 9.  For keyboard macros, use `Macro(n)`
 
-The optional `<profile_name>` can be used to select morse profile (per key) from `[behavior.morse.profiles]` for the tap hold like keys. 
-If not given, the default profile defined in `[behavior.morse]` will be used, except when `matrix_map` used to override the default profile for some keys positions by similarly referring to the profiles by their name - see the example above for more details.
-Please note that the profile name is case sensitive.
+The optional `<profile_name>` can be used to select morse profile (per key) from `[behavior.morse.profiles]` for the tap hold like keys. If not given, the default profile defined in `[behavior.morse]` will be used. Please note that the profile name is case sensitive.
 
 ::: tip
 If you want to use Vial, the positional profile override is recommended instead of per key override, since Vial does not support the profile configuration of tap hold keys, so the profile information will likely be lost.
