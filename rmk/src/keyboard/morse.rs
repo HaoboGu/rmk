@@ -68,7 +68,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if event.pressed {
             // Pressed, check the held buffer, update the tap state
             let pressed_time = self.get_timer_value(event).unwrap_or(Instant::now());
-            let timeout_time = pressed_time + Self::morse_timeout(&self.keymap.borrow(), &key_action, true);
+            let timeout_time = pressed_time + Self::morse_timeout(&self.keymap.borrow(), key_action, true);
             match self.held_buffer.find_pos_mut(event.pos) {
                 Some(k) => {
                     // The current key is already in the buffer, update its state

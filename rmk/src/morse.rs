@@ -184,7 +184,7 @@ impl Morse {
                         return None; //the solution is not unique, so must wait for possible continuation
                     }
                 } else {
-                    first = Some(&pair.1);
+                    first = Some(pair.1);
                 }
             }
         }
