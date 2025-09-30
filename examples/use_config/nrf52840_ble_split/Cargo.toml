@@ -17,13 +17,13 @@ rmk = { path = "../../../rmk", features = [
     "adafruit_bl",
     "controller",
 ] }
-nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "fac511c", default-features = false, features = [
+nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "11d5c3c", default-features = false, features = [
     "defmt",
     "peripheral",
     "central",
     "nrf52840",
 ] }
-nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "fac511c", default-features = false, features = [
+nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "11d5c3c", default-features = false, features = [
     "defmt",
     "critical-section-impl",
     "nrf52840",
@@ -33,7 +33,7 @@ bt-hci = { version = "0.6", default-features = false, features = ["defmt"] }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.5"
 embassy-time = { version = "0.5", features = ["tick-hz-32_768", "defmt", "defmt-timestamp-uptime"] }
-embassy-nrf = { version = "0.7", features = [
+embassy-nrf = { version = "0.8", features = [
     "defmt",
     "nrf52840",
     "time-driver-rtc1",

@@ -740,9 +740,9 @@ dependencies = [
 
 [[package]]
 name = "embassy-nrf"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86a0fd2ba2c12b27bc7116fbd33911eb78ebb72a059f1c4f875a5e1c65a6e372"
+checksum = "a8d63429d74ab5786cde7c9dc9a0338ea162a4da95e204ac5345c5ae36831fdb"
 dependencies = [
  "bitflags 2.9.1",
  "cfg-if",
@@ -1399,7 +1399,7 @@ dependencies = [
 [[package]]
 name = "nrf-mpsl"
 version = "0.3.0"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=fac511c#fac511c8557a215de37f9e1af214870778b74375"
+source = "git+https://github.com/alexmoon/nrf-sdc?rev=11d5c3c#11d5c3c3653af73b511133c2f8231f33eb0696f4"
 dependencies = [
  "cortex-m",
  "critical-section",
@@ -1415,7 +1415,7 @@ dependencies = [
 [[package]]
 name = "nrf-mpsl-sys"
 version = "0.2.1"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=fac511c#fac511c8557a215de37f9e1af214870778b74375"
+source = "git+https://github.com/alexmoon/nrf-sdc?rev=11d5c3c#11d5c3c3653af73b511133c2f8231f33eb0696f4"
 dependencies = [
  "bindgen",
  "doxygen-rs",
@@ -1434,7 +1434,7 @@ dependencies = [
 [[package]]
 name = "nrf-sdc"
 version = "0.4.0"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=fac511c#fac511c8557a215de37f9e1af214870778b74375"
+source = "git+https://github.com/alexmoon/nrf-sdc?rev=11d5c3c#11d5c3c3653af73b511133c2f8231f33eb0696f4"
 dependencies = [
  "bt-hci",
  "critical-section",
@@ -1452,7 +1452,7 @@ dependencies = [
 [[package]]
 name = "nrf-sdc-sys"
 version = "0.2.1"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=fac511c#fac511c8557a215de37f9e1af214870778b74375"
+source = "git+https://github.com/alexmoon/nrf-sdc?rev=11d5c3c#11d5c3c3653af73b511133c2f8231f33eb0696f4"
 dependencies = [
  "bindgen",
  "doxygen-rs",
