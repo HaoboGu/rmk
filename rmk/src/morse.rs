@@ -14,14 +14,17 @@ pub const HOLD: MorsePattern = MorsePattern(0b11);
 pub const DOUBLE_TAP: MorsePattern = MorsePattern(0b100);
 pub const HOLD_AFTER_TAP: MorsePattern = MorsePattern(0b101);
 
+impl Default for MorsePattern {
+    fn default() -> Self {
+        MorsePattern(0b1) // 0b1 means empty
+    }
+}
+
 impl MorsePattern {
     pub fn max_taps() -> usize {
         15 // 15 taps can be encoded on u16 bits (1 bit used to mark the start position)
     }
 
-    pub fn default() -> Self {
-        MorsePattern(0b1) // 0b1 means empty
-    }
 
     pub fn from_u16(value: u16) -> Self {
         MorsePattern(value)
@@ -56,7 +59,7 @@ impl MorsePattern {
 
     pub fn followed_by_tap(&self) -> Self {
         // Shift the bits to the left and set the last bit to 0 (tap)
-        MorsePattern((self.0 << 1) | 0b0)
+        MorsePattern(self.0 << 1)
     }
 
     pub fn followed_by_hold(&self) -> Self {
@@ -100,7 +103,7 @@ impl Morse {
         profile: MorseProfile,
     ) -> Self {
         let mut result = Self {
-            profile: profile,
+            profile,
             ..Default::default()
         };
 
@@ -128,19 +131,19 @@ impl Morse {
     ) -> Self {
         assert!(MAX_PATTERNS_PER_KEY >= 4, "MAX_PATTERNS_PER_KEY must be at least 4");
         let mut result = Self {
-            profile: profile,
+            profile,
             ..Default::default()
         };
 
         let mut pattern = 0b1u16;
         for item in tap_actions.iter() {
-            pattern = pattern << 1;
+            pattern <<= 1;
             result.put(MorsePattern::from_u16(pattern), *item); //+ one tap in each iteration
         }
 
         let mut pattern = 0b1u16;
         for item in hold_actions.iter() {
-            pattern = pattern << 1;
+            pattern <<= 1;
             result.put(MorsePattern::from_u16(pattern | 0b1), *item); //+ one tap in each iteration, but the last one is modified to hold
         }
 
@@ -160,7 +163,7 @@ impl Morse {
     pub fn try_predict_final_action(&self, pattern_start: MorsePattern) -> Option<Action> {
         // Check whether current pattern matches any of the legal patterns
         // If not, return early
-        if self.actions.iter().find(|&a| a.0 == pattern_start).is_none() {
+        if !self.actions.iter().any(|a| a.0 == pattern_start) {
             return None; //the user made a mistake while entering the pattern
         }
 

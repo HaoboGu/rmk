@@ -61,7 +61,6 @@ pub static CONTROLLER_CHANNEL: PubSubChannel<
     CONTROLLER_CHANNEL_SUBS,
     CONTROLLER_CHANNEL_PUBS,
 > = PubSubChannel::new();
-/// Channel for reading vial reports from the host
 
 // Sync messages from server to flash
 #[cfg(feature = "storage")]

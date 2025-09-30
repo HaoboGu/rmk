@@ -268,23 +268,19 @@ pub(crate) async fn process_vial<
                         // Pack morse data into report
                         LittleEndian::write_u16(
                             &mut report.input_data[1..3],
-                            to_via_keycode(morse.get(TAP).map_or(KeyAction::No, |a| KeyAction::Single(a))),
+                            to_via_keycode(morse.get(TAP).map_or(KeyAction::No, KeyAction::Single)),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[3..5],
-                            to_via_keycode(morse.get(HOLD).map_or(KeyAction::No, |a| KeyAction::Single(a))),
+                            to_via_keycode(morse.get(HOLD).map_or(KeyAction::No, KeyAction::Single)),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[5..7],
-                            to_via_keycode(morse.get(DOUBLE_TAP).map_or(KeyAction::No, |a| KeyAction::Single(a))),
+                            to_via_keycode(morse.get(DOUBLE_TAP).map_or(KeyAction::No, KeyAction::Single)),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[7..9],
-                            to_via_keycode(
-                                morse
-                                    .get(HOLD_AFTER_TAP)
-                                    .map_or(KeyAction::No, |a| KeyAction::Single(a)),
-                            ),
+                            to_via_keycode(morse.get(HOLD_AFTER_TAP).map_or(KeyAction::No, KeyAction::Single)),
                         );
                         LittleEndian::write_u16(&mut report.input_data[9..11], 250); //dummy morse.timeout_ms
                     } else {
@@ -296,11 +292,11 @@ pub(crate) async fn process_vial<
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
                     let morse_idx = report.output_data[3] as usize;
-                    let morses = &mut keymap.borrow_mut().behavior.morse.morses;
+                    let morses_len = keymap.borrow_mut().behavior.morse.morses.len();
 
-                    if morse_idx < morses.len() {
+                    if morse_idx < morses_len {
                         // Update the morse in keymap
-                        if let Some(morse) = morses.get_mut(morse_idx) {
+                        if let Some(morse) = keymap.borrow_mut().behavior.morse.morses.get_mut(morse_idx) {
                             // Extract morse (also known as "tap dance" in vial)
                             let tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[4..6]));
                             let hold = from_via_keycode(LittleEndian::read_u16(&report.output_data[6..8]));
@@ -313,14 +309,18 @@ pub(crate) async fn process_vial<
                             morse.put(HOLD, hold.to_action());
                             morse.put(HOLD_AFTER_TAP, hold_after_tap.to_action());
                             //morse.timeout_ms = timeout_ms;
+                        }
 
-                            #[cfg(feature = "storage")]
-                            {
+                        #[cfg(feature = "storage")]
+                        {
+                            let morse = keymap.borrow().behavior.morse.morses.get(morse_idx).cloned();
+                            // Borrowed keymap has been dropped, so it's safe
+                            if let Some(m) = morse {
                                 // Save to storage
                                 FLASH_CHANNEL
                                     .send(FlashOperationMessage::VialMessage(KeymapData::Morse(
                                         morse_idx as u8,
-                                        morse.clone(),
+                                        m,
                                     )))
                                     .await;
                             }
@@ -418,16 +418,15 @@ pub(crate) async fn process_vial<
             debug!("Received Vial - GetEncoder, encoder idx: {} at layer: {}", index, layer);
 
             // Get encoder value
-            if let Some(encoder_map) = &keymap.borrow().encoders {
-                if let Some(encoder_layer) = encoder_map.get(layer as usize) {
-                    if let Some(encoder) = encoder_layer.get(index as usize) {
-                        let clockwise = to_via_keycode(encoder.clockwise());
-                        let counter_clockwise = to_via_keycode(encoder.counter_clockwise());
-                        BigEndian::write_u16(&mut report.input_data[0..2], counter_clockwise);
-                        BigEndian::write_u16(&mut report.input_data[2..4], clockwise);
-                        return;
-                    }
-                }
+            if let Some(encoder_map) = &keymap.borrow().encoders
+                && let Some(encoder_layer) = encoder_map.get(layer as usize)
+                && let Some(encoder) = encoder_layer.get(index as usize)
+            {
+                let clockwise = to_via_keycode(encoder.clockwise());
+                let counter_clockwise = to_via_keycode(encoder.counter_clockwise());
+                BigEndian::write_u16(&mut report.input_data[0..2], counter_clockwise);
+                BigEndian::write_u16(&mut report.input_data[2..4], clockwise);
+                return;
             }
 
             // Clear returned value, aka `KeyAction::No`

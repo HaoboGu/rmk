@@ -2,7 +2,6 @@ use embedded_hal::digital::StatefulOutputPin;
 
 /// The gpio driver is a wrapper for the embedded-hal digital output pin trait.
 /// It wraps the low-active and high-active pins, and provides a way to set the pin state
-
 pub(crate) struct OutputController<P: StatefulOutputPin> {
     pin: P,
     low_active: bool,
