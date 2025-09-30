@@ -150,7 +150,7 @@ pub async fn initialize_encoder_keymap_and_storage<
             default_keymap,
             &Some(default_encoder_map),
             storage_config,
-            &behavior_config,
+            behavior_config,
         )
         .await;
 
@@ -195,7 +195,7 @@ pub async fn initialize_keymap_and_storage<
 ) {
     #[cfg(feature = "host")]
     {
-        let mut storage = Storage::new(flash, default_keymap, &None, storage_config, &behavior_config).await;
+        let mut storage = Storage::new(flash, default_keymap, &None, storage_config, behavior_config).await;
         let keymap = RefCell::new(
             KeyMap::new_from_storage(default_keymap, None, Some(&mut storage), behavior_config, key_info).await,
         );

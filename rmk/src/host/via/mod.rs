@@ -191,7 +191,7 @@ impl<
                     keycode, row, col, layer, action
                 );
                 keymap.borrow_mut().set_action_at(
-                    KeyboardEventPos::key_pos(col as u8, row as u8),
+                    KeyboardEventPos::key_pos(col, row),
                     layer as usize,
                     action,
                 );

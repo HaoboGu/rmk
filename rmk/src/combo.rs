@@ -44,11 +44,10 @@ impl Combo {
             return false;
         }
 
-        if let Some(layer) = self.layer {
-            if layer != active_layer {
+        if let Some(layer) = self.layer
+            && layer != active_layer {
                 return false;
             }
-        }
 
         let action_idx = self.actions.iter().position(|&a| a == *key_action);
         if let Some(i) = action_idx {

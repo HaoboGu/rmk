@@ -97,6 +97,7 @@ impl Default for MorsesConfig {
 /// - key size,
 /// - key shape,
 /// - backlight sequence number, etc.
+///
 /// IDEA: For Keyboards with low memory, these should be compile time constants to save RAM?
 #[derive(Clone, Copy, Default, Debug)]
 pub struct KeyInfo {

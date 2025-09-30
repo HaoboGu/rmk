@@ -84,9 +84,9 @@ impl Value<'_> for KeymapData {
             KeymapData::KeymapKey(k) => {
                 buffer[0] = StorageKeys::KeymapConfig as u8;
                 BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(k.action));
-                buffer[3] = k.layer as u8;
-                buffer[4] = k.col as u8;
-                buffer[5] = k.row as u8;
+                buffer[3] = k.layer;
+                buffer[4] = k.col;
+                buffer[5] = k.row;
                 Ok(6)
             }
 
@@ -94,8 +94,8 @@ impl Value<'_> for KeymapData {
                 buffer[0] = StorageKeys::EncoderKeys as u8;
                 BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(e.action.clockwise()));
                 BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(e.action.counter_clockwise()));
-                buffer[5] = e.idx as u8;
-                buffer[6] = e.layer as u8;
+                buffer[5] = e.idx;
+                buffer[6] = e.layer;
                 Ok(7)
             }
 
@@ -304,8 +304,10 @@ impl Value<'_> for KeymapData {
                         return Err(SerializationError::InvalidData);
                     }
 
-                    let mut morse = Morse::default();
-                    morse.profile = profile;
+                    let mut morse = Morse {
+                        profile,
+                        ..Default::default()
+                    };
 
                     let mut i = 7;
                     for _ in 0..count {

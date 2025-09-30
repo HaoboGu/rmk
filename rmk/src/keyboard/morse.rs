@@ -22,7 +22,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // if there is no possibility for longer morse patterns, trigger the action:
                 let pattern = pattern.followed_by_hold();
                 debug!("pattern while holding: {:?}", pattern);
-                let final_action = Self::try_predict_final_action(&self.keymap.borrow().behavior, &key.action, pattern);
+                let final_action = Self::try_predict_final_action(self.keymap.borrow().behavior, &key.action, pattern);
                 if let Some(action) = final_action {
                     debug!("hold prediction {:?} -> {:?}", pattern, action);
                     self.process_key_action_normal(action, key.event).await;
@@ -39,7 +39,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
             KeyState::Released(pattern) => {
                 // The time since the key release is longer than the timeout, trigger the action
-                let action = Self::action_from_pattern(&self.keymap.borrow().behavior, &key.action, pattern);
+                let action = Self::action_from_pattern(self.keymap.borrow().behavior, &key.action, pattern);
                 self.process_key_action_tap(action, key.event).await;
                 let _ = self.held_buffer.remove(key.event.pos); // Removing from the held buffer is like setting to an idle state
             }
@@ -68,7 +68,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if event.pressed {
             // Pressed, check the held buffer, update the tap state
             let pressed_time = self.get_timer_value(event).unwrap_or(Instant::now());
-            let timeout_time = pressed_time + Self::morse_timeout(&self.keymap.borrow(), event.pos, &key_action, true);
+            let timeout_time = pressed_time + Self::morse_timeout(&self.keymap.borrow(), event.pos, key_action, true);
             match self.held_buffer.find_pos_mut(event.pos) {
                 Some(k) => {
                     // The current key is already in the buffer, update its state
@@ -110,7 +110,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         };
 
                         let final_action =
-                            Self::try_predict_final_action(&self.keymap.borrow().behavior, &k.action, pattern);
+                            Self::try_predict_final_action(self.keymap.borrow().behavior, &k.action, pattern);
                         if let Some(action) = final_action {
                             debug!("released prediction {:?} -> {:?}", pattern, action);
                             // Reached the longest configured morse pattern, trigger the corresponding action immediately

@@ -53,11 +53,11 @@ impl HeldBuffer {
     }
 
     /// Remove a held key from the buffer, keep the order
-    pub fn remove_if<P>(&mut self, mut predicate: P) -> Option<HeldKey>
+    pub fn remove_if<P>(&mut self, predicate: P) -> Option<HeldKey>
     where
         P: FnMut(&HeldKey) -> bool,
     {
-        if let Some(i) = self.keys.iter().position(|x| predicate(x)) {
+        if let Some(i) = self.keys.iter().position(predicate) {
             Some(self.keys.remove(i))
         } else {
             None
@@ -78,7 +78,7 @@ impl HeldBuffer {
         P: FnMut(&HeldKey) -> bool,
     {
         // Support that the held buffer is already sorted by the timeout time
-        self.keys.iter().filter(|&x| predicate(x)).next().map(|x| x.clone())
+        self.keys.iter().find(|&x| predicate(x)).copied()
     }
 
     pub fn is_empty(&self) -> bool {
