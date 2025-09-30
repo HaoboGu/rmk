@@ -34,7 +34,8 @@ use crate::{BUILD_HASH, config};
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
 pub(crate) static FLASH_OPERATION_FINISHED: Signal<crate::RawMutex, bool> = Signal::new();
 
-// Message send from bonder to flash task, which will do saving or clearing operation
+// Message send from other tasks, which will do saving or clearing operation
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum FlashOperationMessage {
@@ -138,6 +139,7 @@ impl StorageKeys {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum StorageData {
@@ -360,7 +362,7 @@ impl Value<'_> for StorageData {
                 | StorageKeys::ComboData
                 | StorageKeys::EncoderKeys
                 | StorageKeys::ForkData
-                | StorageKeys::MorseData => KeymapData::deserialize_from(buffer).map(|d| StorageData::VialData(d)),
+                | StorageKeys::MorseData => KeymapData::deserialize_from(buffer).map(StorageData::VialData),
                 #[cfg(all(feature = "_ble", feature = "split"))]
                 StorageKeys::PeerAddress => {
                     if buffer.len() < 9 {
@@ -573,7 +575,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             (flash.capacity() - storage_config.num_sectors as usize * F::ERASE_SIZE) as u32..flash.capacity() as u32
         } else {
             assert!(
-                start_addr % F::ERASE_SIZE == 0,
+                start_addr.is_multiple_of(F::ERASE_SIZE),
                 "Storage's start addr MUST BE a multiplier of sector size"
             );
             start_addr as u32..(start_addr + storage_config.num_sectors as usize * F::ERASE_SIZE) as u32

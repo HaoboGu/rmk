@@ -99,6 +99,7 @@ impl Default for MorsesConfig {
 /// - key size,
 /// - key shape,
 /// - backlight sequence number, etc.
+///
 /// IDEA: For Keyboards with low memory, these should be compile time constants to save RAM?
 #[derive(Debug)]
 pub struct PositionalConfig<const ROW: usize, const COL: usize> {

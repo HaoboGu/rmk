@@ -375,7 +375,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 self.process_key_action_inner(key_action, event).await
             }
             KeyBehaviorDecision::FlowTap => {
-                let action = Self::action_from_pattern(&self.keymap.borrow().behavior, key_action, TAP); //tap action
+                let action = Self::action_from_pattern(self.keymap.borrow().behavior, key_action, TAP); //tap action
                 self.process_key_action_normal(action, event).await;
                 // Push back after triggered press
                 let now = Instant::now();
@@ -408,47 +408,41 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // debug!("✅ Decision for held key: {:?}: {:?}", pos, decision)
             match decision {
                 HeldKeyDecision::UnilateralTap | HeldKeyDecision::FlowTap => {
-                    if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
-                        if held_key.action.is_morse() {
-                            // Unilateral tap of the held key is triggered
-                            debug!("Cleaning buffered morse key due to unilateral tap or flow tap");
-                            match held_key.state {
-                                KeyState::Pressed(_) | KeyState::Holding(_) => {
-                                    // In this state pattern is not surely finished,
-                                    // however an other key is pressed so terminate the sequence
-                                    // with a tap due to UnilateralTap decision; try to resolve as is
-                                    let pattern = match held_key.state {
-                                        KeyState::Pressed(pattern) => pattern.followed_by_tap(), // The HeldKeyDecision turned this into tap!
-                                        KeyState::Holding(pattern) => pattern,
-                                        _ => unreachable!(),
-                                    };
-                                    debug!("Pattern after unilateral tap or flow tap: {:?}", pattern);
-                                    let action = Self::action_from_pattern(
-                                        &self.keymap.borrow().behavior,
-                                        &held_key.action,
-                                        pattern,
-                                    );
-                                    self.process_key_action_normal(action, held_key.event).await;
-                                    held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
-                                    // Push back after triggered tap
-                                    self.held_buffer.push_without_sort(held_key);
-                                }
-                                KeyState::Released(pattern) => {
-                                    // In this state pattern is not surely finished,
-                                    // however an other key is pressed so terminate the sequence, try to resolve as is
-                                    debug!("Pattern after released, unilateral tap or flow tap: {:?}", pattern);
-                                    let action = Self::action_from_pattern(
-                                        &self.keymap.borrow().behavior,
-                                        &held_key.action,
-                                        pattern,
-                                    );
-                                    held_key.event.pressed = true;
-                                    self.process_key_action_tap(action, held_key.event).await;
-                                    // The tap is fully fired, don't push it back to buffer again
-                                    // Removing from the held buffer is like setting to an idle state
-                                }
-                                _ => (),
+                    if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos)
+                        && held_key.action.is_morse()
+                    {
+                        // Unilateral tap of the held key is triggered
+                        debug!("Cleaning buffered morse key due to unilateral tap or flow tap");
+                        match held_key.state {
+                            KeyState::Pressed(_) | KeyState::Holding(_) => {
+                                // In this state pattern is not surely finished,
+                                // however an other key is pressed so terminate the sequence
+                                // with a tap due to UnilateralTap decision; try to resolve as is
+                                let pattern = match held_key.state {
+                                    KeyState::Pressed(pattern) => pattern.followed_by_tap(), // The HeldKeyDecision turned this into tap!
+                                    KeyState::Holding(pattern) => pattern,
+                                    _ => unreachable!(),
+                                };
+                                debug!("Pattern after unilateral tap or flow tap: {:?}", pattern);
+                                let action =
+                                    Self::action_from_pattern(self.keymap.borrow().behavior, &held_key.action, pattern);
+                                self.process_key_action_normal(action, held_key.event).await;
+                                held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
+                                // Push back after triggered tap
+                                self.held_buffer.push_without_sort(held_key);
                             }
+                            KeyState::Released(pattern) => {
+                                // In this state pattern is not surely finished,
+                                // however an other key is pressed so terminate the sequence, try to resolve as is
+                                debug!("Pattern after released, unilateral tap or flow tap: {:?}", pattern);
+                                let action =
+                                    Self::action_from_pattern(self.keymap.borrow().behavior, &held_key.action, pattern);
+                                held_key.event.pressed = true;
+                                self.process_key_action_tap(action, held_key.event).await;
+                                // The tap is fully fired, don't push it back to buffer again
+                                // Removing from the held buffer is like setting to an idle state
+                            }
+                            _ => (),
                         }
                     }
                 }
@@ -472,7 +466,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     keyboard_state_updated = true;
                                     debug!("pattern after permissive hold: {:?}", pattern);
                                     let action =
-                                        Self::action_from_pattern(&self.keymap.borrow().behavior, &action, pattern);
+                                        Self::action_from_pattern(self.keymap.borrow().behavior, &action, pattern);
                                     self.process_key_action_normal(action, held_key.event).await;
                                     held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                     // Push back after triggered hold
@@ -481,7 +475,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 KeyState::Released(pattern) => {
                                     debug!("pattern after released, permissive hold: {:?}", pattern);
                                     let action =
-                                        Self::action_from_pattern(&self.keymap.borrow().behavior, &action, pattern);
+                                        Self::action_from_pattern(self.keymap.borrow().behavior, &action, pattern);
                                     held_key.event.pressed = true;
                                     self.process_key_action_tap(action, held_key.event).await;
                                     // The tap is fully fired, don't push it back to buffer again
@@ -525,7 +519,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     debug!("pattern by decided tap release: {:?}", pattern);
 
                                     let final_action = Self::try_predict_final_action(
-                                        &self.keymap.borrow().behavior,
+                                        self.keymap.borrow().behavior,
                                         &key_action,
                                         pattern,
                                     );
@@ -753,13 +747,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         if !event.pressed {
             for (i, fork) in (&self.keymap.borrow().behavior.fork.forks).into_iter().enumerate() {
-                if fork.trigger == *key_action {
-                    if let Some(active) = self.fork_states[i] {
-                        // If the originating key of a fork is released, simply release the replacement key
-                        // (The fork deactivation is delayed, will happen after the release hid report is sent)
-                        debug!("replace input with fork action {:?}", active);
-                        return active.replacement;
-                    }
+                if fork.trigger == *key_action
+                    && let Some(active) = self.fork_states[i]
+                {
+                    // If the originating key of a fork is released, simply release the replacement key
+                    // (The fork deactivation is delayed, will happen after the release hid report is sent)
+                    debug!("replace input with fork action {:?}", active);
+                    return active.replacement;
                 }
             }
             return *key_action;
@@ -905,7 +899,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 let mut releasing_triggered_combo = false;
 
                 for combo in self.keymap.borrow_mut().behavior.combo.combos.iter_mut() {
-                    if combo.actions.contains(&key_action) {
+                    if combo.actions.contains(key_action) {
                         // Releasing a combo key in triggered combo
                         releasing_triggered_combo |= combo.is_triggered();
 
@@ -1849,10 +1843,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
             KeyboardEventPos::RotaryEncoder(encoder_pos) => {
                 // Check if the rotary encoder id is valid
-                if let Some(encoder) = self.rotary_encoder_timer.get_mut(encoder_pos.id as usize) {
-                    if encoder_pos.direction != Direction::None {
-                        encoder[encoder_pos.direction as usize] = value;
-                    }
+                if let Some(encoder) = self.rotary_encoder_timer.get_mut(encoder_pos.id as usize)
+                    && encoder_pos.direction != Direction::None
+                {
+                    encoder[encoder_pos.direction as usize] = value;
                 }
             }
         }
@@ -1864,10 +1858,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             KeyboardEventPos::Key(pos) => self.timer[pos.col as usize][pos.row as usize],
             KeyboardEventPos::RotaryEncoder(encoder_pos) => {
                 // Check if the rotary encoder id is valid
-                if let Some(encoder) = self.rotary_encoder_timer.get(encoder_pos.id as usize) {
-                    if encoder_pos.direction != Direction::None {
-                        return encoder[encoder_pos.direction as usize];
-                    }
+                if let Some(encoder) = self.rotary_encoder_timer.get(encoder_pos.id as usize)
+                    && encoder_pos.direction != Direction::None
+                {
+                    return encoder[encoder_pos.direction as usize];
                 }
                 None
             }
@@ -1879,7 +1873,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // First, find the key event slot according to the position
         let slot = self.registered_keys.iter().enumerate().find_map(|(i, k)| {
             if let Some(e) = k
-                && event.pos == (*e).pos
+                && event.pos == e.pos
             {
                 return Some(i);
             }
@@ -1904,7 +1898,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // First, find the key event slot according to the position
         let slot = self.registered_keys.iter().enumerate().find_map(|(i, k)| {
             if let Some(e) = k
-                && event.pos == (*e).pos
+                && event.pos == e.pos
             {
                 return Some(i);
             }

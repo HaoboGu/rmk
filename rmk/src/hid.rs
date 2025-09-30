@@ -63,8 +63,7 @@ pub trait RunnableHidWriter: HidWriterTrait {
                 // Only send the report after the connection is established.
                 if CONNECTION_STATE.load(Ordering::Acquire)
                     == <ConnectionState as Into<bool>>::into(ConnectionState::Connected)
-                {
-                    if let Err(e) = self.write_report(report.clone()).await {
+                    && let Err(e) = self.write_report(report.clone()).await {
                         error!("Failed to send report: {:?}", e);
                         #[cfg(not(feature = "_no_usb"))]
                         // If the USB endpoint is disabled, try wakeup
@@ -78,7 +77,6 @@ pub trait RunnableHidWriter: HidWriterTrait {
                             }
                         }
                     };
-                }
             }
         }
     }

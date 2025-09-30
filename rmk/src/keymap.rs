@@ -107,8 +107,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         fill_vec(&mut behavior.fork.forks); // Is this needed? (has no Vial support)
         fill_vec(&mut behavior.morse.morses);
 
-        if let Some(storage) = storage {
-            if {
+        if let Some(storage) = storage
+            && {
                 Ok(())
                     // Read keymap to `action_map`
                     .and(storage.read_keymap(action_map, &mut encoder_map).await)
@@ -136,7 +136,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                 reboot_keyboard();
             }
-        }
 
         KeyMap {
             layers: action_map,
@@ -191,15 +190,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 self.layers[layer_num][row][col] = action;
             }
             KeyboardEventPos::RotaryEncoder(encoder_pos) => {
-                if let Some(encoders) = &mut self.encoders {
-                    if let Some(encoder_action) = encoders[layer_num].get_mut(encoder_pos.id as usize) {
+                if let Some(encoders) = &mut self.encoders
+                    && let Some(encoder_action) = encoders[layer_num].get_mut(encoder_pos.id as usize) {
                         match encoder_pos.direction {
                             Direction::Clockwise => encoder_action.set_clockwise(action),
                             Direction::CounterClockwise => encoder_action.set_counter_clockwise(action),
                             Direction::None => {}
                         }
                     }
-                }
             }
         }
     }
@@ -214,18 +212,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
             KeyboardEventPos::RotaryEncoder(encoder_pos) => {
                 // Get the action from the keymap
-                if let Some(encoders) = &self.encoders {
-                    if let Some(encoder_action) = encoders[layer_num].get(encoder_pos.id as usize) {
-                        if encoder_pos.direction != Direction::None {
+                if let Some(encoders) = &self.encoders
+                    && let Some(encoder_action) = encoders[layer_num].get(encoder_pos.id as usize)
+                        && encoder_pos.direction != Direction::None {
                             return match encoder_pos.direction {
                                 Direction::Clockwise => encoder_action.clockwise(),
                                 Direction::CounterClockwise => encoder_action.counter_clockwise(),
                                 Direction::None => KeyAction::No,
                             };
                         }
-                    }
-                }
-                return KeyAction::No;
+                KeyAction::No
             }
         }
     }
@@ -316,13 +312,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 layer
             }
             KeyboardEventPos::RotaryEncoder(encoder_pos) => {
-                if let Some(cache) = self.encoder_layer_cache.get_mut(encoder_pos.id as usize) {
-                    if encoder_pos.direction != Direction::None {
+                if let Some(cache) = self.encoder_layer_cache.get_mut(encoder_pos.id as usize)
+                    && encoder_pos.direction != Direction::None {
                         let layer = cache[encoder_pos.direction as usize];
                         cache[encoder_pos.direction as usize] = self.default_layer;
                         return layer;
                     }
-                }
                 // Wrong argument, return the default layer
                 self.default_layer
             }
@@ -339,11 +334,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
             KeyboardEventPos::RotaryEncoder(encoder_pos) => {
                 // Check if the rotary encoder id and direction are valid
-                if let Some(cache) = self.encoder_layer_cache.get_mut(encoder_pos.id as usize) {
-                    if encoder_pos.direction != Direction::None {
+                if let Some(cache) = self.encoder_layer_cache.get_mut(encoder_pos.id as usize)
+                    && encoder_pos.direction != Direction::None {
                         cache[encoder_pos.direction as usize] = layer_num;
                     }
-                }
             }
         }
     }
