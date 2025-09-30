@@ -1,6 +1,7 @@
 use byteorder::{BigEndian, ByteOrder as _};
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
+use heapless::index_map::FnvIndexMap;
 use rmk_types::action::{EncoderAction, KeyAction, MorseProfile};
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
@@ -9,8 +10,10 @@ use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_item};
 
 use crate::combo::Combo;
+use crate::event::KeyboardEventPos;
 use crate::fork::{Fork, StateBits};
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
+use crate::input_device::rotary_encoder::Direction;
 use crate::morse::{Morse, MorsePattern};
 use crate::storage::{
     Storage, StorageData, StorageKeys, get_combo_key, get_fork_key, get_morse_key, print_storage_error,
@@ -33,8 +36,10 @@ pub(crate) struct EncoderConfig {
     pub(crate) idx: u8,
     /// Layer
     pub(crate) layer: u8,
+    /// Direction
+    pub(crate) direction: Direction,
     /// Encoder action
-    pub(crate) action: EncoderAction,
+    pub(crate) action: KeyAction,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -92,11 +97,12 @@ impl Value<'_> for KeymapData {
 
             KeymapData::Encoder(e) => {
                 buffer[0] = StorageKeys::EncoderKeys as u8;
-                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(e.action.clockwise()));
-                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(e.action.counter_clockwise()));
-                buffer[5] = e.idx as u8;
-                buffer[6] = e.layer as u8;
-                Ok(7)
+                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(e.action));
+                // BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(e.action.counter_clockwise()));
+                buffer[3] = e.idx as u8;
+                buffer[4] = e.layer as u8;
+                buffer[5] = e.direction.into();
+                Ok(5)
             }
 
             KeymapData::Macro(d) => {
@@ -242,15 +248,17 @@ impl Value<'_> for KeymapData {
                     if buffer.len() < 7 {
                         return Err(SerializationError::BufferTooSmall);
                     }
-                    let clockwise = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
-                    let counter_clockwise = from_via_keycode(BigEndian::read_u16(&buffer[3..5]));
-                    let idx = buffer[5];
-                    let layer = buffer[6];
+                    let action = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
+                    // let counter_clockwise = from_via_keycode(BigEndian::read_u16(&buffer[3..5]));
+                    let idx = buffer[3];
+                    let layer = buffer[4];
+                    let direction = buffer[5].into();
 
                     Ok(KeymapData::Encoder(EncoderConfig {
                         idx,
                         layer,
-                        action: EncoderAction::new(clockwise, counter_clockwise),
+                        direction,
+                        action,
                     }))
                 }
 
@@ -331,8 +339,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 {
     pub(crate) async fn read_keymap(
         &mut self,
-        keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: &mut Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+        keymap: &mut FnvIndexMap<KeyboardEventPos, [KeyAction; NUM_LAYER], 32>,
     ) -> Result<(), ()> {
         use sequential_storage::cache::NoCache;
         use sequential_storage::map::fetch_all_items;
@@ -362,15 +369,32 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     let row = key.row as usize;
                     let col = key.col as usize;
                     if layer < NUM_LAYER && row < ROW && col < COL {
-                        keymap[layer][row][col] = key.action;
+                        let key_pos = KeyboardEventPos::key_pos(key.col, key.row);
+                        match keymap.get_mut(&key_pos) {
+                            Some(data) => {
+                                data[layer] = key.action;
+                            }
+                            None => {
+                                let mut data = [KeyAction::No; NUM_LAYER];
+                                data[key.layer as usize] = key.action;
+                                keymap.insert(key_pos, data);
+                            }
+                        }
                     }
                 }
                 StorageData::VialData(KeymapData::Encoder(encoder)) => {
-                    if let Some(map) = encoder_map {
-                        let idx = encoder.idx as usize;
-                        let layer = encoder.layer as usize;
-                        if layer < NUM_LAYER && idx < NUM_ENCODER {
-                            map[layer][idx] = encoder.action;
+                    let layer = encoder.layer as usize;
+                    if layer < NUM_LAYER {
+                        let pos = KeyboardEventPos::rotary_encoder_pos(encoder.idx, encoder.direction);
+                        match keymap.get_mut(&pos) {
+                            Some(data) => {
+                                data[layer] = encoder.action;
+                            }
+                            None => {
+                                let mut data = [KeyAction::No; NUM_LAYER];
+                                data[layer] = encoder.action;
+                                keymap.insert(pos, data);
+                            }
                         }
                     }
                 }

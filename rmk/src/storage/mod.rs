@@ -9,6 +9,8 @@ use embassy_sync::signal::Signal;
 use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
+#[cfg(feature = "host")]
+use heapless::index_map::FnvIndexMap;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_item, store_item};
@@ -26,6 +28,8 @@ use {
 
 use crate::channel::FLASH_CHANNEL;
 use crate::config::StorageConfig;
+#[cfg(feature = "host")]
+use crate::event::KeyboardEventPos;
 #[cfg(all(feature = "_ble", feature = "split"))]
 use crate::split::ble::PeerAddress;
 use crate::{BUILD_HASH, config};
@@ -488,9 +492,7 @@ pub async fn new_storage_for_split_peripheral<F: AsyncNorFlash>(
     Storage::<F, 0, 0, 0, 0>::new(
         flash,
         #[cfg(feature = "host")]
-        &[],
-        #[cfg(feature = "host")]
-        &None,
+        &mut FnvIndexMap::new(),
         &storage_config,
         &config::BehaviorConfig::default(),
     )
@@ -537,8 +539,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 {
     pub async fn new(
         flash: F,
-        #[cfg(feature = "host")] keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
-        #[cfg(feature = "host")] encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+        #[cfg(feature = "host")] keymap: &mut FnvIndexMap<KeyboardEventPos, [KeyAction; NUM_LAYER], 32>,
         storage_config: &StorageConfig,
         behavior_config: &config::BehaviorConfig,
     ) -> Self {
@@ -596,8 +597,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 .initialize_storage_with_config(
                     #[cfg(feature = "host")]
                     keymap,
-                    #[cfg(feature = "host")]
-                    encoder_map,
                     behavior_config,
                 )
                 .await
@@ -622,8 +621,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             #[cfg(feature = "host")]
             {
                 debug!("clear_layout=true; overwriting layout items without erase.");
-                let encoder_map = encoder_map.as_ref().map(|m| &**m);
-                let _ = storage.reset_layout_only(keymap, &encoder_map, behavior_config).await;
+                let _ = storage.reset_layout_only(keymap, behavior_config).await;
             }
         }
 
@@ -911,8 +909,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
     async fn initialize_storage_with_config(
         &mut self,
-        #[cfg(feature = "host")] keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
-        #[cfg(feature = "host")] encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+        #[cfg(feature = "host")] keymap: &mut FnvIndexMap<KeyboardEventPos, [KeyAction; NUM_LAYER], 32>,
         behavior: &config::BehaviorConfig,
     ) -> Result<(), ()> {
         let mut cache = NoCache::new();
@@ -972,54 +969,74 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         .map_err(|e| print_storage_error::<F>(e))?;
 
         #[cfg(feature = "host")]
-        for (layer, layer_data) in keymap.iter().enumerate() {
-            for (row, row_data) in layer_data.iter().enumerate() {
-                for (col, action) in row_data.iter().enumerate() {
-                    let keymap_key = KeymapKey {
-                        row: row as u8,
-                        col: col as u8,
-                        layer: layer as u8,
-                        action: *action,
-                    };
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut cache,
-                        &mut self.buffer,
-                        &get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key),
-                        &StorageData::VialData(KeymapData::KeymapKey(keymap_key)),
-                    )
-                    .await
-                    .map_err(|e| print_storage_error::<F>(e))?;
+        for (&pos, &layer_data) in keymap.iter() {
+            for (layer, &action) in layer_data.iter().enumerate() {
+                // for (col, action) in row_data.iter().enumerate() {
+                match pos {
+                    KeyboardEventPos::Key(key_pos) => {
+                        let keymap_key = KeymapKey {
+                            row: key_pos.row,
+                            col: key_pos.col,
+                            layer: layer as u8,
+                            action,
+                        };
+                        store_item(
+                            &mut self.flash,
+                            self.storage_range.clone(),
+                            &mut cache,
+                            &mut self.buffer,
+                            &get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key),
+                            &StorageData::VialData(KeymapData::KeymapKey(keymap_key)),
+                        )
+                        .await
+                        .map_err(|e| print_storage_error::<F>(e))?;
+                    }
+                    KeyboardEventPos::RotaryEncoder(rotary_encoder_pos) => {
+                        use crate::host::storage::EncoderConfig;
+                        let encoder = EncoderConfig {
+                            idx: rotary_encoder_pos.id,
+                            layer: layer as u8,
+                            direction: rotary_encoder_pos.direction,
+                            action: action,
+                        };
+                        store_item(
+                            &mut self.flash,
+                            self.storage_range.clone(),
+                            &mut cache,
+                            &mut self.buffer,
+                            &get_encoder_config_key::<NUM_ENCODER>(encoder.idx, encoder.layer),
+                            &StorageData::VialData(KeymapData::Encoder(encoder)),
+                        )
+                        .await
+                        .map_err(|e| print_storage_error::<F>(e))?;
+                    }
                 }
             }
         }
 
         // Save encoder configurations
-        #[cfg(feature = "host")]
-        if let Some(encoder_map) = encoder_map {
-            for (layer, layer_data) in encoder_map.iter().enumerate() {
-                for (idx, action) in layer_data.iter().enumerate() {
-                    use crate::host::storage::EncoderConfig;
-
-                    let encoder = EncoderConfig {
-                        idx: idx as u8,
-                        layer: layer as u8,
-                        action: *action,
-                    };
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut cache,
-                        &mut self.buffer,
-                        &get_encoder_config_key::<NUM_ENCODER>(encoder.idx, encoder.layer),
-                        &StorageData::VialData(KeymapData::Encoder(encoder)),
-                    )
-                    .await
-                    .map_err(|e| print_storage_error::<F>(e))?;
-                }
-            }
-        }
+        // #[cfg(feature = "host")]
+        // if let Some(encoder_map) = encoder_map {
+        //     for (layer, layer_data) in encoder_map.iter().enumerate() {
+        //         for (idx, action) in layer_data.iter().enumerate() {
+        //             let encoder = EncoderConfig {
+        //                 idx: idx as u8,
+        //                 layer: layer as u8,
+        //                 action: *action,
+        //             };
+        //             store_item(
+        //                 &mut self.flash,
+        //                 self.storage_range.clone(),
+        //                 &mut cache,
+        //                 &mut self.buffer,
+        //                 &get_encoder_config_key::<NUM_ENCODER>(encoder.idx, encoder.layer),
+        //                 &StorageData::VialData(KeymapData::Encoder(encoder)),
+        //             )
+        //             .await
+        //             .map_err(|e| print_storage_error::<F>(e))?;
+        //         }
+        //     }
+        // }
 
         Ok(())
     }
@@ -1027,8 +1044,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     #[cfg(feature = "host")]
     async fn reset_layout_only(
         &mut self,
-        keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: &Option<&[[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+        #[cfg(feature = "host")] keymap: &mut FnvIndexMap<KeyboardEventPos, [KeyAction; NUM_LAYER], 32>,
         behavior: &config::BehaviorConfig,
     ) -> Result<(), SSError<F::Error>> {
         let mut cache = NoCache::new();
@@ -1067,50 +1083,71 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         )
         .await?;
 
-        // TODO: Generic reset for vial and other hosts
-        for (layer, layer_data) in keymap.iter().enumerate() {
-            for (row, row_data) in layer_data.iter().enumerate() {
-                for (col, action) in row_data.iter().enumerate() {
-                    let keymap_key = KeymapKey {
-                        row: row as u8,
-                        col: col as u8,
-                        layer: layer as u8,
-                        action: *action,
-                    };
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut cache,
-                        &mut self.buffer,
-                        &get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key),
-                        &StorageData::VialData(KeymapData::KeymapKey(keymap_key)),
-                    )
-                    .await?;
+        #[cfg(feature = "host")]
+        for (&pos, &layer_data) in keymap.iter() {
+            for (layer, &action) in layer_data.iter().enumerate() {
+                // for (col, action) in row_data.iter().enumerate() {
+                match pos {
+                    KeyboardEventPos::Key(key_pos) => {
+                        let keymap_key = KeymapKey {
+                            row: key_pos.row,
+                            col: key_pos.col,
+                            layer: layer as u8,
+                            action,
+                        };
+                        store_item(
+                            &mut self.flash,
+                            self.storage_range.clone(),
+                            &mut cache,
+                            &mut self.buffer,
+                            &get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key),
+                            &StorageData::VialData(KeymapData::KeymapKey(keymap_key)),
+                        )
+                        .await?;
+                    }
+                    KeyboardEventPos::RotaryEncoder(rotary_encoder_pos) => {
+                        use crate::host::storage::EncoderConfig;
+                        let encoder = EncoderConfig {
+                            idx: rotary_encoder_pos.id,
+                            layer: layer as u8,
+                            direction: rotary_encoder_pos.direction,
+                            action: action,
+                        };
+                        store_item(
+                            &mut self.flash,
+                            self.storage_range.clone(),
+                            &mut cache,
+                            &mut self.buffer,
+                            &get_encoder_config_key::<NUM_ENCODER>(encoder.idx, encoder.layer),
+                            &StorageData::VialData(KeymapData::Encoder(encoder)),
+                        )
+                        .await?;
+                    }
                 }
             }
         }
 
         // TODO: Generic reset for vial and other hosts
-        if let Some(encoder_map) = encoder_map {
-            for (layer, layer_data) in encoder_map.iter().enumerate() {
-                for (idx, action) in layer_data.iter().enumerate() {
-                    use crate::host::storage::EncoderConfig;
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut cache,
-                        &mut self.buffer,
-                        &get_encoder_config_key::<NUM_ENCODER>(idx as u8, layer as u8),
-                        &StorageData::VialData(KeymapData::Encoder(EncoderConfig {
-                            idx: idx as u8,
-                            layer: layer as u8,
-                            action: *action,
-                        })),
-                    )
-                    .await?;
-                }
-            }
-        }
+        // if let Some(encoder_map) = encoder_map {
+        //     for (layer, layer_data) in encoder_map.iter().enumerate() {
+        //         for (idx, action) in layer_data.iter().enumerate() {
+        //             use crate::host::storage::EncoderConfig;
+        //             store_item(
+        //                 &mut self.flash,
+        //                 self.storage_range.clone(),
+        //                 &mut cache,
+        //                 &mut self.buffer,
+        //                 &get_encoder_config_key::<NUM_ENCODER>(idx as u8, layer as u8),
+        //                 &StorageData::VialData(KeymapData::Encoder(EncoderConfig {
+        //                     idx: idx as u8,
+        //                     layer: layer as u8,
+        //                     action: *action,
+        //                 })),
+        //             )
+        //             .await?;
+        //         }
+        //     }
+        // }
 
         Ok(())
     }

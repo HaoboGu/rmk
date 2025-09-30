@@ -39,6 +39,7 @@ use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 #[cfg(not(feature = "_no_usb"))]
 use embassy_usb::driver::Driver;
 use futures::FutureExt;
+use heapless::index_map::FnvIndexMap;
 use hid::{HidReaderTrait, RunnableHidWriter};
 use keymap::KeyMap;
 use matrix::MatrixTrait;
@@ -61,9 +62,9 @@ pub use {embassy_futures, futures, heapless, rmk_macro as macros, rmk_types as t
 #[cfg(feature = "storage")]
 use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 
-use crate::config::PositionalConfig;
 use crate::keyboard::LOCK_LED_STATES;
 use crate::state::ConnectionState;
+use crate::{config::PositionalConfig, event::KeyboardEventPos};
 
 #[cfg(feature = "bidirectional")]
 pub mod bidirectional_matrix;
@@ -102,34 +103,11 @@ pub mod storage;
 pub mod usb;
 
 pub async fn initialize_keymap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
-    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    keymap: &'a mut FnvIndexMap<KeyboardEventPos, [KeyAction; NUM_LAYER], 32>,
     behavior_config: &'a mut config::BehaviorConfig,
     positional_config: &'a mut PositionalConfig<ROW, COL>,
 ) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>> {
-    RefCell::new(KeyMap::new(default_keymap, None, behavior_config, positional_config).await)
-}
-
-pub async fn initialize_encoder_keymap<
-    'a,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
->(
-    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
-    behavior_config: &'a mut config::BehaviorConfig,
-    positional_config: &'a mut PositionalConfig<ROW, COL>,
-) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
-    RefCell::new(
-        KeyMap::new(
-            default_keymap,
-            Some(default_encoder_map),
-            behavior_config,
-            positional_config,
-        )
-        .await,
-    )
+    RefCell::new(KeyMap::new(keymap, behavior_config, positional_config).await)
 }
 
 #[cfg(feature = "storage")]
@@ -141,8 +119,7 @@ pub async fn initialize_encoder_keymap_and_storage<
     const NUM_LAYER: usize,
     const NUM_ENCODER: usize,
 >(
-    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
+    keymap: &'a mut FnvIndexMap<KeyboardEventPos, [KeyAction; NUM_LAYER], 32>,
     flash: F,
     storage_config: &config::StorageConfig,
     behavior_config: &'a mut config::BehaviorConfig,
@@ -153,24 +130,10 @@ pub async fn initialize_encoder_keymap_and_storage<
 ) {
     #[cfg(feature = "host")]
     {
-        let mut storage = Storage::new(
-            flash,
-            default_keymap,
-            &Some(default_encoder_map),
-            storage_config,
-            &behavior_config,
-        )
-        .await;
+        let mut storage = Storage::new(flash, keymap, storage_config, &behavior_config).await;
 
         let keymap = RefCell::new(
-            KeyMap::new_from_storage(
-                default_keymap,
-                Some(default_encoder_map),
-                Some(&mut storage),
-                behavior_config,
-                positional_config,
-            )
-            .await,
+            KeyMap::new_from_storage(keymap, Some(&mut storage), behavior_config, positional_config).await,
         );
         (keymap, storage)
     }
@@ -199,7 +162,7 @@ pub async fn initialize_keymap_and_storage<
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: &'a mut FnvIndexMap<KeyboardEventPos, [KeyAction; NUM_LAYER], 32>,
     flash: F,
     storage_config: &config::StorageConfig,
     behavior_config: &'a mut config::BehaviorConfig,
@@ -210,16 +173,9 @@ pub async fn initialize_keymap_and_storage<
 ) {
     #[cfg(feature = "host")]
     {
-        let mut storage = Storage::new(flash, default_keymap, &None, storage_config, &behavior_config).await;
+        let mut storage = Storage::new(flash, default_keymap, storage_config, &behavior_config).await;
         let keymap = RefCell::new(
-            KeyMap::new_from_storage(
-                default_keymap,
-                None,
-                Some(&mut storage),
-                behavior_config,
-                positional_config,
-            )
-            .await,
+            KeyMap::new_from_storage(default_keymap, Some(&mut storage), behavior_config, positional_config).await,
         );
         (keymap, storage)
     }

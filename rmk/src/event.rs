@@ -65,7 +65,7 @@ impl KeyboardEvent {
 /// The position of the keyboard event.
 ///
 /// The position can be either a key (row, col), or a rotary encoder (id, direction)
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum KeyboardEventPos {
     Key(KeyPos),
@@ -82,7 +82,7 @@ impl KeyboardEventPos {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyPos {
     pub row: u8,
@@ -90,7 +90,7 @@ pub struct KeyPos {
 }
 
 /// Event for rotary encoder
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RotaryEncoderPos {
     /// The id of the rotary encoder

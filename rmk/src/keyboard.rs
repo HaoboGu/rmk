@@ -2190,7 +2190,7 @@ mod test {
 
         static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<5, 14>> = static_cell::StaticCell::new();
         let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
-        let keymap = block_on(KeyMap::new(leaked_keymap, None, behavior_config, per_key_config));
+        let keymap = block_on(KeyMap::new(leaked_keymap, behavior_config, per_key_config));
         let keymap_cell = RefCell::new(keymap);
         let keymap_ref = Box::leak(Box::new(keymap_cell));
 

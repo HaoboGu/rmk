@@ -1,4 +1,5 @@
-use rmk_types::action::{EncoderAction, KeyAction};
+use heapless::index_map::FnvIndexMap;
+use rmk_types::action::KeyAction;
 #[cfg(feature = "controller")]
 use {
     crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
@@ -19,15 +20,58 @@ use crate::keyboard_macros::MacroOperation;
 #[cfg(feature = "vial_lock")]
 use crate::matrix::MatrixState;
 
+// #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+// pub struct KeyPos {
+//     col: u8,
+//     row: u8,
+//     layer: u8,
+// }
+
+// #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+// pub struct EncoderPos {
+//     id: u8,
+//     layer: u8,
+//     direction: Direction,
+// }
+
+// #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+// pub struct Pos {
+//     pos: KeyboardEventPos,
+//     layer: u8,
+// }
+
+// impl Pos {
+//     pub fn new_key(row: u8, col: u8, layer: u8) -> Self {
+//         Self {
+//             pos: KeyboardEventPos::key_pos(col, row),
+//             layer,
+//         }
+//     }
+// }
+
+pub struct KeyMapV2<'a, const LAYER: usize, const SIZE: usize> {
+    // Keymap stores all available key actions.
+    // TODO: `FnvIndexMap` has overheads(6 bytes * SIZE), use LinearMap?
+    // We don't use `layer` in key because for some position we need to check all layers at the position
+    keymap: &'a mut FnvIndexMap<KeyboardEventPos, [KeyAction; LAYER], SIZE>,
+}
+
+impl<'a, const LAYER: usize, const SIZE: usize> KeyMapV2<'a, LAYER, SIZE> {
+    pub fn new(keymap: &'a mut FnvIndexMap<KeyboardEventPos, [KeyAction; LAYER], SIZE>) -> Self {
+        Self { keymap }
+    }
+}
+
 /// Keymap represents the stack of layers.
 ///
 /// Keymap should be binded to the actual pcb matrix definition.
 /// RMK detects hardware key strokes, uses tuple `(row, col, layer)` to retrieve the action from Keymap.
 pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0> {
     /// Layers
-    pub(crate) layers: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    /// Rotary encoders, each rotary encoder is represented as (Clockwise, CounterClockwise)
-    pub(crate) encoders: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+    // pub(crate) layers: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    // /// Rotary encoders, each rotary encoder is represented as (Clockwise, CounterClockwise)
+    // pub(crate) encoders: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+    keymap: &'a mut FnvIndexMap<KeyboardEventPos, [KeyAction; NUM_LAYER], 32>,
     /// Current state of each layer
     layer_state: [bool; NUM_LAYER],
     /// Default layer number, max: 32
@@ -63,8 +107,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     pub async fn new(
-        action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+        keymap: &'a mut FnvIndexMap<KeyboardEventPos, [KeyAction; NUM_LAYER], 32>,
         behavior: &'a mut BehaviorConfig,
         positional_config: &'a mut PositionalConfig<ROW, COL>,
     ) -> Self {
@@ -79,8 +122,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         fill_vec(&mut behavior.morse.morses);
 
         KeyMap {
-            layers: action_map,
-            encoders: encoder_map,
+            // layers: action_map,
+            // encoders: encoder_map,
+            keymap,
             layer_state: [false; NUM_LAYER],
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
@@ -96,8 +140,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     #[cfg(all(feature = "storage", feature = "host"))]
     pub async fn new_from_storage<F: NorFlash>(
-        action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+        // action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+        // mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+        keymap: &'a mut FnvIndexMap<KeyboardEventPos, [KeyAction; NUM_LAYER], 32>,
         storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
         behavior: &'a mut BehaviorConfig,
         positional_config: &'a mut PositionalConfig<ROW, COL>,
@@ -111,7 +156,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             if {
                 Ok(())
                     // Read keymap to `action_map`
-                    .and(storage.read_keymap(action_map, &mut encoder_map).await)
+                    .and(storage.read_keymap(keymap).await)
                     // Read behavior config
                     .and(storage.read_behavior_config(behavior).await)
                     // Read macro cache
@@ -139,8 +184,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         KeyMap {
-            layers: action_map,
-            encoders: encoder_map,
+            keymap,
             layer_state: [false; NUM_LAYER],
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
@@ -183,50 +227,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         )
     }
 
-    pub(crate) fn set_action_at(&mut self, pos: KeyboardEventPos, layer_num: usize, action: KeyAction) {
-        match pos {
-            KeyboardEventPos::Key(key_pos) => {
-                let row = key_pos.row as usize;
-                let col = key_pos.col as usize;
-                self.layers[layer_num][row][col] = action;
-            }
-            KeyboardEventPos::RotaryEncoder(encoder_pos) => {
-                if let Some(encoders) = &mut self.encoders {
-                    if let Some(encoder_action) = encoders[layer_num].get_mut(encoder_pos.id as usize) {
-                        match encoder_pos.direction {
-                            Direction::Clockwise => encoder_action.set_clockwise(action),
-                            Direction::CounterClockwise => encoder_action.set_counter_clockwise(action),
-                            Direction::None => {}
-                        }
-                    }
-                }
-            }
+    pub(crate) fn set_action_at(&mut self, pos: KeyboardEventPos, layer_num: u8, action: KeyAction) {
+        if let Some(data) = self.keymap.get_mut(&pos) {
+            data[layer_num as usize] = action;
         }
     }
 
     /// Fetch the action in keymap, with layer cache
-    pub(crate) fn get_action_at(&self, pos: KeyboardEventPos, layer_num: usize) -> KeyAction {
-        match pos {
-            KeyboardEventPos::Key(key_pos) => {
-                let row = key_pos.row as usize;
-                let col = key_pos.col as usize;
-                self.layers[layer_num][row][col]
-            }
-            KeyboardEventPos::RotaryEncoder(encoder_pos) => {
-                // Get the action from the keymap
-                if let Some(encoders) = &self.encoders {
-                    if let Some(encoder_action) = encoders[layer_num].get(encoder_pos.id as usize) {
-                        if encoder_pos.direction != Direction::None {
-                            return match encoder_pos.direction {
-                                Direction::Clockwise => encoder_action.clockwise(),
-                                Direction::CounterClockwise => encoder_action.counter_clockwise(),
-                                Direction::None => KeyAction::No,
-                            };
-                        }
-                    }
-                }
-                return KeyAction::No;
-            }
+    pub(crate) fn get_action_at(&self, pos: KeyboardEventPos, layer_num: u8) -> KeyAction {
+        if let Some(data) = self.keymap.get(&pos) {
+            data[layer_num as usize]
+        } else {
+            KeyAction::No
         }
     }
 
@@ -235,59 +247,27 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if !event.pressed {
             // Releasing a pressed key, use cached layer and restore the cache
             let layer = self.pop_layer_from_cache(event.pos);
-            let action = self.get_action_at(event.pos, layer as usize);
+            let action = self.get_action_at(event.pos, layer);
             return action;
         }
 
         // Iterate from higher layer to lower layer, the lowest checked layer is the default layer
-        match event.pos {
-            KeyboardEventPos::Key(key_pos) => {
-                let row = key_pos.row as usize;
-                let col = key_pos.col as usize;
-                for (layer_idx, layer) in self.layers.iter().enumerate().rev() {
-                    if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
-                        // This layer is activated
-                        let action = layer[row][col];
-                        if action == KeyAction::Transparent {
-                            continue;
-                        }
-
-                        // Found a valid action in the layer, cache it
-                        self.save_layer_cache(event.pos, layer_idx as u8);
-
-                        return action;
+        if let Some(layer_data) = self.keymap.get(&event.pos) {
+            for (layer_idx, &action) in layer_data.iter().enumerate().rev() {
+                if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
+                    // This layer is activated, check whether it's transparent first
+                    if action == KeyAction::Transparent {
+                        continue;
                     }
 
-                    if layer_idx as u8 == self.default_layer {
-                        // No action
-                        break;
-                    }
+                    // Found a valid action in the layer, cache it
+                    self.save_layer_cache(event.pos, layer_idx as u8);
+
+                    return action;
                 }
-            }
-            KeyboardEventPos::RotaryEncoder(encoder_pos) => {
-                if let Some(encoders) = &self.encoders {
-                    for (layer_idx, layer) in encoders.iter().enumerate().rev() {
-                        // Get the KeyAction for rotary_encoder_event from self.encoders
-                        if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
-                            // This layer is activated
-                            if let Some(encoder_action) = layer.get(encoder_pos.id as usize) {
-                                let action = match encoder_pos.direction {
-                                    Direction::Clockwise => encoder_action.clockwise(),
-                                    Direction::CounterClockwise => encoder_action.counter_clockwise(),
-                                    Direction::None => KeyAction::No,
-                                };
-                                if action == KeyAction::Transparent {
-                                    continue;
-                                }
-                                self.save_layer_cache(event.pos, layer_idx as u8);
-                                return action;
-                            }
-                        }
-                        if layer_idx as u8 == self.default_layer {
-                            // No action
-                            break;
-                        }
-                    }
+                if layer_idx as u8 == self.default_layer {
+                    // No action
+                    break;
                 }
             }
         }
@@ -296,7 +276,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     pub(crate) fn get_activated_layer(&self) -> u8 {
-        for (layer_idx, _) in self.layers.iter().enumerate().rev() {
+        for layer_idx in (0..NUM_LAYER).rev() {
             if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
                 return layer_idx as u8;
             }

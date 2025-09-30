@@ -26,15 +26,35 @@ pub struct RotaryEncoder<A, B, P> {
 }
 
 /// The encoder direction is either `Clockwise`, `CounterClockwise`, or `None`
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Direction {
+    /// No change
+    None,
     /// A clockwise turn
     Clockwise,
     /// A counterclockwise turn
     CounterClockwise,
-    /// No change
-    None,
+}
+
+impl From<u8> for Direction {
+    fn from(value: u8) -> Self {
+        match value {
+            1 => Direction::Clockwise,
+            2 => Direction::CounterClockwise,
+            _ => Direction::None,
+        }
+    }
+}
+
+impl Into<u8> for Direction {
+    fn into(self) -> u8 {
+        match self {
+            Direction::None => 0,
+            Direction::Clockwise => 1,
+            Direction::CounterClockwise => 2,
+        }
+    }
 }
 
 /// Allows customizing which Quadrature Phases should be considered movements
