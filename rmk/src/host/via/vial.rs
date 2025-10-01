@@ -488,6 +488,7 @@ pub(crate) async fn process_vial<
 }
 
 #[cfg(test)]
+#[cfg(feature = "storage")]
 mod tests {
     use rmk_types::action::Action;
     use rmk_types::keycode::KeyCode;
