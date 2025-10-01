@@ -417,8 +417,7 @@ pub struct LayoutConfig {
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct KeyInfo {
-    pub hand: char,              // 'L' or 'R' or other chars
-    pub profile: Option<String>, // name of key profile (BehaviorConfig::morse.profiles[self.profile])
+    pub hand: char, // 'L' or 'R' or other chars
 }
 
 /// Configurations for actions behavior

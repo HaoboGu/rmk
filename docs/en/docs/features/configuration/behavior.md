@@ -98,7 +98,7 @@ operations = [
 ]
 ```
 
-## Morse (and Tap Dance)
+## Morse (and TapDance)
 
 In the `morse` sub-table, you can configure the keyboard's morse functionality. Morse is a superset of the well-known [tap dance](https://docs.qmk.fm/features/tap_dance), enabling you to assign different actions to various combinations of taps and holds performed within a specific time window.
 
@@ -184,38 +184,11 @@ Mixing fields from different methods in the same definition is not allowed.
 
 :::
 
-### Global Configuration Limits
+### Profile
 
-The following parameters in the `[rmk]` section control the resource allocation for the Morse feature:
+The `profile` of a morse key contains all tunable configurations of this morse key, such as behavior mode, timing configurations, etc.
 
-- `morse_max_num`: The maximum number of Morse key you can create. (Default: 8, Range: 0-256)
-- `max_patterns_per_key`: The maximum number of individual patterns (like ".-") or actions that a single Morse key can contain. (Default: 8, Range: 4-65536)
-
-```toml
-[rmk]
-morse_max_num = 10  # To support up to 10 morse keys
-max_patterns_per_key = 36  # To support up to 36 morse patterns per morse key
-```
-
-Note that the Vial-style method (using `tap`, `hold`, `hold_after_tap`, `double_tap`) needs at least 4 patterns. If you create a key with a long `tap_actions`/`hold_actions` array or many `morse_actions`, you might need to increase `max_patterns_per_key` accordingly.
-
-::: warning Vial Compatibility
-Please note that while the firmware can handle all Morse configurations, Vial can only recognize and edit the four basic Vial-style actions. These correspond to the patterns for single tap (.), hold (-), double tap (..), and hold-after-tap (.-). More complex patterns defined using morse_actions or extended tap_actions will not be visible or editable in Vial.
-:::
-
-### Fine tuning
-
-To fine tune the timing of morse(or tapdance/tap-hold) behavior, it is possible to set the profile of any morse key regardless of its configuration style:
- - `profile` : refers a profile name from `[behavior.morse.profiles]`
-
-If this is not set then we look for positional profile settings (see `matrix_map`).
-If that is also missing at that key position, then the defaults will be applied from `[behavior.morse]`.
-
-#### Default profile for Morse, TapDance, Tap Hold
-
-In the `[behavior.morse]` sub-table you can configure the default tap-hold/morse behavior.
-
-Available fields:
+A profile contains the following fields:
 
 - `enable_flow_tap`: Enables HRM (Home Row Mod) mode. When enabled, the `prior_idle_time` setting becomes functional. Defaults to `false`.
 - `prior_idle_time`: If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter is effective only when enable_flow_tap is set to `true`. Defaults to 120ms.
@@ -230,28 +203,14 @@ Available fields:
 - `hold_timeout`: Defines the duration a tap-hold key must be pressed to determine hold behavior. If tap-hold key is released within this time, the key is recognized as a "tap". Holding it beyond this duration triggers the "hold" action. Defaults to 250ms.
 - `gap_timeout`: Defines the duration a tap-hold key must be released to terminate a morse sequence. Defaults to 250ms. Note that only morse and tap-dance needs this setting, simple tap-hold does not.
 
-#### Other profiles for Morse, TapDance, Tap Hold fine tuning
+#### Default profile for Morse/TapDance/TapHold
 
-In the `morse.profiles` sub-table you can configure individual key profiles, which may be used to override the defaults set in the `[behavior.morse]` sub-table.
+In the `[behavior.morse]` sub-table you can configure the default profile. If there's no explicit profile applied to a morse key, default profile will be used.
 
-Available fields (they have the same meaning as in the `[behavior.morse]` sub-table):
-- Fill `unilateral_tap` if you want to override the default value set in the `[behavior.morse]` sub-table
-- Set either `permissive_hold` or `unilateral_tap` or `normal_mode` to `true` if you want to override the default mode set in the `[behavior.morse]` sub-table
-- Fill `hold_timeout` if you want to override the default value set in the `[behavior.morse]` sub-table
-- Fill `gap_timeout` if you want to override the default value set in the `[behavior.morse]` sub-table
-
-Each key profile has an associated name, which may be referred 
-- from the layout.matrix_map (the name is case sensitive), to override the defaults in certain key positions
-- from the tap hold keys in the key map if the third optional parameter is filled: 
-    - `TH(key-tap, key-hold, <profile_name>)`, 
-    - `MT(key, modifier, <profile_name>)`,
-    - `LT(n, key, <profile_name>)`    
-- the Morse keys may also have their per key profile overrides (which is stronger than the positional override) by setting the `profile` field.
-
-The following examples are the typical default configurations:
+The following are some examples for default profile setting:
 
 ```toml
-# This default setting enables HRM with all tap-hold features; additionally for home row keys, use the "HRM" profile below,
+# This default setting enables HRM with all tap-hold features
 [behavior.morse]
 enable_flow_tap = true, 
 prior_idle_time = "120ms"
@@ -271,6 +230,22 @@ gap_timeout = "200ms"
 enable_flow_tap = false 
 hold_timeout = "250ms"
 gap_timeout = "250ms"
+```
+
+#### Per-key profiles for Morse, TapDance, Tap Hold fine tuning
+
+In the `morse.profiles` sub-table you can define individual key profiles. Each profile has an associated name, which can be referred 
+
+- from the layout.matrix_map (the name is case sensitive), to override the defaults in certain key positions
+- from the tap hold keys in the key map if the third optional parameter is filled: 
+    - `TH(key-tap, key-hold, <profile_name>)`, 
+    - `MT(key, modifier, <profile_name>)`,
+    - `LT(n, key, <profile_name>)`    
+- the Morse keys may also have their per key profile overrides (which is stronger than the positional override) by setting the `profile` field.
+
+The following examples are the typical default configurations:
+
+```toml
 
 [behavior.morse.profiles]
 # This profile is recommended on the home row, when enable_flow_tap = true, and the hold action activates a layer or acts as a modifier (aka home row mod)
@@ -282,6 +257,36 @@ FH = { hold_on_other_press = true, unilateral_tap = false, hold_timeout = "200ms
 # This profile is recommended for "real" morse keys
 MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_timeout = "200ms" }
 ```
+
+Then you can reference the profile in layer config:
+
+```toml
+[[layer]]
+keys = """
+MT(A, LShift, HRM) 
+LT(1, A, FH)
+TH(A, B, MRZ)
+"""
+```
+
+### Global Configuration Limits
+
+The following parameters in the `[rmk]` section control the resource allocation for the Morse feature:
+
+- `morse_max_num`: The maximum number of Morse key you can create. (Default: 8, Range: 0-256)
+- `max_patterns_per_key`: The maximum number of individual patterns (like ".-") or actions that a single Morse key can contain. (Default: 8, Range: 4-65536)
+
+```toml
+[rmk]
+morse_max_num = 10  # To support up to 10 morse keys
+max_patterns_per_key = 36  # To support up to 36 morse patterns per morse key
+```
+
+Note that the Vial-style method (using `tap`, `hold`, `hold_after_tap`, `double_tap`) needs at least 4 patterns. If you create a key with a long `tap_actions`/`hold_actions` array or many `morse_actions`, you might need to increase `max_patterns_per_key` accordingly.
+
+::: warning Vial Compatibility
+Please note that while the firmware can handle all Morse configurations, Vial can only recognize and edit the four basic Vial-style actions. These correspond to the patterns for single tap (.), hold (-), double tap (..), and hold-after-tap (.-). More complex patterns defined using morse_actions or extended tap_actions will not be visible or editable in Vial.
+:::
 
 
 ### Comprehensive Example

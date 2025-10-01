@@ -1,4 +1,4 @@
-use heapless::Vec;
+use heapless::{LinearMap, Vec};
 use rmk_types::action::{Action, MorseProfile};
 
 use crate::MAX_PATTERNS_PER_KEY;
@@ -74,21 +74,30 @@ impl MorsePattern {
 /// There is a lists of (pattern, corresponding action) pairs for each morse key:
 /// The number of pairs is limited by MAX_PATTERNS_PER_KEY, which is a const generic parameter.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Morse {
+// #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct Morse<const NUM_PATTERNS: usize = MAX_PATTERNS_PER_KEY> {
     /// The profile of this morse key, which defines the timing parameters, etc.
-    /// if some of its fields are filled with None, the positional override given in KeyInfo,
-    /// or the defaults given in MorsesConfig will be used instead.
+    /// If some of its fields are filled with None, the global default value will be used.
     pub profile: MorseProfile,
     /// The list of pattern -> action pairs, which can be triggered
-    pub actions: Vec<(MorsePattern, Action), MAX_PATTERNS_PER_KEY>,
+    pub actions: LinearMap<MorsePattern, Action, NUM_PATTERNS>,
+}
+
+#[cfg(feature = "defmt")]
+impl<const NUM_PATTERNS: usize> defmt::Format for Morse<NUM_PATTERNS> {
+    fn format(&self, f: defmt::Formatter<'_>) {
+        self.profile.format(f);
+        for item in self.actions.iter() {
+            item.format(f)
+        }
+    }
 }
 
 impl Default for Morse {
     fn default() -> Self {
         Self {
             profile: MorseProfile::const_default(),
-            actions: Vec::default(),
+            actions: LinearMap::default(),
         }
     }
 }
@@ -107,16 +116,16 @@ impl Morse {
         };
 
         if tap != Action::No {
-            _ = result.actions.push((TAP, tap));
+            _ = result.actions.insert(TAP, tap);
         }
         if hold != Action::No {
-            _ = result.actions.push((HOLD, hold));
+            _ = result.actions.insert(HOLD, hold);
         }
         if double_tap != Action::No {
-            _ = result.actions.push((DOUBLE_TAP, double_tap));
+            _ = result.actions.insert(DOUBLE_TAP, double_tap);
         }
         if hold_after_tap != Action::No {
-            _ = result.actions.push((HOLD_AFTER_TAP, hold_after_tap));
+            _ = result.actions.insert(HOLD_AFTER_TAP, hold_after_tap);
         }
         result
     }
@@ -160,10 +169,10 @@ impl Morse {
     /// Checks all stored patterns if more than one continuation found for the given pattern, None,
     /// otherwise the unique completion
     pub fn try_predict_final_action(&self, pattern_start: MorsePattern) -> Option<Action> {
-        // Check whether current pattern matches any of the legal patterns
+        // Check whether current pattern matches any of the legal patterns.
         // If not, return early
-        if !self.actions.iter().any(|a| a.0 == pattern_start) {
-            return None; //the user made a mistake while entering the pattern
+        if !self.actions.contains_key(&pattern_start) {
+            return None;
         }
 
         let mut first: Option<&Action> = None;
@@ -171,11 +180,11 @@ impl Morse {
             // If pair.pattern starts with the given pattern_start
             if pair.0.starts_with(pattern_start) {
                 if let Some(action) = first {
-                    if *action != pair.1 {
+                    if *action != *pair.1 {
                         return None; //the solution is not unique, so must wait for possible continuation
                     }
                 } else {
-                    first = Some(&pair.1);
+                    first = Some(pair.1);
                 }
             }
         }
@@ -184,37 +193,18 @@ impl Morse {
     }
 
     pub fn get(&self, pattern: MorsePattern) -> Option<Action> {
-        for pair in self.actions.iter() {
-            if pair.0 == pattern {
-                return Some(pair.1);
-            }
-        }
-        None
+        self.actions.get(&pattern).copied()
     }
 
     /// A call with Action::No will remove the item from the collection,
     /// otherwise will update the existing action or insert the new action if possible
     pub fn put(&mut self, pattern: MorsePattern, action: Action) {
         if action != Action::No {
-            for pair in self.actions.iter_mut() {
-                // Update if found
-                if pair.0 == pattern {
-                    pair.1 = action;
-                    return;
-                }
-            }
-            if let Err(a) = self.actions.push((pattern, action)) {
+            if let Err(a) = self.actions.insert(pattern, action) {
                 error!("The actions buffer is full in current morse key, pushing {:?} fails", a);
             }
         } else {
-            for i in 0..self.actions.len() {
-                // Found saved pattern, pop it
-                if self.actions[i].0 == pattern {
-                    self.actions[i] = self.actions[self.actions.len() - 1];
-                    self.actions.pop();
-                    return;
-                }
-            }
+            let _ = self.actions.remove(&pattern);
         }
     }
 }

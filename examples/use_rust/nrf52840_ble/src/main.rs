@@ -25,7 +25,7 @@ use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{
-    BehaviorConfig, BleBatteryConfig, KeyboardUsbConfig, PerKeyConfig, RmkConfig, StorageConfig, VialConfig,
+    BehaviorConfig, BleBatteryConfig, KeyboardUsbConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join4;
@@ -182,7 +182,7 @@ async fn main(spawner: Spawner) {
     // Initialze keyboard stuffs
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
-    let mut key_config = PerKeyConfig::default();
+    let mut key_config = PositionalConfig::default();
     let mut behavior_config = BehaviorConfig::default();
     let mut encoder_map = keymap::get_default_encoder_map();
     let (keymap, mut storage) = initialize_encoder_keymap_and_storage(

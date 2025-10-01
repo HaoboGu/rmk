@@ -1,5 +1,5 @@
-use heapless::Vec;
-use rmk::config::{BehaviorConfig, KeyInfo, MorsesConfig, PerKeyConfig};
+use heapless::{LinearMap, Vec};
+use rmk::config::{BehaviorConfig, Hand, MorsesConfig, PositionalConfig};
 use rmk::keyboard::Keyboard;
 use rmk::morse::{Morse, MorsePattern};
 use rmk::types::action::Action;
@@ -22,17 +22,19 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard
     ];
 
     let morse0 = Morse {
-        actions: Vec::from_slice(&[
-            (MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::A)),
-            (MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::B)),
-            (MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::C)),
-            (MorsePattern::from_u16(0b1_101), Action::Key(KeyCode::K)),
-            (MorsePattern::from_u16(0b1_11), Action::Key(KeyCode::M)),
-            (MorsePattern::from_u16(0b1_111), Action::Key(KeyCode::O)),
-            (MorsePattern::from_u16(0b1_010), Action::Key(KeyCode::R)),
-            (MorsePattern::from_u16(0b1_000), Action::Key(KeyCode::S)),
-        ])
-        .unwrap(),
+        actions: LinearMap::from_iter(
+            [
+                (MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::A)),
+                (MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::B)),
+                (MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::C)),
+                (MorsePattern::from_u16(0b1_101), Action::Key(KeyCode::K)),
+                (MorsePattern::from_u16(0b1_11), Action::Key(KeyCode::M)),
+                (MorsePattern::from_u16(0b1_111), Action::Key(KeyCode::O)),
+                (MorsePattern::from_u16(0b1_010), Action::Key(KeyCode::R)),
+                (MorsePattern::from_u16(0b1_000), Action::Key(KeyCode::S)),
+            ]
+            .into_iter(),
+        ),
         ..Default::default()
     };
 
@@ -46,15 +48,12 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard
 
     static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
     let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
-    static KEY_CONFIG: static_cell::StaticCell<PerKeyConfig<1, 5>> = static_cell::StaticCell::new();
-    let per_key_config = KEY_CONFIG.init(PerKeyConfig::default());
+    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 5>> = static_cell::StaticCell::new();
+    let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
     Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
 
-pub fn create_morse_keyboard(
-    behavior_config: BehaviorConfig,
-    key_info: Option<[[KeyInfo; 5]; 1]>,
-) -> Keyboard<'static, 1, 5, 2> {
+pub fn create_morse_keyboard(behavior_config: BehaviorConfig, hand: [[Hand; 5]; 1]) -> Keyboard<'static, 1, 5, 2> {
     let keymap = [
         [[
             k!(A),
@@ -67,17 +66,19 @@ pub fn create_morse_keyboard(
     ];
 
     let morse0 = Morse {
-        actions: Vec::from_slice(&[
-            (MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::A)),
-            (MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::B)),
-            (MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::C)),
-            (MorsePattern::from_u16(0b1_101), Action::Key(KeyCode::K)),
-            (MorsePattern::from_u16(0b1_11), Action::Key(KeyCode::M)),
-            (MorsePattern::from_u16(0b1_111), Action::Key(KeyCode::O)),
-            (MorsePattern::from_u16(0b1_010), Action::Key(KeyCode::R)),
-            (MorsePattern::from_u16(0b1_000), Action::Key(KeyCode::S)),
-        ])
-        .unwrap(),
+        actions: LinearMap::from_iter(
+            [
+                (MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::A)),
+                (MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::B)),
+                (MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::C)),
+                (MorsePattern::from_u16(0b1_101), Action::Key(KeyCode::K)),
+                (MorsePattern::from_u16(0b1_11), Action::Key(KeyCode::M)),
+                (MorsePattern::from_u16(0b1_111), Action::Key(KeyCode::O)),
+                (MorsePattern::from_u16(0b1_010), Action::Key(KeyCode::R)),
+                (MorsePattern::from_u16(0b1_000), Action::Key(KeyCode::S)),
+            ]
+            .into_iter(),
+        ),
         ..Default::default()
     };
 
@@ -91,7 +92,7 @@ pub fn create_morse_keyboard(
 
     static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
     let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
-    static KEY_CONFIG: static_cell::StaticCell<PerKeyConfig<1, 5>> = static_cell::StaticCell::new();
-    let per_key_config = KEY_CONFIG.init(PerKeyConfig::new(key_info));
+    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 5>> = static_cell::StaticCell::new();
+    let per_key_config = KEY_CONFIG.init(PositionalConfig::new(hand));
     Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }

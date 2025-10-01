@@ -21,7 +21,7 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> Tok
     // TODO: config encoder actions in keyboard.toml
     let encoders = vec![quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No))}; total_num_encoder];
 
-    let (layout, _key_info) = keyboard_config.get_layout_config().unwrap();
+    let (layout, _) = keyboard_config.get_layout_config().unwrap();
     let mut layers = vec![];
     let mut encoder_map = vec![];
     for layer in layout.keymap {

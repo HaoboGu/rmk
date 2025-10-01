@@ -313,7 +313,7 @@ impl Value<'_> for KeymapData {
                     for _ in 0..count {
                         let pattern = MorsePattern::from_u16(BigEndian::read_u16(&buffer[i..i + 2]));
                         let key_action = from_via_keycode(BigEndian::read_u16(&buffer[i + 2..i + 4]));
-                        _ = morse.actions.push((pattern, key_action.to_action()));
+                        _ = morse.actions.insert(pattern, key_action.to_action());
                         i += 4;
                     }
 
@@ -556,19 +556,19 @@ mod tests {
                 Some(210u16),
                 Some(220u16),
             ),
-            actions: Vec::default(),
+            actions: heapless::LinearMap::default(),
         };
         morse
             .actions
-            .push((MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::A)))
+            .insert(MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::A))
             .ok();
         morse
             .actions
-            .push((MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::B)))
+            .insert(MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::B))
             .ok();
         morse
             .actions
-            .push((MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::C)))
+            .insert(MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::C))
             .ok();
 
         // Serialization
