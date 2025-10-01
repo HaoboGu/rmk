@@ -52,9 +52,10 @@ impl Combo {
         }
 
         if let Some(layer) = self.layer
-            && layer != active_layer {
-                return false;
-            }
+            && layer != active_layer
+        {
+            return false;
+        }
 
         let action_idx = self.actions.iter().position(|&a| a == *key_action);
         if let Some(i) = action_idx {
@@ -108,6 +109,11 @@ impl Combo {
     pub(crate) fn is_all_pressed(&self) -> bool {
         let cnt = self.actions.iter().filter(|&&a| a != KeyAction::No).count();
         cnt > 0 && self.keys_pressed() == cnt as u32
+    }
+
+    // The size of the current combo
+    pub(crate) fn size(&self) -> usize {
+        self.actions.iter().filter(|&&a| a != KeyAction::No).count()
     }
 
     pub(crate) fn started(&self) -> bool {
