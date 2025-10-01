@@ -382,8 +382,13 @@ pub(crate) async fn process_vial<
                         &report.output_data[4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
                     ));
 
-                    let combo = Combo::new(actions, output, None);
-                    combos[combo_idx] = Some(combo);
+                    combos[combo_idx] =
+                        if actions.iter().find(|&&x| x != KeyAction::No).is_none() && output == KeyAction::No {
+                            debug!("combo is empty");
+                            None
+                        } else {
+                            Some(Combo::new(actions, output, None))
+                        };
 
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL

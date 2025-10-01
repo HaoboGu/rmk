@@ -107,7 +107,7 @@ impl Combo {
     // Check if all keys of this combo are pressed, but it does not mean the combo key event is sent
     pub(crate) fn is_all_pressed(&self) -> bool {
         let cnt = self.actions.iter().filter(|&&a| a != KeyAction::No).count();
-        !self.actions.is_empty() && self.keys_pressed() == cnt as u32
+        cnt > 0 && self.keys_pressed() == cnt as u32
     }
 
     pub(crate) fn started(&self) -> bool {
