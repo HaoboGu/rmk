@@ -170,11 +170,10 @@ This is the configuration for the above example, assuming `1` is the chording la
     ])
 
     CombosConfig {
-        combos: Vec::from_slice(&[
-            Combo::new([k!(T), k!(Y)], k!(Macro0), Some(1)),
-            Combo::new([k!(T), k!(Y), k!(G)], KeyAction::Single(Action::TriggerMacro(1)), Some(1)),
-        ])
-        .expect("too many combo definitions!"),
+        combos: [
+            Some(Combo::new([k!(T), k!(Y)], k!(Macro0), Some(1))),
+            Some(Combo::new([k!(T), k!(Y), k!(G)], KeyAction::Single(Action::TriggerMacro(1)), Some(1))),
+        ],
         timeout: Duration::from_millis(50),
     }
 ```
@@ -196,11 +195,10 @@ Note that instead of having a second macro for all verbs (normal and `ing` form)
     ])
 
     CombosConfig {
-        combos: Vec::from_slice(&[
-            Combo::new([k!(T), k!(Y)], k!(Macro0), Some(1)),
-            Combo::new([k!(G)], KeyAction::Single(Action::TriggerMacro(1)), Some(1)),
-        ])
-        .expect("too many combo definitions!"),
+        combos: [
+            Some(Combo::new([k!(T), k!(Y)], k!(Macro0), Some(1))),
+            Some(Combo::new([k!(G)], KeyAction::Single(Action::TriggerMacro(1)), Some(1))),
+        ],
         timeout: Duration::from_millis(50),
     }
 ```

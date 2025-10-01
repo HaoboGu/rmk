@@ -10,8 +10,6 @@ use {
     embedded_storage_async::nor_flash::NorFlash,
 };
 
-use crate::COMBO_MAX_NUM;
-use crate::combo::Combo;
 use crate::config::{BehaviorConfig, PerKeyConfig};
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::input_device::rotary_encoder::Direction;
@@ -47,11 +45,6 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     pub(crate) matrix_state: MatrixState<ROW, COL>,
 }
 
-fn _reorder_combos(combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>) {
-    // Sort the combos by their length
-    combos.sort_unstable_by(|c1, c2| c2.actions.len().cmp(&c1.actions.len()))
-}
-
 /// fills up the vector to its capacity
 pub(crate) fn fill_vec<T: Default + Clone, const N: usize>(vector: &mut heapless::Vec<T, N>) {
     vector
@@ -69,11 +62,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         key_info: &'a mut PerKeyConfig<ROW, COL>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
-
-        // fill up the empty places so new combos/forks can be configured via Vial
-        fill_vec(&mut behavior.combo.combos);
-        //reorder the combos
-        _reorder_combos(&mut behavior.combo.combos);
 
         fill_vec(&mut behavior.fork.forks); // Is this needed? (has no Vial support)
         fill_vec(&mut behavior.morse.morses);
@@ -103,7 +91,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         key_config: &'a mut PerKeyConfig<ROW, COL>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
-        fill_vec(&mut behavior.combo.combos);
         fill_vec(&mut behavior.fork.forks); // Is this needed? (has no Vial support)
         fill_vec(&mut behavior.morse.morses);
 
@@ -128,14 +115,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     .and(storage.read_morses(&mut behavior.morse.morses).await)
             }
             .is_err()
-            {
-                error!("Failed to read from storage, clearing...");
-                sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
-                    .await
-                    .ok();
+        {
+            error!("Failed to read from storage, clearing...");
+            sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
+                .await
+                .ok();
 
-                reboot_keyboard();
-            }
+            reboot_keyboard();
+        }
 
         KeyMap {
             layers: action_map,
@@ -191,13 +178,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
             KeyboardEventPos::RotaryEncoder(encoder_pos) => {
                 if let Some(encoders) = &mut self.encoders
-                    && let Some(encoder_action) = encoders[layer_num].get_mut(encoder_pos.id as usize) {
-                        match encoder_pos.direction {
-                            Direction::Clockwise => encoder_action.set_clockwise(action),
-                            Direction::CounterClockwise => encoder_action.set_counter_clockwise(action),
-                            Direction::None => {}
-                        }
+                    && let Some(encoder_action) = encoders[layer_num].get_mut(encoder_pos.id as usize)
+                {
+                    match encoder_pos.direction {
+                        Direction::Clockwise => encoder_action.set_clockwise(action),
+                        Direction::CounterClockwise => encoder_action.set_counter_clockwise(action),
+                        Direction::None => {}
                     }
+                }
             }
         }
     }
@@ -214,13 +202,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // Get the action from the keymap
                 if let Some(encoders) = &self.encoders
                     && let Some(encoder_action) = encoders[layer_num].get(encoder_pos.id as usize)
-                        && encoder_pos.direction != Direction::None {
-                            return match encoder_pos.direction {
-                                Direction::Clockwise => encoder_action.clockwise(),
-                                Direction::CounterClockwise => encoder_action.counter_clockwise(),
-                                Direction::None => KeyAction::No,
-                            };
-                        }
+                    && encoder_pos.direction != Direction::None
+                {
+                    return match encoder_pos.direction {
+                        Direction::Clockwise => encoder_action.clockwise(),
+                        Direction::CounterClockwise => encoder_action.counter_clockwise(),
+                        Direction::None => KeyAction::No,
+                    };
+                }
                 KeyAction::No
             }
         }
@@ -313,11 +302,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
             KeyboardEventPos::RotaryEncoder(encoder_pos) => {
                 if let Some(cache) = self.encoder_layer_cache.get_mut(encoder_pos.id as usize)
-                    && encoder_pos.direction != Direction::None {
-                        let layer = cache[encoder_pos.direction as usize];
-                        cache[encoder_pos.direction as usize] = self.default_layer;
-                        return layer;
-                    }
+                    && encoder_pos.direction != Direction::None
+                {
+                    let layer = cache[encoder_pos.direction as usize];
+                    cache[encoder_pos.direction as usize] = self.default_layer;
+                    return layer;
+                }
                 // Wrong argument, return the default layer
                 self.default_layer
             }
@@ -335,9 +325,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             KeyboardEventPos::RotaryEncoder(encoder_pos) => {
                 // Check if the rotary encoder id and direction are valid
                 if let Some(cache) = self.encoder_layer_cache.get_mut(encoder_pos.id as usize)
-                    && encoder_pos.direction != Direction::None {
-                        cache[encoder_pos.direction as usize] = layer_num;
-                    }
+                    && encoder_pos.direction != Direction::None
+                {
+                    cache[encoder_pos.direction as usize] = layer_num;
+                }
             }
         }
     }
@@ -400,20 +391,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             send_controller_event(&mut self.controller_pub, ControllerEvent::Layer(layer));
         }
     }
-
-    //order combos by their actions length
-    pub(crate) fn reorder_combos(&mut self) {
-        _reorder_combos(&mut self.behavior.combo.combos);
-    }
 }
 
 #[cfg(test)]
 mod test {
-    use rmk_types::action::{Action, KeyAction};
-    use rmk_types::keycode::KeyCode;
     use rmk_types::modifier::ModifierCombination;
 
-    use super::{_reorder_combos, Combo};
+    use crate::combo::Combo;
     use crate::fork::{Fork, StateBits};
     use crate::keymap::fill_vec;
     use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
@@ -465,40 +449,5 @@ mod test {
         fill_vec(&mut forks);
 
         assert_eq!(forks.len(), FORK_MAX_NUM);
-    }
-
-    #[test]
-    fn test_combo_reordering() {
-        let combos_raw = [
-            Combo::new([k!(A), k!(B), k!(C), k!(D)], k!(Z), None),
-            Combo::new([k!(A), k!(B)], k!(X), None),
-            Combo::new([k!(A), k!(B), k!(C)], k!(Y), None),
-        ];
-        let mut combos = heapless::Vec::from_slice(&combos_raw).unwrap();
-
-        _reorder_combos(&mut combos);
-        fill_vec(&mut combos);
-
-        let result: Vec<Option<Action>> = combos
-            .iter()
-            .enumerate()
-            .map(|(_, c)| match c.output {
-                KeyAction::Single(a) => Some(a),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(
-            result,
-            vec![
-                Some(Action::Key(KeyCode::Z)),
-                Some(Action::Key(KeyCode::Y)),
-                Some(Action::Key(KeyCode::X)),
-                None,
-                None,
-                None,
-                None,
-                None
-            ]
-        );
     }
 }
