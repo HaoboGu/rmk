@@ -328,13 +328,12 @@ pub(crate) async fn process_vial<
                 }
                 VialDynamic::DynamicVialComboGet => {
                     debug!("DynamicEntryOp - DynamicVialComboGet");
-                    debug!("Combo get output_data: {:?}", report.output_data);
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
                     let combo_idx = report.output_data[3] as usize;
                     let combos = &keymap.borrow().behavior.combo.combos;
                     if let Some(Some(combo)) = combos.get(combo_idx) {
-                        // Combo component
+                        // Combo components
                         for i in 0..VIAL_COMBO_MAX_LENGTH {
                             LittleEndian::write_u16(
                                 &mut report.input_data[1 + i * 2..3 + i * 2],
@@ -349,11 +348,9 @@ pub(crate) async fn process_vial<
                     } else {
                         report.input_data[1..3 + VIAL_COMBO_MAX_LENGTH * 2].fill(0);
                     }
-                    debug!("Combo get returned_data: {:?}", report.output_data);
                 }
                 VialDynamic::DynamicVialComboSet => {
                     debug!("DynamicEntryOp - DynamicVialComboSet");
-                    debug!("Combo set output_data: {:?}", report.output_data);
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
                     // Drop combos to release the borrowed keymap, avoid potential run-time panics
@@ -398,8 +395,6 @@ pub(crate) async fn process_vial<
                             output,
                         })))
                         .await;
-
-                    debug!("Combo set returned_data: {:?}", report.output_data);
                 }
                 VialDynamic::DynamicVialKeyOverrideGet => {
                     warn!("DynamicEntryOp - DynamicVialKeyOverrideGet -- to be implemented");

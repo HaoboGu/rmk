@@ -868,15 +868,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    /// When a key is released, trigger combos that are delayed.
-    /// A combo is delayed when it's a "subset" of another combo, for example, combo "asd" and combo "asdf":
-    /// When "asd" are pressed, combo "asd" is delayed. The delayed combo will be triggered when:
+    /// Trigger a combo that is delayed(if exists).
+    ///
+    /// A combo is delayed when it's **triggered** but it's a "subset" of another combo, like combo "asd" and combo "asdf".
+    /// When "asd" is pressed, combo "asd" is delayed due to there's "asdf" combo. The delayed combo will be triggered when:
     /// - Timeout
     /// - Any of the key in the delayed combo is released
     ///
-    /// When the full combo("asdf") is triggered, the delayed combo will be cleared.
+    /// When multiple combos are delayed, this function will only trigger the longest one, for example,
+    /// combo "as", "sd" and "asd" are delayed, this function will only trigger "asd", and clear the combo state of "as"/"sd"
+    ///
+    /// If the full combo("asdf") is triggered, the delayed combo will be cleared without triggering it.
     async fn trigger_delayed_combo(&mut self, key_action: &KeyAction, event: KeyboardEvent) {
-        // Releasing a key, if there's a combo that its all keys are pressed, but not triggered, trigger it first.
+        // First, find the delayed combo and trigger it
         let next_action = self
             .keymap
             .borrow_mut()
@@ -886,18 +890,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .iter_mut()
             .filter_map(|c| c.as_mut())
             .filter_map(|c| {
-                if c.is_all_pressed() && !c.is_triggered() {
-                    if c.actions.contains(key_action) {
-                        // Releasing a combo that all keys are pressed but not triggered
-                        // There's a combo that should be triggered first
-                        return Some((c.size(), c));
-                    }
+                if c.is_all_pressed() && !c.is_triggered() && c.actions.contains(key_action) {
+                    // All keys are pressed but the combo is not triggered, trigger it
+                    return Some((c.size(), c));
                 }
                 None
-            })
-            .max_by_key(|x| x.0) // Trigger the combo with maximum size
-            .map(|(_, c)| c.trigger());
+            }) // Find all delayed combos
+            .max_by_key(|x| x.0) // Find only the longest one
+            .map(|(_, c)| c.trigger()); // Trigger it
 
+        // Clean the held buffer, process the combo output action and clear other combos
         if let Some(action) = next_action {
             self.held_buffer
                 .keys
@@ -907,6 +909,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             self.process_key_action(&action, new_event, true).await;
             debug!("[Combo] {:?} triggered", action);
             embassy_time::Timer::after_millis(20).await;
+            // Reset other combos' state
             self.reset_combo(key_action);
         }
     }

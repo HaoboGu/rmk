@@ -25,7 +25,6 @@ impl MorsePattern {
         15 // 15 taps can be encoded on u16 bits (1 bit used to mark the start position)
     }
 
-
     pub fn from_u16(value: u16) -> Self {
         MorsePattern(value)
     }
