@@ -215,7 +215,7 @@ rusty_fork_test! {
             sequence: [
                 [1, 3, true, 10], // E
                 [1, 4, true, 10], // T
-                [1, 3, false, 10], // Timeout, should trigger E+T = A because E+T are triggered within the timeout window
+                [1, 3, false, 10],
                 [1, 4, false, 10],
             ],
             expected_reports: [
@@ -234,13 +234,32 @@ rusty_fork_test! {
             }),
             sequence: [
                 [1, 3, true, 10], // E
-                [1, 5, true, 10], // R
-                [1, 4, true, 10], // T
+                [1, 5, true, 10], // T
+                [1, 4, true, 10], // R
                 [1, 3, false, 50],
                 [1, 5, false, 10],
                 [1, 4, false, 50],
+                [1, 3, true, 10], // E
+                [1, 5, true, 10], // T
+                [1, 3, false, 50],
+                [1, 5, false, 10],
+                [1, 3, true, 10], // E
+                [1, 4, true, 10], // R
+                [1, 3, false, 50],
+                [1, 4, false, 50],
+                [1, 3, true, 10], // E
+                [1, 5, true, 10], // T
+                [1, 4, true, 10], // R
+                [1, 3, false, 50],
+                [1, 5, false, 10],
+                [1, 4, false, 50],
+
             ],
             expected_reports: [
+                [0, [KeyCode::Space as u8, 0, 0, 0, 0, 0]],
+                [0, [0; 6]],
+                [KC_LSHIFT, [KeyCode::A as u8, 0, 0, 0, 0, 0]],
+                [0, [0; 6]],
                 [0, [KeyCode::Space as u8, 0, 0, 0, 0, 0]],
                 [0, [0; 6]],
             ]
