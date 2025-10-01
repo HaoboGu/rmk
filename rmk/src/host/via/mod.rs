@@ -190,11 +190,9 @@ impl<
                     "Setting keycode: 0x{:02X} at ({},{}), layer {} as {:?}",
                     keycode, row, col, layer, action
                 );
-                keymap.borrow_mut().set_action_at(
-                    KeyboardEventPos::key_pos(col, row),
-                    layer as usize,
-                    action,
-                );
+                keymap
+                    .borrow_mut()
+                    .set_action_at(KeyboardEventPos::key_pos(col, row), layer as usize, action);
                 #[cfg(feature = "storage")]
                 FLASH_CHANNEL
                     .send(FlashOperationMessage::VialMessage(KeymapData::KeymapKey(KeymapKey {

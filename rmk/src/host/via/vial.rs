@@ -13,12 +13,11 @@ use crate::descriptor::ViaReport;
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
 use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, TAP};
+use crate::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, MORSE_MAX_NUM};
 #[cfg(feature = "storage")]
 use crate::{
-    COMBO_MAX_LENGTH, channel::FLASH_CHANNEL, host::storage::ComboData, host::storage::KeymapData,
-    storage::FlashOperationMessage,
+    channel::FLASH_CHANNEL, host::storage::ComboData, host::storage::KeymapData, storage::FlashOperationMessage,
 };
-use crate::{COMBO_MAX_NUM, MORSE_MAX_NUM};
 
 /// Note: vial uses little endian, while via uses big endian
 pub(crate) async fn process_vial<
@@ -333,13 +332,15 @@ pub(crate) async fn process_vial<
 
                     let combo_idx = report.output_data[3] as usize;
                     let combos = &keymap.borrow().behavior.combo.combos;
-                    if let Some((_, combo)) = vial_combo(combos, combo_idx) {
+                    if let Some(Some(combo)) = combos.get(combo_idx) {
+                        // Combo components
                         for i in 0..VIAL_COMBO_MAX_LENGTH {
                             LittleEndian::write_u16(
                                 &mut report.input_data[1 + i * 2..3 + i * 2],
                                 to_via_keycode(*combo.actions.get(i).unwrap_or(&KeyAction::No)),
                             );
                         }
+                        // Combo output
                         LittleEndian::write_u16(
                             &mut report.input_data[1 + VIAL_COMBO_MAX_LENGTH * 2..3 + VIAL_COMBO_MAX_LENGTH * 2],
                             to_via_keycode(combo.output),
@@ -352,47 +353,44 @@ pub(crate) async fn process_vial<
                     debug!("DynamicEntryOp - DynamicVialComboSet");
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
-                    #[cfg(feature = "storage")]
-                    let (real_idx, actions, output) = {
-                        // Drop combos to release the borrowed keymap, avoid potential run-time panics
-                        let combo_idx = report.output_data[3] as usize;
-                        let km = &mut keymap.borrow_mut();
-                        let combos = &mut km.behavior.combo.combos;
-                        let Some((real_idx, combo)) = vial_combo_mut(combos, combo_idx) else {
-                            return;
+                    // Drop combos to release the borrowed keymap, avoid potential run-time panics
+                    let combo_idx = report.output_data[3] as usize;
+                    let km = &mut keymap.borrow_mut();
+                    let combos = &mut km.behavior.combo.combos;
+                    if combo_idx >= combos.len() {
+                        return;
+                    }
+
+                    let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
+                    let mut n: usize = 0;
+                    for i in 0..VIAL_COMBO_MAX_LENGTH {
+                        let action =
+                            from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
+                        if !action.is_empty() {
+                            if n >= COMBO_MAX_LENGTH {
+                                // Fail if the combo action buffer is too small
+                                return;
+                            }
+                            actions[n] = action;
+                            n += 1;
+                        }
+                    }
+                    let output = from_via_keycode(LittleEndian::read_u16(
+                        &report.output_data[4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
+                    ));
+
+                    combos[combo_idx] =
+                        if actions.iter().find(|&&x| x != KeyAction::No).is_none() && output == KeyAction::No {
+                            debug!("combo is empty");
+                            None
+                        } else {
+                            Some(Combo::new(actions, output, None))
                         };
 
-                        let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
-                        let mut n: usize = 0;
-                        for i in 0..VIAL_COMBO_MAX_LENGTH {
-                            let action =
-                                from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
-                            if !action.is_empty() {
-                                if n >= COMBO_MAX_LENGTH {
-                                    //fail if the combo action buffer is too small
-                                    return;
-                                }
-                                actions[n] = action;
-                                n += 1;
-                            }
-                        }
-                        let output = from_via_keycode(LittleEndian::read_u16(
-                            &report.output_data[4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
-                        ));
-
-                        combo.actions.clear();
-                        let _ = combo.actions.extend_from_slice(&actions[0..n]);
-                        combo.output = output;
-
-                        //reordering combo order
-                        km.reorder_combos();
-
-                        (real_idx, actions, output)
-                    };
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::VialMessage(KeymapData::Combo(ComboData {
-                            idx: real_idx,
+                            idx: combo_idx,
                             actions,
                             output,
                         })))
@@ -484,20 +482,42 @@ pub(crate) async fn process_vial<
     }
 }
 
-fn vial_combo(combos: &heapless::Vec<Combo, COMBO_MAX_NUM>, idx: usize) -> Option<(usize, &Combo)> {
-    combos
-        .iter()
-        .enumerate()
-        .filter(|(_, combo)| combo.actions.len() <= VIAL_COMBO_MAX_LENGTH)
-        .enumerate()
-        .find_map(|(i, combo)| (i == idx).then_some(combo))
-}
+#[cfg(test)]
+#[cfg(feature = "storage")]
+mod tests {
+    use rmk_types::action::Action;
+    use rmk_types::keycode::KeyCode;
+    use sequential_storage::map::Value;
 
-fn vial_combo_mut(combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>, idx: usize) -> Option<(usize, &mut Combo)> {
-    combos
-        .iter_mut()
-        .enumerate()
-        .filter(|(_, combo)| combo.actions.len() <= VIAL_COMBO_MAX_LENGTH)
-        .enumerate()
-        .find_map(|(i, combo)| (i == idx).then_some(combo))
+    use super::*;
+    use crate::storage::StorageData;
+    #[test]
+    fn test_combo_serialization_deserialization() {
+        let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
+        actions[0] = KeyAction::Single(Action::Key(KeyCode::Kc1));
+        let combo = ComboData {
+            idx: 20,
+            actions,
+            output: KeyAction::Single(Action::Key(KeyCode::Space)),
+        };
+
+        let mut buffer = [0u8; 3 + COMBO_MAX_LENGTH * 2];
+        let storage_data = StorageData::VialData(KeymapData::Combo(combo));
+        let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
+        // Deserialization
+        let deserialized_data = StorageData::deserialize_from(&buffer[..serialized_size]).unwrap();
+        // Validation
+        match deserialized_data {
+            StorageData::VialData(KeymapData::Combo(deserialized_combo)) => {
+                // actions
+                assert_eq!(deserialized_combo.actions.len(), combo.actions.len());
+                for (original, deserialized) in combo.actions.iter().zip(deserialized_combo.actions.iter()) {
+                    assert_eq!(original, deserialized);
+                }
+                // output
+                assert_eq!(deserialized_combo.output, combo.output);
+            }
+            _ => panic!("Expected ComboData"),
+        }
+    }
 }

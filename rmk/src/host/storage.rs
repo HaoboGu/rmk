@@ -404,7 +404,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         Ok(())
     }
 
-    pub(crate) async fn read_combos(&mut self, combos: &mut Vec<Combo, COMBO_MAX_NUM>) -> Result<(), ()> {
+    pub(crate) async fn read_combos(&mut self, combos: &mut [Option<Combo>; COMBO_MAX_NUM]) -> Result<(), ()> {
         for (i, item) in combos.iter_mut().enumerate() {
             let key = get_combo_key(i);
             let read_data = fetch_item::<u32, StorageData, _>(
@@ -417,12 +417,15 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .await
             .map_err(|e| print_storage_error::<F>(e))?;
 
-            if let Some(StorageData::VialData(KeymapData::Combo(combo))) = read_data {
+            if let Some(StorageData::VialData(KeymapData::Combo(mut combo))) = read_data {
+                debug!("Read combo: {:?}", combo);
                 let mut actions: Vec<KeyAction, COMBO_MAX_LENGTH> = Vec::new();
+                combo.idx = i;
                 for &action in combo.actions.iter().filter(|&&a| !a.is_empty()) {
                     let _ = actions.push(action);
                 }
-                *item = Combo::new(actions, combo.output, item.layer);
+                // TODO: Save/Load combo layer in storage
+                *item = Some(Combo::new(actions, combo.output, None));
             }
         }
 

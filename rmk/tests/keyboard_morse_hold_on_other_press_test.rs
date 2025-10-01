@@ -60,11 +60,16 @@ fn create_hold_on_other_key_press_keyboard_with_combo() -> Keyboard<'static, 1, 
             ..MorsesConfig::default()
         },
         combo: CombosConfig {
-            combos: heapless::Vec::from_iter([
-                Combo::new([combo_key, combo_key_2], k!(X), None),
-                Combo::new([k!(A), combo_key], k!(Y), None),
-                Combo::new([combo_key, combo_key_2, combo_key_3], k!(Z), None),
-            ]),
+            combos: [
+                Some(Combo::new([combo_key, combo_key_2], k!(X), None)),
+                Some(Combo::new([k!(A), combo_key], k!(Y), None)),
+                Some(Combo::new([combo_key, combo_key_2, combo_key_3], k!(Z), None)),
+                None,
+                None,
+                None,
+                None,
+                None,
+            ],
             timeout: Duration::from_millis(50),
         },
         ..BehaviorConfig::default()

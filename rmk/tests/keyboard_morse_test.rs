@@ -726,14 +726,14 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_simple_morse_keyboard(BehaviorConfig {
                     combo: CombosConfig {
-                        combos: heapless::Vec::from_iter([
-                            Combo::new(
+                        combos: [
+                            Some(Combo::new(
                                 [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT), Default::default()),
                                  KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI), Default::default())],
                                 k!(X),
                                 None,
-                            )
-                        ]),
+                            )), None, None, None, None, None, None, None
+                        ],
                         timeout: Duration::from_millis(50),
                     },
                     ..BehaviorConfig::default()
@@ -758,14 +758,14 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_simple_morse_keyboard(BehaviorConfig {
                     combo: CombosConfig {
-                        combos: heapless::Vec::from_iter([
-                            Combo::new(
+                        combos: [
+                            Some(Combo::new(
                                 [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT), Default::default()),
                                  KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI), Default::default())],
                                 k!(X),
                                 None,
-                            )
-                        ]),
+                            )), None, None, None, None, None, None, None
+                        ],
                         timeout: Duration::from_millis(50),
                     },
                     ..BehaviorConfig::default()

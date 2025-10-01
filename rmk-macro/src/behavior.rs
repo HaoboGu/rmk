@@ -212,7 +212,16 @@ fn expand_combos(
 
             quote! {
                 ::rmk::config::CombosConfig {
-                    combos: ::rmk::heapless::Vec::from_iter([#(#combos_def),*]),
+                    combos: {
+                        let v = [#(#combos_def),*];
+                        core::array::from_fn(|i| {
+                            if i < v.len() {
+                                Some(v[i])
+                            } else {
+                                None
+                            }
+                        })
+                    },
                     #timeout
                     ..Default::default()
                 }
