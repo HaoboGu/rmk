@@ -409,47 +409,42 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             match decision {
                 HeldKeyDecision::UnilateralTap | HeldKeyDecision::FlowTap => {
                     if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos)
-                        && held_key.action.is_morse() {
-                            // Unilateral tap of the held key is triggered
-                            debug!("Cleaning buffered morse key due to unilateral tap or flow tap");
-                            match held_key.state {
-                                KeyState::Pressed(_) | KeyState::Holding(_) => {
-                                    // In this state pattern is not surely finished,
-                                    // however an other key is pressed so terminate the sequence
-                                    // with a tap due to UnilateralTap decision; try to resolve as is
-                                    let pattern = match held_key.state {
-                                        KeyState::Pressed(pattern) => pattern.followed_by_tap(), // The HeldKeyDecision turned this into tap!
-                                        KeyState::Holding(pattern) => pattern,
-                                        _ => unreachable!(),
-                                    };
-                                    debug!("Pattern after unilateral tap or flow tap: {:?}", pattern);
-                                    let action = Self::action_from_pattern(
-                                        self.keymap.borrow().behavior,
-                                        &held_key.action,
-                                        pattern,
-                                    );
-                                    self.process_key_action_normal(action, held_key.event).await;
-                                    held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
-                                    // Push back after triggered tap
-                                    self.held_buffer.push_without_sort(held_key);
-                                }
-                                KeyState::Released(pattern) => {
-                                    // In this state pattern is not surely finished,
-                                    // however an other key is pressed so terminate the sequence, try to resolve as is
-                                    debug!("Pattern after released, unilateral tap or flow tap: {:?}", pattern);
-                                    let action = Self::action_from_pattern(
-                                        self.keymap.borrow().behavior,
-                                        &held_key.action,
-                                        pattern,
-                                    );
-                                    held_key.event.pressed = true;
-                                    self.process_key_action_tap(action, held_key.event).await;
-                                    // The tap is fully fired, don't push it back to buffer again
-                                    // Removing from the held buffer is like setting to an idle state
-                                }
-                                _ => (),
+                        && held_key.action.is_morse()
+                    {
+                        // Unilateral tap of the held key is triggered
+                        debug!("Cleaning buffered morse key due to unilateral tap or flow tap");
+                        match held_key.state {
+                            KeyState::Pressed(_) | KeyState::Holding(_) => {
+                                // In this state pattern is not surely finished,
+                                // however an other key is pressed so terminate the sequence
+                                // with a tap due to UnilateralTap decision; try to resolve as is
+                                let pattern = match held_key.state {
+                                    KeyState::Pressed(pattern) => pattern.followed_by_tap(), // The HeldKeyDecision turned this into tap!
+                                    KeyState::Holding(pattern) => pattern,
+                                    _ => unreachable!(),
+                                };
+                                debug!("Pattern after unilateral tap or flow tap: {:?}", pattern);
+                                let action =
+                                    Self::action_from_pattern(self.keymap.borrow().behavior, &held_key.action, pattern);
+                                self.process_key_action_normal(action, held_key.event).await;
+                                held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
+                                // Push back after triggered tap
+                                self.held_buffer.push_without_sort(held_key);
                             }
+                            KeyState::Released(pattern) => {
+                                // In this state pattern is not surely finished,
+                                // however an other key is pressed so terminate the sequence, try to resolve as is
+                                debug!("Pattern after released, unilateral tap or flow tap: {:?}", pattern);
+                                let action =
+                                    Self::action_from_pattern(self.keymap.borrow().behavior, &held_key.action, pattern);
+                                held_key.event.pressed = true;
+                                self.process_key_action_tap(action, held_key.event).await;
+                                // The tap is fully fired, don't push it back to buffer again
+                                // Removing from the held buffer is like setting to an idle state
+                            }
+                            _ => (),
                         }
+                    }
                 }
                 HeldKeyDecision::PermissiveHold | HeldKeyDecision::HoldOnOtherKeyPress => {
                     if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
@@ -769,12 +764,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if !event.pressed {
             for (i, fork) in (&self.keymap.borrow().behavior.fork.forks).into_iter().enumerate() {
                 if fork.trigger == *key_action
-                    && let Some(active) = self.fork_states[i] {
-                        // If the originating key of a fork is released, simply release the replacement key
-                        // (The fork deactivation is delayed, will happen after the release hid report is sent)
-                        debug!("replace input with fork action {:?}", active);
-                        return active.replacement;
-                    }
+                    && let Some(active) = self.fork_states[i]
+                {
+                    // If the originating key of a fork is released, simply release the replacement key
+                    // (The fork deactivation is delayed, will happen after the release hid report is sent)
+                    debug!("replace input with fork action {:?}", active);
+                    return active.replacement;
+                }
             }
             return *key_action;
         }
@@ -878,8 +874,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_combo(&mut self, key_action: &KeyAction, event: KeyboardEvent) -> (Option<KeyAction>, bool) {
         let mut is_combo_action = false;
         let current_layer = self.keymap.borrow().get_activated_layer();
-        for combo in self.keymap.borrow_mut().behavior.combo.combos.iter_mut() {
+        for combo in self
+            .keymap
+            .borrow_mut()
+            .behavior
+            .combo
+            .combos
+            .iter_mut()
+            .filter_map(|c| c.as_mut())
+        {
             is_combo_action |= combo.update(key_action, event, current_layer);
+            info!("Update combo: {:?}", combo);
         }
 
         if event.pressed && is_combo_action {
@@ -900,7 +905,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .combo
                 .combos
                 .iter_mut()
-                .find_map(|combo| (combo.is_all_pressed() && !combo.is_triggered()).then_some(combo.trigger()));
+                .filter_map(|c| c.as_mut())
+                .find_map(|c| {
+                    info!(
+                        "Combo: {:?}\n is_all_pressed: {}, is_triggered: {}",
+                        c,
+                        c.is_all_pressed(),
+                        c.is_triggered()
+                    );
+                    (c.is_all_pressed() && !c.is_triggered()).then_some(c.trigger())
+                });
+
+            info!("FInd next action:{:?}", next_action);
 
             if next_action.is_some() {
                 // FIXME: This operation removes all held keys with state `WaitingCombo`.
@@ -918,8 +934,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 let mut combo_output = None;
                 let mut releasing_triggered_combo = false;
 
-                for combo in self.keymap.borrow_mut().behavior.combo.combos.iter_mut() {
-                    if combo.actions.contains(key_action) {
+                for combo in self
+                    .keymap
+                    .borrow_mut()
+                    .behavior
+                    .combo
+                    .combos
+                    .iter_mut()
+                    .filter_map(|c| c.as_mut())
+                {
+                    if combo.actions.contains(&key_action) {
                         // Releasing a combo key in triggered combo
                         releasing_triggered_combo |= combo.is_triggered();
 
@@ -966,6 +990,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .combo
             .combos
             .iter_mut()
+            .filter_map(|combo| combo.as_mut())
             .filter(|combo| !combo.is_triggered())
             .for_each(Combo::reset);
     }
@@ -1864,9 +1889,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             KeyboardEventPos::RotaryEncoder(encoder_pos) => {
                 // Check if the rotary encoder id is valid
                 if let Some(encoder) = self.rotary_encoder_timer.get_mut(encoder_pos.id as usize)
-                    && encoder_pos.direction != Direction::None {
-                        encoder[encoder_pos.direction as usize] = value;
-                    }
+                    && encoder_pos.direction != Direction::None
+                {
+                    encoder[encoder_pos.direction as usize] = value;
+                }
             }
         }
     }
@@ -1878,9 +1904,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             KeyboardEventPos::RotaryEncoder(encoder_pos) => {
                 // Check if the rotary encoder id is valid
                 if let Some(encoder) = self.rotary_encoder_timer.get(encoder_pos.id as usize)
-                    && encoder_pos.direction != Direction::None {
-                        return encoder[encoder_pos.direction as usize];
-                    }
+                    && encoder_pos.direction != Direction::None
+                {
+                    return encoder[encoder_pos.direction as usize];
+                }
                 None
             }
         }
@@ -2168,8 +2195,8 @@ mod test {
     fn get_combos_config() -> CombosConfig {
         // Define the function to return the appropriate combo configuration
         CombosConfig {
-            combos: Vec::from_iter([
-                Combo::new(
+            combos: [
+                Some(Combo::new(
                     [
                         k!(V), //3,4
                         k!(B), //3,5
@@ -2177,8 +2204,8 @@ mod test {
                     .to_vec(),
                     k!(LShift),
                     Some(0),
-                ),
-                Combo::new(
+                )),
+                Some(Combo::new(
                     [
                         k!(R), //1,4
                         k!(T), //1,5
@@ -2186,8 +2213,9 @@ mod test {
                     .to_vec(),
                     k!(LAlt),
                     Some(0),
-                ),
-            ]),
+                )),
+                None, None, None, None, None, None
+            ],
             timeout: Duration::from_millis(100),
         }
     }

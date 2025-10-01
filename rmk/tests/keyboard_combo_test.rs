@@ -1,7 +1,6 @@
 pub mod common;
 
 use embassy_time::Duration;
-use heapless::Vec;
 use rmk::combo::Combo;
 use rmk::config::CombosConfig;
 use rmk::types::modifier::ModifierCombination;
@@ -12,8 +11,8 @@ use rmk_types::action::MorseProfile;
 pub fn get_combos_config() -> CombosConfig {
     // Define the function to return the appropriate combo configuration
     CombosConfig {
-        combos: Vec::from_iter([
-            Combo::new(
+        combos: [
+            Some(Combo::new(
                 [
                     k!(V), //3,4
                     k!(B), //3,5
@@ -21,8 +20,8 @@ pub fn get_combos_config() -> CombosConfig {
                 .to_vec(),
                 k!(LShift),
                 Some(0),
-            ),
-            Combo::new(
+            )),
+            Some(Combo::new(
                 [
                     k!(R), //1,4
                     k!(T), //1,5
@@ -30,8 +29,8 @@ pub fn get_combos_config() -> CombosConfig {
                 .to_vec(),
                 k!(LAlt),
                 Some(0),
-            ),
-            Combo::new(
+            )),
+            Some(Combo::new(
                 [
                     k!(E), //1,3
                     k!(T), //1,5
@@ -39,8 +38,8 @@ pub fn get_combos_config() -> CombosConfig {
                 .to_vec(),
                 osm!(ModifierCombination::new_from(false, false, false, true, false)), // one-shot LShift
                 Some(0),
-            ),
-            Combo::new(
+            )),
+            Some(Combo::new(
                 [
                     k!(E), //1,3
                     k!(R), //1,4
@@ -48,8 +47,12 @@ pub fn get_combos_config() -> CombosConfig {
                 .to_vec(),
                 k!(A), // A
                 Some(0),
-            ),
-        ]),
+            )),
+            None,
+            None,
+            None,
+            None,
+        ],
         timeout: Duration::from_millis(100),
     }
 }
@@ -193,13 +196,13 @@ mod combo_test {
                             ..Default::default()
                         },
                         combo: CombosConfig {
-                            combos: heapless::Vec::from_iter([
-                                Combo::new(
+                            combos: [
+                                Some(Combo::new(
                                     [th!(A, LShift), th!(S, LGui), th!(Z, LAlt)],
                                     k!(C),
                                     None,
-                                )
-                            ]),
+                                )), None, None, None, None, None, None, None
+                            ],
                             timeout: Duration::from_millis(50),
                         },
                         ..Default::default()

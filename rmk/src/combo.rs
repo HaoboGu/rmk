@@ -4,9 +4,10 @@ use rmk_types::action::KeyAction;
 use crate::COMBO_MAX_LENGTH;
 use crate::event::KeyboardEvent;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Combo {
-    pub(crate) actions: Vec<KeyAction, COMBO_MAX_LENGTH>,
+    pub(crate) actions: [KeyAction; COMBO_MAX_LENGTH],
     pub(crate) output: KeyAction,
     pub(crate) layer: Option<u8>,
     /// The state records the pressed keys of the combo
@@ -23,8 +24,14 @@ impl Default for Combo {
 
 impl Combo {
     pub fn new<I: IntoIterator<Item = KeyAction>>(actions: I, output: KeyAction, layer: Option<u8>) -> Self {
+        let mut combo_actions = [KeyAction::No; COMBO_MAX_LENGTH];
+        for (id, action) in actions.into_iter().enumerate() {
+            if id < COMBO_MAX_LENGTH {
+                combo_actions[id] = action;
+            }
+        }
         Self {
-            actions: Vec::from_iter(actions),
+            actions: combo_actions,
             output,
             layer,
             state: 0,
@@ -99,7 +106,8 @@ impl Combo {
 
     // Check if all keys of this combo are pressed, but it does not mean the combo key event is sent
     pub(crate) fn is_all_pressed(&self) -> bool {
-        !self.actions.is_empty() && self.keys_pressed() == self.actions.len() as u32
+        let cnt = self.actions.iter().filter(|&&a| a != KeyAction::No).count();
+        !self.actions.is_empty() && self.keys_pressed() == cnt as u32
     }
 
     pub(crate) fn started(&self) -> bool {
