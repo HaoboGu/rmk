@@ -48,7 +48,16 @@ pub fn get_combos_config() -> CombosConfig {
                 k!(A), // A
                 Some(0),
             )),
-            None,
+            Some(Combo::new(
+                [
+                    k!(E), //1,3
+                    k!(R), //1,4
+                    k!(T), //1,5
+                ]
+                .to_vec(),
+                k!(Space),
+                Some(0),
+            )),
             None,
             None,
             None,
@@ -68,6 +77,31 @@ mod combo_test {
     use crate::common::{KC_LSHIFT, create_test_keyboard_with_config};
 
     rusty_fork_test! {
+        #[test]
+        fn test_single_key_in_combo() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard_with_config(BehaviorConfig {
+                    combo: get_combos_config(),
+                    ..Default::default()
+                }),
+                sequence: [
+                    [1, 3, true, 10],
+                    [1, 3, false, 50],
+                    [1, 4, true, 10],
+                    [1, 4, false, 50],
+                    [1, 5, true, 10],
+                    [1, 5, false, 10],
+                ],
+                expected_reports: [
+                    [0, [KeyCode::E as u8, 0, 0, 0, 0, 0]],
+                    [0, [0; 6]],
+                    [0, [KeyCode::R as u8, 0, 0, 0, 0, 0]],
+                    [0, [0; 6]],
+                    [0, [KeyCode::T as u8, 0, 0, 0, 0, 0]],
+                    [0, [0; 6]],
+                ]
+            }
+        }
         #[test]
         fn test_combo_timeout_and_ignore() {
             key_sequence_test! {
@@ -152,6 +186,29 @@ mod combo_test {
                     [KC_LSHIFT, [0; 6]],
                     [KC_LSHIFT, [KeyCode::N as u8, 0, 0, 0, 0, 0]],
                     [KC_LSHIFT, [0; 6]],
+                    [0, [0; 6]],
+                ]
+            }
+        }
+
+        #[ignore]
+        #[test]
+        fn test_combo_override() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard_with_config(BehaviorConfig {
+                    combo: get_combos_config(),
+                    ..Default::default()
+                }),
+                sequence: [
+                    [1, 3, true, 10],
+                    [1, 5, true, 10],
+                    [1, 4, true, 10],
+                    [1, 3, false, 50],
+                    [1, 5, false, 10],
+                    [1, 4, false, 50],
+                ],
+                expected_reports: [
+                    [0, [KeyCode::Space as u8, 0, 0, 0, 0, 0]],
                     [0, [0; 6]],
                 ]
             }
