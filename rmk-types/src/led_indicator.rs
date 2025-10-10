@@ -5,6 +5,7 @@
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
+use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 /// Indicators defined in the HID spec 11.1
@@ -19,7 +20,7 @@ pub enum LedIndicatorType {
 }
 
 #[bitfield(u8, defmt = cfg(feature = "defmt"))]
-#[derive(Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Serialize, Deserialize, MaxSize)]
 
 pub struct LedIndicator {
     #[bits(1)]

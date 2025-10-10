@@ -374,6 +374,15 @@ pub(crate) async fn run_keyboard<
                             crate::event::ControllerEvent::KeyboardIndicator(led_indicator),
                         );
                     }
+
+                    // Send complete LED indicator state to split peripherals
+                    #[cfg(feature = "split")]
+                    {
+                        if let Ok(publisher) = crate::channel::SPLIT_MESSAGE_PUBLISHER.publisher() {
+                            info!("Sending LED indicator to peripherals: {:?}", led_indicator);
+                            publisher.publish_immediate(crate::split::SplitMessage::LedIndicator(led_indicator));
+                        }
+                    }
                 }
                 Err(e) => {
                     error!("Read HID LED indicator error: {:?}", e);
