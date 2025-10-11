@@ -34,8 +34,6 @@ vial_channel_size = 4
 flash_channel_size = 4
 # The number of the split peripherals
 split_peripherals_num = 1
-# The size of the split message channel
-split_message_channel_size = 4
 # The number of available BLE profiles
 ble_profiles_num = 3
 ```
@@ -78,7 +76,6 @@ In RMK there are several channels used for communication between tasks. The leng
 ### Split Keyboard Configuration
 
 - `split_peripherals_num`: The number of split peripherals, default value is 1. If multiple peripherals are specified in the toml, this field will be automatically set to the actual peripherals number.
-- `split_message_channel_size`: The length of the split message channel, default value is 4.
 
 ### Wireless Configuration
 

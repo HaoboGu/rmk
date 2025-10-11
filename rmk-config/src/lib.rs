@@ -84,9 +84,6 @@ pub struct RmkConstantsConfig {
     /// The number of the split peripherals
     #[serde_inline_default(1)]
     pub split_peripherals_num: usize,
-    /// The size of the split message
-    #[serde_inline_default(4)]
-    pub split_message_channel_size: usize,
     /// The number of available BLE profiles
     #[serde_inline_default(3)]
     pub ble_profiles_num: usize,
@@ -163,7 +160,6 @@ impl Default for RmkConstantsConfig {
             vial_channel_size: 4,
             flash_channel_size: 4,
             split_peripherals_num: 1,
-            split_message_channel_size: 4,
             ble_profiles_num: 3,
             split_central_sleep_timeout_minutes: 0,
             vial_enabled: true,
