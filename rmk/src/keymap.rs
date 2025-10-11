@@ -345,6 +345,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             let layer = self.get_activated_layer();
             send_controller_event(&mut self.controller_pub, ControllerEvent::Layer(layer));
         }
+
+        // Send active layer number to split peripherals
+        #[cfg(feature = "split")]
+        {
+            let active_layer = self.get_activated_layer();
+            if let Ok(publisher) = crate::channel::SPLIT_MESSAGE_PUBLISHER.publisher() {
+                info!("Sending active layer to peripherals: {}", active_layer);
+                publisher.publish_immediate(crate::split::SplitMessage::ActiveLayer(active_layer));
+            }
+        }
     }
 
     /// Activate given layer
@@ -389,6 +399,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         {
             let layer = self.get_activated_layer();
             send_controller_event(&mut self.controller_pub, ControllerEvent::Layer(layer));
+        }
+
+        // Send active layer number to split peripherals
+        #[cfg(feature = "split")]
+        {
+            let active_layer = self.get_activated_layer();
+            if let Ok(publisher) = crate::channel::SPLIT_MESSAGE_PUBLISHER.publisher() {
+                info!("Sending active layer to peripherals: {}", active_layer);
+                publisher.publish_immediate(crate::split::SplitMessage::ActiveLayer(active_layer));
+            }
         }
     }
 }

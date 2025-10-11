@@ -34,4 +34,8 @@ pub(crate) enum SplitMessage {
     Address([u8; 6]),
     /// Clear the saved peer info
     ClearPeer,
+    /// Complete LED indicator state from central to peripheral
+    LedIndicator(rmk_types::led_indicator::LedIndicator),
+    /// Active layer number from central to peripheral
+    ActiveLayer(u8),
 }

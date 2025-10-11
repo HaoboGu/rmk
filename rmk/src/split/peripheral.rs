@@ -78,7 +78,8 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
             {
                 embassy_futures::select::Either3::First(m) => match m {
                     // Currently only handle the central state message
-                    Ok(split_message) => match split_message {
+                    Ok(split_message) => {
+                        match split_message {
                         SplitMessage::ConnectionState(state) => {
                             trace!("Received connection state update: {}", state);
                             CONNECTION_STATE.store(state, core::sync::atomic::Ordering::Release);
@@ -92,7 +93,30 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                                 )))
                                 .await;
                         }
+                        SplitMessage::LedIndicator(led_indicator) => {
+                            info!(">>> Received LED indicator: {:?}", led_indicator);
+                            #[cfg(feature = "controller")]
+                            {
+                                if let Ok(mut controller_pub) = crate::channel::CONTROLLER_CHANNEL.publisher() {
+                                    use crate::channel::send_controller_event;
+                                    use crate::event::ControllerEvent;
+                                    send_controller_event(&mut controller_pub, ControllerEvent::KeyboardIndicator(led_indicator));
+                                }
+                            }
+                        }
+                        SplitMessage::ActiveLayer(layer) => {
+                            info!(">>> Received active layer: {}", layer);
+                            #[cfg(feature = "controller")]
+                            {
+                                if let Ok(mut controller_pub) = crate::channel::CONTROLLER_CHANNEL.publisher() {
+                                    use crate::channel::send_controller_event;
+                                    use crate::event::ControllerEvent;
+                                    send_controller_event(&mut controller_pub, ControllerEvent::Layer(layer));
+                                }
+                            }
+                        }
                         _ => (),
+                        }
                     },
                     Err(e) => {
                         error!("Split message read error: {:?}", e);
