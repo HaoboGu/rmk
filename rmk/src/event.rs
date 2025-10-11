@@ -175,4 +175,6 @@ pub enum ControllerEvent {
     /// Ble profile changed
     #[cfg(feature = "_ble")]
     BleProfile(u8),
+    #[cfg(all(feature = "_ble", feature = "split"))]
+    ClearPeer,
 }

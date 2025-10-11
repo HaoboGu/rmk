@@ -740,35 +740,6 @@ dependencies = [
 
 [[package]]
 name = "embassy-nrf"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86a0fd2ba2c12b27bc7116fbd33911eb78ebb72a059f1c4f875a5e1c65a6e372"
-dependencies = [
- "bitflags 2.9.1",
- "cfg-if",
- "cortex-m",
- "cortex-m-rt",
- "critical-section",
- "document-features",
- "embassy-embedded-hal",
- "embassy-hal-internal",
- "embassy-sync",
- "embassy-usb-driver",
- "embedded-hal 0.2.7",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "embedded-io",
- "embedded-io-async",
- "embedded-storage",
- "embedded-storage-async",
- "fixed",
- "nrf-pac",
- "rand_core 0.6.4",
- "rand_core 0.9.3",
-]
-
-[[package]]
-name = "embassy-nrf"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8d63429d74ab5786cde7c9dc9a0338ea162a4da95e204ac5345c5ae36831fdb"
@@ -1428,12 +1399,12 @@ dependencies = [
 [[package]]
 name = "nrf-mpsl"
 version = "0.3.0"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=fac511c#fac511c8557a215de37f9e1af214870778b74375"
+source = "git+https://github.com/alexmoon/nrf-sdc?rev=11d5c3c#11d5c3c3653af73b511133c2f8231f33eb0696f4"
 dependencies = [
  "cortex-m",
  "critical-section",
  "defmt 1.0.1",
- "embassy-nrf 0.7.0",
+ "embassy-nrf",
  "embassy-sync",
  "embedded-io",
  "embedded-storage",
@@ -1444,7 +1415,7 @@ dependencies = [
 [[package]]
 name = "nrf-mpsl-sys"
 version = "0.2.1"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=fac511c#fac511c8557a215de37f9e1af214870778b74375"
+source = "git+https://github.com/alexmoon/nrf-sdc?rev=11d5c3c#11d5c3c3653af73b511133c2f8231f33eb0696f4"
 dependencies = [
  "bindgen",
  "doxygen-rs",
@@ -1463,13 +1434,13 @@ dependencies = [
 [[package]]
 name = "nrf-sdc"
 version = "0.4.0"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=fac511c#fac511c8557a215de37f9e1af214870778b74375"
+source = "git+https://github.com/alexmoon/nrf-sdc?rev=11d5c3c#11d5c3c3653af73b511133c2f8231f33eb0696f4"
 dependencies = [
  "bt-hci",
  "critical-section",
  "defmt 1.0.1",
  "embassy-hal-internal",
- "embassy-nrf 0.7.0",
+ "embassy-nrf",
  "embassy-sync",
  "embedded-io",
  "embedded-io-async",
@@ -1481,7 +1452,7 @@ dependencies = [
 [[package]]
 name = "nrf-sdc-sys"
 version = "0.2.1"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=fac511c#fac511c8557a215de37f9e1af214870778b74375"
+source = "git+https://github.com/alexmoon/nrf-sdc?rev=11d5c3c#11d5c3c3653af73b511133c2f8231f33eb0696f4"
 dependencies = [
  "bindgen",
  "doxygen-rs",
@@ -1824,7 +1795,7 @@ dependencies = [
  "embassy-embedded-hal",
  "embassy-executor",
  "embassy-futures",
- "embassy-nrf 0.8.0",
+ "embassy-nrf",
  "embassy-sync",
  "embassy-time",
  "embassy-usb",
@@ -1898,7 +1869,7 @@ dependencies = [
  "defmt 1.0.1",
  "defmt-rtt",
  "embassy-executor",
- "embassy-nrf 0.8.0",
+ "embassy-nrf",
  "embassy-time",
  "json",
  "nrf-mpsl",
