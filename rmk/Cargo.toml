@@ -171,11 +171,13 @@ async_matrix = ["dep:embedded-hal-async"]
 ## Use rapid debouncer
 rapid_debouncer = []
 
-## Enable split keyboard support
-split = []
-
-## Enable to use controllers to control other hardwares on the board
+## Enable to use controllers to control other hardwares on the board or peripheral
 controller = []
+
+## Enable split keyboard support. 
+## 
+## The split peripheral is regarded as a controller subscriber, so the split feature requires controller feature.
+split = ["controller"]
 
 ## Enable feature to use rp2040 specific features, like PIO and bootrom
 rp2040 = [

@@ -1,5 +1,7 @@
 //! Exposed channels which can be used to share data across devices & processors
 
+#[cfg(feature = "split")]
+use crate::SPLIT_PERIPHERALS_NUM;
 use embassy_sync::channel::Channel;
 #[cfg(any(feature = "split", feature = "controller"))]
 use embassy_sync::pubsub::PubSubChannel;
@@ -12,11 +14,6 @@ use {
     crate::{CONTROLLER_CHANNEL_PUBS, CONTROLLER_CHANNEL_SIZE, CONTROLLER_CHANNEL_SUBS},
     embassy_sync::pubsub::{Publisher, Subscriber},
 };
-#[cfg(feature = "split")]
-use {
-    crate::split::SplitMessage,
-    crate::{SPLIT_MESSAGE_CHANNEL_SIZE, SPLIT_PERIPHERALS_NUM},
-};
 
 use crate::event::{Event, KeyboardEvent};
 use crate::hid::Report;
@@ -25,11 +22,24 @@ use crate::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, RawMutex};
 use crate::{FLASH_CHANNEL_SIZE, storage::FlashOperationMessage};
 
 #[cfg(feature = "controller")]
+const CONTROLLER_CHANNEL_FINAL_SIZE: usize = const {
+    // Calculate CONTROLLER_CHANNEL_FINAL_SIZE at compile-time
+    #[cfg(feature = "split")]
+    {
+        CONTROLLER_CHANNEL_SIZE + SPLIT_PERIPHERALS_NUM
+    }
+    #[cfg(not(feature = "split"))]
+    {
+        CONTROLLER_CHANNEL_SIZE
+    }
+};
+
+#[cfg(feature = "controller")]
 pub type ControllerSub = Subscriber<
     'static,
     RawMutex,
     ControllerEvent,
-    CONTROLLER_CHANNEL_SIZE,
+    CONTROLLER_CHANNEL_FINAL_SIZE,
     CONTROLLER_CHANNEL_SUBS,
     CONTROLLER_CHANNEL_PUBS,
 >;
@@ -38,7 +48,7 @@ pub type ControllerPub = Publisher<
     'static,
     RawMutex,
     ControllerEvent,
-    CONTROLLER_CHANNEL_SIZE,
+    CONTROLLER_CHANNEL_FINAL_SIZE,
     CONTROLLER_CHANNEL_SUBS,
     CONTROLLER_CHANNEL_PUBS,
 >;
@@ -57,7 +67,7 @@ pub static KEYBOARD_REPORT_CHANNEL: Channel<RawMutex, Report, REPORT_CHANNEL_SIZ
 pub static CONTROLLER_CHANNEL: PubSubChannel<
     RawMutex,
     ControllerEvent,
-    CONTROLLER_CHANNEL_SIZE,
+    CONTROLLER_CHANNEL_FINAL_SIZE,
     CONTROLLER_CHANNEL_SUBS,
     CONTROLLER_CHANNEL_PUBS,
 > = PubSubChannel::new();
@@ -67,15 +77,6 @@ pub static CONTROLLER_CHANNEL: PubSubChannel<
 pub(crate) static FLASH_CHANNEL: Channel<RawMutex, FlashOperationMessage, FLASH_CHANNEL_SIZE> = Channel::new();
 #[cfg(feature = "_ble")]
 pub(crate) static BLE_PROFILE_CHANNEL: Channel<RawMutex, BleProfileAction, 1> = Channel::new();
-// Channel for publish split messages to all peripherals
-#[cfg(feature = "split")]
-pub(crate) static SPLIT_MESSAGE_PUBLISHER: PubSubChannel<
-    RawMutex,
-    SplitMessage,
-    SPLIT_MESSAGE_CHANNEL_SIZE,
-    SPLIT_PERIPHERALS_NUM,
-    1,
-> = PubSubChannel::new();
 
 #[cfg(feature = "controller")]
 pub fn send_controller_event(publisher: &mut ControllerPub, event: ControllerEvent) {

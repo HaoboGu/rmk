@@ -270,8 +270,6 @@ vial_channel_size = 4
 flash_channel_size = 4
 # The number of the split peripherals
 split_peripherals_num = 1
-# The size of the split message channel
-split_message_channel_size = 4
 # The number of available BLE profiles
 ble_profiles_num = 3
 
