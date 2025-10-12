@@ -10,6 +10,8 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             Action::Key(KeyCode::GraveEscape) => 0x7c16,
             Action::Key(KeyCode::RepeatKey) => 0x7c79,
             Action::Key(KeyCode::CapsWordToggle) => 0x7c73,
+            Action::Key(KeyCode::TriLayerLower) => 0x7c77,
+            Action::Key(KeyCode::TriLayerUpper) => 0x7c78,
             Action::Key(k) => {
                 if k.is_macro() {
                     k as u16 & 0xFF | 0x7700
@@ -179,6 +181,10 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             );
             KeyAction::No
         }
+        // TriLayer Lower
+        0x7C77 => KeyAction::Single(Action::Key(KeyCode::TriLayerLower)),
+        // TriLayer Upper
+        0x7C78 => KeyAction::Single(Action::Key(KeyCode::TriLayerUpper)),
         0x7E00..=0x7E0F => {
             // QK_KB_N, aka UserN
             let keycode = via_keycode & 0xFF | 0x840;
