@@ -1352,6 +1352,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             let layer = if key == KeyCode::TriLayerLower { 1 } else { 2 };
             self.process_action_layer_switch(layer, event);
             self.keymap.borrow_mut().update_fn_layer_state();
+            return;
         }
         let key = match key {
             KeyCode::GraveEscape => {
