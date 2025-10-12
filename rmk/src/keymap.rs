@@ -333,6 +333,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
+    /// Update fn layer state, this is only used for fn1(fn3) + fn2(fn3)
+    pub(crate) fn update_fn_layer_state(&mut self) {
+        if NUM_LAYER > 3 {
+            self.layer_state[3] = self.layer_state[1] && self.layer_state[2];
+            #[cfg(feature = "controller")]
+            {
+                let layer = self.get_activated_layer();
+                send_controller_event(&mut self.controller_pub, ControllerEvent::Layer(layer));
+            }
+        }
+    }
+
     /// Update Tri Layer state
     fn update_tri_layer(&mut self) {
         if let Some(ref tri_layer) = self.behavior.tri_layer {

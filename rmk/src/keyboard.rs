@@ -1347,6 +1347,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     // Process action key
     async fn process_action_key(&mut self, key: KeyCode, event: KeyboardEvent) {
+        if matches!(key, KeyCode::TriLayerLower | KeyCode::TriLayerUpper) {
+            // Check tri-layer first
+            let layer = if key == KeyCode::TriLayerLower { 1 } else { 2 };
+            self.process_action_layer_switch(layer, event);
+            self.keymap.borrow_mut().update_fn_layer_state();
+        }
         let key = match key {
             KeyCode::GraveEscape => {
                 if self.held_modifiers.into_bits() == 0 {
