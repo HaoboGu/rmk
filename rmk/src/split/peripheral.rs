@@ -11,14 +11,11 @@ use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash, troub
 use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
 use crate::CONNECTION_STATE;
-use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
+use crate::channel::{CONTROLLER_CHANNEL, EVENT_CHANNEL, KEY_EVENT_CHANNEL, send_controller_event};
+use crate::event::ControllerEvent;
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;
-use {
-    crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
-    crate::event::ControllerEvent,
-};
 
 /// Run the split peripheral service.
 ///
