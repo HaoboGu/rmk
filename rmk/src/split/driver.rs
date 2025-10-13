@@ -10,7 +10,7 @@ use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::stora
 use super::SplitMessage;
 use crate::CONNECTION_STATE;
 use crate::channel::{CONTROLLER_CHANNEL, EVENT_CHANNEL, KEY_EVENT_CHANNEL};
-#[cfg(feature = "_ble")]
+#[cfg(any(feature = "_ble", feature = "controller"))]
 use crate::event::ControllerEvent;
 use crate::event::{Event, KeyboardEvent, KeyboardEventPos};
 use crate::input_device::InputDevice;
@@ -127,6 +127,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                                 }
                             }
                         }
+                        #[cfg(feature = "controller")]
                         ControllerEvent::KeyboardIndicator(led_indicator) => {
                             // Send KeyboardIndicator state to peripheral
                             debug!("Sending KeyboardIndicator to peripheral {}: {:?}", self.id, led_indicator);
@@ -137,6 +138,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                                 }
                             }
                         }
+                        #[cfg(feature = "controller")]
                         ControllerEvent::Layer(layer) => {
                             // Send layer number to peripheral
                             debug!("Sending layer number to peripheral {}: {}", self.id, layer);
