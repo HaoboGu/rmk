@@ -105,6 +105,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 },
                 Either3::Second(controller_msg) => {
                     match controller_msg {
+                        #[cfg(feature = "_ble")]
                         ControllerEvent::ClearPeer => {
                             #[cfg(feature = "storage")]
                             // Clear the peer address in storage
