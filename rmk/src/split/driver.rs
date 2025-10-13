@@ -127,6 +127,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                                 }
                             }
                         }
+                        #[cfg(feature = "_ble")]
                         ControllerEvent::KeyboardIndicator(led_indicator) => {
                             // Send KeyboardIndicator state to peripheral
                             debug!("Sending KeyboardIndicator to peripheral {}: {:?}", self.id, led_indicator);
@@ -137,6 +138,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                                 }
                             }
                         }
+                        #[cfg(feature = "_ble")]
                         ControllerEvent::Layer(layer) => {
                             // Send layer number to peripheral
                             debug!("Sending layer number to peripheral {}: {}", self.id, layer);
