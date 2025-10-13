@@ -10,7 +10,6 @@ use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::stora
 use super::SplitMessage;
 use crate::CONNECTION_STATE;
 use crate::channel::{CONTROLLER_CHANNEL, EVENT_CHANNEL, KEY_EVENT_CHANNEL};
-#[cfg(feature = "_ble")]
 use crate::event::ControllerEvent;
 use crate::event::{Event, KeyboardEvent, KeyboardEventPos};
 use crate::input_device::InputDevice;
@@ -121,6 +120,26 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                             // Write `ClearPeer` message to peripheral
                             debug!("Write ClearPeer message to peripheral {}", self.id);
                             if let Err(e) = self.transceiver.write(&SplitMessage::ClearPeer).await {
+                                match e {
+                                    SplitDriverError::Disconnected => return,
+                                    _ => error!("SplitDriver write error: {:?}", e),
+                                }
+                            }
+                        }
+                        ControllerEvent::KeyboardIndicator(led_indicator) => {
+                            // Send KeyboardIndicator state to peripheral
+                            debug!("Sending KeyboardIndicator to peripheral {}: {:?}", self.id, led_indicator);
+                            if let Err(e) = self.transceiver.write(&SplitMessage::KeyboardIndicator(led_indicator.into_bits())).await {
+                                match e {
+                                    SplitDriverError::Disconnected => return,
+                                    _ => error!("SplitDriver write error: {:?}", e),
+                                }
+                            }
+                        }
+                        ControllerEvent::Layer(layer) => {
+                            // Send layer number to peripheral
+                            debug!("Sending layer number to peripheral {}: {}", self.id, layer);
+                            if let Err(e) = self.transceiver.write(&SplitMessage::Layer(layer)).await {
                                 match e {
                                     SplitDriverError::Disconnected => return,
                                     _ => error!("SplitDriver write error: {:?}", e),
