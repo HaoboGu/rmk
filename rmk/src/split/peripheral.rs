@@ -15,6 +15,10 @@ use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;
+use {
+    crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
+    crate::event::ControllerEvent,
+};
 
 /// Run the split peripheral service.
 ///
@@ -91,6 +95,19 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                                     0, false, [0; 6],
                                 )))
                                 .await;
+                        }
+                        SplitMessage::KeyboardIndicator(indicator) => {
+                            // Publish KeyboardIndicator to CONTROLLER_CHANNEL
+                            use rmk_types::led_indicator::LedIndicator;
+                            if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
+                                send_controller_event(&mut publisher, ControllerEvent::KeyboardIndicator(LedIndicator::from_bits(indicator)));
+                            }
+                        }
+                        SplitMessage::Layer(layer) => {
+                            // Publish Layer to CONTROLLER_CHANNEL
+                            if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
+                                send_controller_event(&mut publisher, ControllerEvent::Layer(layer));
+                            }
                         }
                         _ => (),
                     },

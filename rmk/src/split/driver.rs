@@ -127,6 +127,26 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                                 }
                             }
                         }
+                        ControllerEvent::KeyboardIndicator(led_indicator) => {
+                            // Send KeyboardIndicator state to peripheral
+                            debug!("Sending KeyboardIndicator to peripheral {}: {:?}", self.id, led_indicator);
+                            if let Err(e) = self.transceiver.write(&SplitMessage::KeyboardIndicator(led_indicator.into_bits())).await {
+                                match e {
+                                    SplitDriverError::Disconnected => return,
+                                    _ => error!("SplitDriver write error: {:?}", e),
+                                }
+                            }
+                        }
+                        ControllerEvent::Layer(layer) => {
+                            // Send layer number to peripheral
+                            debug!("Sending layer number to peripheral {}: {}", self.id, layer);
+                            if let Err(e) = self.transceiver.write(&SplitMessage::Layer(layer)).await {
+                                match e {
+                                    SplitDriverError::Disconnected => return,
+                                    _ => error!("SplitDriver write error: {:?}", e),
+                                }
+                            }
+                        }
                         _ => {}
                     }
                 }
