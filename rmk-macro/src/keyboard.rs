@@ -172,7 +172,7 @@ fn expand_main(
 
     let main_function_sig = if keyboard_config.get_chip_model().unwrap().series == ChipSeries::Esp32 {
         quote! {
-            #[::esp_hal_embassy::main]
+            #[::esp_rtos::main]
             async fn main(_s: ::embassy_executor::Spawner)
         }
     } else {

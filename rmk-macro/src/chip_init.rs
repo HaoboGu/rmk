@@ -182,7 +182,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                 let timg0 = ::esp_hal::timer::timg::TimerGroup::new(p.TIMG0);
                 #[cfg(target_arch = "riscv32")]
                 let software_interrupt = ::esp_hal::interrupt::software::SoftwareInterruptControl::new(p.SW_INTERRUPT);
-                ::esp_preempt::start(
+                ::esp_rtos::start(
                     timg0.timer0,
                     #[cfg(target_arch = "riscv32")]
                     software_interrupt.software_interrupt0
@@ -191,10 +191,8 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                 let mut rng = ::esp_hal::rng::Trng::try_new().unwrap();
                 static RADIO: ::static_cell::StaticCell<::esp_radio::Controller<'static>> = ::static_cell::StaticCell::new();
                 let radio = RADIO.init(::esp_radio::init().unwrap());
-                let systimer = ::esp_hal::timer::systimer::SystemTimer::new(p.SYSTIMER);
-                ::esp_hal_embassy::init(systimer.alarm0);
                 let bluetooth = p.BT;
-                let connector = ::esp_radio::ble::controller::BleConnector::new(radio, bluetooth);
+                let connector = ::esp_radio::ble::controller::BleConnector::new(radio, bluetooth, Default::default()).unwrap();
                 let controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
                 let ble_addr = #ble_addr;
                 let mut host_resources = ::rmk::HostResources::new();

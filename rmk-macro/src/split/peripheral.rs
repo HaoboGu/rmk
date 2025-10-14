@@ -36,7 +36,7 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
         quote! {
             use {esp_alloc as _, esp_backtrace as _};
             ::esp_bootloader_esp_idf::esp_app_desc!();
-            #[esp_hal_embassy::main]
+            #[esp_rtos::main]
             async fn main(_s: ::embassy_executor::Spawner)
         }
     } else {
