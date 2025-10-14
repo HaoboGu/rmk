@@ -10,8 +10,7 @@ use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::stora
 use super::SplitMessage;
 use crate::CONNECTION_STATE;
 use crate::channel::{CONTROLLER_CHANNEL, EVENT_CHANNEL, KEY_EVENT_CHANNEL};
-use crate::event::ControllerEvent;
-use crate::event::{Event, KeyboardEvent, KeyboardEventPos};
+use crate::event::{ControllerEvent, Event, KeyboardEvent, KeyboardEventPos};
 use crate::input_device::InputDevice;
 
 #[derive(Debug, Clone, Copy)]
@@ -128,8 +127,15 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                         }
                         ControllerEvent::KeyboardIndicator(led_indicator) => {
                             // Send KeyboardIndicator state to peripheral
-                            debug!("Sending KeyboardIndicator to peripheral {}: {:?}", self.id, led_indicator);
-                            if let Err(e) = self.transceiver.write(&SplitMessage::KeyboardIndicator(led_indicator.into_bits())).await {
+                            debug!(
+                                "Sending KeyboardIndicator to peripheral {}: {:?}",
+                                self.id, led_indicator
+                            );
+                            if let Err(e) = self
+                                .transceiver
+                                .write(&SplitMessage::KeyboardIndicator(led_indicator.into_bits()))
+                                .await
+                            {
                                 match e {
                                     SplitDriverError::Disconnected => return,
                                     _ => error!("SplitDriver write error: {:?}", e),

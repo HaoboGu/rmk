@@ -97,7 +97,10 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                             // Publish KeyboardIndicator to CONTROLLER_CHANNEL
                             use rmk_types::led_indicator::LedIndicator;
                             if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
-                                send_controller_event(&mut publisher, ControllerEvent::KeyboardIndicator(LedIndicator::from_bits(indicator)));
+                                send_controller_event(
+                                    &mut publisher,
+                                    ControllerEvent::KeyboardIndicator(LedIndicator::from_bits(indicator)),
+                                );
                             }
                         }
                         SplitMessage::Layer(layer) => {
