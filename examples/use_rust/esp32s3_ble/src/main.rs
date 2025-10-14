@@ -12,7 +12,6 @@ use bt_hci::controller::ExternalController;
 use embassy_executor::Spawner;
 use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{Input, InputConfig, Level, Output, OutputConfig, Pull};
-use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::otg_fs::Usb;
 use esp_hal::otg_fs::asynch::{Config, Driver};
 use esp_hal::rng::TrngSource;
@@ -38,7 +37,7 @@ use crate::vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 ::esp_bootloader_esp_idf::esp_app_desc!();
 
-#[esp_hal_embassy::main]
+#[esp_rtos::main]
 async fn main(_s: Spawner) {
     // Initialize the peripherals and bluetooth controller
     esp_println::logger::init_logger_from_env();
@@ -47,7 +46,7 @@ async fn main(_s: Spawner) {
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     #[cfg(target_arch = "riscv32")]
     let software_interrupt = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
-    esp_preempt::start(
+    esp_rtos::start(
         timg0.timer0,
         #[cfg(target_arch = "riscv32")]
         software_interrupt.software_interrupt0,
@@ -56,10 +55,8 @@ async fn main(_s: Spawner) {
     let mut rng = esp_hal::rng::Trng::try_new().unwrap();
     static RADIO: StaticCell<Controller<'static>> = StaticCell::new();
     let radio = RADIO.init(esp_radio::init().unwrap());
-    let systimer = esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER);
-    esp_hal_embassy::init(systimer.alarm0);
     let bluetooth = peripherals.BT;
-    let connector = BleConnector::new(radio, bluetooth);
+    let connector = BleConnector::new(radio, bluetooth, Default::default()).unwrap();
     let controller: ExternalController<_, 20> = ExternalController::new(connector);
     let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
     let mut host_resources = HostResources::new();
