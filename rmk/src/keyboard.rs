@@ -1119,11 +1119,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if event.pressed {
                     // These modifiers will be combined into the hid report, so
                     // they will be "pressed" the same time as the key (in same hid report)
-                    self.with_modifiers |= modifiers;
+                    self.held_modifiers |= modifiers;
                 } else {
                     // The modifiers will not be part of the hid report, so
                     // they will be "released" the same time as the key (in same hid report)
-                    self.with_modifiers &= !(modifiers);
+                    self.held_modifiers &= !(modifiers);
                 }
                 self.process_action_layer_switch(layer_num, event)
             }

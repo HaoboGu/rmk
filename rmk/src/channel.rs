@@ -1,7 +1,5 @@
 //! Exposed channels which can be used to share data across devices & processors
 
-#[cfg(feature = "split")]
-use crate::SPLIT_PERIPHERALS_NUM;
 use embassy_sync::channel::Channel;
 #[cfg(any(feature = "split", feature = "controller"))]
 use embassy_sync::pubsub::PubSubChannel;
@@ -15,6 +13,8 @@ use {
     embassy_sync::pubsub::{Publisher, Subscriber},
 };
 
+#[cfg(feature = "split")]
+use crate::SPLIT_PERIPHERALS_NUM;
 use crate::event::{Event, KeyboardEvent};
 use crate::hid::Report;
 use crate::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, RawMutex};
