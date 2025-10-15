@@ -160,7 +160,7 @@ async fn main(spawner: Spawner) {
         run_devices! (
             (matrix, encoder) => EVENT_CHANNEL, // Peripheral uses EVENT_CHANNEL to send events to central
         ),
-        run_rmk_split_peripheral(0, &stack, &mut storage),
+        run_rmk_split_peripheral(1, &stack, &mut storage),
     )
     .await;
 }
