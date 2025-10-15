@@ -20,6 +20,9 @@ col_offset = 0
 # Central's ble addr will be automatically generated. You can override it if you want.
 # ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]
 
+# BLE connection latency (optional, default: 30)
+ble_latency = 20
+
 # Central's matrix
 [split.central.matrix]
 matrix_type = "normal"
@@ -81,7 +84,22 @@ col_offset = 2 # The col offset of the peripheral. Central has 2 cols, so the co
 
 ## Split keyboard connection configuration
 
+### BLE connection
+
 If you're using BLE, `ble_addr` will be automatically generated. You can also override it if you want.
+
+You can also configure the BLE connection latency for the central-peripheral communication:
+
+```toml
+[split.central]
+# BLE connection max latency (connection events)
+# Lower values = faster response but higher power consumption
+# Default: 30
+# Examples: 400 ≈ 3s, 20 ≈ 150ms, 10 ≈ 75ms
+ble_latency = 20
+```
+
+### Serial connection
 
 If you're using serial, in `[split.central]` you need to defined a list of serial ports, the number of the list should be same with the number of the peripherals:
 

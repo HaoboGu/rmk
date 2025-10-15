@@ -119,6 +119,7 @@ pub(crate) async fn run_ble_peripheral_manager<
     peripheral_id: usize,
     addr: Option<[u8; 6]>,
     stack: &'a Stack<'a, C, DefaultPacketPool>,
+    ble_latency: u16,
 ) {
     trace!("SPLIT_MESSAGE_MAX_SIZE: {}", SPLIT_MESSAGE_MAX_SIZE);
     let address = match addr {
@@ -166,7 +167,7 @@ pub(crate) async fn run_ble_peripheral_manager<
         connect_params: ConnectParams {
             min_connection_interval: Duration::from_micros(7500),
             max_connection_interval: Duration::from_micros(7500),
-            max_latency: 400, // 3s
+            max_latency: ble_latency,
             supervision_timeout: Duration::from_secs(7),
             ..Default::default()
         },
@@ -192,6 +193,7 @@ pub(crate) async fn run_ble_peripheral_manager<
             stack,
             &mut central,
             &config,
+            ble_latency,
             #[cfg(feature = "controller")]
             &mut controller_pub,
         )
@@ -219,6 +221,7 @@ async fn connect_and_run_peripheral_manager<
     stack: &'a Stack<'a, C, P>,
     central: &mut Central<'a, C, P>,
     config: &ConnectConfig<'_>,
+    ble_latency: u16,
     #[cfg(feature = "controller")] controller_pub: &mut ControllerPub,
 ) -> Result<(), BleHostError<C::Error>> {
     let conn = central.connect(config).await?;
@@ -240,7 +243,7 @@ async fn connect_and_run_peripheral_manager<
         &ConnectParams {
             min_connection_interval: Duration::from_micros(7500),
             max_connection_interval: Duration::from_micros(7500),
-            max_latency: 400, // 3s
+            max_latency: ble_latency,
             supervision_timeout: Duration::from_secs(7),
             ..Default::default()
         },
@@ -250,7 +253,7 @@ async fn connect_and_run_peripheral_manager<
     match select3(
         ble_central_task(&client, &conn),
         run_peripheral_manager::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, &client),
-        sleep_manager_task(stack, &conn),
+        sleep_manager_task(stack, &conn, ble_latency),
     )
     .await
     {
@@ -444,6 +447,7 @@ async fn sleep_manager_task<
 >(
     stack: &'a Stack<'a, C, P>,
     conn: &Connection<'a, P>,
+    ble_latency: u16,
 ) -> Result<(), BleHostError<C::Error>> {
     // Skip sleep management if timeout is 0 (disabled)
     if SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES == 0 {
@@ -515,7 +519,7 @@ async fn sleep_manager_task<
                     &ConnectParams {
                         min_connection_interval: Duration::from_micros(7500),
                         max_connection_interval: Duration::from_micros(7500),
-                        max_latency: 400, // 3s
+                        max_latency: ble_latency,
                         supervision_timeout: Duration::from_secs(7),
                         ..Default::default()
                     },

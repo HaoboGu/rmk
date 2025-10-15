@@ -82,6 +82,18 @@ pub(crate) fn expand_imports_and_constants(config: &KeyboardTomlConfig) -> Token
     // Generate vial config
     let vial_static_var = expand_vial_config(config);
 
+    // Generate BLE latency constant for split central
+    let ble_latency_const = if let BoardConfig::Split(split_config) = &config.get_board_config().unwrap() {
+        let ble_latency = split_config.central.ble_latency.unwrap_or(30);
+        quote! {
+            /// BLE connection max latency for split central-peripheral communication
+            /// This value is set from keyboard.toml [split.central] section
+            pub(crate) const SPLIT_CENTRAL_BLE_LATENCY: u16 = #ble_latency;
+        }
+    } else {
+        quote! {}
+    };
+
     // Generate extra imports, panic handler and logger
     let imports = match config.get_chip_model().unwrap().series {
         ChipSeries::Esp32 => quote! {
@@ -115,6 +127,8 @@ pub(crate) fn expand_imports_and_constants(config: &KeyboardTomlConfig) -> Token
 
     quote! {
         #imports
+
+        #ble_latency_const
 
         #keyboard_info_static_var
         #vial_static_var

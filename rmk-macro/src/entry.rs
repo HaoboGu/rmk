@@ -114,6 +114,7 @@ pub(crate) fn rmk_entry_select(
                             #idx,
                             peripheral_addrs[#idx],
                             &stack,
+                            SPLIT_CENTRAL_BLE_LATENCY,
                         )
                     });
                 });

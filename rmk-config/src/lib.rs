@@ -614,6 +614,8 @@ pub struct SplitBoardConfig {
     pub matrix: MatrixConfig,
     /// Input device config for the split
     pub input_device: Option<InputDeviceConfig>,
+    /// BLE connection max latency (connection events, only for central)
+    pub ble_latency: Option<u16>,
 }
 
 /// Serial port config
