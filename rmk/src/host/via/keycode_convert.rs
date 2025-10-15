@@ -46,6 +46,13 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                 let modifier_bits = m.into_packed_bits();
                 0x52A0 | modifier_bits as u16
             }
+            Action::LayerOnWithModifier(l, m) => {
+                if l < 16 {
+                    0x5000 | ((l as u16) << 5) | ((m.into_packed_bits() & 0b11111) as u16)
+                } else {
+                    0
+                }
+            }
             _ => 0x0000,
         },
         KeyAction::Tap(_) => {
@@ -103,6 +110,11 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             let layer = (via_keycode >> 8) & 0xF;
             let keycode = (via_keycode & 0x00FF).into();
             KeyAction::TapHold(Action::Key(keycode), Action::LayerOn(layer as u8), Default::default())
+        }
+        0x5000..=0x51FF => {
+            let layer = (via_keycode >> 5) & 0xF;
+            let modifier = ModifierCombination::from_packed_bits((via_keycode & 0b11111) as u8);
+            KeyAction::Single(Action::LayerOnWithModifier(layer as u8, modifier))
         }
         0x5200..=0x521F => {
             // Activate layer X and deactivate other layers(except default layer)
@@ -336,6 +348,23 @@ mod test {
             from_via_keycode(via_keycode)
         );
 
+        // LM(1, LSHIFT)
+        let via_keycode = 0x5022;
+        assert_eq!(
+            KeyAction::Single(Action::LayerOnWithModifier(1, ModifierCombination::LSHIFT)),
+            from_via_keycode(via_keycode)
+        );
+
+        // LM(15, RGUI | RCTRL)
+        let via_keycode = 0x5039;
+        assert_eq!(
+            KeyAction::Single(Action::LayerOnWithModifier(
+                1,
+                ModifierCombination::new().with_right_gui(true).with_right_ctrl(true)
+            )),
+            from_via_keycode(via_keycode)
+        );
+
         // ComboOff
         let via_keycode = 0x7C51;
         assert_eq!(
@@ -461,6 +490,17 @@ mod test {
             Default::default(),
         );
         assert_eq!(0x2704, to_via_keycode(a));
+
+        // LM(1, LSHIFT)
+        let a = KeyAction::Single(Action::LayerOnWithModifier(1, ModifierCombination::LSHIFT));
+        assert_eq!(0x5022, to_via_keycode(a));
+
+        // LM(15, RGUI | RCTRL)
+        let a = KeyAction::Single(Action::LayerOnWithModifier(
+            1,
+            ModifierCombination::new().with_right_gui(true).with_right_ctrl(true),
+        ));
+        assert_eq!(0x5039, to_via_keycode(a));
 
         // ComboOff
         let a = KeyAction::Single(Action::Key(KeyCode::ComboOff));
