@@ -459,21 +459,21 @@ pub(crate) async fn ble_task<C: Controller + ControllerCmdAsync<LeSetPhy>, P: Pa
     mut runner: Runner<'_, C, P>,
 ) {
     loop {
-        // Signal to indicate the stack is started
-        #[cfg(feature = "split")]
-        crate::split::ble::central::STACK_STARTED.signal(true);
-
         #[cfg(not(feature = "split"))]
         if let Err(e) = runner.run().await {
             panic!("[ble_task] error: {:?}", e);
         }
 
         #[cfg(feature = "split")]
-        if let Err(e) = runner
-            .run_with_handler(&crate::split::ble::central::ScanHandler {})
-            .await
         {
-            panic!("[ble_task] error: {:?}", e);
+            // Signal to indicate the stack is started
+            crate::split::ble::central::STACK_STARTED.signal(true);
+            if let Err(e) = runner
+                .run_with_handler(&crate::split::ble::central::ScanHandler {})
+                .await
+            {
+                panic!("[ble_task] error: {:?}", e);
+            }
         }
     }
 }
