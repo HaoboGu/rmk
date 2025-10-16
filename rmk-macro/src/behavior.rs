@@ -71,7 +71,7 @@ fn expand_morse_actions(
             .iter()
             .map(|action_pair| expand_morse_action_pair(action_pair, profiles));
         quote! {
-            actions: ::rmk::heapless::Vec::from_iter([#(#action_pair_def),*]),
+            actions: ::rmk::heapless::LinearMap::from_iter([#(#action_pair_def),*]),
         }
     } else {
         quote! {}
