@@ -125,6 +125,7 @@ pub async fn scan_peripherals<
         select(scanning_fut, update_addrs_fut).await;
     }
 
+    SCANNING.store(false, Ordering::Release);
     error!("Scanning stopped");
 
     // TODO: Start scanning again when needed?
@@ -257,7 +258,6 @@ pub(crate) async fn run_ble_peripheral_manager<
             &mut controller_pub,
             ControllerEvent::SplitPeripheral(peripheral_id, false),
         );
-        info!("Connecting peripheral");
         if let Err(e) = connect_and_run_peripheral_manager::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(
             peripheral_id,
             stack,
@@ -292,9 +292,12 @@ async fn connect_and_run_peripheral_manager<
     config: &ConnectConfig<'_>,
     #[cfg(feature = "controller")] controller_pub: &mut ControllerPub,
 ) -> Result<(), BleHostError<C::Error>> {
-    STOP_SCANNING.send(()).await;
-    until_scanning_is_stop().await;
+    if SCANNING.load(Ordering::Acquire) {
+        STOP_SCANNING.send(()).await;
+        until_scanning_is_stop().await;
+    }
     CONNECTING_PERI.fetch_add(1, Ordering::AcqRel);
+    info!("Connecting to peripheral {}", id);
     let conn = central.connect(config).await?;
     CONNECTING_PERI.fetch_sub(1, Ordering::AcqRel);
 
