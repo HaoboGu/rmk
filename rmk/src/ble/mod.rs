@@ -460,19 +460,21 @@ pub(crate) async fn ble_task<C: Controller + ControllerCmdAsync<LeSetPhy>, P: Pa
 ) {
     loop {
         #[cfg(not(feature = "split"))]
-        if let Err(e) = runner.run().await {
-            panic!("[ble_task] error: {:?}", e);
+        if let Err(_e) = runner.run().await {
+            error!("[ble_task] runner.run() error");
+            embassy_time::Timer::after_millis(100).await;
         }
 
         #[cfg(feature = "split")]
         {
             // Signal to indicate the stack is started
             crate::split::ble::central::STACK_STARTED.signal(true);
-            if let Err(e) = runner
+            if let Err(_e) = runner
                 .run_with_handler(&crate::split::ble::central::ScanHandler {})
                 .await
             {
-                panic!("[ble_task] error: {:?}", e);
+                error!("[ble_task] runner.run_with_handler error");
+                embassy_time::Timer::after_millis(100).await;
             }
         }
     }
