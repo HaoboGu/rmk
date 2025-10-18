@@ -164,3 +164,58 @@ path = "src/central.rs"
 name = "peripheral"
 path = "src/peripheral.rs"
 ```
+
+## Controllers in Split Keyboards
+
+Controllers can be used in split keyboards. Peripheral devices can use controllers to respond to events from the central, such as LED indicators for CapsLock state or layer changes.
+
+### Peripheral Controllers
+
+Peripheral devices can use controllers to manage local output devices like keyboard indicators. Events from the central (such as CapsLock state) are automatically synchronized to peripherals through the split communication protocol.
+
+#### Example: CapsLock LED on Peripheral
+
+Here's an example of implementing a CapsLock LED indicator on a split peripheral:
+
+```rust
+pub struct CapsLockController {
+    led: Output<'static>,
+    sub: ControllerSub,
+    caps_lock_on: bool,
+}
+
+impl Controller for CapsLockController {
+    type Event = ControllerEvent;
+
+    async fn process_event(&mut self, event: Self::Event) {
+        match event {
+            ControllerEvent::KeyboardIndicator(state) => {
+                if state.caps_lock() != self.caps_lock_on {
+                    self.caps_lock_on = state.caps_lock();
+                    // Update LED state
+                    self.led.set_state(self.caps_lock_on);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    async fn next_message(&mut self) -> Self::Event {
+        self.sub.next_message_pure().await
+    }
+}
+
+#[rmk_peripheral(id = 0)]
+mod keyboard_peripheral {
+    #[controller(event)]
+    fn capslock_led() -> CapsLockController {
+        let led = Output::new(p.PIN_4, Level::Low, OutputDrive::Standard);
+
+        CapsLockController {
+            led,
+            sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
+            caps_lock_on: false,
+        }
+    }
+}
+```
