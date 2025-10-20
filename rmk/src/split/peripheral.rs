@@ -27,7 +27,6 @@ use crate::state::ConnectionState;
 /// * `storage` - (optional) The storage to save the central address
 pub async fn run_rmk_split_peripheral<
     'a,
-    #[cfg(feature = "_ble")] 'b,
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy>,
     #[cfg(not(feature = "_ble"))] S: Write + Read,
     #[cfg(feature = "_ble")] F: NorFlash,
@@ -38,7 +37,7 @@ pub async fn run_rmk_split_peripheral<
 >(
     #[cfg(feature = "_ble")] id: usize,
     #[cfg(feature = "_ble")] stack: &'a Stack<'a, C, DefaultPacketPool>,
-    #[cfg(feature = "_ble")] storage: &'b mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+    #[cfg(feature = "_ble")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     #[cfg(not(feature = "_ble"))] serial: S,
 ) {
     #[cfg(not(feature = "_ble"))]
@@ -113,11 +112,8 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                     },
                     Err(e) => {
                         error!("Split message read error: {:?}", e);
-                        match e {
-                            crate::split::driver::SplitDriverError::Disconnected => {
-                                break;
-                            }
-                            _ => (),
+                        if let crate::split::driver::SplitDriverError::Disconnected = e {
+                            break;
                         }
                     }
                 },

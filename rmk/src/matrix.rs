@@ -310,9 +310,7 @@ impl<const ROW: usize, const COL: usize> MatrixTrait for TestMatrix<ROW, COL> {
     const COL: usize = COL;
 
     #[cfg(feature = "async_matrix")]
-    fn wait_for_key(&mut self) -> impl Future<Output = ()> {
-        async {}
-    }
+    async fn wait_for_key(&mut self) {}
 }
 
 impl<const ROW: usize, const COL: usize> InputDevice for TestMatrix<ROW, COL> {

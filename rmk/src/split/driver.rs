@@ -82,7 +82,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
 
         loop {
             // Calculate the time until the next 3000ms sync
-            let elapsed = last_sync_time.elapsed().as_millis() as u64;
+            let elapsed = last_sync_time.elapsed().as_millis();
             let wait_time = if elapsed >= 3000 { 1 } else { 3000 - elapsed };
 
             // Read the message from peripheral, or sync the connection state every 1000ms.

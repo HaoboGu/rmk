@@ -909,11 +909,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .iter_mut()
             .filter_map(|c| c.as_mut())
             .for_each(|c| {
-                if c.is_all_pressed() && !c.is_triggered() {
-                    if c.actions.contains(key_action) {
-                        info!("Resetting combo: {:?}", c,);
-                        c.reset();
-                    }
+                if c.is_all_pressed() && !c.is_triggered() && c.actions.contains(key_action) {
+                    info!("Resetting combo: {:?}", c,);
+                    c.reset();
                 }
             });
     }
@@ -1001,7 +999,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     .iter_mut()
                     .filter_map(|c| c.as_mut())
                 {
-                    if combo.actions.contains(&key_action) {
+                    if combo.actions.contains(key_action) {
                         // Releasing a combo key in triggered combo
                         releasing_triggered_combo |= combo.is_triggered();
                         info!("[Combo] releasing: {:?}", combo);
@@ -1722,7 +1720,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             use crate::ble::profile::BleProfileAction;
             use crate::channel::BLE_PROFILE_CHANNEL;
             // Get user key id
-            let id = key as u8 - KeyCode::User0 as u8;
+            let id = (key as u16 - KeyCode::User0 as u16) as u8;
             if event.pressed {
                 // Clear Peer is processed when pressed
                 if id == NUM_BLE_PROFILE as u8 + 4 {

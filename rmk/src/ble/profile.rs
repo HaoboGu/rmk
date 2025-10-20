@@ -113,13 +113,11 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
         self.bonded_devices.clear();
         for slot_num in 0..NUM_BLE_PROFILE {
-            if let Ok(Some(info)) = storage.read_trouble_bond_info(slot_num as u8).await {
-                if !info.removed {
-                    if let Err(e) = self.bonded_devices.push(info) {
+            if let Ok(Some(info)) = storage.read_trouble_bond_info(slot_num as u8).await
+                && !info.removed
+                    && let Err(e) = self.bonded_devices.push(info) {
                         error!("Failed to add bond info: {:?}", e);
                     }
-                }
-            }
         }
         debug!("Loaded {} bond info", self.bonded_devices.len());
 
@@ -317,7 +315,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                         }
                         BleProfileAction::NextProfile => {
                             let mut profile = ACTIVE_PROFILE.load(Ordering::SeqCst) + 1;
-                            profile = profile % NUM_BLE_PROFILE as u8;
+                            profile %= NUM_BLE_PROFILE as u8;
 
                             self.switch_profile(profile).await;
                         }
@@ -335,7 +333,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             #[cfg(feature = "controller")]
                             send_controller_event(
                                 &mut self.controller_pub,
-                                ControllerEvent::ConnectionType(updated.into()),
+                                ControllerEvent::ConnectionType(updated),
                             );
 
                             #[cfg(feature = "storage")]

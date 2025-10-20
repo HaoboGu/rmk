@@ -86,10 +86,12 @@ pub struct Morse<const NUM_PATTERNS: usize = MAX_PATTERNS_PER_KEY> {
 #[cfg(feature = "defmt")]
 impl<const NUM_PATTERNS: usize> defmt::Format for Morse<NUM_PATTERNS> {
     fn format(&self, f: defmt::Formatter<'_>) {
-        self.profile.format(f);
+        defmt::write!(f, "profile: MorseProfile({:?}), ", self.profile);
+        defmt::write!(f, "actions: [");
         for item in self.actions.iter() {
-            item.format(f)
+            defmt::write!(f, "{:?},", item);
         }
+        defmt::write!(f, "]");
     }
 }
 
