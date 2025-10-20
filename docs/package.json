@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "postinstall": "node fetch-docs.js",
     "build": "rspress build",
     "check": "prettier .",
     "dev": "rspress dev",
