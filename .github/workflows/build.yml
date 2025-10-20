@@ -29,6 +29,7 @@ jobs:
           - nrf52832_ble
           - nrf52840_ble
           - nrf52840_ble_split
+          - nrf52840_ble_split_dongle
           - rp2040
           - rp2040_split
           - rp2040_direct_pin
