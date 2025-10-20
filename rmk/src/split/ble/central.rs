@@ -65,12 +65,11 @@ pub async fn read_peripheral_addresses<
 ) -> heapless::Vec<Option<[u8; 6]>, PERI_NUM> {
     let mut peripheral_addresses: heapless::Vec<Option<[u8; 6]>, PERI_NUM> = heapless::Vec::new();
     for id in 0..PERI_NUM {
-        if let Ok(Some(peer_address)) = storage.read_peer_address(id as u8).await {
-            if peer_address.is_valid {
+        if let Ok(Some(peer_address)) = storage.read_peer_address(id as u8).await
+            && peer_address.is_valid {
                 peripheral_addresses.push(Some(peer_address.address)).unwrap();
                 continue;
             }
-        }
         peripheral_addresses.push(None).unwrap();
     }
     peripheral_addresses
@@ -132,7 +131,8 @@ pub(crate) async fn run_ble_peripheral_manager<
                 active: false,
                 ..Default::default()
             };
-            let addr = if let Ok(_session) = scanner.scan(&scan_config).await {
+            
+            if let Ok(_session) = scanner.scan(&scan_config).await {
                 loop {
                     let (found_peripheral_id, addr) = PERIPHERAL_FOUND.wait().await;
                     if found_peripheral_id == peripheral_id as u8 {
@@ -155,8 +155,7 @@ pub(crate) async fn run_ble_peripheral_manager<
                 }
             } else {
                 panic!("Failed to start peripheral scanning");
-            };
-            addr
+            }
         }
     };
 
@@ -228,7 +227,7 @@ async fn connect_and_run_peripheral_manager<
     #[cfg(feature = "controller")]
     send_controller_event(controller_pub, ControllerEvent::SplitPeripheral(id, true));
 
-    let client = GattClient::<C, P, 10>::new(&stack, &conn).await?;
+    let client = GattClient::<C, P, 10>::new(stack, &conn).await?;
 
     // Use 2M Phy
     update_ble_phy(stack, &conn).await;
@@ -301,7 +300,7 @@ async fn run_peripheral_manager<
     if let Some(service) = services.first() {
         let message_to_central = client
             .characteristic_by_uuid::<[u8; SPLIT_MESSAGE_MAX_SIZE]>(
-                &service,
+                service,
                 // uuid: 0e6313e3-bd0b-45c2-8d2e-37a2e8128bc3
                 &Uuid::Uuid128([
                     195u8, 139u8, 18u8, 232u8, 162u8, 55u8, 46u8, 141u8, 194u8, 69u8, 11u8, 189u8, 227u8, 19u8, 99u8,
@@ -312,7 +311,7 @@ async fn run_peripheral_manager<
         info!("Message to central found");
         let message_to_peripheral = client
             .characteristic_by_uuid::<[u8; SPLIT_MESSAGE_MAX_SIZE]>(
-                &service,
+                service,
                 // uuid: 4b3514fb-cae4-4d38-a097-3a2a3d1c3b9c
                 &Uuid::Uuid128([
                     156u8, 59u8, 28u8, 61u8, 42u8, 58u8, 151u8, 160u8, 56u8, 77u8, 228u8, 202u8, 251u8, 20u8, 53u8,
@@ -367,7 +366,7 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> Sp
 {
     async fn read(&mut self) -> Result<SplitMessage, SplitDriverError> {
         let data = self.listener.next().await;
-        let message = postcard::from_bytes(&data.as_ref()).map_err(|_| SplitDriverError::DeserializeError)?;
+        let message = postcard::from_bytes(data.as_ref()).map_err(|_| SplitDriverError::DeserializeError)?;
         info!("Received split message: {:?}", message);
 
         // Update last activity time when receiving key events from peripheral

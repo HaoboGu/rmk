@@ -115,26 +115,23 @@ impl<
                         &self.key_states[out_idx][in_idx],
                     );
 
-                    match debounce_state {
-                        DebounceState::Debounced => {
-                            self.key_states[out_idx][in_idx].toggle_pressed();
-                            #[cfg(feature = "col2row")]
-                            let (row, col, key_state) = (
-                                (in_idx + ROW_OFFSET) as u8,
-                                (out_idx + COL_OFFSET) as u8,
-                                self.key_states[out_idx][in_idx],
-                            );
-                            #[cfg(not(feature = "col2row"))]
-                            let (row, col, key_state) = (
-                                (out_idx + ROW_OFFSET) as u8,
-                                (in_idx + COL_OFFSET) as u8,
-                                self.key_states[out_idx][in_idx],
-                            );
+                    if let DebounceState::Debounced = debounce_state {
+                        self.key_states[out_idx][in_idx].toggle_pressed();
+                        #[cfg(feature = "col2row")]
+                        let (row, col, key_state) = (
+                            (in_idx + ROW_OFFSET) as u8,
+                            (out_idx + COL_OFFSET) as u8,
+                            self.key_states[out_idx][in_idx],
+                        );
+                        #[cfg(not(feature = "col2row"))]
+                        let (row, col, key_state) = (
+                            (out_idx + ROW_OFFSET) as u8,
+                            (in_idx + COL_OFFSET) as u8,
+                            self.key_states[out_idx][in_idx],
+                        );
 
-                            self.scan_pos = (out_idx, in_idx);
-                            return Event::Key(KeyboardEvent::key(row, col, key_state.pressed));
-                        }
-                        _ => (),
+                        self.scan_pos = (out_idx, in_idx);
+                        return Event::Key(KeyboardEvent::key(row, col, key_state.pressed));
                     }
 
                     // If there's key still pressed, always refresh the self.scan_start
@@ -321,19 +318,16 @@ impl<
                             &self.key_states[row_idx][col_idx],
                         );
 
-                        match debounce_state {
-                            DebounceState::Debounced => {
-                                self.key_states[row_idx][col_idx].toggle_pressed();
-                                let (col, row, key_state) = (
-                                    (col_idx + COL_OFFSET) as u8,
-                                    (row_idx + ROW_OFFSET) as u8,
-                                    self.key_states[row_idx][col_idx],
-                                );
+                        if let DebounceState::Debounced = debounce_state {
+                            self.key_states[row_idx][col_idx].toggle_pressed();
+                            let (col, row, key_state) = (
+                                (col_idx + COL_OFFSET) as u8,
+                                (row_idx + ROW_OFFSET) as u8,
+                                self.key_states[row_idx][col_idx],
+                            );
 
-                                self.scan_pos = (row_idx, col_idx);
-                                return Event::Key(KeyboardEvent::key(row, col, key_state.pressed));
-                            }
-                            _ => (),
+                            self.scan_pos = (row_idx, col_idx);
+                            return Event::Key(KeyboardEvent::key(row, col, key_state.pressed));
                         }
 
                         // If there's key still pressed, always refresh the self.scan_start
@@ -383,20 +377,16 @@ impl<
         if self.low_active {
             let mut futs: Vec<_, SIZE> = Vec::new();
             for direct_pins_row in self.direct_pins.iter_mut() {
-                for direct_pin in direct_pins_row.iter_mut() {
-                    if let Some(direct_pin) = direct_pin {
-                        let _ = futs.push(direct_pin.wait_for_low());
-                    }
+                for direct_pin in direct_pins_row.iter_mut().flatten() {
+                    let _ = futs.push(direct_pin.wait_for_low());
                 }
             }
             let _ = select_slice(pin!(futs.as_mut_slice())).await;
         } else {
             let mut futs: Vec<_, SIZE> = Vec::new();
             for direct_pins_row in self.direct_pins.iter_mut() {
-                for direct_pin in direct_pins_row.iter_mut() {
-                    if let Some(direct_pin) = direct_pin {
-                        let _ = futs.push(direct_pin.wait_for_high());
-                    }
+                for direct_pin in direct_pins_row.iter_mut().flatten() {
+                    let _ = futs.push(direct_pin.wait_for_high());
                 }
             }
             let _ = select_slice(pin!(futs.as_mut_slice())).await;

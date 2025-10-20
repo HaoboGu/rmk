@@ -380,7 +380,7 @@ pub(crate) async fn process_vial<
                             &report.output_data[4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
                         ));
                         combos[combo_idx] =
-                            if actions.iter().find(|&&x| x != KeyAction::No).is_none() && output == KeyAction::No {
+                            if !actions.iter().any(|&x| x != KeyAction::No) && output == KeyAction::No {
                                 debug!("combo is empty");
                                 None
                             } else {

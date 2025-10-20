@@ -69,7 +69,7 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitReader for BleSplitPeripheralDrive
                             // Write to peripheral
                             if event.handle() == self.message_to_peripheral.handle {
                                 trace!("Got message from central: {:?}", event.data());
-                                match postcard::from_bytes::<SplitMessage>(&event.data()) {
+                                match postcard::from_bytes::<SplitMessage>(event.data()) {
                                     Ok(message) => {
                                         trace!("Message from central: {:?}", message);
                                         break message;
@@ -117,7 +117,7 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitWriter for BleSplitPeripheralDrive
             SplitDriverError::SerializeError
         })?;
         info!("Writing split message to central: {:?}", message);
-        self.message_to_central.notify(&self.conn, &buf).await.map_err(|e| {
+        self.message_to_central.notify(self.conn, &buf).await.map_err(|e| {
             error!("BLE notify error: {:?}", e);
             SplitDriverError::BleError(1)
         })?;
@@ -134,7 +134,6 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitWriter for BleSplitPeripheralDrive
 /// * `stack` - The stack to use
 pub async fn initialize_nrf_ble_split_peripheral_and_run<
     'stack,
-    's,
     C: Controller + ControllerCmdAsync<LeSetPhy>,
     F: NorFlash,
     const ROW: usize,
@@ -144,7 +143,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
 >(
     id: usize,
     stack: &'stack Stack<'stack, C, DefaultPacketPool>,
-    storage: &'s mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     #[cfg(feature = "controller")]
     let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());

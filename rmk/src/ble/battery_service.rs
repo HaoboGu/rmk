@@ -59,11 +59,10 @@ impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
         loop {
             let battery_state = self.wait_until_battery_state_available().await;
             // Check if there's latest battery state update
-            if let BatteryState::Normal(level) = BATTERY_UPDATE.try_take().unwrap_or(battery_state) {
-                if let Err(e) = self.battery_level.notify(self.conn, &level).await {
+            if let BatteryState::Normal(level) = BATTERY_UPDATE.try_take().unwrap_or(battery_state)
+                && let Err(e) = self.battery_level.notify(self.conn, &level).await {
                     error!("Failed to notify battery level: {:?}", e);
                 }
-            }
         }
     }
 
