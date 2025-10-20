@@ -8,8 +8,7 @@ use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer, with_timeout};
 use embedded_storage_async::nor_flash::NorFlash;
-use heapless::Vec;
-use heapless::VecView;
+use heapless::{Vec, VecView};
 use trouble_host::prelude::*;
 #[cfg(feature = "controller")]
 use {
