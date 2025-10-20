@@ -27,23 +27,20 @@ impl<P: StatefulOutputPin> Controller for KeyboardIndicatorController<P> {
     type Event = ControllerEvent;
 
     async fn process_event(&mut self, event: Self::Event) {
-        match event {
-            ControllerEvent::KeyboardIndicator(state) => {
-                let activated = match self.indicator {
-                    LedIndicatorType::NumLock => state.num_lock(),
-                    LedIndicatorType::CapsLock => state.caps_lock(),
-                    LedIndicatorType::ScrollLock => state.scroll_lock(),
-                    LedIndicatorType::Compose => state.compose(),
-                    LedIndicatorType::Kana => state.kana(),
-                };
-                info!("Activating {:?} {}", self.indicator, activated);
-                if activated {
-                    self.pin.activate();
-                } else {
-                    self.pin.deactivate();
-                }
+        if let ControllerEvent::KeyboardIndicator(state) = event {
+            let activated = match self.indicator {
+                LedIndicatorType::NumLock => state.num_lock(),
+                LedIndicatorType::CapsLock => state.caps_lock(),
+                LedIndicatorType::ScrollLock => state.scroll_lock(),
+                LedIndicatorType::Compose => state.compose(),
+                LedIndicatorType::Kana => state.kana(),
+            };
+            info!("Activating {:?} {}", self.indicator, activated);
+            if activated {
+                self.pin.activate();
+            } else {
+                self.pin.deactivate();
             }
-            _ => (),
         }
     }
 

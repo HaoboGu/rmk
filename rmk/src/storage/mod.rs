@@ -784,8 +784,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 FlashOperationMessage::ClearSlot(key) => {
                     info!("Clearing bond info slot_num: {}", key);
                     // Remove item in `sequential-storage` is quite expensive, so just override the item with `removed = true`
-                    let mut empty = ProfileInfo::default();
-                    empty.removed = true;
+                    let empty = ProfileInfo {
+                        removed: true,
+                        ..Default::default()
+                    };
                     let data = StorageData::BondInfo(empty);
                     store_item::<u32, StorageData, _>(
                         &mut self.flash,

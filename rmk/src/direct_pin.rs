@@ -147,20 +147,16 @@ impl<
         if self.low_active {
             let mut futs: Vec<_, SIZE> = Vec::new();
             for direct_pins_row in self.direct_pins.iter_mut() {
-                for direct_pin in direct_pins_row.iter_mut() {
-                    if let Some(direct_pin) = direct_pin {
-                        let _ = futs.push(direct_pin.wait_for_low());
-                    }
+                for direct_pin in direct_pins_row.iter_mut().flatten() {
+                    let _ = futs.push(direct_pin.wait_for_low());
                 }
             }
             let _ = select_slice(pin!(futs.as_mut_slice())).await;
         } else {
             let mut futs: Vec<_, SIZE> = Vec::new();
             for direct_pins_row in self.direct_pins.iter_mut() {
-                for direct_pin in direct_pins_row.iter_mut() {
-                    if let Some(direct_pin) = direct_pin {
-                        let _ = futs.push(direct_pin.wait_for_high());
-                    }
+                for direct_pin in direct_pins_row.iter_mut().flatten() {
+                    let _ = futs.push(direct_pin.wait_for_high());
                 }
             }
             let _ = select_slice(pin!(futs.as_mut_slice())).await;

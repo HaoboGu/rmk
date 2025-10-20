@@ -355,37 +355,39 @@ pub(crate) async fn process_vial<
 
                     // Drop combos to release the borrowed keymap, avoid potential run-time panics
                     let combo_idx = report.output_data[3] as usize;
-                    let km = &mut keymap.borrow_mut();
-                    let combos = &mut km.behavior.combo.combos;
-                    if combo_idx >= combos.len() {
-                        return;
-                    }
-
-                    let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
-                    let mut n: usize = 0;
-                    for i in 0..VIAL_COMBO_MAX_LENGTH {
-                        let action =
-                            from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
-                        if !action.is_empty() {
-                            if n >= COMBO_MAX_LENGTH {
-                                // Fail if the combo action buffer is too small
-                                return;
-                            }
-                            actions[n] = action;
-                            n += 1;
+                    let (actions, output) = {
+                        let km = &mut keymap.borrow_mut();
+                        let combos = &mut km.behavior.combo.combos;
+                        if combo_idx >= combos.len() {
+                            return;
                         }
-                    }
-                    let output = from_via_keycode(LittleEndian::read_u16(
-                        &report.output_data[4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
-                    ));
 
-                    combos[combo_idx] =
-                        if actions.iter().find(|&&x| x != KeyAction::No).is_none() && output == KeyAction::No {
-                            debug!("combo is empty");
-                            None
-                        } else {
-                            Some(Combo::new(actions, output, None))
-                        };
+                        let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
+                        let mut n: usize = 0;
+                        for i in 0..VIAL_COMBO_MAX_LENGTH {
+                            let action =
+                                from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
+                            if !action.is_empty() {
+                                if n >= COMBO_MAX_LENGTH {
+                                    // Fail if the combo action buffer is too small
+                                    return;
+                                }
+                                actions[n] = action;
+                                n += 1;
+                            }
+                        }
+                        let output = from_via_keycode(LittleEndian::read_u16(
+                            &report.output_data[4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
+                        ));
+                        combos[combo_idx] =
+                            if !actions.iter().any(|&x| x != KeyAction::No) && output == KeyAction::No {
+                                debug!("combo is empty");
+                                None
+                            } else {
+                                Some(Combo::new(actions, output, None))
+                            };
+                        (actions, output)
+                    };
 
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL

@@ -174,7 +174,7 @@ pub(crate) async fn run_ble<
 
     // Create profile manager
     let mut profile_manager = ProfileManager::new(
-        &stack,
+        stack,
         #[cfg(feature = "controller")]
         controller_pub,
     );
@@ -304,7 +304,7 @@ pub(crate) async fn run_ble<
                                 let ble_fut = run_ble_keyboard(
                                     &server,
                                     &conn,
-                                    &stack,
+                                    stack,
                                     #[cfg(feature = "host")]
                                     keymap,
                                     #[cfg(feature = "host")]
@@ -361,7 +361,7 @@ pub(crate) async fn run_ble<
                                     run_ble_keyboard(
                                         &server,
                                         &conn,
-                                        &stack,
+                                        stack,
                                         #[cfg(feature = "host")]
                                         keymap,
                                         #[cfg(feature = "host")]
@@ -854,38 +854,32 @@ async fn run_ble_keyboard<
     #[cfg(feature = "host")] rmk_config: &'d mut RmkConfig<'static>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
-    let ble_hid_server = BleHidServer::new(&server, &conn);
+    let ble_hid_server = BleHidServer::new(server, conn);
     #[cfg(feature = "host")]
-    let ble_host_server = BleHostServer::new(&server, &conn);
+    let ble_host_server = BleHostServer::new(server, conn);
     let ble_led_reader = BleLedReader {};
-    let mut ble_battery_server = BleBatteryServer::new(&server, &conn);
+    let mut ble_battery_server = BleBatteryServer::new(server, conn);
 
     // Load CCCD table from storage
     #[cfg(feature = "storage")]
     if let Ok(Some(bond_info)) = storage
         .read_trouble_bond_info(ACTIVE_PROFILE.load(Ordering::SeqCst))
         .await
-    {
-        if bond_info.info.identity.match_identity(&conn.raw().peer_identity()) {
+        && bond_info.info.identity.match_identity(&conn.raw().peer_identity()) {
             info!("Loading CCCD table from storage: {:?}", bond_info.cccd_table);
             server.set_cccd_table(conn.raw(), bond_info.cccd_table.clone());
         }
-    }
 
     // Use 2M Phy
     update_ble_phy(stack, conn.raw()).await;
 
     let communication_task = async {
-        match select3(
+        if let Either3::First(e) = select3(
             gatt_events_task(server, conn),
             set_conn_params(stack, conn),
             ble_battery_server.run(),
         )
-        .await
-        {
-            Either3::First(e) => error!("[gatt_events_task] end: {:?}", e),
-            _ => {}
-        }
+        .await { error!("[gatt_events_task] end: {:?}", e) }
     };
 
     run_keyboard(
@@ -945,7 +939,7 @@ pub(crate) async fn update_conn_params<
     params: &ConnectParams,
 ) {
     loop {
-        match conn.update_connection_params(&stack, params).await {
+        match conn.update_connection_params(stack, params).await {
             Err(BleHostError::BleHost(Error::Hci(error))) => {
                 if 0x3A == error.to_status().into_inner() {
                     // Busy, retry
