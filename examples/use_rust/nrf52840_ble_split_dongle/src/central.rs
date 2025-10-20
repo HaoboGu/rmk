@@ -6,8 +6,6 @@ mod vial;
 mod macros;
 mod keymap;
 
-use core::cell::RefCell;
-
 use defmt::{info, unwrap};
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Output};
@@ -85,7 +83,7 @@ fn build_sdc<'d, const N: usize>(
         .support_phy_update_central()?
         .support_phy_update_peripheral()?
         .support_le_2m_phy()?
-        .central_count(2)?
+        .central_count(2)? // The number of peripherals
         .peripheral_count(1)?
         .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
         .build(p, rng, mpsl, mem)
@@ -176,7 +174,7 @@ async fn main(spawner: Spawner) {
     let storage_config = StorageConfig {
         start_addr: 0xA0000,
         num_sectors: 6,
-        clear_storage: true,
+        clear_storage: false,
         ..Default::default()
     };
     let rmk_config = RmkConfig {
@@ -215,7 +213,7 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
 
     // Read peripheral address from storage
-    let peripheral_addrs = RefCell::new(read_peripheral_addresses::<2, _, 8, 7, 4, 2>(&mut storage).await);
+    let peripheral_addrs = read_peripheral_addresses::<2, _, 8, 7, 4, 2>(&mut storage).await;
 
     // Initialize the encoder processor
     let mut adc_device = NrfAdc::new(

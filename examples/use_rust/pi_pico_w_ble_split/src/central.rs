@@ -160,7 +160,7 @@ async fn main(spawner: Spawner) {
         ),
         keyboard.run(),
         join(
-            run_peripheral_manager::<4, 7, 4, 0, _>(0, peripheral_addrs[0], &stack),
+            run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
             run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
         ),
     )
