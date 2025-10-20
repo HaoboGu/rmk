@@ -35,7 +35,7 @@ usb_enable = true
 
 - `nice!nano`
 - `nice!nano_v2`
-- `pi_pico_w`   
+- `pi_pico_w`
 - `XIAO BLE`
 
 ## `[matrix]`

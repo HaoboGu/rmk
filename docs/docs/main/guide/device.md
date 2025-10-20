@@ -148,7 +148,6 @@ pub trait InputProcessor {
 
 The `process` method is responsible for processing input events and sending HID reports through the report channel. All processors share a common keymap state through `&'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>`.
 
-
 # Input Devices
 
 RMK supports various input devices beyond just key matrices. The input system consists of two main components:

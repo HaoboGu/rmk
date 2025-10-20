@@ -87,7 +87,6 @@ resolution = 6
 1. Device reads values from each axis
 2. Adds `bias` value to each axis to make the value close to 0 when the joystick is released
 3. About the `transform` matrix:
-
    1. New x-axis value = (axis_x + bias[0]) / transform[0][0] + (axis_y + bias[1]) / transform[0][1] + (axis_z + bias[2]) / transform[0][2]
    2. New y-axis value = (axis_x + bias[0]) / transform[1][0] + (axis_y + bias[1]) / transform[1][1] + (axis_z + bias[2]) / transform[1][2]
    3. New z-axis value = (axis_x + bias[0]) / transform[2][0] + (axis_y + bias[1]) / transform[2][1] + (axis_z + bias[2]) / transform[2][2]
@@ -103,7 +102,6 @@ resolution = 6
 1. First set `bias` to 0, `resolution` to 1, and `transform` to `[[1, 0, 0], [0, 1, 0], [0, 0, 1]]` (matrix dimension depends on the number of axes)
 
 2. Find the optimal `bias` value:
-
    - Use a debug probe to find the output `JoystickProcessor::generate_report: record = [axis_x, axis_y, axis_z]` in debug information
    - Observe these values to find the `bias` value that makes each axis closest to 0 when the joystick is released
 

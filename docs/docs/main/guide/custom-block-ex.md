@@ -1,6 +1,6 @@
 # Custom Block Ex
 
-::: info 
+::: info
 
 This is an info box `code`.
 
@@ -10,13 +10,14 @@ conslog('hello world')
 
 :::
 
-> [!NOTE] 
+> [!NOTE]
 > this is a note `code`.
->```js
->conslog('hello world');
->```
+>
+> ```js
+> conslog('hello world')
+> ```
 
-::: tip 
+::: tip
 
 This is a tip `code`.
 
@@ -26,7 +27,7 @@ conslog('hello world')
 
 :::
 
-::: warning 
+::: warning
 
 This is a warning `code`.
 
@@ -36,7 +37,7 @@ conslog('hello world')
 
 :::
 
-::: danger 
+::: danger
 
 This is a dangerous warning `code`.
 
@@ -46,7 +47,7 @@ conslog('hello world')
 
 :::
 
-::: details 
+::: details
 
 This is a details block `code`.
 

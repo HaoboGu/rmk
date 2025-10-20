@@ -89,10 +89,10 @@ The `layer.keys` string should follow several rules:
    You may use aliases, prefixed with `@`, like `@my_copy` in the above example. The alias names are case sensitive. The definition of aliases is described below.
 
    You may use layer names instead of layer numbers, like `TO(base_layer)` in the above example.
-   ::: warning 
+   ::: warning
 
    Please note that layer name if used like this, may not contain white spaces and may not be a number. Layer names are case sensitive.
-   
+
    :::
 
 2. For no-key (`KeyAction::No`), use `No`

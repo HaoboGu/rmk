@@ -27,7 +27,7 @@ cargo install rmkit --force
 
 ## 2. Update Cargo dependencies
 
-Lot of dependencies are updated from v0.6.x to v0.7.x. 
+Lot of dependencies are updated from v0.6.x to v0.7.x.
 
 The best updating approach is to copy the new `Cargo.toml` file from examples to replace the old one, delete the old `Cargo.lock` file, then tune the RMK features used and then re-build the project using
 
@@ -66,28 +66,31 @@ The migration process is simple, you just need to:
 1. Update RMK version in `Cargo.toml`
 2. Update your memory.x according to whether you are using uf2 bootloader or not
 
-    <!-- ::: code-group -->
-    ```diff [With Adafruit nRF52 bootloader]
-    // These values correspond to the nRF52840 WITH Adafruit nRF52 bootloader
-    MEMORY
-    {
-    -  FLASH : ORIGIN = 0x00027000, LENGTH = 820K 
-    -  RAM : ORIGIN = 0x20020000, LENGTH = 128K 
-    +  FLASH : ORIGIN = 0x00001000, LENGTH = 1020K 
-    +  RAM : ORIGIN = 0x20000008, LENGTH = 255K 
-    }
-    ```
-    ```diff [Without Adafruit nRF52 bootloader]
-    // These values correspond to the nRF52840 WITHOUT Adafruit nRF52 bootloader
-    MEMORY
-    {
-    -  FLASH : ORIGIN = 0x00027000, LENGTH = 820K 
-    -  RAM : ORIGIN = 0x20020000, LENGTH = 128K 
-    +  FLASH : ORIGIN = 0x00000000, LENGTH = 1024K
-    +  RAM : ORIGIN = 0x20000000, LENGTH = 256K
-    }
-    ```
-    <!-- ::: -->
+   <!-- ::: code-group -->
+
+   ```diff [With Adafruit nRF52 bootloader]
+   // These values correspond to the nRF52840 WITH Adafruit nRF52 bootloader
+   MEMORY
+   {
+   -  FLASH : ORIGIN = 0x00027000, LENGTH = 820K
+   -  RAM : ORIGIN = 0x20020000, LENGTH = 128K
+   +  FLASH : ORIGIN = 0x00001000, LENGTH = 1020K
+   +  RAM : ORIGIN = 0x20000008, LENGTH = 255K
+   }
+   ```
+
+   ```diff [Without Adafruit nRF52 bootloader]
+   // These values correspond to the nRF52840 WITHOUT Adafruit nRF52 bootloader
+   MEMORY
+   {
+   -  FLASH : ORIGIN = 0x00027000, LENGTH = 820K
+   -  RAM : ORIGIN = 0x20020000, LENGTH = 128K
+   +  FLASH : ORIGIN = 0x00000000, LENGTH = 1024K
+   +  RAM : ORIGIN = 0x20000000, LENGTH = 256K
+   }
+   ```
+
+   <!-- ::: -->
 
 3. Compile your firmware and flash it to your controller
 
@@ -103,12 +106,11 @@ RMK v0.7.x brings lots of exciting features, making configuration easier and mor
 
 1. BLE peripheral doesn't work
 
-    In the new version, RMK uses nRF chip's unique address as the device address. If BLE peripheral doesn't work after updating, it's likely that the old fixed device address is stored in the chip. You should [clear the storage](/docs/features/storage) for both central and peripheral:
-
-    1. Set `clear_storage` to true for both peripheral & central
-    2. Flash both central & peripheral firmware
-    3. Set `clear_storage` back to false and compile
-    4. Flash both splits again
+   In the new version, RMK uses nRF chip's unique address as the device address. If BLE peripheral doesn't work after updating, it's likely that the old fixed device address is stored in the chip. You should [clear the storage](/docs/features/storage) for both central and peripheral:
+   1. Set `clear_storage` to true for both peripheral & central
+   2. Flash both central & peripheral firmware
+   3. Set `clear_storage` back to false and compile
+   4. Flash both splits again
 
 ## Known issues
 

@@ -118,7 +118,6 @@ Tap dance configuration includes the following parameters:
 
 :::
 
-
 Here is an example of tap dance configuration:
 
 ```toml
@@ -126,18 +125,18 @@ Here is an example of tap dance configuration:
 tap_dances = [
   # Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
   { tap = "F1", hold = "MO(1)", double_tap = "F2" },
-  
+
   # Modifier key that outputs Ctrl on tap, Alt on double tap, Shift on hold
   { tap = "LCtrl", hold = "LShift", double_tap = "LAlt" },
-  
+
   # Navigation key that outputs Tab on tap, Escape on double tap, layer 2 on hold
   { tap = "Tab", hold = "MO(2)", double_tap = "Escape", tapping_term = "250ms" },
-  
+
   # Extended tap dance for function keys
-  { 
-    tap_actions = ["F1", "F2", "F3", "F4", "F5"], 
+  {
+    tap_actions = ["F1", "F2", "F3", "F4", "F5"],
     hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"],
-    tapping_term = "300ms" 
+    tapping_term = "300ms"
   }
 ]
 ```
