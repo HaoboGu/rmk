@@ -112,7 +112,7 @@ pub(crate) fn rmk_entry_select(
                     tasks.push(quote! {
                         ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
                             #idx,
-                            peripheral_addrs[#idx],
+                            &peripheral_addrs,
                             &stack,
                         )
                     });
