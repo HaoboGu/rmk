@@ -26,6 +26,7 @@ In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 
 Note that `"#layer_name"` could also be used in place of layer numbers.
 
 ## One Shot
+
 The `one_shot` sub-table configures one-shot modifiers or one-shot layers (OSM/OSL). Use `timeout` to specify how long the modifier/layer remains active. The value is a string suffixed with `s` or `ms` (default: `1s`).
 
 ```toml
@@ -139,7 +140,7 @@ morses = [
 This is an extended version of tap dance. It allows you to define sequences of actions for multiple taps and for holds that occur after a specific number of taps.
 
 - `tap_actions`: An array of actions triggered by sequential taps. Each tap within the tapping term increments the tap count and triggers the corresponding action from the `tap_actions` array. For example, `tap_actions = ["F1", "F2", "F3"]` means a single tap triggers "F1", double tap triggers "F2", triple tap triggers "F3", and so on. If the tap count exceeds the length of the array, the last action is used.
-- `hold_actions`: An array of actions triggered when the key is held *after* a certain number of taps. When a key is held after multiple taps, the corresponding action from the `hold_actions` array is triggered. For example, `hold_actions = ["MO(1)", "MO(2)", "MO(3)"]` means holding after one tap triggers "MO(1)", holding after two taps triggers "MO(2)", and so on.
+- `hold_actions`: An array of actions triggered when the key is held _after_ a certain number of taps. When a key is held after multiple taps, the corresponding action from the `hold_actions` array is triggered. For example, `hold_actions = ["MO(1)", "MO(2)", "MO(3)"]` means holding after one tap triggers "MO(1)", holding after two taps triggers "MO(2)", and so on.
 
 Example:
 
@@ -196,9 +197,9 @@ A profile contains the following fields:
 - `unilateral_tap`: (Experimental) Enables unilateral tap mode. When enabled, tap action will be triggered when a key from "same" hand is pressed. In current experimental version, the "same" hand is calculated using the `<hand>`, which can be given in `matrix_map`. This option is recommended to set to true when `enable_flow_tap` is set to true.
 
 - The morse mode, which is can be set by enabling one of these:
-    - `permissive_hold`: Enables permissive hold mode. When enabled, hold action will be triggered when a key is pressed and released during tap-hold decision. This option is recommended to set to true when `enable_flow_tap` is set to true.
-    - `hold_on_other_press`: Enables hold-on-other-key-press mode. When enabled, hold action will be triggered immediately when any other non-tap-hold key is pressed while a tap-hold key is being held. This provides faster modifier activation without waiting for the timeout. Defaults to `false`.
-    - `normal_mode` : this is the default mode, when nor the `permissive_hold` nor the `hold_on_other_press` is set.
+  - `permissive_hold`: Enables permissive hold mode. When enabled, hold action will be triggered when a key is pressed and released during tap-hold decision. This option is recommended to set to true when `enable_flow_tap` is set to true.
+  - `hold_on_other_press`: Enables hold-on-other-key-press mode. When enabled, hold action will be triggered immediately when any other non-tap-hold key is pressed while a tap-hold key is being held. This provides faster modifier activation without waiting for the timeout. Defaults to `false`.
+  - `normal_mode` : this is the default mode, when nor the `permissive_hold` nor the `hold_on_other_press` is set.
 
 - `hold_timeout`: Defines the duration a tap-hold key must be pressed to determine hold behavior. If tap-hold key is released within this time, the key is recognized as a "tap". Holding it beyond this duration triggers the "hold" action. Defaults to 250ms.
 - `gap_timeout`: Defines the duration a tap-hold key must be released to terminate a morse sequence. Defaults to 250ms. Note that only morse and tap-dance needs this setting, simple tap-hold does not.
@@ -212,7 +213,7 @@ The following are some examples for default profile setting:
 ```toml
 # This default setting enables HRM with all tap-hold features
 [behavior.morse]
-enable_flow_tap = true, 
+enable_flow_tap = true,
 prior_idle_time = "120ms"
 hold_on_other_press = true
 hold_timeout = "250ms"
@@ -220,27 +221,27 @@ gap_timeout = "250ms"
 
 # This default setting enables fast modifiers without HRM
 [behavior.morse]
-enable_flow_tap = false 
-hold_on_other_press = true 
+enable_flow_tap = false
+hold_on_other_press = true
 hold_timeout = "200ms"
 gap_timeout = "200ms"
 
 # This default setting is the most basic configuration
 [behavior.morse]
-enable_flow_tap = false 
+enable_flow_tap = false
 hold_timeout = "250ms"
 gap_timeout = "250ms"
 ```
 
 #### Per-key profiles for Morse, TapDance, Tap Hold fine tuning
 
-In the `morse.profiles` sub-table you can define individual key profiles. Each profile has an associated name, which can be referred 
+In the `morse.profiles` sub-table you can define individual key profiles. Each profile has an associated name, which can be referred
 
 - from the layout.matrix_map (the name is case sensitive), to override the defaults in certain key positions
-- from the tap hold keys in the key map if the third optional parameter is filled: 
-    - `TH(key-tap, key-hold, <profile_name>)`, 
-    - `MT(key, modifier, <profile_name>)`,
-    - `LT(n, key, <profile_name>)`    
+- from the tap hold keys in the key map if the third optional parameter is filled:
+  - `TH(key-tap, key-hold, <profile_name>)`,
+  - `MT(key, modifier, <profile_name>)`,
+  - `LT(n, key, <profile_name>)`
 - the Morse keys may also have their per key profile overrides (which is stronger than the positional override) by setting the `profile` field.
 
 The following examples are the typical default configurations:
@@ -263,7 +264,7 @@ Then you can reference the profile in layer config:
 ```toml
 [[layer]]
 keys = """
-MT(A, LShift, HRM) 
+MT(A, LShift, HRM)
 LT(1, A, FH)
 TH(A, B, MRZ)
 """
@@ -288,7 +289,6 @@ Note that the Vial-style method (using `tap`, `hold`, `hold_after_tap`, `double_
 Please note that while the firmware can handle all Morse configurations, Vial can only recognize and edit the four basic Vial-style actions. These correspond to the patterns for single tap (.), hold (-), double tap (..), and hold-after-tap (.-). More complex patterns defined using morse_actions or extended tap_actions will not be visible or editable in Vial.
 :::
 
-
 ### Comprehensive Example
 
 Here is a comprehensive example of morse configuration:
@@ -302,63 +302,63 @@ max_patterns_per_key = 36
 
 [behavior.morse]
 # default profile for morse, tap dance and tap-hold keys:
-enable_flow_tap = true, 
+enable_flow_tap = true,
 prior_idle_time = "120ms",  # flow_tap needs this
 hold_on_other_press = true,
-hold_timeout = "250ms", 
+hold_timeout = "250ms",
 gap_timeout = "250ms",
 
 # list of morse (tap dance) keys:
 morses = [
   # td(0): Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
   { tap = "F1", double_tap = "F2", hold = "MO(1)" },
-  
-  # td(1): Modifier key that outputs Shift on hold, Alt on hold after tap, 
+
+  # td(1): Modifier key that outputs Shift on hold, Alt on hold after tap,
   { tap = "LCtrl", hold = "LShift", hold_after_tap = "LAlt" },
-  
+
   # td(2): Navigation key that outputs Tab on tap, Escape on double tap, layer 2 on hold
   { tap = "Tab", hold = "MO(2)", double_tap = "Escape" },
-  
+
   # td(3): Extended morse for function keys
   { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"] }
 
   # td(4): the morse ABC
   { morse_actions = [
-      { pattern = ".-", action = "A" }, 
-      { pattern = "-...", action = "B" }, 
-      { pattern = "-.-.", action = "C" }, 
-      { pattern = "-..", action = "D" }, 
-      { pattern = ".", action = "E" }, 
-      { pattern = "..-.", action = "F" }, 
-      { pattern = "--.", action = "G" }, 
-      { pattern = "....", action = "H" }, 
-      { pattern = "..", action = "I" }, 
-      { pattern = ".---", action = "J" }, 
-      { pattern = "-.-", action = "K" }, 
-      { pattern = ".-..", action = "L" }, 
-      { pattern = "--", action = "M" }, 
-      { pattern = "-.", action = "N" }, 
-      { pattern = "---", action = "O"}, 
-      { pattern = ".--.", action = "P" }, 
-      { pattern = "--.-", action = "Q" }, 
-      { pattern = ".-.", action = "R" }, 
-      { pattern = "...", action = "S" }, 
-      { pattern = "-", action = "T" }, 
-      { pattern = "..-", action = "U" }, 
-      { pattern = "...-", action = "V" }, 
-      { pattern = ".--", action = "W" }, 
-      { pattern = "-..-", action = "X" }, 
-      { pattern = "-.--", action = "Y" }, 
-      { pattern = "--..", action = "Z" }, 
-      { pattern = ".----", action = "Kc1" }, 
-      { pattern = "..---", action = "Kc2" }, 
-      { pattern = "...--", action = "Kc3" }, 
-      { pattern = "....-", action = "Kc4" }, 
-      { pattern = ".....", action = "Kc5" }, 
-      { pattern = "-....", action = "Kc6" }, 
-      { pattern = "--...", action = "Kc7" }, 
-      { pattern = "---..", action = "Kc8" }, 
-      { pattern = "----.", action = "Kc9" }, 
+      { pattern = ".-", action = "A" },
+      { pattern = "-...", action = "B" },
+      { pattern = "-.-.", action = "C" },
+      { pattern = "-..", action = "D" },
+      { pattern = ".", action = "E" },
+      { pattern = "..-.", action = "F" },
+      { pattern = "--.", action = "G" },
+      { pattern = "....", action = "H" },
+      { pattern = "..", action = "I" },
+      { pattern = ".---", action = "J" },
+      { pattern = "-.-", action = "K" },
+      { pattern = ".-..", action = "L" },
+      { pattern = "--", action = "M" },
+      { pattern = "-.", action = "N" },
+      { pattern = "---", action = "O"},
+      { pattern = ".--.", action = "P" },
+      { pattern = "--.-", action = "Q" },
+      { pattern = ".-.", action = "R" },
+      { pattern = "...", action = "S" },
+      { pattern = "-", action = "T" },
+      { pattern = "..-", action = "U" },
+      { pattern = "...-", action = "V" },
+      { pattern = ".--", action = "W" },
+      { pattern = "-..-", action = "X" },
+      { pattern = "-.--", action = "Y" },
+      { pattern = "--..", action = "Z" },
+      { pattern = ".----", action = "Kc1" },
+      { pattern = "..---", action = "Kc2" },
+      { pattern = "...--", action = "Kc3" },
+      { pattern = "....-", action = "Kc4" },
+      { pattern = ".....", action = "Kc5" },
+      { pattern = "-....", action = "Kc6" },
+      { pattern = "--...", action = "Kc7" },
+      { pattern = "---..", action = "Kc8" },
+      { pattern = "----.", action = "Kc9" },
       { pattern = "-----", action = "Kc0" }
     ], profile = "MRZ" }
 ]
@@ -367,7 +367,7 @@ morses = [
 [behavior.morse.profiles]
 # for home row mod
 HRM = { unilateral_tap = true, permissive_hold = true, hold_timeout = "250ms", gap_timeout = "250ms" }
-# for "real" morse 
+# for "real" morse
 MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_timeout = "200ms" }
 # for "fast" modifiers (for example on thumb keys)
 PN = { hold_on_other_press = true, unilateral_tap = false, hold_timeout = "250ms", gap_timeout = "250ms" }
@@ -382,17 +382,17 @@ rows = 4
 cols = 10
 layers = 3
 matrix_map = """
-(0, 0, L)    (0, 1, L)    (0, 2, L)    (0, 3, L)    (0, 4, L)         (0, 5, R)   (0, 6, R)    (0, 7, R)    (0, 8, R)    (0, 9, R)   
+(0, 0, L)    (0, 1, L)    (0, 2, L)    (0, 3, L)    (0, 4, L)         (0, 5, R)   (0, 6, R)    (0, 7, R)    (0, 8, R)    (0, 9, R)
 (1, 0, L:H2) (1, 1, L:H2) (1, 2, L:H1) (1, 3, L:H1) (1, 4, L)         (1, 5, R)   (1, 6, R:H1) (1, 7, R:H1) (1, 8, R:H2) (1, 9, R:H2)
-(2, 0, L)    (2, 1, L)    (2, 2, L)    (2, 3, L)    (2, 4, L)         (2, 5, R)   (2, 6, R)    (2, 7, R)    (2, 8, R)    (2, 9, R)   
-                                       (3, 3, L:T)  (3, 4, L:T)       (3, 5, R:T) (3, 6, R:T) 
+(2, 0, L)    (2, 1, L)    (2, 2, L)    (2, 3, L)    (2, 4, L)         (2, 5, R)   (2, 6, R)    (2, 7, R)    (2, 8, R)    (2, 9, R)
+                                       (3, 3, L:T)  (3, 4, L:T)       (3, 5, R:T) (3, 6, R:T)
 """
 
 # default profile for morse, tap dance and tap-hold keys:
 [behavior.morse]
-enable_flow_tap = true, 
+enable_flow_tap = true,
 prior_idle_time = "120ms"
-hold_on_other_press = true 
+hold_on_other_press = true
 hold_timeout = "250ms"
 gap_timeout = "250ms"
 
@@ -416,10 +416,10 @@ cols = 3
 layers = 2
 keymap = [
     [
-        ["A", "B", "C"], 
+        ["A", "B", "C"],
         ["TD(0)", "TD(1)", "TD(2)"],  # Use morse dances 0, 1, and 2
         ["LCtrl", "MO(1)", "LShift"],
-        ["OSL(1)", "LT(2, Kc9, PN)", "LM(1, LShift | LGui)"]  # PN is a morse profile name here 
+        ["OSL(1)", "LT(2, Kc9, PN)", "LM(1, LShift | LGui)"]  # PN is a morse profile name here
     [
         ["_", "TT(1)", "TG(2)"],
         ["_", "_", "_"],

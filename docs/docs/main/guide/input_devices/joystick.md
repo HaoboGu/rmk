@@ -49,7 +49,7 @@ resolution = 6
 
 #### How it works
 
-::: warning 
+::: warning
 
 the transform might work not so intuitively,
 please read the document below for more information.
@@ -59,7 +59,6 @@ please read the document below for more information.
 1. The device read axes
 2. Add `bias` on each axis to make them into `0` when the joystick is released because the number returned by the ADC device is `u16`.
 3. About the `transform`
-
    1. new `x-axis`'s value = (`axis_x` + bias\[0\]) / transform\[0\]\[0\] + (`axis_y` + bias\[1\]) / transform\[0\]\[1\] + (`axis_z` + bias\[2\]) / transform\[0\]\[2\]
    2. new `y-axis`'s value = (`axis_x` + bias\[0\]) / transform\[1\]\[0\] + (`axis_y` + bias\[1\]) / transform\[1\]\[1\] + (`axis_z` + bias\[2\]) / transform\[1\]\[2\]
    3. new `z-axis`'s value = (`axis_x` + bias\[0\]) / transform\[2\]\[0\] + (`axis_y` + bias\[1\]) / transform\[2\]\[1\] + (`axis_z` + bias\[2\]) / transform\[2\]\[2\]

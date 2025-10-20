@@ -8,6 +8,7 @@ Keyboard configuration in RMK is handled through a `keyboard.toml` file that def
 
 ::: tip New to TOML?
 If you're unfamiliar with TOML syntax, check out the TOML Specification:
+
 - [English](https://toml.io/en/v1.0.0) / [中文](https://toml.io/cn/v1.0.0)
 
 :::
@@ -32,15 +33,14 @@ For complete examples, explore the [`examples/use_config`](https://github.com/Ha
 
 ## Configuration Sections
 
-The `keyboard.toml` file contains comprehensive customization options for your keyboard. For the complete specification, refer to [**Configuration Reference**](configuration/appendix.md). 
-
+The `keyboard.toml` file contains comprehensive customization options for your keyboard. For the complete specification, refer to [**Configuration Reference**](configuration/appendix.md).
 
 ### Available Configuration Sections
 
 The following sections can be configured in your `keyboard.toml`:
 
 - **[Keyboard and Matrix](configuration/keyboard_matrix.md)** - Basic keyboard information and physical key matrix definition
-- **[Layout](configuration/layout.md)** - Keyboard layout and default keymap configuration  
+- **[Layout](configuration/layout.md)** - Keyboard layout and default keymap configuration
 - **[Split Keyboard](configuration/split_keyboard.md)** - Configuration for split keyboard setups
 - **[Storage](configuration/storage.md)** - On-board configuration and keymap storage settings
 - **[Behavior](configuration/behavior.md)** - Advanced keyboard behaviors (one-shot keys, tri-layer, tap-hold, morse key, home row mods, etc.)

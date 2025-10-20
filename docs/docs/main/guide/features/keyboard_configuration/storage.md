@@ -2,7 +2,6 @@
 
 RMK's storage system provides persistent data storage for keyboard settings, keymaps, and system configuration. It uses your microcontroller's internal flash memory to save changes between power cycles.
 
-
 ::: tip
 For most users, the [default storage configuration](https://github.com/HaoboGu/rmk/tree/main/rmk-config/src/default_config) works perfectly. If there's no default config for your chip, the **last two sectors** will be used. In most cases, you only need to modify settings for advanced use cases or when troubleshooting storage-related issues.
 :::

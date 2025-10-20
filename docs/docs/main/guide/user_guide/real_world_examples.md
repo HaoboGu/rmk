@@ -14,7 +14,7 @@ A BLE/USB dual-mode GH60 keyboard using Ebyte's E73 nRF52840 module.
 
 ## [sessile](https://github.com/willpuckett/sessile)
 
-*Sessile* is an exploration of "minimal" finger travel. You can also read its circuitous [origin story](https://kbd.news/Typing-in-the-upside-down-2603.html).
+_Sessile_ is an exploration of "minimal" finger travel. You can also read its circuitous [origin story](https://kbd.news/Typing-in-the-upside-down-2603.html).
 
 ![sessile](../../images/sessile.png)
 

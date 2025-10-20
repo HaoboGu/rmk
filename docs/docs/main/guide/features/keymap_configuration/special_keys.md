@@ -10,7 +10,6 @@ The following keys are supported (some further keys might work, but are not docu
 
 In QMK an `AlternativeRepeatKey` is supported. This functionalaty is not implemented in RMK.
 
-
 ## Caps Word
 
 RMK includes `CapsWordToggle`. It can be aliased with any of `caps_word` or `cword` in a keymap. Caps word capitalizes all characters until a breaking character such as space occurs.

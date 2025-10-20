@@ -19,7 +19,6 @@ There are some limitations currently for cloud compilation. For example, you can
 ![create rmk repository](../../images/create_repository.png)
 
 3. After the repository is created, there are two config files in the project：`keyboard.toml` and `vial.json`:
-
    - `keyboard.toml`: this file defines almost everything about your keyboard, follow [keyboard configuration](/docs/features/keyboard_configuration.md) to create your own keyboard definition
    - `vial.json`: this file contains matrix definitions which will be recognized by [vial](https://get.vial.today/). RMK now uses vial to update the keymap on-the-fly. Follow vial's [porting guide](https://get.vial.today/docs/porting-to-via.html) to create `vial.json` for your keyboard.
 

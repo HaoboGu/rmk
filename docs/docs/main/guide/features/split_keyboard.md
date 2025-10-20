@@ -6,7 +6,6 @@ RMK supports multi-split keyboard, which contains at least one central board and
 
 There are many examples for split keyboards in [RMK examples folder](https://github.com/HaoboGu/rmk/tree/main/examples/use_config).
 
-
 ## Define central and peripherals via `keyboard.toml`
 
 See [this section](./configuration/split_keyboard) for more details.
@@ -47,10 +46,9 @@ run_peripheral_manager::<
   >(peripheral_id, peripheral_addr, &stack)
 ```
 
-
 ```rust[Serial split]
 // UART split central, arguments might be different for other microcontrollers, check the API docs or examples for other usages.
-run_peripheral_manager::<    
+run_peripheral_manager::<
     2, // PERIPHERAL_ROW
     1, // PERIPHERAL_COL
     2, // PERIPHERAL_ROW_OFFSET
@@ -58,6 +56,7 @@ run_peripheral_manager::<
     _,
   >(0, uart_receiver),
 ```
+
 :::
 
 ### Peripheral
@@ -127,7 +126,6 @@ RMK supports BLE wireless split on nRF52, ESP32 and Pi Pico W right now. For BLE
 `storage` feature is required for BLE split.
 
 :::
-
 
 ## Split keyboard project
 

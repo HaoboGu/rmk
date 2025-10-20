@@ -18,11 +18,13 @@ Controllers in RMK are software modules that manage external hardware components
 RMK includes several built-in controllers:
 
 **LED Indicator Controllers:**
+
 - NumLock, CapsLock, ScrollLock LED indicators
 - Automatic configuration through keyboard.toml
 - Support for active-high and active-low pins
 
 **Battery LED Controller:**
+
 - Battery level indication with different states
 - Charging state visualization
 - Configurable blinking patterns
@@ -63,7 +65,7 @@ impl Controller for MyEventController {
                 // Handle LED indicator changes
             },
             ControllerEvent::Battery(level) => {
-                // Handle battery level changes  
+                // Handle battery level changes
             },
             _ => {}
         }
@@ -100,7 +102,7 @@ Built-in LED indicators can be configured in keyboard.toml:
 numslock.pin = "PIN_1"
 numslock.low_active = false
 
-# CapsLock LED  
+# CapsLock LED
 capslock.pin = "PIN_2"
 capslock.low_active = true
 
@@ -144,7 +146,7 @@ pub enum ControllerEvent {
     Key(KeyboardEvent, KeyAction),
     /// Battery percentage (0-100)
     Battery(u8),
-    /// Charging state (true = charging, false = not charging)  
+    /// Charging state (true = charging, false = not charging)
     ChargingState(bool),
     /// Active layer changed
     Layer(u8),
