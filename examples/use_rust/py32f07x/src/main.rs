@@ -59,12 +59,12 @@ async fn main(_spawner: Spawner) {
         serial_number: "vial:f64c2b3c:000001",
     };
 
-    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]);
+    let _vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]);
     // let storage_config = rmk::config::StorageConfig::default();
 
     let rmk_config = RmkConfig {
         usb_config: keyboard_usb_config,
-        vial_config,
+        // vial_config,
         ..Default::default()
     };
 
@@ -90,16 +90,12 @@ async fn main(_spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
 
-    // if let Some(_) = sifli_hal::rcc::get_clk_dll2_freq() {
-    //     panic!();
-    // }
-
     // Start
     join3(
         run_devices!((matrix) => EVENT_CHANNEL),
         keyboard.run(),
-        // run_rmk(&keymap, driver, &mut storage, rmk_config),
-        run_rmk(&keymap, driver, rmk_config),
+        // run_rmk(driver, &mut storage, rmk_config),
+        run_rmk(driver, rmk_config),
     )
     .await;
 }
