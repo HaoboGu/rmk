@@ -93,21 +93,19 @@ pub async fn scan_peripherals<
                 loop {
                     let (found_peripheral_id, addr) = PERIPHERAL_FOUND.wait().await;
                     let scanned_addr = addr.into_inner();
-                    if let Some(Some(stored_addr)) = addrs.borrow_mut().get_mut(found_peripheral_id as usize) {
-                        if *stored_addr == scanned_addr {
+                    if let Some(Some(stored_addr)) = addrs.borrow_mut().get_mut(found_peripheral_id as usize)
+                        && *stored_addr == scanned_addr {
                             continue;
                         }
-                    }
 
                     error!("Scanned new peripheral {:?}", scanned_addr);
                     let mut slot_updated = false;
-                    if let Some(slot) = addrs.borrow_mut().get_mut(found_peripheral_id as usize) {
-                        if slot.is_none() {
+                    if let Some(slot) = addrs.borrow_mut().get_mut(found_peripheral_id as usize)
+                        && slot.is_none() {
                             // Update only when the slot is empty
                             *slot = Some(scanned_addr);
                             slot_updated = true;
                         }
-                    }
 
                     // Update stored addr.
                     // This cannot be put inside the `addrs.borrow_mut()` block because the sending is async
@@ -305,7 +303,7 @@ async fn run_central_manager_task<
     stack: &'a Stack<'a, C, P>,
     conn: &Connection<'a, P>,
 ) -> Result<(), BleHostError<C::Error>> {
-    let client = GattClient::<C, P, 10>::new(&stack, conn).await?;
+    let client = GattClient::<C, P, 10>::new(stack, conn).await?;
 
     // Use 2M Phy
     update_ble_phy(stack, conn).await;
