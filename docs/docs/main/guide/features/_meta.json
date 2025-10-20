@@ -1,0 +1,23 @@
+[
+  {
+    "type": "dir",
+    "name": "configuration",
+    "label": "Keyboard Configuration",
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "keymap",
+    "label": "Keymap Configuration",
+    "collapsed": true
+  },
+  "layers",
+  "split_keyboard",
+  "wireless",
+  "vial_support",
+  "low_power",
+  "storage",
+  "usb_logging",
+  "use_rust_api",
+  "binary_size_optimization"
+]

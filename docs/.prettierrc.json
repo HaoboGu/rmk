@@ -8,7 +8,7 @@
     {
       "files": "*.md",
       "options": {
-        "proseWrap": "never"
+        "proseWrap": "preserve"
       }
     }
   ]

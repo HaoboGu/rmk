@@ -66,7 +66,7 @@ Per default RMK assumes that your pins are <b>col2row</b>, meaning that the outp
 
 IO pins are represented with an array of string, the string value should be the **GPIO peripheral name** of the chip. For example, if you're using stm32h750xb, you can go to <https://docs.embassy.dev/embassy-stm32/git/stm32h750xb/peripherals/index.html> to get the valid GPIO peripheral name:
 
-![gpio_peripheral_name](/images/gpio_peripheral_name.png)
+![gpio_peripheral_name](../../../images/gpio_peripheral_name.png)
 
 The GPIO peripheral name varies for different chips. For example, RP2040 has `PIN_0`, nRF52840 has `P0_00` and stm32 has `PA0`. So it's recommended to check the embassy's doc for your chip to get the valid GPIO name first.
 
