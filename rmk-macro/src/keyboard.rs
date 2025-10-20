@@ -389,7 +389,7 @@ fn expand_key_info(info: &Vec<Vec<KeyInfo>>) -> proc_macro2::TokenStream {
     for row in info {
         rows.push(expand_key_info_row(row));
     }
-    quote! { ::core::option::Option::Some([#(#rows), *]) }
+    quote! { [#(#rows), *] }
 }
 
 /// Push keys info in the row

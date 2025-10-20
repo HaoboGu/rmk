@@ -7,6 +7,7 @@ use rmk_config::{
 use syn::ItemMod;
 
 use crate::chip_init::expand_chip_init;
+use crate::controller::expand_controller_init;
 use crate::entry::join_all_tasks;
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::flash::expand_flash_init;
@@ -227,11 +228,26 @@ fn expand_split_peripheral(
 
     // Peripherals don't need to run processors
     let (device_initialization, devices, _processors) = expand_peripheral_input_device_config(id, keyboard_config);
-    let run_rmk_peripheral = expand_split_peripheral_entry(id, &chip, split_config, peripheral_config, devices);
+
+    // Add controller support for peripherals
+    let (controller_initializers, controllers) = expand_controller_init(keyboard_config, &item_mod);
+
+    // Import EventController for controller support
+    let controller_import = if controllers.is_empty() {
+        quote! {}
+    } else {
+        quote! {
+            use ::rmk::controller::EventController;
+        }
+    };
+
+    let run_rmk_peripheral = expand_split_peripheral_entry(id, &chip, split_config, peripheral_config, devices, controllers);
 
     quote! {
         #imports
+        #controller_import
         #chip_init
+        #controller_initializers
         #matrix_config
         #device_initialization
         #run_rmk_peripheral
@@ -244,6 +260,7 @@ fn expand_split_peripheral_entry(
     split_config: &SplitConfig,
     peripheral_config: &SplitBoardConfig,
     devices: Vec<TokenStream2>,
+    controllers: Vec<TokenStream2>,
 ) -> TokenStream2 {
     // Add matrix to devices, and run all devices
     let mut devs = devices.clone();
@@ -262,7 +279,10 @@ fn expand_split_peripheral_entry(
                 &mut storage,
             )
         };
-        let run_rmk_peripheral = join_all_tasks(vec![device_task, peripheral_run]);
+        // Add controller tasks
+        let mut tasks = vec![device_task, peripheral_run];
+        tasks.extend(controllers);
+        let run_rmk_peripheral = join_all_tasks(tasks);
         quote! {
             #run_rmk_peripheral
         }
@@ -290,7 +310,9 @@ fn expand_split_peripheral_entry(
         let peripheral_run = quote! {
             ::rmk::split::peripheral::run_rmk_split_peripheral(#uart_instance)
         };
-        let run_rmk_peripheral = join_all_tasks(vec![device_task, peripheral_run]);
+        let mut tasks = vec![device_task, peripheral_run];
+        tasks.extend(controllers);
+        let run_rmk_peripheral = join_all_tasks(tasks);
         quote! {
             #serial_init
             #run_rmk_peripheral

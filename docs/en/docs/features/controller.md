@@ -310,3 +310,7 @@ mod keyboard {
     }
 }
 ```
+
+### Split Keyboard
+
+For split keyboard controller usage, see the [Split Keyboard Controllers](./split_keyboard#controllers-in-split-keyboards) section.
