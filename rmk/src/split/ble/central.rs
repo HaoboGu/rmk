@@ -1,18 +1,19 @@
 use core::cell::RefCell;
-use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use core::sync::atomic::Ordering;
 
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy, LeSetScanParams};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::select::{Either, Either3, select, select3};
-use embassy_sync::channel::Channel;
+use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
-use embassy_time::{Duration, Timer};
+use embassy_time::{Duration, Timer, with_timeout};
 use embedded_storage_async::nor_flash::NorFlash;
+use heapless::Vec;
 use heapless::VecView;
 use trouble_host::prelude::*;
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
+    crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
     crate::event::ControllerEvent,
 };
 
@@ -27,10 +28,11 @@ use crate::{CONNECTION_STATE, SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES};
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
 pub(crate) static PERIPHERAL_FOUND: Signal<crate::RawMutex, (u8, BdAddr)> = Signal::new();
-// Signal for stop scanning. Use channel for multiple peripherals
-pub(crate) static STOP_SCANNING: Channel<crate::RawMutex, (), 1> = Channel::new();
-pub(crate) static SCANNING: AtomicBool = AtomicBool::new(false);
-pub(crate) static CONNECTING_PERI: AtomicU8 = AtomicU8::new(0);
+
+// Signals and mutex for syncing scanning state between scanning task and peripheral manager
+static START_SCANNING: Signal<crate::RawMutex, ()> = Signal::new();
+static STOP_SCANNING: Signal<crate::RawMutex, ()> = Signal::new();
+static SCANNING_MUTEX: Mutex<crate::RawMutex, ()> = Mutex::new(());
 
 /// Sleep management signal for BLE Split Central
 ///
@@ -64,88 +66,72 @@ pub async fn scan_peripherals<
 >(
     stack: &'a Stack<'a, C, DefaultPacketPool>,
     addrs: &RefCell<VecView<Option<[u8; 6]>>>,
-    // num_peripherals: usize,
 ) {
-    let need_scan = !addrs.borrow().iter().all(|a| a.is_some());
-    if need_scan {
-        let scanning_fut = async {
-            loop {
-                let Host { central, .. } = stack.build();
-                info!("Scan for peripheral first");
-                wait_for_stack_started().await;
-                let mut scanner = Scanner::new(central);
-                let scan_config = ScanConfig {
-                    active: false,
-                    ..Default::default()
-                };
-                until_scanning_is_allowed().await;
-                if let Ok(_session) = scanner.scan(&scan_config).await {
-                    error!("Start scanning");
-                    SCANNING.store(true, Ordering::Release);
-                    STOP_SCANNING.receive().await;
-                }
-                error!("Stop scanning");
-                SCANNING.store(false, Ordering::Release);
-            }
-        };
-        let update_addrs_fut = async {
-            loop {
-                // Scan until all peripherals are scanned
-                // TODO: Timeout?
-                let (found_peripheral_id, addr) = PERIPHERAL_FOUND.wait().await;
-                let scanned_addr = addr.into_inner();
-                if let Some(Some(stored_addr)) = addrs.borrow_mut().get_mut(found_peripheral_id as usize) {
-                    if *stored_addr == scanned_addr {
-                        continue;
+    loop {
+        // Wait unitil `START_SCANNING` is signaled
+        START_SCANNING.wait().await;
+        // Check whether the scanning is needed, aka there's empty slot in the addr list.
+        let need_scan = !addrs.borrow().iter().all(|a| a.is_some());
+        if need_scan {
+            let scanning_fut = async {
+                loop {
+                    let Host { central, .. } = stack.build();
+                    wait_for_stack_started().await;
+                    let mut scanner = Scanner::new(central);
+                    let scan_config = ScanConfig {
+                        active: false,
+                        ..Default::default()
+                    };
+                    let _guard = SCANNING_MUTEX.lock().await;
+                    if let Ok(_session) = scanner.scan(&scan_config).await {
+                        info!("Start scanning peripherals");
+                        STOP_SCANNING.wait().await;
+                        error!("Stop scanning");
                     }
                 }
+            };
+            let update_addrs_fut = async {
+                loop {
+                    let (found_peripheral_id, addr) = PERIPHERAL_FOUND.wait().await;
+                    let scanned_addr = addr.into_inner();
+                    if let Some(Some(stored_addr)) = addrs.borrow_mut().get_mut(found_peripheral_id as usize) {
+                        if *stored_addr == scanned_addr {
+                            continue;
+                        }
+                    }
 
-                error!("Scanned new peripheral {:?}", scanned_addr);
-                // FIXME: 需要确认当前的这个peripheral，还未连接，才可以更新。对于一个已经连接上的peripheral，不要更新地址。
-                if let Some(slot) = addrs.borrow_mut().get_mut(found_peripheral_id as usize) {
-                    *slot = Some(scanned_addr);
+                    error!("Scanned new peripheral {:?}", scanned_addr);
+                    let mut slot_updated = false;
+                    if let Some(slot) = addrs.borrow_mut().get_mut(found_peripheral_id as usize) {
+                        if slot.is_none() {
+                            // Update only when the slot is empty
+                            *slot = Some(scanned_addr);
+                            slot_updated = true;
+                        }
+                    }
+
+                    // Update stored addr.
+                    // This cannot be put inside the `addrs.borrow_mut()` block because the sending is async
+                    if slot_updated {
+                        FLASH_CHANNEL
+                            .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
+                                found_peripheral_id,
+                                true,
+                                scanned_addr,
+                            )))
+                            .await;
+                    }
+
+                    if addrs.borrow().iter().all(|a| a.is_some()) {
+                        break;
+                    }
                 }
+            };
 
-                // Update stored addr.
-                // This cannot be put inside the `addrs.borrow_mut()` block because the sending is async
-                FLASH_CHANNEL
-                    .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
-                        found_peripheral_id,
-                        true,
-                        scanned_addr,
-                    )))
-                    .await;
-
-                if addrs.borrow().iter().all(|a| a.is_some()) {
-                    break;
-                }
-            }
-        };
-
-        select(scanning_fut, update_addrs_fut).await;
-    }
-
-    SCANNING.store(false, Ordering::Release);
-    error!("Scanning stopped");
-
-    // TODO: Start scanning again when needed?
-}
-
-async fn until_scanning_is_allowed() {
-    loop {
-        if CONNECTING_PERI.load(Ordering::Acquire) == 0 {
-            break;
+            // Scan until all peripherals are scanned
+            // TODO: Timeout?
+            select(scanning_fut, update_addrs_fut).await;
         }
-        embassy_time::Timer::after_millis(200).await
-    }
-}
-
-async fn until_scanning_is_stop() {
-    loop {
-        if !SCANNING.load(Ordering::Acquire) {
-            break;
-        }
-        embassy_time::Timer::after_millis(200).await
     }
 }
 
@@ -163,7 +149,7 @@ pub async fn read_peripheral_addresses<
     const NUM_ENCODER: usize,
 >(
     storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-) -> heapless::Vec<Option<[u8; 6]>, PERI_NUM> {
+) -> RefCell<Vec<Option<[u8; 6]>, PERI_NUM>> {
     let mut peripheral_addresses: heapless::Vec<Option<[u8; 6]>, PERI_NUM> = heapless::Vec::new();
     for id in 0..PERI_NUM {
         if let Ok(Some(peer_address)) = storage.read_peer_address(id as u8).await {
@@ -174,7 +160,7 @@ pub async fn read_peripheral_addresses<
         }
         peripheral_addresses.push(None).unwrap();
     }
-    peripheral_addresses
+    RefCell::new(peripheral_addresses)
 }
 
 // When no peripheral address is saved, the central should first scan for peripheral.
@@ -216,68 +202,98 @@ pub(crate) async fn run_ble_peripheral_manager<
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-    // const NUM_PERIPHERAL: usize,
 >(
-    peripheral_id: usize,
+    peri_id: usize,
     addrs: &RefCell<VecView<Option<[u8; 6]>>>,
     stack: &'a Stack<'a, C, DefaultPacketPool>,
 ) {
     trace!("SPLIT_MESSAGE_MAX_SIZE: {}", SPLIT_MESSAGE_MAX_SIZE);
-    // Check until the address is available
-    let address = loop {
-        if let Some(Some(addr)) = addrs.borrow().get(peripheral_id) {
-            break Address::random(*addr);
-        }
-        // Check again after 500ms
-        embassy_time::Timer::after_millis(500).await;
-    };
-    info!("Peripheral peer address: {:?}", address);
-
-    let Host { mut central, .. } = stack.build();
-    let config = ConnectConfig {
-        connect_params: ConnectParams {
-            min_connection_interval: Duration::from_micros(7500),
-            max_connection_interval: Duration::from_micros(7500),
-            max_latency: 400, // 3s
-            supervision_timeout: Duration::from_secs(7),
-            ..Default::default()
-        },
-        scan_config: ScanConfig {
-            filter_accept_list: &[(address.kind, &address.addr)],
-            ..Default::default()
-        },
-    };
-    wait_for_stack_started().await;
 
     #[cfg(feature = "controller")]
     let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
 
     loop {
+        // Check until the address is available
+        let address = loop {
+            if let Some(Some(addr)) = addrs.borrow().get(peri_id) {
+                break Address::random(*addr);
+            }
+            if !START_SCANNING.signaled() {
+                START_SCANNING.signal(());
+            }
+            // Check again after 500ms
+            embassy_time::Timer::after_millis(500).await;
+        };
+        info!("Peripheral peer address: {:?}", address);
+
+        let Host { mut central, .. } = stack.build();
+        let config = ConnectConfig {
+            connect_params: defaul_central_conn_param(),
+            scan_config: ScanConfig {
+                filter_accept_list: &[(address.kind, &address.addr)],
+                ..Default::default()
+            },
+        };
+        wait_for_stack_started().await;
+
         #[cfg(feature = "controller")]
-        send_controller_event(
-            &mut controller_pub,
-            ControllerEvent::SplitPeripheral(peripheral_id, false),
-        );
-        if let Err(e) = connect_and_run_peripheral_manager::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(
-            peripheral_id,
-            stack,
-            &mut central,
-            &config,
-            #[cfg(feature = "controller")]
-            &mut controller_pub,
-        )
+        send_controller_event(&mut controller_pub, ControllerEvent::SplitPeripheral(peri_id, false));
+
+        // Connect to peripheral
+        match with_timeout(Duration::from_secs(5), async {
+            if let Ok(_guard) = SCANNING_MUTEX.try_lock() {
+                central.connect(&config).await
+            } else {
+                STOP_SCANNING.signal(());
+                let _guard = SCANNING_MUTEX.lock().await;
+                central.connect(&config).await
+            }
+        })
         .await
         {
-            #[cfg(feature = "defmt")]
-            let e = defmt::Debug2Format(&e);
-            error!("BLE central error: {:?}", e);
-            // Reconnect after 500ms
-            embassy_time::Timer::after_millis(500).await;
+            Ok(Ok(conn)) => {
+                info!("Connected to peripheral {}", peri_id);
+
+                #[cfg(feature = "controller")]
+                send_controller_event(&mut controller_pub, ControllerEvent::SplitPeripheral(peri_id, true));
+
+                if let Err(e) =
+                    run_central_manager_task::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(peri_id, stack, &conn).await
+                {
+                    #[cfg(feature = "defmt")]
+                    let e = defmt::Debug2Format(&e);
+                    error!("BLE central error: {:?}", e);
+                    // Reconnect after 500ms
+                    embassy_time::Timer::after_millis(500).await;
+                }
+            }
+            Ok(Err(e)) => {
+                #[cfg(feature = "defmt")]
+                let e = defmt::Debug2Format(&e);
+                error!("Connect to peripheral {} error: {:?}", peri_id, e);
+            }
+            Err(_) => {
+                // Connect to peripheral timeout
+                warn!("Connect to peripheral {} timeout, clearing", peri_id);
+                if let Some(addr) = addrs.borrow_mut().get_mut(peri_id) {
+                    *addr = None
+                };
+            }
         }
     }
 }
 
-async fn connect_and_run_peripheral_manager<
+fn defaul_central_conn_param() -> ConnectParams {
+    ConnectParams {
+        min_connection_interval: Duration::from_micros(7500),
+        max_connection_interval: Duration::from_micros(7500),
+        max_latency: 400, // 3s
+        supervision_timeout: Duration::from_secs(7),
+        ..Default::default()
+    }
+}
+
+async fn run_central_manager_task<
     'a,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     P: PacketPool,
@@ -288,47 +304,20 @@ async fn connect_and_run_peripheral_manager<
 >(
     id: usize,
     stack: &'a Stack<'a, C, P>,
-    central: &mut Central<'a, C, P>,
-    config: &ConnectConfig<'_>,
-    #[cfg(feature = "controller")] controller_pub: &mut ControllerPub,
+    conn: &Connection<'a, P>,
 ) -> Result<(), BleHostError<C::Error>> {
-    if SCANNING.load(Ordering::Acquire) {
-        STOP_SCANNING.send(()).await;
-        until_scanning_is_stop().await;
-    }
-    CONNECTING_PERI.fetch_add(1, Ordering::AcqRel);
-    info!("Connecting to peripheral {}", id);
-    let conn = central.connect(config).await?;
-    CONNECTING_PERI.fetch_sub(1, Ordering::AcqRel);
-
-    info!("Connected to peripheral {}", id);
-
-    #[cfg(feature = "controller")]
-    send_controller_event(controller_pub, ControllerEvent::SplitPeripheral(id, true));
-
-    let client = GattClient::<C, P, 10>::new(&stack, &conn).await?;
+    let client = GattClient::<C, P, 10>::new(&stack, conn).await?;
 
     // Use 2M Phy
-    update_ble_phy(stack, &conn).await;
+    update_ble_phy(stack, conn).await;
 
     info!("Updating connection parameters for peripheral");
-    update_conn_params(
-        stack,
-        &conn,
-        &ConnectParams {
-            min_connection_interval: Duration::from_micros(7500),
-            max_connection_interval: Duration::from_micros(7500),
-            max_latency: 400, // 3s
-            supervision_timeout: Duration::from_secs(7),
-            ..Default::default()
-        },
-    )
-    .await;
+    update_conn_params(stack, conn, &defaul_central_conn_param()).await;
 
     match select3(
-        ble_central_task(&client, &conn),
+        ble_central_task(&client, conn),
         run_peripheral_manager::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, &client),
-        sleep_manager_task(stack, &conn),
+        sleep_manager_task(stack, conn),
     )
     .await
     {
@@ -587,18 +576,7 @@ async fn sleep_manager_task<
                 SLEEPING_STATE.store(false, Ordering::Release);
 
                 // Restore normal connection parameters
-                update_conn_params(
-                    stack,
-                    conn,
-                    &ConnectParams {
-                        min_connection_interval: Duration::from_micros(7500),
-                        max_connection_interval: Duration::from_micros(7500),
-                        max_latency: 400, // 3s
-                        supervision_timeout: Duration::from_secs(7),
-                        ..Default::default()
-                    },
-                )
-                .await;
+                update_conn_params(stack, conn, &defaul_central_conn_param()).await;
             }
         }
     }
