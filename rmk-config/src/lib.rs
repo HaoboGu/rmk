@@ -159,7 +159,7 @@ impl Default for RmkConstantsConfig {
             report_channel_size: 16,
             vial_channel_size: 4,
             flash_channel_size: 4,
-            split_peripherals_num: 1,
+            split_peripherals_num: 0,
             ble_profiles_num: 3,
             split_central_sleep_timeout_minutes: 0,
             vial_enabled: true,

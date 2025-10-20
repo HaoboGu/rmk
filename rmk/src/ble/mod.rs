@@ -79,8 +79,9 @@ pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 /// - `false`: Indicates central is awake
 pub(crate) static SLEEPING_STATE: AtomicBool = AtomicBool::new(false);
 
+// TODO: Add documentation about how to define split peripheral num in Rust code
 /// Max number of connections
-pub(crate) const CONNECTIONS_MAX: usize = 4; // TODO: Should be number of the peripheral + 1?
+pub(crate) const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + 1;
 
 /// Max number of L2CAP channels
 pub(crate) const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
