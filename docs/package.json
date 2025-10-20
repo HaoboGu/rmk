@@ -2,6 +2,7 @@
   "name": "rmk-rspress",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "postinstall": "node fetch-docs.js",
     "build": "rspress build",
