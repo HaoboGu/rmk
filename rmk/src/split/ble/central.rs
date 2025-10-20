@@ -85,7 +85,7 @@ pub async fn scan_peripherals<
                     if let Ok(_session) = scanner.scan(&scan_config).await {
                         info!("Start scanning peripherals");
                         STOP_SCANNING.wait().await;
-                        error!("Stop scanning");
+                        info!("Stop scanning");
                     }
                 }
             };
@@ -94,18 +94,20 @@ pub async fn scan_peripherals<
                     let (found_peripheral_id, addr) = PERIPHERAL_FOUND.wait().await;
                     let scanned_addr = addr.into_inner();
                     if let Some(Some(stored_addr)) = addrs.borrow_mut().get_mut(found_peripheral_id as usize)
-                        && *stored_addr == scanned_addr {
-                            continue;
-                        }
+                        && *stored_addr == scanned_addr
+                    {
+                        continue;
+                    }
 
-                    error!("Scanned new peripheral {:?}", scanned_addr);
+                    info!("Scanned new peripheral {:?}", scanned_addr);
                     let mut slot_updated = false;
                     if let Some(slot) = addrs.borrow_mut().get_mut(found_peripheral_id as usize)
-                        && slot.is_none() {
-                            // Update only when the slot is empty
-                            *slot = Some(scanned_addr);
-                            slot_updated = true;
-                        }
+                        && slot.is_none()
+                    {
+                        // Update only when the slot is empty
+                        *slot = Some(scanned_addr);
+                        slot_updated = true;
+                    }
 
                     // Update stored addr.
                     // This cannot be put inside the `addrs.borrow_mut()` block because the sending is async
@@ -239,10 +241,14 @@ pub(crate) async fn run_ble_peripheral_manager<
         // Connect to peripheral
         match with_timeout(Duration::from_secs(5), async {
             if let Ok(_guard) = SCANNING_MUTEX.try_lock() {
+                info!("Start connecting to peripheral {}", peri_id);
                 central.connect(&config).await
             } else {
                 STOP_SCANNING.signal(());
                 let _guard = SCANNING_MUTEX.lock().await;
+                // Wait a little bit to ensure that the scanning has been fully stopped
+                embassy_time::Timer::after_millis(100).await;
+                info!("Start connecting to peripheral {}", peri_id);
                 central.connect(&config).await
             }
         })
@@ -260,8 +266,6 @@ pub(crate) async fn run_ble_peripheral_manager<
                     #[cfg(feature = "defmt")]
                     let e = defmt::Debug2Format(&e);
                     error!("BLE central error: {:?}", e);
-                    // Reconnect after 500ms
-                    embassy_time::Timer::after_millis(500).await;
                 }
             }
             Ok(Err(e)) => {
@@ -277,6 +281,8 @@ pub(crate) async fn run_ble_peripheral_manager<
                 };
             }
         }
+        // Reconnect after 500ms
+        embassy_time::Timer::after_millis(500).await;
     }
 }
 
