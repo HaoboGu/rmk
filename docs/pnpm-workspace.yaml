@@ -1,3 +1,0 @@
-onlyBuiltDependencies:
-  - '@biomejs/biome'
-  - core-js
