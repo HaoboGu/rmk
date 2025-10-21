@@ -16,6 +16,9 @@ export default defineConfig({
     default: versions.map((branch) => branch.split('/').pop()!)[0],
     versions: ['main', ...versions.map((branch) => branch.split('/').pop()!)]
   },
+  search: {
+    versioned: true,
+  },
   globalStyles: path.join(__dirname, 'docs/styles/index.css'),
   themeConfig: {
     socialLinks: [
