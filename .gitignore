@@ -1,4 +1,5 @@
 target
+node_modules
 
 .DS_Store
 
@@ -14,18 +15,12 @@ rmk/Cargo.lock
 rmk-macro/Cargo.lock
 rmk-config/Cargo.lock
 
-# mdbook site
-docs/book
-docs/po/messages.pot
-
 # esp idf build files
 .embuild
 
 # Pi Pico W firmware folder
 cyw43-firmware
 
-# vitepress site
-node_modules
-docs/.vitepress/cache
-docs/.vitepress/dist
-docs/pnpm-lock.yaml
+# rspress
+docs/dist
+docs/docs/v*
