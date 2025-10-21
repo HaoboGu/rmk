@@ -35,7 +35,7 @@ use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
-use rmk::split::ble::central::read_peripheral_addresses;
+use rmk::split::ble::central::{read_peripheral_addresses, scan_peripherals};
 use rmk::split::central::{CentralMatrix, run_peripheral_manager};
 use rmk::{HostResources, initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk};
 use static_cell::StaticCell;
@@ -83,7 +83,7 @@ fn build_sdc<'d, const N: usize>(
         .support_phy_update_central()?
         .support_phy_update_peripheral()?
         .support_le_2m_phy()?
-        .central_count(1)?
+        .central_count(2)? // The number of peripherals
         .peripheral_count(1)?
         .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
         .build(p, rng, mpsl, mem)
@@ -139,7 +139,7 @@ async fn main(spawner: Spawner) {
     );
     let mut rng = rng::Rng::new(p.RNG, Irqs);
     let mut rng_gen = ChaCha12Rng::from_rng(&mut rng).unwrap();
-    let mut sdc_mem = sdc::Mem::<8192>::new();
+    let mut sdc_mem = sdc::Mem::<15472>::new();
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
     let mut host_resources = HostResources::new();
     let stack = build_ble_stack(sdc, ble_addr(), &mut rng_gen, &mut host_resources).await;
@@ -174,6 +174,7 @@ async fn main(spawner: Spawner) {
     let storage_config = StorageConfig {
         start_addr: 0xA0000,
         num_sectors: 6,
+        clear_storage: false,
         ..Default::default()
     };
     let rmk_config = RmkConfig {
@@ -212,7 +213,7 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
 
     // Read peripheral address from storage
-    let peripheral_addrs = read_peripheral_addresses::<1, _, 8, 7, 4, 2>(&mut storage).await;
+    let peripheral_addrs = read_peripheral_addresses::<2, _, 8, 7, 4, 2>(&mut storage).await;
 
     // Initialize the encoder processor
     let mut adc_device = NrfAdc::new(
@@ -243,8 +244,10 @@ async fn main(spawner: Spawner) {
             EVENT_CHANNEL => [batt_proc],
         },
         join(keyboard.run(), capslock_led.event_loop()),
-        join(
+        join4(
+            scan_peripherals(&stack, &peripheral_addrs),
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
+            run_peripheral_manager::<4, 7, 4, 0, _>(1, &peripheral_addrs, &stack),
             run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
         ),
     )

@@ -241,7 +241,8 @@ fn expand_split_peripheral(
         }
     };
 
-    let run_rmk_peripheral = expand_split_peripheral_entry(id, &chip, split_config, peripheral_config, devices, controllers);
+    let run_rmk_peripheral =
+        expand_split_peripheral_entry(id, &chip, split_config, peripheral_config, devices, controllers);
 
     quote! {
         #imports

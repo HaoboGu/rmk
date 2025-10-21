@@ -19,6 +19,13 @@ impl Default for BoardConfig {
 }
 
 impl BoardConfig {
+    /// Get number of peripherals
+    pub fn get_num_periphreal(&self) -> usize {
+        match self {
+            BoardConfig::Split(split_config) => split_config.peripheral.len(),
+            BoardConfig::UniBody(_) => 0,
+        }
+    }
     /// Get the number of encoders for each board
     ///
     /// - If the board is the unibody board, the returned vector has only one element.

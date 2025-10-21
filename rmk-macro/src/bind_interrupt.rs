@@ -101,23 +101,26 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
 
             // nrf-sdc interrupt config
             let nrf_sdc_config = match board {
-                BoardConfig::Split(_) => quote! {
-                    ::nrf_sdc::Builder::new()?
-                    .support_scan()?
-                    .support_central()?
-                    .support_adv()?
-                    .support_peripheral()?
-                    .support_dle_peripheral()?
-                    .support_dle_central()?
-                    .support_phy_update_central()?
-                    .support_phy_update_peripheral()?
-                    .support_le_2m_phy()?
-                    #tx_power
-                    .central_count(1)?
-                    .peripheral_count(1)?
-                    .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
-                    .build(p, rng, mpsl, mem)
-                },
+                BoardConfig::Split(_) => {
+                    let num_peri = board.get_num_periphreal() as u8;
+                    quote! {
+                        ::nrf_sdc::Builder::new()?
+                        .support_scan()?
+                        .support_central()?
+                        .support_adv()?
+                        .support_peripheral()?
+                        .support_dle_peripheral()?
+                        .support_dle_central()?
+                        .support_phy_update_central()?
+                        .support_phy_update_peripheral()?
+                        .support_le_2m_phy()?
+                        #tx_power
+                        .central_count(#num_peri)?
+                        .peripheral_count(1)?
+                        .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
+                        .build(p, rng, mpsl, mem)
+                    }
+                }
                 BoardConfig::UniBody(_) => quote! {
                     ::nrf_sdc::Builder::new()?
                     .support_adv()?

@@ -50,6 +50,7 @@ pub(crate) fn expand_chip_init(
 pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral_id: Option<usize>) -> TokenStream2 {
     let chip = keyboard_config.get_chip_model().unwrap();
     let communication = keyboard_config.get_communication_config().unwrap();
+    let peri_num = keyboard_config.get_board_config().unwrap().get_num_periphreal();
     match chip.series {
         ChipSeries::Stm32 => quote! {
                 let config = ::embassy_stm32::Config::default();
@@ -71,6 +72,15 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                 quote! {}
             };
             let ble_addr = get_ble_addr(keyboard_config, peripheral_id);
+            // Calculate the size of sdc memory pool.
+            // By default it's 6KB, each peripheral increases 2304 bytes
+            let sdc_mem_size = if peripheral_id.is_none() {
+                // For central
+                4096 + peri_num * 2304
+            } else {
+                // For peripheral
+                6144
+            };
             let ble_init = match &communication {
                 CommunicationConfig::Ble(_) | CommunicationConfig::Both(_, _) => quote! {
                     // Initialize nrf-sdc and ble stack
@@ -98,7 +108,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                     let mut rng = ::embassy_nrf::rng::Rng::new(p.RNG, Irqs);
                     use rand_core::SeedableRng;
                     let mut rng_gen = ::rand_chacha::ChaCha12Rng::from_rng(&mut rng).unwrap();
-                    let mut sdc_mem = ::nrf_sdc::Mem::<6144>::new(); // 6KB is enough for both central and peripheral
+                    let mut sdc_mem = ::nrf_sdc::Mem::<#sdc_mem_size>::new();
                     let sdc = ::defmt::unwrap!(build_sdc(sdc_p, &mut rng, &*mpsl, &mut sdc_mem));
                     let ble_addr = #ble_addr;
                     let mut host_resources = ::rmk::HostResources::new();

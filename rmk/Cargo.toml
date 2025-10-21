@@ -54,7 +54,7 @@ paste = "1"
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { version = "0.5", features = [
+trouble-host = { version = "0.5", git = "https://github.com/embassy-rs/trouble", rev = "0af97d0aee6a526855f197af1feeb9eaa3686fda", features = [
     "gatt",
     "scan",
     "derive",

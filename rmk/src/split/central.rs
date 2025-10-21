@@ -1,3 +1,5 @@
+#[cfg(feature = "_ble")]
+use core::cell::RefCell;
 #[cfg(feature = "async_matrix")]
 use core::pin::pin;
 
@@ -11,6 +13,7 @@ use embedded_io_async::{Read, Write};
 use {
     bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy, LeSetScanParams},
     bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync},
+    heapless::VecView,
     trouble_host::prelude::*,
 };
 
@@ -38,7 +41,7 @@ pub async fn run_peripheral_manager<
     #[cfg(not(feature = "_ble"))] S: Read + Write,
 >(
     id: usize,
-    #[cfg(feature = "_ble")] addr: Option<[u8; 6]>,
+    #[cfg(feature = "_ble")] addr: &RefCell<VecView<Option<[u8; 6]>>>,
     #[cfg(feature = "_ble")] stack: &'a Stack<'a, C, DefaultPacketPool>,
     #[cfg(not(feature = "_ble"))] receiver: S,
 ) {

@@ -79,8 +79,9 @@ pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 /// - `false`: Indicates central is awake
 pub(crate) static SLEEPING_STATE: AtomicBool = AtomicBool::new(false);
 
+// TODO: Add documentation about how to define split peripheral num in Rust code
 /// Max number of connections
-pub(crate) const CONNECTIONS_MAX: usize = 4; // Should be number of the peripheral + 1?
+pub(crate) const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + 1;
 
 /// Max number of L2CAP channels
 pub(crate) const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
@@ -459,21 +460,23 @@ pub(crate) async fn ble_task<C: Controller + ControllerCmdAsync<LeSetPhy>, P: Pa
     mut runner: Runner<'_, C, P>,
 ) {
     loop {
-        // Signal to indicate the stack is started
-        #[cfg(feature = "split")]
-        crate::split::ble::central::STACK_STARTED.signal(true);
-
         #[cfg(not(feature = "split"))]
-        if let Err(e) = runner.run().await {
-            panic!("[ble_task] error: {:?}", e);
+        if let Err(_e) = runner.run().await {
+            error!("[ble_task] runner.run() error");
+            embassy_time::Timer::after_millis(100).await;
         }
 
         #[cfg(feature = "split")]
-        if let Err(e) = runner
-            .run_with_handler(&crate::split::ble::central::ScanHandler {})
-            .await
         {
-            panic!("[ble_task] error: {:?}", e);
+            // Signal to indicate the stack is started
+            crate::split::ble::central::STACK_STARTED.signal(true);
+            if let Err(_e) = runner
+                .run_with_handler(&crate::split::ble::central::ScanHandler {})
+                .await
+            {
+                error!("[ble_task] runner.run_with_handler error");
+                embassy_time::Timer::after_millis(100).await;
+            }
         }
     }
 }
