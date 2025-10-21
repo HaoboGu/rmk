@@ -20,6 +20,6 @@ versions.forEach((branch) => {
   
   console.log(`Fetched branch ${branch} into ${targetDir}`)
 
-  const command = `git archive origin/${branch} docs/main | tar -x -C ${targetDir} --strip-components=3`
+  const command = `git archive origin/${branch} docs/main | tar -x -C ${targetDir} --strip-components=2`
   execSync(command, { stdio: 'inherit', shell: 'bash' })
 })
