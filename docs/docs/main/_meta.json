@@ -1,7 +1,7 @@
 [
   {
     "text": "Guide",
-    "link": "/user_guide/guide_overview",
+    "link": "/guide/user_guide/guide_overview",
     "activeMatch": "/user_guide/"
   },
   {
@@ -11,7 +11,6 @@
   },
   {
     "text": "API doc",
-    "link": "https://docs.rs/rmk/latest/rmk/",
-    "activeMatch": ""
+    "link": "https://docs.rs/rmk/latest/rmk/"
   }
 ]
