@@ -15,6 +15,8 @@ versions.forEach((branch) => {
     mkdirSync(targetDir, { recursive: true }) 
   }
 
+  // Fetch origin branch first
+  execSync(`git fetch origin ${branch}`, { stdio: 'inherit', shell: 'bash' });
   const command = `git archive origin/${branch} docs/main | tar -x -C ${targetDir} --strip-components=2`
   
   console.log(`Fetched branch ${branch} into ${targetDir}`)
