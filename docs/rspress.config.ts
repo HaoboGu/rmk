@@ -13,7 +13,7 @@ export default defineConfig({
   },
   outDir: 'dist',
   multiVersion: {
-    default: 'main',
+    default: versions.map((branch) => branch.split('/').pop()!)[0],
     versions: ['main', ...versions.map((branch) => branch.split('/').pop()!)]
   },
   globalStyles: path.join(__dirname, 'docs/styles/index.css'),
