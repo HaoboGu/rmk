@@ -12,10 +12,15 @@ versions.forEach((branch) => {
     mkdirSync(targetDir, { recursive: true })
   }
 
-  // Fetch origin branch first
-  execSync(`git fetch origin ${branch}`, { stdio: 'inherit', shell: 'bash' })
+  // Set and fetch branch
+  execSync(`git remote remove rmk-origin 2>/dev/null || true`, { stdio: 'inherit', shell: 'bash' })
+  execSync(`git remote add rmk-origin https://github.com/HaoboGu/rmk.git`, {
+    stdio: 'inherit',
+    shell: 'bash'
+  })
+  execSync(`git fetch rmk-origin ${branch}`, { stdio: 'inherit', shell: 'bash' })
   // Extract branch
-  const command = `git archive origin/${branch} docs/main | tar -x -C ${targetDir} --strip-components=2`
+  const command = `git archive rmk-origin/${branch} docs/main | tar -x -C ${targetDir} --strip-components=2`
   execSync(command, { stdio: 'inherit', shell: 'bash' })
 
   console.log(`Fetched branch ${branch} into ${targetDir}`)
