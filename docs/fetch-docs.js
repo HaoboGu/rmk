@@ -1,7 +1,7 @@
 import { execSync } from 'child_process'
-import { readFileSync } from 'fs';
+import { readFileSync } from 'fs'
 
-const versions = JSON.parse(readFileSync(new URL('./versions.json', import.meta.url)));
+const versions = JSON.parse(readFileSync(new URL('./versions.json', import.meta.url)))
 
 versions.forEach((branch) => {
   const version = branch.split('/').pop()
