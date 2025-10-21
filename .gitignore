@@ -27,3 +27,4 @@ cyw43-firmware
 
 # vitepress site
 docs/dist
+docs/docs/v*
