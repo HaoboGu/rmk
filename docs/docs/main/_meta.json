@@ -1,13 +1,13 @@
 [
   {
     "text": "Guide",
-    "link": "/guide/user_guide/guide_overview",
-    "activeMatch": "/user_guide/"
+    "link": "/docs/user_guide/guide_overview",
+    "activeMatch": "/docs/user_guide/"
   },
   {
     "text": "Documentation",
-    "link": "/guide/introduction",
-    "activeMatch": "/guide/(?!user_guide/)[^/]+"
+    "link": "/docs/introduction/introduction",
+    "activeMatch": "/docs/(?!user_guide/)[^/]+"
   },
   {
     "text": "API doc",

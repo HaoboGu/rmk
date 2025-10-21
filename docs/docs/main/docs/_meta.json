@@ -1,5 +1,9 @@
 [
-  "introduction",
+  {
+    "type": "dir",
+    "name": "introduction",
+    "label": "Introduction"
+  },
   {
     "type": "dir",
     "name": "user_guide",
