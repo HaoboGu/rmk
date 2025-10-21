@@ -14,7 +14,7 @@ export default defineConfig({
   outDir: 'dist',
   multiVersion: {
     default: 'main',
-    versions: ['main', ...versions]
+    versions: ['main', ...versions.map(branch => branch.split('/').pop()!)]
   },
   globalStyles: path.join(__dirname, 'docs/styles/index.css'),
   themeConfig: {
