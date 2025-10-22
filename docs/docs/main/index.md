@@ -11,7 +11,7 @@ hero:
   actions:
     - theme: brand
       text: Get Started
-      link: /docs/introduction
+      link: /docs/getting_started/introduction
     - theme: alt
       text: Discord
       link: https://discord.gg/HHGA7pQxkG

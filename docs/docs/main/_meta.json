@@ -6,7 +6,7 @@
   },
   {
     "text": "Documentation",
-    "link": "/docs/introduction/introduction",
+    "link": "/docs/getting_started/introduction",
     "activeMatch": "/docs/(?!user_guide/)[^/]+"
   },
   {
