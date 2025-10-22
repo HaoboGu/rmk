@@ -6,7 +6,7 @@ Below is a (non-exhaustive) list of the currently supported hardware:
 
 | Hardware    | Architectures     | Connectivity | Tested on Hardware | Examples | Note                                  |
 | ----------- | ----------------- | ---------- | ------------------------- | -------- | ------------------------------------- |
-| STM32       | Cortex-M0/3/4/7     | USB        | ✅                        | Partial support (STM32F1/F4/H7) | Supported on all models with USB peripheral |
+| STM32       | Cortex-M0/3/4/7     | USB        | ✅                        | Partial (F1/F4/H7)  | Supported on all models with USB peripheral |
 | ESP32C3     | RISC-V            | BLE        | ✅                         | ✅ | ESP32-C3 lacks full USB functionality |
 | ESP32C6     | RISC-V            | BLE        | ✅                         | ✅ | ESP32-C6 lacks full USB functionality |
 | ESP32S3     | Xtensa            | USB + BLE  | ✅                         | ✅ |                                        |
