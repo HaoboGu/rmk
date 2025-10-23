@@ -143,6 +143,7 @@ pub struct Matrix<
     D: DebouncerTrait,
     const INPUT_PIN_NUM: usize,
     const OUTPUT_PIN_NUM: usize,
+    const COL2ROW: bool,
 > {
     /// Input pins of the pcb matrix
     input_pins: [In; INPUT_PIN_NUM],
@@ -165,7 +166,8 @@ impl<
     D: DebouncerTrait,
     const INPUT_PIN_NUM: usize,
     const OUTPUT_PIN_NUM: usize,
-> Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    const COL2ROW: bool,
+> Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM, COL2ROW>
 {
     /// Create a matrix from input and output pins.
     pub fn new(input_pins: [In; INPUT_PIN_NUM], output_pins: [Out; OUTPUT_PIN_NUM], debouncer: D) -> Self {
@@ -187,7 +189,8 @@ impl<
     D: DebouncerTrait,
     const INPUT_PIN_NUM: usize,
     const OUTPUT_PIN_NUM: usize,
-> InputDevice for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    const COL2ROW: bool,
+> InputDevice for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM, COL2ROW>
 {
     async fn read_event(&mut self) -> crate::event::Event {
         loop {
@@ -247,16 +250,11 @@ impl<
     D: DebouncerTrait,
     const INPUT_PIN_NUM: usize,
     const OUTPUT_PIN_NUM: usize,
-> MatrixTrait for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    const COL2ROW: bool,
+> MatrixTrait for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM, COL2ROW>
 {
-    #[cfg(feature = "col2row")]
-    const ROW: usize = INPUT_PIN_NUM;
-    #[cfg(feature = "col2row")]
-    const COL: usize = OUTPUT_PIN_NUM;
-    #[cfg(not(feature = "col2row"))]
-    const ROW: usize = OUTPUT_PIN_NUM;
-    #[cfg(not(feature = "col2row"))]
-    const COL: usize = INPUT_PIN_NUM;
+    const ROW: usize = const { if COL2ROW { INPUT_PIN_NUM } else { OUTPUT_PIN_NUM } };
+    const COL: usize = const { if COL2ROW { OUTPUT_PIN_NUM } else { INPUT_PIN_NUM } };
 
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
