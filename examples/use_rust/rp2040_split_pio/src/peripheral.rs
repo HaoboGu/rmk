@@ -33,16 +33,15 @@ async fn main(_spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
     // Pin config
-    let (input_pins, output_pins) =
-        config_matrix_pins_rp!(peripherals: p, input: [PIN_9, PIN_11], output: [PIN_10, PIN_12]);
+    let (row_pins, col_pins) = config_matrix_pins_rp!(peripherals: p, input: [PIN_9, PIN_11], output: [PIN_10, PIN_12]);
 
     static RX_BUF: StaticCell<[u8; SPLIT_MESSAGE_MAX_SIZE]> = StaticCell::new();
     let rx_buf = &mut RX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
     let uart_instance = BufferedUart::new_half_duplex(p.PIO0, p.PIN_1, rx_buf, Irqs);
 
     // Define the matrix
-    let debouncer = DefaultDebouncer::<2, 2>::new();
-    let mut matrix = Matrix::<_, _, _, 2, 2>::new(input_pins, output_pins, debouncer);
+    let debouncer = DefaultDebouncer::new();
+    let mut matrix = Matrix::<_, _, _, 2, 2, true>::new(row_pins, col_pins, debouncer);
 
     // Start
     join(

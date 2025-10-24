@@ -54,7 +54,7 @@ async fn main(_spawner: Spawner) {
     );
 
     // Pin config
-    let (input_pins, output_pins) =
+    let (row_pins, col_pins) =
         config_matrix_pins_stm32!(peripherals: p, input: [PA9, PB8, PB13, PB12], output: [PA13, PA14, PA15]);
 
     // Use internal flash to emulate eeprom
@@ -81,8 +81,8 @@ async fn main(_spawner: Spawner) {
     .await;
 
     // Initialize the matrix + keyboard
-    let debouncer = DefaultDebouncer::<ROW, COL>::new();
-    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    let debouncer = DefaultDebouncer::new();
+    let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
 
     // Start

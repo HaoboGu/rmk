@@ -64,7 +64,7 @@ async fn main(_s: Spawner) {
     let flash = async_flash_wrapper(flash);
 
     // Initialize the IO pins
-    let (input_pins, output_pins) = config_matrix_pins_esp!(peripherals: peripherals, input: [GPIO6, GPIO7, GPIO20, GPIO21], output: [GPIO3, GPIO4, GPIO5]);
+    let (row_pins, col_pins) = config_matrix_pins_esp!(peripherals: peripherals, input: [GPIO6, GPIO7, GPIO20, GPIO21], output: [GPIO3, GPIO4, GPIO5]);
 
     // RMK config
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]);
@@ -94,8 +94,8 @@ async fn main(_s: Spawner) {
     .await;
 
     // Initialize the matrix and keyboard
-    let debouncer = DefaultDebouncer::<ROW, COL>::new();
-    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    let debouncer = DefaultDebouncer::new();
+    let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     // let mut matrix = rmk::matrix::TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap); // Initialize the light controller
 

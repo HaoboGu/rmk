@@ -151,7 +151,7 @@ async fn main(spawner: Spawner) {
     let flash = Flash::take(mpsl, p.NVMC);
 
     // Initialize IO Pins
-    let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P0_30, P0_31, P0_29, P0_02], output:  [P0_28, P0_03, P1_10, P1_11, P1_13, P0_09, P0_10]);
+    let (row_pins, col_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P0_30, P0_31, P0_29, P0_02], output:  [P0_28, P0_03, P1_10, P1_11, P1_13, P0_09, P0_10]);
 
     // Initialize the ADC.
     // We are only using one channel for detecting battery level
@@ -207,8 +207,8 @@ async fn main(spawner: Spawner) {
     let mut encoder = RotaryEncoder::with_resolution(pin_a, pin_b, 4, true, 0);
 
     // Initialize the matrix and keyboard
-    let debouncer = DefaultDebouncer::<4, 7>::new();
-    let mut matrix = CentralMatrix::<_, _, _, 0, 0, 4, 7>::new(input_pins, output_pins, debouncer);
+    let debouncer = DefaultDebouncer::new();
+    let mut matrix = CentralMatrix::<_, _, _, 0, 0, 4, 7, true>::new(row_pins, col_pins, debouncer);
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap);
 

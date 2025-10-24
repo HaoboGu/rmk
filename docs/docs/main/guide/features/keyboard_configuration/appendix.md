@@ -26,10 +26,9 @@ usb_enable = true
 # `matrix_type` is optional. Default is "normal"
 matrix_type = "normal"
 # Input and output pins
-input_pins = ["PIN_6", "PIN_7", "PIN_8", "PIN_9"]
-output_pins = ["PIN_19", "PIN_20", "PIN_21"]
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
-# Checkout documentation here: https://rmk.rs/docs/user_guide/faq.html#my-matrix-is-row2col-the-matrix-doesn-t-work
+row_pins = ["PIN_6", "PIN_7", "PIN_8", "PIN_9"]
+col_pins = ["PIN_19", "PIN_20", "PIN_21"]
+# RMK uses col2row as the default matrix diode direction, if you want to use a row2col matrix, add `row2col = true`
 row2col = false
 
 # Direct Pin Matrix is a Matrix of buttons connected directly to pins. It conflicts with the above.
@@ -212,7 +211,7 @@ numslock = { pin = "PIN_2", low_active = true }
 # Whether the storage is enabled
 enabled = true
 # The start address of storage
-start_addr = 0x60000
+start_addr = 0xA0000
 # Number of sectors used for storage, >= 2
 start_addr = 16
 # Clear storage at keyboard boot.
@@ -309,8 +308,8 @@ ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]
 [split.central.matrix]
 matrix_type = "normal"
 # Matrix IO definition on central board
-input_pins = ["PIN_9", "PIN_11"]
-output_pins = ["PIN_10", "PIN_12"]
+row_pins = ["PIN_9", "PIN_11"]
+col_pins = ["PIN_10", "PIN_12"]
 
 # Configuration for the first split peripheral
 # Note the double brackets [[ ]], which indicate that multiple split peripherals can be defined.
@@ -332,8 +331,8 @@ ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3]
 [split.peripheral.matrix]
 matrix_type = "normal"
 # Matrix IO definition on peripheral board
-input_pins = ["PIN_9", "PIN_11"]
-output_pins = ["PIN_10"]
+row_pins = ["PIN_9", "PIN_11"]
+col_pins = ["PIN_10"]
 
 # More split peripherals(if you have)
 [[split.peripheral]]

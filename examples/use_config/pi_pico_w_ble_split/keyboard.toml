@@ -41,11 +41,10 @@ ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]
 
 [split.central.matrix]
 matrix_type = "normal"
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
-# Checkout documentation here: https://rmk.rs/docs/user_guide/faq.html#my-matrix-is-row2col-the-matrix-doesn-t-work
+# RMK uses col2row as the default matrix diode direction, if you want to use a row2col matrix, add `row2col = true`
 # row2col = true
-input_pins = ["PIN_6", "PIN_7"]
-output_pins = ["PIN_19", "PIN_20"]
+row_pins = ["PIN_6", "PIN_7"]
+col_pins = ["PIN_19", "PIN_20"]
 
 [[split.peripheral]]
 rows = 2
@@ -56,5 +55,5 @@ ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3]
 
 [split.peripheral.matrix]
 matrix_type = "normal"
-input_pins = ["PIN_8", "PIN_9"]
-output_pins = ["PIN_19"]
+row_pins = ["PIN_8", "PIN_9"]
+col_pins = ["PIN_19"]

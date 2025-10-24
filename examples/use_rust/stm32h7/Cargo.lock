@@ -2192,8 +2192,7 @@ checksum = "fcc842091f2def52017664b53082ecbbeb5c7731092bad69d2c63050401dfd64"
 [[package]]
 name = "trouble-host"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5b5d5992d07744e464b294ccf2dd6d96285bd61c267c4e0307d1f7057a8cd7f"
+source = "git+https://github.com/embassy-rs/trouble?rev=0af97d0aee6a526855f197af1feeb9eaa3686fda#0af97d0aee6a526855f197af1feeb9eaa3686fda"
 dependencies = [
  "aes",
  "bt-hci",
@@ -2217,8 +2216,7 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bcb85bec3a8393c22ca1a7c25c82c2d33689ab412f3487c492fd01a033ede7c2"
+source = "git+https://github.com/embassy-rs/trouble?rev=0af97d0aee6a526855f197af1feeb9eaa3686fda#0af97d0aee6a526855f197af1feeb9eaa3686fda"
 dependencies = [
  "convert_case 0.8.0",
  "darling",

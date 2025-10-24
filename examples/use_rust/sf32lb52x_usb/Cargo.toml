@@ -10,7 +10,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", default-features = false, features = ["col2row", "defmt"] }
+rmk = { path = "../../../rmk", default-features = false, features = ["defmt"] }
 
 sifli-hal = { version = "0.1.1", features = [
     "defmt",
