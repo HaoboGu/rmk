@@ -135,24 +135,45 @@ impl KeyState {
     }
 }
 
+pub trait RowPins<const COL2ROW: bool> {
+    type RowPinsType;
+}
+pub trait ColPins<const COL2ROW: bool> {
+    type ColPinsType;
+}
+
+pub trait MatrixOutputPins<Out: OutputPin> {
+    fn get_output_pins(&self) -> &[Out];
+    fn get_output_pins_mut(&mut self) -> &mut [Out];
+}
+
+pub trait MatrixInputPins<In: InputPin> {
+    fn get_input_pins(&self) -> &[In];
+    fn get_input_pins_mut(&mut self) -> &mut [In];
+}
+
 /// Matrix is the physical pcb layout of the keyboard matrix.
 pub struct Matrix<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     D: DebouncerTrait,
-    const INPUT_PIN_NUM: usize,
-    const OUTPUT_PIN_NUM: usize,
+    const ROW: usize,
+    const COL: usize,
     const COL2ROW: bool,
-> {
+> where
+    Self: RowPins<COL2ROW>,
+    Self: ColPins<COL2ROW>,
+{
     /// Input pins of the pcb matrix
-    input_pins: [In; INPUT_PIN_NUM],
+    row_pins: <Self as RowPins<COL2ROW>>::RowPinsType,
+    col_pins: <Self as ColPins<COL2ROW>>::ColPinsType,
     /// Output pins of the pcb matrix
-    output_pins: [Out; OUTPUT_PIN_NUM],
+    // output_pins: [Out; COL],
     /// Debouncer
     debouncer: D,
     /// Key state matrix
-    key_states: [[KeyState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
+    key_states: [[KeyState; ROW]; COL],
     /// Start scanning
     scan_start: Option<Instant>,
     /// Current scan pos: (out_idx, in_idx)
@@ -164,18 +185,148 @@ impl<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     Out: OutputPin,
     D: DebouncerTrait,
-    const INPUT_PIN_NUM: usize,
-    const OUTPUT_PIN_NUM: usize,
-    const COL2ROW: bool,
-> Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM, COL2ROW>
+    const ROW: usize,
+    const COL: usize,
+> RowPins<true> for Matrix<In, Out, D, ROW, COL, true>
 {
+    type RowPinsType = [In; ROW];
+}
+
+impl<
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+> RowPins<false> for Matrix<In, Out, D, ROW, COL, false>
+{
+    type RowPinsType = [Out; ROW];
+}
+
+impl<
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+> ColPins<false> for Matrix<In, Out, D, ROW, COL, false>
+{
+    type ColPinsType = [In; COL];
+}
+
+impl<
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+> ColPins<true> for Matrix<In, Out, D, ROW, COL, true>
+{
+    type ColPinsType = [Out; COL];
+}
+
+impl<
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+> MatrixOutputPins<Out> for Matrix<In, Out, D, ROW, COL, true>
+{
+    fn get_output_pins(&self) -> &[Out] {
+        &self.col_pins
+    }
+
+    fn get_output_pins_mut(&mut self) -> &mut [Out] {
+        &mut self.col_pins
+    }
+}
+
+impl<
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+> MatrixOutputPins<Out> for Matrix<In, Out, D, ROW, COL, false>
+{
+    fn get_output_pins(&self) -> &[Out] {
+        &self.row_pins
+    }
+
+    fn get_output_pins_mut(&mut self) -> &mut [Out] {
+        &mut self.row_pins
+    }
+}
+
+impl<
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+> MatrixInputPins<In> for Matrix<In, Out, D, ROW, COL, true>
+{
+    fn get_input_pins(&self) -> &[In] {
+        &self.row_pins
+    }
+
+    fn get_input_pins_mut(&mut self) -> &mut [In] {
+        &mut self.row_pins
+    }
+}
+
+impl<
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+> MatrixInputPins<In> for Matrix<In, Out, D, ROW, COL, false>
+{
+    fn get_input_pins(&self) -> &[In] {
+        &self.col_pins
+    }
+
+    fn get_input_pins_mut(&mut self) -> &mut [In] {
+        &mut self.col_pins
+    }
+}
+
+impl<
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+    const COL2ROW: bool,
+> Matrix<In, Out, D, ROW, COL, COL2ROW>
+where
+    Self: RowPins<COL2ROW>,
+    Self: ColPins<COL2ROW>,
+    Self: MatrixOutputPins<Out>,
+{
+    const OUTPUT_PIN_NUM: usize = const { if COL2ROW { COL } else { ROW } };
+    const INPUT_PIN_NUM: usize = const { if COL2ROW { ROW } else { COL } };
     /// Create a matrix from input and output pins.
-    pub fn new(input_pins: [In; INPUT_PIN_NUM], output_pins: [Out; OUTPUT_PIN_NUM], debouncer: D) -> Self {
+    pub fn new(
+        row_pins: <Self as RowPins<COL2ROW>>::RowPinsType,
+        col_pins: <Self as ColPins<COL2ROW>>::ColPinsType,
+        debouncer: D,
+    ) -> Self {
         Matrix {
-            input_pins,
-            output_pins,
+            row_pins,
+            col_pins,
             debouncer,
-            key_states: [[KeyState::new(); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
+            key_states: [[KeyState::new(); ROW]; COL],
             scan_start: None,
             scan_pos: (0, 0),
         }
@@ -187,10 +338,15 @@ impl<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     Out: OutputPin,
     D: DebouncerTrait,
-    const INPUT_PIN_NUM: usize,
-    const OUTPUT_PIN_NUM: usize,
+    const ROW: usize,
+    const COL: usize,
     const COL2ROW: bool,
-> InputDevice for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM, COL2ROW>
+> InputDevice for Matrix<In, Out, D, ROW, COL, COL2ROW>
+where
+    Self: RowPins<COL2ROW>,
+    Self: ColPins<COL2ROW>,
+    Self: MatrixOutputPins<Out>,
+    Self: MatrixInputPins<In>,
 {
     async fn read_event(&mut self) -> crate::event::Event {
         loop {
@@ -199,19 +355,23 @@ impl<
             self.wait_for_key().await;
 
             // Scan matrix and send report
-            for out_idx in out_idx_start..self.output_pins.len() {
+            for out_idx in out_idx_start..Self::OUTPUT_PIN_NUM {
                 // Pull up output pin, wait 1us ensuring the change comes into effect
-                if let Some(out_pin) = self.output_pins.get_mut(out_idx) {
+                if let Some(out_pin) = self.get_output_pins_mut().get_mut(out_idx) {
                     out_pin.set_high().ok();
                 }
                 Timer::after_micros(1).await;
-                for in_idx in in_idx_start..self.input_pins.len() {
-                    let in_pin = self.input_pins.get_mut(in_idx).unwrap();
+                for in_idx in in_idx_start..Self::INPUT_PIN_NUM {
+                    let in_pin_state = if let Some(in_pin) = self.get_input_pins_mut().get_mut(in_idx) {
+                        in_pin.is_high().ok().unwrap_or_default()
+                    } else {
+                        false
+                    };
                     // Check input pins and debounce
                     let debounce_state = self.debouncer.detect_change_with_debounce(
                         in_idx,
                         out_idx,
-                        in_pin.is_high().ok().unwrap_or_default(),
+                        in_pin_state,
                         &self.key_states[out_idx][in_idx],
                     );
 
@@ -234,7 +394,7 @@ impl<
                 }
 
                 // Pull it back to low
-                if let Some(out_pin) = self.output_pins.get_mut(out_idx) {
+                if let Some(out_pin) = self.get_output_pins_mut().get_mut(out_idx) {
                     out_pin.set_low().ok();
                 }
             }
@@ -248,13 +408,18 @@ impl<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     Out: OutputPin,
     D: DebouncerTrait,
-    const INPUT_PIN_NUM: usize,
-    const OUTPUT_PIN_NUM: usize,
+    const ROW: usize,
+    const COL: usize,
     const COL2ROW: bool,
-> MatrixTrait for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM, COL2ROW>
+> MatrixTrait for Matrix<In, Out, D, ROW, COL, COL2ROW>
+where
+    Self: RowPins<COL2ROW>,
+    Self: ColPins<COL2ROW>,
+    Self: MatrixOutputPins<Out>,
+    Self: MatrixInputPins<In>,
 {
-    const ROW: usize = const { if COL2ROW { INPUT_PIN_NUM } else { OUTPUT_PIN_NUM } };
-    const COL: usize = const { if COL2ROW { OUTPUT_PIN_NUM } else { INPUT_PIN_NUM } };
+    const ROW: usize = ROW;
+    const COL: usize = COL;
 
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
@@ -269,19 +434,21 @@ impl<
             }
         }
         // First, set all output pin to high
-        for out in self.output_pins.iter_mut() {
+        for out in self.get_output_pins_mut().iter_mut() {
             out.set_high().ok();
         }
         Timer::after_micros(1).await;
-        let mut futs: Vec<_, INPUT_PIN_NUM> = self
-            .input_pins
-            .iter_mut()
-            .map(|input_pin| input_pin.wait_for_high())
-            .collect();
-        let _ = select_slice(pin!(futs.as_mut_slice())).await;
+        {
+            let mut futs: Vec<_, ROW> = self
+                .get_input_pins_mut()
+                .iter_mut()
+                .map(|input_pin| input_pin.wait_for_high())
+                .collect();
+            let _ = select_slice(pin!(futs.as_mut_slice())).await;
+        }
 
         // Set all output pins back to low
-        for out in self.output_pins.iter_mut() {
+        for out in self.get_output_pins_mut().iter_mut() {
             out.set_low().ok();
         }
 
