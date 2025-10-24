@@ -2,7 +2,7 @@
 
 ### My matrix is row2col, the matrix doesn't work
 
-RMK uses col2row as the default matrix diode direction To use the row2col matrix, you can add `row2col = true` under the `[matrix]` section or `[split.central.matrix]` section:
+RMK uses col2row as the default matrix diode direction. To use the row2col matrix, you can add `row2col = true` under the `[matrix]` section or `[split.central.matrix]` section:
 
 ```toml
 # keyboard.toml
@@ -22,34 +22,6 @@ let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debo
 // row2col matrix
 let mut matrix = Matrix::<_, _, _, ROW, COL, false>::new(row_pins, col_pins, debouncer);
 ```
-
-### Unable to find libclang
-
-On some windows machines, you may get the following error when building the firmware:
-
-```
-error: failed to run custom build command for `nrf-mpsl-sys v0.1.1 (https://github.com/alexmoon/nrf-sdc.git?rev=7be9b853e15ca0404d65c623d1ec5795fd96c204#7be9b853)`
-
-Caused by:
-  process didn't exit successfully: `C:\Users\User\Documents\rmk\target\release\build\nrf-mpsl-sys-7601ddd28810dbeb\build-script-build` (exit code: 101)
-  --- stderr
-
-  thread 'main' panicked at C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bindgen-0.70.1\lib.rs:622:27:
-  Unable to find libclang: "couldn't find any valid shared libraries matching: ['clang.dll', 'libclang.dll'], set the `LIBCLANG_PATH` environment variable to a path where one of these files can be found (invalid: [])"
-  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-warning: build failed, waiting for other jobs to finish...
-error: failed to run custom build command for `nrf-sdc-sys v0.1.0 (https://github.com/alexmoon/nrf-sdc.git?rev=7be9b853e15ca0404d65c623d1ec5795fd96c204#7be9b853)`
-
-Caused by:
-  process didn't exit successfully: `C:\Users\User\Documents\rmk\target\release\build\nrf-sdc-sys-47ab10b68780c6ba\build-script-build` (exit code: 101)
-  --- stderr
-
-  thread 'main' panicked at C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bindgen-0.70.1\lib.rs:622:27:
-  Unable to find libclang: "couldn't find any valid shared libraries matching: ['clang.dll', 'libclang.dll'], set the `LIBCLANG_PATH` environment variable to a path where one of these files can be found (invalid: [])"
-  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-```
-
-That's because you don't have LLVM(Clang) installed, or the system doesn't know the path of installed LLVM(Clang). You can try solution here: <https://rust-lang.github.io/rust-bindgen/requirements.html#windows>
 
 ### Where is my built firmware?
 
@@ -102,6 +74,60 @@ Note that the storage will be clear EVERYTIME you reboot the keyboard.
 ### rust-lld: error: section will not fit in region 'FLASH': overflowed by x bytes
 
 This is because your MCU's flash is too small. Try building in release mode: `cargo build --release`. If the error still there, follow our [`binary size optimization`](/docs/features/binary_size_optimization.md) doc to reduce your code size.
+
+### Unable to find libclang
+
+On windows machines, you may get the following error when building the firmware:
+
+```
+error: failed to run custom build command for `nrf-mpsl-sys v0.1.1 (https://github.com/alexmoon/nrf-sdc.git?rev=7be9b853e15ca0404d65c623d1ec5795fd96c204#7be9b853)`
+
+Caused by:
+  process didn't exit successfully: `C:\Users\User\Documents\rmk\target\release\build\nrf-mpsl-sys-7601ddd28810dbeb\build-script-build` (exit code: 101)
+  --- stderr
+
+  thread 'main' panicked at C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bindgen-0.70.1\lib.rs:622:27:
+  Unable to find libclang: "couldn't find any valid shared libraries matching: ['clang.dll', 'libclang.dll'], set the `LIBCLANG_PATH` environment variable to a path where one of these files can be found (invalid: [])"
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+warning: build failed, waiting for other jobs to finish...
+error: failed to run custom build command for `nrf-sdc-sys v0.1.0 (https://github.com/alexmoon/nrf-sdc.git?rev=7be9b853e15ca0404d65c623d1ec5795fd96c204#7be9b853)`
+
+Caused by:
+  process didn't exit successfully: `C:\Users\User\Documents\rmk\target\release\build\nrf-sdc-sys-47ab10b68780c6ba\build-script-build` (exit code: 101)
+  --- stderr
+
+  thread 'main' panicked at C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bindgen-0.70.1\lib.rs:622:27:
+  Unable to find libclang: "couldn't find any valid shared libraries matching: ['clang.dll', 'libclang.dll'], set the `LIBCLANG_PATH` environment variable to a path where one of these files can be found (invalid: [])"
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+```
+
+That's because you don't have LLVM(Clang) installed, or the system doesn't know the path of installed LLVM(Clang). You can try solution here: <https://rust-lang.github.io/rust-bindgen/requirements.html#windows>
+
+### Unable to generate bindings: NotExist
+
+On windows machines, you may get the following error when building the firmware:
+
+```
+error: failed to run custom build command for `nrf-sdc-sys v0.2.1 (D:\nrf-sdc\nrf-sdc-sys)`
+
+Caused by:
+  process didn't exit successfully: `D:\nrf-sdc\target\debug\build\nrf-sdc-sys-c5ad399d6ba4c579\build-script-build` (exit code: 101)
+  --- stderr
+
+  thread 'main' panicked at nrf-sdc-sys\build.rs:283:10:
+  Unable to generate bindings: NotExist("./third_party/nordic/nrfxlib/softdevice_controller/include/sdc_soc.h")
+  stack backtrace:
+     0: std::panicking::begin_panic_handler
+               at /rustc/29483883eed69d5fb4db01964cdf2af4d86e9cb2/library\std\src\panicking.rs:697   
+     ...
+  note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+```
+
+To resolve this, you need to enable git symlink on Windows:
+
+```bash
+git config --global core.symlinks true
+```
 
 ### I can see a `RMK Start` log, but nothing else
 
