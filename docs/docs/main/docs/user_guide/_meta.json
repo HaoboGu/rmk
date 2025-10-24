@@ -1,8 +1,12 @@
 [
   "guide_overview",
-  "create_firmware",
-  "cloud_compilation",
-  "local_compilation",
+  {
+    "type": "dir",
+    "name": "create_firmware",
+    "label": "Creating Firmware",
+    "collapsible": false,
+    "collapsed": false
+  },
   "flash_firmware",
   "faq",
   "real_world_examples"
