@@ -162,14 +162,8 @@ fn expand_split_peripheral(
 
     // Debouncer config
     let rapid_debouncer_enabled = is_feature_enabled(rmk_features, "rapid_debouncer");
-    let col2row_enabled = is_feature_enabled(rmk_features, "col2row");
     let col = peripheral_config.cols;
     let row = peripheral_config.rows;
-    let input_output_num = if col2row_enabled {
-        quote! { #row, #col }
-    } else {
-        quote! { #col, #row }
-    };
 
     let debouncer_type = if rapid_debouncer_enabled {
         quote! { ::rmk::debounce::fast_debouncer::RapidDebouncer }
@@ -187,20 +181,24 @@ fn expand_split_peripheral(
                 &chip,
                 peripheral_config
                     .matrix
-                    .input_pins
+                    .row_pins
                     .clone()
-                    .expect("split.peripheral.matrix.input_pins is required"),
+                    .expect("split.peripheral.matrix.row_pins is required"),
                 peripheral_config
                     .matrix
-                    .output_pins
+                    .col_pins
                     .clone()
-                    .expect("split.peripheral.matrix.output_pins is required"),
+                    .expect("split.peripheral.matrix.col_pins is required"),
+                peripheral_config.matrix.row2col,
                 async_matrix,
             ));
+            let col2row = !peripheral_config.matrix.row2col;
+            let num_row = peripheral_config.rows;
+            let num_col = peripheral_config.cols;
 
             matrix_config.extend(quote! {
-                let debouncer = #debouncer_type::<#input_output_num>::new();
-                let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #input_output_num>::new(input_pins, output_pins, debouncer);
+                let debouncer = #debouncer_type::new();
+                let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #num_row, #num_col, #col2row>::new(row_pins, col_pins, debouncer);
             });
         }
         MatrixType::direct_pin => {
@@ -220,7 +218,7 @@ fn expand_split_peripheral(
             let low_active = peripheral_config.matrix.direct_pin_low_active;
 
             matrix_config.extend(quote! {
-                let debouncer = #debouncer_type::<#col, #row>::new();
+                let debouncer = #debouncer_type::new();
                 let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #row, #col, #size>::new(direct_pins, debouncer, #low_active);
             });
         }
