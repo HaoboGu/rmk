@@ -15,7 +15,9 @@
     "rspress": "^1.40.2"
   },
   "devDependencies": {
+    "@iconify/react": "^6.0.2",
     "@types/node": "^18.11.17",
+    "@types/react": "^19.2.2",
     "prettier": "3.6.2"
   },
   "pnpm": {
