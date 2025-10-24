@@ -16,8 +16,8 @@
   },
   {
     "type": "dir",
-    "name": "input_devices",
-    "label": "Input Devices"
+    "name": "configuration",
+    "label": "Configuration"
   },
   {
     "type": "dir",
