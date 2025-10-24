@@ -5,46 +5,42 @@ use crate::DEBOUNCE_THRESHOLD;
 use crate::matrix::KeyState;
 
 /// Fast per-key debouncer.
-pub struct RapidDebouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> {
+pub struct RapidDebouncer<const ROW: usize, const COL: usize> {
     last_ms: Instant,
-    debouncing: [[bool; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
+    debouncing: [[bool; ROW]; COL],
 }
 
-impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> Default
-    for RapidDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
-{
+impl<const ROW: usize, const COL: usize> Default for RapidDebouncer<ROW, COL> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> RapidDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM> {
+impl<const ROW: usize, const COL: usize> RapidDebouncer<ROW, COL> {
     /// Create a rapid debouncer
     pub fn new() -> Self {
         RapidDebouncer {
-            debouncing: [[false; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
+            debouncing: [[false; ROW]; COL],
             last_ms: Instant::now(),
         }
     }
 }
 
-impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DebouncerTrait
-    for RapidDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
-{
+impl<const ROW: usize, const COL: usize> DebouncerTrait<ROW, COL> for RapidDebouncer<ROW, COL> {
     /// Per-key fast debounce
     fn detect_change_with_debounce(
         &mut self,
-        in_idx: usize,
-        out_idx: usize,
+        row_idx: usize,
+        col_idx: usize,
         pin_state: bool,
         key_state: &KeyState,
     ) -> DebounceState {
-        let debouncing = self.debouncing[out_idx][in_idx];
+        let debouncing = self.debouncing[col_idx][row_idx];
         if debouncing {
             // Current key is in debouncing state
             if self.last_ms.elapsed().as_millis() as u16 > DEBOUNCE_THRESHOLD {
                 // If the elapsed time > DEBOUNCE_THRESHOLD, reset
-                self.debouncing[out_idx][in_idx] = false;
+                self.debouncing[col_idx][row_idx] = false;
                 DebounceState::Ignored
             } else {
                 // Still in a debouncing progress
@@ -55,7 +51,7 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DebouncerTrait
             // Trigger the key immediately and record current tick
             self.last_ms = Instant::now();
             // Change debouncing state
-            self.debouncing[out_idx][in_idx] = true;
+            self.debouncing[col_idx][row_idx] = true;
             DebounceState::Debounced
         } else {
             DebounceState::Ignored

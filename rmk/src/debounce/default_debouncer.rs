@@ -28,32 +28,28 @@ impl DebounceCounter {
 }
 
 /// Default per-key debouncer. The debouncing algorithm is same as ZMK's [default debouncer](https://github.com/zmkfirmware/zmk/blob/19613128b901723f7b78c136792d72e6ca7cf4fc/app/module/lib/zmk_debounce/debounce.c)
-pub struct DefaultDebouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> {
+pub struct DefaultDebouncer<const ROW: usize, const COL: usize> {
     last_ms: u32,
-    counters: [[DebounceCounter; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
+    counters: [[DebounceCounter; ROW]; COL],
 }
 
-impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> Default
-    for DefaultDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
-{
+impl<const ROW: usize, const COL: usize> Default for DefaultDebouncer<ROW, COL> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DefaultDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM> {
+impl<const ROW: usize, const COL: usize> DefaultDebouncer<ROW, COL> {
     /// Create a default debouncer
     pub fn new() -> Self {
         DefaultDebouncer {
-            counters: [[DebounceCounter(0); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
+            counters: [[DebounceCounter(0); ROW]; COL],
             last_ms: 0,
         }
     }
 }
 
-impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DebouncerTrait
-    for DefaultDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
-{
+impl<const ROW: usize, const COL: usize> DebouncerTrait<ROW, COL> for DefaultDebouncer<ROW, COL> {
     /// Per-key debounce, same with zmk's debounce algorithm
     fn detect_change_with_debounce(
         &mut self,

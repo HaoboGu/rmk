@@ -52,7 +52,7 @@ cargo +nightly size --release
 
 RMK provides several options that you can use to reduce the binary size:
 
-1. If you don't need storage, you can disable the `storage` feature to save some flash. To disable `storage` feature you need to disable default features of `rmk` crate, and then enable other features you need, for example, "col2row".
+1. If you don't need storage, you can disable the `storage` feature to save some flash. To disable `storage` feature you need to disable default features of `rmk` crate, and then enable other features you need.
 
 2. You can also fully remove `defmt` by removing `defmt` feature from `rmk` crate and similar feature gates from all other dependencies.
 
@@ -60,7 +60,7 @@ RMK provides several options that you can use to reduce the binary size:
 
 ```toml
 # Default features `defmt`, `vial`, and `storage` are disabled
-rmk = { version = "0.7", default-features = false, features = ["col2row"] }
+rmk = { version = "0.7", default-features = false }
 ```
 
 If you're using `keyboard.toml`, you'll also need to disable the storage, defmt and vial in toml config:
@@ -133,7 +133,7 @@ You can disable `storage` and `vial` feature in `Cargo.toml`:
 
 ```toml
 # Default features `defmt`, `vial`, and `storage` are disabled
-rmk = { version = "0.7", default-features = false, features = ["col2row"] }
+rmk = { version = "0.7", default-features = false }
 ```
 
 And then remove anything no longer needed in `main.rs`.

@@ -16,7 +16,7 @@ use crate::matrix::KeyState;
 pub struct DirectPinMatrix<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
     const SIZE: usize,
@@ -38,7 +38,7 @@ pub struct DirectPinMatrix<
 impl<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
     const SIZE: usize,
@@ -60,7 +60,7 @@ impl<
 impl<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
     const SIZE: usize,
@@ -120,15 +120,12 @@ impl<
 impl<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
     const SIZE: usize,
-> MatrixTrait for DirectPinMatrix<In, D, ROW, COL, SIZE>
+> MatrixTrait<ROW, COL> for DirectPinMatrix<In, D, ROW, COL, SIZE>
 {
-    const ROW: usize = ROW;
-    const COL: usize = COL;
-
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
         use core::pin::pin;

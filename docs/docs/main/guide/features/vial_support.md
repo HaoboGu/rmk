@@ -28,5 +28,5 @@ Note vial support requires extra Flash/RAM space. You can also disable vial supp
 vial_enabled = false
 
 # In Cargo.toml
-rmk = { version = "...", default-features = false, features = ["col2row"] }
+rmk = { version = "...", default-features = false }
 ```
