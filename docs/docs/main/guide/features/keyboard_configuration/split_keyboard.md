@@ -23,8 +23,8 @@ col_offset = 0
 # Central's matrix
 [split.central.matrix]
 matrix_type = "normal"
-input_pins = ["P0_12", "P0_13"]
-output_pins = ["P0_14", "P0_15"]
+row_pins = ["P0_12", "P0_13"]
+col_pins = ["P0_14", "P0_15"]
 
 # Note there're TWO brackets, since the peripheral is a list
 # Peripheral 0
@@ -39,8 +39,8 @@ col_offset = 2
 # Peripheral 0's matrix definition
 [split.peripheral.matrix]
 matrix_type = "normal"
-input_pins = ["P1_11", "P1_10"]
-output_pins = ["P0_30"]
+row_pins = ["P1_11", "P1_10"]
+col_pins = ["P0_30"]
 
 # Peripheral 1
 [[split.peripheral]]
@@ -55,8 +55,8 @@ col_offset = 2
 # Peripheral 1's matrix definition
 [split.peripheral.matrix]
 matrix_type = "normal"
-input_pins = ["P1_11", "P1_10"]
-output_pins = ["P0_30"]
+row_pins = ["P1_11", "P1_10"]
+col_pins = ["P0_30"]
 ```
 
 ## Split keyboard matrix configuration

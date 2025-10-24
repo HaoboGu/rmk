@@ -134,12 +134,12 @@ async fn main(spawner: Spawner) {
     // Wait for ADC calibration.
     saadc.calibrate().await;
 
-    let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P1_09, P0_28, P0_03, P1_10], output:  [P0_30, P0_31, P0_29, P0_02, P1_13, P0_10, P0_09]);
+    let (row_pins, col_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P1_09, P0_28, P0_03, P1_10], output:  [P0_30, P0_31, P0_29, P0_02, P1_13, P0_10, P0_09]);
 
     // Initialize flash
     // nRF52840's bootloader starts from 0xF4000(976K)
     let storage_config = StorageConfig {
-        start_addr: 0x60000, // 384K
+        start_addr: 0xA0000, // 640K
         num_sectors: 32,     // 128K
         ..Default::default()
     };
@@ -147,8 +147,8 @@ async fn main(spawner: Spawner) {
     let mut storage = new_storage_for_split_peripheral(flash, storage_config).await;
 
     // Initialize the peripheral matrix
-    let debouncer = DefaultDebouncer::<4, 7>::new();
-    let mut matrix = Matrix::<_, _, _, 4, 7>::new(input_pins, output_pins, debouncer);
+    let debouncer = DefaultDebouncer::new();
+    let mut matrix = Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer);
     // let mut matrix = rmk::matrix::TestMatrix::<4, 7>::new();
 
     let pin_a = Input::new(p.P1_06, embassy_nrf::gpio::Pull::None);

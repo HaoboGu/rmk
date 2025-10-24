@@ -30,7 +30,7 @@ There are a few more things that you have to do:
     let pd8 = ExtiInput::new(p.PD8,  p.EXTI8, Pull::Down);
     let pb13 = ExtiInput::new(p.PB13, p.EXTI13, Pull::Down);
     let pb12 = ExtiInput::new(p.PB12, p.EXTI12, Pull::Down);
-    let input_pins = [pd9, pd8, pb13, pb12];
+    let row_pins = [pd9, pd8, pb13, pb12];
 
-    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
 ```

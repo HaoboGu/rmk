@@ -45,7 +45,7 @@ Some `KeyAction`s are not supported by the macros, plain `KeyAction`s also work,
 Next, you're going to change the IO pins of keyboard matrix making RMK run on your own PCB. Generally, IO pins are defined in `src/main.rs`. RMK will generate a helper macro to help you to define the matrix. For example, if you're using rp2040, you can define your pins using `config_matrix_pins_rp!`:
 
 ```rust
-let (input_pins, output_pins) = config_matrix_pins_rp!(
+let (row_pins, col_pins) = config_matrix_pins_rp!(
     peripherals: p,
     input: [PIN_6, PIN_7, PIN_8, PIN_9],
     output: [PIN_19, PIN_20, PIN_21]

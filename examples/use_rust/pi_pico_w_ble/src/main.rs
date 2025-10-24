@@ -91,7 +91,7 @@ async fn main(spawner: Spawner) {
     let driver = Driver::new(p.USB, Irqs);
 
     // Pin config
-    let (input_pins, output_pins) =
+    let (row_pins, col_pins) =
         config_matrix_pins_rp!(peripherals: p, input: [PIN_6, PIN_7, PIN_8, PIN_9], output: [PIN_19, PIN_20, PIN_21]);
 
     // Use internal flash to emulate eeprom
@@ -136,8 +136,8 @@ async fn main(spawner: Spawner) {
     .await;
 
     // Initialize the matrix + keyboard
-    let debouncer = DefaultDebouncer::<ROW, COL>::new();
-    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    let debouncer = DefaultDebouncer::new();
+    let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
 
     let ble_addr = [0x18, 0xe2, 0x21, 0x88, 0xc0, 0xc7];

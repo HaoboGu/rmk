@@ -2,14 +2,7 @@
 
 ### My matrix is row2col, the matrix doesn't work
 
-RMK enables `col2row` as the default feature. To use the row2col matrix, you have to change your `Cargo.toml`, adds `default-features = false` to RMK crate, disabling the `col2row` feature. Note that you should enable other default features of RMK manually, such as `col2row` and `storage` after disabling default features.
-
-```toml
-# Cargo.toml
-rmk = { version = "0.7", default-features = false, features = ["nrf52840_ble", "async_matrix"] }
-```
-
-If you're using the cloud compilation, you have to update your `keyboard.toml`, add `row2col = true` under the `[matrix]` section or `[split.central.matrix]` section:
+RMK uses col2row as the default matrix diode direction To use the row2col matrix, you can add `row2col = true` under the `[matrix]` section or `[split.central.matrix]` section:
 
 ```toml
 # keyboard.toml
@@ -19,6 +12,15 @@ row2col = true
 # Or
 [split.central.matrix]
 row2col = true
+```
+
+If you're using Rust code, set the generics value `COL2ROW` to `false` to make the matrix row2col:
+
+```rust
+// col2row matrix
+let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
+// row2col matrix
+let mut matrix = Matrix::<_, _, _, ROW, COL, false>::new(row_pins, col_pins, debouncer);
 ```
 
 ### Unable to find libclang

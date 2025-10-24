@@ -116,7 +116,7 @@ async fn main(spawner: Spawner) {
     let flash = Flash::take(mpsl, p.NVMC);
 
     // Initialize IO Pins
-    let (input_pins, output_pins) =
+    let (row_pins, col_pins) =
         config_matrix_pins_nrf!(peripherals: p, input: [P0_30, P0_31, P0_29, P0_27], output:  [P0_28, P0_03, P0_11]);
 
     // Keyboard config
@@ -155,8 +155,8 @@ async fn main(spawner: Spawner) {
     .await;
 
     // Initialize the matrix and keyboard
-    let debouncer = DefaultDebouncer::<ROW, COL>::new();
-    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    let debouncer = DefaultDebouncer::new();
+    let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap);
 

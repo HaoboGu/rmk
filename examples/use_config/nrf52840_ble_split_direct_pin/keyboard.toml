@@ -61,5 +61,5 @@ direct_pins = [["P1_11"], ["P1_10"]]
 # row_offset = 2
 # col_offset = 2
 # serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
-# input_pins = ["PIN_9", "PIN_11"]
-# output_pins = ["PIN_10"]
+# row_pins = ["PIN_9", "PIN_11"]
+# col_pins = ["PIN_10"]

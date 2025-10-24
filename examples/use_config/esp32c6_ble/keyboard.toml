@@ -8,12 +8,11 @@ chip = "esp32c6"
 usb_enable = false
 
 [matrix]
-# Input and output pins are mandatory
-input_pins = ["GPIO6", "GPIO7", "GPIO20", "GPIO21"]
-output_pins = ["GPIO3", "GPIO4", "GPIO5"]
+# Row and col pins are mandatory
+row_pins = ["GPIO6", "GPIO7", "GPIO20", "GPIO21"]
+col_pins = ["GPIO3", "GPIO4", "GPIO5"]
 
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
-# Checkout documentation here: https://rmk.rs/docs/user_guide/faq.html#my-matrix-is-row2col-the-matrix-doesn-t-work
+# RMK uses col2row as the default matrix diode direction, if you want to use a row2col matrix, add `row2col = true`
 # row2col = true
 
 [layout]

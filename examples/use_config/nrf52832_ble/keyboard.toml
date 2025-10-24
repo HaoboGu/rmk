@@ -8,11 +8,10 @@ chip = "nrf52832"
 usb_enable = false
 
 [matrix]
-# Input and output pins are mandatory
-input_pins = ["P0_03", "P0_04", "P0_28", "P0_29"]
-output_pins = ["P0_11", "P0_27", "P0_07"]
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
-# Checkout documentation here: https://rmk.rs/docs/user_guide/faq.html#my-matrix-is-row2col-the-matrix-doesn-t-work
+# Row and col pins are mandatory
+row_pins = ["P0_03", "P0_04", "P0_28", "P0_29"]
+col_pins = ["P0_11", "P0_27", "P0_07"]
+# RMK uses col2row as the default matrix diode direction, if you want to use a row2col matrix, add `row2col = true`
 # row2col = true
 
 [layout]

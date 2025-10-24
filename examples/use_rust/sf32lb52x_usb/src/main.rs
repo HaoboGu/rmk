@@ -53,7 +53,7 @@ async fn main(_spawner: Spawner) {
     let driver = Driver::new(p.USBC, Irqs, p.PA35, p.PA36);
 
     // Pin config
-    let (input_pins, output_pins) =
+    let (row_pins, col_pins) =
         config_matrix_pins_sifli!(peripherals: p, input: [PA9, PA6, PA1, PA33], output: [PA3, PA4, PA2]);
 
     let keyboard_usb_config = KeyboardUsbConfig {
@@ -91,8 +91,8 @@ async fn main(_spawner: Spawner) {
     // .await;
 
     // Initialize the matrix + keyboard
-    let debouncer = DefaultDebouncer::<ROW, COL>::new();
-    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    let debouncer = DefaultDebouncer::new();
+    let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
 
     // Start
