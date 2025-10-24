@@ -93,19 +93,12 @@ For keyboards using a traditional diode matrix:
 ```toml
 [matrix]
 # Define matrix pins
-input_pins = ["PD4", "PD5", "PD6", "PD3"]
-output_pins = ["PD7", "PD8", "PD9"]
+row_pins = ["PD4", "PD5", "PD6", "PD3"]
+col_pins = ["PD7", "PD8", "PD9"]
 
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
-# Checkout documentation here: https://rmk.rs/docs/user_guide/faq.html#my-matrix-is-row2col-the-matrix-doesn-t-work
-# row2col = true  # Uncomment if your matrix is row2col
+# RMK uses col2row as the default matrix diode direction, if you want to use a row2col matrix, add `row2col = true`
+# row2col = true
 ```
-
-**Important Notes:**
-
-- `input_pins` correspond to rows in col2row configuration (default)
-- `output_pins` correspond to columns in col2row configuration (default)
-- If using `row2col = true`, the roles are reversed
 
 ### Finding GPIO Pin Names
 

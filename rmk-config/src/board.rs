@@ -79,8 +79,8 @@ impl KeyboardTomlConfig {
             (Some(m), None) => {
                 match m.matrix_type {
                     MatrixType::normal => {
-                        if m.input_pins.is_none() || m.output_pins.is_none() {
-                            return Err("`input_pins` and `output_pins` is required for normal matrix".to_string());
+                        if m.row_pins.is_none() || m.col_pins.is_none() {
+                            return Err("`row_pins` and `col_pins` is required for normal matrix".to_string());
                         }
                     },
                     MatrixType::direct_pin => {

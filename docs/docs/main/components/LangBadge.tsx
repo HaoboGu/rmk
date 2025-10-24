@@ -10,3 +10,5 @@ const langBadge = (name: string, icon: string) => () => (
 // https://icon-sets.iconify.design/material-icon-theme/
 export const Rust = langBadge('Rust', 'material-icon-theme:rust')
 export const Toml = langBadge('Toml', 'material-icon-theme:toml')
+
+export default () => null;

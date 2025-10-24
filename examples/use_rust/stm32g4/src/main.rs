@@ -35,7 +35,7 @@ async fn main(_spawner: Spawner) {
     let p = embassy_stm32::init(config);
 
     // Pin config
-    let (input_pins, output_pins) =
+    let (row_pins, col_pins) =
         config_matrix_pins_stm32!(peripherals: p, input: [PB9, PB8, PB13, PB12], output: [PA8, PA9, PA10]);
 
     // Usb driver
@@ -52,8 +52,8 @@ async fn main(_spawner: Spawner) {
     let keymap = initialize_keymap(&mut default_keymap, &mut behavior_config, &mut per_key_config).await;
 
     // Initialize the matrix + keyboard
-    let debouncer = DefaultDebouncer::<ROW, COL>::new();
-    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    let debouncer = DefaultDebouncer::new();
+    let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
 
     // Start

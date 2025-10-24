@@ -34,7 +34,6 @@ peripheral = [
 
 [dependencies]
 rmk = { path = "../../../rmk", default-features = false, features = [
-    "col2row",
     "log",
     "split",
     "storage",

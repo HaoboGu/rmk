@@ -20,8 +20,9 @@ pub(crate) fn expand_matrix_config(
             MatrixType::normal => {
                 matrix_config.extend(expand_matrix_input_output_pins(
                     &keyboard_config.get_chip_model().unwrap(),
-                    matrix.input_pins.clone().unwrap(),
-                    matrix.output_pins.clone().unwrap(),
+                    matrix.row_pins.clone().unwrap(),
+                    matrix.col_pins.clone().unwrap(),
+                    matrix.row2col,
                     async_matrix,
                 ));
             }
@@ -54,8 +55,9 @@ pub(crate) fn expand_matrix_config(
             match split_config.central.matrix.matrix_type {
                 MatrixType::normal => matrix_config.extend(expand_matrix_input_output_pins(
                     &keyboard_config.get_chip_model().unwrap(),
-                    split_config.central.matrix.input_pins.clone().unwrap(),
-                    split_config.central.matrix.output_pins.clone().unwrap(),
+                    split_config.central.matrix.row_pins.clone().unwrap(),
+                    split_config.central.matrix.col_pins.clone().unwrap(),
+                    split_config.central.matrix.row2col,
                     async_matrix,
                 )),
                 MatrixType::direct_pin => matrix_config.extend(expand_matrix_direct_pins(
@@ -100,8 +102,9 @@ pub(crate) fn expand_matrix_direct_pins(
 
 pub(crate) fn expand_matrix_input_output_pins(
     chip: &ChipModel,
-    input_pins: Vec<String>,
-    output_pins: Vec<String>,
+    row_pins: Vec<String>,
+    col_pins: Vec<String>,
+    row2col: bool,
     async_matrix: bool,
 ) -> proc_macro2::TokenStream {
     let mut pin_initialization = proc_macro2::TokenStream::new();
@@ -113,8 +116,17 @@ pub(crate) fn expand_matrix_input_output_pins(
     } else {
         quote! {}
     };
-    let input_pin_len = input_pins.len();
-    let output_pin_len = output_pins.len();
+    let (input_pin_len, output_pin_len) = if row2col {
+        (col_pins.len(), row_pins.len())
+    } else {
+        (row_pins.len(), col_pins.len())
+    };
+
+    let (input_pins, output_pins) = if row2col {
+        (col_pins, row_pins)
+    } else {
+        (row_pins, col_pins)
+    };
 
     // Get pin types
     let input_pin_type = get_input_pin_type(chip, async_matrix);
@@ -124,10 +136,15 @@ pub(crate) fn expand_matrix_input_output_pins(
     pin_initialization.extend(convert_input_pins_to_initializers(chip, input_pins, async_matrix));
     // Initialize output pins
     pin_initialization.extend(convert_output_pins_to_initializers(chip, output_pins));
+    let pin_names = if row2col {
+        quote! { (col_pins, row_pins) }
+    } else {
+        quote! { (row_pins, col_pins) }
+    };
     // Generate a macro that does pin matrix config
     quote! {
         #extra_import
-        let (input_pins, output_pins): ([ #input_pin_type; #input_pin_len], [ #output_pin_type; #output_pin_len]) = {
+        let #pin_names: ([ #input_pin_type; #input_pin_len], [ #output_pin_type; #output_pin_len]) = {
             #pin_initialization
             (input_pins, output_pins)
         };

@@ -330,8 +330,8 @@ pub enum MatrixType {
 pub struct MatrixConfig {
     #[serde(default)]
     pub matrix_type: MatrixType,
-    pub input_pins: Option<Vec<String>>,
-    pub output_pins: Option<Vec<String>>,
+    pub row_pins: Option<Vec<String>>,
+    pub col_pins: Option<Vec<String>>,
     pub direct_pins: Option<Vec<Vec<String>>>,
     #[serde(default = "default_true")]
     pub direct_pin_low_active: bool,

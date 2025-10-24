@@ -89,10 +89,9 @@ async fn main(spawner: Spawner) {
     let mut storage = new_storage_for_split_peripheral(flash, storage_config).await;
 
     // Pin config
-    let (input_pins, output_pins) =
-        config_matrix_pins_rp!(peripherals: p, input: [PIN_6, PIN_7], output: [PIN_19, PIN_20]);
-    let debouncer = DefaultDebouncer::<2, 2>::new();
-    let mut matrix = Matrix::<_, _, _, 2, 2>::new(input_pins, output_pins, debouncer);
+    let (row_pins, col_pins) = config_matrix_pins_rp!(peripherals: p, input: [PIN_6, PIN_7], output: [PIN_19, PIN_20]);
+    let debouncer = DefaultDebouncer::new();
+    let mut matrix = Matrix::<_, _, _, 2, 2, true>::new(row_pins, col_pins, debouncer);
 
     let ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
 
