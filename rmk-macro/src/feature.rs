@@ -20,7 +20,6 @@ pub(crate) fn get_rmk_features() -> Option<Vec<String>> {
                 // Add default features to the feature list
                 if default_features {
                     feature_set.push("defmt".to_string());
-                    feature_set.push("col2row".to_string());
                     feature_set.push("storage".to_string());
                     feature_set.push("vial".to_string());
                     feature_set.push("vial_lock".to_string());
