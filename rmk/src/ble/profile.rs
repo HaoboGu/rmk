@@ -115,9 +115,10 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
         for slot_num in 0..NUM_BLE_PROFILE {
             if let Ok(Some(info)) = storage.read_trouble_bond_info(slot_num as u8).await
                 && !info.removed
-                    && let Err(e) = self.bonded_devices.push(info) {
-                        error!("Failed to add bond info: {:?}", e);
-                    }
+                && let Err(e) = self.bonded_devices.push(info)
+            {
+                error!("Failed to add bond info: {:?}", e);
+            }
         }
         debug!("Loaded {} bond info", self.bonded_devices.len());
 
@@ -331,10 +332,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             info!("Switching connection type to: {}", updated);
 
                             #[cfg(feature = "controller")]
-                            send_controller_event(
-                                &mut self.controller_pub,
-                                ControllerEvent::ConnectionType(updated),
-                            );
+                            send_controller_event(&mut self.controller_pub, ControllerEvent::ConnectionType(updated));
 
                             #[cfg(feature = "storage")]
                             FLASH_CHANNEL.send(FlashOperationMessage::ConnectionType(updated)).await;

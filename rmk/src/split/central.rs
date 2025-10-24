@@ -17,16 +17,10 @@ use {
 #[cfg(feature = "async_matrix")]
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
-use crate::matrix::{KeyState, MatrixInputPins, MatrixTrait};
-use crate::{
-    debounce::{DebounceState, DebouncerTrait},
-    matrix::RowPins,
-};
-use crate::{
-    event::{Event, KeyboardEvent},
-    matrix::ColPins,
-};
-use crate::{input_device::InputDevice, matrix::MatrixOutputPins};
+use crate::debounce::{DebounceState, DebouncerTrait};
+use crate::event::{Event, KeyboardEvent};
+use crate::input_device::InputDevice;
+use crate::matrix::{ColPins, KeyState, MatrixInputPins, MatrixOutputPins, MatrixTrait, RowPins};
 
 /// Run central's peripheral manager task.
 ///

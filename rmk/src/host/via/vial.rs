@@ -379,13 +379,12 @@ pub(crate) async fn process_vial<
                         let output = from_via_keycode(LittleEndian::read_u16(
                             &report.output_data[4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
                         ));
-                        combos[combo_idx] =
-                            if !actions.iter().any(|&x| x != KeyAction::No) && output == KeyAction::No {
-                                debug!("combo is empty");
-                                None
-                            } else {
-                                Some(Combo::new(actions, output, None))
-                            };
+                        combos[combo_idx] = if !actions.iter().any(|&x| x != KeyAction::No) && output == KeyAction::No {
+                            debug!("combo is empty");
+                            None
+                        } else {
+                            Some(Combo::new(actions, output, None))
+                        };
                         (actions, output)
                     };
 
