@@ -866,10 +866,11 @@ async fn run_ble_keyboard<
     if let Ok(Some(bond_info)) = storage
         .read_trouble_bond_info(ACTIVE_PROFILE.load(Ordering::SeqCst))
         .await
-        && bond_info.info.identity.match_identity(&conn.raw().peer_identity()) {
-            info!("Loading CCCD table from storage: {:?}", bond_info.cccd_table);
-            server.set_cccd_table(conn.raw(), bond_info.cccd_table.clone());
-        }
+        && bond_info.info.identity.match_identity(&conn.raw().peer_identity())
+    {
+        info!("Loading CCCD table from storage: {:?}", bond_info.cccd_table);
+        server.set_cccd_table(conn.raw(), bond_info.cccd_table.clone());
+    }
 
     // Use 2M Phy
     update_ble_phy(stack, conn.raw()).await;
@@ -880,7 +881,10 @@ async fn run_ble_keyboard<
             set_conn_params(stack, conn),
             ble_battery_server.run(),
         )
-        .await { error!("[gatt_events_task] end: {:?}", e) }
+        .await
+        {
+            error!("[gatt_events_task] end: {:?}", e)
+        }
     };
 
     run_keyboard(
