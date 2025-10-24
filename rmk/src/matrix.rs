@@ -165,11 +165,10 @@ pub struct Matrix<
     Self: RowPins<COL2ROW>,
     Self: ColPins<COL2ROW>,
 {
-    /// Input pins of the pcb matrix
+    /// Row pins of the pcb matrix
     row_pins: <Self as RowPins<COL2ROW>>::RowPinsType,
+    /// Column pins of the pcb matrix
     col_pins: <Self as ColPins<COL2ROW>>::ColPinsType,
-    /// Output pins of the pcb matrix
-    // output_pins: [Out; COL],
     /// Debouncer
     debouncer: D,
     /// Key state matrix
@@ -316,6 +315,7 @@ where
 {
     const OUTPUT_PIN_NUM: usize = const { if COL2ROW { COL } else { ROW } };
     const INPUT_PIN_NUM: usize = const { if COL2ROW { ROW } else { COL } };
+
     /// Create a matrix from input and output pins.
     pub fn new(
         row_pins: <Self as RowPins<COL2ROW>>::RowPinsType,
@@ -329,6 +329,30 @@ where
             key_states: [[KeyState::new(); ROW]; COL],
             scan_start: None,
             scan_pos: (0, 0),
+        }
+    }
+
+    fn get_key_event(&self, out_idx: usize, in_idx: usize) -> KeyboardEvent {
+        if COL2ROW {
+            KeyboardEvent::key(in_idx as u8, out_idx as u8, self.key_states[out_idx][in_idx].pressed)
+        } else {
+            KeyboardEvent::key(out_idx as u8, in_idx as u8, self.key_states[in_idx][out_idx].pressed)
+        }
+    }
+
+    fn get_key_state(&self, out_idx: usize, in_idx: usize) -> KeyState {
+        if COL2ROW {
+            self.key_states[out_idx][in_idx]
+        } else {
+            self.key_states[in_idx][out_idx]
+        }
+    }
+
+    fn toggle_key_state(&mut self, out_idx: usize, in_idx: usize) {
+        if COL2ROW {
+            self.key_states[out_idx][in_idx].toggle_pressed();
+        } else {
+            self.key_states[in_idx][out_idx].toggle_pressed();
         }
     }
 }
@@ -372,23 +396,18 @@ where
                         in_idx,
                         out_idx,
                         in_pin_state,
-                        &self.key_states[out_idx][in_idx],
+                        &self.get_key_state(out_idx, in_idx),
                     );
 
                     if let DebounceState::Debounced = debounce_state {
-                        self.key_states[out_idx][in_idx].toggle_pressed();
-                        #[cfg(feature = "col2row")]
-                        let (row, col, key_state) = (in_idx, out_idx, self.key_states[out_idx][in_idx]);
-                        #[cfg(not(feature = "col2row"))]
-                        let (row, col, key_state) = (out_idx, in_idx, self.key_states[out_idx][in_idx]);
-
+                        self.toggle_key_state(out_idx, in_idx);
                         self.scan_pos = (out_idx, in_idx);
-                        return Event::Key(KeyboardEvent::key(row as u8, col as u8, key_state.pressed));
+                        return Event::Key(self.get_key_event(out_idx, in_idx));
                     }
 
                     // If there's key still pressed, always refresh the self.scan_start
                     #[cfg(feature = "async_matrix")]
-                    if self.key_states[out_idx][in_idx].pressed {
+                    if self.get_key_state(out_idx, in_idx).pressed {
                         self.scan_start = Some(Instant::now());
                     }
                 }
