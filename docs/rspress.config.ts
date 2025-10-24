@@ -17,7 +17,7 @@ export default defineConfig({
     versions: ['main', ...versions.map((branch) => branch.split('/').pop()!)]
   },
   search: {
-    versioned: true,
+    versioned: true
   },
   globalStyles: path.join(__dirname, 'docs/styles/index.css'),
   themeConfig: {
