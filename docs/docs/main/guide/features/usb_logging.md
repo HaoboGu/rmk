@@ -10,7 +10,6 @@ RMK uses [defmt](https://defmt.ferrous-systems.com) as the default logger, which
 
 ```toml
 rmk = { version = "0.7", default-features = false, features = [
-    "col2row",
     "storage",
     "usb_log", # <- enable USB logging
     "..",

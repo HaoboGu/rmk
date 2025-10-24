@@ -110,7 +110,7 @@ features = ["split"]
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["col2row", "defmt", "storage", "vial", "vial_lock"]
+default = ["defmt", "storage", "vial", "vial_lock"]
 
 ## Enable host configurator support
 host = []

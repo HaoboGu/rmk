@@ -1,4 +1,5 @@
-use core::future::Future;
+#[cfg(feature = "async_matrix")]
+use core::pin::pin;
 use core::sync::atomic::Ordering;
 
 use embassy_time::{Instant, Timer};
@@ -82,23 +83,17 @@ impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
 ///
 /// The keyboard matrix is a 2D matrix of keys, the matrix does the scanning and saves the result to each key's `KeyState`.
 /// The `KeyState` at position (row, col) can be read by `get_key_state` and updated by `update_key_state`.
-pub trait MatrixTrait: InputDevice {
-    // Matrix size
-    const ROW: usize;
-    const COL: usize;
-
+pub trait MatrixTrait<const ROW: usize, const COL: usize>: InputDevice {
     // Wait for USB or BLE really connected
-    fn wait_for_connected(&self) -> impl Future<Output = ()> {
-        async {
-            while CONNECTION_STATE.load(Ordering::Acquire) == Into::<bool>::into(ConnectionState::Disconnected) {
-                embassy_time::Timer::after_millis(100).await;
-            }
-            info!("Connected, start scanning matrix");
+    async fn wait_for_connected(&self) {
+        while CONNECTION_STATE.load(Ordering::Acquire) == Into::<bool>::into(ConnectionState::Disconnected) {
+            embassy_time::Timer::after_millis(100).await;
         }
+        info!("Connected, start scanning matrix");
     }
 
     #[cfg(feature = "async_matrix")]
-    fn wait_for_key(&mut self) -> impl Future<Output = ()>;
+    async fn wait_for_key(&mut self);
 }
 
 /// KeyState represents the state of a key.
@@ -150,6 +145,8 @@ pub trait MatrixOutputPins<Out: OutputPin> {
 pub trait MatrixInputPins<In: InputPin> {
     fn get_input_pins(&self) -> &[In];
     fn get_input_pins_mut(&mut self) -> &mut [In];
+    #[cfg(feature = "async_matrix")]
+    async fn wait_input_pins(&mut self);
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.
@@ -157,7 +154,7 @@ pub struct Matrix<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
     const COL2ROW: bool,
@@ -183,7 +180,7 @@ impl<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     Out: OutputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
 > RowPins<true> for Matrix<In, Out, D, ROW, COL, true>
@@ -195,7 +192,7 @@ impl<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     Out: OutputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
 > RowPins<false> for Matrix<In, Out, D, ROW, COL, false>
@@ -207,7 +204,7 @@ impl<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     Out: OutputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
 > ColPins<false> for Matrix<In, Out, D, ROW, COL, false>
@@ -219,7 +216,7 @@ impl<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     Out: OutputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
 > ColPins<true> for Matrix<In, Out, D, ROW, COL, true>
@@ -231,7 +228,7 @@ impl<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     Out: OutputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
 > MatrixOutputPins<Out> for Matrix<In, Out, D, ROW, COL, true>
@@ -249,7 +246,7 @@ impl<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     Out: OutputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
 > MatrixOutputPins<Out> for Matrix<In, Out, D, ROW, COL, false>
@@ -267,7 +264,7 @@ impl<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     Out: OutputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
 > MatrixInputPins<In> for Matrix<In, Out, D, ROW, COL, true>
@@ -279,13 +276,23 @@ impl<
     fn get_input_pins_mut(&mut self) -> &mut [In] {
         &mut self.row_pins
     }
+
+    #[cfg(feature = "async_matrix")]
+    async fn wait_input_pins(&mut self) {
+        let mut futs: Vec<_, ROW> = self
+            .get_input_pins_mut()
+            .iter_mut()
+            .map(|input_pin| input_pin.wait_for_high())
+            .collect();
+        let _ = select_slice(pin!(futs.as_mut_slice())).await;
+    }
 }
 
 impl<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     Out: OutputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
 > MatrixInputPins<In> for Matrix<In, Out, D, ROW, COL, false>
@@ -297,13 +304,23 @@ impl<
     fn get_input_pins_mut(&mut self) -> &mut [In] {
         &mut self.col_pins
     }
+
+    #[cfg(feature = "async_matrix")]
+    async fn wait_input_pins(&mut self) {
+        let mut futs: Vec<_, COL> = self
+            .get_input_pins_mut()
+            .iter_mut()
+            .map(|input_pin| input_pin.wait_for_high())
+            .collect();
+        let _ = select_slice(pin!(futs.as_mut_slice())).await;
+    }
 }
 
 impl<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     Out: OutputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
     const COL2ROW: bool,
@@ -311,7 +328,6 @@ impl<
 where
     Self: RowPins<COL2ROW>,
     Self: ColPins<COL2ROW>,
-    Self: MatrixOutputPins<Out>,
 {
     const OUTPUT_PIN_NUM: usize = const { if COL2ROW { COL } else { ROW } };
     const INPUT_PIN_NUM: usize = const { if COL2ROW { ROW } else { COL } };
@@ -361,7 +377,7 @@ impl<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     Out: OutputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
     const COL2ROW: bool,
@@ -426,24 +442,19 @@ impl<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     Out: OutputPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
     const COL2ROW: bool,
-> MatrixTrait for Matrix<In, Out, D, ROW, COL, COL2ROW>
+> MatrixTrait<ROW, COL> for Matrix<In, Out, D, ROW, COL, COL2ROW>
 where
     Self: RowPins<COL2ROW>,
     Self: ColPins<COL2ROW>,
     Self: MatrixOutputPins<Out>,
     Self: MatrixInputPins<In>,
 {
-    const ROW: usize = ROW;
-    const COL: usize = COL;
-
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
-        use core::pin::pin;
-
         if let Some(start_time) = self.scan_start {
             // If no key press over 1ms, stop scanning and wait for interupt
             if start_time.elapsed().as_millis() <= 1 {
@@ -457,14 +468,9 @@ where
             out.set_high().ok();
         }
         Timer::after_micros(1).await;
-        {
-            let mut futs: Vec<_, ROW> = self
-                .get_input_pins_mut()
-                .iter_mut()
-                .map(|input_pin| input_pin.wait_for_high())
-                .collect();
-            let _ = select_slice(pin!(futs.as_mut_slice())).await;
-        }
+
+        // Wait for any key press
+        self.wait_input_pins().await;
 
         // Set all output pins back to low
         for out in self.get_output_pins_mut().iter_mut() {
@@ -489,10 +495,8 @@ impl<const ROW: usize, const COL: usize> TestMatrix<ROW, COL> {
         Self { last: false }
     }
 }
-impl<const ROW: usize, const COL: usize> MatrixTrait for TestMatrix<ROW, COL> {
-    const ROW: usize = ROW;
-    const COL: usize = COL;
 
+impl<const ROW: usize, const COL: usize> MatrixTrait<ROW, COL> for TestMatrix<ROW, COL> {
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {}
 }
