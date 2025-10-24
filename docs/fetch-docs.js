@@ -22,6 +22,7 @@ versions.forEach((branch) => {
   // Extract branch
   const command = `git archive rmk-origin/${branch} docs/main | tar -x -C ${targetDir} --strip-components=2`
   execSync(command, { stdio: 'inherit', shell: 'bash' })
-
+  // Delete remote
+  execSync(`git remote remove rmk-origin`, { stdio: 'inherit', shell: 'bash' })
   console.log(`Fetched branch ${branch} into ${targetDir}`)
 })
