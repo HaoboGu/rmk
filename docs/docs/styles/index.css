@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@iconify/tailwind4";
 
 :root {
   --rp-c-brand-darker: #ff6900;
