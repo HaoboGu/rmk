@@ -5,16 +5,16 @@ RMK is a high-performance and feature-rich keyboard firmware framework, designed
 ## Features
 
 - **Broad Microcontroller Support**: ESP32, nRF52, STM32, RP2040/2350, CYW43(Raspberry Pi Pico W), etc.
-- **Wired and Wireless Connectivity​​**: Offers both wired (USB) and wireless (BLE) connections, with optimized low-power performance and multi-profile support.
+- **Wired and Wireless Connectivity**: Offers both wired (USB) and wireless (BLE) connections, with optimized low-power performance and multi-profile support.
 - **Simple Configuration**: Configure your keyboard easily through a single [TOML](https://toml.io/) file.
 - **Advanced Feature Set**: Packed with modern features, including on-the-fly keymap customization, advanced layer management, powerful macros and multi-role key support (e.g., Tap-Hold, TapDance, Morse Key)
 - **Split Keyboard Support**: Natively supports both wired and wireless split keyboard.
 
 ## Next Steps
 
-import { LinkCard } from '@theme';
+import { LinkCard } from 'rspress/theme';
 
-<div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px"}}>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 <LinkCard
       href="user_guide/guide_overview"
       title="Tutorial"
