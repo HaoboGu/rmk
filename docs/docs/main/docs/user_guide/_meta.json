@@ -1,0 +1,11 @@
+[
+  "guide_overview",
+  {
+    "type": "dir",
+    "name": "create_firmware",
+    "label": "Creating Firmware",
+    "collapsible": false,
+    "collapsed": false
+  },
+  "flash_firmware"
+]

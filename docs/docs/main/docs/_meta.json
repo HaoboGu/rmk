@@ -1,5 +1,9 @@
 [
-  "introduction",
+  {
+    "type": "dir",
+    "name": "getting_started",
+    "label": "Getting Started"
+  },
   {
     "type": "dir",
     "name": "user_guide",
@@ -12,8 +16,8 @@
   },
   {
     "type": "dir",
-    "name": "input_devices",
-    "label": "Input Devices"
+    "name": "configuration",
+    "label": "Configuration"
   },
   {
     "type": "dir",

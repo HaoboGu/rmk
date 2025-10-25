@@ -1,0 +1,14 @@
+[
+    {
+        "type": "dir",
+        "name": "keyboard_configuration",
+        "label": "Keyboard Configuration",
+        "collapsed": true
+    },
+    {
+        "type": "dir",
+        "name": "keymap_configuration",
+        "label": "Keymap Configuration",
+        "collapsed": true
+    }
+]

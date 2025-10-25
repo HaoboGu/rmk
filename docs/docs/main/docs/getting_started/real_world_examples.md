@@ -1,4 +1,4 @@
-# Real world examples
+# Real World Examples
 
 This pages contains real world examples of RMK keyboards.
 
