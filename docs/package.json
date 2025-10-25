@@ -16,9 +16,11 @@
   },
   "devDependencies": {
     "@iconify/react": "^6.0.2",
+    "@tailwindcss/postcss": "^4.1.16",
     "@types/node": "^18.11.17",
     "@types/react": "^19.2.2",
-    "prettier": "3.6.2"
+    "prettier": "3.6.2",
+    "tailwindcss": "^4.1.16"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
