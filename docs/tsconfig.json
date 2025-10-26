@@ -11,7 +11,10 @@
     "resolveJsonModule": true,
     "moduleResolution": "bundler",
     "useDefineForClassFields": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@theme": ["./theme/index.tsx"]
+    }
   },
   "include": ["docs", "theme", "rspress.config.ts"],
   "mdx": {
