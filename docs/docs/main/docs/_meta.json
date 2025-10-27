@@ -12,12 +12,14 @@
   {
     "type": "dir",
     "name": "features",
-    "label": "Features"
+    "label": "Features",
+    "collapsed": true
   },
   {
     "type": "dir",
     "name": "configuration",
-    "label": "Configuration"
+    "label": "Configuration",
+    "collapsed": true
   },
   {
     "type": "dir",

@@ -116,7 +116,7 @@ GPIO pin names vary by microcontroller. Here are the correct formats for each su
 1. Visit [Embassy docs](https://docs.embassy.dev/)
 2. Navigate to your specific chip (e.g., `embassy-stm32/stm32h750xb`)
 3. Check the peripherals module for valid GPIO pin names:
-   ![gpio_peripheral_name](../../../images/gpio_peripheral_name.png)
+   ![gpio_peripheral_name](../../images/gpio_peripheral_name.png)
 
 ### Matrix Type Configuration
 

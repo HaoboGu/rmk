@@ -1,0 +1,61 @@
+# Configuration
+
+RMK provides a simple and declarative way to configure your keyboard using a TOML configuration file, requiring no Rust programming knowledge. You can also use Rust API which offers maximum flexibility and control over your keyboard's behavior.
+
+In this section, we will introduce how to configure your keyboard using both the `keyboard.toml` file and Rust code. Generally, the configuration code is presented in the following format, allowing you to easily switch between using the TOML configuration or the Rust code configuration:
+
+import { Rust, Toml } from '../../components/LangBadge'
+import { Tab, Tabs } from 'rspress/theme'
+
+<Tabs>
+<Tab label={<Toml />}>
+
+```toml title="keyboard.toml"
+[keyboard]
+name = "RMK Keyboard"
+product_name = "RMK Keyboard"
+vendor_id = 0x4c4b
+product_id = 0x4643
+manufacturer = "haobo"
+```
+
+</Tab>
+<Tab label={<Rust />}>
+
+```rust title="main.rs"
+
+let keyboard_usb_config = KeyboardUsbConfig {
+    vid: 0x4c4b,
+    pid: 0x4643,
+    manufacturer: "Haobo",
+    product_name: "RMK Keyboard",
+    serial_number: "vial:f64c2b3c:000001",
+};
+
+```
+
+</Tab>
+</Tabs>
+
+## `keyboard.toml`
+
+The `keyboard.toml` file is the central configuration for nearly every aspect of your keyboard setup. The following sections can be configured in your `keyboard.toml`:
+
+- **[Keyboard and Matrix](configuration/keyboard_matrix.md)** - Basic keyboard information and physical key matrix definition
+- **[Layout](configuration/layout.md)** - Keyboard layout and default keymap configuration
+- **[Split Keyboard](configuration/split_keyboard.md)** - Configuration for split keyboard setups
+- **[Storage](configuration/storage.md)** - On-board configuration and keymap storage settings
+- **[Behavior](configuration/behavior.md)** - Advanced keyboard behaviors (one-shot keys, tri-layer, tap-hold, morse key, home row mods, etc.)
+- **[Input Devices](configuration/input_device.md)** - Configuration for rotary encoders, joysticks, and other input devices
+- **[Wireless/Bluetooth](configuration/wireless.md)** - Wireless and Bluetooth connectivity settings
+- **[Lighting](configuration/light.md)** - RGB lighting and LED configuration
+- **[RMK Config](configuration/rmk_config.md)** - Internal RMK settings (communication channels, macro limits, etc.)
+- **[Complete Reference](configuration/appendix.md)** - Full specification and examples for `keyboard.toml`
+
+We also provide pre-configured templates for popular microcontroller chips in the [`rmk-config/src/default_config`](https://github.com/HaoboGu/rmk/blob/main/rmk-config/src/default_config) directory. You can use then when generating project using [rmkit](https://github.com/HaoboGu/rmkit). Contributions for additional chip configurations are welcome!
+
+For a complete specification of all TOML configuration options, please refer to the other documentation chapters under `Configuration` section.
+
+## Rust API
+
+All Rust API that RMK provides can be found in https://docs.rs/rmk, you can also refer to `examples/use_rust` in RMK's main repository for comprehensive examples.

@@ -10,7 +10,6 @@ This section is a brief introduction of RMK's configuration system. For the comp
 
 ## TOML configuration
 
-
 Keyboard configuration in RMK is managed using a `keyboard.toml` file that defines nearly every aspect of your keyboard setup. TOML is a human-readable configuration format that's easy to understand and edit.
 
 ::: tip New to TOML?
