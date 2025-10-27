@@ -36,7 +36,7 @@ Fortunately, RMK does most of the heavy things for you, all you need to do is to
 
 After adding the layout of your keyboard, the default keymap should also be updated. The default keymap is defined in `src/keymap.rs`, update keyboard matrix constants and add a `get_default_keymap()` function which returns the default keymap of your keyboard.
 
-RMK provides a bunch of useful [macros](https://docs.rs/rmk/latest/rmk/#macros) helping you define your keymap. Check out [keymap_configuration](keymap.md) chapter for more details. You can also check `src/keymap.rs` files under <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust> examples for reference.
+RMK provides a bunch of useful [macros](https://docs.rs/rmk/latest/rmk/#macros) helping you define your keymap. Check out [keymap_configuration](./keymap) chapter for more details. You can also check `src/keymap.rs` files under <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust> examples for reference.
 
 Some `KeyAction`s are not supported by the macros, plain `KeyAction`s also work, for example: `KeyAction::TapHold(Action::Key(KeyCode::Kc1), Action::Key(KeyCode::Kc2))`
 

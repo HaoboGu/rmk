@@ -33,9 +33,7 @@ let mut matrix = CentralMatrix::<
 
 On the central, you should also run the peripheral manager for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
 
-::: code-group
-
-```rust[BLE split]
+```rust
 // BLE split central, arguments might be different for other microcontrollers, check the API docs or examples for other usages.
 run_peripheral_manager::<
     2, // PERIPHERAL_ROW
@@ -46,7 +44,7 @@ run_peripheral_manager::<
   >(peripheral_id, peripheral_addr, &stack)
 ```
 
-```rust[Serial split]
+```rust
 // UART split central, arguments might be different for other microcontrollers, check the API docs or examples for other usages.
 run_peripheral_manager::<
     2, // PERIPHERAL_ROW
@@ -57,15 +55,11 @@ run_peripheral_manager::<
   >(0, uart_receiver),
 ```
 
-:::
-
 ### Peripheral
 
 Running split peripheral is simplier. For peripheral, we don't need to specify peripheral matrix's offsets(we've done it in central!). So, the split peripheral API is like:
 
-::: code-group
-
-```rust[BLE split]
+```rust
 // Use normal matrix on the peripheral
 let mut matrix = Matrix::<_, _, _, 4, 7>::new(input_pins, output_pins, debouncer);
 
@@ -73,7 +67,7 @@ let mut matrix = Matrix::<_, _, _, 4, 7>::new(input_pins, output_pins, debouncer
 run_rmk_split_peripheral(central_addr, &stack),
 ```
 
-```rust[Serial split]
+```rust
 // Use normal matrix on the peripheral
 let mut matrix = Matrix::<_, _, _, 4, 7>::new(input_pins, output_pins, debouncer);
 let uart_instance = BufferedUart::new(p.UART0, Irqs, p.PIN_0, p.PIN_1, tx_buf, rx_buf, uart::Config::default());
@@ -82,10 +76,6 @@ let uart_instance = BufferedUart::new(p.UART0, Irqs, p.PIN_0, p.PIN_1, tx_buf, r
 run_rmk_split_peripheral(uart_instance),
 
 ```
-
-:::
-
-where `2,2` are the size of peripheral's matrix.
 
 ## Communication
 
