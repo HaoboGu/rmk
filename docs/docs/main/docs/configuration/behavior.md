@@ -302,11 +302,11 @@ max_patterns_per_key = 36
 
 [behavior.morse]
 # default profile for morse, tap dance and tap-hold keys:
-enable_flow_tap = true,
-prior_idle_time = "120ms",  # flow_tap needs this
-hold_on_other_press = true,
-hold_timeout = "250ms",
-gap_timeout = "250ms",
+enable_flow_tap = true
+prior_idle_time = "120ms"  # flow_tap needs this
+hold_on_other_press = true
+hold_timeout = "250ms"
+gap_timeout = "250ms"
 
 # list of morse (tap dance) keys:
 morses = [
