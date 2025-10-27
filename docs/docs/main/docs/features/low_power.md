@@ -1,6 +1,10 @@
 # Low-power
 
-RMK supports low-power mode by using utilizing embassy's low-power feature and `Wait` trait in `embedded-hal-async`. To enable low-power mode, add `async_matrix` feature to your `Cargo.toml`:
+RMK supports low-power mode by using utilizing embassy's low-power feature and `Wait` trait in `embedded-hal-async`.
+
+## Usage
+
+To enable low-power mode, add `async_matrix` feature to your `Cargo.toml`:
 
 ```diff
 rmk = { version = "0.7", features = [

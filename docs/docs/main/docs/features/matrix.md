@@ -8,7 +8,7 @@ RMK provides three built-in matrix implementations to match different hardware d
 
 ### Normal Matrix
 
-The standard approach. Keys are wired in a row-column grid, using diodes to prevent [ghosting](https://en.wikipedia.org/wiki/Key_rollover#Key_jamming_and_ghosting). RMK supports both col2row and row2col diode configurations to match your PCB design. You can set the diode direction in [matrix configuration](TODO).
+The standard approach. Keys are wired in a row-column grid, using diodes to prevent [ghosting](https://en.wikipedia.org/wiki/Key_rollover#Key_jamming_and_ghosting). RMK supports both col2row and row2col diode configurations to match your PCB design. You can set the diode direction in [matrix configuration](../configuration/keyboard_matrix#matrix-configuration).
 
 ### Direct Pin Matrix
 
@@ -57,7 +57,7 @@ join3(
 
 ## Configuration
 
-For detailed matrix configuration options, pin assignments, and platform-specific setup, see the [Matrix Configuration](../configuration/matrix) documentation.
+For detailed matrix configuration options, pin assignments, and platform-specific setup, see the [Matrix Configuration](../configuration/keyboard_matrix#matrix-configuration) documentation.
 
 ## See Also
 

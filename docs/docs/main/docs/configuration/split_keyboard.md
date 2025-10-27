@@ -1,6 +1,6 @@
 # Split keyboard
 
-You can use the [`keyboard.toml`](../keyboard_configuration) to define a split keyboard.
+You can use the [`keyboard.toml`](./index#keyboardtoml) to define a split keyboard.
 
 All split related configurations are defined under `[split]` section. The following is an example using BLE:
 

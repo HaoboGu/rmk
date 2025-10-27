@@ -38,7 +38,7 @@ This marks the end of a macro sequence. Don't use it: The code removes all occur
 
 ### Via the configuration file
 
-See [macro](/docs/features/configuration/behavior.md#macro) section under `behavior`
+See [macro](../behavior#macro) section under `behavior`
 
 ### Via Rust
 

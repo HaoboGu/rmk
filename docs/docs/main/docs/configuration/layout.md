@@ -17,7 +17,7 @@ matrix_map = """
 
 The `matrix_map` is a string built from `(row, col, <hand>)` tuples, listed in the same order as you want to define your keys in your key map.
 
-The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](keyboard_matrix.md), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts.
+The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](./keyboard_matrix#matrix-configuration), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts.
 With the help of this matrix map, the configuration of non-regular key matrices can be intuitively arranged in your key maps. (Triple quote mark `"""` is used to limit multi-line strings)
 
 The `<hand>` is optional, it should only be used when `unilateral_tap = true`. By assigning `L` or `R` to `<hand>`, each key can be associated with either the left or right hand.
@@ -88,7 +88,7 @@ The `layer.keys` string should follow several rules:
 
 1. For a simple keycode(aka keys in RMK's [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html) enum), just fill its name.
 
-   For example, if you set a keycode `Backspace`, it will be turned to `KeyCode::Backspace`. So you have to ensure that the keycode string is valid, or RMK wouldn't compile! However, to make things easier a number of alternative key names (see alias column in [KeyCode table](../keymap/keycodes)) were added and also case-insensitive search is used to find the valid [KeyCode](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html).
+   For example, if you set a keycode `Backspace`, it will be turned to `KeyCode::Backspace`. So you have to ensure that the keycode string is valid, or RMK wouldn't compile! However, to make things easier a number of alternative key names (see alias column in [KeyCode table](./keymap_configuration/keycodes)) were added and also case-insensitive search is used to find the valid [KeyCode](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html).
 
    For simple keycodes with modifiers active, you can use `WM(key, modifier)` to create a keypress with modifier action. Modifiers can be chained together like `LShift | RGui` to have multiple modifiers active.
 

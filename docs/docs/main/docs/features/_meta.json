@@ -1,11 +1,20 @@
 [
+  "matrix",
   "layers",
-  "controller",
-  "split_keyboard",
   "wireless",
-  "vial_support",
+  "configuration",
   "low_power",
+  "split_keyboard",
+  "vial_support",
   "usb_logging",
+  "storage",
   "use_rust_api",
+  "controller",
+  {
+    "type": "dir",
+    "name": "input_devices",
+    "label": "Input Devices",
+    "collapsed": true
+  },
   "binary_size_optimization"
 ]

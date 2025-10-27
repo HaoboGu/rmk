@@ -1,6 +1,6 @@
 # Features
 
-RMK has lots of features, the following is a list that needs to be completed before v0.8 release.
+TODO: RMK has lots of features, the following is a list that needs to be completed before v0.8 release.
 
 - Configuration
   - Supports configuration via `keyboard.toml` or Rust code

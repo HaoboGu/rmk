@@ -20,6 +20,7 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
 - [x] Async key detection and report sending
 - [x] 🔵 Split keyboard support
 - [x] Direct pin
+- [ ] NKRO
 - [x] 🔵 Input device
   - [x] 🟢 Encoder
   - [ ] 🔴 Mouse

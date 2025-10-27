@@ -25,7 +25,7 @@ let mut matrix = Matrix::<_, _, _, ROW, COL, false>::new(row_pins, col_pins, deb
 
 ### Where is my built firmware?
 
-By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where `<TARGET>` is your microcontroller's [target](./2-2_local_compilation.md#_2-choose-your-hardware-and-install-the-target) and `<MODE>` is `debug` or `release`, depending on your build mode.
+By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where `<TARGET>` is your microcontroller's [target](../user_guide/create_firmware/local_compilation#2-choose-your-hardware-and-install-the-target) and `<MODE>` is `debug` or `release`, depending on your build mode.
 
 The firmware's name is your project name in `Cargo.toml`. It's actually an `elf` file, but without file extension.
 
@@ -186,6 +186,10 @@ ERROR Keymap reading aborted!
 If you have more sectors available in your internal flash, you can increase `num_sectors` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk/latest/rmk/config/struct.RmkConfig.html) if you're using Rust API.
 
 ### OUTDATED: panicked at embassy-executor: task arena is full.
+
+::: info
+This error occurs only for RMK versions **before** v0.7
+:::
 
 The current embassy requires manually setting of the task arena size. By default, RMK set's it to 32768 in all examples:
 

@@ -10,30 +10,33 @@ The `[storage]` section in `keyboard.toml` configures RMK's storage.
 
 ## Configuration Options
 
-```toml
+
+
+import { Rust, Toml } from '../../components/LangBadge'
+import { Tab, Tabs } from 'rspress/theme'
+
+<Tabs>
+<Tab label={<Toml />}>
+
+```toml title="keyboard.toml"
 [storage]
 # Enable/disable storage feature (default: true)
 enabled = true
-
 # Number of flash sectors to allocate (default: 2)
 num_sectors = 2
-
 # Storage start address (default: 0 = auto-allocate from end)
 start_addr = 0x00000000
-
 # Clear all storage data on boot, including keymap, BLE bonds, etc
 clear_storage = false
-
 # Clear only layout/keymap data, preserve BLE bonds
 clear_layout = false
 ```
 
-### Rust API Configuration
 
-For advanced users using the Rust API directly:
+</Tab>
+<Tab label={<Rust />}>
 
-```rust
-use rmk::config::{RmkConfig, StorageConfig};
+```rust title="main.rs"
 
 let storage_config = StorageConfig {
     start_addr: 0x70000,    // Custom start address
@@ -45,4 +48,8 @@ let rmk_config = RmkConfig {
     storage_config,
     ..Default::default()
 };
+
 ```
+
+</Tab>
+</Tabs>
