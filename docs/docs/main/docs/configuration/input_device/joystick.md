@@ -1,5 +1,7 @@
 # Joysticks
 
+A joystick is an analog input device that can be used for mouse control and other functions. Currently only NRF series chips are supported.
+
 ::: warning
 
 1. You need to use a debug probe to find your parameters now.
@@ -9,7 +11,7 @@
 
 TODO:
 
-- [ ] a more intuitive way to configure the joystick via `rmk-gui`
+- [ ] a more intuitive way to configure the joystick
 - [ ] more functions besides mouse
 
 ## `toml` configuration

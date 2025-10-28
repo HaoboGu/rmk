@@ -10,11 +10,6 @@
   "storage",
   "use_rust_api",
   "controller",
-  {
-    "type": "dir",
-    "name": "input_devices",
-    "label": "Input Devices",
-    "collapsed": true
-  },
+  "input_device",
   "binary_size_optimization"
 ]
