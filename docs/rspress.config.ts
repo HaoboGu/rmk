@@ -26,6 +26,11 @@ export default defineConfig({
         icon: 'github',
         mode: 'link',
         content: 'https://github.com/haobogu/rmk'
+      },
+      {
+        icon: 'discord',
+        mode: 'link',
+        content: 'https://discord.gg/HHGA7pQxkG'
       }
     ]
   }

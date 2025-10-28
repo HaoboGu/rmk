@@ -1,0 +1,34 @@
+[
+  {
+    "type": "dir",
+    "name": "getting_started",
+    "label": "Getting Started"
+  },
+  {
+    "type": "dir",
+    "name": "user_guide",
+    "label": "User Guide"
+  },
+  {
+    "type": "dir",
+    "name": "migration",
+    "label": "Migration Guide"
+  },
+  {
+    "type": "dir",
+    "name": "features",
+    "label": "Features",
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "configuration",
+    "label": "Configuration",
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "development",
+    "label": "Development"
+  }
+]

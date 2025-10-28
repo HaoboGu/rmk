@@ -1,14 +1,20 @@
-import { Icon } from '@iconify/react'
+import { useDark } from 'rspress/runtime'
 
-const langBadge = (name: string, icon: string) => () => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-    <Icon icon={icon} />
-    <span>{name}</span>
-  </div>
-)
+const langBadge = (name: string, defaultIcon: string, darkIcon?: string) => () => {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+      <span className={useDark() && darkIcon ? darkIcon : defaultIcon} />
+      <span>{name}</span>
+    </div>
+  )
+}
 
 // https://icon-sets.iconify.design/material-icon-theme/
-export const Rust = langBadge('Rust', 'material-icon-theme:rust')
-export const Toml = langBadge('Toml', 'material-icon-theme:toml')
+export const Rust = langBadge('Rust', 'icon-[material-icon-theme--rust]')
+export const Toml = langBadge(
+  'Toml',
+  'icon-[material-icon-theme--toml-light]',
+  'icon-[material-icon-theme--toml]'
+)
 
-export default () => null;
+export default () => null

@@ -1,0 +1,16 @@
+[
+    "keyboard_matrix",
+    "layout",
+    {
+        "type": "dir",
+        "name": "keymap_configuration",
+        "label": "Keymap Configuration",
+        "collapsed": false
+    },
+    "light",
+    "split_keyboard",
+    "wireless",
+    "rmk_config",
+    "storage",
+    "input_device"
+]
