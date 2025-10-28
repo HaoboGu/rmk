@@ -128,3 +128,97 @@ serial = [
 ..
 serial = [{ instance = "PIO0", tx_pin = "PIN_0", rx_pin = "PIN_0" }]
 ```
+
+
+## Define central and peripherals via `keyboard.toml`
+
+See [this section](../configuration/split_keyboard) for more details.
+
+## Define central and peripherals via Rust
+
+In RMK, split keyboard's matrix are defined with row/col number and their offsets in the whole matrix.
+
+### Central
+
+Matrix configuration on the split central is quite similar with the general keyboard, the only difference is for split central, central matrix's row/col number, and central matrix's offsets should be passed to the central matrix:
+
+```rust
+// Suppose that the central matrix is col2row
+let mut matrix = CentralMatrix::<
+    _,
+    _,
+    _,
+    0, // ROW OFFSET
+    0, // COL OFFSET
+    4, // ROW
+    7, // COL
+    true, // COL2ROW = true, set it to false to use ROW2COL matrix
+>::new(row_pins, col_pins, debouncer);
+```
+
+On the central, you should also run the peripheral manager for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
+
+
+import { Rust, Toml } from '../../components/LangBadge'
+import { Tab, Tabs } from '@theme'
+
+<Tabs>
+<Tab label={<Rust />}>
+
+```rust title="BLE Split Central"
+// BLE split central, arguments might be different for other microcontrollers, check the API docs or examples for other usages.
+run_peripheral_manager::<
+    2, // PERIPHERAL_ROW
+    1, // PERIPHERAL_COL
+    2, // PERIPHERAL_ROW_OFFSET
+    2, // PERIPHERAL_COL_OFFSET
+    _,
+  >(peripheral_id, peripheral_addr, &stack)
+```
+
+</Tab>
+<Tab label={<Rust />}>
+
+```rust title="Serial Split Central"
+// UART split central, arguments might be different for other microcontrollers, check the API docs or examples for other usages.
+run_peripheral_manager::<
+    2, // PERIPHERAL_ROW
+    1, // PERIPHERAL_COL
+    2, // PERIPHERAL_ROW_OFFSET
+    2, // PERIPHERAL_COL_OFFSET
+    _,
+  >(peripheral_id, uart_receiver),
+```
+
+</Tab>
+</Tabs>
+
+### Peripheral
+
+Running split peripheral is simplier. For peripheral, we don't need to specify peripheral matrix's offsets(we've done it in central!). So, the split peripheral API is like:
+
+<Tabs>
+<Tab label={<Rust />}>
+
+```rust title="BLE Split Peripheral"
+// Use normal matrix on the peripheral
+let mut matrix = Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer);
+
+// BLE split peripheral, arguments might be different for other microcontrollers, check the API docs or examples for other usages.
+run_rmk_split_peripheral(central_addr, &stack),
+```
+
+</Tab>
+<Tab label={<Rust />}>
+
+```rust title="Serial Split Peripheral"
+// Use normal matrix on the peripheral
+let mut matrix = Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer);
+let uart_instance = BufferedUart::new(p.UART0, p.PIN_0, p.PIN_1, Irqs, tx_buf, rx_buf, uart::Config::default());
+
+// UART split peripheral, arguments might be different for other microcontrollers, check the API docs or examples for other usages.
+run_rmk_split_peripheral(uart_instance),
+```
+
+</Tab>
+</Tabs>

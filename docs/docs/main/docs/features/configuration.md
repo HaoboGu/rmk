@@ -32,7 +32,7 @@ mod keyboard {}
 
 You should also specify the path to your `keyboard.toml` file in `.cargo/config.toml`, so that the build system can locate it:
 
-```toml
+```toml title=".cargo/config.toml"
 [env]
 KEYBOARD_TOML_PATH =  { value = "keyboard.toml", relative = true }
 ```
@@ -41,11 +41,9 @@ KEYBOARD_TOML_PATH =  { value = "keyboard.toml", relative = true }
 
 For developers who want full programmatic control over the keyboard's behavior, RMK provides a comprehensive Rust API. This approach offers maximum flexibility and customization capabilities, allowing you to leverage Rust's powerful type system and compile-time guarantees to build sophisticated keyboard firmware.
 
-### Who should use the Rust API?
+The RMK code is organized in a modular way, consisting of several crates. Therefore, documentation for Rust types and APIs is organized under different crates, as follows:
 
-The Rust API is ideal if you:
-- Are familiar with Rust embedded programming
-- Need advanced features not available in TOML configuration
-- Want to implement complex keyboard behaviors
+- [`rmk-types`](https://docs.rs/rmk-types/latest/rmk_types): Contains all types used in RMK, such as `KeyCode`, `KeyAction`, etc.
+- [`rmk`](https://docs.rs/rmk/latest/rmk): The main RMK crate, which exposes most of the APIs.
 
-Checkout [examples](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust) which use Rust API if you want to try fantastic Rust programming language.
+Checkout [examples](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust) which use Rust API if you want to try fantastic Rust programming language. [Configuration](../configuration) documentation also includes Rust API usages.

@@ -10,7 +10,12 @@
     "light",
     "split_keyboard",
     "wireless",
-    "rmk_config",
     "storage",
-    "input_device"
+    "rmk_config",
+    {
+        "type": "dir",
+        "name": "input_device",
+        "label": "Input Device",
+        "collapsed": true
+    }
 ]

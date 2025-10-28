@@ -1,21 +1,21 @@
-# Low-power
+# Low Power
 
 RMK supports low-power mode by using utilizing embassy's low-power feature and `Wait` trait in `embedded-hal-async`.
 
 ## Usage
 
-To enable low-power mode, add `async_matrix` feature to your `Cargo.toml`:
+By default RMK uses a busy-loop for matrix scanning, which is not very power efficient. To enable the low-power mode, add the `async_matrix` feature to your `Cargo.toml`:
 
-```diff
-rmk = { version = "0.7", features = [
-     "nrf52840_ble",
-+    "async_matrix",
+```toml {3}
+rmk = { version = "...", features = [
+    "nrf52840_ble",
+    "async_matrix",
 ] }
 ```
 
-If you're using nRF chips or rp2040, you're all set! You've already got your keyboard running in low-power mode.
+If you're using nRF chips or RP2040, you're all set! Your keyboard is now running in low-power mode. The `async_matrix` feature enables interrupt-based input detection, puts your microcontroller into sleep mode when no key are being pressed.
 
-For stm32, there's some limitations about Exti(see [here](https://docs.embassy.dev/embassy-stm32/git/stm32g474pc/exti/struct.ExtiInput.html)):
+For STM32, there's some limitations about Exti(see [here](https://docs.embassy.dev/embassy-stm32/git/stm32g474pc/exti/struct.ExtiInput.html)):
 
 > EXTI is not built into Input itself because it needs to take ownership of the corresponding EXTI channel, which is a limited resource.
 >
@@ -23,11 +23,11 @@ For stm32, there's some limitations about Exti(see [here](https://docs.embassy.d
 
 There are a few more things that you have to do:
 
-1. Enable `exti` feature of your `embassy-stm32` dependency
-
+1. Enable the `exti` feature for your `embassy-stm32` dependency in `Cargo.toml`
 2. Ensure that your input pins don't share same EXTI channel
-
-3. If you're using `keyboard.toml`, nothing more to do. The `[rmk_keyboard]` macro will check your `Cargo.toml` and do the work for you. But if you're using Rust code, you need to use `ExtiInput` as your input pins, and update generics type of RMK keyboard run:
+3. For configuration:
+    - If you're using `keyboard.toml`, you are all set. The `[rmk_keyboard]` macro will automatically check your `Cargo.toml` and handlt it for you.
+    - If you're using Rust code, you'll need to use `ExtiInput` for your input pins:
 
 ```rust
     let pd9 = ExtiInput::new(p.PD9,  p.EXTI9, Pull::Down);

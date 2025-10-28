@@ -103,7 +103,7 @@ crc32fast = "1.3"
 const-gen = "1.6"
 
 [package.metadata.docs.rs]
-features = ["split"]
+features = ["split", "vial", "async_matrix", "rapid_debouncer", "_ble"]
 
 # Architecture specific dependencies
 [target.'cfg(all(target_arch = "arm", target_os = "none"))'.dependencies]

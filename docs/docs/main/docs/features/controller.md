@@ -4,30 +4,11 @@ RMK's controller system provides a unified interface for managing output devices
 
 ## Overview
 
-### What are Controllers?
-
 Controllers in RMK are software modules that manage external hardware components and respond to keyboard events. They provide:
 
 - **Event-driven architecture** that reacts to keyboard state changes
 - **Two execution modes**: event-driven and polling-based
-- **Built-in TOML configuration** for LED indicators (NumLock, CapsLock, ScrollLock)
 - **Custom controller support** through the `#[controller]` attribute
-
-### Built-in Controllers
-
-RMK includes several built-in controllers:
-
-**LED Indicator Controllers:**
-
-- NumLock, CapsLock, ScrollLock LED indicators
-- Automatic configuration through keyboard.toml
-- Support for active-high and active-low pins
-
-**Battery LED Controller:**
-
-- Battery level indication with different states
-- Charging state visualization
-- Configurable blinking patterns
 
 ## Controller Architecture
 
@@ -90,6 +71,10 @@ impl PollingController for MyPollingController {
 }
 ```
 
+### Controller Events
+
+Controller events are signals sent from other parts of RMK and handled by `Controller`s. Each controller receives the [`ControllerEvent`](https://docs.rs/rmk/latest/rmk/event/enum.ControllerEvent.html) from the `CONTROLLER_CHANNEL` and reacts only to the events that it is responsible for.
+
 ## Using Controllers
 
 ### TOML Configuration (Built-in Controllers)
@@ -134,61 +119,9 @@ mod keyboard {
 }
 ```
 
-## Controller Events
-
-Controllers receive events from RMK through the `ControllerEvent` enum, which includes:
-
-### Available Events
-
-```rust
-pub enum ControllerEvent {
-    /// Key event with the associated action
-    Key(KeyboardEvent, KeyAction),
-    /// Battery percentage (0-100)
-    Battery(u8),
-    /// Charging state (true = charging, false = not charging)
-    ChargingState(bool),
-    /// Active layer changed
-    Layer(u8),
-    /// Modifier combination changed
-    Modifier(ModifierCombination),
-    /// Words per minute typing speed
-    Wpm(u16),
-    /// Connection type (USB = 0, BLE = 1)
-    ConnectionType(u8),
-    /// LED indicator states (NumLock, CapsLock, ScrollLock, etc.)
-    KeyboardIndicator(LedIndicator),
-    /// Sleep state changed
-    Sleep(bool),
-    // ... and more
-}
-```
-
-### Event Subscription
-
-Controllers automatically receive events through the CONTROLLER_CHANNEL:
-
-```rust
-use crate::channel::{CONTROLLER_CHANNEL, ControllerSub};
-
-pub struct MyController {
-    sub: ControllerSub,
-    // ... other fields
-}
-
-impl MyController {
-    pub fn new() -> Self {
-        Self {
-            sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
-            // ... initialize other fields
-        }
-    }
-}
-```
-
 ## Creating Custom Controllers
 
-### Basic Controller Implementation
+### Implement `Controller` Trait
 
 Here's a complete example of a custom LED controller:
 
@@ -246,73 +179,90 @@ For controllers that need periodic updates (like animations):
 ```rust
 use crate::controller::PollingController;
 
+impl<P: StatefulOutputPin> Controller for BlinkingController<P> {
+    type Event = ControllerEvent;
+    async fn process_event(&mut self, event: Self::Event) {
+        match event {
+            ControllerEvent::Layer(layer) => {
+                // Set active when current layer is not 0
+                if layer != 0 {
+                    self.active = false;
+                    self.pin.set_low();
+                } else {
+                    self.active = true;
+                }
+            }
+            _ => {}
+        }
+    }
+    async fn next_message(&mut self) -> Self::Event {
+        self.sub.next_message_pure().await
+    }
+}
+
 impl<P: StatefulOutputPin> PollingController for BlinkingController<P> {
     const INTERVAL: embassy_time::Duration = embassy_time::Duration::from_millis(500);
 
     async fn update(&mut self) {
-        // Toggle LED every 500ms when active
+        // Toggle LED every 500ms when active(aka current layer is not 0)
         if self.active {
-            self.state = !self.state;
-            if self.state {
-                let _ = self.pin.set_high();
-            } else {
-                let _ = self.pin.set_low();
-            }
+            self.pin.toggle();
         }
     }
 }
 ```
 
-## Advanced Usage
+## Controllers in Split Keyboards
 
-### Battery State Controller
+Controllers can be used in split keyboards. Peripheral devices can use controllers to respond to events from the central, such as LED indicators for CapsLock state or layer changes.
 
-RMK includes a built-in `BatteryLedController` that demonstrates both event handling and polling:
+### Peripheral Controllers
+
+Peripheral devices can use controllers to manage local output devices like keyboard indicators. Events from the central (such as CapsLock state) are automatically synchronized to peripherals through the split communication protocol.
+
+#### Example: CapsLock LED on Peripheral
+
+Here's an example of implementing a CapsLock LED indicator on a split peripheral:
 
 ```rust
-// Events set the state
-ControllerEvent::Battery(level) => {
-    if level < 10 {
-        self.state = BatteryState::Low;
-    } else {
-        self.state = BatteryState::Normal;
+pub struct CapsLockController {
+    led: Output<'static>,
+    sub: ControllerSub,
+    caps_lock_on: bool,
+}
+
+impl Controller for CapsLockController {
+    type Event = ControllerEvent;
+
+    async fn process_event(&mut self, event: Self::Event) {
+        match event {
+            ControllerEvent::KeyboardIndicator(state) => {
+                if state.caps_lock() != self.caps_lock_on {
+                    self.caps_lock_on = state.caps_lock();
+                    // Update LED state
+                    self.led.set_state(self.caps_lock_on);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    async fn next_message(&mut self) -> Self::Event {
+        self.sub.next_message_pure().await
     }
 }
 
-// Polling updates the LED based on state
-async fn update(&mut self) {
-    match self.state {
-        BatteryState::Low => self.pin.toggle(),      // Blink for low battery
-        BatteryState::Normal => self.pin.deactivate(), // Off for normal
-        BatteryState::Charging => self.pin.activate(),  // On when charging
+#[rmk_peripheral(id = 0)]
+mod keyboard_peripheral {
+    #[controller(event)]
+    fn capslock_led() -> CapsLockController {
+        let led = Output::new(p.PIN_4, Level::Low, OutputDrive::Standard);
+
+        CapsLockController {
+            led,
+            sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
+            caps_lock_on: false,
+        }
     }
 }
 ```
-
-### Multiple Controllers
-
-You can define multiple controllers in your keyboard module:
-
-```rust
-#[rmk_keyboard]
-mod keyboard {
-    #[controller(event)]
-    fn status_led() -> StatusLedController {
-        StatusLedController::new(p.PIN_1)
-    }
-
-    #[controller(event)]
-    fn layer_indicator() -> LayerLedController {
-        LayerLedController::new(p.PIN_2)
-    }
-
-    #[controller(poll)]
-    fn battery_monitor() -> BatteryController {
-        BatteryController::new(p.PIN_3)
-    }
-}
-```
-
-### Split Keyboard
-
-For split keyboard controller usage, see the [Split Keyboard Controllers](./split_keyboard#controllers-in-split-keyboards) section.

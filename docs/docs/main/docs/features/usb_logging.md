@@ -4,24 +4,20 @@ RMK uses [defmt](https://defmt.ferrous-systems.com) as the default logger, which
 
 ## Usage
 
-RMK supports USB logging by enabling the `usb_log` feature:
+To enable USB logging, disable the default features and then enable the `usb_log` feature in `Cargo.toml`:
 
 ```toml
-rmk = { version = "0.7", default-features = false, features = [
+rmk = { version = "...", default-features = false, features = [
     "storage",
-    "usb_log", # <- enable USB logging
+    "usb_log", # Enable USB logging
     "..",
 ] }
 ```
 
-To view the logs, you’ll need to install a serial port monitor. Open your serial monitor, select the port corresponding to your keyboard, and connect. The logs will be displayed in the monitor window. 
-
-Note: Logs from the boot stage cannot be captured by the USB logger. You will only see logs after the serial port connection
-
 ::: tip
-The `usb_log` feature cannot be used together with the `defmt` feature, which is enabled by default. To use USB logging, set `default-features = false` and manually enable any other default features you need, such as `col2row` and `storage`.
+Don't forget to enable all other features that you need, especially the default ones.
 :::
 
-::: tip
+To view the logs, you’ll need to install a serial port monitor. Open your serial monitor, select the port corresponding to your keyboard, and connect. The logs will be displayed in the monitor window. Note that logs from the boot stage cannot be captured by the USB logger. You will only be able to see logs after the serial port connection established.
+
 Some microcontrollers (like ESP32S3) does't have enough USB endpoints, so USB logging cannot enabled for those microcontrollers. To enable the USB logging, make sure that your microcontroller has at least 5 In + 4 OUT endpoints available(except control endpoint, EP0)
-:::

@@ -1,4 +1,4 @@
-# Input Devices
+# Input Device
 
 RMK's input device system is a unified, event-driven framework designed to support diverse input devices.
 
@@ -13,3 +13,7 @@ TODO: Intro to RMK's event-driven input system
 ## InputDevice Trait
 
 TODO: Details about how the input device work and example
+
+## Configuration
+
+For detailed input device configurations, see the [Input Device Configuration](../configuration/input_device) documentation.

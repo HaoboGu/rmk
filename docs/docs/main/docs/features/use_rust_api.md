@@ -1,6 +1,6 @@
 # Use Rust
 
-By default, the generated project uses `keyboard.toml` to config the RMK keyboard firmware. If you want to customize your firmware using Rust, there're steps to do to make the generated firmware project compile:
+By default, the generated project uses `keyboard.toml` to config the RMK keyboard firmware. If you want to customize your firmware using Rust, there're steps to do to make the generated firmware project compile
 
 ### Update memory.x
 
@@ -14,11 +14,11 @@ You can either checkout your microcontroller's datasheet or existing Rust projec
 
 ### Update `main.rs`
 
-By default, generated `main.rs` uses proc-macro and `keyboard.toml`. To fully customize the firmware, you can copy the code from RMK's Rust example, such as <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/rp2040/src/main.rs> to `src/main.rs`.
+The generated `main.rs` needs to be updated as well to use Rust code. You can copy the code from RMK's Rust example, such as <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/rp2040/src/main.rs> to `src/main.rs` to get started.
 
-Next, you have to check `src/main.rs`, make sure that the binded USB interrupt is right. Different microcontrollers have different types of USB peripheral, so does bind interrupt. You can check out [Embassy's examples](https://github.com/embassy-rs/embassy/tree/main/examples) for how to bind the USB interrupt correctly.
+Next, check `src/main.rs` and make sure the binded USB interrupt is right. Different microcontrollers have different USB peripherals, which means the interrupt bindings will also differ. Your best resource is to check [Embassy's examples](https://github.com/embassy-rs/embassy/tree/main/examples) for your chip family to see how to bind the USB interrupt correctly.
 
-For example, if you're using stm32f4, there is an [usb serial example](https://github.com/embassy-rs/embassy/blob/main/examples/stm32f4/src/bin/usb_serial.rs) there. And code for binding USB interrupt is at [line 15-17](https://github.com/embassy-rs/embassy/blob/main/examples/stm32f4/src/bin/usb_serial.rs#L15-L17):
+For example, if you're using stm32f4, there is a [usb serial example](https://github.com/embassy-rs/embassy/blob/main/examples/stm32f4/src/bin/usb_serial.rs) there. And code for binding USB interrupt is at [line 15-17](https://github.com/embassy-rs/embassy/blob/main/examples/stm32f4/src/bin/usb_serial.rs#L15-L17):
 
 ```rust
 bind_interrupts!(struct Irqs {
@@ -28,7 +28,7 @@ bind_interrupts!(struct Irqs {
 
 ### Add your own layout
 
-The next step is to add your own keymap layout for your firmware. RMK supports [vial app](https://get.vial.today/), an open-source cross-platform(windows/macos/linux/web) keyboard configurator. So the vial like keymap definition has to be imported to the firmware project.
+The next step is to add your own keymap layout for your firmware. RMK supports [Vial app](https://get.vial.today/), an open-source cross-platform(windows/macos/linux/web) keyboard configurator. So the Vial like keymap definition has to be imported to the firmware project.
 
 Fortunately, RMK does most of the heavy things for you, all you need to do is to create your own keymap definition and convert it to `vial.json` following **[vial's doc here](https://get.vial.today/docs/porting-to-via.html)**, and place it at the root of the firmware project, replacing the default one. RMK would do all the rest things for you.
 
@@ -36,7 +36,7 @@ Fortunately, RMK does most of the heavy things for you, all you need to do is to
 
 After adding the layout of your keyboard, the default keymap should also be updated. The default keymap is defined in `src/keymap.rs`, update keyboard matrix constants and add a `get_default_keymap()` function which returns the default keymap of your keyboard.
 
-RMK provides a bunch of useful [macros](https://docs.rs/rmk/latest/rmk/#macros) helping you define your keymap. Check out [keymap_configuration](keymap.md) chapter for more details. You can also check `src/keymap.rs` files under <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust> examples for reference.
+RMK provides a bunch of useful [macros](https://docs.rs/rmk/latest/rmk/#macros) helping you define your keymap. Check out the [keymap configuration](../configuration/keymap_configuration) chapter for more details. You can also check `src/keymap.rs` files under <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust> examples for reference.
 
 Some `KeyAction`s are not supported by the macros, plain `KeyAction`s also work, for example: `KeyAction::TapHold(Action::Key(KeyCode::Kc1), Action::Key(KeyCode::Kc2))`
 
@@ -66,4 +66,4 @@ If your keys are directly connected to the microcontroller pins, you can define 
     };
 ```
 
-So far so good, you've done all necessary modifications of your firmware project. You can also check TODOs listed in the generated `README.md` file.
+So far so good, you've done all necessary modifications of your firmware project. You can also check TODOs listed in the generated `README.md` file. Happying coding!
