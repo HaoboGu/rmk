@@ -65,8 +65,6 @@ use crate::config::PositionalConfig;
 use crate::keyboard::LOCK_LED_STATES;
 use crate::state::ConnectionState;
 
-#[cfg(feature = "bidirectional")]
-pub mod bidirectional_matrix;
 #[cfg(feature = "_ble")]
 pub mod ble;
 mod boot;

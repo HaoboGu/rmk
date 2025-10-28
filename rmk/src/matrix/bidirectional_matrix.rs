@@ -14,7 +14,7 @@ pub enum ScanLocation {
 /// Matrix is the physical pcb layout of the keyboard matrix.
 pub struct BidirectionalMatrix<
     Pin: FlexPin,
-    D: DebouncerTrait,
+    D: DebouncerTrait<ROW, COL>,
     const PIN_NUM: usize,
     const ROW: usize,
     const COL: usize,
@@ -33,7 +33,7 @@ pub struct BidirectionalMatrix<
     scan_map: [[ScanLocation; COL]; ROW],
 }
 
-impl<Pin: FlexPin, D: DebouncerTrait, const PIN_NUM: usize, const ROW: usize, const COL: usize>
+impl<Pin: FlexPin, D: DebouncerTrait<ROW, COL>, const PIN_NUM: usize, const ROW: usize, const COL: usize>
     BidirectionalMatrix<Pin, D, PIN_NUM, ROW, COL>
 {
     /// Create a matrix from input and output pins.
@@ -49,7 +49,7 @@ impl<Pin: FlexPin, D: DebouncerTrait, const PIN_NUM: usize, const ROW: usize, co
     }
 }
 
-impl<Pin: FlexPin, D: DebouncerTrait, const PIN_NUM: usize, const ROW: usize, const COL: usize> InputDevice
+impl<Pin: FlexPin, D: DebouncerTrait<ROW, COL>, const PIN_NUM: usize, const ROW: usize, const COL: usize> InputDevice
     for BidirectionalMatrix<Pin, D, PIN_NUM, ROW, COL>
 {
     async fn read_event(&mut self) -> crate::event::Event {
@@ -98,9 +98,9 @@ impl<Pin: FlexPin, D: DebouncerTrait, const PIN_NUM: usize, const ROW: usize, co
     }
 }
 
-impl<Pin: FlexPin, D: DebouncerTrait, const PIN_NUM: usize, const ROW: usize, const COL: usize> MatrixTrait
-    for BidirectionalMatrix<Pin, D, PIN_NUM, ROW, COL>
+impl<Pin: FlexPin, D: DebouncerTrait<ROW, COL>, const PIN_NUM: usize, const ROW: usize, const COL: usize>
+    MatrixTrait<ROW, COL> for BidirectionalMatrix<Pin, D, PIN_NUM, ROW, COL>
 {
-    const ROW: usize = ROW;
-    const COL: usize = COL;
+    #[cfg(feature = "async_matrix")]
+    async fn wait_for_key(&mut self) {}
 }
