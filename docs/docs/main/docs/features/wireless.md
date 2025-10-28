@@ -3,7 +3,7 @@
 RMK has built-in wireless(BLE) support for nRF52 series, ESP32 and Raspberry Pi Pico W. To use the wireless feature, you need to enable corresponding feature gate in your `Cargo.toml`:
 
 ```toml
-rmk = { version = "0.7", features = [
+rmk = { version = "...", features = [
     "nrf52840_ble", # Enable BLE feature for nRF52840
 ] }
 ```
@@ -34,7 +34,7 @@ nice!nano has a built-in bootloader, enables flashing a .uf2 format firmware via
 
 You can also refer to [RMK user guide](../user_guide/flash_firmware#use-uf2-bootloader) about the instructions.
 
-## Multiple-profile Support
+## Multiple-Profile Support
 
 RMK has multiple BLE profiles support. The number of profile can be set in [`[rmk]`](../configuration/rmk_config#wireless-configuration) section in the configuration, the default value is 3.
 

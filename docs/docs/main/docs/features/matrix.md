@@ -16,7 +16,7 @@ Each key connects directly to its own GPIO pin, eliminating the matrix grid and 
 
 ### Bidirectional Matrix
 
-The bidirectional matrix design uses dynamically switchable GPIO pins to change between input and output modes during the scan cycle. Because bidirectional matrix is more complicated than the normal matrix, only [Rust API](https://github.com/HaoboGu/rmk/blob/main/rmk/src/bidirectional_matrix.rs) is provided at the moment. You can enable it by enabling `bidirectional_matrix` feature in `Cargo.toml`.
+The bidirectional matrix design uses dynamically switchable GPIO pins to change between input and output modes during the scan cycle. Because bidirectional matrix is more complicated than the normal matrix, only [Rust API](https://github.com/HaoboGu/rmk/blob/main/rmk/src/bidirectional_matrix.rs) is provided at the moment.
 
 ## Async Matrix Feature
 
@@ -32,9 +32,9 @@ rmk = { version = "...", features = ["async_matrix"] }
 
 RMK's matrix system is built on a trait-based architecture. Any matrix or debouncer that implements the corresponding trait can be seamlessly integrated into RMK, making both components highly extensible without touching core firmware code:
 
-**MatrixTrait**: Defines the core scanning interface. Implement this trait to support external I/O expanders, non-standard electrical designs, or specialized scanning algorithms.
+**`MatrixTrait`**: Defines the core scanning interface. Implement this trait to support external I/O expanders, non-standard electrical designs, or specialized scanning algorithms.
 
-**DebouncerTrait**: Controls switch bounce filtering. RMK includes default and rapid debouncing algorithms, or implement custom debouncing logic optimized for specific switch types.
+**`DebouncerTrait`**: Controls switch bounce filtering. RMK includes default and rapid debouncing algorithms, you can also implement custom debouncing logic optimized for your own use cases.
 
 The following is an example demonstrate how to use a customized matrix:
 
