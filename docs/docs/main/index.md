@@ -20,12 +20,10 @@ features:
   - title: Extensive Microcontroller Support
     details: Powered by embassy, with robust support for STM32, nRF, RP2040, and ESP32
     icon: 🖥️
-    link: https://github.com/embassy-rs/embassy
 
   - title: Real-time Keymap Configuration
     details: Native Vial support, enabling real-time keymap modification over BLE connections wirelessly
     icon: 🧪
-    link: https://get.vial.today
 
   - title: Advanced Features
     details: Layer switching, media controls and tap-hold keys are available out-of-the-box

@@ -11,6 +11,11 @@
   },
   {
     "type": "dir",
+    "name": "migration",
+    "label": "Migration Guide"
+  },
+  {
+    "type": "dir",
     "name": "features",
     "label": "Features",
     "collapsed": true

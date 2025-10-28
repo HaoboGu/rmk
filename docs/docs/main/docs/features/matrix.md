@@ -22,7 +22,11 @@ The bidirectional matrix design uses dynamically switchable GPIO pins to change 
 
 Async matrix is a power-saving feature that transforms how the matrix operates, dramatically reducing power consumption for wireless keyboards. This feature works out-of-the-box for nRF52 series. STM32 requires additional EXTI (external interrupt) configuration due to hardware limitations—see the [Low Power](./low_power) documentation for details.
 
-To enable it, add `async_matrix` feature in `Cargo.toml`. 
+To enable it, add `async_matrix` feature in `Cargo.toml`:
+
+```toml
+rmk = { version = "...", features = ["async_matrix"] }
+```
 
 ## Customization via Traits
 
