@@ -127,9 +127,6 @@ storage = ["dep:embedded-storage", "dep:embedded-storage-async"]
 ## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature by `default-features = false`.
 col2row = []
 
-## Enable to use bidirectional matrix
-bidirectional = []
-
 ## Enable defmt support
 defmt = [
     "dep:defmt",
