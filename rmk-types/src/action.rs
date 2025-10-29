@@ -93,6 +93,7 @@ impl MorseProfile {
             _ => None,
         }
     }
+
     pub const fn with_unilateral_tap(self, b: Option<bool>) -> Self {
         Self(
             (self.0 & 0xFFFF_3FFF)
@@ -120,6 +121,7 @@ impl MorseProfile {
             _ => None,
         }
     }
+
     pub const fn with_mode(self, m: Option<MorseMode>) -> Self {
         Self(
             (self.0 & 0x3FFF_FFFF)
@@ -139,12 +141,21 @@ impl MorseProfile {
         let t = (self.0 & 0x3FFF) as u16;
         if t == 0 { None } else { Some(t) }
     }
+
     pub const fn with_hold_timeout_ms(self, t: Option<u16>) -> Self {
         if let Some(t) = t {
             Self((self.0 & 0xFFFF_C000) | (t as u32 & 0x3FFF))
         } else {
             Self(self.0 & 0xFFFF_C000)
         }
+    }
+
+    pub const fn set_hold_timeout_ms(&mut self, t: u16) {
+        self.0 = (self.0 & 0xFFFF_C000) | (t as u32 & 0x3FFF)
+    }
+
+    pub const fn set_gap_timeout_ms(&mut self, t: u16) {
+        self.0 = (self.0 & 0xC000_FFFF) | ((t as u32 & 0x3FFF) << 16)
     }
 
     /// The time elapsed from the last release of a key is longer than this, it will break the morse pattern (in milliseconds)
@@ -154,6 +165,7 @@ impl MorseProfile {
         let t = ((self.0 >> 16) & 0x3FFF) as u16;
         if t == 0 { None } else { Some(t) }
     }
+
     pub const fn with_gap_timeout_ms(self, t: Option<u16>) -> Self {
         if let Some(t) = t {
             Self((self.0 & 0xC000_FFFF) | ((t as u32 & 0x3FFF) << 16))
@@ -309,4 +321,51 @@ pub enum Action {
     OneShotModifier(ModifierCombination),
     /// Oneshot key, keep the key active until the next key is triggered.
     OneShotKey(KeyCode),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_morse_profile_timeout_setters() {
+        // Test with all fields set to verify bit field isolation
+        let mut profile = MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(1000), Some(2000));
+
+        // Verify initial state
+        assert_eq!(profile.hold_timeout_ms(), Some(1000));
+        assert_eq!(profile.gap_timeout_ms(), Some(2000));
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
+
+        // Test set_hold_timeout_ms - should not affect other fields
+        profile.set_hold_timeout_ms(1500);
+        assert_eq!(profile.hold_timeout_ms(), Some(1500));
+        assert_eq!(profile.gap_timeout_ms(), Some(2000));
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
+
+        // Test set_gap_timeout_ms - should not affect other fields (critical for unilateral_tap)
+        profile.set_gap_timeout_ms(2500);
+        assert_eq!(profile.hold_timeout_ms(), Some(1500));
+        assert_eq!(profile.gap_timeout_ms(), Some(2500));
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
+
+        // Test maximum values (14 bits = 0x3FFF)
+        profile.set_hold_timeout_ms(0x3FFF);
+        profile.set_gap_timeout_ms(0x3FFF);
+        assert_eq!(profile.hold_timeout_ms(), Some(0x3FFF));
+        assert_eq!(profile.gap_timeout_ms(), Some(0x3FFF));
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
+
+        // Test zero values (should return None)
+        profile.set_hold_timeout_ms(0);
+        profile.set_gap_timeout_ms(0);
+        assert_eq!(profile.hold_timeout_ms(), None);
+        assert_eq!(profile.gap_timeout_ms(), None);
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
+    }
 }

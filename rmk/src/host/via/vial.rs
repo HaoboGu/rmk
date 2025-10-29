@@ -281,7 +281,8 @@ pub(crate) async fn process_vial<
                             &mut report.input_data[7..9],
                             to_via_keycode(morse.get(HOLD_AFTER_TAP).map_or(KeyAction::No, KeyAction::Single)),
                         );
-                        LittleEndian::write_u16(&mut report.input_data[9..11], 250); //dummy morse.timeout_ms
+                        let timeout_ms = morse.profile.hold_timeout_ms().unwrap_or(250);
+                        LittleEndian::write_u16(&mut report.input_data[9..11], timeout_ms);
                     } else {
                         report.input_data[1..11].fill(0);
                     }
@@ -301,13 +302,14 @@ pub(crate) async fn process_vial<
                             let hold = from_via_keycode(LittleEndian::read_u16(&report.output_data[6..8]));
                             let double_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[8..10]));
                             let hold_after_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[10..12]));
-                            //let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
+                            let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
 
                             morse.put(TAP, tap.to_action());
                             morse.put(DOUBLE_TAP, double_tap.to_action());
                             morse.put(HOLD, hold.to_action());
                             morse.put(HOLD_AFTER_TAP, hold_after_tap.to_action());
-                            //morse.timeout_ms = timeout_ms;
+                            morse.profile.set_hold_timeout_ms(timeout_ms);
+                            morse.profile.set_gap_timeout_ms(timeout_ms);
                         }
 
                         #[cfg(feature = "storage")]
