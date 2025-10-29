@@ -34,6 +34,11 @@ fn main() {
     // FIXME: calculate the number of controllers automatically
     user_toml.auto_calculate_parameters();
 
+    // Fix the default split_peripherals_num when `split` feature is enabled
+    if env::var("CARGO_FEATURE_SPLIT").is_ok() && user_toml.rmk.split_peripherals_num < 1 {
+        user_toml.rmk.split_peripherals_num = 1;
+    }
+
     let constants = get_constants_str(user_toml.rmk);
 
     // Write to constants.rs file
