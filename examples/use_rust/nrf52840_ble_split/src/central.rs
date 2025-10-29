@@ -29,13 +29,13 @@ use rmk::config::{
 use rmk::controller::EventController as _;
 use rmk::controller::led_indicator::KeyboardIndicatorController;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::{join, join4};
+use rmk::futures::future::join4;
 use rmk::input_device::Runnable;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
-use rmk::split::ble::central::read_peripheral_addresses;
+use rmk::split::ble::central::{read_peripheral_addresses, scan_peripherals};
 use rmk::split::central::{CentralMatrix, run_peripheral_manager};
 use rmk::{HostResources, initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk};
 use static_cell::StaticCell;
@@ -242,10 +242,12 @@ async fn main(spawner: Spawner) {
         run_processor_chain! {
             EVENT_CHANNEL => [batt_proc],
         },
-        join(keyboard.run(), capslock_led.event_loop()),
-        join(
+        keyboard.run(),
+        join4(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
             run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+            scan_peripherals(&stack, &peripheral_addrs),
+            capslock_led.event_loop(),
         ),
     )
     .await;
