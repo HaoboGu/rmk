@@ -98,7 +98,7 @@ pub(crate) fn rmk_entry_select(
             tasks.extend(controllers);
             if split_config.connection == "ble" {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(#keymap #usb_driver_arg &stack, #storage rmk_config),
+                    ::rmk::run_rmk(#keymap #usb_driver_arg &stack, #storage rmk_config)
                 };
                 tasks.push(rmk_task);
                 if !processors.is_empty() {
@@ -117,6 +117,10 @@ pub(crate) fn rmk_entry_select(
                         )
                     });
                 });
+                let scan_task = quote! {
+                    ::rmk::split::ble::central::scan_peripherals(&stack, &peripheral_addrs)
+                };
+                tasks.push(scan_task);
                 join_all_tasks(tasks)
             } else if split_config.connection == "serial" {
                 let rmk_task = quote! {
@@ -159,7 +163,7 @@ pub(crate) fn rmk_entry_select(
                 );
             }
         }
-        BoardConfig::UniBody(_) => rmk_entry_default(keyboard_config, devices_task, processors_task, controllers),
+        BoardConfig::UniBody(_) => rmk_entry_unibody(keyboard_config, devices_task, processors_task, controllers),
     };
 
     quote! {
@@ -169,7 +173,7 @@ pub(crate) fn rmk_entry_select(
     }
 }
 
-pub(crate) fn rmk_entry_default(
+pub(crate) fn rmk_entry_unibody(
     keyboard_config: &KeyboardTomlConfig,
     devices_task: TokenStream2,
     processors_task: TokenStream2,
