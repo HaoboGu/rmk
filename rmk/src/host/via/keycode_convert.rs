@@ -161,7 +161,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             warn!("QMK functions {:#X} not supported", via_keycode);
             KeyAction::No
         }
-        0x7700..=0x770F => {
+        0x7700..=0x771F => {
             // Macro
             let keycode = via_keycode & 0xFF | 0x500;
             KeyAction::Single(Action::Key(keycode.into()))
