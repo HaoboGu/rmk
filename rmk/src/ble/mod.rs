@@ -16,7 +16,6 @@ use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap, core::cell:
 use {
     crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
     crate::event::ControllerEvent,
-    embassy_time::Instant,
 };
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
 use {crate::descriptor::ViaReport, crate::host::UsbHostReaderWriter};
@@ -503,21 +502,15 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let system_control = server.composite_service.system_report;
 
     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+    // Publish the controller connected event
     #[cfg(feature = "controller")]
-    let check_connected_time = Instant::now() + Duration::from_secs(2);
-    #[cfg(feature = "controller")]
-    let mut connected_send = false;
-
-    loop {
-        // Publish the controller connected event after gatt task starts 2 seconds
-        #[cfg(feature = "controller")]
-        if !connected_send && Instant::now() > check_connected_time {
-            connected_send = true;
-            let profile = ACTIVE_PROFILE.load(Ordering::Relaxed);
-            if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
-                send_controller_event(&mut publisher, ControllerEvent::BleState(profile, BleState::Connected));
-            }
+    {
+        let profile = ACTIVE_PROFILE.load(Ordering::Relaxed);
+        if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
+            send_controller_event(&mut publisher, ControllerEvent::BleState(profile, BleState::Connected));
         }
+    }
+    loop {
         match conn.next().await {
             GattConnectionEvent::Disconnected { reason } => {
                 info!("[gatt] disconnected: {:?}", reason);
