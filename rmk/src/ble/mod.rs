@@ -504,6 +504,8 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
     #[cfg(feature = "controller")]
     let mut connected = false;
+    #[cfg(feature = "controller")]
+    let mut published_connected_state = false;
     loop {
         match conn.next().await {
             GattConnectionEvent::Disconnected { reason } => {
@@ -522,10 +524,8 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                     };
                     UPDATED_PROFILE.signal(profile_info);
                 }
-                // Publish the controller connected event
                 #[cfg(feature = "controller")]
-                if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
-                    send_controller_event(&mut publisher, ControllerEvent::BleState(profile, BleState::Connected));
+                {
                     connected = true;
                 }
             }
@@ -657,14 +657,9 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 peripheral_latency,
                 supervision_timeout,
             } => {
-                // Publish the controller connected event
                 #[cfg(feature = "controller")]
-                if !connected {
-                    let profile = ACTIVE_PROFILE.load(Ordering::Acquire);
-                    if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
-                        send_controller_event(&mut publisher, ControllerEvent::BleState(profile, BleState::Connected));
-                        connected = true;
-                    }
+                {
+                    connected = true;
                 }
                 info!(
                     "[gatt] ConnectionParamsUpdated: {:?}ms, {:?}, {:?}ms",
@@ -690,13 +685,29 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 max_tx_time,
                 max_rx_octets,
                 max_rx_time,
-            } => info!(
-                "[gatt] DataLengthUpdated: tx/rx octets: ({:?}, {:?}), tx/rx time: ({:?}, {:?})",
-                max_tx_octets, max_rx_octets, max_tx_time, max_rx_time
-            ),
+            } => {
+                #[cfg(feature = "controller")]
+                {
+                    connected = true;
+                }
+                info!(
+                    "[gatt] DataLengthUpdated: tx/rx octets: ({:?}, {:?}), tx/rx time: ({:?}, {:?})",
+                    max_tx_octets, max_rx_octets, max_tx_time, max_rx_time
+                );
+            }
             GattConnectionEvent::PassKeyDisplay(pass_key) => info!("[gatt] PassKeyDisplay: {:?}", pass_key),
             GattConnectionEvent::PassKeyConfirm(pass_key) => info!("[gatt] PassKeyConfirm: {:?}", pass_key),
             GattConnectionEvent::PassKeyInput => warn!("[gatt] PassKeyInput event, should not happen"),
+        }
+
+        // Publish the controller connected event
+        #[cfg(feature = "controller")]
+        if connected && !published_connected_state {
+            let profile = ACTIVE_PROFILE.load(Ordering::Acquire);
+            if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
+                send_controller_event(&mut publisher, ControllerEvent::BleState(profile, BleState::Connected));
+                published_connected_state = true;
+            }
         }
     }
     info!("[gatt] task finished");
