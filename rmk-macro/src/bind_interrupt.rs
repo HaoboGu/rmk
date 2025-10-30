@@ -93,8 +93,14 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
                 quote! { CLOCK_POWER => ::nrf_sdc::mpsl::ClockInterruptHandler; }
             };
 
-            let tx_power = if let Some(pwr) = communication.get_ble_config().unwrap().default_tx_power {
+            let ble_config = communication.get_ble_config().unwrap();
+            let tx_power = if let Some(pwr) = ble_config.default_tx_power {
                 quote! { .default_tx_power(#pwr)?  }
+            } else {
+                quote! {}
+            };
+            let use_2m_phy = if ble_config.ble_use_2m_phy.unwrap_or(true) {
+                quote! { .support_le_2m_phy()? }
             } else {
                 quote! {}
             };
@@ -113,7 +119,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
                         .support_dle_central()?
                         .support_phy_update_central()?
                         .support_phy_update_peripheral()?
-                        .support_le_2m_phy()?
+                        #use_2m_phy
                         #tx_power
                         .central_count(#num_peri)?
                         .peripheral_count(1)?
@@ -127,7 +133,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
                     .support_peripheral()?
                     .support_dle_peripheral()?
                     .support_phy_update_peripheral()?
-                    .support_le_2m_phy()?
+                    #use_2m_phy
                     #tx_power
                     .peripheral_count(1)?
                     .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?

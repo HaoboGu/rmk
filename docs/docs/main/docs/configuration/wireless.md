@@ -18,6 +18,10 @@ battery_adc_pin = "vddh"
 # For example, nice!nano have 806 + 2M resistors, the saadc measures voltage on 2M resistor, so the two values should be set to 2000 and 2806
 adc_divider_measured = 2000
 adc_divider_total = 2806
+# Set the BLE tx power, higher means better signal but more power consumption. For nRF52840 the maximum tx power is 8.
+default_tx_power = 0
+# Whether to enable 2M PHY, defaults to true.
+use_2m_phy = true
 # [Depreciated] Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 # charge_state = { pin = "PIN_1", low_active = true }
 # [Depreciated] Output LED pin that blinks when the battery is low
