@@ -9,7 +9,7 @@ use ssmarshal::serialize;
 use static_cell::StaticCell;
 
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
-use crate::config::KeyboardUsbConfig;
+use crate::config::DeviceConfig;
 use crate::descriptor::CompositeReportType;
 use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
 use crate::state::ConnectionState;
@@ -106,7 +106,7 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
     }
 }
 
-pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: KeyboardUsbConfig<'d>) -> Builder<'d, D> {
+pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: DeviceConfig<'d>) -> Builder<'d, D> {
     // Create embassy-usb Config
     let mut usb_config = embassy_usb::Config::new(keyboard_config.vid, keyboard_config.pid);
     usb_config.manufacturer = Some(keyboard_config.manufacturer);

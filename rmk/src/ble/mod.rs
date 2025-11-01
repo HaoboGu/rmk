@@ -123,13 +123,13 @@ pub(crate) async fn run_ble<
 ) {
     #[cfg(feature = "_nrf_ble")]
     {
-        rmk_config.usb_config.serial_number = crate::hid::get_serial_number();
+        rmk_config.device_config.serial_number = crate::hid::get_serial_number();
     }
 
     // Initialize usb device and usb hid reader/writer
     #[cfg(not(feature = "_no_usb"))]
     let (mut _usb_builder, mut keyboard_reader, mut keyboard_writer, mut other_writer) = {
-        let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
+        let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.device_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
         let other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
         let (keyboard_reader, keyboard_writer) = keyboard_reader_writer.split();
@@ -192,18 +192,18 @@ pub(crate) async fn run_ble<
 
     info!("Starting advertising and GATT service");
     let server = Server::new_with_config(GapConfig::Peripheral(PeripheralConfig {
-        name: rmk_config.usb_config.product_name,
+        name: rmk_config.device_config.product_name,
         appearance: &appearance::human_interface_device::KEYBOARD,
     }))
     .unwrap();
 
     server
         .set(
-            &server.device_info_service.pnp_id,
+            &server.device_config_service.pnp_id,
             &PnPID {
                 vid_source: VidSource::UsbIF,
-                vendor_id: rmk_config.usb_config.vid,
-                product_id: rmk_config.usb_config.pid,
+                vendor_id: rmk_config.device_config.vid,
+                product_id: rmk_config.device_config.pid,
                 product_version: 0x0001,
             },
         )
@@ -211,15 +211,15 @@ pub(crate) async fn run_ble<
 
     server
         .set(
-            &server.device_info_service.serial_number,
-            &heapless::String::try_from(rmk_config.usb_config.serial_number).unwrap(),
+            &server.device_config_service.serial_number,
+            &heapless::String::try_from(rmk_config.device_config.serial_number).unwrap(),
         )
         .unwrap();
 
     server
         .set(
-            &server.device_info_service.manufacturer_name,
-            &heapless::String::try_from(rmk_config.usb_config.manufacturer).unwrap(),
+            &server.device_config_service.manufacturer_name,
+            &heapless::String::try_from(rmk_config.device_config.manufacturer).unwrap(),
         )
         .unwrap();
 
@@ -255,7 +255,7 @@ pub(crate) async fn run_ble<
     // Main loop
     join(background_task, async {
         loop {
-            let adv_fut = advertise(rmk_config.usb_config.product_name, &mut peripheral, &server);
+            let adv_fut = advertise(rmk_config.device_config.product_name, &mut peripheral, &server);
             // USB + BLE dual mode
             #[cfg(not(feature = "_no_usb"))]
             {

@@ -2,40 +2,7 @@
 
 RMK provides a simple and declarative way to configure your keyboard using a TOML configuration file, requiring no Rust programming knowledge. You can also use Rust API which offers maximum flexibility and control over your keyboard's behavior.
 
-In this section, we will introduce how to configure your keyboard using both the `keyboard.toml` file and Rust code. Generally, the configuration code is presented in the following format, allowing you to easily switch between using the TOML configuration or the Rust code configuration:
-
-import { Rust, Toml } from '../../components/LangBadge'
-import { Tab, Tabs } from '@theme'
-
-<Tabs>
-<Tab label={<Toml />}>
-
-```toml title="keyboard.toml"
-[keyboard]
-name = "RMK Keyboard"
-product_name = "RMK Keyboard"
-vendor_id = 0x4c4b
-product_id = 0x4643
-manufacturer = "haobo"
-```
-
-</Tab>
-<Tab label={<Rust />}>
-
-```rust title="main.rs"
-
-let keyboard_usb_config = KeyboardUsbConfig {
-    vid: 0x4c4b,
-    pid: 0x4643,
-    manufacturer: "Haobo",
-    product_name: "RMK Keyboard",
-    serial_number: "vial:f64c2b3c:000001",
-};
-
-```
-
-</Tab>
-</Tabs>
+In this section, we will introduce how to configure your keyboard in detail. The documentation will mainly focus on `keyboard.toml` but still provide Rust API code example if needed.
 
 ## `keyboard.toml`
 
