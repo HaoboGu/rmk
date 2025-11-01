@@ -31,7 +31,7 @@ impl Default for Basic {
 }
 
 impl KeyboardTomlConfig {
-    pub fn get_basic_info(&self) -> Basic {
+    pub fn get_device_config(&self) -> Basic {
         let default = Basic::default();
         let keyboard = self.keyboard.as_ref().unwrap();
         Basic {

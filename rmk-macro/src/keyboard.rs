@@ -152,7 +152,7 @@ fn expand_main(
     let rmk_config = if keyboard_config.get_storage_config().enabled {
         quote! {
             let rmk_config = ::rmk::config::RmkConfig {
-                usb_config: KEYBOARD_USB_CONFIG,
+                device_config: KEYBOARD_DEVICE_CONFIG,
                 #vial_config
                 storage_config,
                 #set_ble_config
@@ -162,7 +162,7 @@ fn expand_main(
     } else {
         quote! {
             let rmk_config = ::rmk::config::RmkConfig {
-                usb_config: KEYBOARD_USB_CONFIG,
+                device_config: KEYBOARD_DEVICE_CONFIG,
                 #vial_config
                 #set_ble_config
                 ..Default::default()

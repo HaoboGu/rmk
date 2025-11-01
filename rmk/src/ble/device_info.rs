@@ -40,7 +40,7 @@ impl Default for PnPID {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct DeviceInformation {
+pub(crate) struct DeviceConfigrmation {
     pub(crate) manufacturer_name: Option<&'static str>,
     pub(crate) model_number: Option<&'static str>,
     pub(crate) serial_number: Option<&'static str>,
@@ -50,7 +50,7 @@ pub(crate) struct DeviceInformation {
 }
 
 #[gatt_service(uuid = service::DEVICE_INFORMATION)]
-pub(crate) struct DeviceInformationService {
+pub(crate) struct DeviceConfigrmationService {
     #[characteristic(uuid = "2a50", read)]
     pub(crate) pnp_id: PnPID,
     #[characteristic(

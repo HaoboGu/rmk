@@ -21,7 +21,7 @@ use keymap::{COL, ROW};
 use rand::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, KeyboardUsbConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
@@ -101,7 +101,7 @@ async fn main(spawner: Spawner) {
     // let flash = Flash::<_, Blocking, FLASH_SIZE>::new_blocking(p.FLASH);
     let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH1);
 
-    let keyboard_usb_config = KeyboardUsbConfig {
+    let keyboard_device_config = DeviceConfig {
         vid: 0x4c4c,
         pid: 0x464c,
         manufacturer: "Haobo",
@@ -118,7 +118,7 @@ async fn main(spawner: Spawner) {
     };
 
     let rmk_config = RmkConfig {
-        usb_config: keyboard_usb_config,
+        device_config: keyboard_device_config,
         vial_config,
         storage_config,
         ..Default::default()

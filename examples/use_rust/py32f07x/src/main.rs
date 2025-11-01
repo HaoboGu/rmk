@@ -15,7 +15,7 @@ use py32_hal::gpio::{Input, Output};
 use py32_hal::rcc::{HsiFs, Pll, PllMul, PllSource, Sysclk};
 use py32_hal::usb::{Driver, InterruptHandler};
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, KeyboardUsbConfig, PositionalConfig, RmkConfig, VialConfig};
+use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
@@ -51,7 +51,7 @@ async fn main(_spawner: Spawner) {
     let (row_pins, col_pins) =
         config_matrix_pins_py!(peripherals: p, input: [PA0, PA1, PA2, PA3], output: [PA4, PA5, PA6]);
 
-    let keyboard_usb_config = KeyboardUsbConfig {
+    let keyboard_device_config = DeviceConfig {
         vid: 0x4c4b,
         pid: 0x4643,
         manufacturer: "RMK & py32-rs",
@@ -63,7 +63,7 @@ async fn main(_spawner: Spawner) {
     // let storage_config = rmk::config::StorageConfig::default();
 
     let rmk_config = RmkConfig {
-        usb_config: keyboard_usb_config,
+        device_config: keyboard_device_config,
         // vial_config,
         ..Default::default()
     };

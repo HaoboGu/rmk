@@ -24,7 +24,7 @@ use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{
-    BehaviorConfig, BleBatteryConfig, KeyboardUsbConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
+    BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
 use rmk::controller::EventController as _;
 use rmk::controller::led_indicator::KeyboardIndicatorController;
@@ -162,7 +162,7 @@ async fn main(spawner: Spawner) {
     saadc.calibrate().await;
 
     // Keyboard config
-    let keyboard_usb_config = KeyboardUsbConfig {
+    let keyboard_device_config = DeviceConfig {
         vid: 0x4c4b,
         pid: 0x4643,
         manufacturer: "Haobo",
@@ -177,7 +177,7 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
     let rmk_config = RmkConfig {
-        usb_config: keyboard_usb_config,
+        device_config: keyboard_device_config,
         vial_config,
         ble_battery_config,
         storage_config,

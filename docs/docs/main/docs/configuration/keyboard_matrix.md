@@ -1,66 +1,6 @@
-# Keyboard and Matrix Configuration
+# Keyboard Matrix
 
 This section covers the basic keyboard identification and physical matrix configuration in your `keyboard.toml` file.
-
-## Keyboard Information
-
-The `[keyboard]` section defines basic information about your keyboard that appears to the operating system and identifies your device.
-
-### Basic Configuration
-
-```toml
-[keyboard]
-name = "My Custom Keyboard"    # Display name
-vendor_id = 0x4c4b            # USB vendor ID (16-bit hex)
-product_id = 0x4643           # USB product ID (16-bit hex)
-manufacturer = "YourName"      # Manufacturer string
-chip = "nrf52840"             # Target microcontroller
-usb_enable = true             # Enable USB functionality
-```
-
-### Hardware Selection
-
-You must specify either a `chip` or `board`, but not both:
-
-**Option 1: Specify Chip**
-
-```toml
-[keyboard]
-chip = "nrf52840"  # Direct chip specification
-```
-
-**Option 2: Specify Board**
-
-```toml
-[keyboard]
-board = "nice!nano_v2"  # Pre-configured board
-```
-
-### Supported Hardware
-
-#### Supported Chips
-
-- **Nordic nRF52 Series**: `nrf52840`, `nrf52833`, `nrf52832`, `nrf52811`, `nrf52810`
-- **Espressif ESP32 Series**: `esp32c3`, `esp32c6`, `esp32s3`
-- **Raspberry Pi**: `rp2040`, `rp2350`
-- **STM32 Series**: All STM32 chips supported by [embassy-stm32](https://github.com/embassy-rs/embassy/blob/main/embassy-stm32/Cargo.toml) with USB capability
-
-#### Supported Development Boards
-
-- `nice!nano` - nRF52840-based wireless board
-- `nice!nano_v2` - Updated version of nice!nano
-- `pi_pico_w` - Raspberry Pi Pico W with WiFi/BLE
-- `xiao_ble` - Seeed Studio XIAO nRF52840
-
-### USB Configuration
-
-For chips without full USB functionality (like nRF52832 or ESP32-C3), disable USB:
-
-```toml
-[keyboard]
-chip = "nrf52832"
-usb_enable = false  # Required for chips without USB
-```
 
 ## Matrix Configuration
 
