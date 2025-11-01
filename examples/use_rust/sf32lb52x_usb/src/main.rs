@@ -11,7 +11,7 @@ use defmt::info;
 use embassy_executor::Spawner;
 use keymap::{COL, ROW};
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, KeyboardUsbConfig, PositionalConfig, RmkConfig, VialConfig};
+use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
@@ -56,7 +56,7 @@ async fn main(_spawner: Spawner) {
     let (row_pins, col_pins) =
         config_matrix_pins_sifli!(peripherals: p, input: [PA9, PA6, PA1, PA33], output: [PA3, PA4, PA2]);
 
-    let keyboard_usb_config = KeyboardUsbConfig {
+    let keyboard_device_config = DeviceConfig {
         vid: 0x4c4b,
         pid: 0x4643,
         manufacturer: "RMK & SiFli-rs",
@@ -68,7 +68,7 @@ async fn main(_spawner: Spawner) {
     // let storage_config = rmk::config::StorageConfig::default();
 
     let rmk_config = RmkConfig {
-        usb_config: keyboard_usb_config,
+        device_config: keyboard_device_config,
         // vial_config,
         ..Default::default()
     };

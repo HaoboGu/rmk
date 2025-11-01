@@ -17,7 +17,7 @@ use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MORSE_MAX_NUM};
 /// Internal configurations for RMK keyboard.
 #[derive(Default)]
 pub struct RmkConfig<'a> {
-    pub usb_config: KeyboardUsbConfig<'a>,
+    pub device_config: DeviceConfig<'a>,
     #[cfg(feature = "vial")]
     pub vial_config: VialConfig<'a>,
     #[cfg(feature = "storage")]
@@ -207,7 +207,7 @@ impl<'a> VialConfig<'a> {
 
 /// Configurations for usb
 #[derive(Clone, Copy, Debug)]
-pub struct KeyboardUsbConfig<'a> {
+pub struct DeviceConfig<'a> {
     /// Vender id
     pub vid: u16,
     /// Product id
@@ -220,7 +220,7 @@ pub struct KeyboardUsbConfig<'a> {
     pub serial_number: &'a str,
 }
 
-impl Default for KeyboardUsbConfig<'_> {
+impl Default for DeviceConfig<'_> {
     fn default() -> Self {
         Self {
             vid: 0x4c4b,

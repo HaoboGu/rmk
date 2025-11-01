@@ -1,4 +1,5 @@
 [
+    "keyboard_device",
     "keyboard_matrix",
     "layout",
     {
@@ -17,5 +18,6 @@
         "name": "input_device",
         "label": "Input Device",
         "collapsed": true
-    }
+    },
+    "appendix"
 ]

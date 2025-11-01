@@ -20,7 +20,7 @@ use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, KeyboardUsbConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable as _;
@@ -120,7 +120,7 @@ async fn main(spawner: Spawner) {
         config_matrix_pins_nrf!(peripherals: p, input: [P0_30, P0_31, P0_29, P0_27], output:  [P0_28, P0_03, P0_11]);
 
     // Keyboard config
-    let keyboard_usb_config = KeyboardUsbConfig {
+    let keyboard_device_config = DeviceConfig {
         vid: 0x4c4b,
         pid: 0x4643,
         manufacturer: "Haobo",
@@ -134,7 +134,7 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
     let rmk_config = RmkConfig {
-        usb_config: keyboard_usb_config,
+        device_config: keyboard_device_config,
         vial_config,
         storage_config,
         ..Default::default()
