@@ -18,5 +18,6 @@
         "name": "input_device",
         "label": "Input Device",
         "collapsed": true
-    }
+    },
+    "appendix"
 ]
