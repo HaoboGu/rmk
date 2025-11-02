@@ -131,10 +131,10 @@ When used in configuration files, all keycodes are case-insensitive.
 ## International keys
 
 | Keycode          | Aliases                   | Usage                  |
-| ---------------- | ------------------------- | ---------------------- | --- |
+| ---------------- | ------------------------- | ---------------------- |
 | `International1` | `international_1`, `int1` | JIS `\` and `_`        |
 | `International2` | `international_2`, `int2` | JIS Katana or Hiragana |
-| `International3` | `international_3`, `int3` | JIS `¥` and `          | `   |
+| `International3` | `international_3`, `int3` | JIS `¥` and `          |
 | `International4` | `international_4`, `int4` | JIS Henkan             |
 | `International5` | `international_5`, `int5` | JIS Muhenkan           |
 | `International6` | `international_6`, `int6` | JIS Numpad `,`         |
