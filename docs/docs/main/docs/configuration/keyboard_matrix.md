@@ -7,7 +7,7 @@ This section covers the basic keyboard identification and physical matrix config
 The `[matrix]` section defines your keyboard's physical key matrix wiring. This tells RMK which GPIO pins connect to your key switches.
 
 ::: tip
-**Skip `[matrix]` section for split keyboards**. Use the `[split]` section instead to define matrix configuration for each part.
+**Skip `[matrix]` section for split keyboards**. Use the `split.central/peripheral.matrix]]` section instead to define matrix configuration for each part.
 :::
 
 ### Understanding Key Matrix
