@@ -38,6 +38,9 @@ col_pins = ["PD7", "PD8", "PD9"]
 
 # RMK uses col2row as the default matrix diode direction, if you want to use a row2col matrix, add `row2col = true`
 # row2col = true
+
+# Debouncer mode: "default"(can be ignored) or "fast"
+# debouncer = "fast"
 ```
 
 ### Finding GPIO Pin Names
@@ -94,6 +97,14 @@ direct_pin_low_active = true
 - `true` (default): The pin is pulled high by default, pressing a key pulls it to low
 - `false`: The pin is pulled low by default, pressing a key pulls it to high
 - Use `"_"` or `"trns"` for unused positions in the matrix
+
+### Debouncer
+
+RMK has two debouncer modes, "default" and "fast":
+- The default mode uses a counter-based algorithm that registers a key only after its counter exceeds a certain threshold.
+- The fast mode, on the other hand, reacts instantly to a key press and then waits briefly before accepting the next input.
+
+If no `debouncer` is set, the matrix will defaults to `default` mode.
 
 ## Vial Security Configuration - `[security]` Section
 

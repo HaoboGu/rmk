@@ -5,8 +5,6 @@ use embedded_hal::digital::InputPin;
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
 use crate::MatrixTrait;
-#[cfg(feature = "rapid_debouncer")]
-use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::event::{Event, KeyboardEvent};
 use crate::input_device::InputDevice;
