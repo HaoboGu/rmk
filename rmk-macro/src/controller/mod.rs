@@ -43,7 +43,7 @@ pub(crate) fn expand_controller_init(
                             return Ok(());
                         }
 
-                        panic!("\"controller\" attrubute must specify executon mode with #[controller(event)] or #[controller(poll)]")
+                        panic!("\"controller\" attribute must specify execution mode with #[controller(event)] or #[controller(poll)]")
                     });
                 }
             }

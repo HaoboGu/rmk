@@ -5,28 +5,28 @@ use crate::DEBOUNCE_THRESHOLD;
 use crate::matrix::KeyState;
 
 /// Fast per-key debouncer.
-pub struct RapidDebouncer<const ROW: usize, const COL: usize> {
+pub struct FastDebouncer<const ROW: usize, const COL: usize> {
     last_ms: Instant,
     debouncing: [[bool; ROW]; COL],
 }
 
-impl<const ROW: usize, const COL: usize> Default for RapidDebouncer<ROW, COL> {
+impl<const ROW: usize, const COL: usize> Default for FastDebouncer<ROW, COL> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<const ROW: usize, const COL: usize> RapidDebouncer<ROW, COL> {
-    /// Create a rapid debouncer
+impl<const ROW: usize, const COL: usize> FastDebouncer<ROW, COL> {
+    /// Create a fast debouncer
     pub fn new() -> Self {
-        RapidDebouncer {
+        FastDebouncer {
             debouncing: [[false; ROW]; COL],
             last_ms: Instant::now(),
         }
     }
 }
 
-impl<const ROW: usize, const COL: usize> DebouncerTrait<ROW, COL> for RapidDebouncer<ROW, COL> {
+impl<const ROW: usize, const COL: usize> DebouncerTrait<ROW, COL> for FastDebouncer<ROW, COL> {
     /// Per-key fast debounce
     fn detect_change_with_debounce(
         &mut self,
