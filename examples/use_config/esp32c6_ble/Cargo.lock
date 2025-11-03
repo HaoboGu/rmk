@@ -149,6 +149,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitfield-struct"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8769c4854c5ada2852ddf6fd09d15cf43d4c2aaeccb4de6432f5402f08a6003b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.108",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2103,7 +2114,7 @@ dependencies = [
 name = "rmk"
 version = "0.7.8"
 dependencies = [
- "bitfield-struct",
+ "bitfield-struct 0.12.1",
  "bt-hci",
  "byteorder",
  "chrono",
@@ -2205,7 +2216,7 @@ dependencies = [
 name = "rmk-types"
 version = "0.1.0"
 dependencies = [
- "bitfield-struct",
+ "bitfield-struct 0.11.0",
  "postcard",
  "serde",
  "strum",
