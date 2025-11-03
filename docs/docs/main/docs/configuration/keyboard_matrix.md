@@ -6,8 +6,8 @@ This section covers the basic keyboard identification and physical matrix config
 
 The `[matrix]` section defines your keyboard's physical key matrix wiring. This tells RMK which GPIO pins connect to your key switches.
 
-::: tip
-**Skip `[matrix]` section for split keyboards**. Use the `split.central/peripheral.matrix]]` section instead to define matrix configuration for each part.
+::: info
+**Skip `[matrix]` section for split keyboards**. Use the `[split.central/peripheral.matrix]` section to define matrix configuration for split central and peripherals.
 :::
 
 ### Understanding Key Matrix
@@ -20,11 +20,8 @@ Output Pin (Column) → |>| → Input Pin (Row)
                    Diode (note direction)
 ```
 
-::: warning
+Per default RMK assumes that your pins are **col2row**, meaning that the output pins (anodes) represent the columns and the input pins (cathodes) represent the rows. If your schemata shows the opposite you need to [change the configuration to **row2col**](../getting_started/faq#my-matrix-is-row2col-the-matrix-doesnt-work)
 
-Per default RMK assumes that your pins are <b>col2row</b>, meaning that the output pins (anodes) represent the columns and the input pins (cathodes) represent the rows. If your schemata shows the opposite you need to <a href="https://rmk.rs/docs/user_guide/faq.html#my-matrix-is-row2col-the-matrix-doesn-t-work"> change the configuration to `row2col`</a>
-
-:::
 
 ### Standard Matrix Configuration
 
@@ -121,8 +118,7 @@ unlock_keys = [[0, 0], [0, 1]]  # Keys at (row=0,col=0) and (row=0,col=1)
 **Matrix Not Working:**
 
 - Verify diode direction in your schematic
-- Check if you need `row2col = true`
-- For local compilation with row2col, add the `row2col` feature to Cargo.toml
+- Check if you need `row2col = true`, add it to your matrix section if you need
 
 **Direct Pins Not Working:**
 

@@ -7,7 +7,8 @@
   {
     "type": "dir",
     "name": "user_guide",
-    "label": "User Guide"
+    "label": "User Guide",
+    "collapsed": true
   },
   {
     "type": "dir",
