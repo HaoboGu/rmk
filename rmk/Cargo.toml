@@ -37,7 +37,7 @@ futures = { version = "0.3", default-features = false, features = [
 
 heapless = "0.9"
 usbd-hid = "0.8.2"
-bitfield-struct = "0.11"
+bitfield-struct = "0.12"
 static_cell = "2"
 sequential-storage = "5.0"
 
@@ -90,7 +90,7 @@ critical-section = { version = "1.2", optional = true }
 rmk = { path = ".", default-features = false, features = ["std", "log"] }
 critical-section = "1.2"
 env_logger = "0.11"
-ctor = "0.5.0"
+ctor = "0.6.0"
 rusty-fork = "0.3.0"
 
 [build-dependencies]
