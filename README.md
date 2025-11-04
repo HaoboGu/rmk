@@ -33,9 +33,9 @@
 
 ## News
 
-- 2025-06-04: v0.7.0 is released! Check out the [migration guide](https://rmk.rs/docs/migration_guide.html) to upgrade!
+- 2025-06-04: v0.7.0 is released! Check out the [migration guide](https://rmk.rs/main/docs/migration/v06_v07.html) to upgrade!
 
-## [User Documentation](https://rmk.rs/docs/user_guide/1_guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://rmk.rs/docs/user_guide/faq.html) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
+## [User Documentation](https://rmk.rs/guide/user_guide/1_guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://rmk.rs/docs/user_guide/faq.html) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
 
 ## Real-World Implementations
 
@@ -64,7 +64,7 @@ cargo install rmkit flip-link
 rmkit init
 ```
 
-For comprehensive guidance, refer to the [User Guide](https://rmk.rs/docs/user_guide/1_guide_overview.html).
+For comprehensive guidance, refer to the [User Guide](https://rmk.rs/guide/user_guide/1_guide_overview.html).
 
 ### Option 2: Explore Built-in Examples
 
