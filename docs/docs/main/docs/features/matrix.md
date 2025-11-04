@@ -38,7 +38,7 @@ RMK's matrix system is built on a trait-based architecture. Any matrix or deboun
 
 **`MatrixTrait`**: Defines the core scanning interface. Implement this trait to support external I/O expanders, non-standard electrical designs, or specialized scanning algorithms.
 
-**`DebouncerTrait`**: Controls switch bounce filtering. RMK includes default and rapid debouncing algorithms, you can also implement custom debouncing logic optimized for your own use cases.
+**`DebouncerTrait`**: Controls switch bounce filtering. RMK includes default and fast debouncing algorithms, you can also implement custom debouncing logic optimized for your own use cases.
 
 The following is an example demonstrate how to use a customized matrix:
 

@@ -1,7 +1,7 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::{BoardConfig, ChipSeries, KeyInfo, KeyboardTomlConfig, MatrixType, UniBodyConfig};
+use rmk_config::{BoardConfig, ChipSeries, KeyInfo, KeyboardTomlConfig, MatrixConfig, MatrixType, UniBodyConfig};
 use syn::ItemMod;
 
 use crate::behavior::expand_behavior_config;
@@ -139,7 +139,7 @@ fn expand_main(
     let keymap_and_storage = expand_keymap_and_storage(keyboard_config);
     let split_central_config = expand_split_central_config(keyboard_config);
     let (input_device_config, devices, processors) = expand_input_device_config(keyboard_config);
-    let matrix_and_keyboard = expand_matrix_and_keyboard_init(keyboard_config, rmk_features);
+    let matrix_and_keyboard = expand_matrix_and_keyboard_init(keyboard_config);
     let (controller_initializers, controllers) = expand_controller_init(keyboard_config, &item_mod);
     let run_rmk = expand_rmk_entry(keyboard_config, &item_mod, devices, processors, controllers);
 
@@ -305,18 +305,7 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
     }
 }
 
-pub(crate) fn expand_matrix_and_keyboard_init(
-    keyboard_config: &KeyboardTomlConfig,
-    rmk_features: &Option<Vec<String>>,
-) -> TokenStream2 {
-    let rapid_debouncer_enabled = is_feature_enabled(rmk_features, "rapid_debouncer");
-
-    let debouncer_type = if rapid_debouncer_enabled {
-        quote! { ::rmk::debounce::fast_debouncer::RapidDebouncer }
-    } else {
-        quote! { ::rmk::debounce::default_debouncer::DefaultDebouncer }
-    };
-
+pub(crate) fn expand_matrix_and_keyboard_init(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
     let matrix = match keyboard_config.get_board_config().unwrap() {
         BoardConfig::UniBody(UniBodyConfig {
             matrix: matrix_config,
@@ -324,6 +313,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
         }) => match matrix_config.matrix_type {
             MatrixType::normal => {
                 let col2row = !matrix_config.row2col;
+                let debouncer_type = get_debouncer_type(&matrix_config);
                 quote! {
                     let debouncer = #debouncer_type::new();
                     let mut matrix = ::rmk::matrix::Matrix::<_, _, _, ROW, COL, #col2row>::new(row_pins, col_pins, debouncer);
@@ -331,6 +321,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
             }
             MatrixType::direct_pin => {
                 let low_active = matrix_config.direct_pin_low_active;
+                let debouncer_type = get_debouncer_type(&matrix_config);
                 quote! {
                     let debouncer = #debouncer_type::new();
                     let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, #low_active);
@@ -345,13 +336,17 @@ pub(crate) fn expand_matrix_and_keyboard_init(
             let central_col_offset = split_config.central.col_offset;
             let col2row = !split_config.central.matrix.row2col;
             match split_config.central.matrix.matrix_type {
-                MatrixType::normal => quote! {
-                    let debouncer = #debouncer_type::new();
-                    let mut matrix = ::rmk::split::central::CentralMatrix::<_, _, _, #central_row_offset, #central_col_offset, #central_row, #central_col, #col2row>::new(row_pins, col_pins, debouncer);
-                },
+                MatrixType::normal => {
+                    let debouncer_type = get_debouncer_type(&split_config.central.matrix);
+                    quote! {
+                        let debouncer = #debouncer_type::new();
+                        let mut matrix = ::rmk::split::central::CentralMatrix::<_, _, _, #central_row_offset, #central_col_offset, #central_row, #central_col, #col2row>::new(row_pins, col_pins, debouncer);
+                    }
+                }
                 MatrixType::direct_pin => {
                     let low_active = split_config.central.matrix.direct_pin_low_active;
                     let size = split_config.central.rows * split_config.central.cols;
+                    let debouncer_type = get_debouncer_type(&split_config.central.matrix);
                     quote! {
                         let debouncer = #debouncer_type::new();
                         let mut matrix = ::rmk::split::central::CentralDirectPinMatrix::<_, _, #central_row_offset, #central_col_offset, #central_row, #central_col, #size>::new(direct_pins, debouncer, #low_active);
@@ -387,4 +382,13 @@ fn expand_key_info_row(row: &Vec<KeyInfo>) -> proc_macro2::TokenStream {
         key_info.push(hand);
     }
     quote! { [#(#key_info), *] }
+}
+
+/// Get debouncer type
+pub(crate) fn get_debouncer_type(matrix_config: &MatrixConfig) -> TokenStream2 {
+    match matrix_config.debouncer.clone().unwrap_or("default".to_string()) {
+        s if s == "fast" => quote! { ::rmk::debounce::fast_debouncer::FastDebouncer },
+        s if s == "default" => quote! { ::rmk::debounce::default_debouncer::DefaultDebouncer },
+        _ => panic!("Invalid debouncer type, supported debouncer types are `default` and `fast`"),
+    }
 }

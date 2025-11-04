@@ -6,8 +6,8 @@ This section covers the basic keyboard identification and physical matrix config
 
 The `[matrix]` section defines your keyboard's physical key matrix wiring. This tells RMK which GPIO pins connect to your key switches.
 
-::: tip
-**Skip `[matrix]` section for split keyboards**. Use the `split.central/peripheral.matrix]]` section instead to define matrix configuration for each part.
+::: info
+**Skip `[matrix]` section for split keyboards**. Use the `[split.central/peripheral.matrix]` section to define matrix configuration for split central and peripherals.
 :::
 
 ### Understanding Key Matrix
@@ -20,11 +20,8 @@ Output Pin (Column) → |>| → Input Pin (Row)
                    Diode (note direction)
 ```
 
-::: warning
+Per default RMK assumes that your pins are **col2row**, meaning that the output pins (anodes) represent the columns and the input pins (cathodes) represent the rows. If your schemata shows the opposite you need to [change the configuration to **row2col**](../getting_started/faq#my-matrix-is-row2col-the-matrix-doesnt-work)
 
-Per default RMK assumes that your pins are <b>col2row</b>, meaning that the output pins (anodes) represent the columns and the input pins (cathodes) represent the rows. If your schemata shows the opposite you need to <a href="https://rmk.rs/docs/user_guide/faq.html#my-matrix-is-row2col-the-matrix-doesn-t-work"> change the configuration to `row2col`</a>
-
-:::
 
 ### Standard Matrix Configuration
 
@@ -38,6 +35,9 @@ col_pins = ["PD7", "PD8", "PD9"]
 
 # RMK uses col2row as the default matrix diode direction, if you want to use a row2col matrix, add `row2col = true`
 # row2col = true
+
+# Debouncer mode: "default"(can be ignored) or "fast"
+# debouncer = "fast"
 ```
 
 ### Finding GPIO Pin Names
@@ -95,6 +95,14 @@ direct_pin_low_active = true
 - `false`: The pin is pulled low by default, pressing a key pulls it to high
 - Use `"_"` or `"trns"` for unused positions in the matrix
 
+### Debouncer
+
+RMK has two debouncer modes, "default" and "fast":
+- The default mode uses a counter-based algorithm that registers a key only after its counter exceeds a certain threshold.
+- The fast mode, on the other hand, reacts instantly to a key press and then waits briefly before accepting the next input.
+
+If no `debouncer` is set, the matrix will defaults to `default` mode.
+
 ## Vial Security Configuration - `[security]` Section
 
 For enhanced security, Vial locks certain functions (like matrix testing) by default. You can set a key combination to unlock it.
@@ -121,8 +129,7 @@ unlock_keys = [[0, 0], [0, 1]]  # Keys at (row=0,col=0) and (row=0,col=1)
 **Matrix Not Working:**
 
 - Verify diode direction in your schematic
-- Check if you need `row2col = true`
-- For local compilation with row2col, add the `row2col` feature to Cargo.toml
+- Check if you need `row2col = true`, add it to your matrix section if you need
 
 **Direct Pins Not Working:**
 

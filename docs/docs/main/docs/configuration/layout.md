@@ -129,12 +129,6 @@ The definitions of those operations are same with QMK, you can found [here](http
 
 9. For keyboard macros, use `Macro(n)`
 
-The optional `<profile_name>` can be used to select morse profile (per key) from `[behavior.morse.profiles]` for the tap hold like keys. If not given, the default profile defined in `[behavior.morse]` will be used. Please note that the profile name is case sensitive.
-
-::: tip
-If you want to use Vial, the positional profile override is recommended instead of per key override, since Vial does not support the profile configuration of tap hold keys, so the profile information will likely be lost.
-:::
-
 ## Aliases
 
 The `[aliases]` section contains a table of user defined names and an associated replacement string, which can be used in the `layer.keys`:

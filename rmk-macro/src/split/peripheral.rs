@@ -14,6 +14,7 @@ use crate::flash::expand_flash_init;
 use crate::import::expand_custom_imports;
 use crate::input_device::adc::expand_adc_device;
 use crate::input_device::encoder::expand_encoder_device;
+use crate::keyboard::get_debouncer_type;
 use crate::keyboard_config::read_keyboard_toml_config;
 use crate::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
 use crate::split::central::expand_serial_init;
@@ -166,15 +167,8 @@ fn expand_split_peripheral(
     }
 
     // Debouncer config
-    let rapid_debouncer_enabled = is_feature_enabled(rmk_features, "rapid_debouncer");
     let col = peripheral_config.cols;
     let row = peripheral_config.rows;
-
-    let debouncer_type = if rapid_debouncer_enabled {
-        quote! { ::rmk::debounce::fast_debouncer::RapidDebouncer }
-    } else {
-        quote! { ::rmk::debounce::default_debouncer::DefaultDebouncer }
-    };
 
     // Matrix config
     let async_matrix = is_feature_enabled(rmk_features, "async_matrix");
@@ -197,6 +191,7 @@ fn expand_split_peripheral(
                 peripheral_config.matrix.row2col,
                 async_matrix,
             ));
+            let debouncer_type = get_debouncer_type(&peripheral_config.matrix);
             let col2row = !peripheral_config.matrix.row2col;
             let num_row = peripheral_config.rows;
             let num_col = peripheral_config.cols;
@@ -221,6 +216,7 @@ fn expand_split_peripheral(
             // So we need to declaring them in advance.
             let size = row * col;
             let low_active = peripheral_config.matrix.direct_pin_low_active;
+            let debouncer_type = get_debouncer_type(&peripheral_config.matrix);
 
             matrix_config.extend(quote! {
                 let debouncer = #debouncer_type::new();
