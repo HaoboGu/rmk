@@ -121,7 +121,7 @@ Browse the examples in the [`examples`](https://github.com/HaoboGu/rmk/blob/main
 
 ## [Development Roadmap](https://rmk.rs/docs/development/roadmap.html)
 
-Current roadmap of RMK can be found [here](https://rmk.rs/docs/development/roadmap.html).
+Current roadmap of RMK can be found [here](https://rmk.rs/guide/development/roadmap).
 
 ## Minimum Supported Rust Version (MSRV)
 
