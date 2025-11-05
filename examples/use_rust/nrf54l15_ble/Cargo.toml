@@ -12,7 +12,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 rmk = { path = "../../../rmk", default-features = false, features = [
     "defmt",
-    "async_matrix",
+    # "async_matrix",
     "nrf54l15_ble",
     "controller",
 ] }
@@ -43,6 +43,7 @@ embassy-executor = { version = "0.9", features = [
     "defmt",
     "arch-cortex-m",
     "executor-thread",
+    # "executor-interrupt"
 ] }
 defmt = "1.0"
 defmt-rtt = "1.0"
