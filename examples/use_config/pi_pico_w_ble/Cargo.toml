@@ -31,7 +31,7 @@ panic-probe = { version = "1.0", features = ["print-defmt"] }
 cyw43 = { version = "0.5.0", features = ["defmt", "firmware-logs", "bluetooth"] }
 cyw43-pio = { version = "0.8.0", features = ["defmt"] }
 static_cell = "2"
-bt-hci = { version = "0.6", default-features = false, features = ["defmt"] }
+bt-hci = { version = "0.6", features = ["defmt"] }
 rand = { version = "0.8.4", default-features = false }
 rand_core = { version = "0.6" }
 rand_chacha = { version = "0.3", default-features = false }

@@ -582,11 +582,12 @@ dependencies = [
 [[package]]
 name = "cyw43-pio"
 version = "0.8.0"
-source = "git+https://github.com/embassy-rs/embassy?rev=faacad6#faacad613ea26a28de216cf32ac4cc64f7862d4c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86bd7dea4d32a73557be29bfadaaa916e758115ed8b42cfca4fda0a111f07644"
 dependencies = [
  "cyw43",
  "defmt 1.0.1",
- "embassy-rp 0.8.0 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
+ "embassy-rp",
  "fixed",
 ]
 
@@ -774,25 +775,9 @@ checksum = "554e3e840696f54b4c9afcf28a0f24da431c927f4151040020416e7393d6d0d8"
 dependencies = [
  "defmt 1.0.1",
  "embassy-futures 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "embassy-hal-internal 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embassy-hal-internal",
  "embassy-sync 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "embassy-time",
- "embedded-hal 0.2.7",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "embedded-storage",
- "embedded-storage-async",
- "nb 1.1.0",
-]
-
-[[package]]
-name = "embassy-embedded-hal"
-version = "0.5.0"
-source = "git+https://github.com/embassy-rs/embassy?rev=faacad6#faacad613ea26a28de216cf32ac4cc64f7862d4c"
-dependencies = [
- "embassy-futures 0.1.2 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
- "embassy-hal-internal 0.3.0 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
- "embassy-sync 0.7.2 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
@@ -860,16 +845,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "embassy-hal-internal"
-version = "0.3.0"
-source = "git+https://github.com/embassy-rs/embassy?rev=faacad6#faacad613ea26a28de216cf32ac4cc64f7862d4c"
-dependencies = [
- "cortex-m",
- "critical-section",
- "num-traits",
-]
-
-[[package]]
 name = "embassy-net-driver"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -914,11 +889,11 @@ dependencies = [
  "critical-section",
  "defmt 1.0.1",
  "document-features",
- "embassy-embedded-hal 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "embassy-hal-internal 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embassy-embedded-hal",
+ "embassy-hal-internal",
  "embassy-sync 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "embassy-time",
- "embassy-usb-driver 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embassy-usb-driver",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
@@ -945,50 +920,14 @@ dependencies = [
  "critical-section",
  "defmt 1.0.1",
  "document-features",
- "embassy-embedded-hal 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embassy-embedded-hal",
  "embassy-futures 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "embassy-hal-internal 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embassy-hal-internal",
  "embassy-sync 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "embassy-time",
  "embassy-time-driver",
  "embassy-time-queue-utils",
- "embassy-usb-driver 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "embedded-hal 0.2.7",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "embedded-hal-nb",
- "embedded-io",
- "embedded-io-async",
- "embedded-storage",
- "embedded-storage-async",
- "fixed",
- "nb 1.1.0",
- "pio",
- "rand_core 0.6.4",
- "rand_core 0.9.3",
- "rp-pac",
- "rp2040-boot2",
- "sha2-const-stable",
- "smart-leds",
-]
-
-[[package]]
-name = "embassy-rp"
-version = "0.8.0"
-source = "git+https://github.com/embassy-rs/embassy?rev=faacad6#faacad613ea26a28de216cf32ac4cc64f7862d4c"
-dependencies = [
- "atomic-polyfill",
- "cfg-if",
- "cortex-m",
- "cortex-m-rt",
- "critical-section",
- "document-features",
- "embassy-embedded-hal 0.5.0 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
- "embassy-futures 0.1.2 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
- "embassy-hal-internal 0.3.0 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
- "embassy-sync 0.7.2 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
- "embassy-time",
- "embassy-usb-driver 0.2.0 (git+https://github.com/embassy-rs/embassy?rev=faacad6)",
+ "embassy-usb-driver",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
@@ -1080,7 +1019,7 @@ dependencies = [
  "embassy-futures 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "embassy-net-driver-channel 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "embassy-sync 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "embassy-usb-driver 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embassy-usb-driver",
  "embedded-io-async",
  "heapless 0.8.0",
  "ssmarshal",
@@ -1094,14 +1033,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17119855ccc2d1f7470a39756b12068454ae27a3eabb037d940b5c03d9c77b7a"
 dependencies = [
  "defmt 1.0.1",
- "embedded-io-async",
-]
-
-[[package]]
-name = "embassy-usb-driver"
-version = "0.2.0"
-source = "git+https://github.com/embassy-rs/embassy?rev=faacad6#faacad613ea26a28de216cf32ac4cc64f7862d4c"
-dependencies = [
  "embedded-io-async",
 ]
 
@@ -2674,12 +2605,12 @@ dependencies = [
  "crc32fast",
  "defmt 1.0.1",
  "document-features",
- "embassy-embedded-hal 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embassy-embedded-hal",
  "embassy-executor",
  "embassy-futures 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "embassy-hal-internal 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embassy-hal-internal",
  "embassy-nrf",
- "embassy-rp 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embassy-rp",
  "embassy-sync 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "embassy-time",
  "embassy-usb",
@@ -2757,7 +2688,7 @@ dependencies = [
  "defmt 1.0.1",
  "defmt-rtt",
  "embassy-executor",
- "embassy-rp 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embassy-rp",
  "embassy-time",
  "json",
  "panic-probe",
