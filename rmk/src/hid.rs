@@ -119,7 +119,7 @@ impl RunnableHidWriter for DummyWriter {
     }
 }
 
-#[cfg(feature = "_nrf_ble")]
+#[cfg(all(feature = "_nrf_ble", not(feature = "nrf54l15_ble")))]
 pub(crate) fn get_serial_number() -> &'static str {
     use heapless::String;
     use static_cell::StaticCell;
@@ -129,6 +129,36 @@ pub(crate) fn get_serial_number() -> &'static str {
     let serial = SERIAL.init_with(|| {
         let ficr = embassy_nrf::pac::FICR;
         let device_id = (u64::from(ficr.deviceid(1).read()) << 32) | u64::from(ficr.deviceid(0).read());
+
+        let mut result = String::new();
+        let _ = result.push_str("vial:f64c2b3c:");
+
+        // Hex lookup table
+        const HEX_TABLE: &[u8] = b"0123456789abcdef";
+        // Add 6 hex digits to the serial number, as the serial str in BLE Device Information Service is limited to 20 bytes
+        for i in 0..6 {
+            let digit = (device_id >> (60 - i * 4)) & 0xF;
+            // This index access is safe because digit is guaranteed to be in the range of 0-15
+            let hex_char = HEX_TABLE[digit as usize] as char;
+            let _ = result.push(hex_char);
+        }
+
+        result
+    });
+
+    serial.as_str()
+}
+
+#[cfg(all(feature = "_nrf_ble", feature = "nrf54l15_ble"))]
+pub(crate) fn get_serial_number() -> &'static str {
+    use heapless::String;
+    use static_cell::StaticCell;
+
+    static SERIAL: StaticCell<String<20>> = StaticCell::new();
+
+    let serial = SERIAL.init_with(|| {
+        let ficr = embassy_nrf::pac::FICR;
+        let device_id = (u64::from(ficr.deviceaddr(1).read()) << 32) | u64::from(ficr.deviceaddr(0).read());
 
         let mut result = String::new();
         let _ = result.push_str("vial:f64c2b3c:");
