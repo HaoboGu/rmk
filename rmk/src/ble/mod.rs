@@ -47,10 +47,13 @@ use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
-use crate::state::{ConnectionState, ConnectionType};
+use crate::state::ConnectionState;
+#[cfg(any(feature = "storage", not(feature = "_no_usb")))]
+use crate::state::ConnectionType;
 #[cfg(feature = "usb_log")]
 use crate::usb::add_usb_logger;
 use crate::{CONNECTION_STATE, run_keyboard};
+
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;
@@ -146,9 +149,6 @@ pub(crate) async fn run_ble<
     #[cfg(not(feature = "_no_usb"))]
     let mut usb_device = _usb_builder.build();
 
-    #[cfg(feature = "controller")]
-    let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
-
     // Load current connection type
     #[cfg(feature = "storage")]
     {
@@ -167,7 +167,7 @@ pub(crate) async fn run_ble<
 
         #[cfg(feature = "controller")]
         send_controller_event(
-            &mut controller_pub,
+            &mut unwrap!(CONTROLLER_CHANNEL.publisher()),
             ControllerEvent::ConnectionType(CONNECTION_TYPE.load(Ordering::SeqCst)),
         );
     }
@@ -176,7 +176,7 @@ pub(crate) async fn run_ble<
     let mut profile_manager = ProfileManager::new(
         stack,
         #[cfg(feature = "controller")]
-        controller_pub,
+        unwrap!(CONTROLLER_CHANNEL.publisher()),
     );
 
     #[cfg(feature = "storage")]

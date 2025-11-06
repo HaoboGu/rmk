@@ -16,12 +16,12 @@ rmk = { path = "../../../rmk", default-features = false, features = [
     "nrf54l15_ble",
     "controller",
 ] }
-nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "8d9c4076a54f307540f230c45acd66d6f8267a3d", default-features = false, features = [
+nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "1bcd64523471ddd5eea38f5c7227aef3b59c623a", default-features = false, features = [
     "defmt",
     "peripheral",
     "nrf54l15-app-s",
 ] }
-nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "8d9c4076a54f307540f230c45acd66d6f8267a3d", default-features = false, features = [
+nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "1bcd64523471ddd5eea38f5c7227aef3b59c623a", default-features = false, features = [
     "defmt",
     "critical-section-impl",
     "nrf54l15-app-s",
