@@ -105,11 +105,11 @@ async fn main(spawner: Spawner) {
         p.PPIB21_CH0,
     );
     let lfclk_cfg = mpsl::raw::mpsl_clock_lfclk_cfg_t {
-        source: mpsl::raw::MPSL_CLOCK_LF_SRC_RC as u8,
-        rc_ctiv: mpsl::raw::MPSL_RECOMMENDED_RC_CTIV as u8,
-        rc_temp_ctiv: mpsl::raw::MPSL_RECOMMENDED_RC_TEMP_CTIV as u8,
-        accuracy_ppm: mpsl::raw::MPSL_DEFAULT_CLOCK_ACCURACY_PPM as u16,
-        skip_wait_lfclk_started: mpsl::raw::MPSL_DEFAULT_SKIP_WAIT_LFCLK_STARTED != 0,
+        source: mpsl::raw::MPSL_CLOCK_LF_SRC_XTAL as u8,
+        rc_ctiv: 0,
+        rc_temp_ctiv: 0,
+        accuracy_ppm: 50,
+        skip_wait_lfclk_started: false,
     };
     static MPSL: StaticCell<MultiprotocolServiceLayer> = StaticCell::new();
     static SESSION_MEM: StaticCell<mpsl::SessionMem<1>> = StaticCell::new();
@@ -187,9 +187,9 @@ async fn main(spawner: Spawner) {
     .await;
 
     // Initialize the matrix and keyboard
-    let debouncer = DefaultDebouncer::new();
+    let debouncer = DefaultDebouncer::<ROW, COL>::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
-    // let mut matrix = TestMatrix::<ROW, COL>::new();
+    // let mut matrix = rmk::matrix::TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap);
 
     let mut batt_proc = BatteryProcessor::new(2000, 2806, &keymap);

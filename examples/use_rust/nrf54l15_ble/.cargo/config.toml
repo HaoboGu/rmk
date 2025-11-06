@@ -1,5 +1,6 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
 runner = "probe-rs run --chip nRF54l15"
+# runner = "./run.sh"
 
 [build]
 target = "thumbv8m.main-none-eabihf"
