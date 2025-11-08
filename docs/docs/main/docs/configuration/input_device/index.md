@@ -18,18 +18,38 @@ pin_b = "P0_31"
 
 # Working mode of the encoder
 # Available modes:
-# - default: EC11 compatible mode, resolution = 1
-# - e8h7: resolution = 2, direction reversed
+# - default: resolution = 1
 # - resolution: custom resolution, requires specifying resolution and reverse parameters
 phase = "default"
 
-# Resolution represents the number of pulses generated per detent
-# For example: if your encoder has 30 detents and generates 15 pulses per 360-degree rotation, then resolution = 30/15 = 2
-# The number of detents and pulses can be found in your encoder's datasheet
-resolution = 2
+# `resolution` represents the number of steps generated per detent.
+#
+# When your encoder datasheet lists:
+#   - detent = number of mechanical detent positions  
+#   - pulse  = number of full quadrature cycles (A/B cycles)  
+#
+# Then the relationship is:
+#   resolution = (pulse × 4) / detent
+# because each full quadrature cycle (pulse) produces 4 edge transitions.
+#
+# For example — in the ALPS EC11E series(https://tech.alpsalpine.com/cms.media/product_catalog_ec_01_ec11e_en_611f078659.pdf):
+#   detent = 30, pulse = 15 → resolution = (15 × 4) / 30 = 2
+resolution = 4
+
+# Optional: specify detent and pulse instead of resolution.
+# Requirements:
+#   - `phase` should be "resolution", and `resolution` value is not set
+#   - `detent` and `pulse` must be provided together
+# Number of detent positions
+detent = 30  
+# Number of pulse
+pulse  = 15   
 
 # Whether to reverse the encoder direction
 reverse = false
+
+# Whether to use the MCU's internal pull-up resistor, default to false
+internal_pullup = false
 ```
 
 Multiple encoders can be added, and their indices are determined by the order of addition:
