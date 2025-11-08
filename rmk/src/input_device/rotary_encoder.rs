@@ -76,7 +76,7 @@ impl Phase for E8H7Phase {
 pub struct ResolutionPhase {
     resolution: u8,
     lut: [i8; 16],
-    pulses: i8,
+    current_pulses: i8,
 }
 
 impl ResolutionPhase {
@@ -89,7 +89,20 @@ impl ResolutionPhase {
         Self {
             resolution,
             lut,
-            pulses: 0,
+            current_pulses: 0,
+        }
+    }
+
+    pub fn new_with_detent_and_pulse(detent: u8, pulse: u8, reverse: bool) -> Self {
+        // Each entry corresponds to a state transition and provides +1, -1, or 0 pulse
+        let mut lut = [0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0];
+        if reverse {
+            lut = lut.map(|x| -x);
+        }
+        Self {
+            resolution: pulse * 4 / detent,
+            lut,
+            current_pulses: 0,
         }
     }
 }
@@ -99,13 +112,13 @@ impl Phase for ResolutionPhase {
         // Only proceed if there was a state change
         if (s & 0xC) != (s & 0x3) {
             // Add pulse value from the lookup table
-            self.pulses += self.lut[s as usize & 0xF];
+            self.current_pulses += self.lut[s as usize & 0xF];
             // Check if we've reached the resolution threshold
-            if self.pulses >= self.resolution as i8 {
-                self.pulses %= self.resolution as i8;
+            if self.current_pulses >= self.resolution as i8 {
+                self.current_pulses %= self.resolution as i8;
                 return Direction::CounterClockwise;
-            } else if self.pulses <= -(self.resolution as i8) {
-                self.pulses %= self.resolution as i8;
+            } else if self.current_pulses <= -(self.resolution as i8) {
+                self.current_pulses %= self.resolution as i8;
                 return Direction::Clockwise;
             }
         }

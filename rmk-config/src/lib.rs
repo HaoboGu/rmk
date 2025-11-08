@@ -701,15 +701,20 @@ pub struct EncoderConfig {
     pub pin_b: String,
     // Phase is the working mode of the rotary encoders.
     // Available mode:
-    // - default: EC11 compatible, resolution = 1
-    // - e8h7: resolution = 2, reverse = true
+    // - default: resolution = 1
     // - resolution: customized resolution, the resolution value and reverse should be specified
+    //   A typical [EC11 encoder](https://tech.alpsalpine.com/cms.media/product_catalog_ec_01_ec11e_en_611f078659.pdf)'s resolution is 2
+    //   In resolution mode, you can also specify the number of detent and pulses, the resolution will be calculated by `pulse * 4 / detent`
     pub phase: Option<String>,
     // Resolution
     pub resolution: Option<u8>,
+    // The number of detent
+    pub detent: Option<u8>,
+    // The number of pulse
+    pub pulse: Option<u8>,
     // Whether the direction of the rotary encoder is reversed.
     pub reverse: Option<bool>,
-    // Use MCU's internal pull-up resistor or not
+    // Use MCU's internal pull-up resistor or not, defaults to false, the external pull-up resistor is needed
     #[serde(default = "default_false")]
     pub internal_pullup: bool,
 }
