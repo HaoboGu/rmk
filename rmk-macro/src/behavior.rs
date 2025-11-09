@@ -53,8 +53,8 @@ fn expand_morse_action_pair(
             '1' => pattern = pattern << 1 | 1,
             '-' => pattern = pattern << 1 | 1,
             '_' => pattern = pattern << 1 | 1,
-            '0' => pattern = pattern << 1,
-            '.' => pattern = pattern << 1,
+            '0' => pattern <<= 1,
+            '.' => pattern <<= 1,
             _ => {}
         }
     }
@@ -63,10 +63,10 @@ fn expand_morse_action_pair(
 }
 
 fn expand_morse_actions(
-    actions: &Vec<MorseActionPair>,
+    actions: &[MorseActionPair],
     profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> proc_macro2::TokenStream {
-    if actions.len() > 0 {
+    if !actions.is_empty() {
         let action_pair_def = actions
             .iter()
             .map(|action_pair| expand_morse_action_pair(action_pair, profiles));
@@ -268,13 +268,10 @@ fn expand_macros(macros: &Option<MacrosConfig>) -> proc_macro2::TokenStream {
     }
 }
 
-fn expand_morses(
-    morses: &Vec<MorseConfig>,
-    profiles: &Option<HashMap<String, MorseProfile>>,
-) -> proc_macro2::TokenStream {
+fn expand_morses(morses: &[MorseConfig], profiles: &Option<HashMap<String, MorseProfile>>) -> proc_macro2::TokenStream {
     let morses_def = morses.iter().map(|morse| {
         let profile = if let Some(profile_name) = &morse.profile {
-            let morse_profile = expand_profile_name(&profile_name, &profiles);
+            let morse_profile = expand_profile_name(profile_name, profiles);
             quote! { #morse_profile }
         } else {
             quote! { rmk::types::action::MorseProfile::const_default() }
@@ -285,7 +282,7 @@ fn expand_morses(
                 panic!("\n❌ keyboard.toml: `morse_actions` cannot be used together with `tap_actions`, `hold_actions`, `tap`, `hold`, `hold_after_tap`, or `double_tap`. Please check the documentation: https://rmk.rs/docs/features/configuration/behavior.html#morse");
             }
 
-            let actions_def = expand_morse_actions(&morse_actions, profiles);
+            let actions_def = expand_morse_actions(morse_actions, profiles);
 
             quote! {
                 ::rmk::morse::Morse {

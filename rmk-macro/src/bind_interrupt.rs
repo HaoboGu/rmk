@@ -13,17 +13,15 @@ pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardTomlConfig, item_m
         items
             .iter()
             .find_map(|item| {
-                if let syn::Item::Fn(item_fn) = &item {
-                    if item_fn.attrs.len() == 1 {
-                        if let Some(i) = item_fn.attrs[0].meta.path().get_ident() {
-                            if i == "bind_interrupt" {
-                                let content = &item_fn.block.stmts;
-                                return Some(quote! {
-                                    #(#content)*
-                                });
-                            }
-                        }
-                    }
+                if let syn::Item::Fn(item_fn) = &item
+                    && item_fn.attrs.len() == 1
+                    && let Some(i) = item_fn.attrs[0].meta.path().get_ident()
+                    && i == "bind_interrupt"
+                {
+                    let content = &item_fn.block.stmts;
+                    return Some(quote! {
+                        #(#content)*
+                    });
                 }
                 None
             })
@@ -37,10 +35,10 @@ pub(crate) fn find_extern_irqs(item_mod: &ItemMod) -> Vec<TokenStream2> {
     let mut extern_irqs: Vec<TokenStream2> = Vec::new();
     if let Some((_, items)) = &item_mod.content {
         items.iter().for_each(|item| {
-            if let syn::Item::Macro(item_macro) = &item {
-                if item_macro.mac.path.is_ident("add_interrupt") {
-                    extern_irqs.push(item_macro.mac.tokens.clone());
-                }
+            if let syn::Item::Macro(item_macro) = &item
+                && item_macro.mac.path.is_ident("add_interrupt")
+            {
+                extern_irqs.push(item_macro.mac.tokens.clone());
             }
         });
     }

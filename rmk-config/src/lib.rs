@@ -94,15 +94,15 @@ impl KeyboardTomlConfig {
     /// - TODO: Update controller number based on the number of split boards
     pub fn auto_calculate_parameters(&mut self) {
         // Update the number of peripherals
-        if let Some(split) = &self.split {
-            if split.peripheral.len() > self.rmk.split_peripherals_num {
-                // eprintln!(
-                //     "The number of split peripherals is updated to {} from {}",
-                //     split.peripheral.len(),
-                //     self.rmk.split_peripherals_num
-                // );
-                self.rmk.split_peripherals_num = split.peripheral.len();
-            }
+        if let Some(split) = &self.split
+            && split.peripheral.len() > self.rmk.split_peripherals_num
+        {
+            // eprintln!(
+            //     "The number of split peripherals is updated to {} from {}",
+            //     split.peripheral.len(),
+            //     self.rmk.split_peripherals_num
+            // );
+            self.rmk.split_peripherals_num = split.peripheral.len();
         }
 
         if let Some(behavior) = &self.behavior {
@@ -230,7 +230,7 @@ where
     D: de::Deserializer<'de>,
 {
     let value = SerdeDeserialize::deserialize(deserializer)?;
-    if value < 4 || value > 65536 {
+    if !(4..=65536).contains(&value) {
         panic!("❌ Parse `keyboard.toml` error: max_patterns_per_key must be between 4 and 65566, got {value}");
     }
     Ok(value)

@@ -72,6 +72,7 @@ impl MouseButtons {
     pub const BUTTON7: Self = Self::new().with_button7(true);
     pub const BUTTON8: Self = Self::new().with_button8(true);
 
+    #[allow(clippy::too_many_arguments)]
     pub const fn new_from(
         button1: bool,
         button2: bool,

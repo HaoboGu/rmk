@@ -15,12 +15,11 @@ pub(crate) fn expand_usb_init(keyboard_config: &KeyboardTomlConfig, item_mod: &I
         items
             .iter()
             .find_map(|item| {
-                if let syn::Item::Fn(item_fn) = &item {
-                    if item_fn.attrs.len() == 1 {
-                        if let Ok(Overwritten::Usb) = Overwritten::from_meta(&item_fn.attrs[0].meta) {
-                            return Some(override_usb_init(item_fn));
-                        }
-                    }
+                if let syn::Item::Fn(item_fn) = &item
+                    && item_fn.attrs.len() == 1
+                    && let Ok(Overwritten::Usb) = Overwritten::from_meta(&item_fn.attrs[0].meta)
+                {
+                    return Some(override_usb_init(item_fn));
                 }
                 None
             })

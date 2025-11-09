@@ -24,13 +24,13 @@ pub(crate) fn expand_controller_init(
     // external controller
     if let Some((_, items)) = &item_mod.content {
         items.iter().for_each(|item| {
-            if let syn::Item::Fn(item_fn) = &item {
-                if let Some(attr) = item_fn.attrs.iter().find(|attr| attr.path().is_ident("controller")) {
+            if let syn::Item::Fn(item_fn) = &item
+                && let Some(attr) = item_fn.attrs.iter().find(|attr| attr.path().is_ident("controller")) {
                     let _ = attr.parse_nested_meta(|meta| {
                         if !controller_feature_enabled {
                             panic!("\"controller\" feature of RMK must be enabled to use the #[controller] attribute");
                         }
-                        let (custom_init, custom_exec) = expand_custom_controller(&item_fn);
+                        let (custom_init, custom_exec) = expand_custom_controller(item_fn);
                         initializers.extend(custom_init);
 
                         if meta.path.is_ident("event") {
@@ -46,7 +46,6 @@ pub(crate) fn expand_controller_init(
                         panic!("\"controller\" attribute must specify execution mode with #[controller(event)] or #[controller(poll)]")
                     });
                 }
-            }
         });
     }
 
