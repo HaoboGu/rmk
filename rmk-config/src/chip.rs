@@ -46,7 +46,7 @@ impl ChipModel {
             s if s.starts_with("stm32") => Ok(include_str!("default_config/stm32.toml")),
             s if s.starts_with("esp32") => {
                 if s == "esp32s3" {
-                    return Ok(include_str!("default_config/esp32s3.toml"));
+                    Ok(include_str!("default_config/esp32s3.toml"))
                 } else {
                     Ok(include_str!("default_config/esp32.toml"))
                 }

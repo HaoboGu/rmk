@@ -221,9 +221,9 @@ impl From<u32> for MorseProfile {
     }
 }
 
-impl Into<u32> for MorseProfile {
-    fn into(self) -> u32 {
-        self.0
+impl From<MorseProfile> for u32 {
+    fn from(val: MorseProfile) -> Self {
+        val.0
     }
 }
 

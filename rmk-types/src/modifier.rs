@@ -95,6 +95,7 @@ impl ModifierCombination {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub const fn new_from_vals(
         left_ctrl: bool,
         left_shift: bool,
