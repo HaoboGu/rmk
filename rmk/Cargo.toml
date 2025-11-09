@@ -109,6 +109,7 @@ features = ["split", "vial", "async_matrix", "_ble"]
 [target.'cfg(all(target_arch = "arm", target_os = "none"))'.dependencies]
 cortex-m = { version = "0.7" }
 
+# Reminder: when changing feature configuration, double check `rmk-macro/src/feature.rs`
 [features]
 default = ["defmt", "storage", "vial", "vial_lock"]
 

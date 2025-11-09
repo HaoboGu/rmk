@@ -6,9 +6,10 @@
         "type": "dir",
         "name": "keymap_configuration",
         "label": "Keymap Configuration",
-        "collapsed": false
+        "collapsed": true
     },
     "light",
+    "behavior",
     "split_keyboard",
     "wireless",
     "storage",

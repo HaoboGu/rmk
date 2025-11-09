@@ -18,7 +18,7 @@ combo_max_length = 4
 fork_max_num = 8
 # Maximum number of morse keys keyboard can store (max 256)
 morse_max_num = 8
-# Maximum number of patterns a morse key can handle (default: 8, min: 2, max 65536)
+# Maximum number of patterns a morse key can handle (default: 8, min: 4, max 65536)
 max_patterns_per_key = 8
 # Macro space size in bytes for storing sequences. The maximum number of Macros depends on the size of each sequence: All sequences combined need to fit into macro_space_size, the number of macro sequences doesn't matter.
 macro_space_size = 256

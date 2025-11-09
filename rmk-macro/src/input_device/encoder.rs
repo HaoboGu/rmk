@@ -45,9 +45,18 @@ pub(crate) fn expand_encoder_device(
             }
             Some("resolution") => {
                 // When phase is "resolution", ensure resolution and reverse are set
-                let resolution = encoder
-                    .resolution
-                    .expect("Resolution value must be specified when phase is 'resolution'");
+                let resolution = match encoder.resolution {
+                    Some(r) => r,
+                    None => {
+                        let detent = encoder
+                            .detent
+                            .expect("Resolution or detent & pulse value must be specified when phase is 'resolution'");
+                        let pulse = encoder
+                            .pulse
+                            .expect("Resolution or detent & pulse value must be specified when phase is 'resolution'");
+                        pulse * 4 / detent
+                    }
+                };
                 let reverse = encoder.reverse.unwrap_or(false);
 
                 quote! {
