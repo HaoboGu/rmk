@@ -16,7 +16,7 @@ internal_pullup = false
 # Available modes:
 # - default: resolution = 1
 # - resolution: custom resolution, requires specifying resolution and reverse parameters
-phase = "default"
+phase = "resolution"
 
 # `resolution` represents the number of steps generated per detent.
 #
@@ -32,14 +32,8 @@ phase = "default"
 #   detent = 30, pulse = 15 → resolution = (15 × 4) / 30 = 2
 resolution = 4
 
-# Optional: specify detent and pulse instead of resolution.
-# Requirements:
-#   - `phase` should be "resolution", and `resolution` value is not set
-#   - `detent` and `pulse` must be provided together
-# Number of detent positions
-detent = 30  
-# Number of pulse
-pulse  = 15
+# Optional: specify detent and pulse to calculate resolution automatically
+resolution = { detent = 30, pulse = 15 }
 
 # Whether the direction of the rotary encoder is reversed.
 reverse = false
