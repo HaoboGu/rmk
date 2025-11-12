@@ -1,5 +1,5 @@
 use quote::{format_ident, quote};
-use rmk_config::{ChipModel, EncoderConfig};
+use rmk_config::{ChipModel, EncoderConfig, EncoderResolution};
 
 use super::Initializer;
 use crate::gpio_config::convert_gpio_str_to_input_pin;
@@ -45,17 +45,13 @@ pub(crate) fn expand_encoder_device(
             }
             Some("resolution") => {
                 // When phase is "resolution", ensure resolution and reverse are set
-                let resolution = match encoder.resolution {
-                    Some(r) => r,
-                    None => {
-                        let detent = encoder
-                            .detent
-                            .expect("Resolution or detent & pulse value must be specified when phase is 'resolution'");
-                        let pulse = encoder
-                            .pulse
-                            .expect("Resolution or detent & pulse value must be specified when phase is 'resolution'");
-                        pulse * 4 / detent
-                    }
+                let resolution = match encoder
+                    .resolution
+                    .clone()
+                    .expect("`resolution` field needs to be set when the encoder's mode is 'resolution'")
+                {
+                    EncoderResolution::Value(r) => r,
+                    EncoderResolution::Derived { detent, pulse } => pulse * 4 / detent,
                 };
                 let reverse = encoder.reverse.unwrap_or(false);
 

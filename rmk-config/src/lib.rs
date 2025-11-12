@@ -707,7 +707,7 @@ pub struct EncoderConfig {
     //   In resolution mode, you can also specify the number of detent and pulses, the resolution will be calculated by `pulse * 4 / detent`
     pub phase: Option<String>,
     // Resolution
-    pub resolution: Option<u8>,
+    pub resolution: Option<EncoderResolution>,
     // The number of detent
     pub detent: Option<u8>,
     // The number of pulse
@@ -717,6 +717,20 @@ pub struct EncoderConfig {
     // Use MCU's internal pull-up resistor or not, defaults to false, the external pull-up resistor is needed
     #[serde(default = "default_false")]
     pub internal_pullup: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[allow(unused)]
+#[serde(deny_unknown_fields)]
+pub enum EncoderResolution {
+    Value(u8),
+    Derived { detent: u8, pulse: u8 },
+}
+
+impl Default for EncoderResolution {
+    fn default() -> Self {
+        Self::Value(4)
+    }
 }
 
 /// Pointing device config
