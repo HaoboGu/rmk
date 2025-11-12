@@ -721,7 +721,7 @@ pub struct EncoderConfig {
 
 #[derive(Clone, Debug, Deserialize)]
 #[allow(unused)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, untagged)]
 pub enum EncoderResolution {
     Value(u8),
     Derived { detent: u8, pulse: u8 },
