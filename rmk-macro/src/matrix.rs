@@ -24,7 +24,20 @@ pub(crate) fn expand_matrix_config(
                     matrix.col_pins.clone().unwrap(),
                     matrix.row2col,
                     async_matrix,
+                    false,
+                    Some(false) // low active = false == pull down
                 ));
+            }
+            MatrixType::low_power => {
+                matrix_config.extend(expand_matrix_input_output_pins(
+                    &keyboard_config.get_chip_model().unwrap(),
+                    matrix.row_pins.clone().unwrap(),
+                    matrix.col_pins.clone().unwrap(),
+                    true, //always scan row2col, use polarity for direction
+                    async_matrix,
+                    !matrix.row2col,
+                    Some(!matrix.row2col),
+                ))
             }
             MatrixType::direct_pin => {
                 matrix_config.extend(expand_matrix_direct_pins(
@@ -59,6 +72,17 @@ pub(crate) fn expand_matrix_config(
                     split_config.central.matrix.col_pins.clone().unwrap(),
                     split_config.central.matrix.row2col,
                     async_matrix,
+                    false,
+                    Some(false) // low active = false == pull down
+                )),
+                MatrixType::low_power => matrix_config.extend(expand_matrix_input_output_pins(
+                    &keyboard_config.get_chip_model().unwrap(),
+                    split_config.central.matrix.row_pins.clone().unwrap(),
+                    split_config.central.matrix.col_pins.clone().unwrap(),
+                    true, //always scan row2col, use polarity for direction
+                    async_matrix,
+                    !split_config.central.matrix.row2col,
+                    Some(!split_config.central.matrix.row2col),
                 )),
                 MatrixType::direct_pin => matrix_config.extend(expand_matrix_direct_pins(
                     &keyboard_config.get_chip_model().unwrap(),
@@ -106,6 +130,8 @@ pub(crate) fn expand_matrix_input_output_pins(
     col_pins: Vec<String>,
     row2col: bool,
     async_matrix: bool,
+    low_active: bool,
+    pull: Option<bool>,
 ) -> proc_macro2::TokenStream {
     let mut pin_initialization = proc_macro2::TokenStream::new();
     // Extra import when using `ExtiInput`
@@ -133,9 +159,9 @@ pub(crate) fn expand_matrix_input_output_pins(
     let output_pin_type = get_output_pin_type(chip);
 
     // Initialize input pins
-    pin_initialization.extend(convert_input_pins_to_initializers(chip, input_pins, async_matrix));
+    pin_initialization.extend(convert_input_pins_to_initializers(chip, input_pins, async_matrix, pull));
     // Initialize output pins
-    pin_initialization.extend(convert_output_pins_to_initializers(chip, output_pins));
+    pin_initialization.extend(convert_output_pins_to_initializers(chip, output_pins, low_active));
     let pin_names = if row2col {
         quote! { (col_pins, row_pins) }
     } else {
