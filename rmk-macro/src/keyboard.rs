@@ -319,6 +319,14 @@ pub(crate) fn expand_matrix_and_keyboard_init(keyboard_config: &KeyboardTomlConf
                     let mut matrix = ::rmk::matrix::Matrix::<_, _, _, ROW, COL, #col2row>::new(row_pins, col_pins, debouncer);
                 }
             }
+            MatrixType::low_power => {
+                let col2row = !matrix_config.row2col;
+                let debouncer_type = get_debouncer_type(&matrix_config);
+                quote! {
+                    let debouncer = #debouncer_type::new();
+                    let mut matrix = ::rmk::matrix::LowPowerMatric::<_, _, _, ROW, COL, #col2row>::new(row_pins, col_pins, debouncer);
+                }
+            }
             MatrixType::direct_pin => {
                 let low_active = matrix_config.direct_pin_low_active;
                 let debouncer_type = get_debouncer_type(&matrix_config);
@@ -343,6 +351,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(keyboard_config: &KeyboardTomlConf
                         let mut matrix = ::rmk::split::central::CentralMatrix::<_, _, _, #central_row_offset, #central_col_offset, #central_row, #central_col, #col2row>::new(row_pins, col_pins, debouncer);
                     }
                 }
+                MatrixType::low_power => {todo!()}
                 MatrixType::direct_pin => {
                     let low_active = split_config.central.matrix.direct_pin_low_active;
                     let size = split_config.central.rows * split_config.central.cols;

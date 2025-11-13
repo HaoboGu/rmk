@@ -190,6 +190,8 @@ fn expand_split_peripheral(
                     .expect("split.peripheral.matrix.col_pins is required"),
                 peripheral_config.matrix.row2col,
                 async_matrix,
+                false,
+                Some(false) // low active = false == pull down
             ));
             let debouncer_type = get_debouncer_type(&peripheral_config.matrix);
             let col2row = !peripheral_config.matrix.row2col;
@@ -199,6 +201,27 @@ fn expand_split_peripheral(
             matrix_config.extend(quote! {
                 let debouncer = #debouncer_type::new();
                 let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #num_row, #num_col, #col2row>::new(row_pins, col_pins, debouncer);
+            });
+        }
+
+        MatrixType::low_power => {
+            matrix_config.extend(expand_matrix_input_output_pins(
+                &chip,
+                peripheral_config.matrix.row_pins.clone().unwrap(),
+                peripheral_config.matrix.col_pins.clone().unwrap(),
+                true, //always scan row2col, use polarity for direction
+                async_matrix,
+                !peripheral_config.matrix.row2col,
+                Some(!peripheral_config.matrix.row2col),
+            ));
+            let debouncer_type = get_debouncer_type(&peripheral_config.matrix);
+            let col2row = !peripheral_config.matrix.row2col;
+            let num_row = peripheral_config.rows;
+            let num_col = peripheral_config.cols;
+
+            matrix_config.extend(quote! {
+                let debouncer = #debouncer_type::new();
+                let mut matrix = ::rmk::matrix::low_power_matrix::LowPowerMatrix::<_, _, _, #num_row, #num_col, #col2row>::new(row_pins, col_pins, debouncer);
             });
         }
         MatrixType::direct_pin => {

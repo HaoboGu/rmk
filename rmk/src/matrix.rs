@@ -14,6 +14,7 @@ use crate::input_device::InputDevice;
 use crate::state::ConnectionState;
 
 pub mod bidirectional_matrix;
+pub mod low_power_matrix;
 
 /// Recording the matrix pressed state
 #[cfg(feature = "vial_lock")]
