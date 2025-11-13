@@ -172,7 +172,7 @@ controller = []
 ## Enable split keyboard support. 
 ## 
 ## The split peripheral is regarded as a controller subscriber, so the split feature requires controller feature.
-split = ["controller"]
+split = ["controller", "trouble-host?/gatt-client-notification-queue-size-4"]
 
 ## Enable feature to use rp2040 specific features, like PIO and bootrom
 rp2040 = [
