@@ -20,22 +20,22 @@ pub(crate) fn expand_chip_init(
         items
             .iter()
             .find_map(|item| {
-                if let syn::Item::Fn(item_fn) = &item {
-                    if item_fn.attrs.len() == 1 {
-                        match Overwritten::from_meta(&item_fn.attrs[0].meta) {
-                            Ok(Overwritten::ChipConfig) => {
-                                return Some(override_chip_config(
-                                    &keyboard_config.get_chip_model().unwrap(),
-                                    item_fn,
-                                ));
-                            }
-                            Ok(Overwritten::ChipInit) => {
-                                // Override the whole chip initialization
-                                let stmts = &item_fn.block.stmts;
-                                return Some(quote! { #(#stmts)* });
-                            }
-                            _ => (),
+                if let syn::Item::Fn(item_fn) = &item
+                    && item_fn.attrs.len() == 1
+                {
+                    match Overwritten::from_meta(&item_fn.attrs[0].meta) {
+                        Ok(Overwritten::ChipConfig) => {
+                            return Some(override_chip_config(
+                                &keyboard_config.get_chip_model().unwrap(),
+                                item_fn,
+                            ));
                         }
+                        Ok(Overwritten::ChipInit) => {
+                            // Override the whole chip initialization
+                            let stmts = &item_fn.block.stmts;
+                            return Some(quote! { #(#stmts)* });
+                        }
+                        _ => (),
                     }
                 }
                 None
@@ -261,7 +261,7 @@ fn get_ble_addr(keyboard_config: &KeyboardTomlConfig, peripheral_id: Option<usiz
                         split
                             .peripheral
                             .get(id)
-                            .expect(&format!("There's no config for peripheral {}", id))
+                            .unwrap_or_else(|| panic!("There's no config for peripheral {}", id))
                             .ble_addr
                             .unwrap_or(default_addr)
                     }

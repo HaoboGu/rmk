@@ -32,13 +32,13 @@ impl crate::KeyboardTomlConfig {
                                 i
                             ));
                         }
-                        if let Some(layer) = c.layer {
-                            if layer >= layout.layers {
-                                return Err(format!(
-                                    "keyboard.toml: layer in combo #{} is greater than [layout.layers]",
-                                    i
-                                ));
-                            }
+                        if let Some(layer) = c.layer
+                            && layer >= layout.layers
+                        {
+                            return Err(format!(
+                                "keyboard.toml: layer in combo #{} is greater than [layout.layers]",
+                                i
+                            ));
                         }
                     }
                 }

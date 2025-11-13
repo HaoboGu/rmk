@@ -21,42 +21,41 @@ pub(crate) fn expand_adc_device(
             let mut devices = vec![];
             let mut processors = vec![];
 
-            if let Some(ble) = ble_config {
-                if ble.enabled {
-                    if let Some(adc_pin) = ble.battery_adc_pin {
-                        let adc_pin_def = if adc_pin == "vddh" {
-                            quote! {
-                                saadc::ChannelConfig::single_ended(saadc::VddhDiv5Input.degrade_saadc())
-                            }
-                        } else {
-                            let adc_pin_def = format_ident!("{}", adc_pin);
-                            quote! {
-                                saadc::ChannelConfig::single_ended(p.#adc_pin_def.degrade_saadc())
-                            }
-                        };
-                        channel_cfg.push(adc_pin_def);
-                        adc_type.push(quote! {
-                            ::rmk::input_device::adc::AnalogEventType::Battery
-                        });
-
-                        let (adc_divider_measured, adc_divider_total) = if adc_pin == "vddh" {
-                            (1, 5)
-                        } else {
-                            (
-                                ble.adc_divider_measured.unwrap_or(1),
-                                ble.adc_divider_total.unwrap_or(1),
-                            )
-                        };
-                        let bat_ident = format_ident!("battery_processor");
-                        let battery_processor = Initializer {
-                            initializer: quote! {
-                                let mut #bat_ident = ::rmk::input_device::battery::BatteryProcessor::new(#adc_divider_measured, #adc_divider_total, &keymap);
-                            },
-                            var_name: bat_ident,
-                        };
-                        processors.push(battery_processor);
+            if let Some(ble) = ble_config
+                && ble.enabled
+                && let Some(adc_pin) = ble.battery_adc_pin
+            {
+                let adc_pin_def = if adc_pin == "vddh" {
+                    quote! {
+                        saadc::ChannelConfig::single_ended(saadc::VddhDiv5Input.degrade_saadc())
                     }
-                }
+                } else {
+                    let adc_pin_def = format_ident!("{}", adc_pin);
+                    quote! {
+                        saadc::ChannelConfig::single_ended(p.#adc_pin_def.degrade_saadc())
+                    }
+                };
+                channel_cfg.push(adc_pin_def);
+                adc_type.push(quote! {
+                    ::rmk::input_device::adc::AnalogEventType::Battery
+                });
+
+                let (adc_divider_measured, adc_divider_total) = if adc_pin == "vddh" {
+                    (1, 5)
+                } else {
+                    (
+                        ble.adc_divider_measured.unwrap_or(1),
+                        ble.adc_divider_total.unwrap_or(1),
+                    )
+                };
+                let bat_ident = format_ident!("battery_processor");
+                let battery_processor = Initializer {
+                    initializer: quote! {
+                        let mut #bat_ident = ::rmk::input_device::battery::BatteryProcessor::new(#adc_divider_measured, #adc_divider_total, &keymap);
+                    },
+                    var_name: bat_ident,
+                };
+                processors.push(battery_processor);
             }
 
             // polling interval with joystick
