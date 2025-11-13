@@ -103,6 +103,7 @@ pub enum SettingKey {
     MorseTimeout = 0x07,
     TapInterval = 0x12,
     TapCapslockInterval = 0x13,
+    PermissiveHold = 0x16,
     UnilateralTap = 0x1A,
     PriorIdleTime = 0x1B,
 }

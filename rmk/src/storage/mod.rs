@@ -9,6 +9,7 @@ use embassy_sync::signal::Signal;
 use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
+use rmk_types::action::MorseMode;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_item, store_item};
@@ -77,6 +78,8 @@ pub(crate) enum FlashOperationMessage {
     MorseHoldTimeout(u16),
     // Whether the unilateral tap is enabled in default morse profile
     UnilateralTap(bool),
+    // Default Morse Mode
+    MorseMode(MorseMode),
 }
 
 /// StorageKeys is the prefix digit stored in the flash, it's used to identify the type of the stored data.
