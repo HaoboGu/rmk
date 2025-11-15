@@ -109,7 +109,7 @@ The `layer.keys` string should follow several rules:
    1. Use `DF(n)` to create a switch default layer action, `n` is the layer number
    2. Use `MO(n)` to create a layer activate action, `n` is the layer number
    3. Use `LM(n, modifier)` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`
-   4. Use `LT(n, key, <profile_name>)` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html)
+   4. Use `LT(n, key, <profile_name>)` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html), The `profile_name` is optional, which defines the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning)
    5. Use `OSL(n)` to create a one-shot layer action, `n` is the layer number
    6. Use `OSM(modifier)` to create a one-shot modifier action. The modifier can be chained in the same way as `WM`
    7. Use `TT(n)` to create a layer activate or tap toggle action, `n` is the layer number
@@ -118,10 +118,10 @@ The `layer.keys` string should follow several rules:
 
 The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
-5. For modifier-tap-hold, use `MT(key, modifier, <profile_name>)` where the modifier can be a chain like explained on point 1.
+5. For modifier-tap-hold, use `MT(key, modifier, <profile_name>)` where the modifier can be a chain like explained on point 1. The `profile_name` is optional, which defines the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning)
 <!-- If you're using home-row mod(HRM), you can also use `HRM(key, modifier)` to create a modifier-tap-hold whose configuration is optimized for home-row mod. -->
 
-6. For generic key tap-hold, use `TH(key-tap, key-hold, <profile_name>)`
+6. For generic key tap-hold, use `TH(key-tap, key-hold, <profile_name>)`, The `profile_name` is optional, which defines the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning)
 
 7. For shifted key, use `SHIFTED(key)`
 
