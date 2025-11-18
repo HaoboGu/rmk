@@ -176,6 +176,7 @@ pub struct Matrix<
     scan_start: Option<Instant>,
     /// Current scan pos: (out_idx, in_idx)
     scan_pos: (usize, usize),
+    rescan_needed: bool
 }
 
 impl<
@@ -347,6 +348,7 @@ where
             key_states: [[KeyState::new(); ROW]; COL],
             scan_start: None,
             scan_pos: (0, 0),
+            rescan_needed: false,
         }
     }
 
@@ -420,13 +422,14 @@ where
                     if let DebounceState::Debounced = debounce_state {
                         self.toggle_key_state(out_idx, in_idx);
                         self.scan_pos = (out_idx, in_idx);
+                        self.rescan_needed = true;
                         return Event::Key(self.get_key_event(out_idx, in_idx));
                     }
 
                     // If there's key still pressed, always refresh the self.scan_start
                     #[cfg(feature = "async_matrix")]
                     if self.get_key_state(out_idx, in_idx).pressed {
-                        self.scan_start = Some(Instant::now());
+                        self.rescan_needed = true;
                     }
                 }
 
@@ -435,6 +438,10 @@ where
                     out_pin.set_low().ok();
                 }
             }
+            if self.rescan_needed {
+                self.scan_start = Some(Instant::now());
+            }
+            self.rescan_needed = false;
             self.scan_pos = (0, 0);
         }
     }
@@ -459,7 +466,7 @@ where
     async fn wait_for_key(&mut self) {
         if let Some(start_time) = self.scan_start {
             // If no key press over 1ms, stop scanning and wait for interupt
-            if start_time.elapsed().as_millis() <= 1 {
+            if self.rescan_needed || start_time.elapsed().as_millis() <= 1 {
                 return;
             } else {
                 self.scan_start = None;
