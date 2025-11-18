@@ -199,7 +199,7 @@ pub struct RmkConstantsConfig {
     pub ble_profiles_num: usize,
     /// BLE Split Central sleep timeout in minutes (0 = disabled)
     #[serde_inline_default(0)]
-    pub split_central_sleep_timeout_minutes: u32,
+    pub split_central_sleep_timeout_seconds: u32,
     /// Whether Vial is enabled
     #[serde_inline_default(true)]
     pub vial_enabled: bool,
@@ -271,7 +271,7 @@ impl Default for RmkConstantsConfig {
             flash_channel_size: 4,
             split_peripherals_num: 0,
             ble_profiles_num: 3,
-            split_central_sleep_timeout_minutes: 0,
+            split_central_sleep_timeout_seconds: 0,
             vial_enabled: true,
         }
     }

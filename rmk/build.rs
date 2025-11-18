@@ -68,7 +68,7 @@ fn get_constants_str(constants: RmkConstantsConfig) -> String {
         const_declaration!(pub(crate) FLASH_CHANNEL_SIZE = constants.flash_channel_size),
         const_declaration!(pub(crate) SPLIT_PERIPHERALS_NUM = constants.split_peripherals_num),
         const_declaration!(pub(crate) NUM_BLE_PROFILE = constants.ble_profiles_num),
-        const_declaration!(pub(crate) SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES = constants.split_central_sleep_timeout_minutes),
+        const_declaration!(pub(crate) SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS = constants.split_central_sleep_timeout_seconds),
         const_declaration!(pub(crate) MORSE_MAX_NUM = constants.morse_max_num),
         const_declaration!(pub(crate) MAX_PATTERNS_PER_KEY = constants.max_patterns_per_key),
         format!("pub(crate) const BUILD_HASH: u32 = {build_hash:#010x};\n"),
