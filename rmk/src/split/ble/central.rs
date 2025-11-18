@@ -23,7 +23,7 @@ use crate::split::ble::PeerAddress;
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
 use crate::storage::{FlashOperationMessage, Storage};
-use crate::{CONNECTION_STATE, SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES};
+use crate::{CONNECTION_STATE, SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS};
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
 pub(crate) static PERIPHERAL_FOUND: Signal<crate::RawMutex, (u8, BdAddr)> = Signal::new();
@@ -516,23 +516,26 @@ async fn sleep_manager_task<
     conn: &Connection<'a, P>,
 ) -> Result<(), BleHostError<C::Error>> {
     // Skip sleep management if timeout is 0 (disabled)
-    if SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES == 0 {
+    if SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS == 0 {
         info!("Sleep management disabled (timeout = 0)");
         core::future::pending::<()>().await;
         return Ok(());
     }
 
-    let sleep_timeout = SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES as u64 * 60;
-
     info!(
-        "Sleep manager started with {}min timeout",
-        SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES
+        "Sleep manager started with {}s timeout",
+        SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS
     );
 
     loop {
         if !SLEEPING_STATE.load(Ordering::Acquire) {
             // Wait for timeout or activity (false signal means activity/wakeup)
-            match select(Timer::after_secs(sleep_timeout), CENTRAL_SLEEP.wait()).await {
+            match select(
+                Timer::after_secs(SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS.into()),
+                CENTRAL_SLEEP.wait(),
+            )
+            .await
+            {
                 Either::First(_) => {
                     // Timeout: enter sleep mode
                 }
