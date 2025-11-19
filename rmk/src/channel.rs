@@ -91,6 +91,6 @@ pub fn send_controller_event(publisher: &mut ControllerPub, event: ControllerEve
 #[cfg(feature = "controller")]
 pub fn send_controller_event_new(event: ControllerEvent) {
     if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
-        send_controller_event(publisher, event);
+        send_controller_event(&mut publisher, event);
     }
 }
