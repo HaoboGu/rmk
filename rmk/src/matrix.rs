@@ -476,7 +476,6 @@ where
         for out in self.get_output_pins_mut().iter_mut() {
             out.set_high().ok();
         }
-        Timer::after_micros(1).await;
 
         // Wait for any key press
         self.wait_input_pins().await;
