@@ -527,6 +527,9 @@ async fn sleep_manager_task<
         SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS
     );
 
+    #[cfg(feature = "controller")]
+    let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
+
     loop {
         if !SLEEPING_STATE.load(Ordering::Acquire) {
             // Wait for timeout or activity (false signal means activity/wakeup)
@@ -574,12 +577,16 @@ async fn sleep_manager_task<
             // Update connection parameters
             update_conn_params(stack, conn, &conn_params).await;
             SLEEPING_STATE.store(true, Ordering::Release);
+            #[cfg(feature = "controller")]
+            send_controller_event(&mut controller_pub, ControllerEvent::Sleep(true));
         } else {
             // Wait for activity to wake up (false signal means activity/wakeup)
             let signal_value = CENTRAL_SLEEP.wait().await;
             if !signal_value {
                 info!("Waking up from sleep mode due to activity");
                 SLEEPING_STATE.store(false, Ordering::Release);
+                #[cfg(feature = "controller")]
+                send_controller_event(&mut controller_pub, ControllerEvent::Sleep(false));
 
                 // Restore normal connection parameters
                 update_conn_params(stack, conn, &defaul_central_conn_param()).await;
