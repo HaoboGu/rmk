@@ -1776,10 +1776,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         match select(embassy_time::Timer::after_millis(5000), KEY_EVENT_CHANNEL.receive()).await {
                             Either::First(_) => {
                                 // Timeout reached, send clear peer message
+                                #[cfg(feature = "controller")]
+                                send_controller_event(&mut self.controller_pub, ControllerEvent::ClearPeer);
                                 info!("Clear peer");
-                                if let Ok(publisher) = crate::channel::CONTROLLER_CHANNEL.publisher() {
-                                    publisher.publish_immediate(crate::event::ControllerEvent::ClearPeer);
-                                }
                             }
                             Either::Second(e) => {
                                 // Received a new key event before timeout, add to unprocessed list
