@@ -14,7 +14,7 @@ use trouble_host::prelude::*;
 use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap, core::cell::RefCell};
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event, send_controller_event_new},
+    crate::channel::{CONTROLLER_CHANNEL, send_controller_event, send_controller_event_new},
     crate::event::ControllerEvent,
 };
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
