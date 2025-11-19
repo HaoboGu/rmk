@@ -14,7 +14,7 @@ use trouble_host::prelude::*;
 use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap, core::cell::RefCell};
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
+    crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event, send_controller_event_new},
     crate::event::ControllerEvent,
 };
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
@@ -146,9 +146,6 @@ pub(crate) async fn run_ble<
     #[cfg(not(feature = "_no_usb"))]
     let mut usb_device = _usb_builder.build();
 
-    #[cfg(feature = "controller")]
-    let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
-
     // Load current connection type
     #[cfg(feature = "storage")]
     {
@@ -166,18 +163,11 @@ pub(crate) async fn run_ble<
         }
 
         #[cfg(feature = "controller")]
-        send_controller_event(
-            &mut controller_pub,
-            ControllerEvent::ConnectionType(CONNECTION_TYPE.load(Ordering::SeqCst)),
-        );
+        send_controller_event_new(ControllerEvent::ConnectionType(CONNECTION_TYPE.load(Ordering::SeqCst)));
     }
 
     // Create profile manager
-    let mut profile_manager = ProfileManager::new(
-        stack,
-        #[cfg(feature = "controller")]
-        controller_pub,
-    );
+    let mut profile_manager = ProfileManager::new(stack);
 
     #[cfg(feature = "storage")]
     // Load saved bonding information
@@ -254,7 +244,15 @@ pub(crate) async fn run_ble<
 
     // Main loop
     join(background_task, async {
+        #[cfg(feature = "controller")]
+        let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
         loop {
+            // Advertising state
+            #[cfg(feature = "controller")]
+            send_controller_event(
+                &mut controller_pub,
+                ControllerEvent::BleState(ACTIVE_PROFILE.load(Ordering::Relaxed), BleState::Advertising),
+            );
             let adv_fut = advertise(rmk_config.device_config.product_name, &mut peripheral, &server);
             // USB + BLE dual mode
             #[cfg(not(feature = "_no_usb"))]
@@ -276,9 +274,10 @@ pub(crate) async fn run_ble<
                             Either4::First(_) => {
                                 info!("USB enabled, run USB keyboard");
                                 #[cfg(feature = "controller")]
-                                if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
-                                    send_controller_event(&mut publisher, ControllerEvent::BleState(0, BleState::None));
-                                }
+                                send_controller_event(
+                                    &mut controller_pub,
+                                    ControllerEvent::BleState(0, BleState::None),
+                                );
                                 // Re-send the consumed flag
                                 USB_ENABLED.signal(());
                                 let usb_fut = run_keyboard(
@@ -318,9 +317,10 @@ pub(crate) async fn run_ble<
                             Either4::Second(Err(BleHostError::BleHost(Error::Timeout))) => {
                                 warn!("Advertising timeout, sleep and wait for any key");
                                 #[cfg(feature = "controller")]
-                                if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
-                                    send_controller_event(&mut publisher, ControllerEvent::BleState(0, BleState::None));
-                                }
+                                send_controller_event(
+                                    &mut controller_pub,
+                                    ControllerEvent::BleState(0, BleState::None),
+                                );
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
@@ -377,9 +377,10 @@ pub(crate) async fn run_ble<
                                 warn!("Advertising timeout, sleep and wait for any key");
 
                                 #[cfg(feature = "controller")]
-                                if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
-                                    send_controller_event(&mut publisher, ControllerEvent::BleState(0, BleState::None));
-                                }
+                                send_controller_event(
+                                    &mut controller_pub,
+                                    ControllerEvent::BleState(0, BleState::None),
+                                );
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
@@ -506,6 +507,8 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let mut connected = false;
     #[cfg(feature = "controller")]
     let mut published_connected_state = false;
+    #[cfg(feature = "controller")]
+    let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
     loop {
         match conn.next().await {
             GattConnectionEvent::Disconnected { reason } => {
@@ -704,10 +707,11 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
         #[cfg(feature = "controller")]
         if connected && !published_connected_state {
             let profile = ACTIVE_PROFILE.load(Ordering::Acquire);
-            if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
-                send_controller_event(&mut publisher, ControllerEvent::BleState(profile, BleState::Connected));
-                published_connected_state = true;
-            }
+            send_controller_event(
+                &mut controller_pub,
+                ControllerEvent::BleState(profile, BleState::Connected),
+            );
+            published_connected_state = true;
         }
     }
     info!("[gatt] task finished");
@@ -755,16 +759,6 @@ async fn advertise<'a, 'b, C: Controller>(
             },
         )
         .await?;
-
-    // Advertising state
-    #[cfg(feature = "controller")]
-    if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
-        let profile = ACTIVE_PROFILE.load(Ordering::Relaxed);
-        send_controller_event(
-            &mut publisher,
-            ControllerEvent::BleState(profile, BleState::Advertising),
-        );
-    }
 
     // Timeout for advertising is 300s
     match with_timeout(Duration::from_secs(300), advertiser.accept()).await {

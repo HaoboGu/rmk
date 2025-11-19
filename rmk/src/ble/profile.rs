@@ -15,7 +15,7 @@ use {
 };
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{ControllerPub, send_controller_event},
+    crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
     crate::event::ControllerEvent,
 };
 
@@ -87,12 +87,12 @@ pub struct ProfileManager<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: P
 #[cfg(feature = "_ble")]
 impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileManager<'a, C, P> {
     /// Create a new profile manager
-    pub fn new(stack: &'a Stack<'a, C, P>, #[cfg(feature = "controller")] controller_pub: ControllerPub) -> Self {
+    pub fn new(stack: &'a Stack<'a, C, P>) -> Self {
         Self {
             bonded_devices: heapless::Vec::new(),
             stack,
             #[cfg(feature = "controller")]
-            controller_pub,
+            controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
         }
     }
 
