@@ -114,15 +114,16 @@ pub(crate) async fn process_vial<
         VialCommand::BehaviorSettingQuery => {
             report.input_data.fill(0xFF);
             let value = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
-            if value <= 7 {
+            if value <= 8 {
                 LittleEndian::write_u16(&mut report.input_data[0..2], 0x02);
                 LittleEndian::write_u16(&mut report.input_data[2..4], 0x06);
                 LittleEndian::write_u16(&mut report.input_data[4..6], 0x07);
                 LittleEndian::write_u16(&mut report.input_data[6..8], 0x12);
                 LittleEndian::write_u16(&mut report.input_data[8..10], 0x13);
                 LittleEndian::write_u16(&mut report.input_data[10..12], 0x16);
-                LittleEndian::write_u16(&mut report.input_data[12..14], 0x1A);
-                LittleEndian::write_u16(&mut report.input_data[14..16], 0x1B);
+                LittleEndian::write_u16(&mut report.input_data[12..14], 0x17);
+                LittleEndian::write_u16(&mut report.input_data[14..16], 0x1A);
+                LittleEndian::write_u16(&mut report.input_data[16..18], 0x1B);
             }
         }
         VialCommand::GetBehaviorSetting => {
@@ -166,6 +167,15 @@ pub(crate) async fn process_vial<
                         report.input_data[1] = 0
                     }
                 }
+                SettingKey::HoldOnOtherKeyPress => {
+                    if let Some(m) = keymap.borrow_mut().behavior.morse.default_profile.mode()
+                        && m == MorseMode::HoldOnOtherPress
+                    {
+                        report.input_data[1] = 1
+                    } else {
+                        report.input_data[1] = 0
+                    }
+                }
                 SettingKey::UnilateralTap => {
                     let unilateral_tap = keymap
                         .borrow()
@@ -201,10 +211,11 @@ pub(crate) async fn process_vial<
                 SettingKey::MorseTimeout => {
                     let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
                     let old = keymap.borrow().behavior.morse.default_profile;
-                    keymap.borrow_mut().behavior.morse.default_profile = old.with_hold_timeout_ms(Some(timeout_time));
+                    let new_profile = old.with_hold_timeout_ms(Some(timeout_time));
+                    keymap.borrow_mut().behavior.morse.default_profile = new_profile;
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
-                        .send(FlashOperationMessage::MorseHoldTimeout(timeout_time))
+                        .send(FlashOperationMessage::MorseDefaultProfile(new_profile))
                         .await;
                 }
                 SettingKey::OneShotTimeout => {
@@ -233,21 +244,59 @@ pub(crate) async fn process_vial<
                 }
 
                 SettingKey::PermissiveHold => {
-                    let mode = todo!("Get permissive hold bit from vial");
+                    let enabled = report.output_data[4] == 1;
                     let old = keymap.borrow().behavior.morse.default_profile;
-                    keymap.borrow_mut().behavior.morse.default_profile = old.with_mode(mode);
+                    let new_mode = if enabled {
+                        // Hold On Other Key Press has higher priority
+                        if old.mode() == Some(MorseMode::HoldOnOtherPress) {
+                            old.mode()
+                        } else {
+                            // Enable: Set to Permissive Hold (will override other modes)
+                            Some(MorseMode::PermissiveHold)
+                        }
+                    } else {
+                        // Disable: Only set to Normal if currently PermissiveHold
+                        if old.mode() == Some(MorseMode::PermissiveHold) {
+                            Some(MorseMode::Normal)
+                        } else {
+                            old.mode() // Keep current mode unchanged
+                        }
+                    };
+                    let new_profile = old.with_mode(new_mode);
+                    keymap.borrow_mut().behavior.morse.default_profile = new_profile;
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
-                        .send(FlashOperationMessage::UnilateralTap(report.output_data[4] == 1))
+                        .send(FlashOperationMessage::MorseDefaultProfile(new_profile))
+                        .await;
+                }
+                SettingKey::HoldOnOtherKeyPress => {
+                    let enabled = report.output_data[4] == 1;
+                    let old = keymap.borrow().behavior.morse.default_profile;
+                    let new_mode = if enabled {
+                        // Enable: Set to HoldOnOtherPress (will override other modes)
+                        Some(MorseMode::HoldOnOtherPress)
+                    } else {
+                        // Disable: Only set to Normal if currently HoldOnOtherPress
+                        if old.mode() == Some(MorseMode::HoldOnOtherPress) {
+                            Some(MorseMode::Normal)
+                        } else {
+                            old.mode() // Keep current mode unchanged
+                        }
+                    };
+                    let new_profile = old.with_mode(new_mode);
+                    keymap.borrow_mut().behavior.morse.default_profile = new_profile;
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::MorseDefaultProfile(new_profile))
                         .await;
                 }
                 SettingKey::UnilateralTap => {
                     let old = keymap.borrow().behavior.morse.default_profile;
-                    keymap.borrow_mut().behavior.morse.default_profile =
-                        old.with_unilateral_tap(Some(report.output_data[4] == 1));
+                    let new_profile = old.with_unilateral_tap(Some(report.output_data[4] == 1));
+                    keymap.borrow_mut().behavior.morse.default_profile = new_profile;
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
-                        .send(FlashOperationMessage::UnilateralTap(report.output_data[4] == 1))
+                        .send(FlashOperationMessage::MorseDefaultProfile(new_profile))
                         .await;
                 }
                 SettingKey::PriorIdleTime => {
