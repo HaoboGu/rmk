@@ -2,16 +2,15 @@
 //!
 use core::sync::atomic::Ordering;
 
+use super::SplitMessage;
+use crate::CONNECTION_STATE;
+use crate::channel::{CONTROLLER_CHANNEL, EVENT_CHANNEL, KEY_EVENT_CHANNEL, send_controller_event};
+use crate::event::{ControllerEvent, Event, KeyboardEvent, KeyboardEventPos};
+use crate::input_device::InputDevice;
 use embassy_futures::select::{Either3, select3};
 use embassy_time::{Instant, Timer};
 #[cfg(all(feature = "storage", feature = "_ble"))]
 use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::storage::FlashOperationMessage};
-
-use super::SplitMessage;
-use crate::CONNECTION_STATE;
-use crate::channel::{CONTROLLER_CHANNEL, EVENT_CHANNEL, KEY_EVENT_CHANNEL};
-use crate::event::{ControllerEvent, Event, KeyboardEvent, KeyboardEventPos};
-use crate::input_device::InputDevice;
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -215,6 +214,15 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                     } else {
                         warn!("Event from peripheral is ignored because the connection is not established.");
                     }
+                }
+                Ok(SplitMessage::BatteryLevel(level)) => {
+                    // TODO: Process battery level from peripheral
+                    // // Publish battery level to controller channel when connected
+                    // if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                    //     if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
+                    //         send_controller_event(&mut publisher, ControllerEvent::Battery(level));
+                    //     }
+                    // }
                 }
                 Ok(_) => {
                     // Ignore other types of messages

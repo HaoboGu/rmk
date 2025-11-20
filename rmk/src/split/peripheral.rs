@@ -1,6 +1,6 @@
 #[cfg(feature = "_ble")]
 use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
-use embassy_futures::select::select3;
+use embassy_futures::select::{Either3, select3};
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
 #[cfg(all(feature = "_ble", feature = "storage"))]
@@ -11,7 +11,7 @@ use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash, troub
 use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
 use crate::CONNECTION_STATE;
-use crate::channel::{CONTROLLER_CHANNEL, EVENT_CHANNEL, KEY_EVENT_CHANNEL, send_controller_event};
+use crate::channel::{CONTROLLER_CHANNEL, ControllerSub, EVENT_CHANNEL, KEY_EVENT_CHANNEL, send_controller_event};
 use crate::event::ControllerEvent;
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
@@ -55,11 +55,17 @@ pub async fn run_rmk_split_peripheral<
 /// The split peripheral instance.
 pub(crate) struct SplitPeripheral<S: SplitWriter + SplitReader> {
     split_driver: S,
+    #[cfg(feature = "controller")]
+    controller_sub: ControllerSub,
 }
 
 impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     pub(crate) fn new(split_driver: S) -> Self {
-        Self { split_driver }
+        Self {
+            split_driver,
+            #[cfg(feature = "controller")]
+            controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
+        }
     }
 
     /// Run the peripheral keyboard service.
@@ -68,6 +74,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     /// If also receives split messages from the central through `SplitReader`.
     pub(crate) async fn run(&mut self) {
         CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
+        // TODO: subscribe battery change and forward to central
         loop {
             match select3(
                 self.split_driver.read(),
