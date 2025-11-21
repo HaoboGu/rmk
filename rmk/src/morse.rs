@@ -1,11 +1,13 @@
 use heapless::{LinearMap, Vec};
+use postcard::experimental::max_size::MaxSize;
 use rmk_types::action::{Action, MorseProfile};
+use serde::{Deserialize, Serialize};
 
 use crate::MAX_PATTERNS_PER_KEY;
 
 /// MorsePattern is a sequence of maximum 15 taps or holds that can be encoded into an u16:
 /// 0x1 when empty, then 0 for tap or 1 for hold shifted from the right
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MorsePattern(u16);
 
@@ -73,14 +75,71 @@ impl MorsePattern {
 /// The maximum number of taps is limited to 15 by the internal u16 representation of MorsePattern.
 /// There is a lists of (pattern, corresponding action) pairs for each morse key:
 /// The number of pairs is limited by MAX_PATTERNS_PER_KEY, which is a const generic parameter.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 // #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Morse<const NUM_PATTERNS: usize = MAX_PATTERNS_PER_KEY> {
     /// The profile of this morse key, which defines the timing parameters, etc.
     /// If some of its fields are filled with None, the global default value will be used.
     pub profile: MorseProfile,
     /// The list of pattern -> action pairs, which can be triggered
+    #[serde(with = "morse_actions_serde")]
     pub actions: LinearMap<MorsePattern, Action, NUM_PATTERNS>,
+}
+
+// Custom serde module for LinearMap
+mod morse_actions_serde {
+    use super::*;
+    use serde::{Deserializer, Serializer, de::Error};
+
+    pub fn serialize<S, const N: usize>(
+        map: &LinearMap<MorsePattern, Action, N>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Convert to Vec for serialization
+        let vec: heapless::Vec<(u16, Action), N> = map.iter().map(|(k, v)| (k.to_u16(), *v)).collect();
+        vec.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D, const N: usize>(deserializer: D) -> Result<LinearMap<MorsePattern, Action, N>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use core::fmt;
+        use serde::de::{SeqAccess, Visitor};
+
+        struct VecVisitor<const N: usize>;
+
+        impl<'de, const N: usize> Visitor<'de> for VecVisitor<N> {
+            type Value = heapless::Vec<(u16, Action), N>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write!(formatter, "a sequence of (u16, Action) tuples")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut vec = heapless::Vec::new();
+                while let Some(elem) = seq.next_element::<(u16, Action)>()? {
+                    vec.push(elem)
+                        .map_err(|_| serde::de::Error::custom("Vec capacity exceeded"))?;
+                }
+                Ok(vec)
+            }
+        }
+
+        let vec = deserializer.deserialize_seq(VecVisitor::<N>)?;
+        let mut map = LinearMap::new();
+        for (pattern, action) in vec {
+            map.insert(MorsePattern::from_u16(pattern), action)
+                .map_err(|_| D::Error::custom("Failed to insert into LinearMap"))?;
+        }
+        Ok(map)
+    }
 }
 
 #[cfg(feature = "defmt")]
@@ -207,6 +266,164 @@ impl Morse {
             }
         } else {
             let _ = self.actions.remove(&pattern);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rmk_types::keycode::KeyCode;
+
+    #[test]
+    fn test_linear_map_serde_empty() {
+        // Test serialization/deserialization of empty LinearMap
+        let morse = Morse::<4> {
+            profile: MorseProfile::const_default(),
+            actions: heapless::LinearMap::default(),
+        };
+
+        let mut buffer = [0u8; 128];
+        let serialized = postcard::to_slice(&morse, &mut buffer).unwrap();
+        let deserialized: Morse<4> = postcard::from_bytes(serialized).unwrap();
+
+        assert_eq!(morse.actions.len(), deserialized.actions.len());
+        assert_eq!(morse.actions.len(), 0);
+    }
+
+    #[test]
+    fn test_linear_map_serde_single_entry() {
+        // Test with single entry
+        let mut morse = Morse::<4> {
+            profile: MorseProfile::const_default(),
+            actions: heapless::LinearMap::default(),
+        };
+        morse.actions.insert(TAP, Action::Key(KeyCode::A)).ok();
+
+        let mut buffer = [0u8; 128];
+        let serialized = postcard::to_slice(&morse, &mut buffer).unwrap();
+        let deserialized: Morse<4> = postcard::from_bytes(serialized).unwrap();
+
+        assert_eq!(morse.actions.len(), deserialized.actions.len());
+        assert_eq!(deserialized.actions.get(&TAP), Some(&Action::Key(KeyCode::A)));
+    }
+
+    #[test]
+    fn test_linear_map_serde_multiple_entries() {
+        // Test with multiple entries
+        let mut morse = Morse::<4> {
+            profile: MorseProfile::const_default(),
+            actions: heapless::LinearMap::default(),
+        };
+        morse.actions.insert(TAP, Action::Key(KeyCode::A)).ok();
+        morse.actions.insert(HOLD, Action::Key(KeyCode::B)).ok();
+        morse.actions.insert(DOUBLE_TAP, Action::Key(KeyCode::C)).ok();
+        morse.actions.insert(HOLD_AFTER_TAP, Action::Key(KeyCode::D)).ok();
+
+        let mut buffer = [0u8; 128];
+        let serialized = postcard::to_slice(&morse, &mut buffer).unwrap();
+        let deserialized: Morse<4> = postcard::from_bytes(serialized).unwrap();
+
+        assert_eq!(morse.actions.len(), deserialized.actions.len());
+        assert_eq!(morse.actions.len(), 4);
+
+        // Verify each entry
+        assert_eq!(deserialized.actions.get(&TAP), Some(&Action::Key(KeyCode::A)));
+        assert_eq!(deserialized.actions.get(&HOLD), Some(&Action::Key(KeyCode::B)));
+        assert_eq!(deserialized.actions.get(&DOUBLE_TAP), Some(&Action::Key(KeyCode::C)));
+        assert_eq!(
+            deserialized.actions.get(&HOLD_AFTER_TAP),
+            Some(&Action::Key(KeyCode::D))
+        );
+    }
+
+    #[test]
+    fn test_linear_map_serde_custom_patterns() {
+        // Test with custom morse patterns
+        let mut morse = Morse::<4> {
+            profile: MorseProfile::const_default(),
+            actions: heapless::LinearMap::default(),
+        };
+        morse
+            .actions
+            .insert(MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::E))
+            .ok();
+        morse
+            .actions
+            .insert(MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::F))
+            .ok();
+        morse
+            .actions
+            .insert(MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::G))
+            .ok();
+
+        let mut buffer = [0u8; 128];
+        let serialized = postcard::to_slice(&morse, &mut buffer).unwrap();
+        let deserialized: Morse<4> = postcard::from_bytes(serialized).unwrap();
+
+        assert_eq!(morse.actions.len(), deserialized.actions.len());
+
+        // Verify patterns are preserved correctly
+        for (original_pattern, original_action) in morse.actions.iter() {
+            let deserialized_action = deserialized.actions.get(original_pattern);
+            assert_eq!(deserialized_action, Some(original_action));
+        }
+    }
+
+    #[test]
+    fn test_linear_map_serde_with_profile() {
+        // Test that profile is also correctly serialized
+        let mut morse = Morse::<4> {
+            profile: MorseProfile::new(
+                Some(true),
+                Some(rmk_types::action::MorseMode::PermissiveHold),
+                Some(200),
+                Some(150),
+            ),
+            actions: heapless::LinearMap::default(),
+        };
+        morse.actions.insert(TAP, Action::Key(KeyCode::H)).ok();
+        morse.actions.insert(HOLD, Action::Key(KeyCode::I)).ok();
+
+        let mut buffer = [0u8; 128];
+        let serialized = postcard::to_slice(&morse, &mut buffer).unwrap();
+        let deserialized: Morse<4> = postcard::from_bytes(serialized).unwrap();
+
+        assert_eq!(morse.profile, deserialized.profile);
+        assert_eq!(morse.actions.len(), deserialized.actions.len());
+        assert_eq!(deserialized.actions.get(&TAP), Some(&Action::Key(KeyCode::H)));
+        assert_eq!(deserialized.actions.get(&HOLD), Some(&Action::Key(KeyCode::I)));
+    }
+
+    #[test]
+    fn test_linear_map_order_independence() {
+        // Test that deserialization produces same results regardless of insertion order
+        let mut morse1 = Morse::<4> {
+            profile: MorseProfile::const_default(),
+            actions: heapless::LinearMap::default(),
+        };
+        morse1.actions.insert(TAP, Action::Key(KeyCode::A)).ok();
+        morse1.actions.insert(HOLD, Action::Key(KeyCode::B)).ok();
+
+        let mut morse2 = Morse::<4> {
+            profile: MorseProfile::const_default(),
+            actions: heapless::LinearMap::default(),
+        };
+        morse2.actions.insert(HOLD, Action::Key(KeyCode::B)).ok();
+        morse2.actions.insert(TAP, Action::Key(KeyCode::A)).ok();
+
+        let mut buffer1 = [0u8; 128];
+        let mut buffer2 = [0u8; 128];
+        let serialized1 = postcard::to_slice(&morse1, &mut buffer1).unwrap();
+        let serialized2 = postcard::to_slice(&morse2, &mut buffer2).unwrap();
+
+        let deserialized1: Morse<4> = postcard::from_bytes(serialized1).unwrap();
+        let deserialized2: Morse<4> = postcard::from_bytes(serialized2).unwrap();
+
+        // Both should have the same content
+        assert_eq!(deserialized1.actions.len(), deserialized2.actions.len());
+        for (pattern, action) in deserialized1.actions.iter() {
+            assert_eq!(deserialized2.actions.get(pattern), Some(action));
         }
     }
 }

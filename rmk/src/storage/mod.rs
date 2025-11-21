@@ -3,7 +3,8 @@ pub mod dummy_flash;
 use core::fmt::Debug;
 use core::ops::Range;
 
-use byteorder::{BigEndian, ByteOrder};
+#[cfg(feature = "_ble")]
+use crate::ble::profile::ProfileInfo;
 use embassy_embedded_hal::adapter::BlockingAsync;
 use embassy_sync::signal::Signal;
 use embassy_time::Duration;
@@ -12,12 +13,6 @@ use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_item, store_item};
-#[cfg(feature = "_ble")]
-use {
-    crate::ble::ble_server::CCCD_TABLE_SIZE,
-    crate::ble::profile::ProfileInfo,
-    trouble_host::{BondInformation, IdentityResolvingKey, LongTermKey, prelude::*},
-};
 #[cfg(feature = "host")]
 use {
     crate::host::storage::{KeymapData, KeymapKey},
@@ -198,107 +193,87 @@ pub(crate) fn get_morse_key(idx: u8) -> u32 {
     0x7000 + idx as u32
 }
 
-// TODO: Move ser/de code to corresponding structs
+/// Convert postcard::Error to SerializationError
+pub(crate) fn postcard_error_to_serialization_error(e: postcard::Error) -> SerializationError {
+    match e {
+        postcard::Error::SerializeBufferFull => SerializationError::BufferTooSmall,
+        postcard::Error::DeserializeUnexpectedEnd
+        | postcard::Error::DeserializeBadVarint
+        | postcard::Error::DeserializeBadBool
+        | postcard::Error::DeserializeBadChar
+        | postcard::Error::DeserializeBadUtf8
+        | postcard::Error::DeserializeBadOption
+        | postcard::Error::DeserializeBadEnum
+        | postcard::Error::DeserializeBadEncoding => SerializationError::InvalidFormat,
+        // Other errors with debug info
+        _ => {
+            #[cfg(feature = "defmt")]
+            {
+                defmt::error!("Unexpected postcard error: {:?}", defmt::Debug2Format(&e));
+            }
+            SerializationError::Custom(1)
+        }
+    }
+}
+
+/// Macro to serialize standard variants: key + postcard-serialized data
+/// Used by both StorageData and KeymapData
+#[macro_export]
+macro_rules! ser_storage_variant {
+    ($buffer:expr, $key:expr, $data:expr) => {{
+        $buffer[0] = $key as u8;
+        let len = postcard::to_slice($data, &mut $buffer[1..])
+            .map_err($crate::storage::postcard_error_to_serialization_error)?
+            .len();
+        Ok(len + 1)
+    }};
+}
+
+// Helper methods for StorageData
+impl StorageData {
+    /// Get the StorageKey for this variant (used by store_item calls)
+    const fn key(&self) -> u32 {
+        match self {
+            Self::StorageConfig(_) => StorageKeys::StorageConfig as u32,
+            Self::LayoutConfig(_) => StorageKeys::LayoutConfig as u32,
+            Self::BehaviorConfig(_) => StorageKeys::BehaviorConfig as u32,
+            Self::ConnectionType(_) => StorageKeys::ConnectionType as u32,
+            #[cfg(all(feature = "_ble", feature = "split"))]
+            Self::PeerAddress(_) => StorageKeys::PeerAddress as u32,
+            #[cfg(feature = "_ble")]
+            Self::BondInfo(_) => StorageKeys::BleBondInfo as u32,
+            #[cfg(feature = "_ble")]
+            Self::ActiveBleProfile(_) => StorageKeys::ActiveBleProfile as u32,
+            #[cfg(feature = "host")]
+            Self::VialData(_) => {
+                // VialData variants have their own keys managed elsewhere
+                // This shouldn't be called for VialData, use specific key functions instead
+                0
+            }
+        }
+    }
+}
+
 impl Value<'_> for StorageData {
+    #[inline(never)]
     fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, SerializationError> {
-        if buffer.len() < 6 {
+        if buffer.is_empty() {
             return Err(SerializationError::BufferTooSmall);
         }
-        match self {
-            StorageData::StorageConfig(c) => {
-                buffer[0] = StorageKeys::StorageConfig as u8;
-                // If enabled, write 0 to flash.
-                if c.enable {
-                    buffer[1] = 0;
-                } else {
-                    buffer[1] = 1;
-                }
-                // Save build_hash
-                BigEndian::write_u32(&mut buffer[2..6], c.build_hash);
-                Ok(6)
-            }
-            StorageData::LayoutConfig(c) => {
-                buffer[0] = StorageKeys::LayoutConfig as u8;
-                buffer[1] = c.default_layer;
-                BigEndian::write_u32(&mut buffer[2..6], c.layout_option);
-                Ok(6)
-            }
-            StorageData::BehaviorConfig(c) => {
-                buffer[0] = StorageKeys::BehaviorConfig as u8;
-                BigEndian::write_u16(&mut buffer[1..3], c.prior_idle_time);
-                BigEndian::write_u16(&mut buffer[3..5], c.morse_hold_timeout_ms);
-                buffer[5] = if c.unilateral_tap { 1 } else { 0 };
 
-                BigEndian::write_u16(&mut buffer[6..8], c.combo_timeout);
-                BigEndian::write_u16(&mut buffer[8..10], c.one_shot_timeout);
-                BigEndian::write_u16(&mut buffer[10..12], c.tap_interval);
-                BigEndian::write_u16(&mut buffer[12..14], c.tap_capslock_interval);
-                Ok(14)
-            }
-            #[cfg(feature = "host")]
-            StorageData::VialData(vial_data) => vial_data.serialize_into(buffer),
-            StorageData::ConnectionType(ty) => {
-                buffer[0] = StorageKeys::ConnectionType as u8;
-                buffer[1] = *ty;
-                Ok(2)
-            }
+        match self {
+            Self::StorageConfig(d) => ser_storage_variant!(buffer, StorageKeys::StorageConfig, d),
+            Self::LayoutConfig(d) => ser_storage_variant!(buffer, StorageKeys::LayoutConfig, d),
+            Self::BehaviorConfig(d) => ser_storage_variant!(buffer, StorageKeys::BehaviorConfig, d),
+            Self::ConnectionType(d) => ser_storage_variant!(buffer, StorageKeys::ConnectionType, d),
             #[cfg(all(feature = "_ble", feature = "split"))]
-            StorageData::PeerAddress(p) => {
-                if buffer.len() < 9 {
-                    return Err(SerializationError::BufferTooSmall);
-                }
-                buffer[0] = StorageKeys::PeerAddress as u8;
-                buffer[1] = p.peer_id;
-                buffer[2] = if p.is_valid { 1 } else { 0 };
-                buffer[3..9].copy_from_slice(&p.address);
-                Ok(9)
-            }
+            Self::PeerAddress(d) => ser_storage_variant!(buffer, StorageKeys::PeerAddress, d),
             #[cfg(feature = "_ble")]
-            StorageData::ActiveBleProfile(slot_num) => {
-                buffer[0] = StorageKeys::ActiveBleProfile as u8;
-                buffer[1] = *slot_num;
-                Ok(2)
-            }
+            Self::BondInfo(d) => ser_storage_variant!(buffer, StorageKeys::BleBondInfo, d),
             #[cfg(feature = "_ble")]
-            StorageData::BondInfo(b) => {
-                if buffer.len() < 42 + CCCD_TABLE_SIZE * 4 {
-                    return Err(SerializationError::BufferTooSmall);
-                }
-                buffer[0] = StorageKeys::BleBondInfo as u8;
-                let ltk = b.info.ltk.to_le_bytes();
-                let address = b.info.identity.bd_addr;
-                let irk = match b.info.identity.irk {
-                    Some(irk) => irk.to_le_bytes(),
-                    None => [0; 16],
-                };
-                let security_level = match b.info.security_level {
-                    SecurityLevel::NoEncryption => 0,
-                    SecurityLevel::Encrypted => 1,
-                    SecurityLevel::EncryptedAuthenticated => 2,
-                };
-                let is_bonded = if b.info.is_bonded { 1 } else { 0 };
-                buffer[1] = b.slot_num;
-                buffer[2..18].copy_from_slice(&ltk);
-                buffer[18] = security_level;
-                buffer[19] = is_bonded;
-                buffer[20..26].copy_from_slice(address.raw());
-                buffer[26..42].copy_from_slice(&irk);
-                let cccd_table = b.cccd_table.inner();
-                for i in 0..CCCD_TABLE_SIZE {
-                    match cccd_table.get(i) {
-                        Some(cccd) => {
-                            let handle: u16 = cccd.0;
-                            let cccd: u16 = cccd.1.raw();
-                            buffer[42 + i * 4..44 + i * 4].copy_from_slice(&handle.to_le_bytes());
-                            buffer[44 + i * 4..46 + i * 4].copy_from_slice(&cccd.to_le_bytes());
-                        }
-                        None => {
-                            buffer[42 + i * 4..46 + i * 4].copy_from_slice(&[0, 0, 0, 0]);
-                        }
-                    };
-                }
-                Ok(42 + CCCD_TABLE_SIZE * 4)
-            }
+            Self::ActiveBleProfile(d) => ser_storage_variant!(buffer, StorageKeys::ActiveBleProfile, d),
+            #[cfg(feature = "host")]
+            Self::VialData(vial_data) => vial_data.serialize_into(buffer),
         }
     }
 
@@ -309,154 +284,62 @@ impl Value<'_> for StorageData {
         if buffer.is_empty() {
             return Err(SerializationError::InvalidFormat);
         }
-        if let Some(key_type) = StorageKeys::from_u8(buffer[0]) {
-            match key_type {
-                StorageKeys::StorageConfig => {
-                    if buffer.len() < 6 {
-                        return Err(SerializationError::BufferTooSmall);
-                    }
-                    // 1 is the initial state of flash, so it means storage is NOT initialized
-                    if buffer[1] == 1 {
-                        Ok(StorageData::StorageConfig(LocalStorageConfig {
-                            enable: false,
-                            build_hash: BUILD_HASH,
-                        }))
-                    } else {
-                        // Enabled, read build hash
-                        let build_hash = BigEndian::read_u32(&buffer[2..6]);
-                        Ok(StorageData::StorageConfig(LocalStorageConfig {
-                            enable: true,
-                            build_hash,
-                        }))
-                    }
-                }
 
-                StorageKeys::LayoutConfig => {
-                    let default_layer = buffer[1];
-                    let layout_option = BigEndian::read_u32(&buffer[2..6]);
-                    Ok(StorageData::LayoutConfig(LayoutConfig {
-                        default_layer,
-                        layout_option,
-                    }))
-                }
-                StorageKeys::ConnectionType => Ok(StorageData::ConnectionType(buffer[1])),
-                StorageKeys::BehaviorConfig => {
-                    if buffer.len() < 14 {
-                        return Err(SerializationError::BufferTooSmall);
-                    }
-                    let keymap_config = BehaviorConfig {
-                        prior_idle_time: BigEndian::read_u16(&buffer[1..3]),
-                        morse_hold_timeout_ms: BigEndian::read_u16(&buffer[3..5]),
-                        unilateral_tap: buffer[5] != 0,
+        let key = StorageKeys::from_u8(buffer[0]).ok_or(SerializationError::InvalidFormat)?;
 
-                        combo_timeout: BigEndian::read_u16(&buffer[6..8]),
-                        one_shot_timeout: BigEndian::read_u16(&buffer[8..10]),
-                        tap_interval: BigEndian::read_u16(&buffer[10..12]),
-                        tap_capslock_interval: BigEndian::read_u16(&buffer[12..14]),
-                    };
-                    Ok(StorageData::BehaviorConfig(keymap_config))
-                }
-                #[cfg(feature = "host")]
-                StorageKeys::KeymapConfig
-                | StorageKeys::MacroData
-                | StorageKeys::ComboData
-                | StorageKeys::EncoderKeys
-                | StorageKeys::ForkData
-                | StorageKeys::MorseData => KeymapData::deserialize_from(buffer).map(StorageData::VialData),
-                #[cfg(all(feature = "_ble", feature = "split"))]
-                StorageKeys::PeerAddress => {
-                    if buffer.len() < 9 {
-                        return Err(SerializationError::InvalidData);
-                    }
-                    let peer_id = buffer[1];
-                    let is_valid = buffer[2] != 0;
-                    let mut address = [0u8; 6];
-                    address.copy_from_slice(&buffer[3..9]);
-                    Ok(StorageData::PeerAddress(PeerAddress {
-                        peer_id,
-                        is_valid,
-                        address,
-                    }))
-                }
-                #[cfg(feature = "_ble")]
-                StorageKeys::ActiveBleProfile => {
-                    if buffer.len() < 2 {
-                        return Err(SerializationError::BufferTooSmall);
-                    }
-                    Ok(StorageData::ActiveBleProfile(buffer[1]))
-                }
-                #[cfg(feature = "_ble")]
-                StorageKeys::BleBondInfo => {
-                    if buffer.len() < 42 + CCCD_TABLE_SIZE * 4 {
-                        return Err(SerializationError::BufferTooSmall);
-                    }
-                    let slot_num = buffer[1];
-                    let ltk = LongTermKey::from_le_bytes(buffer[2..18].try_into().unwrap());
-                    let security_level = match buffer[18] {
-                        1 => SecurityLevel::Encrypted,
-                        2 => SecurityLevel::EncryptedAuthenticated,
-                        _ => SecurityLevel::NoEncryption,
-                    };
-                    let is_bonded = buffer[19] == 1;
-                    let address = BdAddr::new(buffer[20..26].try_into().unwrap());
-                    let irk = IdentityResolvingKey::from_le_bytes(buffer[26..42].try_into().unwrap());
-                    // Use all 0s as the empty irk
-                    let irk = if irk.0 == 0 { None } else { Some(irk) };
-                    let info = BondInformation::new(Identity { bd_addr: address, irk }, ltk, security_level, is_bonded);
-                    // Read info:
-                    let mut cccd_table_values = [(0u16, CCCD::default()); CCCD_TABLE_SIZE];
-                    for i in 0..CCCD_TABLE_SIZE {
-                        let handle = u16::from_le_bytes(buffer[42 + i * 4..44 + i * 4].try_into().unwrap());
-                        let cccd = u16::from_le_bytes(buffer[44 + i * 4..46 + i * 4].try_into().unwrap());
-                        cccd_table_values[i] = (handle, cccd.into());
-                    }
-                    Ok(StorageData::BondInfo(ProfileInfo {
-                        slot_num,
-                        removed: false,
-                        info,
-                        cccd_table: CccdTable::new(cccd_table_values),
-                    }))
-                }
-            }
-        } else {
-            Err(SerializationError::Custom(1))
-        }
-    }
-}
-
-impl StorageData {
-    fn key(&self) -> u32 {
-        match self {
-            StorageData::StorageConfig(_) => StorageKeys::StorageConfig as u32,
-            StorageData::LayoutConfig(_) => StorageKeys::LayoutConfig as u32,
-            StorageData::BehaviorConfig(_) => StorageKeys::BehaviorConfig as u32,
-            StorageData::ConnectionType(_) => StorageKeys::ConnectionType as u32,
+        match key {
+            StorageKeys::StorageConfig => Ok(Self::StorageConfig(
+                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
+            )),
+            StorageKeys::LayoutConfig => Ok(Self::LayoutConfig(
+                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
+            )),
+            StorageKeys::BehaviorConfig => Ok(Self::BehaviorConfig(
+                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
+            )),
+            StorageKeys::ConnectionType => Ok(Self::ConnectionType(
+                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
+            )),
             #[cfg(all(feature = "_ble", feature = "split"))]
-            StorageData::PeerAddress(p) => get_peer_address_key(p.peer_id),
+            StorageKeys::PeerAddress => Ok(Self::PeerAddress(
+                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
+            )),
             #[cfg(feature = "_ble")]
-            StorageData::ActiveBleProfile(_) => StorageKeys::ActiveBleProfile as u32,
+            StorageKeys::BleBondInfo => Ok(Self::BondInfo(
+                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
+            )),
             #[cfg(feature = "_ble")]
-            StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
+            StorageKeys::ActiveBleProfile => Ok(Self::ActiveBleProfile(
+                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
+            )),
             #[cfg(feature = "host")]
-            StorageData::VialData(_) => panic!("To get key for VialData, use `get_xxx_key` instead"),
+            StorageKeys::KeymapConfig
+            | StorageKeys::MacroData
+            | StorageKeys::ComboData
+            | StorageKeys::EncoderKeys
+            | StorageKeys::ForkData
+            | StorageKeys::MorseData => {
+                // VialData keys handled by KeymapData
+                KeymapData::deserialize_from(buffer).map(Self::VialData)
+            }
         }
     }
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, postcard::experimental::max_size::MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LocalStorageConfig {
     enable: bool,
     build_hash: u32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, postcard::experimental::max_size::MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LayoutConfig {
     default_layer: u8,
     layout_option: u32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, postcard::experimental::max_size::MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct BehaviorConfig {
     // Enable flow tap for morse/tap-hold
@@ -775,18 +658,35 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         self.storage_range.clone(),
                         &mut storage_cache,
                         &mut self.buffer,
-                        &data.key(),
+                        &(StorageKeys::ActiveBleProfile as u32),
                         &data,
                     )
                     .await
                 }
                 #[cfg(feature = "_ble")]
-                FlashOperationMessage::ClearSlot(key) => {
-                    info!("Clearing bond info slot_num: {}", key);
+                FlashOperationMessage::ClearSlot(slot_num) => {
+                    use crate::ble::ble_server::CCCD_TABLE_SIZE;
+                    use bt_hci::param::BdAddr;
+                    use trouble_host::{
+                        BondInformation, Identity, LongTermKey,
+                        prelude::{CCCD, CccdTable, SecurityLevel},
+                    };
+
+                    info!("Clearing bond info slot_num: {}", slot_num);
                     // Remove item in `sequential-storage` is quite expensive, so just override the item with `removed = true`
                     let empty = ProfileInfo {
                         removed: true,
-                        ..Default::default()
+                        slot_num,
+                        info: BondInformation::new(
+                            Identity {
+                                bd_addr: BdAddr::new([0; 6]),
+                                irk: None,
+                            },
+                            LongTermKey::from_le_bytes([0; 16]),
+                            SecurityLevel::NoEncryption,
+                            false,
+                        ),
+                        cccd_table: CccdTable::new([(0u16, CCCD::default()); CCCD_TABLE_SIZE]),
                     };
                     let data = StorageData::BondInfo(empty);
                     store_item::<u32, StorageData, _>(
@@ -794,7 +694,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         self.storage_range.clone(),
                         &mut storage_cache,
                         &mut self.buffer,
-                        &data.key(),
+                        &get_bond_info_key(slot_num),
                         &data,
                     )
                     .await
@@ -802,13 +702,13 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 #[cfg(feature = "_ble")]
                 FlashOperationMessage::ProfileInfo(b) => {
                     debug!("Saving profile info: {:?}", b);
-                    let data = StorageData::BondInfo(b);
+                    let data = StorageData::BondInfo(b.clone());
                     store_item::<u32, StorageData, _>(
                         &mut self.flash,
                         self.storage_range.clone(),
                         &mut storage_cache,
                         &mut self.buffer,
-                        &data.key(),
+                        &get_bond_info_key(b.slot_num),
                         &data,
                     )
                     .await
