@@ -38,3 +38,19 @@ There are a few more things that you need to do:
 
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
 ```
+
+## External VCC
+
+Some boards, such as the nice!nano have an external 3.3V regulator that can be used to power the LEDs. If not used, the regulator can be disabled by pulling `P0_13` low to safe power.
+
+In the case of the nice!nano, this can be done by adding the following line to `main.rs`
+```rust
+    // Disable external voltage regulator
+    Output::new(peripherals.P0_13, Level::Low, OutputDrive::Standard).persist();
+```
+or the following snippet to your `keyboard.toml`:
+```toml
+[[output]]
+pin = "P0_13"
+initial_state_active = false
+```
