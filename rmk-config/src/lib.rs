@@ -54,6 +54,8 @@ pub struct KeyboardTomlConfig {
     split: Option<SplitConfig>,
     /// Input device config
     input_device: Option<InputDeviceConfig>,
+    /// Static outputs config for the split
+    static_output: Option<Vec<StaticOutput>>,
     /// Set host configurations
     pub host: Option<HostConfig>,
     /// RMK config constants
@@ -613,6 +615,8 @@ pub struct SplitBoardConfig {
     pub matrix: MatrixConfig,
     /// Input device config for the split
     pub input_device: Option<InputDeviceConfig>,
+    /// Static outputs config for the split
+    pub static_output: Option<Vec<StaticOutput>>,
 }
 
 /// Serial port config
@@ -780,4 +784,28 @@ pub struct I2cConfig {
     pub sda: String,
     pub scl: String,
     pub address: u8,
+}
+
+/// Configuration for a static output pin
+#[allow(unused)]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StaticOutput {
+    pub pin: String,
+    pub level_high: bool,
+}
+
+impl KeyboardTomlConfig {
+    pub fn get_static_output_config(&self) -> Result<Vec<StaticOutput>, String> {
+        let static_output = self.static_output.clone();
+        let split = self.split.clone();
+        match (static_output, split) {
+            (None, Some(s)) => Ok(s.central.static_output.unwrap_or_default()),
+            (Some(c), None) => Ok(c),
+            (None, None) => Ok(Default::default()),
+            _ => {
+                Err("Use [[split.static_output]] to define static outputs for split in your keyboard.toml!".to_string())
+            }
+        }
+    }
 }

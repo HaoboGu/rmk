@@ -145,6 +145,22 @@ pub(crate) fn convert_gpio_str_to_output_pin(
     }
 }
 
+pub(crate) fn convert_gpio_str_to_persisted_output_pin(
+    chip: &ChipModel,
+    gpio_name: String,
+    low_active: bool,
+) -> proc_macro2::TokenStream {
+    let initializer = convert_gpio_str_to_output_pin(chip, gpio_name, low_active);
+    match chip.series {
+        ChipSeries::Stm32 | ChipSeries::Esp32 | ChipSeries::Rp2040 => {
+            quote! { ::core::mem::forget(#initializer); }
+        }
+        ChipSeries::Nrf52 => {
+            quote! { #initializer.persist();}
+        }
+    }
+}
+
 pub(crate) fn convert_gpio_str_to_input_pin(
     chip: &ChipModel,
     gpio_name: String,
