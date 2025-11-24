@@ -1,23 +1,20 @@
-use byteorder::{BigEndian, ByteOrder as _};
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-use heapless::Vec;
-use rmk_types::action::{EncoderAction, KeyAction, MorseProfile};
-use rmk_types::led_indicator::LedIndicator;
-use rmk_types::modifier::ModifierCombination;
-use rmk_types::mouse_button::MouseButtons;
+use postcard::experimental::max_size::MaxSize;
+use rmk_types::action::{EncoderAction, KeyAction};
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_item};
+use serde::{Deserialize, Serialize};
 
-use crate::combo::Combo;
-use crate::fork::{Fork, StateBits};
-use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
-use crate::morse::{Morse, MorsePattern};
+use crate::combo::{Combo, ComboConfig};
+use crate::fork::Fork;
+use crate::morse::Morse;
 use crate::storage::{
-    Storage, StorageData, StorageKeys, get_combo_key, get_fork_key, get_morse_key, print_storage_error,
+    Storage, StorageData, StorageKeys, get_combo_key, get_fork_key, get_morse_key,
+    postcard_error_to_serialization_error, print_storage_error,
 };
-use crate::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM};
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, ser_storage_variant};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct KeymapKey {
     pub(crate) row: u8,
@@ -26,35 +23,15 @@ pub(crate) struct KeymapKey {
     pub(crate) action: KeyAction,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) struct EncoderConfig {
+pub(crate) struct EncoderKeymap {
     /// Encoder index
     pub(crate) idx: u8,
     /// Layer
     pub(crate) layer: u8,
     /// Encoder action
     pub(crate) action: EncoderAction,
-}
-
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) struct ComboData {
-    /// Combo index
-    pub(crate) idx: usize,
-    /// Combo components
-    pub(crate) actions: [KeyAction; COMBO_MAX_LENGTH],
-    /// Combo output
-    pub(crate) output: KeyAction,
-}
-
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) struct ForkData {
-    /// Fork index
-    pub(crate) idx: usize,
-    /// Fork instance
-    pub(crate) fork: Fork,
 }
 
 /// Keymap data that can be updated by the host tools like Vial.
@@ -66,264 +43,99 @@ pub(crate) enum KeymapData {
     // Write a key in keymap
     KeymapKey(KeymapKey),
     // Write encoder configuration
-    Encoder(EncoderConfig),
-    // Write combo
-    Combo(ComboData),
-    // Write fork
-    Fork(ForkData),
+    Encoder(EncoderKeymap),
+    // Write combo - stores (idx, config)
+    Combo(u8, ComboConfig),
+    // Write fork - stores (idx, fork)
+    Fork(u8, Fork),
     // Write tap dance
     Morse(u8, Morse),
 }
 
 impl Value<'_> for KeymapData {
-    fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, sequential_storage::map::SerializationError> {
-        if buffer.len() < 6 {
+    fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, SerializationError> {
+        if buffer.is_empty() {
             return Err(SerializationError::BufferTooSmall);
         }
+
         match self {
-            KeymapData::KeymapKey(k) => {
-                buffer[0] = StorageKeys::KeymapConfig as u8;
-                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(k.action));
-                buffer[3] = k.layer;
-                buffer[4] = k.col;
-                buffer[5] = k.row;
-                Ok(6)
-            }
-
-            KeymapData::Encoder(e) => {
-                buffer[0] = StorageKeys::EncoderKeys as u8;
-                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(e.action.clockwise()));
-                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(e.action.counter_clockwise()));
-                buffer[5] = e.idx;
-                buffer[6] = e.layer;
-                Ok(7)
-            }
-
-            KeymapData::Macro(d) => {
-                if buffer.len() < MACRO_SPACE_SIZE + 1 {
+            Self::Macro(m) => {
+                // Macro: direct copy without postcard encoding
+                if buffer.len() < 1 + m.len() {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::MacroData as u8;
-                let mut idx = MACRO_SPACE_SIZE - 1;
-                // Check from the end of the macro buffer, find the first non-zero byte
-                while let Some(b) = d.get(idx) {
-                    if *b != 0 || idx == 0 {
-                        break;
-                    }
-                    idx -= 1;
-                }
-                let data_len = idx + 1;
-                // Macro data length
-                buffer[1..3].copy_from_slice(&(data_len as u16).to_le_bytes());
-                // Macro data
-                buffer[3..3 + data_len].copy_from_slice(&d[..data_len]);
-                Ok(data_len + 3)
+                buffer[1..1 + m.len()].copy_from_slice(m);
+                Ok(1 + m.len())
             }
-
-            KeymapData::Combo(combo) => {
-                if buffer.len() < 3 + COMBO_MAX_LENGTH * 2 {
-                    return Err(SerializationError::BufferTooSmall);
-                }
+            Self::KeymapKey(k) => ser_storage_variant!(buffer, StorageKeys::KeymapConfig, k),
+            Self::Encoder(e) => ser_storage_variant!(buffer, StorageKeys::EncoderKeys, e),
+            Self::Combo(idx, combo) => {
                 buffer[0] = StorageKeys::ComboData as u8;
-                for i in 0..COMBO_MAX_LENGTH {
-                    BigEndian::write_u16(&mut buffer[1 + i * 2..3 + i * 2], to_via_keycode(combo.actions[i]));
-                }
-                BigEndian::write_u16(
-                    &mut buffer[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
-                    to_via_keycode(combo.output),
-                );
-                Ok(3 + COMBO_MAX_LENGTH * 2)
+                let len = postcard::to_slice(&(*idx, *combo), &mut buffer[1..])
+                    .map_err(postcard_error_to_serialization_error)?
+                    .len();
+                Ok(len + 1)
             }
-
-            KeymapData::Fork(fork) => {
-                if buffer.len() < 13 {
-                    return Err(SerializationError::BufferTooSmall);
-                }
+            Self::Fork(idx, fork) => {
                 buffer[0] = StorageKeys::ForkData as u8;
-                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(fork.fork.trigger));
-                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(fork.fork.negative_output));
-                BigEndian::write_u16(&mut buffer[5..7], to_via_keycode(fork.fork.positive_output));
-
-                BigEndian::write_u16(
-                    &mut buffer[7..9],
-                    fork.fork.match_any.leds.into_bits() as u16 | (fork.fork.match_none.leds.into_bits() as u16) << 8,
-                );
-                BigEndian::write_u16(
-                    &mut buffer[9..11],
-                    fork.fork.match_any.mouse.into_bits() as u16 | (fork.fork.match_none.mouse.into_bits() as u16) << 8,
-                );
-                BigEndian::write_u32(
-                    &mut buffer[11..15],
-                    fork.fork.match_any.modifiers.into_bits() as u32
-                        | (fork.fork.match_none.modifiers.into_bits() as u32) << 8
-                        | (fork.fork.kept_modifiers.into_bits() as u32) << 16
-                        | if fork.fork.bindable { 1 << 24 } else { 0 },
-                );
-                Ok(15)
+                let len = postcard::to_slice(&(*idx, *fork), &mut buffer[1..])
+                    .map_err(postcard_error_to_serialization_error)?
+                    .len();
+                Ok(len + 1)
             }
-
-            KeymapData::Morse(_, morse) => {
-                let total_size = 7 + 4 * morse.actions.len();
-                if buffer.len() < total_size {
-                    return Err(SerializationError::BufferTooSmall);
-                }
+            Self::Morse(idx, morse) => {
                 buffer[0] = StorageKeys::MorseData as u8;
-                BigEndian::write_u32(&mut buffer[1..5], morse.profile.into());
-                BigEndian::write_u16(&mut buffer[5..7], morse.actions.len() as u16);
-                let mut i = 7;
-                for (pattern, action) in &morse.actions {
-                    BigEndian::write_u16(
-                        &mut buffer[i..i + 2],
-                        pattern.to_u16(), //pattern
-                    );
-                    BigEndian::write_u16(&mut buffer[i + 2..i + 4], to_via_keycode(KeyAction::Single(*action)));
-                    i += 4;
-                }
-
-                Ok(total_size)
+                let len = postcard::to_slice(&(*idx, morse.clone()), &mut buffer[1..])
+                    .map_err(postcard_error_to_serialization_error)?
+                    .len();
+                Ok(len + 1)
             }
         }
     }
 
-    fn deserialize_from(buffer: &'_ [u8]) -> Result<Self, sequential_storage::map::SerializationError>
+    fn deserialize_from(buffer: &[u8]) -> Result<Self, SerializationError>
     where
         Self: Sized,
     {
-        if buffer.is_empty() {
+        if buffer.len() < 2 {
             return Err(SerializationError::InvalidFormat);
         }
-        if let Some(key_type) = StorageKeys::from_u8(buffer[0]) {
-            match key_type {
-                StorageKeys::KeymapConfig => {
-                    let action = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
-                    let layer = buffer[3];
-                    let col = buffer[4];
-                    let row = buffer[5];
-                    Ok(KeymapData::KeymapKey(KeymapKey {
-                        row,
-                        col,
-                        layer,
-                        action,
-                    }))
+
+        let key = StorageKeys::from_u8(buffer[0]).ok_or(SerializationError::InvalidFormat)?;
+
+        match key {
+            StorageKeys::MacroData => {
+                // Large array: copy bytes directly
+                if buffer.len() < 1 + MACRO_SPACE_SIZE {
+                    return Err(SerializationError::InvalidFormat);
                 }
-                StorageKeys::MacroData => {
-                    if buffer.len() < 3 {
-                        return Err(SerializationError::InvalidData);
-                    }
-                    let mut buf = [0_u8; MACRO_SPACE_SIZE];
-                    let macro_length = u16::from_le_bytes(buffer[1..3].try_into().unwrap()) as usize;
-                    if macro_length > MACRO_SPACE_SIZE + 1 || buffer.len() < 3 + macro_length {
-                        // Check length
-                        return Err(SerializationError::InvalidData);
-                    }
-                    buf[0..macro_length].copy_from_slice(&buffer[3..3 + macro_length]);
-                    Ok(KeymapData::Macro(buf))
-                }
-
-                StorageKeys::ComboData => {
-                    if buffer.len() < 3 + COMBO_MAX_LENGTH * 2 {
-                        return Err(SerializationError::InvalidData);
-                    }
-                    let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
-                    for i in 0..COMBO_MAX_LENGTH {
-                        actions[i] = from_via_keycode(BigEndian::read_u16(&buffer[1 + i * 2..3 + i * 2]));
-                    }
-                    let output = from_via_keycode(BigEndian::read_u16(
-                        &buffer[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
-                    ));
-                    Ok(KeymapData::Combo(ComboData {
-                        idx: 0,
-                        actions,
-                        output,
-                    }))
-                }
-
-                StorageKeys::EncoderKeys => {
-                    if buffer.len() < 7 {
-                        return Err(SerializationError::BufferTooSmall);
-                    }
-                    let clockwise = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
-                    let counter_clockwise = from_via_keycode(BigEndian::read_u16(&buffer[3..5]));
-                    let idx = buffer[5];
-                    let layer = buffer[6];
-
-                    Ok(KeymapData::Encoder(EncoderConfig {
-                        idx,
-                        layer,
-                        action: EncoderAction::new(clockwise, counter_clockwise),
-                    }))
-                }
-
-                StorageKeys::ForkData => {
-                    if buffer.len() < 15 {
-                        return Err(SerializationError::InvalidData);
-                    }
-                    let trigger = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
-                    let negative_output = from_via_keycode(BigEndian::read_u16(&buffer[3..5]));
-                    let positive_output = from_via_keycode(BigEndian::read_u16(&buffer[5..7]));
-
-                    let led_masks = BigEndian::read_u16(&buffer[7..9]);
-                    let mouse_masks = BigEndian::read_u16(&buffer[9..11]);
-                    let modifier_masks = BigEndian::read_u32(&buffer[11..15]);
-
-                    let match_any = StateBits {
-                        modifiers: ModifierCombination::from_bits((modifier_masks & 0xFF) as u8),
-                        leds: LedIndicator::from_bits((led_masks & 0xFF) as u8),
-                        mouse: MouseButtons::from_bits((mouse_masks & 0xFF) as u8),
-                    };
-                    let match_none = StateBits {
-                        modifiers: ModifierCombination::from_bits(((modifier_masks >> 8) & 0xFF) as u8),
-                        leds: LedIndicator::from_bits(((led_masks >> 8) & 0xFF) as u8),
-                        mouse: MouseButtons::from_bits(((mouse_masks >> 8) & 0xFF) as u8),
-                    };
-                    let kept_modifiers = ModifierCombination::from_bits(((modifier_masks >> 16) & 0xFF) as u8);
-                    let bindable = (modifier_masks & (1 << 24)) != 0;
-
-                    Ok(KeymapData::Fork(ForkData {
-                        idx: 0,
-                        fork: Fork::new(
-                            trigger,
-                            negative_output,
-                            positive_output,
-                            match_any,
-                            match_none,
-                            kept_modifiers,
-                            bindable,
-                        ),
-                    }))
-                }
-
-                StorageKeys::MorseData => {
-                    if buffer.len() < 7 {
-                        return Err(SerializationError::InvalidData);
-                    }
-                    let profile = MorseProfile::from(BigEndian::read_u32(&buffer[1..5]));
-                    let count = BigEndian::read_u16(&buffer[5..7]) as usize;
-
-                    if buffer.len() < 7 + 4 * count {
-                        return Err(SerializationError::InvalidData);
-                    }
-
-                    let mut morse = Morse {
-                        profile,
-                        ..Default::default()
-                    };
-
-                    let mut i = 7;
-                    for _ in 0..count {
-                        let pattern = MorsePattern::from_u16(BigEndian::read_u16(&buffer[i..i + 2]));
-                        let key_action = from_via_keycode(BigEndian::read_u16(&buffer[i + 2..i + 4]));
-                        _ = morse.actions.insert(pattern, key_action.to_action());
-                        i += 4;
-                    }
-
-                    // The morse id isn't important
-                    Ok(KeymapData::Morse(0, morse))
-                }
-                _ => Err(SerializationError::Custom(2)),
+                let mut macro_data = [0u8; MACRO_SPACE_SIZE];
+                macro_data.copy_from_slice(&buffer[1..1 + MACRO_SPACE_SIZE]);
+                Ok(Self::Macro(macro_data))
             }
-        } else {
-            Err(SerializationError::Custom(1))
+            StorageKeys::KeymapConfig => Ok(Self::KeymapKey(
+                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
+            )),
+            StorageKeys::EncoderKeys => Ok(Self::Encoder(
+                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
+            )),
+            StorageKeys::ComboData => {
+                let (idx, combo): (u8, ComboConfig) =
+                    postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                Ok(Self::Combo(idx, combo))
+            }
+            StorageKeys::ForkData => {
+                let (idx, fork): (u8, Fork) =
+                    postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                Ok(Self::Fork(idx, fork))
+            }
+            StorageKeys::MorseData => {
+                let (idx, morse): (u8, Morse) =
+                    postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                Ok(Self::Morse(idx, morse))
+            }
+            _ => Err(SerializationError::InvalidFormat),
         }
     }
 }
@@ -336,10 +148,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: &mut Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
     ) -> Result<(), ()> {
-        use sequential_storage::cache::NoCache;
         use sequential_storage::map::fetch_all_items;
-
-        use crate::storage::print_storage_error;
 
         let mut storage_cache = NoCache::new();
         // Use fetch_all_items to speed up the keymap reading
@@ -384,8 +193,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     pub(crate) async fn read_macro_cache(&mut self, macro_cache: &mut [u8]) -> Result<(), ()> {
-        // Read storage and send back from send_channel
-
         let read_data = fetch_item::<u32, StorageData, _>(
             &mut self.flash,
             self.storage_range.clone(),
@@ -397,7 +204,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         .map_err(|e| print_storage_error::<F>(e))?;
 
         if let Some(StorageData::VialData(KeymapData::Macro(data))) = read_data {
-            // Send data back
             macro_cache.copy_from_slice(&data);
         }
 
@@ -405,8 +211,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     pub(crate) async fn read_combos(&mut self, combos: &mut [Option<Combo>; COMBO_MAX_NUM]) -> Result<(), ()> {
+        use crate::combo::Combo;
+
         for (i, item) in combos.iter_mut().enumerate() {
-            let key = get_combo_key(i);
+            let key = get_combo_key(i as u8);
             let read_data = fetch_item::<u32, StorageData, _>(
                 &mut self.flash,
                 self.storage_range.clone(),
@@ -417,24 +225,18 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .await
             .map_err(|e| print_storage_error::<F>(e))?;
 
-            if let Some(StorageData::VialData(KeymapData::Combo(mut combo))) = read_data {
-                debug!("Read combo: {:?}", combo);
-                let mut actions: Vec<KeyAction, COMBO_MAX_LENGTH> = Vec::new();
-                combo.idx = i;
-                for &action in combo.actions.iter().filter(|&&a| !a.is_empty()) {
-                    let _ = actions.push(action);
-                }
-                // TODO: Save/Load combo layer in storage
-                *item = Some(Combo::new(actions, combo.output, None));
+            if let Some(StorageData::VialData(KeymapData::Combo(_idx, config))) = read_data {
+                debug!("Read combo config: {:?}", config);
+                *item = Some(Combo::new(config));
             }
         }
 
         Ok(())
     }
 
-    pub(crate) async fn read_forks(&mut self, forks: &mut Vec<Fork, FORK_MAX_NUM>) -> Result<(), ()> {
+    pub(crate) async fn read_forks(&mut self, forks: &mut heapless::Vec<Fork, FORK_MAX_NUM>) -> Result<(), ()> {
         for (i, item) in forks.iter_mut().enumerate() {
-            let key = get_fork_key(i);
+            let key = get_fork_key(i as u8);
             let read_data = fetch_item::<u32, StorageData, _>(
                 &mut self.flash,
                 self.storage_range.clone(),
@@ -445,15 +247,15 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .await
             .map_err(|e| print_storage_error::<F>(e))?;
 
-            if let Some(StorageData::VialData(KeymapData::Fork(fork))) = read_data {
-                *item = fork.fork;
+            if let Some(StorageData::VialData(KeymapData::Fork(_idx, fork))) = read_data {
+                *item = fork;
             }
         }
 
         Ok(())
     }
 
-    pub(crate) async fn read_morses(&mut self, morses: &mut Vec<Morse, MORSE_MAX_NUM>) -> Result<(), ()> {
+    pub(crate) async fn read_morses(&mut self, morses: &mut heapless::Vec<Morse, MORSE_MAX_NUM>) -> Result<(), ()> {
         for (i, item) in morses.iter_mut().enumerate() {
             let key = get_morse_key(i as u8);
             let read_data = fetch_item::<u32, StorageData, _>(
@@ -482,7 +284,7 @@ mod tests {
     use sequential_storage::map::Value;
 
     use super::*;
-    use crate::morse::{HOLD, TAP};
+    use crate::morse::{HOLD, MorsePattern, TAP};
 
     #[test]
     fn test_morse_serialization_deserialization() {

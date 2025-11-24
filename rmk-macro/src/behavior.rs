@@ -199,7 +199,7 @@ fn expand_combos(
                     Some(layer) => quote! { ::core::option::Option::Some(#layer) },
                     None => quote! { ::core::option::Option::None },
                 };
-                quote! { ::rmk::combo::Combo::new([#(#actions),*], #output, #layer) }
+                quote! { ::rmk::combo::Combo::new(::rmk::combo::ComboConfig::new([#(#actions),*], #output, #layer)) }
             });
 
             let timeout = match &combos.timeout {

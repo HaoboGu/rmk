@@ -5,11 +5,12 @@
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
+use serde::{Deserialize, Serialize};
 
 /// Mouse buttons
 #[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
-#[derive(Eq, PartialEq)]
-
+#[derive(Eq, PartialEq, Serialize, Deserialize)]
+#[derive(postcard::experimental::max_size::MaxSize)]
 pub struct MouseButtons {
     #[bits(1)]
     pub button1: bool, //left

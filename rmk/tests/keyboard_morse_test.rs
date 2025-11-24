@@ -1,7 +1,7 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::combo::Combo;
+use rmk::combo::{Combo, ComboConfig};
 use rmk::config::{BehaviorConfig, CombosConfig};
 use rmk::k;
 use rmk::types::action::{Action, KeyAction};
@@ -727,12 +727,12 @@ rusty_fork_test! {
             keyboard: create_simple_morse_keyboard(BehaviorConfig {
                     combo: CombosConfig {
                         combos: [
-                            Some(Combo::new(
+                            Some(Combo::new(ComboConfig::new(
                                 [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT), Default::default()),
                                  KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI), Default::default())],
                                 k!(X),
                                 None,
-                            )), None, None, None, None, None, None, None
+                            ))), None, None, None, None, None, None, None
                         ],
                         timeout: Duration::from_millis(50),
                     },
@@ -759,12 +759,12 @@ rusty_fork_test! {
             keyboard: create_simple_morse_keyboard(BehaviorConfig {
                     combo: CombosConfig {
                         combos: [
-                            Some(Combo::new(
+                            Some(Combo::new(ComboConfig::new(
                                 [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT), Default::default()),
                                  KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI), Default::default())],
                                 k!(X),
                                 None,
-                            )), None, None, None, None, None, None, None
+                            ))), None, None, None, None, None, None, None
                         ],
                         timeout: Duration::from_millis(50),
                     },

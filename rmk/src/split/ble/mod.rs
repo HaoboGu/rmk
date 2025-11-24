@@ -1,7 +1,10 @@
 pub mod central;
 pub mod peripheral;
 
-#[derive(Clone, Debug)]
+use postcard::experimental::max_size::MaxSize;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PeerAddress {
     pub peer_id: u8,

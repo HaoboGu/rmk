@@ -1,7 +1,7 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::combo::Combo;
+use rmk::combo::{Combo, ComboConfig};
 use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, OneShotConfig};
 use rmk::types::keycode::KeyCode;
 use rmk::types::modifier::ModifierCombination;
@@ -16,7 +16,7 @@ pub fn get_combos_config() -> CombosConfig {
     // Define the function to return the appropriate combo configuration
     CombosConfig {
         combos: [
-            Some(Combo::new(
+            Some(Combo::new(ComboConfig::new(
                 [
                     k!(V), //3,4
                     k!(B), //3,5
@@ -24,8 +24,8 @@ pub fn get_combos_config() -> CombosConfig {
                 .to_vec(),
                 k!(LShift),
                 Some(0),
-            )),
-            Some(Combo::new(
+            ))),
+            Some(Combo::new(ComboConfig::new(
                 [
                     k!(R), //1,4
                     k!(T), //1,5
@@ -33,8 +33,8 @@ pub fn get_combos_config() -> CombosConfig {
                 .to_vec(),
                 k!(LAlt),
                 Some(0),
-            )),
-            Some(Combo::new(
+            ))),
+            Some(Combo::new(ComboConfig::new(
                 [
                     k!(E), //1,3
                     k!(T), //1,5
@@ -42,8 +42,8 @@ pub fn get_combos_config() -> CombosConfig {
                 .to_vec(),
                 osm!(ModifierCombination::new_from(false, false, false, true, false)), // one-shot LShift
                 Some(0),
-            )),
-            Some(Combo::new(
+            ))),
+            Some(Combo::new(ComboConfig::new(
                 [
                     k!(E), //1,3
                     k!(R), //1,4
@@ -51,8 +51,8 @@ pub fn get_combos_config() -> CombosConfig {
                 .to_vec(),
                 k!(A), // A
                 Some(0),
-            )),
-            Some(Combo::new(
+            ))),
+            Some(Combo::new(ComboConfig::new(
                 [
                     k!(E), //1,3
                     k!(R), //1,4
@@ -61,7 +61,7 @@ pub fn get_combos_config() -> CombosConfig {
                 .to_vec(),
                 k!(Space),
                 Some(0),
-            )),
+            ))),
             None,
             None,
             None,
@@ -306,11 +306,11 @@ rusty_fork_test! {
                     },
                     combo: CombosConfig {
                         combos: [
-                            Some(Combo::new(
+                            Some(Combo::new(ComboConfig::new(
                                 [th!(A, LShift), th!(S, LGui), th!(Z, LAlt)],
                                 k!(C),
                                 None,
-                            )), None, None, None, None, None, None, None
+                            ))), None, None, None, None, None, None, None
                         ],
                         timeout: Duration::from_millis(50),
                     },
