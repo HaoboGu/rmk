@@ -22,8 +22,6 @@ use core::cell::RefCell;
 use core::future::Future;
 use core::sync::atomic::Ordering;
 
-#[cfg(feature = "vial")]
-use crate::config::VialConfig;
 #[cfg(feature = "_ble")]
 use bt_hci::{
     cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy},
@@ -61,6 +59,8 @@ pub use {embassy_futures, futures, heapless, rmk_macro as macros, rmk_types as t
 use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 
 use crate::config::PositionalConfig;
+#[cfg(feature = "vial")]
+use crate::config::VialConfig;
 use crate::keyboard::LOCK_LED_STATES;
 use crate::state::ConnectionState;
 

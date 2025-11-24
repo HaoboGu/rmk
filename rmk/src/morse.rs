@@ -88,8 +88,10 @@ pub struct Morse<const NUM_PATTERNS: usize = MAX_PATTERNS_PER_KEY> {
 
 // Custom serde module for LinearMap
 mod morse_actions_serde {
+    use serde::de::Error;
+    use serde::{Deserializer, Serializer};
+
     use super::*;
-    use serde::{Deserializer, Serializer, de::Error};
 
     pub fn serialize<S, const N: usize>(
         map: &LinearMap<MorsePattern, Action, N>,
@@ -108,6 +110,7 @@ mod morse_actions_serde {
         D: Deserializer<'de>,
     {
         use core::fmt;
+
         use serde::de::{SeqAccess, Visitor};
 
         struct VecVisitor<const N: usize>;
@@ -272,8 +275,9 @@ impl Morse {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use rmk_types::keycode::KeyCode;
+
+    use super::*;
 
     #[test]
     fn test_linear_map_serde_empty() {

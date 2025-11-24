@@ -409,17 +409,29 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 mod test {
     use rmk_types::modifier::ModifierCombination;
 
-    use crate::combo::Combo;
+    use crate::combo::{Combo, ComboConfig};
     use crate::fork::{Fork, StateBits};
     use crate::keymap::fill_vec;
-    use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, combo::ComboConfig, k};
+    use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
 
     #[test]
     fn test_fill_vec() {
         let mut combos: heapless::Vec<_, COMBO_MAX_NUM> = heapless::Vec::from_slice(&[
-            Combo::new(ComboConfig { actions: [k!(A), k!(B), k!(C), k!(D)], output: k!(Z), layer: None }),
-            Combo::new(ComboConfig { actions: [k!(A), k!(B), k!(No), k!(No)], output: k!(X), layer: None }),
-            Combo::new(ComboConfig { actions: [k!(A), k!(B), k!(C), k!(No)], output: k!(Y), layer: None }),
+            Combo::new(ComboConfig {
+                actions: [k!(A), k!(B), k!(C), k!(D)],
+                output: k!(Z),
+                layer: None,
+            }),
+            Combo::new(ComboConfig {
+                actions: [k!(A), k!(B), k!(No), k!(No)],
+                output: k!(X),
+                layer: None,
+            }),
+            Combo::new(ComboConfig {
+                actions: [k!(A), k!(B), k!(C), k!(No)],
+                output: k!(Y),
+                layer: None,
+            }),
         ])
         .unwrap();
 
