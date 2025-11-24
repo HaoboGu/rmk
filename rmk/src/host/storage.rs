@@ -1,4 +1,3 @@
-use bt_hci::WriteHci;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use postcard::experimental::max_size::MaxSize;
 use rmk_types::action::{EncoderAction, KeyAction};
@@ -118,31 +117,31 @@ impl Value<'_> for KeymapData {
             StorageKeys::KeymapConfig => {
                 let (keymap_key, unused) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.size() - unused.size() + 1;
+                let size = buffer.len() - unused.len() + 1;
                 Ok((Self::KeymapKey(keymap_key), size))
             }
             StorageKeys::EncoderKeys => {
                 let (encoder, unused) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.size() - unused.size() + 1;
+                let size = buffer.len() - unused.len() + 1;
                 Ok((Self::Encoder(encoder), size))
             }
             StorageKeys::ComboData => {
                 let ((idx, combo), unused): ((u8, ComboConfig), _) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.size() - unused.size() + 1;
+                let size = buffer.len() - unused.len() + 1;
                 Ok((Self::Combo(idx, combo), size))
             }
             StorageKeys::ForkData => {
                 let ((idx, fork), unused): ((u8, Fork), _) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.size() - unused.size() + 1;
+                let size = buffer.len() - unused.len() + 1;
                 Ok((Self::Fork(idx, fork), size))
             }
             StorageKeys::MorseData => {
                 let ((idx, morse), unused): ((u8, Morse), _) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.size() - unused.size() + 1;
+                let size = buffer.len() - unused.len() + 1;
                 Ok((Self::Morse(idx, morse), size))
             }
             _ => Err(SerializationError::InvalidFormat),
