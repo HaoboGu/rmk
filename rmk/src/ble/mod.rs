@@ -119,7 +119,7 @@ pub(crate) async fn run_ble<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-    mut rmk_config: RmkConfig<'static>,
+    #[cfg_attr(not(feature = "_nrf_ble"), allow(unused_mut))] mut rmk_config: RmkConfig<'static>,
 ) {
     #[cfg(feature = "_nrf_ble")]
     {

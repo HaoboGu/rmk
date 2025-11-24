@@ -22,6 +22,8 @@ use core::cell::RefCell;
 use core::future::Future;
 use core::sync::atomic::Ordering;
 
+#[cfg(feature = "vial")]
+use crate::config::VialConfig;
 #[cfg(feature = "_ble")]
 use bt_hci::{
     cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy},
@@ -48,10 +50,7 @@ use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
 pub use trouble_host::prelude::*;
 #[cfg(feature = "host")]
-use {
-    crate::config::VialConfig, crate::descriptor::ViaReport, crate::hid::HidWriterTrait,
-    crate::host::run_host_communicate_task,
-};
+use {crate::descriptor::ViaReport, crate::hid::HidWriterTrait, crate::host::run_host_communicate_task};
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
     crate::light::UsbLedReader,
@@ -380,8 +379,14 @@ pub(crate) async fn run_keyboard<
             }
         }
     };
+
     #[cfg(feature = "host")]
-    let host_fut = run_host_communicate_task(keymap, reader_writer, vial_config);
+    let host_fut = run_host_communicate_task(
+        keymap,
+        reader_writer,
+        #[cfg(feature = "vial")]
+        vial_config,
+    );
     #[cfg(feature = "storage")]
     let storage_fut = storage.run();
 

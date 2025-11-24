@@ -6,8 +6,10 @@ use core::cell::RefCell;
 
 // TODO: Remove those aliases
 pub use via::UsbVialReaderWriter as UsbHostReaderWriter;
+#[cfg(feature = "vial")]
 pub(crate) use via::VialService as HostService;
 
+#[cfg(feature = "vial")]
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
 use crate::hid::{HidReaderTrait, HidWriterTrait};
@@ -39,8 +41,8 @@ pub(crate) async fn run_host_communicate_task<
     const NUM_LAYER: usize,
     const NUM_ENCODER: usize,
 >(
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
-    reader_writer: Rw,
+    _keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    _reader_writer: Rw,
 ) {
     todo!()
 }
