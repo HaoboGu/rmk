@@ -1,8 +1,8 @@
 pub mod central;
 pub mod peripheral;
 
-use serde::{Deserialize, Serialize};
 use postcard::experimental::max_size::MaxSize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

@@ -42,8 +42,9 @@ pub struct ProfileInfo {
 
 // Custom serde module for BondInformation
 mod bond_info_serde {
+    use serde::{Deserializer, Serialize, Serializer};
+
     use super::*;
-    use serde::{Deserializer, Serializer, Serialize};
 
     #[inline(never)]
     pub fn serialize<S>(info: &BondInformation, serializer: S) -> Result<S::Ok, S::Error>
@@ -69,13 +70,8 @@ mod bond_info_serde {
     where
         D: Deserializer<'de>,
     {
-        let (ltk, bd_addr, irk, security_level, is_bonded): (
-            [u8; 16],
-            [u8; 6],
-            Option<[u8; 16]>,
-            u8,
-            bool,
-        ) = serde::Deserialize::deserialize(deserializer)?;
+        let (ltk, bd_addr, irk, security_level, is_bonded): ([u8; 16], [u8; 6], Option<[u8; 16]>, u8, bool) =
+            serde::Deserialize::deserialize(deserializer)?;
 
         Ok(BondInformation::new(
             Identity {
@@ -95,8 +91,9 @@ mod bond_info_serde {
 
 // Custom serde module for CccdTable
 mod cccd_table_serde {
+    use serde::{Deserializer, Serialize, Serializer};
+
     use super::*;
-    use serde::{Deserializer, Serializer, Serialize};
 
     #[inline(never)]
     pub fn serialize<S>(table: &CccdTable<CCCD_TABLE_SIZE>, serializer: S) -> Result<S::Ok, S::Error>

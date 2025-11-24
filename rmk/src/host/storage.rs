@@ -8,12 +8,11 @@ use serde::{Deserialize, Serialize};
 use crate::combo::{Combo, ComboConfig};
 use crate::fork::Fork;
 use crate::morse::Morse;
-use crate::ser_storage_variant;
 use crate::storage::{
     Storage, StorageData, StorageKeys, get_combo_key, get_fork_key, get_morse_key,
     postcard_error_to_serialization_error, print_storage_error,
 };
-use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM};
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, ser_storage_variant};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

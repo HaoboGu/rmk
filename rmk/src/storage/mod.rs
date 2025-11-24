@@ -3,8 +3,6 @@ pub mod dummy_flash;
 use core::fmt::Debug;
 use core::ops::Range;
 
-#[cfg(feature = "_ble")]
-use crate::ble::profile::ProfileInfo;
 use embassy_embedded_hal::adapter::BlockingAsync;
 use embassy_sync::signal::Signal;
 use embassy_time::Duration;
@@ -19,6 +17,8 @@ use {
     rmk_types::action::{EncoderAction, KeyAction},
 };
 
+#[cfg(feature = "_ble")]
+use crate::ble::profile::ProfileInfo;
 use crate::channel::FLASH_CHANNEL;
 use crate::config::StorageConfig;
 #[cfg(all(feature = "_ble", feature = "split"))]
@@ -665,12 +665,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 }
                 #[cfg(feature = "_ble")]
                 FlashOperationMessage::ClearSlot(slot_num) => {
-                    use crate::ble::ble_server::CCCD_TABLE_SIZE;
                     use bt_hci::param::BdAddr;
-                    use trouble_host::{
-                        BondInformation, Identity, LongTermKey,
-                        prelude::{CCCD, CccdTable, SecurityLevel},
-                    };
+                    use trouble_host::prelude::{CCCD, CccdTable, SecurityLevel};
+                    use trouble_host::{BondInformation, Identity, LongTermKey};
+
+                    use crate::ble::ble_server::CCCD_TABLE_SIZE;
 
                     info!("Clearing bond info slot_num: {}", slot_num);
                     // Remove item in `sequential-storage` is quite expensive, so just override the item with `removed = true`
