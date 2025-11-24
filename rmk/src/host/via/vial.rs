@@ -159,7 +159,7 @@ pub(crate) async fn process_vial<
                     LittleEndian::write_u16(&mut report.input_data[1..3], tap_interval);
                 }
                 SettingKey::PermissiveHold => {
-                    if let Some(m) = keymap.borrow_mut().behavior.morse.default_profile.mode()
+                    if let Some(m) = keymap.borrow().behavior.morse.default_profile.mode()
                         && m == MorseMode::PermissiveHold
                     {
                         report.input_data[1] = 1
@@ -168,7 +168,7 @@ pub(crate) async fn process_vial<
                     }
                 }
                 SettingKey::HoldOnOtherKeyPress => {
-                    if let Some(m) = keymap.borrow_mut().behavior.morse.default_profile.mode()
+                    if let Some(m) = keymap.borrow().behavior.morse.default_profile.mode()
                         && m == MorseMode::HoldOnOtherPress
                     {
                         report.input_data[1] = 1
