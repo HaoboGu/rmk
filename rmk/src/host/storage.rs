@@ -1,3 +1,4 @@
+use bt_hci::WriteHci;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use postcard::experimental::max_size::MaxSize;
 use rmk_types::action::{EncoderAction, KeyAction};
@@ -94,7 +95,7 @@ impl Value<'_> for KeymapData {
         }
     }
 
-    fn deserialize_from(buffer: &[u8]) -> Result<Self, SerializationError>
+    fn deserialize_from(buffer: &[u8]) -> Result<(Self, usize), SerializationError>
     where
         Self: Sized,
     {
@@ -112,28 +113,37 @@ impl Value<'_> for KeymapData {
                 }
                 let mut macro_data = [0u8; MACRO_SPACE_SIZE];
                 macro_data.copy_from_slice(&buffer[1..1 + MACRO_SPACE_SIZE]);
-                Ok(Self::Macro(macro_data))
+                Ok((Self::Macro(macro_data), MACRO_SPACE_SIZE + 1))
             }
-            StorageKeys::KeymapConfig => Ok(Self::KeymapKey(
-                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
-            )),
-            StorageKeys::EncoderKeys => Ok(Self::Encoder(
-                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
-            )),
+            StorageKeys::KeymapConfig => {
+                let (keymap_key, unused) =
+                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                let size = buffer.size() - unused.size() + 1;
+                Ok((Self::KeymapKey(keymap_key), size))
+            }
+            StorageKeys::EncoderKeys => {
+                let (encoder, unused) =
+                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                let size = buffer.size() - unused.size() + 1;
+                Ok((Self::Encoder(encoder), size))
+            }
             StorageKeys::ComboData => {
-                let (idx, combo): (u8, ComboConfig) =
-                    postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                Ok(Self::Combo(idx, combo))
+                let ((idx, combo), unused): ((u8, ComboConfig), _) =
+                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                let size = buffer.size() - unused.size() + 1;
+                Ok((Self::Combo(idx, combo), size))
             }
             StorageKeys::ForkData => {
-                let (idx, fork): (u8, Fork) =
-                    postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                Ok(Self::Fork(idx, fork))
+                let ((idx, fork), unused): ((u8, Fork), _) =
+                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                let size = buffer.size() - unused.size() + 1;
+                Ok((Self::Fork(idx, fork), size))
             }
             StorageKeys::MorseData => {
-                let (idx, morse): (u8, Morse) =
-                    postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                Ok(Self::Morse(idx, morse))
+                let ((idx, morse), unused): ((u8, Morse), _) =
+                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                let size = buffer.size() - unused.size() + 1;
+                Ok((Self::Morse(idx, morse), size))
             }
             _ => Err(SerializationError::InvalidFormat),
         }
