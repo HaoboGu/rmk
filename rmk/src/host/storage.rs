@@ -303,7 +303,7 @@ mod tests {
     use sequential_storage::map::Value;
 
     use super::*;
-    use crate::morse::{HOLD, TAP};
+    use crate::morse::{HOLD, MorsePattern, TAP};
 
     #[test]
     fn test_morse_serialization_deserialization() {
