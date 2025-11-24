@@ -8,6 +8,7 @@ use embassy_sync::signal::Signal;
 use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
+use rmk_types::action::MorseProfile;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_item, store_item};
@@ -68,10 +69,8 @@ pub(crate) enum FlashOperationMessage {
     TapCapslockInterval(u16),
     // The prior-idle-time in ms used for in flow tap
     PriorIdleTime(u16),
-    // Timeout time for morse keys in default morse profile
-    MorseHoldTimeout(u16),
-    // Whether the unilateral tap is enabled in default morse profile
-    UnilateralTap(bool),
+    // Default morse profile containing all morse/tap-hold settings (mode, timeouts, unilateral_tap)
+    MorseDefaultProfile(MorseProfile),
 }
 
 /// StorageKeys is the prefix digit stored in the flash, it's used to identify the type of the stored data.
@@ -341,13 +340,10 @@ pub(crate) struct LayoutConfig {
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, postcard::experimental::max_size::MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct BehaviorConfig {
-    // Enable flow tap for morse/tap-hold
-    //pub(crate) enable_flow_tap: bool,
     // The prior-idle-time in ms used for in flow tap
     pub(crate) prior_idle_time: u16,
-    // morse/tap-hold defaults
-    pub(crate) morse_hold_timeout_ms: u16,
-    pub(crate) unilateral_tap: bool,
+    // Default morse profile containing mode, timeouts, and unilateral_tap settings
+    pub(crate) morse_default_profile: MorseProfile,
 
     // Timeout time for combos
     pub(crate) combo_timeout: u16,
@@ -711,14 +707,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     )
                     .await
                 }
-                FlashOperationMessage::MorseHoldTimeout(morse_hold_timeout_ms) => update_storage_field!(
-                    &mut self.flash,
-                    &mut self.buffer,
-                    &mut storage_cache,
-                    BehaviorConfig,
-                    morse_hold_timeout_ms,
-                    self.storage_range.clone()
-                ),
                 FlashOperationMessage::ComboTimeout(combo_timeout) => update_storage_field!(
                     &mut self.flash,
                     &mut self.buffer,
@@ -759,14 +747,16 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     prior_idle_time,
                     self.storage_range.clone()
                 ),
-                FlashOperationMessage::UnilateralTap(unilateral_tap) => update_storage_field!(
-                    &mut self.flash,
-                    &mut self.buffer,
-                    &mut storage_cache,
-                    BehaviorConfig,
-                    unilateral_tap,
-                    self.storage_range.clone()
-                ),
+                FlashOperationMessage::MorseDefaultProfile(morse_default_profile) => {
+                    update_storage_field!(
+                        &mut self.flash,
+                        &mut self.buffer,
+                        &mut storage_cache,
+                        BehaviorConfig,
+                        morse_default_profile,
+                        self.storage_range.clone()
+                    )
+                }
                 #[cfg(not(feature = "_ble"))]
                 _ => Ok(()),
             } {
@@ -796,11 +786,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         .map_err(|e| print_storage_error::<F>(e))?
         {
             behavior_config.morse.prior_idle_time = Duration::from_millis(c.prior_idle_time as u64);
-            behavior_config.morse.default_profile = behavior_config
-                .morse
-                .default_profile
-                .with_hold_timeout_ms(Some(c.morse_hold_timeout_ms))
-                .with_unilateral_tap(Some(c.unilateral_tap));
+            behavior_config.morse.default_profile = c.morse_default_profile;
 
             behavior_config.combo.timeout = Duration::from_millis(c.combo_timeout as u64);
             behavior_config.one_shot.timeout = Duration::from_millis(c.one_shot_timeout as u64);
@@ -853,8 +839,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         // Save behavior config
         let behavior_config = StorageData::BehaviorConfig(BehaviorConfig {
             prior_idle_time: behavior.morse.prior_idle_time.as_millis() as u16,
-            morse_hold_timeout_ms: behavior.morse.default_profile.hold_timeout_ms().unwrap_or(0),
-            unilateral_tap: behavior.morse.default_profile.unilateral_tap().unwrap_or(false),
+            morse_default_profile: behavior.morse.default_profile,
 
             combo_timeout: behavior.combo.timeout.as_millis() as u16,
             one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,
@@ -951,8 +936,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
         let behavior_config = StorageData::BehaviorConfig(BehaviorConfig {
             prior_idle_time: behavior.morse.prior_idle_time.as_millis() as u16,
-            morse_hold_timeout_ms: behavior.morse.default_profile.hold_timeout_ms().unwrap_or(0),
-            unilateral_tap: behavior.morse.default_profile.unilateral_tap().unwrap_or(false),
+            morse_default_profile: behavior.morse.default_profile,
 
             combo_timeout: behavior.combo.timeout.as_millis() as u16,
             one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,
