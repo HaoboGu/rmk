@@ -5,7 +5,7 @@ use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_item};
 use serde::{Deserialize, Serialize};
 
-use crate::combo::Combo;
+use crate::combo::{Combo, ComboConfig};
 use crate::fork::Fork;
 use crate::morse::Morse;
 use crate::ser_storage_variant;
@@ -13,7 +13,7 @@ use crate::storage::{
     Storage, StorageData, StorageKeys, get_combo_key, get_fork_key, get_morse_key,
     postcard_error_to_serialization_error, print_storage_error,
 };
-use crate::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM};
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -26,33 +26,13 @@ pub(crate) struct KeymapKey {
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) struct EncoderConfig {
+pub(crate) struct EncoderKeymap {
     /// Encoder index
     pub(crate) idx: u8,
     /// Layer
     pub(crate) layer: u8,
     /// Encoder action
     pub(crate) action: EncoderAction,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) struct ComboData {
-    /// Combo index
-    pub(crate) idx: usize,
-    /// Combo components
-    pub(crate) actions: [KeyAction; COMBO_MAX_LENGTH],
-    /// Combo output
-    pub(crate) output: KeyAction,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) struct ForkData {
-    /// Fork index
-    pub(crate) idx: usize,
-    /// Fork instance
-    pub(crate) fork: Fork,
 }
 
 /// Keymap data that can be updated by the host tools like Vial.
@@ -64,11 +44,11 @@ pub(crate) enum KeymapData {
     // Write a key in keymap
     KeymapKey(KeymapKey),
     // Write encoder configuration
-    Encoder(EncoderConfig),
-    // Write combo
-    Combo(ComboData),
-    // Write fork
-    Fork(ForkData),
+    Encoder(EncoderKeymap),
+    // Write combo - stores (idx, config)
+    Combo(u8, ComboConfig),
+    // Write fork - stores (idx, fork)
+    Fork(u8, Fork),
     // Write tap dance
     Morse(u8, Morse),
 }
@@ -91,19 +71,26 @@ impl Value<'_> for KeymapData {
             }
             Self::KeymapKey(k) => ser_storage_variant!(buffer, StorageKeys::KeymapConfig, k),
             Self::Encoder(e) => ser_storage_variant!(buffer, StorageKeys::EncoderKeys, e),
-            Self::Combo(c) => ser_storage_variant!(buffer, StorageKeys::ComboData, c),
-            Self::Fork(f) => ser_storage_variant!(buffer, StorageKeys::ForkData, f),
-            Self::Morse(idx, morse) => {
-                // Morse: key + idx + postcard(morse)
-                if buffer.len() < 3 {
-                    return Err(SerializationError::BufferTooSmall);
-                }
-                buffer[0] = StorageKeys::MorseData as u8;
-                buffer[1] = *idx;
-                let len = postcard::to_slice(morse, &mut buffer[2..])
+            Self::Combo(idx, combo) => {
+                buffer[0] = StorageKeys::ComboData as u8;
+                let len = postcard::to_slice(&(*idx, *combo), &mut buffer[1..])
                     .map_err(postcard_error_to_serialization_error)?
                     .len();
-                Ok(2 + len)
+                Ok(len + 1)
+            }
+            Self::Fork(idx, fork) => {
+                buffer[0] = StorageKeys::ForkData as u8;
+                let len = postcard::to_slice(&(*idx, *fork), &mut buffer[1..])
+                    .map_err(postcard_error_to_serialization_error)?
+                    .len();
+                Ok(len + 1)
+            }
+            Self::Morse(idx, morse) => {
+                buffer[0] = StorageKeys::MorseData as u8;
+                let len = postcard::to_slice(&(*idx, morse.clone()), &mut buffer[1..])
+                    .map_err(postcard_error_to_serialization_error)?
+                    .len();
+                Ok(len + 1)
             }
         }
     }
@@ -134,18 +121,19 @@ impl Value<'_> for KeymapData {
             StorageKeys::EncoderKeys => Ok(Self::Encoder(
                 postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
             )),
-            StorageKeys::ComboData => Ok(Self::Combo(
-                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
-            )),
-            StorageKeys::ForkData => Ok(Self::Fork(
-                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
-            )),
+            StorageKeys::ComboData => {
+                let (idx, combo): (u8, ComboConfig) =
+                    postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                Ok(Self::Combo(idx, combo))
+            }
+            StorageKeys::ForkData => {
+                let (idx, fork): (u8, Fork) =
+                    postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                Ok(Self::Fork(idx, fork))
+            }
             StorageKeys::MorseData => {
-                if buffer.len() < 3 {
-                    return Err(SerializationError::InvalidFormat);
-                }
-                let idx = buffer[1];
-                let morse: Morse = postcard::from_bytes(&buffer[2..]).map_err(postcard_error_to_serialization_error)?;
+                let (idx, morse): (u8, Morse) =
+                    postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
                 Ok(Self::Morse(idx, morse))
             }
             _ => Err(SerializationError::InvalidFormat),
@@ -225,10 +213,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
     pub(crate) async fn read_combos(&mut self, combos: &mut [Option<Combo>; COMBO_MAX_NUM]) -> Result<(), ()> {
         use crate::combo::Combo;
-        use heapless::Vec;
 
         for (i, item) in combos.iter_mut().enumerate() {
-            let key = get_combo_key(i);
+            let key = get_combo_key(i as u8);
             let read_data = fetch_item::<u32, StorageData, _>(
                 &mut self.flash,
                 self.storage_range.clone(),
@@ -239,14 +226,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .await
             .map_err(|e| print_storage_error::<F>(e))?;
 
-            if let Some(StorageData::VialData(KeymapData::Combo(mut combo))) = read_data {
-                debug!("Read combo: {:?}", combo);
-                let mut actions: Vec<KeyAction, COMBO_MAX_LENGTH> = Vec::new();
-                combo.idx = i;
-                for &action in combo.actions.iter().filter(|&&a| !a.is_empty()) {
-                    let _ = actions.push(action);
-                }
-                *item = Some(Combo::new(actions, combo.output, None));
+            if let Some(StorageData::VialData(KeymapData::Combo(_idx, config))) = read_data {
+                debug!("Read combo config: {:?}", config);
+                *item = Some(Combo::new(config));
             }
         }
 
@@ -255,7 +237,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
     pub(crate) async fn read_forks(&mut self, forks: &mut heapless::Vec<Fork, FORK_MAX_NUM>) -> Result<(), ()> {
         for (i, item) in forks.iter_mut().enumerate() {
-            let key = get_fork_key(i);
+            let key = get_fork_key(i as u8);
             let read_data = fetch_item::<u32, StorageData, _>(
                 &mut self.flash,
                 self.storage_range.clone(),
@@ -266,8 +248,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .await
             .map_err(|e| print_storage_error::<F>(e))?;
 
-            if let Some(StorageData::VialData(KeymapData::Fork(fork))) = read_data {
-                *item = fork.fork;
+            if let Some(StorageData::VialData(KeymapData::Fork(_idx, fork))) = read_data {
+                *item = fork;
             }
         }
 

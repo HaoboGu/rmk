@@ -16,7 +16,7 @@ use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, TAP};
 use crate::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, MORSE_MAX_NUM};
 #[cfg(feature = "storage")]
 use crate::{
-    channel::FLASH_CHANNEL, host::storage::ComboData, host::storage::KeymapData, storage::FlashOperationMessage,
+    channel::FLASH_CHANNEL, combo::ComboConfig, host::storage::KeymapData, storage::FlashOperationMessage,
 };
 
 /// Note: vial uses little endian, while via uses big endian
@@ -339,13 +339,13 @@ pub(crate) async fn process_vial<
                         for i in 0..VIAL_COMBO_MAX_LENGTH {
                             LittleEndian::write_u16(
                                 &mut report.input_data[1 + i * 2..3 + i * 2],
-                                to_via_keycode(*combo.actions.get(i).unwrap_or(&KeyAction::No)),
+                                to_via_keycode(*combo.config.actions.get(i).unwrap_or(&KeyAction::No)),
                             );
                         }
                         // Combo output
                         LittleEndian::write_u16(
                             &mut report.input_data[1 + VIAL_COMBO_MAX_LENGTH * 2..3 + VIAL_COMBO_MAX_LENGTH * 2],
-                            to_via_keycode(combo.output),
+                            to_via_keycode(combo.config.output),
                         );
                     } else {
                         report.input_data[1..3 + VIAL_COMBO_MAX_LENGTH * 2].fill(0);
@@ -385,18 +385,25 @@ pub(crate) async fn process_vial<
                             debug!("combo is empty");
                             None
                         } else {
-                            Some(Combo::new(actions, output, None))
+                            Some(Combo::new(ComboConfig {
+                                actions,
+                                output,
+                                layer: None,
+                            }))
                         };
                         (actions, output)
                     };
 
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
-                        .send(FlashOperationMessage::VialMessage(KeymapData::Combo(ComboData {
-                            idx: combo_idx,
-                            actions,
-                            output,
-                        })))
+                        .send(FlashOperationMessage::VialMessage(KeymapData::Combo(
+                            combo_idx as u8,
+                            ComboConfig {
+                                actions,
+                                output,
+                                layer: None,
+                            }
+                        )))
                         .await;
                 }
                 VialDynamic::DynamicVialKeyOverrideGet => {
@@ -471,9 +478,9 @@ pub(crate) async fn process_vial<
             // Save the encoder action to the storage after the RefCell is released
             if let Some(encoder) = _encoder {
                 // Save the encoder action to the storage
-                use crate::host::storage::EncoderConfig;
+                use crate::host::storage::EncoderKeymap;
                 FLASH_CHANNEL
-                    .send(FlashOperationMessage::VialMessage(KeymapData::Encoder(EncoderConfig {
+                    .send(FlashOperationMessage::VialMessage(KeymapData::Encoder(EncoderKeymap {
                         idx: index,
                         layer,
                         action: encoder,
@@ -498,29 +505,33 @@ mod tests {
     fn test_combo_serialization_deserialization() {
         let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
         actions[0] = KeyAction::Single(Action::Key(KeyCode::Kc1));
-        let combo = ComboData {
-            idx: 20,
+        let combo_config = ComboConfig {
             actions,
             output: KeyAction::Single(Action::Key(KeyCode::Space)),
+            layer: None,
         };
+        let combo_idx: u8 = 20;
 
-        let mut buffer = [0u8; 3 + COMBO_MAX_LENGTH * 2];
-        let storage_data = StorageData::VialData(KeymapData::Combo(combo));
+        let mut buffer = [0u8; 64]; // Increased buffer size for idx + combo config
+        let storage_data = StorageData::VialData(KeymapData::Combo(combo_idx, combo_config));
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
         // Deserialization
         let deserialized_data = StorageData::deserialize_from(&buffer[..serialized_size]).unwrap();
         // Validation
         match deserialized_data {
-            StorageData::VialData(KeymapData::Combo(deserialized_combo)) => {
+            StorageData::VialData(KeymapData::Combo(idx, deserialized_config)) => {
+                assert_eq!(idx, combo_idx);
                 // actions
-                assert_eq!(deserialized_combo.actions.len(), combo.actions.len());
-                for (original, deserialized) in combo.actions.iter().zip(deserialized_combo.actions.iter()) {
+                assert_eq!(deserialized_config.actions.len(), combo_config.actions.len());
+                for (original, deserialized) in combo_config.actions.iter().zip(deserialized_config.actions.iter()) {
                     assert_eq!(original, deserialized);
                 }
                 // output
-                assert_eq!(deserialized_combo.output, combo.output);
+                assert_eq!(deserialized_config.output, combo_config.output);
+                // layer
+                assert_eq!(deserialized_config.layer, combo_config.layer);
             }
-            _ => panic!("Expected ComboData"),
+            _ => panic!("Expected Combo"),
         }
     }
 }
