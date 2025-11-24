@@ -275,7 +275,7 @@ impl Value<'_> for StorageData {
         }
     }
 
-    fn deserialize_from(buffer: &[u8]) -> Result<Self, SerializationError>
+    fn deserialize_from(buffer: &[u8]) -> Result<(Self, usize), SerializationError>
     where
         Self: Sized,
     {
@@ -286,30 +286,51 @@ impl Value<'_> for StorageData {
         let key = StorageKeys::from_u8(buffer[0]).ok_or(SerializationError::InvalidFormat)?;
 
         match key {
-            StorageKeys::StorageConfig => Ok(Self::StorageConfig(
-                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
-            )),
-            StorageKeys::LayoutConfig => Ok(Self::LayoutConfig(
-                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
-            )),
-            StorageKeys::BehaviorConfig => Ok(Self::BehaviorConfig(
-                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
-            )),
-            StorageKeys::ConnectionType => Ok(Self::ConnectionType(
-                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
-            )),
+            StorageKeys::StorageConfig => {
+                let (data, unused) =
+                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                let size = buffer.len() - unused.len() + 1;
+                Ok((Self::StorageConfig(data), size))
+            }
+            StorageKeys::LayoutConfig => {
+                let (data, unused) =
+                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                let size = buffer.len() - unused.len() + 1;
+                Ok((Self::LayoutConfig(data), size))
+            }
+            StorageKeys::BehaviorConfig => {
+                let (data, unused) =
+                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                let size = buffer.len() - unused.len() + 1;
+                Ok((Self::BehaviorConfig(data), size))
+            }
+            StorageKeys::ConnectionType => {
+                let (data, unused) =
+                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                let size = buffer.len() - unused.len() + 1;
+                Ok((Self::ConnectionType(data), size))
+            }
             #[cfg(all(feature = "_ble", feature = "split"))]
-            StorageKeys::PeerAddress => Ok(Self::PeerAddress(
-                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
-            )),
+            StorageKeys::PeerAddress => {
+                let (data, unused) =
+                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                let size = buffer.len() - unused.len() + 1;
+                Ok((Self::PeerAddress(data), size))
+            }
             #[cfg(feature = "_ble")]
-            StorageKeys::BleBondInfo => Ok(Self::BondInfo(
-                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
-            )),
+            StorageKeys::BleBondInfo => {
+                let (data, unused) =
+                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                let size = buffer.len() - unused.len() + 1;
+                Ok((Self::BondInfo(data), size))
+            }
             #[cfg(feature = "_ble")]
-            StorageKeys::ActiveBleProfile => Ok(Self::ActiveBleProfile(
-                postcard::from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?,
-            )),
+            StorageKeys::ActiveBleProfile => {
+                let (data, unused) =
+                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
+                let size = buffer.len() - unused.len() + 1;
+                Ok((Self::ActiveBleProfile(data), size))
+            }
             #[cfg(feature = "host")]
             StorageKeys::KeymapConfig
             | StorageKeys::MacroData
@@ -318,7 +339,7 @@ impl Value<'_> for StorageData {
             | StorageKeys::ForkData
             | StorageKeys::MorseData => {
                 // VialData keys handled by KeymapData
-                KeymapData::deserialize_from(buffer).map(Self::VialData)
+                KeymapData::deserialize_from(buffer).map(|(data, size)| (Self::VialData(data), size))
             }
         }
     }
