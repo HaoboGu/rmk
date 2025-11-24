@@ -167,7 +167,7 @@ pub(crate) fn get_bond_info_key(slot_num: u8) -> u32 {
 
 /// Get the key to retrieve the combo from the storage.
 #[cfg(feature = "host")]
-pub(crate) fn get_combo_key(idx: usize) -> u32 {
+pub(crate) fn get_combo_key(idx: u8) -> u32 {
     0x3000 + idx as u32
 }
 
@@ -178,7 +178,7 @@ pub(crate) fn get_encoder_config_key<const NUM_ENCODER: usize>(idx: u8, layer: u
 }
 
 #[cfg(feature = "host")]
-pub(crate) fn get_fork_key(idx: usize) -> u32 {
+pub(crate) fn get_fork_key(idx: u8) -> u32 {
     0x5000 + idx as u32
 }
 
@@ -590,26 +590,26 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         )
                         .await
                     }
-                    KeymapData::Combo(combo) => {
-                        let key = get_combo_key(combo.idx);
+                    KeymapData::Combo(idx, config) => {
+                        let key = get_combo_key(idx);
                         store_item(
                             &mut self.flash,
                             self.storage_range.clone(),
                             &mut storage_cache,
                             &mut self.buffer,
                             &key,
-                            &StorageData::VialData(KeymapData::Combo(combo)),
+                            &StorageData::VialData(KeymapData::Combo(idx, config)),
                         )
                         .await
                     }
-                    KeymapData::Fork(fork) => {
+                    KeymapData::Fork(idx, fork) => {
                         store_item(
                             &mut self.flash,
                             self.storage_range.clone(),
                             &mut storage_cache,
                             &mut self.buffer,
-                            &get_fork_key(fork.idx),
-                            &StorageData::VialData(KeymapData::Fork(fork)),
+                            &get_fork_key(idx),
+                            &StorageData::VialData(KeymapData::Fork(idx, fork)),
                         )
                         .await
                     }
@@ -904,9 +904,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         if let Some(encoder_map) = encoder_map {
             for (layer, layer_data) in encoder_map.iter().enumerate() {
                 for (idx, action) in layer_data.iter().enumerate() {
-                    use crate::host::storage::EncoderConfig;
+                    use crate::host::storage::EncoderKeymap;
 
-                    let encoder = EncoderConfig {
+                    let encoder = EncoderKeymap {
                         idx: idx as u8,
                         layer: layer as u8,
                         action: *action,
@@ -998,14 +998,14 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         if let Some(encoder_map) = encoder_map {
             for (layer, layer_data) in encoder_map.iter().enumerate() {
                 for (idx, action) in layer_data.iter().enumerate() {
-                    use crate::host::storage::EncoderConfig;
+                    use crate::host::storage::EncoderKeymap;
                     store_item(
                         &mut self.flash,
                         self.storage_range.clone(),
                         &mut cache,
                         &mut self.buffer,
                         &get_encoder_config_key::<NUM_ENCODER>(idx as u8, layer as u8),
-                        &StorageData::VialData(KeymapData::Encoder(EncoderConfig {
+                        &StorageData::VialData(KeymapData::Encoder(EncoderKeymap {
                             idx: idx as u8,
                             layer: layer as u8,
                             action: *action,

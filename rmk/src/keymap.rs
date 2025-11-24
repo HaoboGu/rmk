@@ -412,14 +412,14 @@ mod test {
     use crate::combo::Combo;
     use crate::fork::{Fork, StateBits};
     use crate::keymap::fill_vec;
-    use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
+    use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, combo::ComboConfig, k};
 
     #[test]
     fn test_fill_vec() {
         let mut combos: heapless::Vec<_, COMBO_MAX_NUM> = heapless::Vec::from_slice(&[
-            Combo::new([k!(A), k!(B), k!(C), k!(D)], k!(Z), None),
-            Combo::new([k!(A), k!(B)], k!(X), None),
-            Combo::new([k!(A), k!(B), k!(C)], k!(Y), None),
+            Combo::new(ComboConfig { actions: [k!(A), k!(B), k!(C), k!(D)], output: k!(Z), layer: None }),
+            Combo::new(ComboConfig { actions: [k!(A), k!(B), k!(No), k!(No)], output: k!(X), layer: None }),
+            Combo::new(ComboConfig { actions: [k!(A), k!(B), k!(C), k!(No)], output: k!(Y), layer: None }),
         ])
         .unwrap();
 

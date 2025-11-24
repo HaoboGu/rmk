@@ -874,7 +874,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .iter_mut()
             .filter_map(|c| c.as_mut())
             .filter_map(|c| {
-                if c.is_all_pressed() && !c.is_triggered() && c.actions.contains(key_action) {
+                if c.is_all_pressed() && !c.is_triggered() && c.config.actions.contains(key_action) {
                     // All keys are pressed but the combo is not triggered, trigger it
                     return Some((c.size(), c));
                 }
@@ -909,7 +909,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .iter_mut()
             .filter_map(|c| c.as_mut())
             .for_each(|c| {
-                if c.is_all_pressed() && !c.is_triggered() && c.actions.contains(key_action) {
+                if c.is_all_pressed() && !c.is_triggered() && c.config.actions.contains(key_action) {
                     info!("Resetting combo: {:?}", c,);
                     c.reset();
                 }
@@ -999,7 +999,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     .iter_mut()
                     .filter_map(|c| c.as_mut())
                 {
-                    if combo.actions.contains(key_action) {
+                    if combo.config.actions.contains(key_action) {
                         // Releasing a combo key in triggered combo
                         releasing_triggered_combo |= combo.is_triggered();
                         info!("[Combo] releasing: {:?}", combo);
@@ -1007,8 +1007,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         // Release the combo key, check whether the combo is fully released
                         if combo.update_released(key_action) {
                             // If the combo is fully released, update the combo output
-                            debug!("[Combo] {:?} is released", combo.output);
-                            combo_output = combo_output.or(Some(combo.output));
+                            debug!("[Combo] {:?} is released", combo.config.output);
+                            combo_output = combo_output.or(Some(combo.config.output));
                         }
                     }
                 }
@@ -2223,6 +2223,7 @@ mod test {
     use rusty_fork::rusty_fork_test;
 
     use super::*;
+    use crate::combo::{Combo, ComboConfig};
     use crate::config::{BehaviorConfig, CombosConfig, ForksConfig, PositionalConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
     use crate::fork::Fork;
@@ -2262,24 +2263,24 @@ mod test {
         // Define the function to return the appropriate combo configuration
         CombosConfig {
             combos: [
-                Some(Combo::new(
-                    [
+                Some(Combo::new(ComboConfig {
+                    actions: [
                         k!(V), //3,4
                         k!(B), //3,5
-                    ]
-                    .to_vec(),
-                    k!(LShift),
-                    Some(0),
-                )),
-                Some(Combo::new(
-                    [
+                        k!(No), k!(No),
+                    ],
+                    output: k!(LShift),
+                    layer: Some(0),
+                })),
+                Some(Combo::new(ComboConfig {
+                    actions: [
                         k!(R), //1,4
                         k!(T), //1,5
-                    ]
-                    .to_vec(),
-                    k!(LAlt),
-                    Some(0),
-                )),
+                        k!(No), k!(No),
+                    ],
+                    output: k!(LAlt),
+                    layer: Some(0),
+                })),
                 None, None, None, None, None, None
             ],
             timeout: Duration::from_millis(100),
