@@ -255,7 +255,6 @@ impl StorageData {
 }
 
 impl Value<'_> for StorageData {
-    #[inline(never)]
     fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, SerializationError> {
         if buffer.is_empty() {
             return Err(SerializationError::BufferTooSmall);

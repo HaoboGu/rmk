@@ -46,7 +46,6 @@ mod bond_info_serde {
 
     use super::*;
 
-    #[inline(never)]
     pub fn serialize<S>(info: &BondInformation, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -65,7 +64,6 @@ mod bond_info_serde {
         tuple.serialize(serializer)
     }
 
-    #[inline(never)]
     pub fn deserialize<'de, D>(deserializer: D) -> Result<BondInformation, D::Error>
     where
         D: Deserializer<'de>,
@@ -95,7 +93,6 @@ mod cccd_table_serde {
 
     use super::*;
 
-    #[inline(never)]
     pub fn serialize<S>(table: &CccdTable<CCCD_TABLE_SIZE>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -110,7 +107,6 @@ mod cccd_table_serde {
         entries.serialize(serializer)
     }
 
-    #[inline(never)]
     pub fn deserialize<'de, D>(deserializer: D) -> Result<CccdTable<CCCD_TABLE_SIZE>, D::Error>
     where
         D: Deserializer<'de>,
