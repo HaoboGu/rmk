@@ -78,8 +78,8 @@ fn init_adc(adc_pin: AnyInput, adc: Peri<'static, SAADC>) -> Saadc<'static, 1> {
     let config = saadc::Config::default();
     let channel_cfg = saadc::ChannelConfig::single_ended(adc_pin.degrade_saadc());
     interrupt::SAADC.set_priority(interrupt::Priority::P3);
-    let saadc = saadc::Saadc::new(adc, Irqs, config, [channel_cfg]);
-    saadc
+
+    saadc::Saadc::new(adc, Irqs, config, [channel_cfg])
 }
 
 fn ble_addr() -> [u8; 6] {
