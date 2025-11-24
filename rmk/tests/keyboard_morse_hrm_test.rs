@@ -72,7 +72,11 @@ fn create_hrm_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
                 combos: [
                     Some(Combo::new(ComboConfig::new([combo_key, combo_key_2], k!(X), None))),
                     Some(Combo::new(ComboConfig::new([k!(A), combo_key], k!(Y), None))),
-                    Some(Combo::new(ComboConfig::new([combo_key, combo_key_2, combo_key_3], k!(Z), None))),
+                    Some(Combo::new(ComboConfig::new(
+                        [combo_key, combo_key_2, combo_key_3],
+                        k!(Z),
+                        None,
+                    ))),
                     None,
                     None,
                     None,
