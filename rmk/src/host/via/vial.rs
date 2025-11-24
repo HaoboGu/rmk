@@ -249,7 +249,7 @@ pub(crate) async fn process_vial<
                         if old.mode() == Some(MorseMode::HoldOnOtherPress) {
                             old.mode()
                         } else {
-                            // Enable: Set to Permissive Hold (will override other modes)
+                            // Enable: Set to Permissive Hold
                             Some(MorseMode::PermissiveHold)
                         }
                     } else {
