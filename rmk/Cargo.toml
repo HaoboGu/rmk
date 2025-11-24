@@ -22,7 +22,6 @@ embedded-storage-async = { version = "0.4", optional = true }
 embassy-embedded-hal = { version = "0.5" }
 embassy-time = { version = "0.5" }
 embassy-usb = { version = "0.5", features = [
-    "usbd-hid",
     "max-interface-count-8",
     "max-handler-count-8",
 ] }
@@ -36,7 +35,7 @@ futures = { version = "0.3", default-features = false, features = [
 ] }
 
 heapless = "0.9"
-usbd-hid = "0.8.2"
+usbd-hid = "0.9"
 bitfield-struct = "0.12"
 static_cell = "2"
 sequential-storage = "5.0"
