@@ -7,7 +7,7 @@ use rmk_types::protocol::vial::{
     SettingKey, VIAL_COMBO_MAX_LENGTH, VIAL_EP_SIZE, VIAL_PROTOCOL_VERSION, VialCommand, VialDynamic,
 };
 
-use crate::combo::Combo;
+use crate::combo::{Combo, ComboConfig};
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
@@ -15,7 +15,7 @@ use crate::keymap::KeyMap;
 use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, TAP};
 use crate::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, MORSE_MAX_NUM};
 #[cfg(feature = "storage")]
-use crate::{channel::FLASH_CHANNEL, combo::ComboConfig, host::storage::KeymapData, storage::FlashOperationMessage};
+use crate::{channel::FLASH_CHANNEL, host::storage::KeymapData, storage::FlashOperationMessage};
 
 /// Note: vial uses little endian, while via uses big endian
 pub(crate) async fn process_vial<
