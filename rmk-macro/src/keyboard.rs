@@ -152,6 +152,7 @@ fn expand_main(
 
     let rmk_config = if keyboard_config.get_storage_config().enabled {
         quote! {
+            #[allow(clippy::needless_update)]
             let rmk_config = ::rmk::config::RmkConfig {
                 device_config: KEYBOARD_DEVICE_CONFIG,
                 #vial_config
@@ -162,6 +163,7 @@ fn expand_main(
         }
     } else {
         quote! {
+            #[allow(clippy::needless_update)]
             let rmk_config = ::rmk::config::RmkConfig {
                 device_config: KEYBOARD_DEVICE_CONFIG,
                 #vial_config
