@@ -866,7 +866,6 @@ pub enum KeyCode {
 // The derive macro on a large enum (~300 variants) generates ~7KB of code
 // Manual implementation serializes directly as u16 repr, saving significant space
 impl serde::Serialize for KeyCode {
-    #[inline(never)]
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -876,7 +875,6 @@ impl serde::Serialize for KeyCode {
 }
 
 impl<'de> serde::Deserialize<'de> for KeyCode {
-    #[inline(never)]
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
