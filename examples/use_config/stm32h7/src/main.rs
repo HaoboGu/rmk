@@ -65,15 +65,15 @@ mod my_keyboard {
         static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
         let mut usb_config = embassy_stm32::usb::Config::default();
         usb_config.vbus_detection = false;
-        let driver = Driver::new_fs(
+
+        Driver::new_fs(
             p.USB_OTG_HS,
             Irqs,
             p.PA12,
             p.PA11,
             &mut EP_OUT_BUFFER.init([0; 1024])[..],
             usb_config,
-        );
-        driver
+        )
     }
 
     // Use `#[Override(entry)]` to override default rmk keyboard runner

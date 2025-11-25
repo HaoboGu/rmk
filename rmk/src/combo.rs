@@ -1,15 +1,25 @@
 use heapless::Vec;
+use postcard::experimental::max_size::MaxSize;
 use rmk_types::action::KeyAction;
+use serde::{Deserialize, Serialize};
 
 use crate::COMBO_MAX_LENGTH;
 use crate::event::KeyboardEvent;
 
-#[derive(Clone, Copy, Debug)]
+/// Configuration data for a combo
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Combo {
+pub struct ComboConfig {
     pub(crate) actions: [KeyAction; COMBO_MAX_LENGTH],
     pub(crate) output: KeyAction,
     pub(crate) layer: Option<u8>,
+}
+
+/// Runtime combo instance (config + runtime state)
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct Combo {
+    pub(crate) config: ComboConfig,
     /// The state records the pressed keys of the combo
     state: u8,
     /// The flag indicates whether the combo is triggered
@@ -22,7 +32,7 @@ impl Default for Combo {
     }
 }
 
-impl Combo {
+impl ComboConfig {
     pub fn new<I: IntoIterator<Item = KeyAction>>(actions: I, output: KeyAction, layer: Option<u8>) -> Self {
         let mut combo_actions = [KeyAction::No; COMBO_MAX_LENGTH];
         for (id, action) in actions.into_iter().enumerate() {
@@ -34,30 +44,53 @@ impl Combo {
             actions: combo_actions,
             output,
             layer,
+        }
+    }
+
+    /// Get an empty combo.
+    pub fn empty() -> Self {
+        Self::new(Vec::<KeyAction, COMBO_MAX_LENGTH>::new(), KeyAction::No, None)
+    }
+
+    /// Returns the number of key actions in the combo.
+    pub fn size(&self) -> usize {
+        self.actions.iter().filter(|&&a| a != KeyAction::No).count()
+    }
+
+    /// Find the index of a key action in the combo.
+    pub fn find_key_action_index(&self, key_action: &KeyAction) -> Option<usize> {
+        self.actions.iter().position(|&a| a == *key_action)
+    }
+}
+
+impl Combo {
+    pub fn new(config: ComboConfig) -> Self {
+        Self {
+            config,
             state: 0,
             is_triggered: false,
         }
     }
 
     pub fn empty() -> Self {
-        Self::new(Vec::<KeyAction, COMBO_MAX_LENGTH>::new(), KeyAction::No, None)
+        Self::new(ComboConfig::empty())
     }
 
     /// Update the combo's state when a key is pressed.
     /// Returns true if the combo is updated.
     pub(crate) fn update(&mut self, key_action: &KeyAction, key_event: KeyboardEvent, active_layer: u8) -> bool {
-        if !key_event.pressed || self.actions.is_empty() || self.is_triggered {
+        if !key_event.pressed || self.config.actions.is_empty() || self.is_triggered {
             // Ignore combo that without actions
             return false;
         }
 
-        if let Some(layer) = self.layer
+        if let Some(layer) = self.config.layer
             && layer != active_layer
         {
             return false;
         }
 
-        let action_idx = self.actions.iter().position(|&a| a == *key_action);
+        let action_idx = self.config.find_key_action_index(key_action);
         if let Some(i) = action_idx {
             self.state |= 1 << i;
         } else if !self.is_all_pressed() {
@@ -69,7 +102,7 @@ impl Combo {
     /// Update the combo's state when a key is released
     /// When the combo is fully released from triggered state, this function returns true
     pub(crate) fn update_released(&mut self, key_action: &KeyAction) -> bool {
-        if let Some(i) = self.actions.iter().position(|&a| a == *key_action) {
+        if let Some(i) = self.config.find_key_action_index(key_action) {
             self.state &= !(1 << i);
         }
 
@@ -87,17 +120,17 @@ impl Combo {
     /// Mark the combo as done, if all actions are satisfied
     pub(crate) fn trigger(&mut self) -> KeyAction {
         if self.is_triggered() {
-            return self.output;
+            return self.config.output;
         }
 
-        if self.output.is_empty() {
-            return self.output;
+        if self.config.output.is_empty() {
+            return self.config.output;
         }
 
         if self.is_all_pressed() {
             self.is_triggered = true;
         }
-        self.output
+        self.config.output
     }
 
     // Check if the combo is dispatched into key event
@@ -107,13 +140,13 @@ impl Combo {
 
     // Check if all keys of this combo are pressed, but it does not mean the combo key event is sent
     pub(crate) fn is_all_pressed(&self) -> bool {
-        let cnt = self.actions.iter().filter(|&&a| a != KeyAction::No).count();
+        let cnt = self.config.size();
         cnt > 0 && self.keys_pressed() == cnt as u32
     }
 
     // The size of the current combo
     pub(crate) fn size(&self) -> usize {
-        self.actions.iter().filter(|&&a| a != KeyAction::No).count()
+        self.config.size()
     }
 
     pub(crate) fn started(&self) -> bool {

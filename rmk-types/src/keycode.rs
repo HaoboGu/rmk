@@ -9,8 +9,9 @@ use crate::modifier::ModifierCombination;
 /// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
 /// Use flat representation of keycodes.
 #[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, FromRepr, EnumIter)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr, EnumIter)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(postcard::experimental::max_size::MaxSize)]
 pub enum KeyCode {
     /// Reserved, no-key.
     No = 0x0000,
@@ -859,6 +860,30 @@ pub enum KeyCode {
     User29 = 0x85D,
     User30 = 0x85E,
     User31 = 0x85F,
+}
+
+// Manual Serialize/Deserialize implementation to avoid derive macro overhead
+// The derive macro on a large enum (~300 variants) generates ~7KB of code
+// Manual implementation serializes directly as u16 repr, saving significant space
+impl serde::Serialize for KeyCode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_u16(*self as u16)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for KeyCode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = u16::deserialize(deserializer)?;
+        // Use From<u16> trait which already handles invalid values by returning KeyCode::No
+        // This is more efficient than from_repr + ok_or_else
+        Ok(KeyCode::from(value))
+    }
 }
 
 impl KeyCode {

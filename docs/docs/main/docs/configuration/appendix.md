@@ -346,8 +346,11 @@ col_pins = ["PIN_10"]
 # Whether to enable defmt, set to false for reducing binary size
 defmt_log = true
 
-[security]
-# the unlock keys are the combo of the row 0, col 0 key and
+# Host-side tools configuration
+[host]
+# Whether Vial is enabled (default: true)
+vial_enabled = true
+# The unlock keys are the combo of the row 0, col 0 key and
 # the row 0, col 1 key
 unlock_keys = [[0, 0], [0, 1]]
 ```

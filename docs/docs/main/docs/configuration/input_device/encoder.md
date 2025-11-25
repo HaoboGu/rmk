@@ -1,8 +1,11 @@
 # Rotary encoders
 
+
+A rotary encoder is a common input device that can be used for volume control, page scrolling, and other functions.
+
 ## `toml` configuration
 
-You can define a rotary encoder in your `keyboard.toml`. The default type of rotary encoder is EC11, you can config it as:
+You can define a rotary encoder in your `keyboard.toml`:
 
 ```toml
 [[input_device.encoder]]
@@ -16,7 +19,7 @@ internal_pullup = false
 # Available modes:
 # - default: resolution = 1
 # - resolution: custom resolution, requires specifying resolution and reverse parameters
-phase = "default"
+phase = "resolution"
 
 # `resolution` represents the number of steps generated per detent.
 #
@@ -30,16 +33,10 @@ phase = "default"
 #
 # For example — in the ALPS EC11E series(https://tech.alpsalpine.com/cms.media/product_catalog_ec_01_ec11e_en_611f078659.pdf):
 #   detent = 30, pulse = 15 → resolution = (15 × 4) / 30 = 2
-resolution = 4
+resolution = 2
 
-# Optional: specify detent and pulse instead of resolution.
-# Requirements:
-#   - `phase` should be "resolution", and `resolution` value is not set
-#   - `detent` and `pulse` must be provided together
-# Number of detent positions
-detent = 30  
-# Number of pulse
-pulse  = 15
+# Or you can specify detent and pulse to calculate resolution automatically
+resolution = { detent = 30, pulse = 15 }
 
 # Whether the direction of the rotary encoder is reversed.
 reverse = false

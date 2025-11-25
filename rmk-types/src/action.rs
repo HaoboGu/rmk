@@ -13,8 +13,9 @@ use crate::keycode::KeyCode;
 use crate::modifier::ModifierCombination;
 
 /// EncoderAction is the action at a encoder position, stored in encoder_map.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(postcard::experimental::max_size::MaxSize)]
 pub struct EncoderAction {
     clockwise: KeyAction,
     counter_clockwise: KeyAction,
@@ -76,8 +77,9 @@ pub enum MorseMode {
 
 /// Configuration for morse, tap dance and tap-hold
 /// to save some RAM space, manually packed into 32 bits
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(postcard::experimental::max_size::MaxSize)]
 pub struct MorseProfile(u32);
 
 impl MorseProfile {
@@ -219,16 +221,17 @@ impl From<u32> for MorseProfile {
     }
 }
 
-impl Into<u32> for MorseProfile {
-    fn into(self) -> u32 {
-        self.0
+impl From<MorseProfile> for u32 {
+    fn from(val: MorseProfile) -> Self {
+        val.0
     }
 }
 
 /// A KeyAction is the action at a keyboard position, stored in keymap.
 /// It can be a single action like triggering a key, or a composite keyboard action like tap/hold
-#[derive(Debug, Copy, Clone, Eq)]
+#[derive(Debug, Copy, Clone, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(postcard::experimental::max_size::MaxSize)]
 pub enum KeyAction {
     /// No action. Serialized as 0x0000.
     No,
@@ -283,8 +286,9 @@ impl PartialEq for KeyAction {
 }
 
 /// A single basic action that a keyboard can execute.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(postcard::experimental::max_size::MaxSize)]
 pub enum Action {
     /// Default action, no action.
     No,

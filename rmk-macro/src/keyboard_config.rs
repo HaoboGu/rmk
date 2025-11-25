@@ -40,12 +40,13 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc
 }
 
 pub(crate) fn expand_vial_config(config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
-    if !config.rmk.vial_enabled {
+    // Check if vial is enabled (default: true)
+    let host_config = config.get_host_config();
+    if !host_config.vial_enabled {
         return quote! {};
     }
-    let unlock_keys = if let Some(security_config) = &config.security {
-        let keys_expr = security_config
-            .unlock_keys
+    let unlock_keys = if let Some(unlock_keys) = &host_config.unlock_keys {
+        let keys_expr = unlock_keys
             .iter()
             .map(|key| {
                 let row = key[0];

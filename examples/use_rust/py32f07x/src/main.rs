@@ -65,7 +65,6 @@ async fn main(_spawner: Spawner) {
     let rmk_config = RmkConfig {
         device_config: keyboard_device_config,
         // vial_config,
-        ..Default::default()
     };
 
     // let f = Flash::new_blocking(p.MPI2);

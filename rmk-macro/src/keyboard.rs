@@ -49,10 +49,11 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
     }
 
     // Check "vial" feature gate
-    if keyboard_config.rmk.vial_enabled != is_feature_enabled(&rmk_features, "vial") {
-        if keyboard_config.rmk.vial_enabled {
+    let host_config = keyboard_config.get_host_config();
+    if host_config.vial_enabled != is_feature_enabled(&rmk_features, "vial") {
+        if host_config.vial_enabled {
             panic!(
-                "If the \"vial\" cargo feature is disabled, `rmk.vial_enabled` must be set to false in the keyboard.toml."
+                "If the \"vial\" cargo feature is disabled, `host.vial_enabled` must be set to false in the keyboard.toml."
             )
         } else {
             panic!(
@@ -143,7 +144,7 @@ fn expand_main(
     let (controller_initializers, controllers) = expand_controller_init(keyboard_config, &item_mod);
     let run_rmk = expand_rmk_entry(keyboard_config, &item_mod, devices, processors, controllers);
 
-    let vial_config = if keyboard_config.rmk.vial_enabled {
+    let vial_config = if keyboard_config.get_host_config().vial_enabled {
         quote! { vial_config: VIAL_CONFIG,}
     } else {
         quote! {}
@@ -151,6 +152,7 @@ fn expand_main(
 
     let rmk_config = if keyboard_config.get_storage_config().enabled {
         quote! {
+            #[allow(clippy::needless_update)]
             let rmk_config = ::rmk::config::RmkConfig {
                 device_config: KEYBOARD_DEVICE_CONFIG,
                 #vial_config
@@ -161,6 +163,7 @@ fn expand_main(
         }
     } else {
         quote! {
+            #[allow(clippy::needless_update)]
             let rmk_config = ::rmk::config::RmkConfig {
                 device_config: KEYBOARD_DEVICE_CONFIG,
                 #vial_config

@@ -13,6 +13,7 @@ pub mod keyboard;
 pub mod usb_interrupt_map;
 pub mod behavior;
 pub mod board;
+pub mod host;
 pub mod keycode_alias;
 pub mod layout;
 pub mod light;
@@ -53,8 +54,8 @@ pub struct KeyboardTomlConfig {
     split: Option<SplitConfig>,
     /// Input device config
     input_device: Option<InputDeviceConfig>,
-    /// Unlock keys for the keyboard
-    pub security: Option<SecurityConfig>,
+    /// Set host configurations
+    pub host: Option<HostConfig>,
     /// RMK config constants
     #[serde(default)]
     pub rmk: RmkConstantsConfig,
@@ -93,15 +94,15 @@ impl KeyboardTomlConfig {
     /// - TODO: Update controller number based on the number of split boards
     pub fn auto_calculate_parameters(&mut self) {
         // Update the number of peripherals
-        if let Some(split) = &self.split {
-            if split.peripheral.len() > self.rmk.split_peripherals_num {
-                // eprintln!(
-                //     "The number of split peripherals is updated to {} from {}",
-                //     split.peripheral.len(),
-                //     self.rmk.split_peripherals_num
-                // );
-                self.rmk.split_peripherals_num = split.peripheral.len();
-            }
+        if let Some(split) = &self.split
+            && split.peripheral.len() > self.rmk.split_peripherals_num
+        {
+            // eprintln!(
+            //     "The number of split peripherals is updated to {} from {}",
+            //     split.peripheral.len(),
+            //     self.rmk.split_peripherals_num
+            // );
+            self.rmk.split_peripherals_num = split.peripheral.len();
         }
 
         if let Some(behavior) = &self.behavior {
@@ -199,10 +200,7 @@ pub struct RmkConstantsConfig {
     pub ble_profiles_num: usize,
     /// BLE Split Central sleep timeout in minutes (0 = disabled)
     #[serde_inline_default(0)]
-    pub split_central_sleep_timeout_minutes: u32,
-    /// Whether Vial is enabled
-    #[serde_inline_default(true)]
-    pub vial_enabled: bool,
+    pub split_central_sleep_timeout_seconds: u32,
 }
 
 fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
@@ -232,7 +230,7 @@ where
     D: de::Deserializer<'de>,
 {
     let value = SerdeDeserialize::deserialize(deserializer)?;
-    if value < 4 || value > 65536 {
+    if !(4..=65536).contains(&value) {
         panic!("❌ Parse `keyboard.toml` error: max_patterns_per_key must be between 4 and 65566, got {value}");
     }
     Ok(value)
@@ -271,8 +269,7 @@ impl Default for RmkConstantsConfig {
             flash_channel_size: 4,
             split_peripherals_num: 0,
             ble_profiles_num: 3,
-            split_central_sleep_timeout_minutes: 0,
-            vial_enabled: true,
+            split_central_sleep_timeout_seconds: 0,
         }
     }
 }
@@ -657,10 +654,25 @@ fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Resu
     }
 }
 
-/// Configuration for security
-#[derive(Clone, Debug, Default, Deserialize)]
-pub struct SecurityConfig {
-    pub unlock_keys: Vec<[u8; 2]>,
+/// Configuration for host tools
+#[serde_inline_default]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostConfig {
+    /// Whether Vial is enabled
+    #[serde_inline_default(true)]
+    pub vial_enabled: bool,
+    /// Unlock keys for Vial (optional)
+    pub unlock_keys: Option<Vec<[u8; 2]>>,
+}
+
+impl Default for HostConfig {
+    fn default() -> Self {
+        Self {
+            vial_enabled: true,
+            unlock_keys: None,
+        }
+    }
 }
 
 /// Configurations for input devices
@@ -707,7 +719,7 @@ pub struct EncoderConfig {
     //   In resolution mode, you can also specify the number of detent and pulses, the resolution will be calculated by `pulse * 4 / detent`
     pub phase: Option<String>,
     // Resolution
-    pub resolution: Option<u8>,
+    pub resolution: Option<EncoderResolution>,
     // The number of detent
     pub detent: Option<u8>,
     // The number of pulse
@@ -717,6 +729,20 @@ pub struct EncoderConfig {
     // Use MCU's internal pull-up resistor or not, defaults to false, the external pull-up resistor is needed
     #[serde(default = "default_false")]
     pub internal_pullup: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[allow(unused)]
+#[serde(deny_unknown_fields, untagged)]
+pub enum EncoderResolution {
+    Value(u8),
+    Derived { detent: u8, pulse: u8 },
+}
+
+impl Default for EncoderResolution {
+    fn default() -> Self {
+        Self::Value(4)
+    }
 }
 
 /// Pointing device config
