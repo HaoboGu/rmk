@@ -1307,7 +1307,7 @@ checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
 
 [[package]]
 name = "rmk"
-version = "0.7.8"
+version = "0.8.0"
 dependencies = [
  "bitfield-struct",
  "byteorder",
