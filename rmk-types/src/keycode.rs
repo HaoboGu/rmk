@@ -1024,7 +1024,7 @@ impl KeyCode {
         }
     }
 
-    /// Does current keycode continues caps word
+    /// Does current keycode continues caps word?
     pub fn is_caps_word_continue_key(self) -> bool {
         if self >= KeyCode::A && self <= KeyCode::Z {
             return true;
@@ -1033,6 +1033,17 @@ impl KeyCode {
             return true;
         }
         if self == KeyCode::Minus || self == KeyCode::Backspace || self == KeyCode::Delete {
+            return true;
+        }
+        false
+    }
+
+    /// Does current keycode require shifting in caps word?
+    pub fn is_caps_word_shifted_key(self) -> bool {
+        if self >= KeyCode::A && self <= KeyCode::Z {
+            return true;
+        }
+        if self == KeyCode::Minus {
             return true;
         }
         false

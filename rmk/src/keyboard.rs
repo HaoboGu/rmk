@@ -135,6 +135,9 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Caps word state - whether caps word is currently active
     caps_word_active: bool,
+    /// Caps word shift state - whether the current pressed key should be shifted.
+    /// Its value doesn't matter if caps word is not active (or has timed out) or no key is pressed.
+    caps_word_shift: bool,
     /// Caps word idle timer - tracks when caps word should timeout
     caps_word_timer: Option<Instant>,
 
@@ -193,6 +196,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
             caps_word_active: false,
+            caps_word_shift: false,
             caps_word_timer: None,
             with_modifiers: ModifierCombination::default(),
             macro_texting: false,
@@ -1316,12 +1320,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // the suppression effect of forks should not apply on these
         result |= self.with_modifiers;
 
-        // Apply caps word shift if active and appropriate
+        // Apply caps word shift if it is active, has not timed out,
+        // and the current key belongs to those that should be shifted
         if self.caps_word_active
             && let Some(timer) = self.caps_word_timer
             && timer.elapsed() < Duration::from_secs(5)
         {
-            if pressed {
+            if pressed && self.caps_word_shift {
                 result |= ModifierCombination::new().with_left_shift(true);
             }
         } else {
@@ -1402,6 +1407,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     && timer.elapsed() < Duration::from_secs(5)
                 {
                     self.caps_word_timer = Some(Instant::now());
+                    self.caps_word_shift = key.is_caps_word_shifted_key();
                 } else {
                     self.caps_word_active = false;
                     self.caps_word_timer = None;
