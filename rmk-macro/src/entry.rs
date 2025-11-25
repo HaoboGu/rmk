@@ -76,7 +76,7 @@ pub(crate) fn rmk_entry_select(
     } else {
         TokenStream2::new()
     };
-    let keymap = if keyboard_config.rmk.vial_enabled {
+    let keymap = if keyboard_config.get_host_config().vial_enabled {
         quote! { &keymap, }
     } else {
         quote! {}
@@ -195,7 +195,7 @@ pub(crate) fn rmk_entry_unibody(
         TokenStream2::new()
     };
     // Remove the keymap argument if the vial is disabled
-    let keymap = if keyboard_config.rmk.vial_enabled {
+    let keymap = if keyboard_config.get_host_config().vial_enabled {
         quote! { &keymap, }
     } else {
         quote! {}

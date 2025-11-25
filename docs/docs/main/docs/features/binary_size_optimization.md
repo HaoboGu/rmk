@@ -73,7 +73,7 @@ enabled = false
 [dependency]
 defmt_log = false
 
-[rmk]
+[host]
 vial_enabled = false
 ```
 

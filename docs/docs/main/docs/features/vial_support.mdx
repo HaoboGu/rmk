@@ -1,35 +1,43 @@
 # Vial support
 
-RMK uses [Vial](https://get.vial.today/) as the default keymap editor. Vial allows you to change your keymapping in real-time, no additional firmware flashing is required.
+RMK uses [Vial](https://get.vial.today/) as the default keymap editor. Vial allows you to change
+your keymapping in real-time, no additional firmware flashing is required.
 
-::: warning
-Vial requires the [storage feature](./storage) to persist your keymap data. Without storage feature enabled, any changes to your keymap will be lost after the keyboard reboots.
-:::
+::: warning Vial requires the [storage feature](./storage) to persist your keymap data. Without
+storage feature enabled, any changes to your keymap will be lost after the keyboard reboots. :::
 
 ## Port Vial
 
-To use Vial with RMK, you need a keyboard definition file named `vial.json`. Vial provides detailed documentation on how to generate this file: https://get.vial.today/docs/porting-to-via.html. 
+To use Vial with RMK, you need a keyboard definition file named `vial.json`. Vial provides detailed
+documentation on how to generate this file: https://get.vial.today/docs/porting-to-via.html.
 
-::: Note
-When creating your `vial.json`, it is essential that you use the exact same layout definition as your RMK firmware's internal keymap, which is defined in either `src/keymap.rs` or `keyboard.toml`.
+::: Note When creating your `vial.json`, it is essential that you use the exact same layout
+definition as your RMK firmware's internal keymap, which is defined in either `src/keymap.rs` or
+`keyboard.toml`.
 
 It's important to understand the difference:
 
-- `vial.json`: Defines the keyboard layout recognized by Vial, which specifies the position of each key that Vial sets.
-- `src/keymap.rs` / `keyboard.toml`: Defines the actual layout and keymap in the firmware, which specifies the action for each key press.
+- `vial.json`: Defines the keyboard layout recognized by Vial, which specifies the position of each
+  key that Vial sets.
+- `src/keymap.rs` / `keyboard.toml`: Defines the actual layout and keymap in the firmware, which
+  specifies the action for each key press.
 
 :::
 
-Once you have your `vial.json` file, simply place it in the root directory of your RMK firmware project. RMK will automatically handle the rest..
+Once you have your `vial.json` file, simply place it in the root directory of your RMK firmware
+project. RMK will automatically handle the rest..
 
 ## Disable Vial
 
-Vial support requires additional Flash and RAM. If you want to minimize binary size and memory usage, you can disable Vial support.
+Vial support requires additional Flash and RAM. If you want to minimize binary size and memory
+usage, you can disable Vial support.
 
-When using `keyboard.toml`, you can disable Vial by setting `vial_enabled` to `false` under the `[rmk]` section. To completely remove Vial from the build, also disable the `vial` feature in your `Cargo.toml` by turning off the default features:
+When using `keyboard.toml`, you can disable Vial by setting `vial_enabled` to `false` under the
+`[host]` section. To completely remove Vial from the build, also disable the `vial` feature in your
+`Cargo.toml` by turning off the default features:
 
 ```toml title="keyboard.toml"
-[rmk]
+[host]
 vial_enabled = false
 ```
 
@@ -37,3 +45,18 @@ vial_enabled = false
 rmk = { version = "...", default-features = false }
 ```
 
+## Configure Unlock Keys
+
+For security purposes, you can configure unlock keys that must be pressed simultaneously to unlock
+Vial configuration in Vial. This prevents accidental keymap changes.
+
+```toml title="keyboard.toml"
+[host]
+# Unlock combination: simultaneous press of specified keys
+# Format: [[row, col], [row, col], ...]
+unlock_keys = [[0, 0], [0, 1]]  # Keys at (row=0,col=0) and (row=0,col=1)
+```
+
+::: tip The unlock keys use the physical matrix position (row, column), not the keycode. Make sure
+to use keys that are easy to press simultaneously but not commonly pressed together accidentally.
+:::
