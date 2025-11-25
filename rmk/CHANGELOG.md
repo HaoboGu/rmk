@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2025-11-25
+
 ### Added
 
 - Add dongle support back, checkout [this example](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/nrf52840_ble_split_dongle)
@@ -19,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add capsword support
 - Add `default_tx_power` and `use_2m_phy` config for BLE
 - Add lock and matrix tester support for Vial
+- Add `[host]` config section
+- Support changing permissive hold option at the runtime
+- Add `detent` and `pulse` config for encoders
 
 ### Changed
 
@@ -29,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rewrite led indicator, use controller system
 - Rename `RapidDebouncer` to `FastDebouncer`
 - Remove `col2row`, `bidirectional` and `rapid_debouncer` features
+- Use postcard for serialization/deserialization of storage data
+- Change central sleep timeout to be in seconds 
 - Migrate documentation site to rspress
 
 ### Fixed
@@ -39,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix combo reorder issue
 - Fix key stuck when one shot key rolling with tap hold 
 - Fix flow-tap misorder
+- Fix peripheral message loss
 
 ## [0.7.8] - 2025-07-23
 
