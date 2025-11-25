@@ -11,8 +11,8 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [dependencies]
-rmk-macro = { version = "=0.6.8", path = "../rmk-macro" }
-rmk-types = { version = "=0.1.0", path = "../rmk-types" }
+rmk-macro = { version = "=0.7.0", path = "../rmk-macro" }
+rmk-types = { version = "=0.2.0", path = "../rmk-types" }
 embedded-hal = { version = "1.0.0" }
 embedded-hal-async = { version = "1.0.0", optional = true }
 embedded-io-async = { version = "0.6" }
@@ -93,7 +93,7 @@ ctor = "0.6.0"
 rusty-fork = "0.3.0"
 
 [build-dependencies]
-rmk-config = { path = "../rmk-config", version = "=0.5.6" }
+rmk-config = { path = "../rmk-config", version = "=0.6.0" }
 toml = "0.9"
 serde = "1.0"
 serde_derive = "1.0"
