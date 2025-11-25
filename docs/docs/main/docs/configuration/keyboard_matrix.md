@@ -103,16 +103,22 @@ RMK has two debouncer modes, "default" and "fast":
 
 If no `debouncer` is set, the matrix will defaults to `default` mode.
 
-## Vial Security Configuration - `[security]` Section
+## Vial Unlock Keys - `[host]` Section
 
-For enhanced security, Vial locks certain functions (like matrix testing) by default. You can set a key combination to unlock it.
+For enhanced security, Vial locks certain functions (like matrix testing) by default. You can set a key combination to unlock it. This configuration is part of the `[host]` section which controls host-side tools and features.
 
 ```toml
-[security]
+[host]
 # Unlock combination: simultaneous press of specified keys
 # Format: [[row, col], [row, col], ...]
 unlock_keys = [[0, 0], [0, 1]]  # Keys at (row=0,col=0) and (row=0,col=1)
 ```
+
+::: tip
+- The unlock keys use the physical matrix position (row, column), not the keycode
+- Choose keys that are easy to press simultaneously but not commonly pressed together accidentally
+- See the [Vial Support](../features/vial_support.mdx) page for more details on Vial configuration
+:::
 
 ## Troubleshooting
 

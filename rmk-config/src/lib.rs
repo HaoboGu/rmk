@@ -17,6 +17,7 @@ pub mod keycode_alias;
 pub mod layout;
 pub mod light;
 pub mod storage;
+pub mod host;
 
 pub use board::{BoardConfig, UniBodyConfig};
 pub use chip::{ChipModel, ChipSeries};
@@ -53,8 +54,8 @@ pub struct KeyboardTomlConfig {
     split: Option<SplitConfig>,
     /// Input device config
     input_device: Option<InputDeviceConfig>,
-    /// Unlock keys for the keyboard
-    pub security: Option<SecurityConfig>,
+    /// Set host configurations
+    pub host: Option<HostConfig>,
     /// RMK config constants
     #[serde(default)]
     pub rmk: RmkConstantsConfig,
@@ -200,9 +201,6 @@ pub struct RmkConstantsConfig {
     /// BLE Split Central sleep timeout in minutes (0 = disabled)
     #[serde_inline_default(0)]
     pub split_central_sleep_timeout_seconds: u32,
-    /// Whether Vial is enabled
-    #[serde_inline_default(true)]
-    pub vial_enabled: bool,
 }
 
 fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
@@ -272,7 +270,6 @@ impl Default for RmkConstantsConfig {
             split_peripherals_num: 0,
             ble_profiles_num: 3,
             split_central_sleep_timeout_seconds: 0,
-            vial_enabled: true,
         }
     }
 }
@@ -657,10 +654,25 @@ fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Resu
     }
 }
 
-/// Configuration for security
-#[derive(Clone, Debug, Default, Deserialize)]
-pub struct SecurityConfig {
-    pub unlock_keys: Vec<[u8; 2]>,
+/// Configuration for host tools
+#[serde_inline_default]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostConfig {
+    /// Whether Vial is enabled
+    #[serde_inline_default(true)]
+    pub vial_enabled: bool,
+    /// Unlock keys for Vial (optional)
+    pub unlock_keys: Option<Vec<[u8; 2]>>,
+}
+
+impl Default for HostConfig {
+    fn default() -> Self {
+        Self {
+            vial_enabled: true,
+            unlock_keys: None,
+        }
+    }
 }
 
 /// Configurations for input devices
