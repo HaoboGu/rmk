@@ -315,7 +315,7 @@ mod tests {
 
         // Validation
         match deserialized_data {
-            StorageData::VialData(KeymapData::Morse(_, deserialized_morse)) => {
+            (StorageData::VialData(KeymapData::Morse(_, deserialized_morse)), _) => {
                 // actions
                 assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
                 for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
@@ -345,7 +345,7 @@ mod tests {
 
         // Validation
         match deserialized_data {
-            StorageData::VialData(KeymapData::Morse(_, deserialized_morse)) => {
+            (StorageData::VialData(KeymapData::Morse(_, deserialized_morse)), _) => {
                 // actions
                 assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
                 for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
@@ -392,7 +392,7 @@ mod tests {
 
         // Validation
         match deserialized_data {
-            StorageData::VialData(KeymapData::Morse(_, deserialized_morse)) => {
+            (StorageData::VialData(KeymapData::Morse(_, deserialized_morse)), _) => {
                 // actions
                 assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
                 for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {

@@ -580,7 +580,7 @@ mod tests {
         let deserialized_data = StorageData::deserialize_from(&buffer[..serialized_size]).unwrap();
         // Validation
         match deserialized_data {
-            StorageData::VialData(KeymapData::Combo(idx, deserialized_config)) => {
+            (StorageData::VialData(KeymapData::Combo(idx, deserialized_config)), _) => {
                 assert_eq!(idx, combo_idx);
                 // actions
                 assert_eq!(deserialized_config.actions.len(), combo_config.actions.len());
