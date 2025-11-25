@@ -135,15 +135,15 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitWriter for BleSplitPeripheralDrive
 pub async fn initialize_nrf_ble_split_peripheral_and_run<
     'stack,
     C: Controller + ControllerCmdAsync<LeSetPhy>,
-    F: NorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
+    #[cfg(feature = "storage")] F: NorFlash,
+    #[cfg(feature = "storage")] const ROW: usize,
+    #[cfg(feature = "storage")] const COL: usize,
+    #[cfg(feature = "storage")] const NUM_LAYER: usize,
+    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
     id: usize,
     stack: &'stack Stack<'stack, C, DefaultPacketPool>,
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+    #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     #[cfg(feature = "controller")]
     let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
@@ -157,6 +157,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
 
     // First, read central address from storage
     let mut central_saved = false;
+    #[cfg(feature = "storage")]
     let mut central_addr = if let Ok(Some(central_addr)) = storage.read_peer_address(0).await {
         if central_addr.is_valid {
             central_saved = true;
@@ -167,6 +168,8 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
     } else {
         None
     };
+    #[cfg(not(feature = "storage"))]
+    let mut central_addr = None;
 
     let peri_task = async {
         let server = BleSplitPeripheralServer::new_default("rmk").unwrap();
@@ -183,6 +186,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
                     // Save central address to storage if the central address is not saved
                     if !central_saved || conn.raw().peer_address().into_inner() != central_addr.unwrap_or_default() {
                         info!("Saving central address to storage");
+                        #[cfg(feature = "storage")]
                         if let Ok(()) = storage
                             .write_peer_address(PeerAddress {
                                 peer_id: 0,
@@ -196,7 +200,10 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
                         }
                     }
                     // Start run peripheral service
+                    #[cfg(feature = "storage")]
                     select(storage.run(), peripheral.run()).await;
+                    #[cfg(not(feature = "storage"))]
+                    peripheral.run().await;
                     info!("Disconnected from the central");
                 }
                 Err(BleHostError::BleHost(Error::Timeout)) => {
