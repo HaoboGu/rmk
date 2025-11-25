@@ -13,11 +13,11 @@ pub mod keyboard;
 pub mod usb_interrupt_map;
 pub mod behavior;
 pub mod board;
+pub mod host;
 pub mod keycode_alias;
 pub mod layout;
 pub mod light;
 pub mod storage;
-pub mod host;
 
 pub use board::{BoardConfig, UniBodyConfig};
 pub use chip::{ChipModel, ChipSeries};
