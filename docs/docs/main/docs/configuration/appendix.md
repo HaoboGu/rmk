@@ -350,6 +350,21 @@ defmt_log = true
 # the unlock keys are the combo of the row 0, col 0 key and
 # the row 0, col 1 key
 unlock_keys = [[0, 0], [0, 1]]
+
+# Chip-specific configuration
+# To use the default configuration, ignore this section completely
+[chip]
+# DCDC regulator 0 enabled (nrf52840 only, default: true)
+# **Note**: Do not enable DC/DC regulator without an external LC filter being connected
+# as this will inhibit device operation, including debug access, until an LC filter is connected.
+dcdc_reg0 = true
+# DCDC regulator 1 enabled (nrf52840, nrf52833, default: true)
+# **Note**: Do not enable DC/DC regulator without an external LC filter being connected
+# as this will inhibit device operation, including debug access, until an LC filter is connected.
+dcdc_reg1 = true
+# DCDC regulator 0 voltage (nrf52840 only, default: "3V3")
+# Valid values: "3V3" or "1V8"
+dcdc_reg0_voltage = "3V3"
 ```
 
 ### Available chip names
