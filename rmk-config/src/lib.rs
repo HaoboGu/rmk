@@ -47,6 +47,8 @@ pub struct KeyboardTomlConfig {
     storage: Option<StorageConfig>,
     /// Ble config
     ble: Option<BleConfig>,
+    /// Chip config
+    chip: Option<ChipConfig>,
     /// Dependency config
     dependency: Option<DependencyConfig>,
     /// Split config
@@ -368,6 +370,19 @@ pub struct BleConfig {
     pub adc_divider_total: Option<u32>,
     pub default_tx_power: Option<i8>,
     pub ble_use_2m_phy: Option<bool>,
+}
+
+/// Config for chip-specific settings
+#[derive(Clone, Default, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChipConfig {
+    /// DCDC regulator 0 enabled (for nrf52840)
+    pub dcdc_reg0: Option<bool>,
+    /// DCDC regulator 1 enabled (for nrf52840, nrf52833)
+    pub dcdc_reg1: Option<bool>,
+    /// DCDC regulator 0 voltage (for nrf52840)
+    /// Values: "3V3" or "1V8"
+    pub dcdc_reg0_voltage: Option<String>,
 }
 
 /// Config for lights

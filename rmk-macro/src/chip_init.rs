@@ -57,16 +57,32 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                 let mut p = ::embassy_stm32::init(config);
         },
         ChipSeries::Nrf52 => {
+            let chip_cfg = keyboard_config.get_chip_config();
             let dcdc_config = if chip.chip == "nrf52840" {
+                let reg0_enabled = chip_cfg.dcdc_reg0.unwrap_or(true);
+                let reg1_enabled = chip_cfg.dcdc_reg1.unwrap_or(true);
+                let reg0_voltage_str = chip_cfg.dcdc_reg0_voltage.as_deref().unwrap_or("3V3");
+                let reg0_voltage = match reg0_voltage_str {
+                    "3V3" => quote! { ::embassy_nrf::config::Reg0Voltage::_3V3 },
+                    "1V8" => quote! { ::embassy_nrf::config::Reg0Voltage::_1V8 },
+                    _ => {
+                        panic!(
+                            "Invalid dcdc_reg0_voltage: {}. Must be \"3V3\" or \"1V8\"",
+                            reg0_voltage_str
+                        );
+                    }
+                };
                 quote! {
-                    config.dcdc.reg0_voltage = Some(::embassy_nrf::config::Reg0Voltage::_3V3);
-                    config.dcdc.reg0 = true;
-                    config.dcdc.reg1 = true;
+                    config.dcdc.reg0_voltage = Some(#reg0_voltage);
+                    config.dcdc.reg0 = #reg0_enabled;
+                    config.dcdc.reg1 = #reg1_enabled;
+                    ::defmt::info!("DCDC config: reg0_voltage={}, reg0={}, reg1={}", #reg0_voltage_str, #reg0_enabled, #reg1_enabled);
                 }
             } else if chip.chip == "nrf52833" {
+                let reg1_enabled = chip_cfg.dcdc_reg1.unwrap_or(true);
                 quote! {
-                    config.dcdc.reg0_voltage = Some(::embassy_nrf::config::Reg0Voltage::_3V3);
-                    config.dcdc.reg1 = true;
+                    config.dcdc.reg1 = #reg1_enabled;
+                    ::defmt::info!("DCDC config: reg1={}", #reg1_enabled);
                 }
             } else {
                 quote! {}
