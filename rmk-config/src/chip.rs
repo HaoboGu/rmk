@@ -1,4 +1,4 @@
-use crate::KeyboardTomlConfig;
+use crate::{ChipConfig, KeyboardTomlConfig};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum ChipSeries {
@@ -113,5 +113,9 @@ impl KeyboardTomlConfig {
         } else {
             Err("Neither board nor chip is specified".to_string())
         }
+    }
+
+    pub fn get_chip_config(&self) -> ChipConfig {
+        self.chip.clone().unwrap_or_default()
     }
 }
