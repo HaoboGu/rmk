@@ -1024,7 +1024,7 @@ impl KeyCode {
         }
     }
 
-    /// Does current keycode continues caps word?
+    /// Does current keycode continues Caps Word?
     pub fn is_caps_word_continue_key(self) -> bool {
         if self >= KeyCode::A && self <= KeyCode::Z {
             return true;
@@ -1038,7 +1038,7 @@ impl KeyCode {
         false
     }
 
-    /// Does current keycode is to be shifted by caps word?
+    /// Does current keycode is to be shifted by Caps Word?
     pub fn is_caps_word_shifted_key(self) -> bool {
         if self >= KeyCode::A && self <= KeyCode::Z {
             return true;
