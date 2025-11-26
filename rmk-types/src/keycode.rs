@@ -1038,7 +1038,7 @@ impl KeyCode {
         false
     }
 
-    /// Does current keycode require shifting in caps word?
+    /// Does current keycode is to be shifted by caps word?
     pub fn is_caps_word_shifted_key(self) -> bool {
         if self >= KeyCode::A && self <= KeyCode::Z {
             return true;
