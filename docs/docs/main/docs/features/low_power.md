@@ -13,7 +13,7 @@ rmk = { version = "...", features = [
 ] }
 ```
 
-If you're using nRF chips or RP2040, you're all set! Your keyboard is now running in low-power mode. The `async_matrix` feature enables interrupt-based input detection, puts your microcontroller into sleep mode when no key are being pressed.
+If you're using nRF chips or RP2040, you're all set! Your keyboard is now running in low-power mode. The `async_matrix` feature enables interrupt-based input detection, puts your microcontroller into sleep mode when no keys are being pressed.
 
 For STM32, there's some limitations about Exti(see [here](https://docs.embassy.dev/embassy-stm32/git/stm32g474pc/exti/struct.ExtiInput.html)):
 
@@ -26,7 +26,7 @@ There are a few more things that you have to do:
 1. Enable the `exti` feature for your `embassy-stm32` dependency in `Cargo.toml`
 2. Ensure that your input pins don't share same EXTI channel
 3. For configuration:
-    - If you're using `keyboard.toml`, you are all set. The `[rmk_keyboard]` macro will automatically check your `Cargo.toml` and handlt it for you.
+    - If you're using `keyboard.toml`, you are all set. The `[rmk_keyboard]` macro will automatically check your `Cargo.toml` and handle it for you.
     - If you're using Rust code, you'll need to use `ExtiInput` for your input pins:
 
 ```rust

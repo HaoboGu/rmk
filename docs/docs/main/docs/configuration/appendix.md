@@ -21,7 +21,7 @@ board = "nice!nano_v2"
 # Set to false if you don't want USB
 usb_enable = true
 
-# Set matrix IO for the board. This section is for non-split keyboard and is conflict with [split] section
+# Set matrix IO for the board. This section is for non-split keyboards and is in conflict with the [split] section
 [matrix]
 # `matrix_type` is optional. Default is "normal"
 matrix_type = "normal"
@@ -45,9 +45,9 @@ direct_pin_low_active = true
 
 # Layout info for the keyboard, this section is mandatory
 [layout]
-# Number of rows. For split keyboard, this is the total rows contains all splits
+# Number of rows. For a split keyboard, this is the total number of rows for all splits
 rows = 5
-# Number of cols. For split keyboard, this is the total cols contains all splits
+# Number of cols. For a split keyboard, this is the total number of cols for all splits
 cols = 4
 # Number of layers. Be careful, since large layer number takes more flash and RAM
 layers = 3
@@ -232,10 +232,10 @@ battery_adc_pin = "vddh"
 adc_divider_measured = 2000
 # Total resistance of the full path for input adc
 adc_divider_total = 2806
-# [Depreciated] Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
+# [Deprecated] Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 # Input pin that indicates the charging state
 # charge_state = { pin = "PIN_1", low_active = true }
-# [Depreciated] Output LED pin that blinks when the battery is low
+# [Deprecated] Output LED pin that blinks when the battery is low
 # charge_led= { pin = "PIN_2", low_active = true }
 
 # RMK internal configuration
@@ -323,7 +323,7 @@ cols = 1
 row_offset = 2
 # Col offset of peripheral matrix to the whole matrix
 col_offset = 2
-# The serial instance used to communication with the central board, if the connection type is "serial"
+# The serial instance used to communicate with the central board, if the connection type is "serial"
 serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
 # Override the BLE random static address of the peripheral board
 ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3]

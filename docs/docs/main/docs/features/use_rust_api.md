@@ -66,4 +66,4 @@ If your keys are directly connected to the microcontroller pins, you can define 
     };
 ```
 
-So far so good, you've done all necessary modifications of your firmware project. You can also check TODOs listed in the generated `README.md` file. Happying coding!
+So far so good, you've done all necessary modifications of your firmware project. You can also check TODOs listed in the generated `README.md` file. Happy coding!

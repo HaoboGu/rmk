@@ -195,7 +195,7 @@ run_peripheral_manager::<
 
 ### Peripheral
 
-Running split peripheral is simplier. For peripheral, we don't need to specify peripheral matrix's offsets(we've done it in central!). So, the split peripheral API is like:
+Running split peripheral is simpler. For peripheral, we don't need to specify peripheral matrix's offsets(we've done it in central!). So, the split peripheral API is like:
 
 <Tabs>
 <Tab label={<Rust />}>

@@ -61,7 +61,7 @@ By default, Rust compiler generates `elf` file in target folder. There're a litt
 
 ### I changed keymap in `keyboard.toml`, but the keyboard is not updated
 
-RMK assumes that users change the keymap using [vial](https://vial.rocks). So reflashing the firmware won't change the keymap by default. For testing senario, RMK provides a config `clear_storage` under `[storage]` section, you can enable it to clear the storage when the keyboard boots.
+RMK assumes that users change the keymap using [vial](https://vial.rocks). So reflashing the firmware won't change the keymap by default. For testing scenario, RMK provides a config `clear_storage` under `[storage]` section, you can enable it to clear the storage when the keyboard boots.
 
 ```toml
 [storage]
@@ -69,7 +69,7 @@ RMK assumes that users change the keymap using [vial](https://vial.rocks). So re
 clear_storage = true
 ```
 
-Note that the storage will be clear EVERYTIME you reboot the keyboard.
+Note that the storage will be cleared EVERYTIME you reboot the keyboard.
 
 ### rust-lld: error: section will not fit in region 'FLASH': overflowed by x bytes
 

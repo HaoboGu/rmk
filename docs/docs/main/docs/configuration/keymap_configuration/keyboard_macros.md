@@ -262,7 +262,7 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
 }
 ```
 
-When you press `shift` and use `MacroOperation::Text`, like in the code above, no letter gets capitalized (outputs `qu`). Remember that `MacroOperation::Text` ignores all modifiers not being part of the sequence. `MacroOperation:Tap` doesn't, thus you can use `MacroOperation::Tap` for the first letter, and `MacroOperation::Text` for the following letters, to capitalize the first letter only.
+When you press `shift` and use `MacroOperation::Text`, like in the code above, no letter gets capitalized (outputs `qu`). Remember that `MacroOperation::Text` ignores all modifiers not being part of the sequence. `MacroOperation::Tap` doesn't, thus you can use `MacroOperation::Tap` for the first letter, and `MacroOperation::Text` for the following letters, to capitalize the first letter only.
 
 ```rust
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {

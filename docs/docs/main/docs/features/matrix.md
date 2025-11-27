@@ -40,7 +40,7 @@ RMK's matrix system is built on a trait-based architecture. Any matrix or deboun
 
 **`DebouncerTrait`**: Controls switch bounce filtering. RMK includes default and fast debouncing algorithms, you can also implement custom debouncing logic optimized for your own use cases.
 
-The following is an example demonstrate how to use a customized matrix:
+The following is an example demonstrating how to use a customized matrix:
 
 ```rust
 struct YourOwnMatrix {}
