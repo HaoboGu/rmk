@@ -321,6 +321,7 @@ pub enum MatrixType {
     #[default]
     normal,
     direct_pin,
+    low_power,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
