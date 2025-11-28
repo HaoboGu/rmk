@@ -4,8 +4,8 @@ RMK provides a simple and declarative way to configure your keyboard using a TOM
 
 RMK provides many examples for various microcontrollers using both configuration methods. See the [examples folder](https://github.com/HaoboGu/rmk/tree/main/examples) in the RMK repository.
 
-::: INFO
-This section is a brief introduction of RMK's configuration system. For the complete configuration specification, please refer to the [Configuration](../configuration) section.
+::: info
+This section is a brief introduction to RMK's configuration system. For the complete configuration specification, please refer to the [Configuration](../configuration) section.
 :::
 
 ## TOML configuration
@@ -46,4 +46,4 @@ The RMK code is organized in a modular way, consisting of several crates. Theref
 - [`rmk-types`](https://docs.rs/rmk-types/latest/rmk_types): Contains all types used in RMK, such as `KeyCode`, `KeyAction`, etc.
 - [`rmk`](https://docs.rs/rmk/latest/rmk): The main RMK crate, which exposes most of the APIs.
 
-Checkout [examples](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust) which use Rust API if you want to try fantastic Rust programming language. [Configuration](../configuration) documentation also includes Rust API usages.
+Check out [examples](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust) that use Rust API if you want to try the fantastic Rust programming language. [Configuration](../configuration) documentation also includes Rust API usage.

@@ -74,19 +74,19 @@ MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
 """
 ```
 
-The number and order of entries on each defined layers must be identical with the number and order of entries in `matrix_map`. White spaces, line breaks are free to vary, but its worth to keep a consistent arrangement with the real keyboard.
+The number and order of entries on each defined layer must be identical with the number and order of entries in `matrix_map`. White spaces and line breaks are free to vary, but it's worth keeping a consistent arrangement with the real keyboard.
 
 ::: warning
 
-If the number of defined layers is smaller than what was defined in `layout.layers`, RMK will fill empty layers automatically (so you can configure them freely in Vial). But the empty layers still consumes flash and RAM, so if you don't have a enough space for them, it's not recommended to use a big layer count.
+If the number of defined layers is smaller than what was defined in `layout.layers`, RMK will fill empty layers automatically (so you can configure them freely in Vial). But the empty layers still consume flash and RAM, so if you don't have enough space for them, it's not recommended to use a big layer count.
 
 :::
 
-In each `layer.keys`, the keys are bound to various key actions. Due to the limitation of `toml` file, this is done in a string. RMK parses the string and fill the to actual keymap initializer, like what's in [`keymap.rs`](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/rp2040/src/keymap.rs)
+In each `layer.keys`, the keys are bound to various key actions. Due to the limitation of the `toml` file format, this is done in a string. RMK parses the string and fills in the actual keymap initializer, like what's in [`keymap.rs`](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/rp2040/src/keymap.rs)
 
 The `layer.keys` string should follow several rules:
 
-1. For a simple keycode(aka keys in RMK's [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html) enum), just fill its name.
+1. For a simple keycode (i.e., keys in RMK's [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html) enum), just fill in its name.
 
    For example, if you set a keycode `Backspace`, it will be turned to `KeyCode::Backspace`. So you have to ensure that the keycode string is valid, or RMK wouldn't compile! However, to make things easier a number of alternative key names (see alias column in [KeyCode table](./keymap_configuration/keycodes)) were added and also case-insensitive search is used to find the valid [KeyCode](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html).
 
@@ -116,7 +116,7 @@ The `layer.keys` string should follow several rules:
    8. Use `TG(n)` to create a layer toggle action, `n` is the layer number
    9. Use `TO(n)` to create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
 
-The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
+The definitions of these operations are the same as QMK's; you can find them [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [file an issue](https://github.com/HaoboGu/rmk/issues/new).
 
 5. For modifier-tap-hold, use `MT(key, modifier, <profile_name>)` where the modifier can be a chain like explained on point 1. The `profile_name` is optional, which defines the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning)
 <!-- If you're using home-row mod(HRM), you can also use `HRM(key, modifier)` to create a modifier-tap-hold whose configuration is optimized for home-row mod. -->

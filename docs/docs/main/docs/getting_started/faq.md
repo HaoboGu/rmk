@@ -59,9 +59,9 @@ By default, Rust compiler generates `elf` file in target folder. There're a litt
   cargo make uf2 --release
   ```
 
-### I changed keymap in `keyboard.toml`, but the keyboard is not updated
+### I changed the keymap in `keyboard.toml`, but the keyboard is not updated
 
-RMK assumes that users change the keymap using [vial](https://vial.rocks). So reflashing the firmware won't change the keymap by default. For testing scenario, RMK provides a config `clear_storage` under `[storage]` section, you can enable it to clear the storage when the keyboard boots.
+RMK assumes that users change the keymap using [vial](https://vial.rocks). So reflashing the firmware won't change the keymap by default. For testing scenarios, RMK provides a config `clear_storage` under the `[storage]` section. You can enable it to clear the storage when the keyboard boots.
 
 ```toml
 [storage]
@@ -69,15 +69,15 @@ RMK assumes that users change the keymap using [vial](https://vial.rocks). So re
 clear_storage = true
 ```
 
-Note that the storage will be cleared EVERYTIME you reboot the keyboard.
+Note that the storage will be cleared EVERY TIME you reboot the keyboard.
 
 ### rust-lld: error: section will not fit in region 'FLASH': overflowed by x bytes
 
-This is because your MCU's flash is too small. Try building in release mode: `cargo build --release`. If the error still there, follow our [`binary size optimization`](/docs/features/binary_size_optimization.md) doc to reduce your code size.
+This is because your MCU's flash is too small. Try building in release mode: `cargo build --release`. If the error persists, follow our [`binary size optimization`](/docs/features/binary_size_optimization.md) documentation to reduce your code size.
 
 ### Unable to find libclang
 
-On windows machines, you may get the following error when building the firmware:
+On Windows machines, you may get the following error when building the firmware:
 
 ```
 error: failed to run custom build command for `nrf-mpsl-sys v0.1.1 (https://github.com/alexmoon/nrf-sdc.git?rev=7be9b853e15ca0404d65c623d1ec5795fd96c204#7be9b853)`
@@ -101,11 +101,11 @@ Caused by:
   note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 ```
 
-That's because you don't have LLVM(Clang) installed, or the system doesn't know the path of installed LLVM(Clang). You can try solution here: <https://rust-lang.github.io/rust-bindgen/requirements.html#windows>
+That's because you don't have LLVM (Clang) installed, or the system doesn't know the path to the installed LLVM (Clang). You can try the solution here: <https://rust-lang.github.io/rust-bindgen/requirements.html#windows>
 
 ### Unable to generate bindings: NotExist
 
-On windows machines, you may get the following error when building the firmware:
+On Windows machines, you may get the following error when building the firmware:
 
 ```
 error: failed to run custom build command for `nrf-sdc-sys v0.2.1 (D:\nrf-sdc\nrf-sdc-sys)`
@@ -129,9 +129,9 @@ To resolve this, you need to enable git symlink on Windows:
 git config --global core.symlinks true
 ```
 
-### I can see a `RMK Start` log, but nothing else
+### I can see an `RMK Start` log, but nothing else
 
-First you need to check the RCC config of your board, make sure that the USB's clock is enabled and set to 48MHZ. For example, if you're using stm32f1, you can set the RCC as the following:
+First, you need to check the RCC config of your board. Make sure that the USB's clock is enabled and set to 48 MHz. For example, if you're using STM32F1, you can set the RCC as follows:
 
 ```rust
 // If you're using a keyboard.toml
@@ -161,7 +161,7 @@ mod keyboard {
 }
 ```
 
-If the keyboard still doesn't work, enabling full logging trace at `.cargo/config.toml`:
+If the keyboard still doesn't work, enable full logging trace in `.cargo/config.toml`:
 
 ```toml
 [env]
@@ -170,9 +170,9 @@ DEFMT_LOG = "trace"
 
 run `cargo clean` and then `cargo run --release`. Open an [issue](https://github.com/HaoboGu/rmk/issues) with the detailed logs.
 
-### I see ERROR: Storage is full error in the log
+### I see "ERROR: Storage is full" error in the log
 
-By default, RMK uses only 2 sectors of your microcontroller's internal flash. You may get the following error if 2 sectors is not big enough to store all your keymaps:
+By default, RMK uses only 2 sectors of your microcontroller's internal flash. You may get the following error if 2 sectors are not big enough to store all your keymaps:
 
 ```
 ERROR Storage is full
@@ -188,10 +188,10 @@ If you have more sectors available in your internal flash, you can increase `num
 ### OUTDATED: panicked at embassy-executor: task arena is full.
 
 ::: info
-This error occurs only for RMK versions **before** v0.7
+This error occurs only for RMK versions **before** v0.7.
 :::
 
-The current embassy requires manually setting of the task arena size. By default, RMK set's it to 32768 in all examples:
+The current Embassy requires manual setting of the task arena size. By default, RMK sets it to 32768 in all examples:
 
 ```toml
 # Cargo.toml
@@ -203,7 +203,7 @@ embassy-executor = { version = "0.9", features = [
 ] }
 ```
 
-If you got `ERROR panicked at 'embassy-executor: task arena is full.` error after flashing to your MCU, that means that you should increase your embassy's task arena. Embassy has a series cargo features to do this, for example, changing task arena size to 65536:
+If you get the `ERROR panicked at 'embassy-executor: task arena is full.'` error after flashing to your MCU, that means you should increase your Embassy's task arena. Embassy has a series of cargo features to do this; for example, changing the task arena size to 65536:
 
 ```diff
 # Cargo.toml
@@ -216,9 +216,9 @@ embassy-executor = { version = "0.9", features = [
 ] }
 ```
 
-In the latest git version of embassy, task arena size could be calculated automatically, but it requires **nightly** version of Rust.
+In the latest git version of Embassy, the task arena size can be calculated automatically, but it requires the **nightly** version of Rust.
 
-If you're comfortable with nightly Rust, you can enable `nightly` feature of embassy-executor and remove `task-arena-size-*` feature.
+If you're comfortable with nightly Rust, you can enable the `nightly` feature of embassy-executor and remove the `task-arena-size-*` feature.
 
 ### What font is used for the RMK logo?
 

@@ -10,7 +10,7 @@ one_shot = { timeout = "1s" }
 
 ## Tri Layer
 
-Tri-layer enables a third layer (often called `adjust`) automatically when two other layers(`upper` and `lower`) are both active.
+Tri-layer enables a third layer (often called `adjust`) automatically when two other layers (`upper` and `lower`) are both active.
 
 You can enable Tri-Layer by specifying the `upper`, `lower` and `adjust` layers in the `tri_layer` sub-table:
 
@@ -431,7 +431,7 @@ keymap = [
 
 ## Fork
 
-In the `fork` sub-table, you can configure the keyboard's state based key fork functionality. Forks allows you to define a trigger key and condition dependent possible replacement keys. When the trigger key is pressed, the condition is checked by the following rule: If any of the `match_any` states are active AND none of the `match_none` states active, the trigger key will be replaced with positive_output, otherwise with the negative_output. By default the modifiers listed in `match_any` will be suppressed (even the one-shot modifiers) for the time the replacement key action is executed. However, with `kept_modifiers` some of them can be kept instead of automatic suppression.
+In the `fork` sub-table, you can configure the keyboard's state-based key fork functionality. Forks allow you to define a trigger key and condition-dependent possible replacement keys. When the trigger key is pressed, the condition is checked by the following rule: If any of the `match_any` states are active AND none of the `match_none` states are active, the trigger key will be replaced with positive_output; otherwise, it will be replaced with the negative_output. By default, the modifiers listed in `match_any` will be suppressed (even the one-shot modifiers) for the time the replacement key action is executed. However, with `kept_modifiers` some of them can be kept instead of automatic suppression.
 
 Fork configuration includes the following parameters:
 
@@ -439,14 +439,14 @@ Fork configuration includes the following parameters:
   - `trigger`: Defines the triggering key.
   - `negative_output`: A string defining the output action to be triggered when the conditions are not met
   - `positive_output`: A string defining the output action to be triggered when the conditions are met
-  - `match_any`: A strings defining a combination of modifier keys, lock leds, mouse buttons (optional)
-  - `match_none`: A strings defining a combination of modifier keys, lock leds, mouse buttons (optional)
-  - `kept_modifiers`: A string defining a combination of modifier keys, which should not be 'suppressed' from the keyboard state for the time the replacement action is executed. (optional)
-  - `bindable`: Enables the evaluation of not yet triggered forks on the output of this fork to further manipulate the output. Advanced use cases can be solved using this option. (optional)
+  - `match_any`: A string defining a combination of modifier keys, lock LEDs, mouse buttons (optional)
+  - `match_none`: A string defining a combination of modifier keys, lock LEDs, mouse buttons (optional)
+  - `kept_modifiers`: A string defining a combination of modifier keys, which should not be 'suppressed' from the keyboard state for the time the replacement action is executed (optional)
+  - `bindable`: Enables the evaluation of not yet triggered forks on the output of this fork to further manipulate the output. Advanced use cases can be solved using this option (optional)
 
 For `match_any`, `match_none` the legal values are listed below (many values may be combined with "|"):
 
-- `LShift`, `LCtrl`, `LAlt`, `LGui`, `RShift`, `RCtrl`, `RAlt`, `RGui` (these are including the effect of explicitly held and one-shot modifiers too)
+- `LShift`, `LCtrl`, `LAlt`, `LGui`, `RShift`, `RCtrl`, `RAlt`, `RGui` (these include the effect of explicitly held and one-shot modifiers too)
 - `CapsLock`, `ScrollLock`, `NumLock`, `Compose`, `Kana`
 - `MouseBtn1` .. `MouseBtn8`
 

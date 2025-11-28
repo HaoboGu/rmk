@@ -49,7 +49,7 @@ ble_profiles_num = 3
 
 ::: info
 
-Increasing the number of combos, forks, morses(tap dances) and macros will increase memory usage.
+Increasing the number of combos, forks, morses (tap dances), and macros will increase memory usage.
 
 :::
 

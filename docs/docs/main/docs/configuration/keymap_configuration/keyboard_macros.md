@@ -1,6 +1,6 @@
 # Keyboard Macros
 
-rmk supports keyboard macros: Pressing a trigger to execute a sequence of keypresses.
+RMK supports keyboard macros: Pressing a trigger to execute a sequence of keypresses.
 
 This can be configured via Vial or rust. A configuration via the toml configuration file will be provided in the future.
 

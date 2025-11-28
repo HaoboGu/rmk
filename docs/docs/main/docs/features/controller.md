@@ -99,8 +99,8 @@ scrolllock.low_active = false
 ### Custom Controllers
 
 Custom controllers are declared using the `#[controller(event)]` or `#[controller(poll)]` attribute within your keyboard module.
-If `#[controller(event)]` is used the controller must implement `EventController` (or just `Controller`) and the `EventController::event_loop` method will be called.
-If `#[controller(poll)]` is used the controller must implement `PollingController` and the `PollingController::polling_loop` method will be called.
+If `#[controller(event)]` is used, the controller must implement `EventController` (or just `Controller`) and the `EventController::event_loop` method will be called.
+If `#[controller(poll)]` is used, the controller must implement `PollingController` and the `PollingController::polling_loop` method will be called.
 
 A `p` variable containing the chip peripherals is in scope inside the function.
 It's also possible to define extra interrupts using the `bind_interrupts!` macro.
@@ -204,7 +204,7 @@ impl<P: StatefulOutputPin> PollingController for BlinkingController<P> {
     const INTERVAL: embassy_time::Duration = embassy_time::Duration::from_millis(500);
 
     async fn update(&mut self) {
-        // Toggle LED every 500ms when active(aka current layer is not 0)
+        // Toggle LED every 500ms when active (i.e., current layer is not 0)
         if self.active {
             self.pin.toggle();
         }

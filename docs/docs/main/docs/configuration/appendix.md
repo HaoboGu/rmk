@@ -2,7 +2,7 @@
 
 ### `keyboard.toml`
 
-The following toml contains all available settings in `keyboard.toml`
+The following TOML contains all available settings in `keyboard.toml`
 
 ```toml
 # Basic info of the keyboard
@@ -81,7 +81,7 @@ my_paste = "WM(V, LCtrl)"
 # The number (and order) of entries on each layer should be
 # identical with the number (and order) of entries in `matrix_map`.
 # Empty layers will be used to fill if the number of explicitly
-# defined layers is smaller then `layout.layers` setting
+# defined layers is smaller than the `layout.layers` setting
 
 # layer 0 (default):
 # (the number comes from the order of '[[layer]] entries' in the file)
@@ -273,7 +273,7 @@ split_peripherals_num = 1
 ble_profiles_num = 3
 
 # Split configuration
-# This section is conflict with [split] section, you could only have either [matrix] or [split], but NOT BOTH
+# This section conflicts with the [matrix] section. You can only have either [matrix] or [split], but NOT BOTH
 [split]
 # Connection type of split, "serial" or "ble"
 connection = "serial"
@@ -313,7 +313,7 @@ col_pins = ["PIN_10", "PIN_12"]
 
 # Configuration for the first split peripheral
 # Note the double brackets [[ ]], which indicate that multiple split peripherals can be defined.
-# The order of peripherals is important: it should match the order of the serial instances(if serial is used).
+# The order of peripherals is important: it should match the order of the serial instances (if serial is used).
 [[split.peripheral]]
 # Number of rows on peripheral board
 rows = 2
@@ -334,9 +334,9 @@ matrix_type = "normal"
 row_pins = ["PIN_9", "PIN_11"]
 col_pins = ["PIN_10"]
 
-# More split peripherals(if you have)
+# More split peripherals (if you have any)
 [[split.peripheral]]
-# The configuration is same with the first split peripheral
+# The configuration is the same as the first split peripheral
 ...
 ...
 ...
