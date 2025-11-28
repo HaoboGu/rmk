@@ -216,13 +216,12 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                     }
                 }
                 Ok(SplitMessage::BatteryLevel(level)) => {
-                    // TODO: Process battery level from peripheral
-                    // // Publish battery level to controller channel when connected
-                    // if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                    //     if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
-                    //         send_controller_event(&mut publisher, ControllerEvent::Battery(level));
-                    //     }
-                    // }
+                    // Publish peripheral battery level to controller channel when connected
+                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                        if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
+                            send_controller_event(&mut publisher, ControllerEvent::SplitPeripheralBattery(self.id, level));
+                        }
+                    }
                 }
                 Ok(_) => {
                     // Ignore other types of messages

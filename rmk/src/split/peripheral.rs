@@ -1,6 +1,6 @@
 #[cfg(feature = "_ble")]
 use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
-use embassy_futures::select::{Either3, select3};
+use embassy_futures::select::{Either4, select4};
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
 #[cfg(all(feature = "_ble", feature = "storage"))]
@@ -55,7 +55,6 @@ pub async fn run_rmk_split_peripheral<
 /// The split peripheral instance.
 pub(crate) struct SplitPeripheral<S: SplitWriter + SplitReader> {
     split_driver: S,
-    #[cfg(feature = "controller")]
     controller_sub: ControllerSub,
 }
 
@@ -63,7 +62,6 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     pub(crate) fn new(split_driver: S) -> Self {
         Self {
             split_driver,
-            #[cfg(feature = "controller")]
             controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
         }
     }
@@ -74,16 +72,16 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     /// If also receives split messages from the central through `SplitReader`.
     pub(crate) async fn run(&mut self) {
         CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
-        // TODO: subscribe battery change and forward to central
         loop {
-            match select3(
+            match select4(
                 self.split_driver.read(),
                 KEY_EVENT_CHANNEL.receive(),
                 EVENT_CHANNEL.receive(),
+                self.controller_sub.next_message_pure(),
             )
             .await
             {
-                embassy_futures::select::Either3::First(m) => match m {
+                Either4::First(m) => match m {
                     // Currently only handle the central state message
                     Ok(split_message) => match split_message {
                         SplitMessage::ConnectionState(state) => {
@@ -124,7 +122,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         }
                     }
                 },
-                embassy_futures::select::Either3::Second(e) => {
+                Either4::Second(e) => {
                     // Only send the key event if the connection is established
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
                         debug!("Writing split key event to central");
@@ -133,12 +131,21 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         debug!("Connection not established, skipping key event");
                     }
                 }
-                embassy_futures::select::Either3::Third(e) => {
+                Either4::Third(e) => {
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
                         debug!("Writing split event to central: {:?}", e);
                         self.split_driver.write(&SplitMessage::Event(e)).await.ok();
                     } else {
                         debug!("Connection not established, skipping event");
+                    }
+                }
+                Either4::Fourth(controller_event) => {
+                    // Forward battery level to central
+                    if let ControllerEvent::Battery(level) = controller_event {
+                        if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                            debug!("Forwarding battery level to central: {}", level);
+                            self.split_driver.write(&SplitMessage::BatteryLevel(level)).await.ok();
+                        }
                     }
                 }
             }
