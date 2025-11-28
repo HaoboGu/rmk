@@ -139,8 +139,7 @@ impl CapsWordState {
     /// Note that this function does not check the CapsWord key itself.
     fn check(&mut self, key: KeyCode) {
         if let CapsWordState::Activated { timer, shift_current } = self {
-            if key.is_caps_word_continue_key() && timer.elapsed() < Self::TIMEOUT
-            {
+            if key.is_caps_word_continue_key() && timer.elapsed() < Self::TIMEOUT {
                 *timer = Instant::now();
                 *shift_current = key.is_caps_word_shifted_key();
             } else {

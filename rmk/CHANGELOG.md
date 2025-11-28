@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2025-11-25
+
+### Changed
+
+- Remove unused `EnumIter` in `rmk-types`
+
+### Fixed
+
+- Fix storage ser/de format error
+- Fix a bug of Caps Word
+
 ## [0.8.0] - 2025-11-25
 
 ### Added
