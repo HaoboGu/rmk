@@ -1,6 +1,6 @@
 # Binary size
 
-RMK has included many optimizations by default to of binary size. But there are still some tricks to reduce the binary size more. If you got linker error like:
+RMK has included many optimizations by default to reduce binary size. But there are still some tricks to reduce the binary size more. If you got linker error like:
 
 ```
 = note: rust-lld: error:
@@ -90,7 +90,7 @@ By default, RMK uses `panic-probe` to print error messages if panic occurs. But 
 + panic-halt = "1.0"
 ```
 
-The in `main.rs`, use `panic-halt` instead:
+Then in `main.rs`, use `panic-halt` instead:
 
 ```diff
 // src/main.rs

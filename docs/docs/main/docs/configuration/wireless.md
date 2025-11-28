@@ -22,9 +22,9 @@ adc_divider_total = 2806
 default_tx_power = 0
 # Whether to enable 2M PHY, defaults to true.
 use_2m_phy = true
-# [Depreciated] Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
+# [Deprecated] Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 # charge_state = { pin = "PIN_1", low_active = true }
-# [Depreciated] Output LED pin that blinks when the battery is low
+# [Deprecated] Output LED pin that blinks when the battery is low
 # charge_led= { pin = "PIN_2", low_active = true }
 ```
 
