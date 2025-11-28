@@ -31,10 +31,6 @@
 - **Easy configuration**: RMK simplifies keyboard development through a single `keyboard.toml` configuration file. For Rust enthusiasts, the firmware remains highly customizable using Rust code
 - **Optimized performance**: RMK achieves approximately 2ms latency in wired mode and 10ms in wireless mode. With the `async_matrix` feature enabled, power consumption is significantly reduced—a 2000mAh battery can power your keyboard for several months
 
-## News
-
-- 2025-06-04: v0.7.0 is released! Check out the [migration guide](https://rmk.rs/main/docs/migration/v06_v07.html) to upgrade!
-
 ## [User Documentation](https://rmk.rs/guide/user_guide/1_guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://rmk.rs/docs/user_guide/faq.html) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
 
 ## Real-World Implementations
