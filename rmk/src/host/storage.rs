@@ -117,31 +117,31 @@ impl Value<'_> for KeymapData {
             StorageKeys::KeymapConfig => {
                 let (keymap_key, unused) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len() + 1;
+                let size = buffer.len() - unused.len();
                 Ok((Self::KeymapKey(keymap_key), size))
             }
             StorageKeys::EncoderKeys => {
                 let (encoder, unused) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len() + 1;
+                let size = buffer.len() - unused.len();
                 Ok((Self::Encoder(encoder), size))
             }
             StorageKeys::ComboData => {
                 let ((idx, combo), unused): ((u8, ComboConfig), _) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len() + 1;
+                let size = buffer.len() - unused.len();
                 Ok((Self::Combo(idx, combo), size))
             }
             StorageKeys::ForkData => {
                 let ((idx, fork), unused): ((u8, Fork), _) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len() + 1;
+                let size = buffer.len() - unused.len();
                 Ok((Self::Fork(idx, fork), size))
             }
             StorageKeys::MorseData => {
                 let ((idx, morse), unused): ((u8, Morse), _) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len() + 1;
+                let size = buffer.len() - unused.len();
                 Ok((Self::Morse(idx, morse), size))
             }
             _ => Err(SerializationError::InvalidFormat),

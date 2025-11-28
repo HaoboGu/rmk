@@ -230,7 +230,7 @@ macro_rules! ser_storage_variant {
 
 // Helper methods for StorageData
 impl StorageData {
-    /// Get the StorageKey for this variant (used by store_item calls)
+    /// Get the StorageKey for this variant (used as the first byte in stored data)
     const fn key(&self) -> u32 {
         match self {
             Self::StorageConfig(_) => StorageKeys::StorageConfig as u32,
@@ -244,11 +244,14 @@ impl StorageData {
             #[cfg(feature = "_ble")]
             Self::ActiveBleProfile(_) => StorageKeys::ActiveBleProfile as u32,
             #[cfg(feature = "host")]
-            Self::VialData(_) => {
-                // VialData variants have their own keys managed elsewhere
-                // This shouldn't be called for VialData, use specific key functions instead
-                0
-            }
+            Self::VialData(d) => match d {
+                KeymapData::Macro(_) => StorageKeys::MacroData as u32,
+                KeymapData::KeymapKey(_) => panic!("Error"),
+                KeymapData::Encoder(_) => StorageKeys::EncoderKeys as u32,
+                KeymapData::Combo(_, _) => StorageKeys::ComboData as u32,
+                KeymapData::Fork(_, _) => StorageKeys::ForkData as u32,
+                KeymapData::Morse(_, _) => StorageKeys::MorseData as u32,
+            },
         }
     }
 }
@@ -289,46 +292,46 @@ impl Value<'_> for StorageData {
             StorageKeys::StorageConfig => {
                 let (data, unused) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len() + 1;
+                let size = buffer.len() - unused.len();
                 Ok((Self::StorageConfig(data), size))
             }
             StorageKeys::LayoutConfig => {
                 let (data, unused) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len() + 1;
+                let size = buffer.len() - unused.len();
                 Ok((Self::LayoutConfig(data), size))
             }
             StorageKeys::BehaviorConfig => {
                 let (data, unused) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len() + 1;
+                let size = buffer.len() - unused.len();
                 Ok((Self::BehaviorConfig(data), size))
             }
             StorageKeys::ConnectionType => {
                 let (data, unused) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len() + 1;
+                let size = buffer.len() - unused.len();
                 Ok((Self::ConnectionType(data), size))
             }
             #[cfg(all(feature = "_ble", feature = "split"))]
             StorageKeys::PeerAddress => {
                 let (data, unused) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len() + 1;
+                let size = buffer.len() - unused.len();
                 Ok((Self::PeerAddress(data), size))
             }
             #[cfg(feature = "_ble")]
             StorageKeys::BleBondInfo => {
                 let (data, unused) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len() + 1;
+                let size = buffer.len() - unused.len();
                 Ok((Self::BondInfo(data), size))
             }
             #[cfg(feature = "_ble")]
             StorageKeys::ActiveBleProfile => {
                 let (data, unused) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len() + 1;
+                let size = buffer.len() - unused.len();
                 Ok((Self::ActiveBleProfile(data), size))
             }
             #[cfg(feature = "host")]
@@ -344,6 +347,7 @@ impl Value<'_> for StorageData {
         }
     }
 }
+
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, postcard::experimental::max_size::MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LocalStorageConfig {
