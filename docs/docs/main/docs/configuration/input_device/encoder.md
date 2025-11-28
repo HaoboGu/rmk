@@ -31,7 +31,7 @@ phase = "resolution"
 #   resolution = (pulse × 4) / detent
 # because each full quadrature cycle (pulse) produces 4 edge transitions.
 #
-# For example — in the ALPS EC11E series(https://tech.alpsalpine.com/cms.media/product_catalog_ec_01_ec11e_en_611f078659.pdf):
+# For example — in the ALPS EC11E series (https://tech.alpsalpine.com/cms.media/product_catalog_ec_01_ec11e_en_611f078659.pdf):
 #   detent = 30, pulse = 15 → resolution = (15 × 4) / 30 = 2
 resolution = 2
 
@@ -79,7 +79,7 @@ You can also use the resolution based phase:
     let mut encoder = RotaryEncoder::with_resolution(pin_a, pin_b, 2, false, encoder_id)
 ```
 
-Then adding the encoder to the device list of `run_device`.
+Then add the encoder to the device list of `run_device`.
 
 ```rust
     join3(

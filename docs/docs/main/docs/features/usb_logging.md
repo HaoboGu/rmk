@@ -18,6 +18,6 @@ rmk = { version = "...", default-features = false, features = [
 Don't forget to enable all other features that you need, especially the default ones.
 :::
 
-To view the logs, you’ll need to install a serial port monitor. Open your serial monitor, select the port corresponding to your keyboard, and connect. The logs will be displayed in the monitor window. Note that logs from the boot stage cannot be captured by the USB logger. You will only be able to see logs after the serial port connection established.
+To view the logs, you'll need to install a serial port monitor. Open your serial monitor, select the port corresponding to your keyboard, and connect. The logs will be displayed in the monitor window. Note that logs from the boot stage cannot be captured by the USB logger. You will only be able to see logs after the serial port connection is established.
 
-Some microcontrollers (like ESP32S3) doesn't have enough USB endpoints, so USB logging cannot enabled for those microcontrollers. To enable the USB logging, make sure that your microcontroller has at least 5 In + 4 OUT endpoints available(except control endpoint, EP0)
+Some microcontrollers (like ESP32S3) don't have enough USB endpoints, so USB logging cannot be enabled for those microcontrollers. To enable USB logging, make sure that your microcontroller has at least 5 In + 4 OUT endpoints available (except the control endpoint, EP0).

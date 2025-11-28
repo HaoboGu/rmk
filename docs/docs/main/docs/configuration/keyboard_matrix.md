@@ -20,7 +20,7 @@ Output Pin (Column) → |>| → Input Pin (Row)
                    Diode (note direction)
 ```
 
-Per default RMK assumes that your pins are **col2row**, meaning that the output pins (anodes) represent the columns and the input pins (cathodes) represent the rows. If your schemata shows the opposite you need to [change the configuration to **row2col**](../getting_started/faq#my-matrix-is-row2col-the-matrix-doesnt-work)
+By default, RMK assumes that your pins are **col2row**, meaning that the output pins (anodes) represent the columns and the input pins (cathodes) represent the rows. If your schematic shows the opposite, you need to [change the configuration to **row2col**](../getting_started/faq#my-matrix-is-row2col-the-matrix-doesnt-work)
 
 
 ### Standard Matrix Configuration
@@ -101,7 +101,7 @@ RMK has two debouncer modes, "default" and "fast":
 - The default mode uses a counter-based algorithm that registers a key only after its counter exceeds a certain threshold.
 - The fast mode, on the other hand, reacts instantly to a key press and then waits briefly before accepting the next input.
 
-If no `debouncer` is set, the matrix will defaults to `default` mode.
+If no `debouncer` is set, the matrix will default to `default` mode.
 
 ## Vial Unlock Keys - `[host]` Section
 
