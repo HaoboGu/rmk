@@ -2511,7 +2511,7 @@ dependencies = [
 
 [[package]]
 name = "rmk"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "bitfield-struct",
  "bt-hci",
@@ -2621,7 +2621,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-types"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "bitfield-struct",
  "defmt 1.0.1",

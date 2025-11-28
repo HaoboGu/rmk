@@ -1785,7 +1785,7 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
 name = "rmk"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "bitfield-struct",
  "bt-hci",
@@ -1890,7 +1890,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-types"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "bitfield-struct",
  "defmt 1.0.1",
