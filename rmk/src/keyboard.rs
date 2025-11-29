@@ -181,7 +181,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 
     /// Unprocessed events
-    unprocessed_events: Vec<KeyboardEvent, 4>,
+    pub unprocessed_events: Vec<KeyboardEvent, 4>,
 
     /// Buffered held keys
     pub held_buffer: HeldBuffer,
@@ -301,7 +301,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Get a copy of the next timeout key in the buffer,
     /// which is either a combo component that is waiting for other combo keys,
     /// or a morse key that is in the pressed or released state.
-    fn next_buffered_key(&mut self) -> Option<HeldKey> {
+    pub fn next_buffered_key(&mut self) -> Option<HeldKey> {
         self.held_buffer.next_timeout(|k| {
             matches!(k.state, KeyState::Released(_) | KeyState::WaitingCombo)
                 || (matches!(k.state, KeyState::Pressed(_)) && k.action.is_morse())
@@ -328,7 +328,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Process the latest buffered key.
     ///
     /// The given holding key is a copy of the buffered key. Only tap-hold keys are considered now.
-    async fn process_buffered_key(&mut self, key: HeldKey) {
+    pub async fn process_buffered_key(&mut self, key: HeldKey) {
         debug!(
             "Processing buffered key: \nevent: {:?} state: {:?}",
             key.event, key.state
@@ -373,7 +373,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Process key changes at (row, col)
-    async fn process_inner(&mut self, event: KeyboardEvent) {
+    pub async fn process_inner(&mut self, event: KeyboardEvent) {
         #[cfg(feature = "vial_lock")]
         self.keymap.borrow_mut().matrix_state.update(&event);
 
