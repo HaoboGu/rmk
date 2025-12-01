@@ -9,7 +9,7 @@ use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, h
 
 use crate::CONNECTION_STATE;
 use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::event::{Event, KeyboardEvent};
+use crate::event::{Event, KeyPos, KeyboardEvent, KeyboardEventPos};
 use crate::input_device::InputDevice;
 use crate::state::ConnectionState;
 
@@ -482,6 +482,32 @@ where
         // Set all output pins back to low
         for out in self.get_output_pins_mut().iter_mut() {
             out.set_low().ok();
+        }
+    }
+}
+
+pub struct OffsetMatrixWrapper<
+    const ROW: usize,
+    const COL: usize,
+    M: MatrixTrait<ROW, COL>,
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+>(pub M);
+
+impl<const ROW: usize, const COL: usize, M: MatrixTrait<ROW, COL>, const ROW_OFFSET: usize, const COL_OFFSET: usize>
+    InputDevice for OffsetMatrixWrapper<ROW, COL, M, ROW_OFFSET, COL_OFFSET>
+{
+    async fn read_event(&mut self) -> Event {
+        match self.0.read_event().await {
+            Event::Key(KeyboardEvent {
+                pressed,
+                pos: KeyboardEventPos::Key(KeyPos { row, col }),
+            }) => Event::Key(KeyboardEvent::key(
+                row + ROW_OFFSET as u8,
+                col + COL_OFFSET as u8,
+                pressed,
+            )),
+            event => event,
         }
     }
 }
