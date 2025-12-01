@@ -140,20 +140,24 @@ In RMK, split keyboard's matrix are defined with row/col number and their offset
 
 ### Central
 
-Matrix configuration on the split central is quite similar with the general keyboard, the only difference is for split central, central matrix's row/col number, and central matrix's offsets should be passed to the central matrix:
+Matrix configuration on the split central is quite similar with the general keyboard, the only difference is for split central, central matrix needs to be wrapped in an offset matrix:
 
 ```rust
 // Suppose that the central matrix is col2row
-let mut matrix = CentralMatrix::<
+let mut matrix = OffsetMatrixWrapper::<
     _,
     _,
     _,
     0, // ROW OFFSET
     0, // COL OFFSET
-    4, // ROW
-    7, // COL
-    true, // COL2ROW = true, set it to false to use ROW2COL matrix
->::new(row_pins, col_pins, debouncer);
+    >(Matrix::<
+        _,
+        _,
+        _,
+        4, // ROW
+        7, // COL
+        true, // COL2ROW = true, set it to false to use ROW2COL matrix
+    >::new(row_pins, col_pins, debouncer));
 ```
 
 On the central, you should also run the peripheral manager for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
