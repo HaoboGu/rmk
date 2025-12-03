@@ -14,6 +14,7 @@ use crate::flash::expand_flash_init;
 use crate::import::expand_custom_imports;
 use crate::input_device::adc::expand_adc_device;
 use crate::input_device::encoder::expand_encoder_device;
+use crate::input_device::pmw3610::expand_pmw3610_device;
 use crate::keyboard::get_debouncer_type;
 use crate::keyboard_config::read_keyboard_toml_config;
 use crate::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
@@ -380,6 +381,26 @@ pub(crate) fn expand_peripheral_input_device_config(
     };
 
     for initializer in encoder_devices {
+        initializations.extend(initializer.initializer);
+        let device_name = initializer.var_name;
+        devices.push(quote! { #device_name });
+    }
+
+    // generate PMW3610 configuration
+    let (pmw3610_devices, _pmw3610_processors) = match &board {
+        BoardConfig::Split(split_config) => expand_pmw3610_device(
+            split_config.peripheral[id]
+                .input_device
+                .clone()
+                .unwrap_or(InputDeviceConfig::default())
+                .pmw3610
+                .unwrap_or(Vec::new()),
+            &chip,
+        ),
+        _ => (vec![], vec![]),
+    };
+
+    for initializer in pmw3610_devices {
         initializations.extend(initializer.initializer);
         let device_name = initializer.var_name;
         devices.push(quote! { #device_name });
