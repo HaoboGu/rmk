@@ -262,7 +262,7 @@ impl Default for RmkConstantsConfig {
             debounce_time: 20,
             event_channel_size: 16,
             controller_channel_size: 16,
-            controller_channel_pubs: 8,
+            controller_channel_pubs: 10,
             controller_channel_subs: 8,
             report_channel_size: 16,
             vial_channel_size: 4,
