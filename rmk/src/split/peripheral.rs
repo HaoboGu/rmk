@@ -16,11 +16,6 @@ use crate::event::ControllerEvent;
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;
-#[cfg(feature = "controller")]
-use {
-    crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
-    crate::event::ControllerEvent,
-};
 
 /// Run the split peripheral service.
 ///
@@ -149,12 +144,11 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                 }
                 Either4::Fourth(controller_event) => {
                     // Forward battery level to central
-                    if let ControllerEvent::Battery(level) = controller_event {
-                        if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                    if let ControllerEvent::Battery(level) = controller_event
+                        && CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
                             debug!("Forwarding battery level to central: {}", level);
                             self.split_driver.write(&SplitMessage::BatteryLevel(level)).await.ok();
                         }
-                    }
                 }
             }
         }
