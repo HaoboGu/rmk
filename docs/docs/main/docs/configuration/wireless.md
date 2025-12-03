@@ -4,7 +4,7 @@
 
 To enable BLE, add `enabled = true` under the `[ble]` section.
 
-There are several more configs for reading battery level and charging state, now they are available for nRF52840 only.
+There are several more configs for reading battery level and charging state; they are now available for nRF52840 only.
 
 ```toml
 # Ble configuration
@@ -14,22 +14,22 @@ There are several more configs for reading battery level and charging state, now
 enabled = true
 # nRF52840's saadc pin for reading battery level, you can use a pin number or "vddh"
 battery_adc_pin = "vddh"
-# The voltage divider setting for saadc, this setting should be ignored when using "vddh" as the adc pin.
-# For example, nice!nano have 806 + 2M resistors, the saadc measures voltage on 2M resistor, so the two values should be set to 2000 and 2806
+# The voltage divider setting for saadc. This setting should be ignored when using "vddh" as the adc pin.
+# For example, nice!nano has 806 + 2M resistors. The saadc measures voltage on the 2M resistor, so the two values should be set to 2000 and 2806
 adc_divider_measured = 2000
 adc_divider_total = 2806
-# Set the BLE tx power, higher means better signal but more power consumption. For nRF52840 the maximum tx power is 8.
+# Set the BLE tx power; higher means better signal but more power consumption. For nRF52840 the maximum tx power is 8.
 default_tx_power = 0
 # Whether to enable 2M PHY, defaults to true.
 use_2m_phy = true
-# [Depreciated] Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
+# [Deprecated] Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 # charge_state = { pin = "PIN_1", low_active = true }
-# [Depreciated] Output LED pin that blinks when the battery is low
+# [Deprecated] Output LED pin that blinks when the battery is low
 # charge_led= { pin = "PIN_2", low_active = true }
 ```
 
 ::: warning
 
-In current version, when using split, central and peripherals can only share the same ADC config. This issue will be fixed soon.
+In the current version, when using split, central and peripherals can only share the same ADC config. This issue will be fixed soon.
 
 :::

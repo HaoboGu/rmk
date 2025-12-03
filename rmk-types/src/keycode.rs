@@ -2,15 +2,16 @@
 //!
 //! This module provides keycode definitions following the USB HID
 //! specification, extended with additional codes
-use strum::{EnumIter, FromRepr};
+use strum::FromRepr;
 
 use crate::modifier::ModifierCombination;
 
 /// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
 /// Use flat representation of keycodes.
 #[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, FromRepr, EnumIter)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(postcard::experimental::max_size::MaxSize)]
 pub enum KeyCode {
     /// Reserved, no-key.
     No = 0x0000,
@@ -861,6 +862,30 @@ pub enum KeyCode {
     User31 = 0x85F,
 }
 
+// Manual Serialize/Deserialize implementation to avoid derive macro overhead
+// The derive macro on a large enum (~300 variants) generates ~7KB of code
+// Manual implementation serializes directly as u16 repr, saving significant space
+impl serde::Serialize for KeyCode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_u16(*self as u16)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for KeyCode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = u16::deserialize(deserializer)?;
+        // Use From<u16> trait which already handles invalid values by returning KeyCode::No
+        // This is more efficient than from_repr + ok_or_else
+        Ok(KeyCode::from(value))
+    }
+}
+
 impl KeyCode {
     /// Returns `true` if the keycode is a simple keycode defined in HID spec
     pub fn is_simple_key(self) -> bool {
@@ -999,7 +1024,7 @@ impl KeyCode {
         }
     }
 
-    /// Does current keycode continues caps word
+    /// Does current keycode continues Caps Word?
     pub fn is_caps_word_continue_key(self) -> bool {
         if self >= KeyCode::A && self <= KeyCode::Z {
             return true;
@@ -1008,6 +1033,17 @@ impl KeyCode {
             return true;
         }
         if self == KeyCode::Minus || self == KeyCode::Backspace || self == KeyCode::Delete {
+            return true;
+        }
+        false
+    }
+
+    /// Does current keycode is to be shifted by Caps Word?
+    pub fn is_caps_word_shifted_key(self) -> bool {
+        if self >= KeyCode::A && self <= KeyCode::Z {
+            return true;
+        }
+        if self == KeyCode::Minus {
             return true;
         }
         false
@@ -1286,7 +1322,7 @@ impl From<u16> for KeyCode {
 /// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=75>
 #[non_exhaustive]
 #[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr, EnumIter)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ConsumerKey {
     No = 0x00,
@@ -1359,7 +1395,7 @@ impl From<u16> for ConsumerKey {
 /// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=26>
 #[non_exhaustive]
 #[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr, EnumIter)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SystemControlKey {
     No = 0x00,

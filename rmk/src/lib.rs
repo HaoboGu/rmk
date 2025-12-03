@@ -48,10 +48,7 @@ use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
 pub use trouble_host::prelude::*;
 #[cfg(feature = "host")]
-use {
-    crate::config::VialConfig, crate::descriptor::ViaReport, crate::hid::HidWriterTrait,
-    crate::host::run_host_communicate_task,
-};
+use {crate::descriptor::ViaReport, crate::hid::HidWriterTrait, crate::host::run_host_communicate_task};
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
     crate::light::UsbLedReader,
@@ -62,6 +59,8 @@ pub use {embassy_futures, futures, heapless, rmk_macro as macros, rmk_types as t
 use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 
 use crate::config::PositionalConfig;
+#[cfg(feature = "vial")]
+use crate::config::VialConfig;
 use crate::keyboard::LOCK_LED_STATES;
 use crate::state::ConnectionState;
 
@@ -364,14 +363,10 @@ pub(crate) async fn run_keyboard<
                     info!("Got led indicator");
                     LOCK_LED_STATES.store(led_indicator.into_bits(), core::sync::atomic::Ordering::Relaxed);
                     #[cfg(feature = "controller")]
-                    {
-                        info!("Publishing led indicator");
-                        // Publish the event
-                        crate::channel::send_controller_event(
-                            &mut controller_pub,
-                            crate::event::ControllerEvent::KeyboardIndicator(led_indicator),
-                        );
-                    }
+                    crate::channel::send_controller_event(
+                        &mut controller_pub,
+                        crate::event::ControllerEvent::KeyboardIndicator(led_indicator),
+                    );
                 }
                 Err(e) => {
                     error!("Read HID LED indicator error: {:?}", e);
@@ -380,8 +375,14 @@ pub(crate) async fn run_keyboard<
             }
         }
     };
+
     #[cfg(feature = "host")]
-    let host_fut = run_host_communicate_task(keymap, reader_writer, vial_config);
+    let host_fut = run_host_communicate_task(
+        keymap,
+        reader_writer,
+        #[cfg(feature = "vial")]
+        vial_config,
+    );
     #[cfg(feature = "storage")]
     let storage_fut = storage.run();
 

@@ -1,6 +1,6 @@
 # Joysticks
 
-A joystick is an analog input device that can be used for mouse control and other functions. Currently only NRF series chips are supported.
+A joystick is an analog input device that can be used for mouse control and other functions. Currently, only NRF series chips are supported.
 
 ::: warning
 
@@ -55,7 +55,7 @@ The transform might be not very intuitive, please read the document below for mo
 
 
 1. Device reads values from each axis
-2. Adds `bias` value to each axis to make the value close to 0 when the joystick is released
+2. Adds the `bias` value to each axis to make the value close to 0 when the joystick is released
 3. About the `transform` matrix:
    1. New x-axis value = (axis_x + bias[0]) / transform[0][0] + (axis_y + bias[1]) / transform[0][1] + (axis_z + bias[2]) / transform[0][2]
    2. New y-axis value = (axis_x + bias[0]) / transform[1][0] + (axis_y + bias[1]) / transform[1][1] + (axis_z + bias[2]) / transform[1][2]

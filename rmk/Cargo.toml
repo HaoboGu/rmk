@@ -1,6 +1,6 @@
 [package]
 name = "rmk"
-version = "0.7.8"
+version = "0.8.1"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
@@ -11,8 +11,8 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [dependencies]
-rmk-macro = { version = "=0.6.8", path = "../rmk-macro" }
-rmk-types = { version = "=0.1.0", path = "../rmk-types" }
+rmk-macro = { version = "=0.7.0", path = "../rmk-macro" }
+rmk-types = { version = "=0.2.1", path = "../rmk-types" }
 embedded-hal = { version = "1.0.0" }
 embedded-hal-async = { version = "1.0.0", optional = true }
 embedded-io-async = { version = "0.6" }
@@ -22,7 +22,6 @@ embedded-storage-async = { version = "0.4", optional = true }
 embassy-embedded-hal = { version = "0.5" }
 embassy-time = { version = "0.5" }
 embassy-usb = { version = "0.5", features = [
-    "usbd-hid",
     "max-interface-count-8",
     "max-handler-count-8",
 ] }
@@ -36,10 +35,10 @@ futures = { version = "0.3", default-features = false, features = [
 ] }
 
 heapless = "0.9"
-usbd-hid = "0.8.2"
+usbd-hid = "0.9"
 bitfield-struct = "0.12"
 static_cell = "2"
-sequential-storage = "5.0"
+sequential-storage = "6.0"
 
 defmt = { version = "1.0", optional = true }
 log = { version = "0.4", optional = true }
@@ -54,7 +53,7 @@ paste = "1"
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { version = "0.5", git = "https://github.com/embassy-rs/trouble", rev = "0af97d0aee6a526855f197af1feeb9eaa3686fda", features = [
+trouble-host = { version = "0.5.1", features = [
     "gatt",
     "scan",
     "derive",
@@ -94,7 +93,7 @@ ctor = "0.6.0"
 rusty-fork = "0.3.0"
 
 [build-dependencies]
-rmk-config = { path = "../rmk-config", version = "=0.5.6" }
+rmk-config = { path = "../rmk-config", version = "=0.6.0" }
 toml = "0.9"
 serde = "1.0"
 serde_derive = "1.0"
@@ -141,7 +140,7 @@ defmt = [
     "embassy-futures/defmt",
     "embassy-executor/defmt",
     "usbd-hid/defmt",
-    "sequential-storage/defmt-03",
+    "sequential-storage/defmt",
     "embassy-nrf?/defmt",
     "postcard/use-defmt",
     "trouble-host?/defmt",
@@ -169,8 +168,8 @@ async_matrix = ["dep:embedded-hal-async"]
 ## Enable to use controllers to control other hardwares on the board or peripheral
 controller = []
 
-## Enable split keyboard support. 
-## 
+## Enable split keyboard support.
+##
 ## The split peripheral is regarded as a controller subscriber, so the split feature requires controller feature.
 split = ["controller", "trouble-host?/gatt-client-notification-queue-size-4"]
 

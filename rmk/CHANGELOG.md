@@ -7,12 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2025-11-25
+
 ### Changed
 
+- Remove unused `EnumIter` in `rmk-types`
+
+### Fixed
+
+- Fix storage ser/de format error
+- Fix a bug of Caps Word
+
+## [0.8.0] - 2025-11-25
+
+### Added
+
+- Add dongle support back, checkout [this example](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/nrf52840_ble_split_dongle)
+- Add `detent` and `pulse` settings to encoder config
+- Add `Controller` support for peripheral #584
+- Add Fn1(Fn3) + Fn2(Fn3) tri-layer support in Vial
+- Add LED indicator and layer state sync from central to peripheral
+- Add `vial` and `host` feature
+- Add configuration of controller execution mode
+- Add capsword support
+- Add `default_tx_power` and `use_2m_phy` config for BLE
+- Add lock and matrix tester support for Vial
+- Add `[host]` config section
+- Support changing permissive hold option at the runtime
+- Add `detent` and `pulse` config for encoders
+
+### Changed
+
+- Bump lots of dependencies to latest version
 - Refactor tap-hold, and introduced morse_actions to tap-dance to support real morse code like tap/hold patterns 
 - Positional and per key morse profile configuration introduced for tap hold like, morse like keys
 - Rename chordal tap to unilateral tap
 - Rewrite led indicator, use controller system
+- Rename `RapidDebouncer` to `FastDebouncer`
+- Remove `col2row`, `bidirectional` and `rapid_debouncer` features
+- Use postcard for serialization/deserialization of storage data
+- Change central sleep timeout to be in seconds 
+- Migrate documentation site to rspress
+
+### Fixed
+
+- Fix invalid macro key
+- Fix wrong peripheral number setting in Rust split examples
+- Fix modifier activation in lm 
+- Fix combo reorder issue
+- Fix key stuck when one shot key rolling with tap hold 
+- Fix flow-tap misorder
+- Fix peripheral message loss
 
 ## [0.7.8] - 2025-07-23
 

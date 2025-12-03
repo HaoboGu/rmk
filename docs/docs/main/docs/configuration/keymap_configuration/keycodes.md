@@ -50,7 +50,7 @@ When used in configuration files, all keycodes are case-insensitive.
 | `Kc9`   | `9`     | `9` and `(` |
 | `Kc0`   | `0`     | `0` and `)` |
 
-## Punctation keys
+## Punctuation keys
 
 | Keycode          | Aliases                      | Usage                      |
 | ---------------- | ---------------------------- | -------------------------- |

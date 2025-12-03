@@ -61,9 +61,9 @@ col_pins = ["P0_30"]
 
 ## Split keyboard matrix configuration
 
-When using split, the input/output pins defined in `[matrix]` section is not valid anymore. Instead, the input/output pins of split boards are defined in `[split.central.matrix]` and `[split.peripheral.matrix]`. The contents of the split matrix configuration is the same as for `[matrix]`. This means each peripheral and central keyboard also supports `direct_pin`.
+When using split, the input/output pins defined in the `[matrix]` section are not valid anymore. Instead, the input/output pins of split boards are defined in `[split.central.matrix]` and `[split.peripheral.matrix]`. The contents of the split matrix configuration are the same as for `[matrix]`. This means each peripheral and central keyboard also supports `direct_pin`.
 
-The rows/cols in `[layout]` section is the total number of rows/cols of the whole keyboard. For each split(central and peripherals), rows/cols/row_offset/col_offset should be defined to indicate the current split's position in the whole keyboard's layout. Suppose we have a 2-row + 5-col split, the left(central) is 2\*2, and the right(peripheral) is 2\*3, the positions should be defined as:
+The rows/cols in the `[layout]` section are the total number of rows/cols of the whole keyboard. For each split (central and peripherals), rows/cols/row_offset/col_offset should be defined to indicate the current split's position in the whole keyboard's layout. Suppose we have a 2-row + 5-col split, the left (central) is 2\*2, and the right (peripheral) is 2\*3, the positions should be defined as:
 
 ```toml
 [split.central]
@@ -83,7 +83,7 @@ col_offset = 2 # The col offset of the peripheral. Central has 2 cols, so the co
 
 If you're using BLE, `ble_addr` will be automatically generated. You can also override it if you want.
 
-If you're using serial, in `[split.central]` you need to defined a list of serial ports, the number of the list should be same with the number of the peripherals:
+If you're using serial, in `[split.central]` you need to define a list of serial ports; the number of items in the list should be the same as the number of peripherals:
 
 ```toml
 [split]
@@ -111,7 +111,7 @@ serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
 serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
 ```
 
-If you're using the Programmable IO (PIO) serial port with an RP2040 chip, subsitute the UART serial port interface with the PIO block, e.g. `PIO0`:
+If you're using the Programmable IO (PIO) serial port with an RP2040 chip, substitute the UART serial port interface with the PIO block, e.g. `PIO0`:
 
 ```toml
 [split]
@@ -140,20 +140,24 @@ In RMK, split keyboard's matrix are defined with row/col number and their offset
 
 ### Central
 
-Matrix configuration on the split central is quite similar with the general keyboard, the only difference is for split central, central matrix's row/col number, and central matrix's offsets should be passed to the central matrix:
+Matrix configuration on the split central is quite similar with the general keyboard, the only difference is for split central, central matrix needs to be wrapped in an offset matrix:
 
 ```rust
 // Suppose that the central matrix is col2row
-let mut matrix = CentralMatrix::<
+let mut matrix = OffsetMatrixWrapper::<
     _,
     _,
     _,
     0, // ROW OFFSET
     0, // COL OFFSET
-    4, // ROW
-    7, // COL
-    true, // COL2ROW = true, set it to false to use ROW2COL matrix
->::new(row_pins, col_pins, debouncer);
+    >(Matrix::<
+        _,
+        _,
+        _,
+        4, // ROW
+        7, // COL
+        true, // COL2ROW = true, set it to false to use ROW2COL matrix
+    >::new(row_pins, col_pins, debouncer));
 ```
 
 On the central, you should also run the peripheral manager for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
@@ -195,7 +199,7 @@ run_peripheral_manager::<
 
 ### Peripheral
 
-Running split peripheral is simplier. For peripheral, we don't need to specify peripheral matrix's offsets(we've done it in central!). So, the split peripheral API is like:
+Running split peripheral is simpler. For the peripheral, we don't need to specify the peripheral matrix's offsets (we've done that in the central!). So, the split peripheral API is like:
 
 <Tabs>
 <Tab label={<Rust />}>

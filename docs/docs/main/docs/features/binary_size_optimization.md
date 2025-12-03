@@ -1,6 +1,6 @@
 # Binary size
 
-RMK has included many optimizations by default to of binary size. But there are still some tricks to reduce the binary size more. If you got linker error like:
+RMK has included many optimizations by default to reduce binary size. But there are still some tricks to reduce the binary size further. If you get a linker error like:
 
 ```
 = note: rust-lld: error:
@@ -8,10 +8,10 @@ RMK has included many optimizations by default to of binary size. But there are 
         Set _stext to an address smaller than 'ORIGIN(FLASH) + LENGTH(FLASH)'
 ```
 
-or some errors occur when writing configs to flash, that means that your microcontroller's internal flash is not big enough.
+or some errors occur when writing configs to flash, that means your microcontroller's internal flash is not big enough.
 
 ::: tip
-For the minimal example, please checkout `examples/use_rust/stm32f1` and `examples/use_config/stm32f1` example.
+For the minimal example, please check out the `examples/use_rust/stm32f1` and `examples/use_config/stm32f1` examples.
 :::
 
 There are several approaches to solve the problem:
@@ -63,7 +63,7 @@ RMK provides several options that you can use to reduce the binary size:
 rmk = { version = "...", default-features = false }
 ```
 
-If you're using `keyboard.toml`, you'll also need to disable the storage, defmt and vial in toml config:
+If you're using `keyboard.toml`, you'll also need to disable storage, defmt, and vial in the toml config:
 
 ```toml
 # Disable storage, defmt and vial in keyboard.toml
@@ -73,7 +73,7 @@ enabled = false
 [dependency]
 defmt_log = false
 
-[rmk]
+[host]
 vial_enabled = false
 ```
 
@@ -90,7 +90,7 @@ By default, RMK uses `panic-probe` to print error messages if panic occurs. But 
 + panic-halt = "1.0"
 ```
 
-The in `main.rs`, use `panic-halt` instead:
+Then in `main.rs`, use `panic-halt` instead:
 
 ```diff
 // src/main.rs

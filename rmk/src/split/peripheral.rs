@@ -16,6 +16,11 @@ use crate::event::ControllerEvent;
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;
+#[cfg(feature = "controller")]
+use {
+    crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
+    crate::event::ControllerEvent,
+};
 
 /// Run the split peripheral service.
 ///
@@ -72,6 +77,10 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     /// If also receives split messages from the central through `SplitReader`.
     pub(crate) async fn run(&mut self) {
         CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
+
+        #[cfg(feature = "controller")]
+        let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
+
         loop {
             match select4(
                 self.split_driver.read(),
@@ -99,19 +108,18 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         }
                         SplitMessage::KeyboardIndicator(indicator) => {
                             // Publish KeyboardIndicator to CONTROLLER_CHANNEL
-                            use rmk_types::led_indicator::LedIndicator;
-                            if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
-                                send_controller_event(
-                                    &mut publisher,
-                                    ControllerEvent::KeyboardIndicator(LedIndicator::from_bits(indicator)),
-                                );
-                            }
+                            #[cfg(feature = "controller")]
+                            send_controller_event(
+                                &mut controller_pub,
+                                ControllerEvent::KeyboardIndicator(rmk_types::led_indicator::LedIndicator::from_bits(
+                                    indicator,
+                                )),
+                            );
                         }
                         SplitMessage::Layer(layer) => {
                             // Publish Layer to CONTROLLER_CHANNEL
-                            if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
-                                send_controller_event(&mut publisher, ControllerEvent::Layer(layer));
-                            }
+                            #[cfg(feature = "controller")]
+                            send_controller_event(&mut controller_pub, ControllerEvent::Layer(layer));
                         }
                         _ => (),
                     },

@@ -2,14 +2,14 @@
 use core::pin::pin;
 use core::sync::atomic::Ordering;
 
-use embassy_time::{Instant, Timer};
+use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
 use crate::CONNECTION_STATE;
 use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::event::{Event, KeyboardEvent};
+use crate::event::{Event, KeyPos, KeyboardEvent, KeyboardEventPos};
 use crate::input_device::InputDevice;
 use crate::state::ConnectionState;
 
@@ -172,10 +172,11 @@ pub struct Matrix<
     debouncer: D,
     /// Key state matrix
     key_states: [[KeyState; ROW]; COL],
-    /// Start scanning
-    scan_start: Option<Instant>,
     /// Current scan pos: (out_idx, in_idx)
     scan_pos: (usize, usize),
+    /// Re-scan needed flag
+    #[cfg(feature = "async_matrix")]
+    rescan_needed: bool
 }
 
 impl<
@@ -345,8 +346,9 @@ where
             col_pins,
             debouncer,
             key_states: [[KeyState::new(); ROW]; COL],
-            scan_start: None,
             scan_pos: (0, 0),
+            #[cfg(feature = "async_matrix")]
+            rescan_needed: false,
         }
     }
 
@@ -393,8 +395,6 @@ where
     async fn read_event(&mut self) -> crate::event::Event {
         loop {
             let (out_idx_start, in_idx_start) = self.scan_pos;
-            #[cfg(feature = "async_matrix")]
-            self.wait_for_key().await;
 
             // Scan matrix and send report
             for out_idx in out_idx_start..Self::OUTPUT_PIN_NUM {
@@ -402,7 +402,9 @@ where
                 if let Some(out_pin) = self.get_output_pins_mut().get_mut(out_idx) {
                     out_pin.set_high().ok();
                 }
+                // This may take >1ms on some platforms if other tasks are running!
                 Timer::after_micros(1).await;
+
                 for in_idx in in_idx_start..Self::INPUT_PIN_NUM {
                     let in_pin_state = if let Some(in_pin) = self.get_input_pins_mut().get_mut(in_idx) {
                         in_pin.is_high().ok().unwrap_or_default()
@@ -420,13 +422,17 @@ where
                     if let DebounceState::Debounced = debounce_state {
                         self.toggle_key_state(out_idx, in_idx);
                         self.scan_pos = (out_idx, in_idx);
+                        #[cfg(feature = "async_matrix")]
+                        {
+                            self.rescan_needed = true;
+                        }
                         return Event::Key(self.get_key_event(out_idx, in_idx));
                     }
 
                     // If there's key still pressed, always refresh the self.scan_start
                     #[cfg(feature = "async_matrix")]
                     if self.get_key_state(out_idx, in_idx).pressed {
-                        self.scan_start = Some(Instant::now());
+                        self.rescan_needed = true;
                     }
                 }
 
@@ -434,6 +440,14 @@ where
                 if let Some(out_pin) = self.get_output_pins_mut().get_mut(out_idx) {
                     out_pin.set_low().ok();
                 }
+            }
+
+            #[cfg(feature = "async_matrix")]
+            {
+                if !self.rescan_needed {
+                    self.wait_for_key().await;
+                }
+                self.rescan_needed = false;
             }
             self.scan_pos = (0, 0);
         }
@@ -457,19 +471,10 @@ where
 {
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
-        if let Some(start_time) = self.scan_start {
-            // If no key press over 1ms, stop scanning and wait for interupt
-            if start_time.elapsed().as_millis() <= 1 {
-                return;
-            } else {
-                self.scan_start = None;
-            }
-        }
-        // First, set all output pin to high
+        // First, set all output pins to high
         for out in self.get_output_pins_mut().iter_mut() {
             out.set_high().ok();
         }
-        Timer::after_micros(1).await;
 
         // Wait for any key press
         self.wait_input_pins().await;
@@ -478,8 +483,32 @@ where
         for out in self.get_output_pins_mut().iter_mut() {
             out.set_low().ok();
         }
+    }
+}
 
-        self.scan_start = Some(Instant::now());
+pub struct OffsetMatrixWrapper<
+    const ROW: usize,
+    const COL: usize,
+    M: MatrixTrait<ROW, COL>,
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+>(pub M);
+
+impl<const ROW: usize, const COL: usize, M: MatrixTrait<ROW, COL>, const ROW_OFFSET: usize, const COL_OFFSET: usize>
+    InputDevice for OffsetMatrixWrapper<ROW, COL, M, ROW_OFFSET, COL_OFFSET>
+{
+    async fn read_event(&mut self) -> Event {
+        match self.0.read_event().await {
+            Event::Key(KeyboardEvent {
+                pressed,
+                pos: KeyboardEventPos::Key(KeyPos { row, col }),
+            }) => Event::Key(KeyboardEvent::key(
+                row + ROW_OFFSET as u8,
+                col + COL_OFFSET as u8,
+                pressed,
+            )),
+            event => event,
+        }
     }
 }
 

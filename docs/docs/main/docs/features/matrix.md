@@ -8,7 +8,7 @@ RMK provides three built-in matrix implementations to match different hardware d
 
 ### Normal Matrix
 
-The standard approach. Keys are wired in a row-column grid, using diodes to prevent [ghosting](https://en.wikipedia.org/wiki/Key_rollover#Key_jamming_and_ghosting). RMK supports both col2row and row2col diode configurations to match your PCB design. You can set the diode direction in [matrix configuration](../configuration/keyboard_matrix#matrix-configuration).
+The standard approach. Keys are wired in a row-column grid, using diodes to prevent [ghosting](https://en.wikipedia.org/wiki/Key_rollover#Key_jamming_and_ghosting). RMK supports both col2row and row2col diode configurations to match your PCB design. You can set the diode direction in the [matrix configuration](../configuration/keyboard_matrix#matrix-configuration).
 
 ### Direct Pin Matrix
 
@@ -16,13 +16,13 @@ Each key connects directly to its own GPIO pin, eliminating the matrix grid and 
 
 ### Bidirectional Matrix
 
-The bidirectional matrix design uses dynamically switchable GPIO pins to change between input and output modes during the scan cycle. Because bidirectional matrix is more complicated than the normal matrix, only [Rust API](https://github.com/HaoboGu/rmk/blob/main/rmk/src/matrix/bidirectional_matrix.rs) is provided at the moment. 
+The bidirectional matrix design uses dynamically switchable GPIO pins that can change between input and output modes during the scan cycle. Because the bidirectional matrix is more complicated than the normal matrix, only the [Rust API](https://github.com/HaoboGu/rmk/blob/main/rmk/src/matrix/bidirectional_matrix.rs) is provided at the moment. 
 
 ## Async Matrix Feature
 
 Async matrix is a power-saving feature that transforms how the matrix operates, dramatically reducing power consumption for wireless keyboards. This feature works out-of-the-box for nRF52 series. STM32 requires additional EXTI (external interrupt) configuration due to hardware limitations—see the [Low Power](./low_power) documentation for details.
 
-To enable it, add `async_matrix` feature in `Cargo.toml`:
+To enable it, add the `async_matrix` feature in `Cargo.toml`:
 
 ```toml
 rmk = { version = "...", features = ["async_matrix"] }
@@ -38,9 +38,9 @@ RMK's matrix system is built on a trait-based architecture. Any matrix or deboun
 
 **`MatrixTrait`**: Defines the core scanning interface. Implement this trait to support external I/O expanders, non-standard electrical designs, or specialized scanning algorithms.
 
-**`DebouncerTrait`**: Controls switch bounce filtering. RMK includes default and fast debouncing algorithms, you can also implement custom debouncing logic optimized for your own use cases.
+**`DebouncerTrait`**: Controls switch bounce filtering. RMK includes default and fast debouncing algorithms, and you can also implement custom debouncing logic optimized for your own use cases.
 
-The following is an example demonstrate how to use a customized matrix:
+The following is an example demonstrating how to use a customized matrix:
 
 ```rust
 struct YourOwnMatrix {}
@@ -65,4 +65,4 @@ join3(
 
 ## See Also
 
-- [How key matrices works](https://pcbheaven.com/wikipages/How_Key_Matrices_Works/)
+- [How key matrices work](https://pcbheaven.com/wikipages/How_Key_Matrices_Works/)

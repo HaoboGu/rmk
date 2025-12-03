@@ -3,26 +3,26 @@
 // For a full list of overridable settings, and general information on folder-specific settings,
 // see the documentation: https://zed.dev/docs/configuring-zed#settings-files
 {
-  "format_on_save": "on",
-  "lsp": {
-    "rust-analyzer": {
-      "initialization_options": {
-        "check": {
-          "allTargets": false,
-          "noDefaultFeatures": true
-        },
-        "cargo": {
-          "noDefaultFeatures": true
-          // "target": "thumbv7em-none-eabihf"
-        },
-        "showUnlinkedFileNotification": false,
-        "linkedProjects": [
-          "rmk-types/Cargo.toml",
-          "rmk/Cargo.toml"
-          // "rmk-macro/Cargo.toml",
-          // "examples/use_rust/nrf52840_ble_split/Cargo.toml"
-        ]
-      }
+    "format_on_save": "on",
+    "lsp": {
+        "rust-analyzer": {
+            "initialization_options": {
+                "check": {
+                    "allTargets": false,
+                    "noDefaultFeatures": true
+                },
+                "cargo": {
+                    "noDefaultFeatures": true
+                    // "target": "thumbv7em-none-eabihf"
+                },
+                "showUnlinkedFileNotification": false,
+                "linkedProjects": [
+                    "rmk-types/Cargo.toml",
+                    "rmk/Cargo.toml",
+                    "rmk-macro/Cargo.toml",
+                    "examples/use_rust/nrf52840_ble_split/Cargo.toml"
+                ]
+            }
+        }
     }
-  }
 }

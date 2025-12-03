@@ -2,7 +2,7 @@
 
 ### `keyboard.toml`
 
-The following toml contains all available settings in `keyboard.toml`
+The following TOML contains all available settings in `keyboard.toml`
 
 ```toml
 # Basic info of the keyboard
@@ -21,7 +21,7 @@ board = "nice!nano_v2"
 # Set to false if you don't want USB
 usb_enable = true
 
-# Set matrix IO for the board. This section is for non-split keyboard and is conflict with [split] section
+# Set matrix IO for the board. This section is for non-split keyboards and is in conflict with the [split] section
 [matrix]
 # `matrix_type` is optional. Default is "normal"
 matrix_type = "normal"
@@ -45,9 +45,9 @@ direct_pin_low_active = true
 
 # Layout info for the keyboard, this section is mandatory
 [layout]
-# Number of rows. For split keyboard, this is the total rows contains all splits
+# Number of rows. For a split keyboard, this is the total number of rows for all splits
 rows = 5
-# Number of cols. For split keyboard, this is the total cols contains all splits
+# Number of cols. For a split keyboard, this is the total number of cols for all splits
 cols = 4
 # Number of layers. Be careful, since large layer number takes more flash and RAM
 layers = 3
@@ -81,7 +81,7 @@ my_paste = "WM(V, LCtrl)"
 # The number (and order) of entries on each layer should be
 # identical with the number (and order) of entries in `matrix_map`.
 # Empty layers will be used to fill if the number of explicitly
-# defined layers is smaller then `layout.layers` setting
+# defined layers is smaller than the `layout.layers` setting
 
 # layer 0 (default):
 # (the number comes from the order of '[[layer]] entries' in the file)
@@ -232,10 +232,10 @@ battery_adc_pin = "vddh"
 adc_divider_measured = 2000
 # Total resistance of the full path for input adc
 adc_divider_total = 2806
-# [Depreciated] Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
+# [Deprecated] Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 # Input pin that indicates the charging state
 # charge_state = { pin = "PIN_1", low_active = true }
-# [Depreciated] Output LED pin that blinks when the battery is low
+# [Deprecated] Output LED pin that blinks when the battery is low
 # charge_led= { pin = "PIN_2", low_active = true }
 
 # RMK internal configuration
@@ -273,7 +273,7 @@ split_peripherals_num = 1
 ble_profiles_num = 3
 
 # Split configuration
-# This section is conflict with [split] section, you could only have either [matrix] or [split], but NOT BOTH
+# This section conflicts with the [matrix] section. You can only have either [matrix] or [split], but NOT BOTH
 [split]
 # Connection type of split, "serial" or "ble"
 connection = "serial"
@@ -313,7 +313,7 @@ col_pins = ["PIN_10", "PIN_12"]
 
 # Configuration for the first split peripheral
 # Note the double brackets [[ ]], which indicate that multiple split peripherals can be defined.
-# The order of peripherals is important: it should match the order of the serial instances(if serial is used).
+# The order of peripherals is important: it should match the order of the serial instances (if serial is used).
 [[split.peripheral]]
 # Number of rows on peripheral board
 rows = 2
@@ -323,7 +323,7 @@ cols = 1
 row_offset = 2
 # Col offset of peripheral matrix to the whole matrix
 col_offset = 2
-# The serial instance used to communication with the central board, if the connection type is "serial"
+# The serial instance used to communicate with the central board, if the connection type is "serial"
 serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
 # Override the BLE random static address of the peripheral board
 ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3]
@@ -334,9 +334,9 @@ matrix_type = "normal"
 row_pins = ["PIN_9", "PIN_11"]
 col_pins = ["PIN_10"]
 
-# More split peripherals(if you have)
+# More split peripherals (if you have any)
 [[split.peripheral]]
-# The configuration is same with the first split peripheral
+# The configuration is the same as the first split peripheral
 ...
 ...
 ...
@@ -346,8 +346,11 @@ col_pins = ["PIN_10"]
 # Whether to enable defmt, set to false for reducing binary size
 defmt_log = true
 
-[security]
-# the unlock keys are the combo of the row 0, col 0 key and
+# Host-side tools configuration
+[host]
+# Whether Vial is enabled (default: true)
+vial_enabled = true
+# The unlock keys are the combo of the row 0, col 0 key and
 # the row 0, col 1 key
 unlock_keys = [[0, 0], [0, 1]]
 ```

@@ -66,11 +66,13 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
         // Write report to USB
         match report {
             Report::KeyboardReport(keyboard_report) => {
+                let mut buf: [u8; 8] = [0; 8];
+                let n: usize = serialize(&mut buf, &keyboard_report).map_err(|_| HidError::ReportSerializeError)?;
                 self.keyboard_writer
-                    .write_serialize(&keyboard_report)
+                    .write(&buf[0..n])
                     .await
                     .map_err(HidError::UsbEndpointError)?;
-                Ok(8)
+                Ok(n)
             }
             Report::MouseReport(mouse_report) => {
                 let mut buf: [u8; 9] = [0; 9];

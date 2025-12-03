@@ -4,10 +4,10 @@
 set -e
 
 # Format rmk and rmk-macro
-cd rmk && cargo +nightly fmt && cd ..
-cd rmk-macro && cargo +nightly fmt && cd ..
-cd rmk-config && cargo +nightly fmt && cd ..
-cd rmk-types && cargo +nightly fmt && cd ..
+cd rmk && cargo clippy --fix --allow-dirty && cd ..
+cd rmk-macro && cargo clippy --fix --allow-dirty&& cd ..
+cd rmk-config && cargo clippy --fix --allow-dirty&& cd ..
+cd rmk-types && cargo clippy --fix --allow-dirty&& cd ..
 
 # Format all directories under examples/use_rust
 for dir in examples/use_rust/*/; do
@@ -15,9 +15,9 @@ for dir in examples/use_rust/*/; do
         cd "$dir"
         # Check if it's an ESP project
         if [[ "$dir" == *"esp"* ]]; then
-            cargo +esp fmt
+            cargo clippy --fix --allow-dirty
         else
-            cargo +nightly fmt
+            cargo clippy --fix --allow-dirty
         fi
         cd ../../..
     fi
@@ -29,9 +29,9 @@ for dir in examples/use_config/*/; do
         cd "$dir"
         # Check if it's an ESP project
         if [[ "$dir" == *"esp"* ]]; then
-            cargo +esp fmt
+            cargo clippy --fix --allow-dirty
         else
-            cargo +nightly fmt
+            cargo clippy --fix --allow-dirty
         fi
         cd ../../..
     fi

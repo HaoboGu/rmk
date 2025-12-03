@@ -18,12 +18,11 @@ pub(crate) fn expand_rmk_entry(
         items
             .iter()
             .find_map(|item| {
-                if let syn::Item::Fn(item_fn) = &item {
-                    if item_fn.attrs.len() == 1 {
-                        if let Ok(Overwritten::Entry) = Overwritten::from_meta(&item_fn.attrs[0].meta) {
-                            return Some(override_rmk_entry(item_fn));
-                        }
-                    }
+                if let syn::Item::Fn(item_fn) = &item
+                    && item_fn.attrs.len() == 1
+                    && let Ok(Overwritten::Entry) = Overwritten::from_meta(&item_fn.attrs[0].meta)
+                {
+                    return Some(override_rmk_entry(item_fn));
                 }
                 None
             })
@@ -64,7 +63,7 @@ pub(crate) fn rmk_entry_select(
             )
         }
     };
-    let event_trait_import = if controllers.len() > 0 {
+    let event_trait_import = if !controllers.is_empty() {
         quote! { use ::rmk::controller::EventController; }
     } else {
         quote! {}
@@ -76,7 +75,7 @@ pub(crate) fn rmk_entry_select(
     } else {
         TokenStream2::new()
     };
-    let keymap = if keyboard_config.rmk.vial_enabled {
+    let keymap = if keyboard_config.get_host_config().vial_enabled {
         quote! { &keymap, }
     } else {
         quote! {}
@@ -195,7 +194,7 @@ pub(crate) fn rmk_entry_unibody(
         TokenStream2::new()
     };
     // Remove the keymap argument if the vial is disabled
-    let keymap = if keyboard_config.rmk.vial_enabled {
+    let keymap = if keyboard_config.get_host_config().vial_enabled {
         quote! { &keymap, }
     } else {
         quote! {}

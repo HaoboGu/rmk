@@ -42,6 +42,17 @@ capslock.low_active = true
 numslock.pin = "P0_01"
 numslock.low_active = false
 
+[behavior.combo]
+timeout = "150ms"
+combos = [
+  # Press J and K keys simultaneously to output "L"
+  { actions = ["J", "K"], output = "L" },
+  # Press F and D keys simultaneously to switch to layer 2, but only valid on layer 0
+  { actions = ["F", "D"], output = "TO(1)", layer = 0 },
+  # Three-key combo, press A, S, and D keys to output "X"
+  { actions = ["A", "S", "D"], output = "X" }
+]
+
 # default profile for morse, tap dance and tap-hold keys:
 [behavior.morse]
 enable_flow_tap = true

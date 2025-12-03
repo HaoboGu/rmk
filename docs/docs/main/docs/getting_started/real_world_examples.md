@@ -1,6 +1,6 @@
 # Real World Examples
 
-This pages contains real world examples of RMK keyboards.
+This page contains real world examples of RMK keyboards.
 
 ## [rmk-ble-keyboard](https://github.com/HaoboGu/rmk-ble-keyboard)
 

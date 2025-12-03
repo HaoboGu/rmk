@@ -5,11 +5,11 @@
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
+use serde::{Deserialize, Serialize};
 
 /// Mouse buttons
 #[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
-#[derive(Eq, PartialEq)]
-
+#[derive(Eq, PartialEq, Serialize, Deserialize, postcard::experimental::max_size::MaxSize)]
 pub struct MouseButtons {
     #[bits(1)]
     pub button1: bool, //left
@@ -71,6 +71,7 @@ impl MouseButtons {
     pub const BUTTON7: Self = Self::new().with_button7(true);
     pub const BUTTON8: Self = Self::new().with_button8(true);
 
+    #[allow(clippy::too_many_arguments)]
     pub const fn new_from(
         button1: bool,
         button2: bool,

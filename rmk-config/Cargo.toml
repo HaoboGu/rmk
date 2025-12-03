@@ -1,6 +1,6 @@
 [package]
 name = "rmk-config"
-version = "0.5.6"
+version = "0.6.0"
 edition = "2024"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Config crate of RMK"
@@ -11,11 +11,11 @@ resolver = "2"
 
 [dependencies]
 config = "0.15"
-toml = "0.8"
+toml = "0.9.8"
 cargo_toml = "0.22"
 serde = "1.0"
 serde_derive = "1.0"
-serde-inline-default = "0.2.3"
+serde-inline-default = "1.0.0"
 once_cell = "1.19"
 pest = "2.8"
 pest_derive = "2.8"

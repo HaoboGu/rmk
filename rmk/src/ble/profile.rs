@@ -15,7 +15,7 @@ use {
 };
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{ControllerPub, send_controller_event},
+    crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
     crate::event::ControllerEvent,
 };
 
@@ -29,13 +29,117 @@ pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal
 pub(crate) static UPDATED_CCCD_TABLE: Signal<crate::RawMutex, CccdTable<CCCD_TABLE_SIZE>> = Signal::new();
 
 /// BLE profile info
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ProfileInfo {
     pub(crate) slot_num: u8,
     pub(crate) removed: bool,
+    #[serde(with = "bond_info_serde")]
     pub(crate) info: BondInformation,
+    #[serde(with = "cccd_table_serde")]
     pub(crate) cccd_table: CccdTable<CCCD_TABLE_SIZE>,
+}
+
+// Custom serde module for BondInformation
+mod bond_info_serde {
+    use serde::{Deserializer, Serialize, Serializer};
+
+    use super::*;
+
+    pub fn serialize<S>(info: &BondInformation, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let tuple = (
+            info.ltk.to_le_bytes(),
+            info.identity.bd_addr.into_inner(),
+            info.identity.irk.map(|k| k.to_le_bytes()),
+            match info.security_level {
+                SecurityLevel::NoEncryption => 0u8,
+                SecurityLevel::Encrypted => 1u8,
+                SecurityLevel::EncryptedAuthenticated => 2u8,
+            },
+            info.is_bonded,
+        );
+        tuple.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<BondInformation, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let (ltk, bd_addr, irk, security_level, is_bonded): ([u8; 16], [u8; 6], Option<[u8; 16]>, u8, bool) =
+            serde::Deserialize::deserialize(deserializer)?;
+
+        Ok(BondInformation::new(
+            Identity {
+                bd_addr: BdAddr::new(bd_addr),
+                irk: irk.map(IdentityResolvingKey::from_le_bytes),
+            },
+            LongTermKey::from_le_bytes(ltk),
+            match security_level {
+                0 => SecurityLevel::NoEncryption,
+                1 => SecurityLevel::Encrypted,
+                _ => SecurityLevel::EncryptedAuthenticated,
+            },
+            is_bonded,
+        ))
+    }
+}
+
+// Custom serde module for CccdTable
+mod cccd_table_serde {
+    use serde::{Deserializer, Serialize, Serializer};
+
+    use super::*;
+
+    pub fn serialize<S>(table: &CccdTable<CCCD_TABLE_SIZE>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut entries = [(0u16, 0u16); CCCD_TABLE_SIZE];
+        let inner = table.inner();
+        for i in 0..CCCD_TABLE_SIZE {
+            if let Some(entry) = inner.get(i) {
+                entries[i] = (entry.0, entry.1.raw());
+            }
+        }
+        entries.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<CccdTable<CCCD_TABLE_SIZE>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let entries: [(u16, u16); CCCD_TABLE_SIZE] = serde::Deserialize::deserialize(deserializer)?;
+        let mut cccd_values = [(0u16, CCCD::default()); CCCD_TABLE_SIZE];
+        for i in 0..CCCD_TABLE_SIZE {
+            cccd_values[i] = (entries[i].0, entries[i].1.into());
+        }
+        Ok(CccdTable::new(cccd_values))
+    }
+}
+
+/// Returns the maximum number of bytes required to encode T.
+pub const fn varint_max<T: Sized>() -> usize {
+    const BITS_PER_BYTE: usize = 8;
+    const BITS_PER_VARINT_BYTE: usize = 7;
+
+    // How many data bits do we need for this type?
+    let bits = core::mem::size_of::<T>() * BITS_PER_BYTE;
+
+    // We add (BITS_PER_VARINT_BYTE - 1), to ensure any integer divisions
+    // with a remainder will always add exactly one full byte, but
+    // an evenly divided number of bits will be the same
+    let roundup_bits = bits + (BITS_PER_VARINT_BYTE - 1);
+
+    // Apply division, using normal "round down" integer division
+    roundup_bits / BITS_PER_VARINT_BYTE
+}
+
+// Manual MaxSize implementation
+impl postcard::experimental::max_size::MaxSize for ProfileInfo {
+    const POSTCARD_MAX_SIZE: usize = varint_max::<Self>();
 }
 
 impl Default for ProfileInfo {
@@ -87,12 +191,12 @@ pub struct ProfileManager<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: P
 #[cfg(feature = "_ble")]
 impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileManager<'a, C, P> {
     /// Create a new profile manager
-    pub fn new(stack: &'a Stack<'a, C, P>, #[cfg(feature = "controller")] controller_pub: ControllerPub) -> Self {
+    pub fn new(stack: &'a Stack<'a, C, P>) -> Self {
         Self {
             bonded_devices: heapless::Vec::new(),
             stack,
             #[cfg(feature = "controller")]
-            controller_pub,
+            controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
         }
     }
 

@@ -1,11 +1,13 @@
 use core::ops::{BitAnd, BitOr, Not};
 
+use postcard::experimental::max_size::MaxSize;
 use rmk_types::action::KeyAction;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
 use rmk_types::mouse_button::MouseButtons;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct StateBits {
     pub(crate) modifiers: ModifierCombination,
@@ -54,7 +56,7 @@ impl StateBits {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Fork {
     pub(crate) trigger: KeyAction,

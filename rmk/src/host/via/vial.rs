@@ -2,12 +2,12 @@ use core::cell::RefCell;
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::Duration;
-use rmk_types::action::KeyAction;
+use rmk_types::action::{KeyAction, MorseMode};
 use rmk_types::protocol::vial::{
     SettingKey, VIAL_COMBO_MAX_LENGTH, VIAL_EP_SIZE, VIAL_PROTOCOL_VERSION, VialCommand, VialDynamic,
 };
 
-use crate::combo::Combo;
+use crate::combo::{Combo, ComboConfig};
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
@@ -15,9 +15,7 @@ use crate::keymap::KeyMap;
 use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, TAP};
 use crate::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, MORSE_MAX_NUM};
 #[cfg(feature = "storage")]
-use crate::{
-    channel::FLASH_CHANNEL, host::storage::ComboData, host::storage::KeymapData, storage::FlashOperationMessage,
-};
+use crate::{channel::FLASH_CHANNEL, host::storage::KeymapData, storage::FlashOperationMessage};
 
 /// Note: vial uses little endian, while via uses big endian
 pub(crate) async fn process_vial<
@@ -114,28 +112,29 @@ pub(crate) async fn process_vial<
         VialCommand::BehaviorSettingQuery => {
             report.input_data.fill(0xFF);
             let value = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
-            if value <= 7 {
+            if value <= 8 {
                 LittleEndian::write_u16(&mut report.input_data[0..2], 0x02);
                 LittleEndian::write_u16(&mut report.input_data[2..4], 0x06);
                 LittleEndian::write_u16(&mut report.input_data[4..6], 0x07);
                 LittleEndian::write_u16(&mut report.input_data[6..8], 0x12);
                 LittleEndian::write_u16(&mut report.input_data[8..10], 0x13);
-                LittleEndian::write_u16(&mut report.input_data[10..12], 0x1A);
-                LittleEndian::write_u16(&mut report.input_data[12..14], 0x1B);
+                LittleEndian::write_u16(&mut report.input_data[10..12], 0x16);
+                LittleEndian::write_u16(&mut report.input_data[12..14], 0x17);
+                LittleEndian::write_u16(&mut report.input_data[14..16], 0x1A);
+                LittleEndian::write_u16(&mut report.input_data[16..18], 0x1B);
             }
         }
         VialCommand::GetBehaviorSetting => {
             report.input_data.fill(0xFF);
             let value = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
+            report.input_data[0] = 0;
             match value.into() {
-                SettingKey::None => (),
+                SettingKey::None => report.input_data[0] = 0xFF,
                 SettingKey::ComboTimeout => {
-                    report.input_data[0] = 0;
                     let combo_timeout = keymap.borrow().behavior.combo.timeout.as_millis() as u16;
                     LittleEndian::write_u16(&mut report.input_data[1..3], combo_timeout);
                 }
                 SettingKey::MorseTimeout => {
-                    report.input_data[0] = 0;
                     let tapping_term = keymap
                         .borrow()
                         .behavior
@@ -146,22 +145,36 @@ pub(crate) async fn process_vial<
                     LittleEndian::write_u16(&mut report.input_data[1..3], tapping_term);
                 }
                 SettingKey::OneShotTimeout => {
-                    report.input_data[0] = 0;
                     let one_shot_timeout = keymap.borrow().behavior.one_shot.timeout.as_millis() as u16;
                     LittleEndian::write_u16(&mut report.input_data[1..3], one_shot_timeout);
                 }
                 SettingKey::TapInterval => {
-                    report.input_data[0] = 0;
                     let tap_interval = keymap.borrow().behavior.tap.tap_interval;
                     LittleEndian::write_u16(&mut report.input_data[1..3], tap_interval);
                 }
                 SettingKey::TapCapslockInterval => {
-                    report.input_data[0] = 0;
                     let tap_interval = keymap.borrow().behavior.tap.tap_interval;
                     LittleEndian::write_u16(&mut report.input_data[1..3], tap_interval);
                 }
+                SettingKey::PermissiveHold => {
+                    if let Some(m) = keymap.borrow().behavior.morse.default_profile.mode()
+                        && m == MorseMode::PermissiveHold
+                    {
+                        report.input_data[1] = 1
+                    } else {
+                        report.input_data[1] = 0
+                    }
+                }
+                SettingKey::HoldOnOtherKeyPress => {
+                    if let Some(m) = keymap.borrow().behavior.morse.default_profile.mode()
+                        && m == MorseMode::HoldOnOtherPress
+                    {
+                        report.input_data[1] = 1
+                    } else {
+                        report.input_data[1] = 0
+                    }
+                }
                 SettingKey::UnilateralTap => {
-                    report.input_data[0] = 0;
                     let unilateral_tap = keymap
                         .borrow()
                         .behavior
@@ -176,7 +189,6 @@ pub(crate) async fn process_vial<
                     };
                 }
                 SettingKey::PriorIdleTime => {
-                    report.input_data[0] = 0;
                     let prior_idle_time = keymap.borrow().behavior.morse.prior_idle_time.as_millis() as u16;
                     LittleEndian::write_u16(&mut report.input_data[1..3], prior_idle_time);
                 }
@@ -197,10 +209,11 @@ pub(crate) async fn process_vial<
                 SettingKey::MorseTimeout => {
                     let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
                     let old = keymap.borrow().behavior.morse.default_profile;
-                    keymap.borrow_mut().behavior.morse.default_profile = old.with_hold_timeout_ms(Some(timeout_time));
+                    let new_profile = old.with_hold_timeout_ms(Some(timeout_time));
+                    keymap.borrow_mut().behavior.morse.default_profile = new_profile;
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
-                        .send(FlashOperationMessage::MorseHoldTimeout(timeout_time))
+                        .send(FlashOperationMessage::MorseDefaultProfile(new_profile))
                         .await;
                 }
                 SettingKey::OneShotTimeout => {
@@ -227,13 +240,61 @@ pub(crate) async fn process_vial<
                         .send(FlashOperationMessage::TapCapslockInterval(tap_capslock_interval))
                         .await;
                 }
-                SettingKey::UnilateralTap => {
+
+                SettingKey::PermissiveHold => {
+                    let enabled = report.output_data[4] == 1;
                     let old = keymap.borrow().behavior.morse.default_profile;
-                    keymap.borrow_mut().behavior.morse.default_profile =
-                        old.with_unilateral_tap(Some(report.output_data[4] == 1));
+                    let new_mode = if enabled {
+                        // Hold On Other Key Press has higher priority
+                        if old.mode() == Some(MorseMode::HoldOnOtherPress) {
+                            old.mode()
+                        } else {
+                            // Enable: Set to Permissive Hold
+                            Some(MorseMode::PermissiveHold)
+                        }
+                    } else {
+                        // Disable: Only set to Normal if currently PermissiveHold
+                        if old.mode() == Some(MorseMode::PermissiveHold) {
+                            Some(MorseMode::Normal)
+                        } else {
+                            old.mode() // Keep current mode unchanged
+                        }
+                    };
+                    let new_profile = old.with_mode(new_mode);
+                    keymap.borrow_mut().behavior.morse.default_profile = new_profile;
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
-                        .send(FlashOperationMessage::UnilateralTap(report.output_data[4] == 1))
+                        .send(FlashOperationMessage::MorseDefaultProfile(new_profile))
+                        .await;
+                }
+                SettingKey::HoldOnOtherKeyPress => {
+                    let enabled = report.output_data[4] == 1;
+                    let old = keymap.borrow().behavior.morse.default_profile;
+                    let new_mode = if enabled {
+                        // Enable: Set to HoldOnOtherPress (will override other modes)
+                        Some(MorseMode::HoldOnOtherPress)
+                    } else {
+                        // Disable: Only set to Normal if currently HoldOnOtherPress
+                        if old.mode() == Some(MorseMode::HoldOnOtherPress) {
+                            Some(MorseMode::Normal)
+                        } else {
+                            old.mode() // Keep current mode unchanged
+                        }
+                    };
+                    let new_profile = old.with_mode(new_mode);
+                    keymap.borrow_mut().behavior.morse.default_profile = new_profile;
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::MorseDefaultProfile(new_profile))
+                        .await;
+                }
+                SettingKey::UnilateralTap => {
+                    let old = keymap.borrow().behavior.morse.default_profile;
+                    let new_profile = old.with_unilateral_tap(Some(report.output_data[4] == 1));
+                    keymap.borrow_mut().behavior.morse.default_profile = new_profile;
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::MorseDefaultProfile(new_profile))
                         .await;
                 }
                 SettingKey::PriorIdleTime => {
@@ -339,13 +400,13 @@ pub(crate) async fn process_vial<
                         for i in 0..VIAL_COMBO_MAX_LENGTH {
                             LittleEndian::write_u16(
                                 &mut report.input_data[1 + i * 2..3 + i * 2],
-                                to_via_keycode(*combo.actions.get(i).unwrap_or(&KeyAction::No)),
+                                to_via_keycode(*combo.config.actions.get(i).unwrap_or(&KeyAction::No)),
                             );
                         }
                         // Combo output
                         LittleEndian::write_u16(
                             &mut report.input_data[1 + VIAL_COMBO_MAX_LENGTH * 2..3 + VIAL_COMBO_MAX_LENGTH * 2],
-                            to_via_keycode(combo.output),
+                            to_via_keycode(combo.config.output),
                         );
                     } else {
                         report.input_data[1..3 + VIAL_COMBO_MAX_LENGTH * 2].fill(0);
@@ -385,18 +446,25 @@ pub(crate) async fn process_vial<
                             debug!("combo is empty");
                             None
                         } else {
-                            Some(Combo::new(actions, output, None))
+                            Some(Combo::new(ComboConfig {
+                                actions,
+                                output,
+                                layer: None,
+                            }))
                         };
                         (actions, output)
                     };
 
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
-                        .send(FlashOperationMessage::VialMessage(KeymapData::Combo(ComboData {
-                            idx: combo_idx,
-                            actions,
-                            output,
-                        })))
+                        .send(FlashOperationMessage::VialMessage(KeymapData::Combo(
+                            combo_idx as u8,
+                            ComboConfig {
+                                actions,
+                                output,
+                                layer: None,
+                            },
+                        )))
                         .await;
                 }
                 VialDynamic::DynamicVialKeyOverrideGet => {
@@ -471,9 +539,9 @@ pub(crate) async fn process_vial<
             // Save the encoder action to the storage after the RefCell is released
             if let Some(encoder) = _encoder {
                 // Save the encoder action to the storage
-                use crate::host::storage::EncoderConfig;
+                use crate::host::storage::EncoderKeymap;
                 FLASH_CHANNEL
-                    .send(FlashOperationMessage::VialMessage(KeymapData::Encoder(EncoderConfig {
+                    .send(FlashOperationMessage::VialMessage(KeymapData::Encoder(EncoderKeymap {
                         idx: index,
                         layer,
                         action: encoder,
@@ -498,29 +566,33 @@ mod tests {
     fn test_combo_serialization_deserialization() {
         let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
         actions[0] = KeyAction::Single(Action::Key(KeyCode::Kc1));
-        let combo = ComboData {
-            idx: 20,
+        let combo_config = ComboConfig {
             actions,
             output: KeyAction::Single(Action::Key(KeyCode::Space)),
+            layer: None,
         };
+        let combo_idx: u8 = 20;
 
-        let mut buffer = [0u8; 3 + COMBO_MAX_LENGTH * 2];
-        let storage_data = StorageData::VialData(KeymapData::Combo(combo));
+        let mut buffer = [0u8; 64]; // Increased buffer size for idx + combo config
+        let storage_data = StorageData::VialData(KeymapData::Combo(combo_idx, combo_config));
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
         // Deserialization
         let deserialized_data = StorageData::deserialize_from(&buffer[..serialized_size]).unwrap();
         // Validation
         match deserialized_data {
-            StorageData::VialData(KeymapData::Combo(deserialized_combo)) => {
+            (StorageData::VialData(KeymapData::Combo(idx, deserialized_config)), _) => {
+                assert_eq!(idx, combo_idx);
                 // actions
-                assert_eq!(deserialized_combo.actions.len(), combo.actions.len());
-                for (original, deserialized) in combo.actions.iter().zip(deserialized_combo.actions.iter()) {
+                assert_eq!(deserialized_config.actions.len(), combo_config.actions.len());
+                for (original, deserialized) in combo_config.actions.iter().zip(deserialized_config.actions.iter()) {
                     assert_eq!(original, deserialized);
                 }
                 // output
-                assert_eq!(deserialized_combo.output, combo.output);
+                assert_eq!(deserialized_config.output, combo_config.output);
+                // layer
+                assert_eq!(deserialized_config.layer, combo_config.layer);
             }
-            _ => panic!("Expected ComboData"),
+            _ => panic!("Expected Combo"),
         }
     }
 }

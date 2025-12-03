@@ -36,7 +36,8 @@ use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
 use rmk::split::ble::central::{read_peripheral_addresses, scan_peripherals};
-use rmk::split::central::{CentralMatrix, run_peripheral_manager};
+use rmk::split::central::run_peripheral_manager;
+use rmk::matrix::{OffsetMatrixWrapper, Matrix};
 use rmk::{HostResources, initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -95,8 +96,8 @@ fn init_adc(adc_pin: AnyInput, adc: Peri<'static, SAADC>) -> Saadc<'static, 1> {
     let config = saadc::Config::default();
     let channel_cfg = saadc::ChannelConfig::single_ended(adc_pin.degrade_saadc());
     interrupt::SAADC.set_priority(interrupt::Priority::P3);
-    let saadc = saadc::Saadc::new(adc, Irqs, config, [channel_cfg]);
-    saadc
+
+    saadc::Saadc::new(adc, Irqs, config, [channel_cfg])
 }
 
 fn ble_addr() -> [u8; 6] {
@@ -182,7 +183,6 @@ async fn main(spawner: Spawner) {
         vial_config,
         ble_battery_config,
         storage_config,
-        ..Default::default()
     };
 
     // Initialze keyboard stuffs
@@ -208,7 +208,7 @@ async fn main(spawner: Spawner) {
 
     // Initialize the matrix and keyboard
     let debouncer = DefaultDebouncer::new();
-    let mut matrix = CentralMatrix::<_, _, _, 0, 0, 4, 7, true>::new(row_pins, col_pins, debouncer);
+    let mut matrix = OffsetMatrixWrapper::<_, _, _, 0, 0>(Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer));
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap);
 

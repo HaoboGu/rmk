@@ -76,6 +76,79 @@ impl<T> OneShotState<T> {
     }
 }
 
+/// State machine for Caps Word
+#[derive(Debug, Default)]
+enum CapsWordState {
+    /// Caps Word is activated (but may have timed out thus becoming inactive)
+    Activated {
+        /// Time since last key press
+        timer: Instant,
+        /// Whether the current key should be shifted
+        shift_current: bool,
+    },
+    /// Caps Word is deactivated
+    #[default]
+    Deactivated,
+}
+
+impl CapsWordState {
+    /// Caps Word timeout duration
+    const TIMEOUT: Duration = Duration::from_secs(5);
+
+    /// Activate Caps Word
+    fn activate(&mut self) {
+        *self = CapsWordState::Activated {
+            timer: Instant::now(),
+            shift_current: false,
+        };
+    }
+
+    /// Deactivate Caps Word
+    fn deactivate(&mut self) {
+        *self = CapsWordState::Deactivated;
+    }
+
+    /// Toggle Caps Word
+    fn toggle(&mut self) {
+        match self {
+            CapsWordState::Activated { .. } => self.deactivate(),
+            CapsWordState::Deactivated => self.activate(),
+        }
+    }
+
+    /// Return whether Caps Word is active (and has not timed out)
+    fn is_active(&self) -> bool {
+        if let CapsWordState::Activated { timer, .. } = self {
+            timer.elapsed() < Self::TIMEOUT
+        } else {
+            false
+        }
+    }
+
+    /// Return whether the current key pressed is to be shifted
+    fn is_shift_current(&self) -> bool {
+        if let CapsWordState::Activated { shift_current, .. } = self {
+            *shift_current
+        } else {
+            false
+        }
+    }
+
+    /// Check whether to shift the given key, and update the state accordingly
+    ///
+    /// Note that this function does not check the CapsWord key itself.
+    fn check(&mut self, key: KeyCode) {
+        if let CapsWordState::Activated { timer, shift_current } = self {
+            if key.is_caps_word_continue_key() && timer.elapsed() < Self::TIMEOUT {
+                *timer = Instant::now();
+                *shift_current = key.is_caps_word_shifted_key();
+            } else {
+                self.deactivate();
+            }
+        }
+    }
+}
+
 impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> Runnable
     for Keyboard<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
@@ -108,7 +181,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 
     /// Unprocessed events
-    unprocessed_events: Vec<KeyboardEvent, 4>,
+    pub unprocessed_events: Vec<KeyboardEvent, 4>,
 
     /// Buffered held keys
     pub held_buffer: HeldBuffer,
@@ -133,10 +206,8 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// One shot modifier state
     osm_state: OneShotState<ModifierCombination>,
 
-    /// Caps word state - whether caps word is currently active
-    caps_word_active: bool,
-    /// Caps word idle timer - tracks when caps word should timeout
-    caps_word_timer: Option<Instant>,
+    /// Caps Word state machine
+    caps_word: CapsWordState,
 
     /// The modifiers coming from (last) Action::KeyWithModifier
     with_modifiers: ModifierCombination,
@@ -192,8 +263,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             last_press_time: Instant::now(),
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
-            caps_word_active: false,
-            caps_word_timer: None,
+            caps_word: CapsWordState::default(),
             with_modifiers: ModifierCombination::default(),
             macro_texting: false,
             macro_caps: false,
@@ -231,7 +301,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Get a copy of the next timeout key in the buffer,
     /// which is either a combo component that is waiting for other combo keys,
     /// or a morse key that is in the pressed or released state.
-    fn next_buffered_key(&mut self) -> Option<HeldKey> {
+    pub fn next_buffered_key(&mut self) -> Option<HeldKey> {
         self.held_buffer.next_timeout(|k| {
             matches!(k.state, KeyState::Released(_) | KeyState::WaitingCombo)
                 || (matches!(k.state, KeyState::Pressed(_)) && k.action.is_morse())
@@ -258,7 +328,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Process the latest buffered key.
     ///
     /// The given holding key is a copy of the buffered key. Only tap-hold keys are considered now.
-    async fn process_buffered_key(&mut self, key: HeldKey) {
+    pub async fn process_buffered_key(&mut self, key: HeldKey) {
         debug!(
             "Processing buffered key: \nevent: {:?} state: {:?}",
             key.event, key.state
@@ -303,7 +373,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Process key changes at (row, col)
-    async fn process_inner(&mut self, event: KeyboardEvent) {
+    pub async fn process_inner(&mut self, event: KeyboardEvent) {
         #[cfg(feature = "vial_lock")]
         self.keymap.borrow_mut().matrix_state.update(&event);
 
@@ -874,7 +944,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .iter_mut()
             .filter_map(|c| c.as_mut())
             .filter_map(|c| {
-                if c.is_all_pressed() && !c.is_triggered() && c.actions.contains(key_action) {
+                if c.is_all_pressed() && !c.is_triggered() && c.config.actions.contains(key_action) {
                     // All keys are pressed but the combo is not triggered, trigger it
                     return Some((c.size(), c));
                 }
@@ -909,7 +979,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .iter_mut()
             .filter_map(|c| c.as_mut())
             .for_each(|c| {
-                if c.is_all_pressed() && !c.is_triggered() && c.actions.contains(key_action) {
+                if c.is_all_pressed() && !c.is_triggered() && c.config.actions.contains(key_action) {
                     info!("Resetting combo: {:?}", c,);
                     c.reset();
                 }
@@ -999,7 +1069,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     .iter_mut()
                     .filter_map(|c| c.as_mut())
                 {
-                    if combo.actions.contains(key_action) {
+                    if combo.config.actions.contains(key_action) {
                         // Releasing a combo key in triggered combo
                         releasing_triggered_combo |= combo.is_triggered();
                         info!("[Combo] releasing: {:?}", combo);
@@ -1007,8 +1077,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         // Release the combo key, check whether the combo is fully released
                         if combo.update_released(key_action) {
                             // If the combo is fully released, update the combo output
-                            debug!("[Combo] {:?} is released", combo.output);
-                            combo_output = combo_output.or(Some(combo.output));
+                            debug!("[Combo] {:?} is released", combo.config.output);
+                            combo_output = combo_output.or(Some(combo.config.output));
                         }
                     }
                 }
@@ -1316,18 +1386,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // the suppression effect of forks should not apply on these
         result |= self.with_modifiers;
 
-        // Apply caps word shift if active and appropriate
-        if self.caps_word_active
-            && let Some(timer) = self.caps_word_timer
-            && timer.elapsed() < Duration::from_secs(5)
-        {
-            if pressed {
-                result |= ModifierCombination::new().with_left_shift(true);
-            }
-        } else {
-            self.caps_word_timer = None;
-            self.caps_word_active = false;
-        };
+        // Apply Caps Word shift
+        if self.caps_word.is_active() && pressed && self.caps_word.is_shift_current() {
+            result |= ModifierCombination::new().with_left_shift(true);
+        }
 
         result
     }
@@ -1361,16 +1423,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
             }
             KeyCode::CapsWordToggle => {
-                // Handle caps word keycode by triggering the action
+                // Handle Caps Word keycode
                 if event.pressed {
-                    self.caps_word_active = !self.caps_word_active;
-                    if self.caps_word_active {
-                        // The caps word is just activated, set the timer
-                        self.caps_word_timer = Some(Instant::now());
-                    } else {
-                        // The caps word is just deactivated, reset the timer
-                        self.caps_word_timer = None;
-                    }
+                    self.caps_word.toggle();
                 };
                 return;
             }
@@ -1395,18 +1450,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 );
                 self.last_key_code = key;
             }
-            // Check caps word
-            if self.caps_word_active {
-                if key.is_caps_word_continue_key()
-                    && let Some(timer) = self.caps_word_timer
-                    && timer.elapsed() < Duration::from_secs(5)
-                {
-                    self.caps_word_timer = Some(Instant::now());
-                } else {
-                    self.caps_word_active = false;
-                    self.caps_word_timer = None;
-                }
-            }
+            // Check Caps Word
+            self.caps_word.check(key);
         }
 
         // Consumer, system and mouse keys should be processed before basic keycodes, since basic keycodes contain them all
@@ -1731,10 +1776,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         match select(embassy_time::Timer::after_millis(5000), KEY_EVENT_CHANNEL.receive()).await {
                             Either::First(_) => {
                                 // Timeout reached, send clear peer message
+                                #[cfg(feature = "controller")]
+                                send_controller_event(&mut self.controller_pub, ControllerEvent::ClearPeer);
                                 info!("Clear peer");
-                                if let Ok(publisher) = crate::channel::CONTROLLER_CHANNEL.publisher() {
-                                    publisher.publish_immediate(crate::event::ControllerEvent::ClearPeer);
-                                }
                             }
                             Either::Second(e) => {
                                 // Received a new key event before timeout, add to unprocessed list
@@ -2223,6 +2267,7 @@ mod test {
     use rusty_fork::rusty_fork_test;
 
     use super::*;
+    use crate::combo::{Combo, ComboConfig};
     use crate::config::{BehaviorConfig, CombosConfig, ForksConfig, PositionalConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
     use crate::fork::Fork;
@@ -2262,24 +2307,24 @@ mod test {
         // Define the function to return the appropriate combo configuration
         CombosConfig {
             combos: [
-                Some(Combo::new(
-                    [
+                Some(Combo::new(ComboConfig {
+                    actions: [
                         k!(V), //3,4
                         k!(B), //3,5
-                    ]
-                    .to_vec(),
-                    k!(LShift),
-                    Some(0),
-                )),
-                Some(Combo::new(
-                    [
+                        k!(No), k!(No),
+                    ],
+                    output: k!(LShift),
+                    layer: Some(0),
+                })),
+                Some(Combo::new(ComboConfig {
+                    actions: [
                         k!(R), //1,4
                         k!(T), //1,5
-                    ]
-                    .to_vec(),
-                    k!(LAlt),
-                    Some(0),
-                )),
+                        k!(No), k!(No),
+                    ],
+                    output: k!(LAlt),
+                    layer: Some(0),
+                })),
                 None, None, None, None, None, None
             ],
             timeout: Duration::from_millis(100),
