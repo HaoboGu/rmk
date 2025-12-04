@@ -1,5 +1,6 @@
 import * as path from 'node:path'
 import { defineConfig } from 'rspress/config'
+import sitemap from "rspress-plugin-sitemap"
 
 import versions from './versions.json' assert { type: 'json' }
 
@@ -12,6 +13,11 @@ export default defineConfig({
     dark: '/rmk_logo.svg'
   },
   outDir: 'dist',
+  plugins: [
+    sitemap({
+      domain: "https://rmk.rs"
+    }),
+  ],
   multiVersion: {
     default: versions.map((branch) => branch.split('/').pop()!)[0],
     versions: ['main', ...versions.map((branch) => branch.split('/').pop()!)]

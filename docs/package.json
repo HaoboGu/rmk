@@ -21,6 +21,7 @@
     "@types/node": "^18.11.17",
     "@types/react": "^19.2.2",
     "prettier": "3.6.2",
+    "rspress-plugin-sitemap": "^1.2.1",
     "tailwindcss": "^4.1.16"
   },
   "pnpm": {
