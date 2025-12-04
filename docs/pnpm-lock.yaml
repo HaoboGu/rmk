@@ -30,6 +30,9 @@ importers:
       prettier:
         specifier: 3.6.2
         version: 3.6.2
+      rspress-plugin-sitemap:
+        specifier: ^1.2.1
+        version: 1.2.1
       tailwindcss:
         specifier: ^4.1.16
         version: 4.1.16
@@ -1625,6 +1628,9 @@ packages:
 
   rspack-plugin-virtual-module@0.1.13:
     resolution: {integrity: sha512-VC0HiVHH6dtGfTgfpbDgVTt6LlYv+uAg9CWGWAR5lBx9FbKPEZeGz7iRUUP8vMymx+PGI8ps0u4a25dne0rtuQ==}
+
+  rspress-plugin-sitemap@1.2.1:
+    resolution: {integrity: sha512-JMf2/SKerX3oiFuNaRAnPJxOtBl5hOF0qupK63Fh9CaTb6Mn440iximV+1V0fd/XeOhHlN0oLJPFUDrrkgkcwg==}
 
   rspress@1.45.8:
     resolution: {integrity: sha512-CThi6ZwavnJi5RuyB5QfF9g1kwZ7k51mN5xogEesru235O45kxWuAsy2QeFZdWI8zqcTaaBRiwuYCxK9zQOYdA==}
@@ -3930,6 +3936,8 @@ snapshots:
   rspack-plugin-virtual-module@0.1.13:
     dependencies:
       fs-extra: 11.3.2
+
+  rspress-plugin-sitemap@1.2.1: {}
 
   rspress@1.45.8(webpack@5.102.1):
     dependencies:
