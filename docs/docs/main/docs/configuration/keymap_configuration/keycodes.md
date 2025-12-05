@@ -151,6 +151,38 @@ When used in configuration files, all keycodes are case-insensitive.
 | `Language8`      | `language_8`, `lng8`      | Language 8             |
 | `Language9`      | `language_9`, `lng9`      | Language 9             |
 
+## Consumer keys
+
+| Keycode | Aliases                      | Usage                                                     |
+| ------- | ---------------------------- | --------------------------------------------------------- |
+| `Mute`  | `mute`, `audio_mute`           | Audio Mute                                                |
+| `VolU`  | `volu`, `audio_vol_up`         | Audio Volume Up                                           |
+| `VolD`  | `vold`, `audio_vol_down`       | Audio Volume Down                                         |
+| `MNxt`  | `mnxt`, `media_next`         | Media Next Track                                          |
+| `MPrv`  | `mprv`, `media_prev`         | Media Previous Track                                      |
+| `MStp`  | `mstp`, `media_stop`         | Media Stop                                                |
+| `MPly`  | `mply`, `media_play_pause`   | Media Play/Pause                                          |
+| `MFfd`  | `mffd`, `media_fast_forward` | Media Fast Forward                                        |
+| `MRwd`  | `mrwd`, `media_rewind`       | Media Rewind                                              |
+| `MSel`  | `msel`, `media_select`       | Media Select / Record                                     |
+| `Ejct`  | `ejct`, `media_eject`        | Media Eject                                               |
+| `Mail`  | `mail`, `launch_mail`        | Open Email Client                                         |
+| `Calc`  | `calc`, `launch_calculator`  | Open Calculator                                           |
+| `MyCm`  | `mycm`, `launch_computer`    | Open “My Computer” / File Explorer                        |
+| `WSch`  | `wsch`, `www_search`         | Browser Search                                            |
+| `WHom`  | `whom`, `www_home`           | Browser Home                                              |
+| `WBak`  | `wbak`, `www_back`           | Browser Back                                              |
+| `WFwd`  | `wfwd`, `www_forward`        | Browser Forward                                           |
+| `WStp`  | `wstp`, `www_stop`           | Browser Stop                                              |
+| `WRef`  | `wref`, `www_refresh`        | Browser Refresh                                           |
+| `WFav`  | `wfav`, `www_favorites`      | Browser Bookmarks/Favorites                               |
+| `BriU`  | `briu`, `brightness_up`      | Screen Brightness Up                                      |
+| `BriD`  | `brid`, `brightness_down`    | Screen Brightness Down                                    |
+| `CPnl`  | `cpnl`, `control_panel`      | Open Control Panel                                        |
+| `Asst`  | `asst`, `assistant`          | Open OS Assistant (Cortana/Google Assistant/Siri trigger) |
+| `MCtl`  | `mctl`, `mission_control`    | macOS Mission Control                                     |
+| `Lpad`  | `lpad`, `launchpad`          | macOS Launchpad                                           |
+
 ## Special keys
 
 | Keycode       | Aliases                                                | Usage                                   |
