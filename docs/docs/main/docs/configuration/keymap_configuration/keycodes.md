@@ -155,9 +155,9 @@ When used in configuration files, all keycodes are case-insensitive.
 
 | Keycode | Aliases                      | Usage                                                     |
 | ------- | ---------------------------- | --------------------------------------------------------- |
-| `Mute`  | `mute`, `audio_mute`           | Audio Mute                                                |
-| `VolU`  | `volu`, `audio_vol_up`         | Audio Volume Up                                           |
-| `VolD`  | `vold`, `audio_vol_down`       | Audio Volume Down                                         |
+| `Mute`  | `mute`, `audio_mute`         | Audio Mute                                                |
+| `VolU`  | `volu`, `audio_vol_up`       | Audio Volume Up                                           |
+| `VolD`  | `vold`, `audio_vol_down`     | Audio Volume Down                                         |
 | `MNxt`  | `mnxt`, `media_next`         | Media Next Track                                          |
 | `MPrv`  | `mprv`, `media_prev`         | Media Previous Track                                      |
 | `MStp`  | `mstp`, `media_stop`         | Media Stop                                                |
