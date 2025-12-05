@@ -1057,10 +1057,10 @@ impl KeyCode {
             KeyCode::VolD => ConsumerKey::VolumeDecrement, // Audio Volume Dn
             KeyCode::MNxt => ConsumerKey::NextTrack, // Media Next Track
             KeyCode::MPrv => ConsumerKey::PrevTrack, // Media Previous Track
-            KeyCode::MStp => ConsumerKey::StopPlay, // Media Next Track
-            KeyCode::MPly => ConsumerKey::PlayPause, // Media Next Track
-            KeyCode::MSel => ConsumerKey::Record, // Media Next Track
-            KeyCode::Ejct => ConsumerKey::Eject, // Media Next Track
+            KeyCode::MStp => ConsumerKey::StopPlay, // Media Stop
+            KeyCode::MPly => ConsumerKey::PlayPause, // Media Play/Pause
+            KeyCode::MSel => ConsumerKey::Record, // Media Select
+            KeyCode::Ejct => ConsumerKey::Eject, // Media Eject
             KeyCode::Mail => ConsumerKey::Email, // Mail
             KeyCode::Calc => ConsumerKey::Calculator, // Calculator
             KeyCode::MyCm => ConsumerKey::LocalBrowser, // My Computer
