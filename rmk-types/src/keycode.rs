@@ -1052,33 +1052,33 @@ impl KeyCode {
     /// Convert a keycode to usb hid media key
     pub fn as_consumer_control_usage_id(self) -> ConsumerKey {
         match self {
-            KeyCode::AudioMute => ConsumerKey::Mute,
-            KeyCode::AudioVolUp => ConsumerKey::VolumeIncrement,
-            KeyCode::AudioVolDown => ConsumerKey::VolumeDecrement,
-            KeyCode::MediaNextTrack => ConsumerKey::NextTrack,
-            KeyCode::MediaPrevTrack => ConsumerKey::PrevTrack,
-            KeyCode::MediaStop => ConsumerKey::StopPlay,
-            KeyCode::MediaPlayPause => ConsumerKey::PlayPause,
-            KeyCode::MediaSelect => ConsumerKey::Record,
-            KeyCode::MediaEject => ConsumerKey::Eject,
-            KeyCode::Mail => ConsumerKey::Email,
-            KeyCode::Calculator => ConsumerKey::Calculator,
-            KeyCode::MyComputer => ConsumerKey::LocalBrowser,
-            KeyCode::WwwSearch => ConsumerKey::Search,
-            KeyCode::WwwHome => ConsumerKey::Home,
-            KeyCode::WwwBack => ConsumerKey::Back,
-            KeyCode::WwwForward => ConsumerKey::Forward,
-            KeyCode::WwwStop => ConsumerKey::Stop,
-            KeyCode::WwwRefresh => ConsumerKey::Refresh,
-            KeyCode::WwwFavorites => ConsumerKey::Bookmarks,
-            KeyCode::MediaFastForward => ConsumerKey::FastForward,
-            KeyCode::MediaRewind => ConsumerKey::Rewind,
-            KeyCode::BrightnessUp => ConsumerKey::BrightnessUp,
-            KeyCode::BrightnessDown => ConsumerKey::BrightnessDown,
-            KeyCode::ControlPanel => ConsumerKey::ControlPanel,
-            KeyCode::Assistant => ConsumerKey::Assistant,
-            KeyCode::MissionControl => ConsumerKey::DesktopShowAllWindows,
-            KeyCode::Launchpad => ConsumerKey::AcSoftKeyLeft,
+            KeyCode::Mute => ConsumerKey::Mute, // AudioMute
+            KeyCode::VolU => ConsumerKey::VolumeIncrement, // Audio Volume Up
+            KeyCode::VolD => ConsumerKey::VolumeDecrement, // Audio Volume Dn
+            KeyCode::MNxt => ConsumerKey::NextTrack, // Media Next Track
+            KeyCode::MPrv => ConsumerKey::PrevTrack, // Media Previous Track
+            KeyCode::MStp => ConsumerKey::StopPlay, // Media Next Track
+            KeyCode::MPly => ConsumerKey::PlayPause, // Media Next Track
+            KeyCode::MSel => ConsumerKey::Record, // Media Next Track
+            KeyCode::Ejct => ConsumerKey::Eject, // Media Next Track
+            KeyCode::Mail => ConsumerKey::Email, // Mail
+            KeyCode::Calc => ConsumerKey::Calculator, // Calculator
+            KeyCode::MyCm => ConsumerKey::LocalBrowser, // My Computer
+            KeyCode::WSch => ConsumerKey::Search, // WWW Search
+            KeyCode::WHom => ConsumerKey::Home, // WWW Home
+            KeyCode::WBak => ConsumerKey::Back, // WWW Back
+            KeyCode::WFwd => ConsumerKey::Forward, // WWW Forward
+            KeyCode::WStp => ConsumerKey::Stop, // WWW Stop
+            KeyCode::WRef => ConsumerKey::Refresh, // WWW Refresh
+            KeyCode::WFav => ConsumerKey::Bookmarks, // WWW Favorites
+            KeyCode::MFfd => ConsumerKey::FastForward, // Media Fast Forward
+            KeyCode::MRwd => ConsumerKey::Rewind, // Media Rewind
+            KeyCode::BriU => ConsumerKey::BrightnessUp, // Brightness Up
+            KeyCode::BriD => ConsumerKey::BrightnessDown, // Brightness Down
+            KeyCode::CPnl => ConsumerKey::ControlPanel, // Control Panel
+            KeyCode::Asst => ConsumerKey::Assistant, // Assistant
+            KeyCode::MCtl => ConsumerKey::DesktopShowAllWindows, // Mission Control
+            KeyCode::Lpad => ConsumerKey::AcSoftKeyLeft, // Launchpad
             _ => ConsumerKey::No,
         }
     }
