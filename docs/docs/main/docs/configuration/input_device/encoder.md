@@ -57,6 +57,25 @@ pin_b = "P0_04"
 phase = "default"
 ```
 
+Defining Encoder Actions in `keyboard.toml`:
+
+```toml
+# The map of actions/keycodes triggered by the encoder.
+# This is typically an array of layers, where each layer contains two actions:
+# [Action for Clockwise (CW) rotation, Action for Counter-Clockwise (CCW) rotation].
+#
+# The outer array index corresponds to the keyboard layer (e.g., [0] is base layer).
+#
+# Encoder 0
+# - Layer 0: CW -> VolUp, CCW -> VolDn
+# - Layer 1: CW -> PgDn, CCW -> PgUp
+encoder_map = [["VolUp", "VolDn"], ["PgDn", "PgUp"]]
+# Encoder 1
+# - Layer 0: No action ("_")
+# - Layer 1: CW -> Briu (Brightness up), CCW -> Brid (Brightness down)
+encoder_map = [["_", "_"], ["Briu", "Brid"]]
+```
+
 ## Rust configuration
 
 With Rust, you can define a rotary encoder as the following:
@@ -90,4 +109,27 @@ Then add the encoder to the device list of `run_device`.
         run_rmk(&keymap, driver, storage, rmk_config, sd),
     )
     .await;
+```
+
+Defining Encoder Actions in `keymap.rs`:
+
+```rust
+pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
+    [
+    ... // Standard keymap definition
+    ]
+}
+
+pub const fn get_default_encoder_map() -> [[EncoderAction; NUM_ENCODER]; NUM_LAYER] {
+    [
+        // Layer 0
+        [
+            // Encoder 0: (Clockwise, Counter-Clockwise)
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)), 
+            // Encoder 1:
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)), 
+        ],
+        ...
+    ]
+}
 ```
