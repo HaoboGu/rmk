@@ -66,13 +66,13 @@ Defining Encoder Actions in `keyboard.toml`:
 #
 # The outer array index corresponds to the keyboard layer (e.g., [0] is base layer).
 #
-# Encoder 0
-# - Layer 0: CW -> VolUp, CCW -> VolDn
-# - Layer 1: CW -> PgDn, CCW -> PgUp
+# Layer 0
+# - Encoder 0: CW -> VolUp, CCW -> VolDn
+# - Encoder 1: CW -> PgDn, CCW -> PgUp
 encoder_map = [["VolUp", "VolDn"], ["PgDn", "PgUp"]]
-# Encoder 1
-# - Layer 0: No action ("_")
-# - Layer 1: CW -> Briu (Brightness up), CCW -> Brid (Brightness down)
+# Layer 1
+# - Encoder 0: No action ("_")
+# - Encoder 1: CW -> Briu (Brightness up), CCW -> Brid (Brightness down)
 encoder_map = [["_", "_"], ["Briu", "Brid"]]
 ```
 
