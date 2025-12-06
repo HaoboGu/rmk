@@ -155,6 +155,19 @@ async fn main(spawner: Spawner) {
     let pin_b = Input::new(p.P1_04, embassy_nrf::gpio::Pull::None);
     let mut encoder = RotaryEncoder::with_resolution(pin_a, pin_b, 4, true, 1);
 
+    // TODO: Battery monitoring for peripheral
+    // To enable battery level reporting to central, you need to:
+    // 1. Initialize ADC device:
+    //    let mut adc_device = NrfAdc::new(
+    //        saadc,
+    //        [AnalogEventType::Battery],
+    //        embassy_time::Duration::from_secs(12),
+    //        None,
+    //    );
+    // 2. Add BatteryProcessor (requires keymap - this is a known limitation)
+    // 3. Add both to run_devices! and run_processor_chain!
+    // See examples/use_rust/nrf52840_ble/src/main.rs for reference
+
     // Start
     join(
         run_devices! (

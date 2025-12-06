@@ -98,11 +98,9 @@ mod cccd_table_serde {
         S: Serializer,
     {
         let mut entries = [(0u16, 0u16); CCCD_TABLE_SIZE];
-        let inner = table.inner();
-        for i in 0..CCCD_TABLE_SIZE {
-            if let Some(entry) = inner.get(i) {
-                entries[i] = (entry.0, entry.1.raw());
-            }
+
+        for (i, entry) in table.inner().iter().enumerate() {
+            entries[i] = (entry.0, entry.1.raw());
         }
         entries.serialize(serializer)
     }
