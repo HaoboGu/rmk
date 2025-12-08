@@ -711,12 +711,9 @@ pub struct JoystickConfig {
 pub struct Pmw3610Config {
     /// Name of the sensor (used for variable naming)
     pub name: String,
-    /// SPI clock pin
-    pub sclk: String,
-    /// SPI bidirectional data pin (SDIO)
-    pub sdio: String,
-    /// Chip select pin
-    pub cs: String,
+    /// SPI pins
+    #[serde(flatten)]
+    pub spi: SpiConfig,
     /// Optional motion interrupt pin
     pub motion: Option<String>,
     /// CPI resolution (200-3200, step 200). Optional, uses sensor default if not set.

@@ -35,9 +35,22 @@ pub(crate) fn expand_pmw3610_device(
         let processor_ident = format_ident!("{}_processor", sensor_name);
 
         // Generate pin initialization
-        let sclk_ident = format_ident!("{}", sensor.sclk);
-        let sdio_ident = format_ident!("{}", sensor.sdio);
-        let cs_ident = format_ident!("{}", sensor.cs);
+        let spi = &sensor.spi;
+        let mosi_pin = &spi.mosi;
+        let miso_pin = &spi.miso;
+
+        if mosi_pin.is_empty() && miso_pin.is_empty() {
+            panic!("pmw3610 requires at least one of spi.mosi or spi.miso");
+        }
+        if !(mosi_pin == miso_pin || mosi_pin.is_empty() || miso_pin.is_empty()) {
+            panic!("pmw3610 requires spi.mosi == spi.miso, or one of them empty");
+        }
+
+        let sdio_pin = if mosi_pin.is_empty() { miso_pin } else { mosi_pin };
+
+        let sck_ident = format_ident!("{}", spi.sck);
+        let sdio_ident = format_ident!("{}", sdio_pin);
+        let cs_ident = format_ident!("{}", spi.cs.as_ref().expect("pmw3610 requires `cs` in spi config"));
 
         // Generate config values
         let res_cpi: i16 = sensor.cpi.map(|c| c as i16).unwrap_or(-1);
@@ -78,12 +91,12 @@ pub(crate) fn expand_pmw3610_device(
                     use ::embassy_nrf::gpio::{Output, Flex, Level, OutputDrive};
                     use ::rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610Config, Pmw3610Device};
 
-                    let sclk = Output::new(p.#sclk_ident, Level::High, OutputDrive::Standard);
+                    let sck = Output::new(p.#sck_ident, Level::High, OutputDrive::Standard);
                     let sdio = Flex::new(p.#sdio_ident);
                     let cs = Output::new(p.#cs_ident, Level::High, OutputDrive::Standard);
                     let motion = #motion_pin_init;
 
-                    let spi_bus = BitBangSpiBus::new(sclk, sdio);
+                    let spi_bus = BitBangSpiBus::new(sck, sdio);
 
                     let config = Pmw3610Config {
                         res_cpi: #res_cpi,
@@ -102,12 +115,12 @@ pub(crate) fn expand_pmw3610_device(
                     use ::embassy_rp::gpio::{Output, Flex, Level};
                     use ::rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610Config, Pmw3610Device};
 
-                    let sclk = Output::new(p.#sclk_ident, Level::High);
+                    let sck = Output::new(p.#sck_ident, Level::High);
                     let sdio = Flex::new(p.#sdio_ident);
                     let cs = Output::new(p.#cs_ident, Level::High);
                     let motion = #motion_pin_init;
 
-                    let spi_bus = BitBangSpiBus::new(sclk, sdio);
+                    let spi_bus = BitBangSpiBus::new(sck, sdio);
 
                     let config = Pmw3610Config {
                         res_cpi: #res_cpi,
