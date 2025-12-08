@@ -712,7 +712,6 @@ pub struct Pmw3610Config {
     /// Name of the sensor (used for variable naming)
     pub name: String,
     /// SPI pins
-    #[serde(flatten)]
     pub spi: SpiConfig,
     /// Optional motion interrupt pin
     pub motion: Option<String>,
