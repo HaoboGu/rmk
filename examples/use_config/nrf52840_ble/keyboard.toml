@@ -159,7 +159,7 @@ combo_max_num = 128
 fork_max_num = 16
 
 # IGNORE/DONT-INCLUDE THIS SECTION Unless you're using custom nRF52840 based board (Eg not a nice!nano)
-[chip]
+[chip.nrf52840]
 # DCDC regulator 0 enabled (default: true)
 dcdc_reg0 = true
 # DCDC regulator 1 enabled (default: true)

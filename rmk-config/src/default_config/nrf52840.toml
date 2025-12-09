@@ -11,7 +11,7 @@ start_addr = 0xA0000
 # Storage uses 128K = 640K ~ 768K
 num_sectors = 32
 
-[chip]
+[chip.nrf52840]
 # DCDC regulator 0 enabled (default: true)
 dcdc_reg0 = false
 # DCDC regulator 1 enabled (default: true)
