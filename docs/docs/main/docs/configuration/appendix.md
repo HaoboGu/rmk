@@ -356,7 +356,8 @@ unlock_keys = [[0, 0], [0, 1]]
 
 # Chip-specific configuration
 # To use the default configuration, ignore this section completely
-[chip]
+# Use chip-specific sections like [chip.nrf52840] for chip-specific settings
+[chip.nrf52840]
 # DCDC regulator 0 enabled (nrf52840 only, default: true)
 # **Note**: Do not enable DC/DC regulator without an external LC filter being connected
 # as this will inhibit device operation, including debug access, until an LC filter is connected.
