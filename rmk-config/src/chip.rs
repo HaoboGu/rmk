@@ -1,4 +1,5 @@
-use crate::{ChipConfig, KeyboardTomlConfig};
+use crate::ChipConfig;
+use crate::KeyboardTomlConfig;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum ChipSeries {
@@ -116,6 +117,11 @@ impl KeyboardTomlConfig {
     }
 
     pub fn get_chip_config(&self) -> ChipConfig {
-        self.chip.clone().unwrap_or_default()
+        let chip_name = &self.get_chip_model().unwrap().chip;
+        self.chip
+            .as_ref()
+            .and_then(|chip_configs| chip_configs.get(chip_name))
+            .cloned()
+            .unwrap_or_default()
     }
 }

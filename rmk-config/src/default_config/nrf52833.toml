@@ -11,7 +11,7 @@ start_addr = 0x64000
 # Storage uses 64K = 400K ~ 464K
 num_sectors = 16
 
-[chip]
+[chip.nrf52833]
 # DCDC regulator 1 enabled (default: true)
 # Note: nrf52833 only has reg1, not reg0
 dcdc_reg1 = true 

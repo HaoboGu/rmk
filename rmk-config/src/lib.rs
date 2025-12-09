@@ -48,8 +48,8 @@ pub struct KeyboardTomlConfig {
     storage: Option<StorageConfig>,
     /// Ble config
     ble: Option<BleConfig>,
-    /// Chip config
-    chip: Option<ChipConfig>,
+    /// Chip-specific configs (e.g., [chip.nrf52840])
+    chip: Option<HashMap<String, ChipConfig>>,
     /// Dependency config
     dependency: Option<DependencyConfig>,
     /// Split config
