@@ -244,15 +244,6 @@ When used in configuration files, all keycodes are case-insensitive.
 | `ClearAgain`  | `clear_again`, `clag`         | Clear Again                           |
 | `Crsel`       | `crsl`                        | Cursor Select                         |
 | `Exsel`       | `exsl`                        | Extend Selection                      |
-| `Paste`       | `pste`                        | Paste                                 |
-| `Cut`         | —                             | Cut                                   |
-| `Copy`        | —                             | Copy                                  |
-| `Find`        | —                             | Find                                  |
-| `Clear`       | `clr`                         | Clear                                 |
-| `Select`      | `slct`                        | Select                                |
-| `ClearAgain`  | `clear_again`, `clag`         | Clear again                           |
-| `Crsel`       | `crsl`                        | Cursor select                         |
-| `Exsel`       | `exsl`                        | Extend selection                      |
 
 ## Mouse keys
 
