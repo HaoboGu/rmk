@@ -132,25 +132,6 @@ impl KeyState {
     }
 }
 
-pub trait RowPins<const COL2ROW: bool> {
-    type RowPinsType;
-}
-pub trait ColPins<const COL2ROW: bool> {
-    type ColPinsType;
-}
-
-pub trait MatrixOutputPins<Out: OutputPin> {
-    fn get_output_pins(&self) -> &[Out];
-    fn get_output_pins_mut(&mut self) -> &mut [Out];
-}
-
-pub trait MatrixInputPins<In: InputPin> {
-    fn get_input_pins(&self) -> &[In];
-    fn get_input_pins_mut(&mut self) -> &mut [In];
-    #[cfg(feature = "async_matrix")]
-    async fn wait_input_pins(&mut self);
-}
-
 /// Matrix is the physical pcb layout of the keyboard matrix.
 pub struct Matrix<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
@@ -160,14 +141,11 @@ pub struct Matrix<
     const ROW: usize,
     const COL: usize,
     const COL2ROW: bool,
-> where
-    Self: RowPins<COL2ROW>,
-    Self: ColPins<COL2ROW>,
-{
+> {
     /// Row pins of the pcb matrix
-    row_pins: <Self as RowPins<COL2ROW>>::RowPinsType,
+    row_pins: [In; ROW],
     /// Column pins of the pcb matrix
-    col_pins: <Self as ColPins<COL2ROW>>::ColPinsType,
+    col_pins: [Out; COL],
     /// Debouncer
     debouncer: D,
     /// Key state matrix
@@ -176,147 +154,7 @@ pub struct Matrix<
     scan_pos: (usize, usize),
     /// Re-scan needed flag
     #[cfg(feature = "async_matrix")]
-    rescan_needed: bool
-}
-
-impl<
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    Out: OutputPin,
-    D: DebouncerTrait<ROW, COL>,
-    const ROW: usize,
-    const COL: usize,
-> RowPins<true> for Matrix<In, Out, D, ROW, COL, true>
-{
-    type RowPinsType = [In; ROW];
-}
-
-impl<
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    Out: OutputPin,
-    D: DebouncerTrait<ROW, COL>,
-    const ROW: usize,
-    const COL: usize,
-> RowPins<false> for Matrix<In, Out, D, ROW, COL, false>
-{
-    type RowPinsType = [Out; ROW];
-}
-
-impl<
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    Out: OutputPin,
-    D: DebouncerTrait<ROW, COL>,
-    const ROW: usize,
-    const COL: usize,
-> ColPins<false> for Matrix<In, Out, D, ROW, COL, false>
-{
-    type ColPinsType = [In; COL];
-}
-
-impl<
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    Out: OutputPin,
-    D: DebouncerTrait<ROW, COL>,
-    const ROW: usize,
-    const COL: usize,
-> ColPins<true> for Matrix<In, Out, D, ROW, COL, true>
-{
-    type ColPinsType = [Out; COL];
-}
-
-impl<
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    Out: OutputPin,
-    D: DebouncerTrait<ROW, COL>,
-    const ROW: usize,
-    const COL: usize,
-> MatrixOutputPins<Out> for Matrix<In, Out, D, ROW, COL, true>
-{
-    fn get_output_pins(&self) -> &[Out] {
-        &self.col_pins
-    }
-
-    fn get_output_pins_mut(&mut self) -> &mut [Out] {
-        &mut self.col_pins
-    }
-}
-
-impl<
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    Out: OutputPin,
-    D: DebouncerTrait<ROW, COL>,
-    const ROW: usize,
-    const COL: usize,
-> MatrixOutputPins<Out> for Matrix<In, Out, D, ROW, COL, false>
-{
-    fn get_output_pins(&self) -> &[Out] {
-        &self.row_pins
-    }
-
-    fn get_output_pins_mut(&mut self) -> &mut [Out] {
-        &mut self.row_pins
-    }
-}
-
-impl<
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    Out: OutputPin,
-    D: DebouncerTrait<ROW, COL>,
-    const ROW: usize,
-    const COL: usize,
-> MatrixInputPins<In> for Matrix<In, Out, D, ROW, COL, true>
-{
-    fn get_input_pins(&self) -> &[In] {
-        &self.row_pins
-    }
-
-    fn get_input_pins_mut(&mut self) -> &mut [In] {
-        &mut self.row_pins
-    }
-
-    #[cfg(feature = "async_matrix")]
-    async fn wait_input_pins(&mut self) {
-        let mut futs: Vec<_, ROW> = self
-            .get_input_pins_mut()
-            .iter_mut()
-            .map(|input_pin| input_pin.wait_for_high())
-            .collect();
-        let _ = select_slice(pin!(futs.as_mut_slice())).await;
-    }
-}
-
-impl<
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    Out: OutputPin,
-    D: DebouncerTrait<ROW, COL>,
-    const ROW: usize,
-    const COL: usize,
-> MatrixInputPins<In> for Matrix<In, Out, D, ROW, COL, false>
-{
-    fn get_input_pins(&self) -> &[In] {
-        &self.col_pins
-    }
-
-    fn get_input_pins_mut(&mut self) -> &mut [In] {
-        &mut self.col_pins
-    }
-
-    #[cfg(feature = "async_matrix")]
-    async fn wait_input_pins(&mut self) {
-        let mut futs: Vec<_, COL> = self
-            .get_input_pins_mut()
-            .iter_mut()
-            .map(|input_pin| input_pin.wait_for_high())
-            .collect();
-        let _ = select_slice(pin!(futs.as_mut_slice())).await;
-    }
+    rescan_needed: bool,
 }
 
 impl<
@@ -328,19 +166,9 @@ impl<
     const COL: usize,
     const COL2ROW: bool,
 > Matrix<In, Out, D, ROW, COL, COL2ROW>
-where
-    Self: RowPins<COL2ROW>,
-    Self: ColPins<COL2ROW>,
 {
-    const OUTPUT_PIN_NUM: usize = const { if COL2ROW { COL } else { ROW } };
-    const INPUT_PIN_NUM: usize = const { if COL2ROW { ROW } else { COL } };
-
     /// Create a matrix from input and output pins.
-    pub fn new(
-        row_pins: <Self as RowPins<COL2ROW>>::RowPinsType,
-        col_pins: <Self as ColPins<COL2ROW>>::ColPinsType,
-        debouncer: D,
-    ) -> Self {
+    pub fn new(row_pins: [In; ROW], col_pins: [Out; COL], debouncer: D) -> Self {
         Matrix {
             row_pins,
             col_pins,
@@ -352,27 +180,22 @@ where
         }
     }
 
-    fn get_key_event(&self, out_idx: usize, in_idx: usize) -> KeyboardEvent {
+    #[cfg(feature = "async_matrix")]
+    async fn wait_input_pins(&mut self) {
         if COL2ROW {
-            KeyboardEvent::key(in_idx as u8, out_idx as u8, self.key_states[out_idx][in_idx].pressed)
+            let mut futs: Vec<_, ROW> = self
+                .row_pins
+                .iter_mut()
+                .map(|input_pin| input_pin.wait_for_high())
+                .collect();
+            let _ = select_slice(pin!(futs.as_mut_slice())).await;
         } else {
-            KeyboardEvent::key(out_idx as u8, in_idx as u8, self.key_states[in_idx][out_idx].pressed)
-        }
-    }
-
-    fn get_key_state(&self, out_idx: usize, in_idx: usize) -> KeyState {
-        if COL2ROW {
-            self.key_states[out_idx][in_idx]
-        } else {
-            self.key_states[in_idx][out_idx]
-        }
-    }
-
-    fn toggle_key_state(&mut self, out_idx: usize, in_idx: usize) {
-        if COL2ROW {
-            self.key_states[out_idx][in_idx].toggle_pressed();
-        } else {
-            self.key_states[in_idx][out_idx].toggle_pressed();
+            let mut futs: Vec<_, ROW> = self
+                .row_pins
+                .iter_mut()
+                .map(|input_pin| input_pin.wait_for_low())
+                .collect();
+            let _ = select_slice(pin!(futs.as_mut_slice())).await;
         }
     }
 }
@@ -386,59 +209,66 @@ impl<
     const COL: usize,
     const COL2ROW: bool,
 > InputDevice for Matrix<In, Out, D, ROW, COL, COL2ROW>
-where
-    Self: RowPins<COL2ROW>,
-    Self: ColPins<COL2ROW>,
-    Self: MatrixOutputPins<Out>,
-    Self: MatrixInputPins<In>,
 {
     async fn read_event(&mut self) -> crate::event::Event {
         loop {
-            let (out_idx_start, in_idx_start) = self.scan_pos;
+            let (col_idx_start, row_idx_start) = self.scan_pos;
 
             // Scan matrix and send report
-            for out_idx in out_idx_start..Self::OUTPUT_PIN_NUM {
-                // Pull up output pin, wait 1us ensuring the change comes into effect
-                if let Some(out_pin) = self.get_output_pins_mut().get_mut(out_idx) {
-                    out_pin.set_high().ok();
+            for col_idx in col_idx_start..COL {
+                // Activate output pin, wait 1us ensuring the change comes into effect
+                if COL2ROW {
+                    self.col_pins[col_idx].set_high().ok();
+                } else {
+                    self.col_pins[col_idx].set_low().ok();
                 }
+
                 // This may take >1ms on some platforms if other tasks are running!
                 Timer::after_micros(1).await;
 
-                for in_idx in in_idx_start..Self::INPUT_PIN_NUM {
-                    let in_pin_state = if let Some(in_pin) = self.get_input_pins_mut().get_mut(in_idx) {
-                        in_pin.is_high().ok().unwrap_or_default()
+                let start = if col_idx == col_idx_start { row_idx_start } else { 0 };
+
+                for row_idx in start..ROW {
+                    let in_pin_state = if COL2ROW {
+                        self.row_pins[row_idx].is_high().ok().unwrap_or_default()
                     } else {
-                        false
+                        self.row_pins[row_idx].is_low().ok().unwrap_or_default()
                     };
+
                     // Check input pins and debounce
                     let debounce_state = self.debouncer.detect_change_with_debounce(
-                        in_idx,
-                        out_idx,
+                        row_idx,
+                        col_idx,
                         in_pin_state,
-                        &self.get_key_state(out_idx, in_idx),
+                        &self.key_states[col_idx][row_idx],
                     );
 
                     if let DebounceState::Debounced = debounce_state {
-                        self.toggle_key_state(out_idx, in_idx);
-                        self.scan_pos = (out_idx, in_idx);
+                        self.key_states[col_idx][row_idx].toggle_pressed();
+                        self.scan_pos = (col_idx, row_idx);
                         #[cfg(feature = "async_matrix")]
                         {
                             self.rescan_needed = true;
                         }
-                        return Event::Key(self.get_key_event(out_idx, in_idx));
+                        return Event::Key(KeyboardEvent::key(
+                            row_idx as u8,
+                            col_idx as u8,
+                            self.key_states[col_idx][row_idx].pressed,
+                        ));
                     }
 
                     // If there's key still pressed, always refresh the self.scan_start
                     #[cfg(feature = "async_matrix")]
-                    if self.get_key_state(out_idx, in_idx).pressed {
+                    if self.key_states[col_idx][row_idx].pressed {
                         self.rescan_needed = true;
                     }
                 }
 
-                // Pull it back to low
-                if let Some(out_pin) = self.get_output_pins_mut().get_mut(out_idx) {
-                    out_pin.set_low().ok();
+                // deactivate output pin
+                if COL2ROW {
+                    self.col_pins[col_idx].set_low().ok();
+                } else {
+                    self.col_pins[col_idx].set_high().ok();
                 }
             }
 
@@ -463,25 +293,28 @@ impl<
     const COL: usize,
     const COL2ROW: bool,
 > MatrixTrait<ROW, COL> for Matrix<In, Out, D, ROW, COL, COL2ROW>
-where
-    Self: RowPins<COL2ROW>,
-    Self: ColPins<COL2ROW>,
-    Self: MatrixOutputPins<Out>,
-    Self: MatrixInputPins<In>,
 {
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
-        // First, set all output pins to high
-        for out in self.get_output_pins_mut().iter_mut() {
-            out.set_high().ok();
+        // First, activate all output pins
+        for out in self.col_pins.iter_mut() {
+            if COL2ROW {
+                out.set_high().ok();
+            } else {
+                out.set_low().ok();
+            }
         }
 
-        // Wait for any key press
+        // Wait for any key press (any input pin activation)
         self.wait_input_pins().await;
 
-        // Set all output pins back to low
-        for out in self.get_output_pins_mut().iter_mut() {
-            out.set_low().ok();
+        // deactivate all output pins
+        for out in self.col_pins.iter_mut() {
+            if COL2ROW {
+                out.set_low().ok();
+            } else {
+                out.set_high().ok();
+            }
         }
     }
 }
