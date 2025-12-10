@@ -315,6 +315,12 @@ pub(crate) fn parse_key(key: String, profiles: &Option<HashMap<String, MorseProf
                 );
             }
         }
+        s if s.to_lowercase().starts_with("macro(") => {
+            let number = get_number(s.clone(), s.get(0..6).unwrap(), ")");
+            quote! {
+                ::rmk::macros!(#number)
+            }
+        }
         // s if s.to_lowercase().starts_with("hrm(") => {
         //     let prefix = s.get(0..4).unwrap();
         //     if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {

@@ -223,6 +223,6 @@ macro_rules! morse {
 #[macro_export]
 macro_rules! macros {
     ($index: literal) => {
-        $crate::action::KeyAction::Single($crate::action::Action::TriggerMacro($index))
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::TriggerMacro($index))
     };
 }

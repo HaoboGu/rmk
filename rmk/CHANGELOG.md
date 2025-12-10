@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix compilation error when use `Macro()` in keymap config
+
 ## [0.8.1] - 2025-11-25
 
 ### Changed
