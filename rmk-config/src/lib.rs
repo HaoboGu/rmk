@@ -283,8 +283,9 @@ pub struct LayoutTomlConfig {
     pub rows: u8,
     pub cols: u8,
     pub layers: u8,
-    pub keymap: Option<Vec<Vec<Vec<String>>>>, // will be deprecated in the future
-    pub matrix_map: Option<String>,            //temporarily allow both matrix_map and keymap to be set
+    pub keymap: Option<Vec<Vec<Vec<String>>>>, // Will be deprecated in the future
+    pub matrix_map: Option<String>,            // Temporarily allow both matrix_map and keymap to be set
+    pub encoder_map: Option<Vec<Vec<[String; 2]>>>, // Encoder map
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -422,6 +423,7 @@ pub struct LayoutConfig {
     pub cols: u8,
     pub layers: u8,
     pub keymap: Vec<Vec<Vec<String>>>,
+    pub encoder_map: Option<Vec<Vec<[String; 2]>>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

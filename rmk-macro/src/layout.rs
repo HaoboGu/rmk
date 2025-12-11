@@ -18,15 +18,35 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> Tok
     let num_encoder = keyboard_config.get_board_config().unwrap().get_num_encoder();
     let total_num_encoder = num_encoder.iter().sum::<usize>();
 
-    // TODO: config encoder actions in keyboard.toml
-    let encoders = vec![quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No))}; total_num_encoder];
-
     let (layout, _) = keyboard_config.get_layout_config().unwrap();
+    let configured_encoder_map = layout.encoder_map.as_ref();
+
     let mut layers = vec![];
     let mut encoder_map = vec![];
-    for layer in layout.keymap {
-        layers.push(expand_layer(layer, profiles));
-        encoder_map.push(quote! { [#(#encoders), *] });
+
+    for (layer_idx, layer) in layout.keymap.iter().enumerate() {
+        layers.push(expand_layer(layer.clone(), profiles));
+
+        // Build encoder actions for this layer
+        let mut layer_encoders = vec![];
+
+        if let Some(encoder_map_config) = configured_encoder_map {
+            // Use configured encoder_map if available for this layer
+            if layer_idx < encoder_map_config.len() {
+                for encoder_actions in &encoder_map_config[layer_idx] {
+                    let cw_action = parse_key(encoder_actions[0].clone(), profiles);
+                    let ccw_action = parse_key(encoder_actions[1].clone(), profiles);
+                    layer_encoders.push(quote! { ::rmk::encoder!(#cw_action, #ccw_action) });
+                }
+            }
+        }
+
+        // Fill remaining encoders with No action if not enough configured
+        while layer_encoders.len() < total_num_encoder {
+            layer_encoders.push(quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)) });
+        }
+
+        encoder_map.push(quote! { [#(#layer_encoders), *] });
     }
 
     quote! {

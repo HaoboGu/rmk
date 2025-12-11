@@ -24,6 +24,15 @@ matrix_map = """
 (3,0) (3,1) (3,2) (3,3)
     (4,0)    (4,1)
 """
+
+# Encoder map: defines actions for each encoder on each layer
+# Layer 0: Encoder 0 - CW: AudioVolUp, CCW: AudioVolDown
+# Layer 1: Encoder 0 - CW: BrightnessUp, CCW: BrightnessDown
+encoder_map = [
+  [["AudioVolUp", "AudioVolDown"]],
+  [["BrightnessUp", "BrightnessDown"]]
+]
+
 [[layer]]
 name = "base_layer"
 keys = """
@@ -60,31 +69,9 @@ capslock.low_active = false
 [[input_device.encoder]]
 pin_a = "P0_29"
 pin_b = "P0_28"
-
-# Whether to use the MCU's internal pull-up resistor, default to false
 internal_pullup = false
-
-# Working mode of the encoder
-# Available modes:
-# - default: resolution = 1
-# - resolution: custom resolution, requires specifying resolution and reverse parameters
 phase = "resolution"
-
-# `resolution` represents the number of steps generated per detent.
-#
-# When your encoder datasheet lists:
-#   - detent = number of mechanical detent positions  
-#   - pulse  = number of full quadrature cycles (A/B cycles)  
-#
-# Then the relationship is:
-#   resolution = (pulse × 4) / detent
-# because each full quadrature cycle (pulse) produces 4 edge transitions.
-#
-# For example — in the ALPS EC11E series(https://tech.alpsalpine.com/cms.media/product_catalog_ec_01_ec11e_en_611f078659.pdf):
-#   detent = 30, pulse = 15 → resolution = (15 × 4) / 30 = 2
 resolution = 4
-
-# Whether the direction of the rotary encoder is reversed.
 reverse = false
 
 [storage]
