@@ -114,6 +114,34 @@ rusty_fork_test! {
     }
 
     #[test]
+    fn test_combo_hold_one_key() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_config(BehaviorConfig {
+                combo: get_combos_config(),
+                ..Default::default()
+            }),
+            sequence: [
+                [1, 3, true, 10],
+                [1, 4, true, 10],
+                [1, 4, false, 50],
+                [1, 4, true, 100],
+                [1, 4, false, 50],
+                [1, 4, true, 100],
+                [1, 4, false, 50],
+                [1, 3, false, 10],
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(A), kc_to_u8!(R), 0, 0, 0, 0]],
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(A), kc_to_u8!(R), 0, 0, 0, 0]],
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        }
+    }
+
+    #[test]
     fn test_combo_with_mod_then_mod_timeout() {
         key_sequence_test! {
             keyboard: create_test_keyboard_with_config(BehaviorConfig {
