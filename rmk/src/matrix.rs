@@ -176,7 +176,7 @@ pub struct Matrix<
     scan_pos: (usize, usize),
     /// Re-scan needed flag
     #[cfg(feature = "async_matrix")]
-    rescan_needed: bool
+    rescan_needed: bool,
 }
 
 impl<
@@ -412,9 +412,11 @@ where
                         false
                     };
                     // Check input pins and debounce
+                    // Convert in_idx/out_idx to row_idx/col_idx based on COL2ROW
+                    let (row_idx, col_idx) = if COL2ROW { (in_idx, out_idx) } else { (out_idx, in_idx) };
                     let debounce_state = self.debouncer.detect_change_with_debounce(
-                        in_idx,
-                        out_idx,
+                        row_idx,
+                        col_idx,
                         in_pin_state,
                         &self.get_key_state(out_idx, in_idx),
                     );
