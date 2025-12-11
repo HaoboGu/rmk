@@ -684,6 +684,7 @@ pub struct InputDeviceConfig {
     pub encoder: Option<Vec<EncoderConfig>>,
     pub pointing: Option<Vec<PointingDeviceConfig>>,
     pub joystick: Option<Vec<JoystickConfig>>,
+    pub pmw3610: Option<Vec<Pmw3610Config>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -701,6 +702,36 @@ pub struct JoystickConfig {
     pub transform: Vec<Vec<i16>>,
     pub bias: Vec<i16>,
     pub resolution: u16,
+}
+
+/// PMW3610 optical mouse sensor configuration
+#[derive(Clone, Debug, Default, Deserialize)]
+#[allow(unused)]
+#[serde(deny_unknown_fields)]
+pub struct Pmw3610Config {
+    /// Name of the sensor (used for variable naming)
+    pub name: String,
+    /// SPI pins
+    pub spi: SpiConfig,
+    /// Optional motion interrupt pin
+    pub motion: Option<String>,
+    /// CPI resolution (200-3200, step 200). Optional, uses sensor default if not set.
+    pub cpi: Option<u16>,
+    /// Invert X axis
+    #[serde(default)]
+    pub invert_x: bool,
+    /// Invert Y axis
+    #[serde(default)]
+    pub invert_y: bool,
+    /// Swap X and Y axes
+    #[serde(default)]
+    pub swap_xy: bool,
+    /// Force awake mode (disable power saving)
+    #[serde(default)]
+    pub force_awake: bool,
+    /// Enable smart mode for better tracking on shiny surfaces
+    #[serde(default)]
+    pub smart_mode: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
