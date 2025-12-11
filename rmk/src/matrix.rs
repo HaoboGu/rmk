@@ -176,7 +176,7 @@ pub struct Matrix<
     scan_pos: (usize, usize),
     /// Re-scan needed flag
     #[cfg(feature = "async_matrix")]
-    rescan_needed: bool
+    rescan_needed: bool,
 }
 
 impl<

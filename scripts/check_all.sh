@@ -14,7 +14,7 @@ for dir in examples/use_rust/*/ examples/use_config/*/; do
             continue
         fi
         cd "$dir"
-        cargo build --release
+        cargo update && cargo build --release
         cd ../../..
     fi
 done
@@ -27,7 +27,7 @@ for dir in examples/use_rust/*/ examples/use_config/*/; do
     if [ -d "$dir" ] && [ -d "$dir/src" ]; then
         if [[ "$dir" == *"esp32s3"* ]]; then
             cd "$dir"
-            cargo +esp build --release
+            cargo +esp update && cargo +esp build --release
             cd ../../..
         fi
     fi
