@@ -161,6 +161,7 @@ impl KeyboardTomlConfig {
                 cols: layout.cols,
                 layers: layout.layers,
                 keymap: final_layers,
+                encoder_map: layout.encoder_map.clone(),
             },
             key_info,
         ))

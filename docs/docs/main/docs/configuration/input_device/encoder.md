@@ -59,21 +59,47 @@ phase = "default"
 
 Defining Encoder Actions in `keyboard.toml`:
 
+The `encoder_map` should be added under the `[layout]` section. It defines the actions triggered by encoder rotation for each layer.
+
+**Structure**:
+```
+encoder_map = [
+  [ [CW, CCW], [CW, CCW], ... ],  # Layer 0: encoder 0, encoder 1, ...
+  [ [CW, CCW], [CW, CCW], ... ],  # Layer 1: encoder 0, encoder 1, ...
+  ...
+]
+```
+
+- The outer array represents keyboard layers (layer 0, layer 1, etc.)
+- Each layer contains an array of encoders
+- Each encoder is defined as a 2-element array `[CW_action, CCW_action]`:
+  - `CW_action`: Action for clockwise rotation
+  - `CCW_action`: Action for counter-clockwise rotation
+
+**Example:**
+
 ```toml
-# The map of actions/keycodes triggered by the encoder.
-# This is typically an array of layers, where each layer contains two actions:
-# [Action for Clockwise (CW) rotation, Action for Counter-Clockwise (CCW) rotation].
-#
-# The outer array index corresponds to the keyboard layer (e.g., [0] is base layer).
-#
-# Layer 0
-# - Encoder 0: CW -> VolUp, CCW -> VolDn
-# - Encoder 1: CW -> PgDn, CCW -> PgUp
-encoder_map = [["VolUp", "VolDn"], ["PgDn", "PgUp"]]
-# Layer 1
-# - Encoder 0: No action ("_")
-# - Encoder 1: CW -> Briu (Brightness up), CCW -> Brid (Brightness down)
-encoder_map = [["_", "_"], ["Briu", "Brid"]]
+[layout]
+rows = 5
+cols = 4
+layers = 2
+# ... matrix_map ...
+
+# Layer 0:
+#   - Encoder 0: CW -> AudioVolUp, CCW -> AudioVolDown
+#   - Encoder 1: CW -> PageDown, CCW -> PageUp
+# Layer 1:
+#   - Encoder 0: No action ("_")
+#   - Encoder 1: CW -> BrightnessUp, CCW -> BrightnessDown
+encoder_map = [
+  [["AudioVolUp", "AudioVolDown"], ["PageDown", "PageUp"]],
+  [["_", "_"], ["BrightnessUp", "BrightnessDown"]]
+]
+```
+
+**Notes:**
+- If `encoder_map` is not specified, encoders will have no action by default
+- The number of encoder entries should match the number of physical encoders defined in `[[input_device.encoder]]`
 ```
 
 ## Rust configuration
