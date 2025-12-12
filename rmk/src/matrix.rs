@@ -405,7 +405,9 @@ where
                 // This may take >1ms on some platforms if other tasks are running!
                 Timer::after_micros(1).await;
 
-                for in_idx in in_idx_start..Self::INPUT_PIN_NUM {
+                let in_start = if out_idx == out_idx_start { in_idx_start } else { 0 };
+
+                for in_idx in in_start..Self::INPUT_PIN_NUM {
                     let in_pin_state = if let Some(in_pin) = self.get_input_pins_mut().get_mut(in_idx) {
                         in_pin.is_high().ok().unwrap_or_default()
                     } else {
