@@ -15,6 +15,7 @@ mod keyboard_config;
 mod layout;
 mod matrix;
 mod split;
+mod static_output;
 
 use darling::FromMeta;
 use darling::ast::NestedMeta;

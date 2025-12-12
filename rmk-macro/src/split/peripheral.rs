@@ -19,6 +19,7 @@ use crate::keyboard::get_debouncer_type;
 use crate::keyboard_config::read_keyboard_toml_config;
 use crate::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
 use crate::split::central::expand_serial_init;
+use crate::static_output::expand_static_output_initialization;
 
 /// Parse split peripheral mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStream, item_mod: ItemMod) -> TokenStream2 {
@@ -226,6 +227,9 @@ fn expand_split_peripheral(
         }
     }
 
+    let static_output_config =
+        expand_static_output_initialization(peripheral_config.static_output.clone().unwrap_or_default(), &chip);
+
     // Peripherals don't need to run processors
     let (device_initialization, devices, _processors) = expand_peripheral_input_device_config(id, keyboard_config);
 
@@ -250,6 +254,7 @@ fn expand_split_peripheral(
         #chip_init
         #controller_initializers
         #matrix_config
+        #static_output_config
         #device_initialization
         #run_rmk_peripheral
     }

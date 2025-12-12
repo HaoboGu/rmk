@@ -19,6 +19,7 @@ use crate::keyboard_config::{expand_keyboard_info, expand_vial_config, read_keyb
 use crate::layout::expand_default_keymap;
 use crate::matrix::expand_matrix_config;
 use crate::split::central::expand_split_central_config;
+use crate::static_output::expand_static_output_config;
 
 /// List of functions that can be overwritten
 #[derive(Debug, Clone, Copy, FromMeta)]
@@ -136,6 +137,7 @@ fn expand_main(
     let flash_init = expand_flash_init(keyboard_config);
     let behavior_config = expand_behavior_config(keyboard_config);
     let matrix_config = expand_matrix_config(keyboard_config, rmk_features);
+    let static_output_config = expand_static_output_config(keyboard_config);
     let (ble_config, set_ble_config) = expand_ble_config(keyboard_config);
     let keymap_and_storage = expand_keymap_and_storage(keyboard_config);
     let split_central_config = expand_split_central_config(keyboard_config);
@@ -202,6 +204,9 @@ fn expand_main(
 
             // Initialize matrix config as `(row_pins, col_pins)` or `direct_pins`
             #matrix_config
+
+            // Initialize static output pins
+            #static_output_config
 
             // Initialize flash driver as `flash` and storage config as `storage_config`
             #flash_init
