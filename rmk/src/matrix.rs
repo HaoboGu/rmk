@@ -84,7 +84,6 @@ impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
 /// MatrixTrait is the trait for keyboard matrix.
 ///
 /// The keyboard matrix is a 2D matrix of keys, the matrix does the scanning and saves the result to each key's `KeyState`.
-/// The `KeyState` at position (row, col) can be read by `get_key_state` and updated by `update_key_state`.
 pub trait MatrixTrait<const ROW: usize, const COL: usize>: InputDevice {
     // Wait for USB or BLE really connected
     async fn wait_for_connected(&self) {
@@ -351,30 +350,6 @@ where
             rescan_needed: false,
         }
     }
-
-    fn get_key_event(&self, out_idx: usize, in_idx: usize) -> KeyboardEvent {
-        if COL2ROW {
-            KeyboardEvent::key(in_idx as u8, out_idx as u8, self.key_states[out_idx][in_idx].pressed)
-        } else {
-            KeyboardEvent::key(out_idx as u8, in_idx as u8, self.key_states[in_idx][out_idx].pressed)
-        }
-    }
-
-    fn get_key_state(&self, out_idx: usize, in_idx: usize) -> KeyState {
-        if COL2ROW {
-            self.key_states[out_idx][in_idx]
-        } else {
-            self.key_states[in_idx][out_idx]
-        }
-    }
-
-    fn toggle_key_state(&mut self, out_idx: usize, in_idx: usize) {
-        if COL2ROW {
-            self.key_states[out_idx][in_idx].toggle_pressed();
-        } else {
-            self.key_states[in_idx][out_idx].toggle_pressed();
-        }
-    }
 }
 
 impl<
@@ -420,22 +395,26 @@ where
                         row_idx,
                         col_idx,
                         in_pin_state,
-                        &self.get_key_state(out_idx, in_idx),
+                        &self.key_states[col_idx][row_idx],
                     );
 
                     if let DebounceState::Debounced = debounce_state {
-                        self.toggle_key_state(out_idx, in_idx);
+                        self.key_states[col_idx][row_idx].toggle_pressed();
                         self.scan_pos = (out_idx, in_idx);
                         #[cfg(feature = "async_matrix")]
                         {
                             self.rescan_needed = true;
                         }
-                        return Event::Key(self.get_key_event(out_idx, in_idx));
+                        return Event::Key(KeyboardEvent::key(
+                            row_idx as u8,
+                            col_idx as u8,
+                            self.key_states[col_idx][row_idx].pressed,
+                        ));
                     }
 
                     // If there's key still pressed, always refresh the self.scan_start
                     #[cfg(feature = "async_matrix")]
-                    if self.get_key_state(out_idx, in_idx).pressed {
+                    if self.key_states[col_idx][row_idx].pressed {
                         self.rescan_needed = true;
                     }
                 }
