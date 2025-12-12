@@ -122,14 +122,6 @@ impl KeyState {
     pub fn toggle_pressed(&mut self) {
         self.pressed = !self.pressed;
     }
-
-    pub fn is_releasing(&self) -> bool {
-        !self.pressed
-    }
-
-    pub fn is_pressing(&self) -> bool {
-        self.pressed
-    }
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.
@@ -182,21 +174,18 @@ impl<
 
     #[cfg(feature = "async_matrix")]
     async fn wait_input_pins(&mut self) {
-        if COL2ROW {
-            let mut futs: Vec<_, ROW> = self
-                .row_pins
+        let mut futs: Vec<_, ROW> = if COL2ROW {
+            self.row_pins
                 .iter_mut()
                 .map(|input_pin| input_pin.wait_for_high())
-                .collect();
-            let _ = select_slice(pin!(futs.as_mut_slice())).await;
+                .collect()
         } else {
-            let mut futs: Vec<_, ROW> = self
-                .row_pins
+            self.row_pins
                 .iter_mut()
-                .map(|input_pin| input_pin.wait_for_low())
-                .collect();
-            let _ = select_slice(pin!(futs.as_mut_slice())).await;
-        }
+                .map(|input_pin| input_pin.wait_for_high())
+                .collect()
+        };
+        let _ = select_slice(pin!(futs.as_mut_slice())).await;
     }
 }
 
@@ -217,11 +206,8 @@ impl<
             // Scan matrix and send report
             for col_idx in col_idx_start..COL {
                 // Activate output pin, wait 1us ensuring the change comes into effect
-                if COL2ROW {
-                    self.col_pins[col_idx].set_high().ok();
-                } else {
-                    self.col_pins[col_idx].set_low().ok();
-                }
+                let out_pin = &mut self.col_pins[col_idx];
+                if COL2ROW { out_pin.set_high() } else { out_pin.set_low() }.ok();
 
                 // This may take >1ms on some platforms if other tasks are running!
                 Timer::after_micros(1).await;
@@ -229,47 +215,38 @@ impl<
                 let start = if col_idx == col_idx_start { row_idx_start } else { 0 };
 
                 for row_idx in start..ROW {
-                    let in_pin_state = if COL2ROW {
-                        self.row_pins[row_idx].is_high().ok().unwrap_or_default()
-                    } else {
-                        self.row_pins[row_idx].is_low().ok().unwrap_or_default()
-                    };
+                    let in_pin = &mut self.row_pins[row_idx];
+                    let in_pin_state = if COL2ROW { in_pin.is_high() } else { in_pin.is_low() }
+                        .ok()
+                        .unwrap_or_default();
+
+                    let state = &mut self.key_states[col_idx][row_idx];
 
                     // Check input pins and debounce
-                    let debounce_state = self.debouncer.detect_change_with_debounce(
-                        row_idx,
-                        col_idx,
-                        in_pin_state,
-                        &self.key_states[col_idx][row_idx],
-                    );
+                    let debounce_state =
+                        self.debouncer
+                            .detect_change_with_debounce(row_idx, col_idx, in_pin_state, &state);
 
                     if let DebounceState::Debounced = debounce_state {
-                        self.key_states[col_idx][row_idx].toggle_pressed();
+                        state.toggle_pressed();
                         self.scan_pos = (col_idx, row_idx);
                         #[cfg(feature = "async_matrix")]
                         {
                             self.rescan_needed = true;
                         }
-                        return Event::Key(KeyboardEvent::key(
-                            row_idx as u8,
-                            col_idx as u8,
-                            self.key_states[col_idx][row_idx].pressed,
-                        ));
+                        return Event::Key(KeyboardEvent::key(row_idx as u8, col_idx as u8, state.pressed));
                     }
 
                     // If there's key still pressed, always refresh the self.scan_start
                     #[cfg(feature = "async_matrix")]
-                    if self.key_states[col_idx][row_idx].pressed {
+                    if state.pressed {
                         self.rescan_needed = true;
                     }
                 }
 
                 // deactivate output pin
-                if COL2ROW {
-                    self.col_pins[col_idx].set_low().ok();
-                } else {
-                    self.col_pins[col_idx].set_high().ok();
-                }
+                let out_pin = &mut self.col_pins[col_idx];
+                if COL2ROW { out_pin.set_low() } else { out_pin.set_high() }.ok();
             }
 
             #[cfg(feature = "async_matrix")]
