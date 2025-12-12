@@ -174,18 +174,21 @@ impl<
 
     #[cfg(feature = "async_matrix")]
     async fn wait_input_pins(&mut self) {
-        let mut futs: Vec<_, ROW> = if COL2ROW {
-            self.row_pins
+        if COL2ROW {
+            let mut futs: Vec<_, ROW> = self
+                .row_pins
                 .iter_mut()
                 .map(|input_pin| input_pin.wait_for_high())
-                .collect()
+                .collect();
+            let _ = select_slice(pin!(futs.as_mut_slice())).await;
         } else {
-            self.row_pins
+            let mut futs: Vec<_, ROW> = self
+                .row_pins
                 .iter_mut()
-                .map(|input_pin| input_pin.wait_for_high())
-                .collect()
+                .map(|input_pin| input_pin.wait_for_low())
+                .collect();
+            let _ = select_slice(pin!(futs.as_mut_slice())).await;
         };
-        let _ = select_slice(pin!(futs.as_mut_slice())).await;
     }
 }
 
@@ -207,7 +210,11 @@ impl<
             for col_idx in col_idx_start..COL {
                 // Activate output pin, wait 1us ensuring the change comes into effect
                 let out_pin = &mut self.col_pins[col_idx];
-                if COL2ROW { out_pin.set_high() } else { out_pin.set_low() }.ok();
+                if COL2ROW {
+                    out_pin.set_high().ok();
+                } else {
+                    out_pin.set_low().ok();
+                }
 
                 // This may take >1ms on some platforms if other tasks are running!
                 Timer::after_micros(1).await;
@@ -216,9 +223,11 @@ impl<
 
                 for row_idx in start..ROW {
                     let in_pin = &mut self.row_pins[row_idx];
-                    let in_pin_state = if COL2ROW { in_pin.is_high() } else { in_pin.is_low() }
-                        .ok()
-                        .unwrap_or_default();
+                    let in_pin_state = if COL2ROW {
+                        in_pin.is_high().ok().unwrap_or_default()
+                    } else {
+                        in_pin.is_low().ok().unwrap_or_default()
+                    };
 
                     let state = &mut self.key_states[col_idx][row_idx];
 
@@ -246,7 +255,11 @@ impl<
 
                 // deactivate output pin
                 let out_pin = &mut self.col_pins[col_idx];
-                if COL2ROW { out_pin.set_low() } else { out_pin.set_high() }.ok();
+                if COL2ROW {
+                    out_pin.set_low().ok();
+                } else {
+                    out_pin.set_high().ok();
+                }
             }
 
             #[cfg(feature = "async_matrix")]
