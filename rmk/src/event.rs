@@ -163,6 +163,8 @@ pub enum ControllerEvent {
     ConnectionType(u8),
     /// Split peripheral connection
     SplitPeripheral(usize, bool),
+    /// Split peripheral battery level (peripheral_id, battery_level)
+    SplitPeripheralBattery(usize, u8),
     /// Split central connection
     SplitCentral(bool),
     /// Lock state led indicator
