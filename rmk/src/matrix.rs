@@ -171,25 +171,6 @@ impl<
             rescan_needed: false,
         }
     }
-
-    #[cfg(feature = "async_matrix")]
-    async fn wait_input_pins(&mut self) {
-        if COL2ROW {
-            let mut futs: Vec<_, ROW> = self
-                .row_pins
-                .iter_mut()
-                .map(|input_pin| input_pin.wait_for_high())
-                .collect();
-            let _ = select_slice(pin!(futs.as_mut_slice())).await;
-        } else {
-            let mut futs: Vec<_, ROW> = self
-                .row_pins
-                .iter_mut()
-                .map(|input_pin| input_pin.wait_for_low())
-                .collect();
-            let _ = select_slice(pin!(futs.as_mut_slice())).await;
-        };
-    }
 }
 
 impl<
@@ -199,8 +180,7 @@ impl<
     D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
-    const COL2ROW: bool,
-> InputDevice for Matrix<In, Out, D, ROW, COL, COL2ROW>
+> InputDevice for Matrix<In, Out, D, ROW, COL, true>
 {
     async fn read_event(&mut self) -> crate::event::Event {
         loop {
@@ -209,12 +189,7 @@ impl<
             // Scan matrix and send report
             for col_idx in col_idx_start..COL {
                 // Activate output pin, wait 1us ensuring the change comes into effect
-                let out_pin = &mut self.col_pins[col_idx];
-                if COL2ROW {
-                    out_pin.set_high().ok();
-                } else {
-                    out_pin.set_low().ok();
-                }
+                self.col_pins[col_idx].set_high().ok();
 
                 // This may take >1ms on some platforms if other tasks are running!
                 Timer::after_micros(1).await;
@@ -222,12 +197,7 @@ impl<
                 let start = if col_idx == col_idx_start { row_idx_start } else { 0 };
 
                 for row_idx in start..ROW {
-                    let in_pin = &mut self.row_pins[row_idx];
-                    let in_pin_state = if COL2ROW {
-                        in_pin.is_high().ok().unwrap_or_default()
-                    } else {
-                        in_pin.is_low().ok().unwrap_or_default()
-                    };
+                    let in_pin_state = self.row_pins[row_idx].is_high().ok().unwrap_or_default();
 
                     let state = &mut self.key_states[col_idx][row_idx];
 
@@ -254,12 +224,7 @@ impl<
                 }
 
                 // deactivate output pin
-                let out_pin = &mut self.col_pins[col_idx];
-                if COL2ROW {
-                    out_pin.set_low().ok();
-                } else {
-                    out_pin.set_high().ok();
-                }
+                self.col_pins[col_idx].set_low().ok();
             }
 
             #[cfg(feature = "async_matrix")]
@@ -281,30 +246,125 @@ impl<
     D: DebouncerTrait<ROW, COL>,
     const ROW: usize,
     const COL: usize,
-    const COL2ROW: bool,
-> MatrixTrait<ROW, COL> for Matrix<In, Out, D, ROW, COL, COL2ROW>
+> InputDevice for Matrix<In, Out, D, ROW, COL, false>
 {
+    async fn read_event(&mut self) -> crate::event::Event {
+        loop {
+            let (col_idx_start, row_idx_start) = self.scan_pos;
+
+            // Scan matrix and send report
+            for col_idx in col_idx_start..COL {
+                // Activate output pin, wait 1us ensuring the change comes into effect
+                self.col_pins[col_idx].set_low().ok();
+
+                // This may take >1ms on some platforms if other tasks are running!
+                Timer::after_micros(1).await;
+
+                let start = if col_idx == col_idx_start { row_idx_start } else { 0 };
+
+                for row_idx in start..ROW {
+                    let in_pin_state = self.row_pins[row_idx].is_low().ok().unwrap_or_default();
+
+                    let state = &mut self.key_states[col_idx][row_idx];
+
+                    // Check input pins and debounce
+                    let debounce_state =
+                        self.debouncer
+                            .detect_change_with_debounce(row_idx, col_idx, in_pin_state, &state);
+
+                    if let DebounceState::Debounced = debounce_state {
+                        state.toggle_pressed();
+                        self.scan_pos = (col_idx, row_idx);
+                        #[cfg(feature = "async_matrix")]
+                        {
+                            self.rescan_needed = true;
+                        }
+                        return Event::Key(KeyboardEvent::key(row_idx as u8, col_idx as u8, state.pressed));
+                    }
+
+                    // If there's key still pressed, always refresh the self.scan_start
+                    #[cfg(feature = "async_matrix")]
+                    if state.pressed {
+                        self.rescan_needed = true;
+                    }
+                }
+
+                // deactivate output pin
+                self.col_pins[col_idx].set_high().ok();
+            }
+
+            #[cfg(feature = "async_matrix")]
+            {
+                if !self.rescan_needed {
+                    self.wait_for_key().await;
+                }
+                self.rescan_needed = false;
+            }
+            self.scan_pos = (0, 0);
+        }
+    }
+}
+
+impl<
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait<ROW, COL>,
+    const ROW: usize,
+    const COL: usize,
+> MatrixTrait<ROW, COL> for Matrix<In, Out, D, ROW, COL, true>
+{
+    // Wait for any key press (any input pin activation)
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
         // First, activate all output pins
         for out in self.col_pins.iter_mut() {
-            if COL2ROW {
-                out.set_high().ok();
-            } else {
-                out.set_low().ok();
-            }
+            out.set_high().ok();
         }
 
-        // Wait for any key press (any input pin activation)
-        self.wait_input_pins().await;
+        //wait for any input pin to go high
+        let mut futs: Vec<_, ROW> = self
+            .row_pins
+            .iter_mut()
+            .map(|input_pin| input_pin.wait_for_high())
+            .collect();
+        let _ = select_slice(pin!(futs.as_mut_slice())).await;
 
         // deactivate all output pins
         for out in self.col_pins.iter_mut() {
-            if COL2ROW {
-                out.set_low().ok();
-            } else {
-                out.set_high().ok();
-            }
+            out.set_low().ok();
+        }
+    }
+}
+
+impl<
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait<ROW, COL>,
+    const ROW: usize,
+    const COL: usize,
+> MatrixTrait<ROW, COL> for Matrix<In, Out, D, ROW, COL, false>
+{
+    // Wait for any key press (any input pin activation)
+    #[cfg(feature = "async_matrix")]
+    async fn wait_for_key(&mut self) {
+        // First, activate all output pins
+        for out in self.col_pins.iter_mut() {
+            out.set_low().ok();
+        }
+
+        //wait for any input pin to go low
+        let mut futs: Vec<_, ROW> = self
+            .row_pins
+            .iter_mut()
+            .map(|input_pin| input_pin.wait_for_low())
+            .collect();
+        let _ = select_slice(pin!(futs.as_mut_slice())).await;
+
+        // deactivate all output pins
+        for out in self.col_pins.iter_mut() {
+            out.set_high().ok();
         }
     }
 }
