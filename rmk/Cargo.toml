@@ -124,9 +124,6 @@ vial_lock = ["vial"]
 ## Enable the storage. The storage is optional to save memory
 storage = ["dep:embedded-storage", "dep:embedded-storage-async"]
 
-## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature by `default-features = false`.
-col2row = []
-
 ## Enable defmt support
 defmt = [
     "dep:defmt",
