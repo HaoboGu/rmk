@@ -53,8 +53,8 @@ impl<const ROW: usize, const COL: usize> DebouncerTrait<ROW, COL> for DefaultDeb
     /// Per-key debounce, same with zmk's debounce algorithm
     fn detect_change_with_debounce(
         &mut self,
-        in_idx: usize,
-        out_idx: usize,
+        row_idx: usize,
+        col_idx: usize,
         pin_state: bool,
         key_state: &KeyState,
     ) -> DebounceState {
@@ -64,7 +64,7 @@ impl<const ROW: usize, const COL: usize> DebouncerTrait<ROW, COL> for DefaultDeb
 
         // If `elapsed_ms` == 0, the debounce state is checked within 1 ms, skip
         if elapsed_ms > 0 {
-            let counter: &mut DebounceCounter = &mut self.counters[out_idx][in_idx];
+            let counter: &mut DebounceCounter = &mut self.counters[col_idx][row_idx];
 
             if key_state.pressed == pin_state {
                 // If current key state matches input level, decrease debounce counter

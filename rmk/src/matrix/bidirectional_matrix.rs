@@ -27,7 +27,7 @@ pub struct BidirectionalMatrix<
     key_state: [[KeyState; COL]; ROW],
     /// Start scanning
     scan_start: Option<Instant>,
-    /// Current scan pos: (col_idx, row_idx)
+    /// Current scan pos: (row_idx, col_idx)
     scan_pos: (usize, usize),
     /// Scan map
     scan_map: [[ScanLocation; COL]; ROW],
