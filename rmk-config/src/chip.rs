@@ -1,3 +1,4 @@
+use crate::ChipConfig;
 use crate::KeyboardTomlConfig;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -113,5 +114,14 @@ impl KeyboardTomlConfig {
         } else {
             Err("Neither board nor chip is specified".to_string())
         }
+    }
+
+    pub fn get_chip_config(&self) -> ChipConfig {
+        let chip_name = &self.get_chip_model().unwrap().chip;
+        self.chip
+            .as_ref()
+            .and_then(|chip_configs| chip_configs.get(chip_name))
+            .cloned()
+            .unwrap_or_default()
     }
 }
