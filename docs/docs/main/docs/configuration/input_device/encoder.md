@@ -71,13 +71,13 @@ The `encoder_map` under `[layout]` is a 3D array where each entry is a 2D array 
 
 **Structure**:
 ```toml
-[[layers]]  # Layer 0
+[[layer]]  # Layer 0
 encoders = [[CW, CCW], [CW, CCW], ...]  # Encoder 0, encoder 1, ...
 
-[[layers]]  # Layer 1
+[[layer]]  # Layer 1
 encoders = [[CW, CCW], [CW, CCW], ...]  # Encoder 0, encoder 1, ...
 
-[[layers]]  # More layers...
+[[layer]]  # More layers...
 encoders = [...]
 
 # Alternatively, use encoder_map:
@@ -102,11 +102,11 @@ encoder_map = [
 #   - Encoder 0: No action ("_")
 #   - Encoder 1: CW -> BrightnessUp, CCW -> BrightnessDown
 
-[[layers]]  # Layer 0
+[[layer]]  # Layer 0
 # ... keys ...
 encoders = [["AudioVolUp", "AudioVolDown"], ["PageDown", "PageUp"]]
 
-[[layers]]  # Layer 1
+[[layer]]  # Layer 1
 # ... keys ...
 encoders = [["_", "_"], ["BrightnessUp", "BrightnessDown"]]
 
