@@ -15,39 +15,29 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> Tok
         .unwrap()
         .morse
         .and_then(|m| m.profiles);
-    let num_encoder = keyboard_config.get_board_config().unwrap().get_num_encoder();
-    let total_num_encoder = num_encoder.iter().sum::<usize>();
+    let num_encoder = keyboard_config
+        .get_board_config()
+        .unwrap()
+        .get_num_encoder()
+        .iter()
+        .sum();
 
     let (layout, _) = keyboard_config.get_layout_config().unwrap();
-    let configured_encoder_map = layout.encoder_map.as_ref();
 
     let mut layers = vec![];
     let mut encoder_map = vec![];
 
-    for (layer_idx, layer) in layout.keymap.iter().enumerate() {
+    for layer in &layout.keymap {
         layers.push(expand_layer(layer.clone(), profiles));
-
-        // Build encoder actions for this layer
-        let mut layer_encoders = vec![];
-
-        if let Some(encoder_map_config) = configured_encoder_map {
-            // Use configured encoder_map if available for this layer
-            if layer_idx < encoder_map_config.len() {
-                for encoder_actions in &encoder_map_config[layer_idx] {
-                    let cw_action = parse_key(encoder_actions[0].clone(), profiles);
-                    let ccw_action = parse_key(encoder_actions[1].clone(), profiles);
-                    layer_encoders.push(quote! { ::rmk::encoder!(#cw_action, #ccw_action) });
-                }
-            }
-        }
-
-        // Fill remaining encoders with No action if not enough configured
-        while layer_encoders.len() < total_num_encoder {
-            layer_encoders.push(quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)) });
-        }
-
-        encoder_map.push(quote! { [#(#layer_encoders), *] });
     }
+
+    for encoder_layer in &layout.encoder_map {
+        encoder_map.push(expand_encoder_layer(encoder_layer.clone(), num_encoder, profiles));
+    }
+    encoder_map.resize(
+        layout.keymap.len(),
+        quote! { [::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)); NUM_ENCODER] }
+    );
 
     quote! {
         pub const fn get_default_keymap() -> [[[::rmk::types::action::KeyAction; COL]; ROW]; NUM_LAYER] {
@@ -60,7 +50,7 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> Tok
     }
 }
 
-/// Push rows in the layer
+/// Expand a layer for keymap
 fn expand_layer(layer: Vec<Vec<String>>, profiles: &Option<HashMap<String, MorseProfile>>) -> TokenStream2 {
     let mut rows = vec![];
     for row in layer {
@@ -69,13 +59,36 @@ fn expand_layer(layer: Vec<Vec<String>>, profiles: &Option<HashMap<String, Morse
     quote! { [#(#rows), *] }
 }
 
-/// Push keys in the row
+/// Expand a row for keymap
 fn expand_row(row: Vec<String>, profiles: &Option<HashMap<String, MorseProfile>>) -> TokenStream2 {
     let mut keys = vec![];
     for key in row {
         keys.push(parse_key(key, profiles));
     }
     quote! { [#(#keys), *] }
+}
+
+/// Expand a layer for encoder map
+fn expand_encoder_layer(
+    encoder_layer: Vec<[String; 2]>,
+    num_encoder: usize,
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> TokenStream2 {
+    let mut encoders = vec![];
+
+    for encoder in encoder_layer {
+        let cw_action = parse_key(encoder[0].clone(), profiles);
+        let ccw_action = parse_key(encoder[1].clone(), profiles);
+        encoders.push(quote! { ::rmk::encoder!(#cw_action, #ccw_action) });
+    }
+
+    // Make sure it configures correct number of encoders
+    encoders.resize(
+        num_encoder,
+        quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)) }
+    );
+
+    quote! { [#(#encoders), *] }
 }
 
 struct ModifierCombinationMacro {
