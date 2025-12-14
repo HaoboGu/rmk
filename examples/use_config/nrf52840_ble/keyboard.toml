@@ -25,14 +25,6 @@ matrix_map = """
     (4,0)    (4,1)
 """
 
-# Encoder map: defines actions for each encoder on each layer
-# Layer 0: Encoder 0 - CW: AudioVolUp, CCW: AudioVolDown
-# Layer 1: Encoder 0 - CW: BrightnessUp, CCW: BrightnessDown
-encoder_map = [
-  [["AudioVolUp", "AudioVolDown"]],
-  [["BrightnessUp", "BrightnessDown"]]
-]
-
 [[layer]]
 name = "base_layer"
 keys = """
@@ -42,6 +34,8 @@ Kp4     Kp5     Kp6
 Kp1     Kp2     Kp3        Enter
     Kp0         KpDot
 """
+# Encoder 0 - CW: AudioVolUp, CCW: AudioVolDown
+encoders = [["AudioVolUp", "AudioVolDown"]]
 
 [[layer]]
 name = "second_layer"
@@ -51,6 +45,8 @@ DF(0)  LT(1, Space) LM(0, LShift | RGui)
 OSL(0) OSM(LAlt)    TH(Kp1, Kp2)        SHIFTED(Kp2)
     @my_copy        @my_paste
 """
+# Encoder 0 - CW: BrightnessUp, CCW: BrightnessDown
+encoders = [["BrightnessUp", "BrightnessDown"]]
 
 [aliases]
 my_copy = "WM(C, LCtrl)"

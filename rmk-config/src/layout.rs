@@ -166,6 +166,9 @@ impl KeyboardTomlConfig {
             }
             encoder_map.push(encoders);
         }
+        if let Some(deprecated_encoder_map) = &mut layout.encoder_map {
+            encoder_map.append(deprecated_encoder_map);
+        }
 
         Ok((
             LayoutConfig {
