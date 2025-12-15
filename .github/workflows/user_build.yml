@@ -71,12 +71,17 @@ jobs:
       - name: Build uf2 firmware
         working-directory: ./rmk
         run: cargo make uf2 --release
-      - name: Upload artifacts
+      - name: Upload uf2 artifacts
         uses: actions/upload-artifact@v4
         with:
           name: firmware_uf2
           path: rmk/*.uf2
-      - name: Upload artifacts
+      - name: Upload bin artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware_bin
+          path: rmk/*.bin
+      - name: Upload hex artifacts
         uses: actions/upload-artifact@v4
         with:
           name: firmware_hex
