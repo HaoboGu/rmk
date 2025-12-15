@@ -56,6 +56,8 @@ pub struct KeyboardTomlConfig {
     split: Option<SplitConfig>,
     /// Input device config
     input_device: Option<InputDeviceConfig>,
+    /// Output Pin config
+    output: Option<Vec<OutputConfig>>,
     /// Set host configurations
     pub host: Option<HostConfig>,
     /// RMK config constants
@@ -631,6 +633,8 @@ pub struct SplitBoardConfig {
     pub matrix: MatrixConfig,
     /// Input device config for the split
     pub input_device: Option<InputDeviceConfig>,
+    /// Output Pin config for the split
+    pub output: Option<Vec<OutputConfig>>,
 }
 
 /// Serial port config
@@ -829,4 +833,29 @@ pub struct I2cConfig {
     pub sda: String,
     pub scl: String,
     pub address: u8,
+}
+
+/// Configuration for an output pin
+#[allow(unused)]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OutputConfig {
+    pub pin: String,
+    #[serde(default)]
+    pub low_active: bool,
+    #[serde(default)]
+    pub initial_state_active: bool,
+}
+
+impl KeyboardTomlConfig {
+    pub fn get_output_config(&self) -> Result<Vec<OutputConfig>, String> {
+        let output_config = self.output.clone();
+        let split = self.split.clone();
+        match (output_config, split) {
+            (None, Some(s)) => Ok(s.central.output.unwrap_or_default()),
+            (Some(c), None) => Ok(c),
+            (None, None) => Ok(Default::default()),
+            _ => Err("Use [[split.output]] to define outputs for split in your keyboard.toml!".to_string()),
+        }
+    }
 }

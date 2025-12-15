@@ -205,6 +205,14 @@ capslock = { pin = "PIN_0", low_active = true }
 scrolllock = { pin = "PIN_1", low_active = true }
 numslock = { pin = "PIN_2", low_active = true }
 
+# Output configuration, if you don't neet to set an output pin, just ignore this section.
+# Note the double brackets [[ ]], which indicate that multiple outputs can be defined.
+[[output]]
+# Only the pin name is required, the rest of the fields are optional
+pin = "PIN_13"
+initial_state_active = false
+low_active = false
+
 # Storage configuration.
 # To use the default configuration, ignore this section completely
 [storage]
@@ -333,6 +341,14 @@ matrix_type = "normal"
 # Matrix IO definition on peripheral board
 row_pins = ["PIN_9", "PIN_11"]
 col_pins = ["PIN_10"]
+
+# Output configuration, if you don't neet to set an output pin, just ignore this section.
+# Note the double brackets [[ ]], which indicate that multiple outputs can be defined.
+[[split.peripheral.output]]
+# Only the pin name is required, the rest of the fields are optional
+pin = "PIN_13"
+initial_state_active = false
+low_active = false
 
 # More split peripherals (if you have any)
 [[split.peripheral]]
