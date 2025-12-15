@@ -269,6 +269,12 @@ macro_space_size = 256
 debounce_time = 20
 # Event channel size
 event_channel_size = 16
+# Controller event channel size
+controller_channel_size = 16
+# Number of publishers to controllers
+controller_channel_pubs = 12
+# Number of controllers (subscribers)
+controller_channel_subs = 8
 # Report channel size
 report_channel_size = 16
 # Vial channel size
@@ -279,6 +285,8 @@ flash_channel_size = 4
 split_peripherals_num = 1
 # The number of available BLE profiles
 ble_profiles_num = 3
+# BLE Split Central sleep timeout in seconds (0 = disabled)
+split_central_sleep_timeout_seconds = 0
 
 # Split configuration
 # This section conflicts with the [matrix] section. You can only have either [matrix] or [split], but NOT BOTH
