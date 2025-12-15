@@ -1533,4 +1533,25 @@ rusty_fork_test! {
             ]
         };
     }
+
+    #[test]
+    fn test_mt_lt_combination() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 1, true, 130], // Press mt!(B, LShift)
+                [0, 3, true, 130], // Press lt!(1, D)
+                [0, 0, true, 130], // Press Kp4 on layer1
+                [0, 0, false, 130], // Release Kp4 on layer1
+                [0, 3, false, 200], // Release lt!(1, D)
+                [0, 1, false, 10], // Release mt!(C, LGui)
+            ],
+            expected_reports: [
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
 }
