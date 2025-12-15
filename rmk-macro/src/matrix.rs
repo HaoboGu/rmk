@@ -116,35 +116,27 @@ pub(crate) fn expand_matrix_input_output_pins(
     } else {
         quote! {}
     };
-    let (input_pin_len, output_pin_len) = if row2col {
-        (col_pins.len(), row_pins.len())
-    } else {
-        (row_pins.len(), col_pins.len())
-    };
-
-    let (input_pins, output_pins) = if row2col {
-        (col_pins, row_pins)
-    } else {
-        (row_pins, col_pins)
-    };
+    let (input_pin_len, output_pin_len) = (row_pins.len(), col_pins.len());
+    let (input_pins, output_pins) = (row_pins, col_pins);
 
     // Get pin types
     let input_pin_type = get_input_pin_type(chip, async_matrix);
     let output_pin_type = get_output_pin_type(chip);
 
     // Initialize input pins
-    pin_initialization.extend(convert_input_pins_to_initializers(chip, input_pins, async_matrix));
+    pin_initialization.extend(convert_input_pins_to_initializers(
+        chip,
+        input_pins,
+        async_matrix,
+        row2col,
+    ));
     // Initialize output pins
-    pin_initialization.extend(convert_output_pins_to_initializers(chip, output_pins));
-    let pin_names = if row2col {
-        quote! { (col_pins, row_pins) }
-    } else {
-        quote! { (row_pins, col_pins) }
-    };
+    pin_initialization.extend(convert_output_pins_to_initializers(chip, output_pins, row2col));
+
     // Generate a macro that does pin matrix config
     quote! {
         #extra_import
-        let #pin_names: ([ #input_pin_type; #input_pin_len], [ #output_pin_type; #output_pin_len]) = {
+        let (row_pins, col_pins): ([ #input_pin_type; #input_pin_len], [ #output_pin_type; #output_pin_len]) = {
             #pin_initialization
             (input_pins, output_pins)
         };
