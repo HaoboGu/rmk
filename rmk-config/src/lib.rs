@@ -266,7 +266,7 @@ impl Default for RmkConstantsConfig {
             debounce_time: 20,
             event_channel_size: 16,
             controller_channel_size: 16,
-            controller_channel_pubs: 10,
+            controller_channel_pubs: 16,
             controller_channel_subs: 8,
             report_channel_size: 16,
             vial_channel_size: 4,
@@ -426,7 +426,7 @@ pub struct LayoutConfig {
     pub cols: u8,
     pub layers: u8,
     pub keymap: Vec<Vec<Vec<String>>>,
-    pub encoder_map: Vec<Vec<[String; 2]>>,  // Empty if there are no encoders or not configured
+    pub encoder_map: Vec<Vec<[String; 2]>>, // Empty if there are no encoders or not configured
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
