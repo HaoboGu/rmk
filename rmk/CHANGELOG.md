@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add PMW3610 optical mouse sensor support for nRF and RP2040 with bit-bang SPI
 - Add support for configuring static output pins
+- DCDC config for nRF52840/nRF52833
 
 ### Changed
 
