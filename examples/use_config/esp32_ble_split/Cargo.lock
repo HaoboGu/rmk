@@ -2173,6 +2173,7 @@ dependencies = [
  "json",
  "rand_core 0.6.4",
  "rmk",
+ "static_cell",
  "xz2",
 ]
 
