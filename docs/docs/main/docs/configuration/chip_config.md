@@ -20,24 +20,6 @@ dcdc_reg1 = true
 dcdc_reg0_voltage = "3V3"  # Options: "3V3" or "1V8"
 ```
 
-#### Available Parameters
-
-**`dcdc_reg0`**
-- **Type**: Boolean
-- **Default**: `true`
-- **Description**: Enables or disables DC/DC regulator 0.
-
-**`dcdc_reg1`**
-- **Type**: Boolean
-- **Default**: `true`
-- **Description**: Enables or disables DC/DC regulator 1.
-
-**`dcdc_reg0_voltage`**
-- **Type**: String
-- **Default**: `"3V3"`
-- **Valid values**: `"3V3"` or `"1V8"`
-- **Description**: Sets the output voltage of DC/DC regulator 0.
-
 ::: danger Hardware Requirement
 Do not enable DC/DC regulators without an external LC filter being connected, as this will inhibit device operation, including debug access, until an LC filter is connected.
 :::
@@ -55,13 +37,6 @@ The nRF52833 has one DC/DC regulator available for configuration.
 # Enable DCDC regulator 1
 dcdc_reg1 = true
 ```
-
-#### Available Parameters
-
-**`dcdc_reg1`**
-- **Type**: Boolean
-- **Default**: `true`
-- **Description**: Enables or disables DC/DC regulator 1.
 
 ::: danger Hardware Requirement
 Do not enable DC/DC regulator without an external LC filter being connected, as this will inhibit device operation, including debug access, until an LC filter is connected.

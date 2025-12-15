@@ -9,18 +9,19 @@
         "collapsed": true
     },
     "light",
-    "output",
     "behavior",
     "split_keyboard",
     "wireless",
     "storage",
     "host_config",
-    "rmk_config",
+    "output",
+    "chip_config",
     {
         "type": "dir",
         "name": "input_device",
         "label": "Input Device",
         "collapsed": true
     },
+    "rmk_config",
     "appendix"
 ]
