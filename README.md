@@ -115,9 +115,9 @@ Browse the examples in the [`examples`](https://github.com/HaoboGu/rmk/blob/main
       173.00 KB / 173.00 KB [=======================] 100.00 % 193.64 KB/s  
       ```
 
-## [Development Roadmap](https://rmk.rs/docs/development/roadmap.html)
+## [Development Roadmap](https://rmk.rs/docs/development/roadmap)
 
-Current roadmap of RMK can be found [here](https://rmk.rs/guide/development/roadmap).
+Current roadmap of RMK can be found [here](https://rmk.rs/docs/development/roadmap).
 
 ## Minimum Supported Rust Version (MSRV)
 
