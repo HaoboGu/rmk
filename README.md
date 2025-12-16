@@ -51,7 +51,7 @@
 
 ### Option 1: Start with a Template
 
-Quickly bootstrap your project using [rmkit](https://github.com/HaoboGu/rmkit) and the official RMK [project template](https://github.com/HaoboGu/rmk-template/tree/feat/rework).
+Quickly bootstrap your project using [rmkit](https://github.com/HaoboGu/rmkit) and the official RMK [project template](https://github.com/HaoboGu/rmk-template).
 
 ```shell
 cargo install rmkit flip-link
