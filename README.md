@@ -31,7 +31,7 @@
 - **Easy configuration**: RMK simplifies keyboard development through a single `keyboard.toml` configuration file. For Rust enthusiasts, the firmware remains highly customizable using Rust code
 - **Optimized performance**: RMK achieves approximately 2ms latency in wired mode and 10ms in wireless mode. With the `async_matrix` feature enabled, power consumption is significantly reduced—a 2000mAh battery can power your keyboard for several months
 
-## [User Documentation](https://rmk.rs/guide/user_guide/1_guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://rmk.rs/docs/user_guide/faq.html) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
+## [User Documentation](https://rmk.rs/docs/user_guide/guide_overview) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://rmk.rs/docs/getting_started/faq) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
 
 ## Real-World Implementations
 
@@ -56,15 +56,15 @@ Quickly bootstrap your project using [rmkit](https://github.com/HaoboGu/rmkit) a
 ```shell
 cargo install rmkit flip-link
 # If you encounter installation issues on Windows, try this alternative command:
-# powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.13/rmkit-installer.ps1 | iex"
+# powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.20/rmkit-installer.ps1 | iex"
 rmkit init
 ```
 
-For comprehensive guidance, refer to the [User Guide](https://rmk.rs/guide/user_guide/1_guide_overview.html).
+For comprehensive guidance, refer to the [User Guide](https://rmk.rs/docs/user_guide/guide_overview).
 
 ### Option 2: Explore Built-in Examples
 
-Browse the examples in the [`examples`](https://github.com/HaoboGu/rmk/blob/main/examples) directory. Below are step-by-step instructions for rp2040 development. The process is similar for other microcontrollers when using a debug probe.
+Browse the examples in the [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) directory. Below are step-by-step instructions for rp2040 development. The process is similar for other microcontrollers when using a debug probe.
 
 #### rp2040 Setup
 
