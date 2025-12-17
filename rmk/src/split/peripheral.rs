@@ -5,6 +5,11 @@ use embassy_futures::select::select3;
 use embedded_io_async::{Read, Write};
 #[cfg(all(feature = "_ble", feature = "storage"))]
 use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
+#[cfg(feature = "controller")]
+use {
+    crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
+    crate::event::ControllerEvent,
+};
 #[cfg(feature = "_ble")]
 use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash, trouble_host::prelude::*};
 
@@ -15,11 +20,6 @@ use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;
-#[cfg(feature = "controller")]
-use {
-    crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
-    crate::event::ControllerEvent,
-};
 
 /// Run the split peripheral service.
 ///

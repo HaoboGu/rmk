@@ -36,7 +36,7 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> Tok
     }
     encoder_map.resize(
         layout.keymap.len(),
-        quote! { [::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)); NUM_ENCODER] }
+        quote! { [::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)); NUM_ENCODER] },
     );
 
     quote! {
@@ -83,10 +83,7 @@ fn expand_encoder_layer(
     }
 
     // Make sure it configures correct number of encoders
-    encoders.resize(
-        num_encoder,
-        quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)) }
-    );
+    encoders.resize(num_encoder, quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)) });
 
     quote! { [#(#encoders), *] }
 }
