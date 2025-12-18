@@ -13,7 +13,7 @@ on:
         required: false
         type: string
       rmk_version:
-        description:"Used rmk version"
+        description: "Used rmk version"
         default: "main"
         required: false
         type: string
