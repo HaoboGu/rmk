@@ -1,5 +1,4 @@
-use crate::ChipConfig;
-use crate::KeyboardTomlConfig;
+use crate::{ChipConfig, KeyboardTomlConfig};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum ChipSeries {
