@@ -2095,7 +2095,7 @@ dependencies = [
 
 [[package]]
 name = "rmk"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "bitfield-struct",
  "bt-hci",
@@ -2139,7 +2139,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "cargo_toml",
  "config",
@@ -2173,12 +2173,13 @@ dependencies = [
  "json",
  "rand_core 0.6.4",
  "rmk",
+ "static_cell",
  "xz2",
 ]
 
 [[package]]
 name = "rmk-macro"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "cargo_toml",
  "darling 0.20.11",
@@ -2197,7 +2198,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-types"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "bitfield-struct",
  "postcard",

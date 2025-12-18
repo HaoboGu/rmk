@@ -11,7 +11,6 @@ use {
     trouble_host::prelude::*,
 };
 
-
 /// Run central's peripheral manager task.
 ///
 /// # Arguments

@@ -205,6 +205,14 @@ capslock = { pin = "PIN_0", low_active = true }
 scrolllock = { pin = "PIN_1", low_active = true }
 numslock = { pin = "PIN_2", low_active = true }
 
+# Output configuration, if you don't neet to set an output pin, just ignore this section.
+# Note the double brackets [[ ]], which indicate that multiple outputs can be defined.
+[[output]]
+# Only the pin name is required, the rest of the fields are optional
+pin = "PIN_13"
+initial_state_active = false
+low_active = false
+
 # Storage configuration.
 # To use the default configuration, ignore this section completely
 [storage]
@@ -261,6 +269,12 @@ macro_space_size = 256
 debounce_time = 20
 # Event channel size
 event_channel_size = 16
+# Controller event channel size
+controller_channel_size = 16
+# Number of publishers to controllers
+controller_channel_pubs = 12
+# Number of controllers (subscribers)
+controller_channel_subs = 8
 # Report channel size
 report_channel_size = 16
 # Vial channel size
@@ -271,6 +285,8 @@ flash_channel_size = 4
 split_peripherals_num = 1
 # The number of available BLE profiles
 ble_profiles_num = 3
+# BLE Split Central sleep timeout in seconds (0 = disabled)
+split_central_sleep_timeout_seconds = 0
 
 # Split configuration
 # This section conflicts with the [matrix] section. You can only have either [matrix] or [split], but NOT BOTH
@@ -333,6 +349,14 @@ matrix_type = "normal"
 # Matrix IO definition on peripheral board
 row_pins = ["PIN_9", "PIN_11"]
 col_pins = ["PIN_10"]
+
+# Output configuration, if you don't neet to set an output pin, just ignore this section.
+# Note the double brackets [[ ]], which indicate that multiple outputs can be defined.
+[[split.peripheral.output]]
+# Only the pin name is required, the rest of the fields are optional
+pin = "PIN_13"
+initial_state_active = false
+low_active = false
 
 # More split peripherals (if you have any)
 [[split.peripheral]]

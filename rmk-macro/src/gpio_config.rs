@@ -1,5 +1,6 @@
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use rmk_config::{ChipModel, ChipSeries};
+use rmk_config::{ChipModel, ChipSeries, KeyboardTomlConfig, OutputConfig};
 
 pub(crate) fn convert_output_pins_to_initializers(chip: &ChipModel, pins: Vec<String>) -> proc_macro2::TokenStream {
     let mut initializers = proc_macro2::TokenStream::new();
@@ -113,10 +114,10 @@ pub(crate) fn convert_direct_pins_to_initializers(
 pub(crate) fn convert_gpio_str_to_output_pin(
     chip: &ChipModel,
     gpio_name: String,
-    low_active: bool,
+    initial_level_high: bool,
 ) -> proc_macro2::TokenStream {
     let gpio_ident = format_ident!("{}", gpio_name);
-    let default_level_ident = if low_active {
+    let default_level_ident = if initial_level_high {
         format_ident!("High")
     } else {
         format_ident!("Low")
@@ -141,6 +142,22 @@ pub(crate) fn convert_gpio_str_to_output_pin(
             quote! {
                 ::esp_hal::gpio::Output::new(p.#gpio_ident, ::esp_hal::gpio::Level::#default_level_ident, ::esp_hal::gpio::OutputConfig::default())
             }
+        }
+    }
+}
+
+pub(crate) fn convert_gpio_str_to_persisted_output_pin(
+    chip: &ChipModel,
+    gpio_name: String,
+    initial_level_high: bool,
+) -> proc_macro2::TokenStream {
+    let initializer = convert_gpio_str_to_output_pin(chip, gpio_name, initial_level_high);
+    match chip.series {
+        ChipSeries::Stm32 | ChipSeries::Esp32 | ChipSeries::Rp2040 => {
+            quote! { ::core::mem::forget(#initializer); }
+        }
+        ChipSeries::Nrf52 => {
+            quote! { #initializer.persist();}
         }
     }
 }
@@ -207,4 +224,17 @@ fn get_pin_num_stm32(gpio_name: &str) -> Option<String> {
     } else {
         Some(gpio_name[2..].to_string())
     }
+}
+
+pub fn expand_output_config(keyboard_config: &KeyboardTomlConfig) -> TokenStream {
+    let chip = keyboard_config.get_chip_model().unwrap();
+    let outputs = keyboard_config.get_output_config().unwrap();
+    expand_output_initialization(outputs, &chip)
+}
+
+pub fn expand_output_initialization(outputs: Vec<OutputConfig>, chip: &ChipModel) -> TokenStream {
+    outputs
+        .into_iter()
+        .map(|oc| convert_gpio_str_to_persisted_output_pin(chip, oc.pin, oc.initial_state_active ^ oc.low_active))
+        .collect()
 }

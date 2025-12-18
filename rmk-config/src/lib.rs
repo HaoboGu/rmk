@@ -56,6 +56,8 @@ pub struct KeyboardTomlConfig {
     split: Option<SplitConfig>,
     /// Input device config
     input_device: Option<InputDeviceConfig>,
+    /// Output Pin config
+    output: Option<Vec<OutputConfig>>,
     /// Set host configurations
     pub host: Option<HostConfig>,
     /// RMK config constants
@@ -180,7 +182,7 @@ pub struct RmkConstantsConfig {
     #[serde_inline_default(16)]
     pub controller_channel_size: usize,
     /// Number of publishers to controllers
-    #[serde_inline_default(8)]
+    #[serde_inline_default(12)]
     pub controller_channel_pubs: usize,
     /// Number of controllers
     #[serde_inline_default(8)]
@@ -264,7 +266,7 @@ impl Default for RmkConstantsConfig {
             debounce_time: 20,
             event_channel_size: 16,
             controller_channel_size: 16,
-            controller_channel_pubs: 10,
+            controller_channel_pubs: 12,
             controller_channel_subs: 8,
             report_channel_size: 16,
             vial_channel_size: 4,
@@ -283,8 +285,9 @@ pub struct LayoutTomlConfig {
     pub rows: u8,
     pub cols: u8,
     pub layers: u8,
-    pub keymap: Option<Vec<Vec<Vec<String>>>>, // will be deprecated in the future
-    pub matrix_map: Option<String>,            //temporarily allow both matrix_map and keymap to be set
+    pub keymap: Option<Vec<Vec<Vec<String>>>>, // Will be deprecated in the future
+    pub matrix_map: Option<String>,            // Temporarily allow both matrix_map and keymap to be set
+    pub encoder_map: Option<Vec<Vec<[String; 2]>>>, // Will be deprecated together with keymap
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -292,6 +295,7 @@ pub struct LayoutTomlConfig {
 pub struct LayerTomlConfig {
     pub name: Option<String>,
     pub keys: String,
+    pub encoders: Option<Vec<[String; 2]>>,
 }
 
 /// Configurations for keyboard info
@@ -422,6 +426,7 @@ pub struct LayoutConfig {
     pub cols: u8,
     pub layers: u8,
     pub keymap: Vec<Vec<Vec<String>>>,
+    pub encoder_map: Vec<Vec<[String; 2]>>, // Empty if there are no encoders or not configured
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -628,6 +633,8 @@ pub struct SplitBoardConfig {
     pub matrix: MatrixConfig,
     /// Input device config for the split
     pub input_device: Option<InputDeviceConfig>,
+    /// Output Pin config for the split
+    pub output: Option<Vec<OutputConfig>>,
 }
 
 /// Serial port config
@@ -826,4 +833,29 @@ pub struct I2cConfig {
     pub sda: String,
     pub scl: String,
     pub address: u8,
+}
+
+/// Configuration for an output pin
+#[allow(unused)]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OutputConfig {
+    pub pin: String,
+    #[serde(default)]
+    pub low_active: bool,
+    #[serde(default)]
+    pub initial_state_active: bool,
+}
+
+impl KeyboardTomlConfig {
+    pub fn get_output_config(&self) -> Result<Vec<OutputConfig>, String> {
+        let output_config = self.output.clone();
+        let split = self.split.clone();
+        match (output_config, split) {
+            (None, Some(s)) => Ok(s.central.output.unwrap_or_default()),
+            (Some(c), None) => Ok(c),
+            (None, None) => Ok(Default::default()),
+            _ => Err("Use [[split.output]] to define outputs for split in your keyboard.toml!".to_string()),
+        }
+    }
 }

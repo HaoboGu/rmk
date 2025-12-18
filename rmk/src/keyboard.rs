@@ -1193,7 +1193,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     // they will be "released" the same time as the key (in same hid report)
                     self.held_modifiers &= !(modifiers);
                 }
-                self.process_action_layer_switch(layer_num, event)
+                self.process_action_layer_switch(layer_num, event);
+                self.send_keyboard_report_with_resolved_modifiers(event.pressed).await
             }
             Action::OneShotLayer(l) => {
                 self.process_action_osl(l, event).await;

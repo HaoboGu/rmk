@@ -1,0 +1,6 @@
+{
+    "recommendations": [
+        "probe-rs.probe-rs-debugger",
+        "marus25.cortex-debug"
+    ]
+}

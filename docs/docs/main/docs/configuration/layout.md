@@ -44,7 +44,19 @@ matrix_map = """
 (1,0) (1,1) (1,2) (1,3)
 (2,0) (2,1) (2,2)
 (3,0) (3,1) (3,2) (3,3)
-   (4,0)    (4,1)
+   (4,0)      (4,1)
+"""
+
+# split ortho example for matrix map, with L/R hand information filled
+[layout]
+rows = 4
+cols = 10
+layers = 3
+matrix_map = """
+(0, 0, L)  (0, 1, L)  (0, 2, L)  (0, 3, L)  (0, 4, L)    (0, 5, R)  (0, 6, R)  (0, 7, R)  (0, 8, R)  (0, 9, R)
+(1, 0, L)  (1, 1, L)  (1, 2, L)  (1, 3, L)  (1, 4, L)    (1, 5, R)  (1, 6, R)  (1, 7, R)  (1, 8, R)  (1, 9, R)
+(2, 0, L)  (2, 1, L)  (2, 2, L)  (2, 3, L)  (2, 4, L)    (2, 5, R)  (2, 6, R)  (2, 7, R)  (2, 8, R)  (2, 9, R)
+                                 (3, 3, L)  (3, 4, L)    (3, 5, R)  (3, 6, R)
 """
 ```
 
@@ -146,3 +158,15 @@ my_paste = "WM(V, LCtrl)"
 Please note that alias names may not contain white spaces and they are case sensitive.
 
 :::
+
+## Assigning the left/right hand to a position
+
+
+# default profile for morse, tap dance and tap-hold keys:
+[behavior.morse]
+enable_flow_tap = true,
+prior_idle_time = "120ms"
+hold_on_other_press = true
+hold_timeout = "250ms"
+gap_timeout = "250ms"
+```

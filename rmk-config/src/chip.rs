@@ -1,5 +1,4 @@
-use crate::ChipConfig;
-use crate::KeyboardTomlConfig;
+use crate::{ChipConfig, KeyboardTomlConfig};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum ChipSeries {
@@ -26,7 +25,7 @@ impl ChipModel {
                 "XIAO BLE" | "nrfmicro" | "bluemicro840" | "puchi_ble" => {
                     Ok(include_str!("default_config/nrf52840.toml"))
                 }
-                "pi_pico_w" | "pico_w" => Ok(include_str!("default_config/pi_pico_w.toml")),
+                "Pi Pico W" | "Pico W" | "pi_pico_w" | "pico_w" => Ok(include_str!("default_config/pi_pico_w.toml")),
                 _ => {
                     eprintln!("Fallback to use chip config for board: {}", board);
                     self.get_default_config_str_from_chip(&self.chip)
@@ -76,7 +75,7 @@ impl KeyboardTomlConfig {
                     chip: "nrf52840".to_string(),
                     board: Some(board),
                 }),
-                "pi_pico_w" | "pico_w" => Ok(ChipModel {
+                "Pi Pico W" | "Pico W" | "pi_pico_w" | "pico_w" => Ok(ChipModel {
                     series: ChipSeries::Rp2040,
                     chip: "rp2040".to_string(),
                     board: Some(board),

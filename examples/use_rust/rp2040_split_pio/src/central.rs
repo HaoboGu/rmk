@@ -20,9 +20,9 @@ use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join4;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
+use rmk::matrix::{Matrix, OffsetMatrixWrapper};
 use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
 use rmk::split::central::run_peripheral_manager;
-use rmk::matrix::{Matrix, OffsetMatrixWrapper};
 use rmk::split::rp::uart::{BufferedUart, UartInterruptHandler};
 use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use static_cell::StaticCell;
@@ -87,7 +87,8 @@ async fn main(_spawner: Spawner) {
 
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::new();
-    let mut matrix = OffsetMatrixWrapper::<_, _, _, 0, 0>(Matrix::<_, _, _, 2, 2, true>::new(row_pins, col_pins, debouncer));
+    let mut matrix =
+        OffsetMatrixWrapper::<_, _, _, 0, 0>(Matrix::<_, _, _, 2, 2, true>::new(row_pins, col_pins, debouncer));
     let mut keyboard = Keyboard::new(&keymap);
 
     // Start

@@ -84,7 +84,6 @@ impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
 /// MatrixTrait is the trait for keyboard matrix.
 ///
 /// The keyboard matrix is a 2D matrix of keys, the matrix does the scanning and saves the result to each key's `KeyState`.
-/// The `KeyState` at position (row, col) can be read by `get_key_state` and updated by `update_key_state`.
 pub trait MatrixTrait<const ROW: usize, const COL: usize>: InputDevice {
     // Wait for USB or BLE really connected
     async fn wait_for_connected(&self) {
@@ -176,7 +175,7 @@ pub struct Matrix<
     scan_pos: (usize, usize),
     /// Re-scan needed flag
     #[cfg(feature = "async_matrix")]
-    rescan_needed: bool
+    rescan_needed: bool,
 }
 
 impl<
@@ -351,30 +350,6 @@ where
             rescan_needed: false,
         }
     }
-
-    fn get_key_event(&self, out_idx: usize, in_idx: usize) -> KeyboardEvent {
-        if COL2ROW {
-            KeyboardEvent::key(in_idx as u8, out_idx as u8, self.key_states[out_idx][in_idx].pressed)
-        } else {
-            KeyboardEvent::key(out_idx as u8, in_idx as u8, self.key_states[in_idx][out_idx].pressed)
-        }
-    }
-
-    fn get_key_state(&self, out_idx: usize, in_idx: usize) -> KeyState {
-        if COL2ROW {
-            self.key_states[out_idx][in_idx]
-        } else {
-            self.key_states[in_idx][out_idx]
-        }
-    }
-
-    fn toggle_key_state(&mut self, out_idx: usize, in_idx: usize) {
-        if COL2ROW {
-            self.key_states[out_idx][in_idx].toggle_pressed();
-        } else {
-            self.key_states[in_idx][out_idx].toggle_pressed();
-        }
-    }
 }
 
 impl<
@@ -405,33 +380,41 @@ where
                 // This may take >1ms on some platforms if other tasks are running!
                 Timer::after_micros(1).await;
 
-                for in_idx in in_idx_start..Self::INPUT_PIN_NUM {
+                let in_start = if out_idx == out_idx_start { in_idx_start } else { 0 };
+
+                for in_idx in in_start..Self::INPUT_PIN_NUM {
                     let in_pin_state = if let Some(in_pin) = self.get_input_pins_mut().get_mut(in_idx) {
                         in_pin.is_high().ok().unwrap_or_default()
                     } else {
                         false
                     };
                     // Check input pins and debounce
+                    // Convert in_idx/out_idx to row_idx/col_idx based on COL2ROW
+                    let (row_idx, col_idx) = if COL2ROW { (in_idx, out_idx) } else { (out_idx, in_idx) };
                     let debounce_state = self.debouncer.detect_change_with_debounce(
-                        in_idx,
-                        out_idx,
+                        row_idx,
+                        col_idx,
                         in_pin_state,
-                        &self.get_key_state(out_idx, in_idx),
+                        &self.key_states[col_idx][row_idx],
                     );
 
                     if let DebounceState::Debounced = debounce_state {
-                        self.toggle_key_state(out_idx, in_idx);
+                        self.key_states[col_idx][row_idx].toggle_pressed();
                         self.scan_pos = (out_idx, in_idx);
                         #[cfg(feature = "async_matrix")]
                         {
                             self.rescan_needed = true;
                         }
-                        return Event::Key(self.get_key_event(out_idx, in_idx));
+                        return Event::Key(KeyboardEvent::key(
+                            row_idx as u8,
+                            col_idx as u8,
+                            self.key_states[col_idx][row_idx].pressed,
+                        ));
                     }
 
                     // If there's key still pressed, always refresh the self.scan_start
                     #[cfg(feature = "async_matrix")]
-                    if self.get_key_state(out_idx, in_idx).pressed {
+                    if self.key_states[col_idx][row_idx].pressed {
                         self.rescan_needed = true;
                     }
                 }

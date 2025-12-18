@@ -11,6 +11,7 @@ use crate::controller::expand_controller_init;
 use crate::entry::join_all_tasks;
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::flash::expand_flash_init;
+use crate::gpio_config::expand_output_initialization;
 use crate::import::expand_custom_imports;
 use crate::input_device::adc::expand_adc_device;
 use crate::input_device::encoder::expand_encoder_device;
@@ -226,6 +227,8 @@ fn expand_split_peripheral(
         }
     }
 
+    let output_config = expand_output_initialization(peripheral_config.output.clone().unwrap_or_default(), &chip);
+
     // Peripherals don't need to run processors
     let (device_initialization, devices, _processors) = expand_peripheral_input_device_config(id, keyboard_config);
 
@@ -250,6 +253,7 @@ fn expand_split_peripheral(
         #chip_init
         #controller_initializers
         #matrix_config
+        #output_config
         #device_initialization
         #run_rmk_peripheral
     }
