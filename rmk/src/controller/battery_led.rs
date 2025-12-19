@@ -60,7 +60,9 @@ impl<P: StatefulOutputPin> Controller for BatteryLedController<P> {
 }
 
 impl<P: StatefulOutputPin> PollingController for BatteryLedController<P> {
-    const INTERVAL: embassy_time::Duration = embassy_time::Duration::from_secs(1);
+    fn interval(&self) -> embassy_time::Duration {
+        embassy_time::Duration::from_secs(1)
+    }
 
     async fn update(&mut self) {
         match self.state {
