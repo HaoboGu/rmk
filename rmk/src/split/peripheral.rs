@@ -5,11 +5,6 @@ use embassy_futures::select::{Either4, select4};
 use embedded_io_async::{Read, Write};
 #[cfg(all(feature = "_ble", feature = "storage"))]
 use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
-#[cfg(feature = "controller")]
-use {
-    crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
-    crate::event::ControllerEvent,
-};
 #[cfg(feature = "_ble")]
 use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash, trouble_host::prelude::*};
 
@@ -150,10 +145,11 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                 Either4::Fourth(controller_event) => {
                     // Forward battery level to central
                     if let ControllerEvent::Battery(level) = controller_event
-                        && CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                            debug!("Forwarding battery level to central: {}", level);
-                            self.split_driver.write(&SplitMessage::BatteryLevel(level)).await.ok();
-                        }
+                        && CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire)
+                    {
+                        debug!("Forwarding battery level to central: {}", level);
+                        self.split_driver.write(&SplitMessage::BatteryLevel(level)).await.ok();
+                    }
                 }
             }
         }

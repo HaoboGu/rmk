@@ -29,8 +29,7 @@ use rmk::config::{
 use rmk::controller::EventController;
 use rmk::controller::led_indicator::KeyboardIndicatorController;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join4;
-use rmk::futures::future::join5;
+use rmk::futures::future::{join4, join5};
 use rmk::input_device::Runnable;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
@@ -239,8 +238,8 @@ async fn main(spawner: Spawner) {
     // Peripheral battery monitor controller
     // This controller subscribes to ControllerEvent::SplitPeripheralBattery events
     // and logs the battery level of each peripheral
-    use rmk::controller::Controller;
     use rmk::channel::ControllerSub;
+    use rmk::controller::Controller;
     struct PeripheralBatteryMonitor {
         controller_sub: ControllerSub,
     }
