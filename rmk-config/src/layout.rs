@@ -158,16 +158,17 @@ impl KeyboardTomlConfig {
 
         // Process encoder map
         let mut encoder_map: Vec<Vec<[String; 2]>> = vec![];
-        for layer in &layers {
-            let mut encoders = layer.encoders.clone().unwrap_or_default();
-            for [cw, ccw] in &mut encoders {
-                *cw = Self::alias_resolver(cw, &aliases)?;
-                *ccw = Self::alias_resolver(ccw, &aliases)?;
-            }
-            encoder_map.push(encoders);
-        }
         if let Some(deprecated_encoder_map) = &mut layout.encoder_map {
             encoder_map.append(deprecated_encoder_map);
+        } else {
+            for layer in &layers {
+                let mut encoders = layer.encoders.clone().unwrap_or_default();
+                for [cw, ccw] in &mut encoders {
+                    *cw = Self::alias_resolver(cw, &aliases)?;
+                    *ccw = Self::alias_resolver(ccw, &aliases)?;
+                }
+                encoder_map.push(encoders);
+            }
         }
 
         Ok((
