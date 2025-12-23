@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING**: `PollingController::INTERVAL` constant is now `PollingController::interval()` method, allowing dynamic interval configuration at runtime
+
+## [0.8.2] - 2025-12-18
+
+### Added
+
+- Add PMW3610 optical mouse sensor support for nRF and RP2040 with bit-bang SPI
+- Add support for configuring static output pins
+- DCDC config for nRF52840/nRF52833
+- Add `encoder_map` support in `keyboard.toml`
+- Add devcontainer config
+- Add sitemap to rmk.rs
+
+### Changed
+
+- Make `embedded-hal-async` a required dependency
+- Update default BLE connection parameters
+- Increase the default number of controller channel pub
+- Documentation update
+
+### Fixed
+
+- Fix compilation error when use `Macro()` in keymap config
+- Fix row2col matrix doesn't work issue
+- Fix `lm` key is not properly released
+
+
 ## [0.8.1] - 2025-11-25
 
 ### Changed

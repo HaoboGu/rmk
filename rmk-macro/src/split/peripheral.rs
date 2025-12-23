@@ -1,8 +1,8 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::{
-    BleConfig, BoardConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig, MatrixType,
-    SplitBoardConfig, SplitConfig,
+    BleConfig, BoardConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig,
+    MatrixType, SplitBoardConfig, SplitConfig,
 };
 use syn::ItemMod;
 
@@ -11,9 +11,11 @@ use crate::controller::expand_controller_init;
 use crate::entry::join_all_tasks;
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::flash::expand_flash_init;
+use crate::gpio_config::expand_output_initialization;
 use crate::import::expand_custom_imports;
 use crate::input_device::adc::expand_adc_device;
 use crate::input_device::encoder::expand_encoder_device;
+use crate::input_device::pmw3610::expand_pmw3610_device;
 use crate::keyboard::get_debouncer_type;
 use crate::keyboard_config::read_keyboard_toml_config;
 use crate::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
@@ -225,6 +227,8 @@ fn expand_split_peripheral(
         }
     }
 
+    let output_config = expand_output_initialization(peripheral_config.output.clone().unwrap_or_default(), &chip);
+
     // Get peripheral device and processor configuration
     let (device_initialization, devices, processors) = expand_peripheral_input_device_config(id, keyboard_config);
 
@@ -258,8 +262,15 @@ fn expand_split_peripheral(
         }
     };
 
-    let run_rmk_peripheral =
-        expand_split_peripheral_entry(id, &chip, split_config, peripheral_config, devices, processors, controllers);
+    let run_rmk_peripheral = expand_split_peripheral_entry(
+        id,
+        &chip,
+        split_config,
+        peripheral_config,
+        devices,
+        processors,
+        controllers,
+    );
 
     quote! {
         #imports
@@ -268,6 +279,7 @@ fn expand_split_peripheral(
         #controller_initializers
         #matrix_config
         #keymap_init
+        #output_config
         #device_initialization
         #run_rmk_peripheral
     }
@@ -441,6 +453,26 @@ pub(crate) fn expand_peripheral_input_device_config(
     };
 
     for initializer in encoder_devices {
+        initializations.extend(initializer.initializer);
+        let device_name = initializer.var_name;
+        devices.push(quote! { #device_name });
+    }
+
+    // generate PMW3610 configuration
+    let (pmw3610_devices, _pmw3610_processors) = match &board {
+        BoardConfig::Split(split_config) => expand_pmw3610_device(
+            split_config.peripheral[id]
+                .input_device
+                .clone()
+                .unwrap_or(InputDeviceConfig::default())
+                .pmw3610
+                .unwrap_or(Vec::new()),
+            &chip,
+        ),
+        _ => (vec![], vec![]),
+    };
+
+    for initializer in pmw3610_devices {
         initializations.extend(initializer.initializer);
         let device_name = initializer.var_name;
         devices.push(quote! { #device_name });

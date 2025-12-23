@@ -41,7 +41,9 @@ impl Controller for WpmController {
 }
 
 impl PollingController for WpmController {
-    const INTERVAL: embassy_time::Duration = embassy_time::Duration::from_secs(1);
+    fn interval(&self) -> embassy_time::Duration {
+        embassy_time::Duration::from_secs(1)
+    }
 
     async fn update(&mut self) {
         self.update_count = SAMPLES.min(self.update_count + 1);

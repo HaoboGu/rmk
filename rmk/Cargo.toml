@@ -1,6 +1,6 @@
 [package]
 name = "rmk"
-version = "0.8.1"
+version = "0.8.2"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
@@ -11,10 +11,10 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [dependencies]
-rmk-macro = { version = "=0.7.0", path = "../rmk-macro" }
-rmk-types = { version = "=0.2.1", path = "../rmk-types" }
+rmk-macro = { version = "=0.7.1", path = "../rmk-macro" }
+rmk-types = { version = "=0.2.2", path = "../rmk-types" }
 embedded-hal = { version = "1.0.0" }
-embedded-hal-async = { version = "1.0.0", optional = true }
+embedded-hal-async = { version = "1.0.0" }
 embedded-io-async = { version = "0.6" }
 embedded-storage = { version = "0.3", optional = true }
 embedded-storage-async = { version = "0.4", optional = true }
@@ -93,7 +93,7 @@ ctor = "0.6.0"
 rusty-fork = "0.3.0"
 
 [build-dependencies]
-rmk-config = { path = "../rmk-config", version = "=0.6.0" }
+rmk-config = { path = "../rmk-config", version = "=0.6.1" }
 toml = "0.9"
 serde = "1.0"
 serde_derive = "1.0"
@@ -132,7 +132,7 @@ defmt = [
     "dep:defmt",
     "rmk-types/defmt",
     "embedded-hal/defmt-03",
-    "embedded-hal-async?/defmt-03",
+    "embedded-hal-async/defmt-03",
     "embedded-io-async/defmt-03",
     "embassy-time/defmt",
     "embassy-usb/defmt",
@@ -163,7 +163,7 @@ std = [
 ]
 
 ## Enable async matrix scanning
-async_matrix = ["dep:embedded-hal-async"]
+async_matrix = []
 
 ## Enable to use controllers to control other hardwares on the board or peripheral
 controller = []

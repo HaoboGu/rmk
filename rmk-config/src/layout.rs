@@ -155,12 +155,29 @@ impl KeyboardTomlConfig {
         {
             return Err("keyboard.toml: Col number in keymap doesn't match with [layout.col]".to_string());
         }
+
+        // Process encoder map
+        let mut encoder_map: Vec<Vec<[String; 2]>> = vec![];
+        if let Some(deprecated_encoder_map) = &mut layout.encoder_map {
+            encoder_map.append(deprecated_encoder_map);
+        } else {
+            for layer in &layers {
+                let mut encoders = layer.encoders.clone().unwrap_or_default();
+                for [cw, ccw] in &mut encoders {
+                    *cw = Self::alias_resolver(cw, &aliases)?;
+                    *ccw = Self::alias_resolver(ccw, &aliases)?;
+                }
+                encoder_map.push(encoders);
+            }
+        }
+
         Ok((
             LayoutConfig {
                 rows: layout.rows,
                 cols: layout.cols,
                 layers: layout.layers,
                 keymap: final_layers,
+                encoder_map,
             },
             key_info,
         ))

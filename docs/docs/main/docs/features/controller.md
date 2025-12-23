@@ -63,12 +63,44 @@ Controllers that need periodic updates implement `PollingController`:
 
 ```rust
 impl PollingController for MyPollingController {
-    const INTERVAL: embassy_time::Duration = embassy_time::Duration::from_millis(100);
+    fn interval(&self) -> embassy_time::Duration {
+        embassy_time::Duration::from_millis(100)
+    }
 
     async fn update(&mut self) {
         // Periodic update logic (e.g., LED animations, sensor readings)
     }
 }
+```
+
+The polling interval can also be passed as a parameter like this:
+
+```rust
+struct ConfigurableController {
+    interval: embassy_time::Duration,
+}
+
+impl ConfigurableController {
+    /// Create a controller with a specific update frequency in Hz
+    pub fn with_hz(hz: u32) -> Self {
+        Self {
+            interval: embassy_time::Duration::from_hz(hz as u64),
+        }
+    }
+}
+
+impl PollingController for ConfigurableController {
+    fn interval(&self) -> embassy_time::Duration {
+        self.interval
+    }
+
+    async fn update(&mut self) {
+        // update periodic
+    }
+}
+
+// Usage: create a controller with 60Hz update rate
+let controller = ConfigurableController::with_hz(60);
 ```
 
 ### Controller Events
@@ -201,7 +233,9 @@ impl<P: StatefulOutputPin> Controller for BlinkingController<P> {
 }
 
 impl<P: StatefulOutputPin> PollingController for BlinkingController<P> {
-    const INTERVAL: embassy_time::Duration = embassy_time::Duration::from_millis(500);
+    fn interval(&self) -> embassy_time::Duration {
+        embassy_time::Duration::from_millis(500)
+    }
 
     async fn update(&mut self) {
         // Toggle LED every 500ms when active (i.e., current layer is not 0)

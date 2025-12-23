@@ -53,6 +53,7 @@ esp-rtos = { version = "0.2", features = ["esp-radio", "embassy"]}
 esp-bootloader-esp-idf = { version = "0.4", features = ["log-04"] }
 bt-hci = { version = "0.6" }
 rand_core = { version = "0.6", default-features = false }
+static_cell = "2"
 
 [build-dependencies]
 xz2 = "0.1.7"
