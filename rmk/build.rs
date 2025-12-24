@@ -31,7 +31,7 @@ fn main() {
     let mut user_toml: KeyboardTomlConfig =
         toml::from_str(&user_config_str).expect("Failed to parse KEYBOARD_TOML_PATH file\n");
 
-    // FIXME: calculate the number of controllers automatically
+    // Auto-calculate parameters including controller publisher/subscriber counts
     user_toml.auto_calculate_parameters();
 
     // Fix the default split_peripherals_num when `split` feature is enabled

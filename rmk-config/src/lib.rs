@@ -91,11 +91,87 @@ impl KeyboardTomlConfig {
         config
     }
 
+    /// Calculate required number of publishers based on keyboard configuration
+    fn calculate_publishers(&self) -> usize {
+        let mut count = 2; // Base: Keyboard + LED handler
+
+        // BLE publishers
+        if let Some(ble) = &self.ble {
+            if ble.enabled {
+                count += 2; // BleProfileManager + connection handler
+                if ble.battery_adc_pin.is_some() {
+                    count += 1; // BatteryMonitor
+                }
+            }
+        }
+
+        // Split publishers
+        if let Some(split) = &self.split {
+            // Each peripheral needs: driver + central BLE handler
+            count += split.peripheral.len() * 2;
+
+            // Central battery monitoring
+            if split.central.battery_adc_pin.is_some() {
+                count += 1;
+            }
+
+            // Peripheral publishers
+            if !split.peripheral.is_empty() {
+                count += 1;
+                for peripheral in &split.peripheral {
+                    if peripheral.battery_adc_pin.is_some() {
+                        count += 1;
+                    }
+                }
+            }
+        }
+
+        // Add safety buffer for edge cases and custom controllers
+        count + 2
+    }
+
+    /// Calculate required number of subscribers based on keyboard configuration
+    fn calculate_subscribers(&self) -> usize {
+        let mut count = 1; // Base: WpmController
+
+        // LED indicators
+        if let Some(light) = &self.light {
+            if light.capslock.is_some() {
+                count += 1;
+            }
+            if light.numslock.is_some() {
+                count += 1;
+            }
+            if light.scrolllock.is_some() {
+                count += 1;
+            }
+        }
+
+        // Battery LED
+        if let Some(ble) = &self.ble {
+            if ble.charge_led.is_some() {
+                count += 1;
+            }
+        }
+
+        // Split peripherals
+        if let Some(split) = &self.split {
+            count += split.peripheral.len();
+            // If there are peripherals, add subscriber for peripheral battery monitoring
+            if !split.peripheral.is_empty() {
+                count += 1; // PeripheralBatteryMonitor
+            }
+        }
+
+        // Add safety buffer
+        count + 2
+    }
+
     /// Auto calculate some parameters in toml:
     /// - Update morse_max_num to fit all configured morses
     /// - Update max_patterns_per_key to fit the max number of configured (pattern, action) pairs per morse key
     /// - Update peripheral number based on the number of split boards
-    /// - TODO: Update controller number based on the number of split boards
+    /// - Update controller publisher and subscriber counts based on configuration
     pub fn auto_calculate_parameters(&mut self) {
         // Update the number of peripherals
         if let Some(split) = &self.split
@@ -135,6 +211,19 @@ impl KeyboardTomlConfig {
                 // Update the morse_max_num
                 self.rmk.morse_max_num = self.rmk.morse_max_num.max(morses.len());
             }
+        }
+
+        // Calculate and update controller publisher/subscriber counts
+        let calculated_pubs = self.calculate_publishers();
+        let calculated_subs = self.calculate_subscribers();
+
+        // Use max of calculated vs user-provided
+        if self.rmk.controller_channel_pubs < calculated_pubs {
+            self.rmk.controller_channel_pubs = calculated_pubs;
+        }
+
+        if self.rmk.controller_channel_subs < calculated_subs {
+            self.rmk.controller_channel_subs = calculated_subs;
         }
     }
 }
@@ -181,10 +270,14 @@ pub struct RmkConstantsConfig {
     /// Controller event channel size
     #[serde_inline_default(16)]
     pub controller_channel_size: usize,
-    /// Number of publishers to controllers
+    /// Number of publishers to controller channel.
+    /// Auto-calculated from keyboard.toml if not set.
+    /// Increase manually if using custom controllers.
     #[serde_inline_default(12)]
     pub controller_channel_pubs: usize,
-    /// Number of controllers
+    /// Number of subscribers to controller channel.
+    /// Auto-calculated from keyboard.toml if not set.
+    /// Increase manually if using custom controllers.
     #[serde_inline_default(8)]
     pub controller_channel_subs: usize,
     /// Report channel size
