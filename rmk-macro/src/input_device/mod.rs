@@ -3,7 +3,7 @@ use encoder::expand_encoder_device;
 use pmw3610::expand_pmw3610_device;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use rmk_config::{BoardConfig, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig, UniBodyConfig};
+use rmk_config::{BleConfig, BoardConfig, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig, UniBodyConfig};
 
 pub(crate) mod adc;
 pub(crate) mod encoder;
@@ -38,17 +38,35 @@ pub(crate) fn expand_input_device_config(
             ble_config,
             chip.series.clone(),
         ),
-        BoardConfig::Split(split_config) => expand_adc_device(
-            split_config
-                .central
-                .input_device
-                .clone()
-                .unwrap_or(InputDeviceConfig::default())
-                .joystick
-                .unwrap_or(Vec::new()),
-            ble_config,
-            chip.series.clone(),
-        ),
+        BoardConfig::Split(split_config) => {
+            // For split central, read battery config from split.central instead of [ble]
+            // This provides better consistency with peripheral configuration
+            let central_ble_config = if split_config.central.battery_adc_pin.is_some() {
+                // Central has its own battery config in [split.central]
+                Some(BleConfig {
+                    enabled: ble_config.as_ref().map(|c| c.enabled).unwrap_or(false),
+                    battery_adc_pin: split_config.central.battery_adc_pin.clone(),
+                    adc_divider_measured: split_config.central.adc_divider_measured,
+                    adc_divider_total: split_config.central.adc_divider_total,
+                    ..Default::default()
+                })
+            } else {
+                // Fall back to [ble] section for backward compatibility
+                ble_config
+            };
+
+            expand_adc_device(
+                split_config
+                    .central
+                    .input_device
+                    .clone()
+                    .unwrap_or(InputDeviceConfig::default())
+                    .joystick
+                    .unwrap_or(Vec::new()),
+                central_ble_config,
+                chip.series.clone(),
+            )
+        }
     };
 
     for initializer in adc_initializers {
