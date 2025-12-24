@@ -42,6 +42,20 @@ pub(crate) fn expand_input_device_config(
             // For split central, read battery config from split.central instead of [ble]
             // This provides better consistency with peripheral configuration
             let central_ble_config = if split_config.central.battery_adc_pin.is_some() {
+                // Validate: warn if both [ble] and [split.central] have different battery configs
+                if let Some(ref ble_cfg) = ble_config {
+                    if ble_cfg.battery_adc_pin.is_some() {
+                        let ble_matches = ble_cfg.battery_adc_pin == split_config.central.battery_adc_pin
+                            && ble_cfg.adc_divider_measured == split_config.central.adc_divider_measured
+                            && ble_cfg.adc_divider_total == split_config.central.adc_divider_total;
+
+                        if !ble_matches {
+                            eprintln!("warning: Battery configuration found in both [ble] and [split.central] sections with different values");
+                            eprintln!("help: [split.central] configuration will be used. Remove [ble] battery config to avoid confusion.");
+                        }
+                    }
+                }
+
                 // Central has its own battery config in [split.central]
                 Some(BleConfig {
                     enabled: ble_config.as_ref().map(|c| c.enabled).unwrap_or(false),
