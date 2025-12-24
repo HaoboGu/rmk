@@ -66,7 +66,7 @@ pub(crate) fn usb_config_default(keyboard_config: &KeyboardTomlConfig) -> TokenS
                 // use hardware vbus
                 let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect::new(Irqs));
             },
-            ChipSeries::Rp2040 => quote! {
+            ChipSeries::Rp2040 | ChipSeries::Rp2350 => quote! {
                 let driver = ::embassy_rp::usb::Driver::new(p.#peripheral_name, Irqs);
             },
             ChipSeries::Esp32 => {

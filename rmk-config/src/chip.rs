@@ -6,6 +6,7 @@ pub enum ChipSeries {
     Nrf52,
     #[default]
     Rp2040,
+    Rp2350,
     Esp32,
 }
 
@@ -26,6 +27,9 @@ impl ChipModel {
                     Ok(include_str!("default_config/nrf52840.toml"))
                 }
                 "Pi Pico W" | "Pico W" | "pi_pico_w" | "pico_w" => Ok(include_str!("default_config/pi_pico_w.toml")),
+                "Pi Pico 2 W" | "Pico 2 W" | "pi_pico_2_w" | "pico_2_w" => {
+                    Ok(include_str!("default_config/pi_pico_2_w.toml"))
+                }
                 _ => {
                     eprintln!("Fallback to use chip config for board: {}", board);
                     self.get_default_config_str_from_chip(&self.chip)
@@ -43,6 +47,7 @@ impl ChipModel {
             "nrf52832" => Ok(include_str!("default_config/nrf52832.toml")),
             "nrf52810" | "nrf52811" => Ok(include_str!("default_config/nrf52810.toml")),
             "rp2040" => Ok(include_str!("default_config/rp2040.toml")),
+            "rp2350" => Ok(include_str!("default_config/rp2350.toml")),
             s if s.starts_with("stm32") => Ok(include_str!("default_config/stm32.toml")),
             s if s.starts_with("esp32") => {
                 if s == "esp32s3" {
@@ -80,6 +85,11 @@ impl KeyboardTomlConfig {
                     chip: "rp2040".to_string(),
                     board: Some(board),
                 }),
+                "Pi Pico 2 W" | "Pico 2 W" | "pi_pico_2_w" | "pico_2_w" => Ok(ChipModel {
+                    series: ChipSeries::Rp2350,
+                    chip: "rp2350".to_string(),
+                    board: Some(board),
+                }),
                 _ => Err(format!("Unsupported board: {}", board)),
             }
         } else if let Some(chip) = keyboard.chip.clone() {
@@ -92,6 +102,12 @@ impl KeyboardTomlConfig {
             } else if chip.to_lowercase().starts_with("nrf52") {
                 Ok(ChipModel {
                     series: ChipSeries::Nrf52,
+                    chip,
+                    board: None,
+                })
+            } else if chip.to_lowercase().starts_with("rp2350") {
+                Ok(ChipModel {
+                    series: ChipSeries::Rp2350,
                     chip,
                     board: None,
                 })

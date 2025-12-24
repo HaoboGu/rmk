@@ -24,7 +24,7 @@ impl UsbInfo {
         match chip.series {
             ChipSeries::Stm32 => UsbInfo::new("PA11", "PA12", "USB_OTG_FS", "USB_FS"),
             ChipSeries::Nrf52 => UsbInfo::new("", "", "USBD", "USBD"),
-            ChipSeries::Rp2040 => UsbInfo::new("", "", "USB", "USBCTRL_IRQ"),
+            ChipSeries::Rp2040 | ChipSeries::Rp2350 => UsbInfo::new("", "", "USB", "USBCTRL_IRQ"),
             _ => UsbInfo::new(
                 "default_dm",
                 "default_dp",

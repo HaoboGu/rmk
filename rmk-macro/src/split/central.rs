@@ -46,7 +46,7 @@ pub(crate) fn expand_serial_init(chip: &ChipModel, serial: Vec<SerialConfig>) ->
             let #rx_buf_name = &mut #rx_buf_static.init([0_u8; ::rmk::split::SPLIT_MESSAGE_MAX_SIZE])[..];
         };
         let uart_init = match chip.series {
-            ChipSeries::Rp2040 => {
+            ChipSeries::Rp2040 | ChipSeries::Rp2350 => {
                 let uart_instance = format_ident!("{}", s.instance);
                 let uart_name = format_ident!("{}", s.instance.to_lowercase());
                 let tx_pin = format_ident!("{}", s.tx_pin);

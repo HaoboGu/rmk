@@ -120,7 +120,7 @@ fn expand_bind_interrupt_for_split_peripheral(chip: &ChipModel, communication: &
                 }
             }
         }
-        ChipSeries::Rp2040 => {
+        ChipSeries::Rp2040 | ChipSeries::Rp2350 => {
             if communication.ble_enabled() {
                 quote! {
                     use ::embassy_rp::bind_interrupts;

@@ -58,7 +58,7 @@ pub(crate) fn get_input_pin_type(chip: &ChipModel, async_matrix: bool) -> proc_m
             }
         }
         ChipSeries::Nrf52 => quote! { ::embassy_nrf::gpio::Input },
-        ChipSeries::Rp2040 => quote! { ::embassy_rp::gpio::Input },
+        ChipSeries::Rp2040 | ChipSeries::Rp2350 => quote! { ::embassy_rp::gpio::Input },
         ChipSeries::Esp32 => quote! { ::esp_hal::gpio::Input },
     }
 }
@@ -67,7 +67,7 @@ pub(crate) fn get_output_pin_type(chip: &ChipModel) -> proc_macro2::TokenStream 
     match chip.series {
         ChipSeries::Stm32 => quote! {::embassy_stm32::gpio::Output},
         ChipSeries::Nrf52 => quote! {::embassy_nrf::gpio::Output},
-        ChipSeries::Rp2040 => quote! {::embassy_rp::gpio::Output},
+        ChipSeries::Rp2040 | ChipSeries::Rp2350 => quote! {::embassy_rp::gpio::Output},
         ChipSeries::Esp32 => quote! { ::esp_hal::gpio::Output },
     }
 }
@@ -133,7 +133,7 @@ pub(crate) fn convert_gpio_str_to_output_pin(
                 ::embassy_nrf::gpio::Output::new(p.#gpio_ident, ::embassy_nrf::gpio::Level::#default_level_ident, ::embassy_nrf::gpio::OutputDrive::Standard)
             }
         }
-        ChipSeries::Rp2040 => {
+        ChipSeries::Rp2040 | ChipSeries::Rp2350 => {
             quote! {
                 ::embassy_rp::gpio::Output::new(p.#gpio_ident, ::embassy_rp::gpio::Level::#default_level_ident)
             }
@@ -153,7 +153,7 @@ pub(crate) fn convert_gpio_str_to_persisted_output_pin(
 ) -> proc_macro2::TokenStream {
     let initializer = convert_gpio_str_to_output_pin(chip, gpio_name, initial_level_high);
     match chip.series {
-        ChipSeries::Stm32 | ChipSeries::Esp32 | ChipSeries::Rp2040 => {
+        ChipSeries::Stm32 | ChipSeries::Esp32 | ChipSeries::Rp2040 | ChipSeries::Rp2350 => {
             quote! { ::core::mem::forget(#initializer); }
         }
         ChipSeries::Nrf52 => {
@@ -200,7 +200,7 @@ pub(crate) fn convert_gpio_str_to_input_pin(
                 ::embassy_nrf::gpio::Input::new(p.#gpio_ident, ::embassy_nrf::gpio::Pull::#default_pull_ident)
             }
         }
-        ChipSeries::Rp2040 => {
+        ChipSeries::Rp2040 | ChipSeries::Rp2350 => {
             quote! {
                 ::embassy_rp::gpio::Input::new(p.#gpio_ident, ::embassy_rp::gpio::Pull::#default_pull_ident)
             }

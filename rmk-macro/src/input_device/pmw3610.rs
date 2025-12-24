@@ -13,11 +13,11 @@ pub(crate) fn expand_pmw3610_device(
         return (Vec::new(), Vec::new());
     }
 
-    // PMW3610 is only supported on nRF52 and RP2040
+    // PMW3610 is only supported on nRF52 and RP2040/RP2350
     match chip.series {
-        ChipSeries::Nrf52 | ChipSeries::Rp2040 => {}
+        ChipSeries::Nrf52 | ChipSeries::Rp2040 | ChipSeries::Rp2350 => {}
         _ => {
-            panic!("PMW3610 is only supported on nRF52 and RP2040 chips");
+            panic!("PMW3610 is only supported on nRF52 and RP2040/RP2350 chips");
         }
     }
 
@@ -67,7 +67,7 @@ pub(crate) fn expand_pmw3610_device(
                 ChipSeries::Nrf52 => quote! {
                     Some(::embassy_nrf::gpio::Input::new(p.#motion_ident, ::embassy_nrf::gpio::Pull::Up))
                 },
-                ChipSeries::Rp2040 => quote! {
+                ChipSeries::Rp2040 | ChipSeries::Rp2350 => quote! {
                     Some(::embassy_rp::gpio::Input::new(p.#motion_ident, ::embassy_rp::gpio::Pull::Up))
                 },
                 _ => unreachable!(),
@@ -77,7 +77,7 @@ pub(crate) fn expand_pmw3610_device(
                 ChipSeries::Nrf52 => quote! {
                     None::<::embassy_nrf::gpio::Input<'static>>
                 },
-                ChipSeries::Rp2040 => quote! {
+                ChipSeries::Rp2040 | ChipSeries::Rp2350 => quote! {
                     None::<::embassy_rp::gpio::Input<'static>>
                 },
                 _ => unreachable!(),
@@ -110,7 +110,7 @@ pub(crate) fn expand_pmw3610_device(
                     Pmw3610Device::new(spi_bus, cs, motion, config)
                 };
             },
-            ChipSeries::Rp2040 => quote! {
+            ChipSeries::Rp2040 | ChipSeries::Rp2350 => quote! {
                 let mut #device_ident = {
                     use ::embassy_rp::gpio::{Output, Flex, Level};
                     use ::rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610Config, Pmw3610Device};

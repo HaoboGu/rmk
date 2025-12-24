@@ -27,7 +27,7 @@ pub(crate) fn expand_flash_init(keyboard_config: &KeyboardTomlConfig) -> TokenSt
                     let flash = ::nrf_mpsl::Flash::take(mpsl, p.NVMC);
                 }
             }
-            ChipSeries::Rp2040 => quote! {
+            ChipSeries::Rp2040 | ChipSeries::Rp2350 => quote! {
                 const FLASH_SIZE: usize = 2 * 1024 * 1024;
                 let flash = ::embassy_rp::flash::Flash::<_, ::embassy_rp::flash::Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH1);
             },

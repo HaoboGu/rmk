@@ -140,7 +140,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                 #ble_init
             }
         }
-        ChipSeries::Rp2040 => {
+        ChipSeries::Rp2040 | ChipSeries::Rp2350 => {
             let ble_addr = get_ble_addr(keyboard_config, peripheral_id);
             if communication.ble_enabled() {
                 quote! {
@@ -240,7 +240,7 @@ fn override_chip_config(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
         ChipSeries::Nrf52 => initialization_tokens.extend(quote! {
             let mut p = ::embassy_nrf::init(config);
         }),
-        ChipSeries::Rp2040 => initialization_tokens.extend(quote! {
+        ChipSeries::Rp2040 | ChipSeries::Rp2350 => initialization_tokens.extend(quote! {
             let mut p = ::embassy_rp::init(config);
         }),
         ChipSeries::Esp32 => initialization_tokens.extend(quote! {

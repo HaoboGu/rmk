@@ -172,7 +172,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
                 }
             }
         }
-        rmk_config::ChipSeries::Rp2040 => {
+        rmk_config::ChipSeries::Rp2040 | rmk_config::ChipSeries::Rp2350 => {
             let usb_info = communication.get_usb_info().expect("no usb info for the chip");
             let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
             let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
