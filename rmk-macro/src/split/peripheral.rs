@@ -387,6 +387,7 @@ pub(crate) fn expand_peripheral_input_device_config(
     let chip = keyboard_config.get_chip_model().unwrap();
 
     // Create peripheral-specific BLE config for battery
+    // Only use peripheral's own battery config, do NOT fallback to top-level BLE config
     let peripheral_ble_config = match &board {
         BoardConfig::Split(split_config) => {
             let peripheral_board = &split_config.peripheral[id];
@@ -400,8 +401,7 @@ pub(crate) fn expand_peripheral_input_device_config(
                     ..Default::default()
                 })
             } else {
-                // Fall back to top-level BLE config
-                ble_config.clone()
+                None
             }
         }
         _ => ble_config.clone(),
