@@ -6,6 +6,7 @@ use rmk_config::{
 };
 use syn::ItemMod;
 
+use crate::bind_interrupt::{collect_iqs5xx_i2c_instances, expand_i2c_irqs};
 use crate::chip_init::expand_chip_init;
 use crate::controller::expand_controller_init;
 use crate::entry::join_all_tasks;
@@ -15,6 +16,7 @@ use crate::gpio_config::expand_output_initialization;
 use crate::import::expand_custom_imports;
 use crate::input_device::adc::expand_adc_device;
 use crate::input_device::encoder::expand_encoder_device;
+use crate::input_device::iqs5xx::expand_iqs5xx_device;
 use crate::input_device::pmw3610::expand_pmw3610_device;
 use crate::keyboard::get_debouncer_type;
 use crate::keyboard_config::read_keyboard_toml_config;
@@ -33,8 +35,12 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
     let main_function = expand_split_peripheral(id, &toml_config, item_mod, &rmk_features);
     let chip = toml_config.get_chip_model().unwrap();
 
-    let bind_interrupts =
-        expand_bind_interrupt_for_split_peripheral(&chip, &toml_config.get_communication_config().unwrap());
+    let bind_interrupts = expand_bind_interrupt_for_split_peripheral(
+        id,
+        &chip,
+        &toml_config,
+        &toml_config.get_communication_config().unwrap(),
+    );
 
     let main_function_sig = if chip.series == ChipSeries::Esp32 {
         quote! {
@@ -62,7 +68,12 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
     }
 }
 
-fn expand_bind_interrupt_for_split_peripheral(chip: &ChipModel, communication: &CommunicationConfig) -> TokenStream2 {
+fn expand_bind_interrupt_for_split_peripheral(
+    id: usize,
+    chip: &ChipModel,
+    keyboard_config: &KeyboardTomlConfig,
+    communication: &CommunicationConfig,
+) -> TokenStream2 {
     match chip.series {
         ChipSeries::Nrf52 => {
             let ble_config = communication.get_ble_config().unwrap();
@@ -121,10 +132,13 @@ fn expand_bind_interrupt_for_split_peripheral(chip: &ChipModel, communication: &
             }
         }
         ChipSeries::Rp2040 => {
+            let i2c_instances = collect_iqs5xx_i2c_instances(keyboard_config, Some(id));
+            let i2c_irqs = expand_i2c_irqs(i2c_instances.clone());
             if communication.ble_enabled() {
                 quote! {
                     use ::embassy_rp::bind_interrupts;
                     bind_interrupts!(struct Irqs {
+                        #i2c_irqs
                         PIO0_IRQ_0 => ::embassy_rp::pio::InterruptHandler<::embassy_rp::peripherals::PIO0>;
                     });
                     #[::embassy_executor::task]
@@ -133,7 +147,16 @@ fn expand_bind_interrupt_for_split_peripheral(chip: &ChipModel, communication: &
                     }
                 }
             } else {
-                quote! {}
+                if i2c_instances.is_empty() {
+                    quote! {}
+                } else {
+                    quote! {
+                        use ::embassy_rp::bind_interrupts;
+                        bind_interrupts!(struct Irqs {
+                            #i2c_irqs
+                        });
+                    }
+                }
             }
         }
         _ => quote! {},
@@ -405,6 +428,26 @@ pub(crate) fn expand_peripheral_input_device_config(
     };
 
     for initializer in pmw3610_devices {
+        initializations.extend(initializer.initializer);
+        let device_name = initializer.var_name;
+        devices.push(quote! { #device_name });
+    }
+
+    // generate IQS5xx configuration
+    let (iqs5xx_devices, _iqs5xx_processors) = match &board {
+        BoardConfig::Split(split_config) => expand_iqs5xx_device(
+            split_config.peripheral[id]
+                .input_device
+                .clone()
+                .unwrap_or(InputDeviceConfig::default())
+                .iqs5xx
+                .unwrap_or(Vec::new()),
+            &chip,
+        ),
+        _ => (vec![], vec![]),
+    };
+
+    for initializer in iqs5xx_devices {
         initializations.extend(initializer.initializer);
         let device_name = initializer.var_name;
         devices.push(quote! { #device_name });

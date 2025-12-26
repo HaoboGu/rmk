@@ -1,5 +1,6 @@
 use adc::expand_adc_device;
 use encoder::expand_encoder_device;
+use iqs5xx::expand_iqs5xx_device;
 use pmw3610::expand_pmw3610_device;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
@@ -7,6 +8,7 @@ use rmk_config::{BoardConfig, CommunicationConfig, InputDeviceConfig, KeyboardTo
 
 pub(crate) mod adc;
 pub(crate) mod encoder;
+pub(crate) mod iqs5xx;
 pub(crate) mod pmw3610;
 
 /// Initializer struct for input devices
@@ -121,6 +123,35 @@ pub(crate) fn expand_input_device_config(
         processors.push(quote! { #processor_name });
     }
 
+    // generate IQS5xx configuration
+    let (iqs5xx_device_initializers, iqs5xx_processor_initializers) = match &board {
+        BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => {
+            expand_iqs5xx_device(input_device.clone().iqs5xx.unwrap_or(Vec::new()), &chip)
+        }
+        BoardConfig::Split(split_config) => expand_iqs5xx_device(
+            split_config
+                .central
+                .input_device
+                .clone()
+                .unwrap_or(InputDeviceConfig::default())
+                .iqs5xx
+                .unwrap_or(Vec::new()),
+            &chip,
+        ),
+    };
+
+    for initializer in iqs5xx_device_initializers {
+        initialization.extend(initializer.initializer);
+        let device_name = initializer.var_name;
+        devices.push(quote! { #device_name });
+    }
+
+    for initializer in iqs5xx_processor_initializers {
+        initialization.extend(initializer.initializer);
+        let processor_name = initializer.var_name;
+        processors.push(quote! { #processor_name });
+    }
+
     // For split keyboards, also generate processors for PMW3610 devices on peripherals
     // The devices run on peripherals, but processors need to run on central to handle the events
     if let BoardConfig::Split(split_config) = &board {
@@ -136,6 +167,24 @@ pub(crate) fn expand_input_device_config(
             let (_, peripheral_pmw3610_processors) = expand_pmw3610_device(peripheral_pmw3610_config, &chip);
 
             for initializer in peripheral_pmw3610_processors {
+                initialization.extend(initializer.initializer);
+                let processor_name = initializer.var_name;
+                processors.push(quote! { #processor_name });
+            }
+        }
+
+        for peripheral in &split_config.peripheral {
+            let peripheral_iqs5xx_config = peripheral
+                .input_device
+                .clone()
+                .unwrap_or(InputDeviceConfig::default())
+                .iqs5xx
+                .unwrap_or(Vec::new());
+
+            // Only generate processors (not devices) for peripheral IQS5xx
+            let (_, peripheral_iqs5xx_processors) = expand_iqs5xx_device(peripheral_iqs5xx_config, &chip);
+
+            for initializer in peripheral_iqs5xx_processors {
                 initialization.extend(initializer.initializer);
                 let processor_name = initializer.var_name;
                 processors.push(quote! { #processor_name });

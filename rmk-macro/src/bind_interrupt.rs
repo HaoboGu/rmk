@@ -3,7 +3,8 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::{BoardConfig, KeyboardTomlConfig};
+use rmk_config::{BoardConfig, InputDeviceConfig, KeyboardTomlConfig};
+use std::collections::BTreeSet;
 use syn::ItemMod;
 
 /// Expand `bind_interrupt!` stuffs, and other code before `main` function
@@ -176,6 +177,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
             let usb_info = communication.get_usb_info().expect("no usb info for the chip");
             let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
             let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
+            let i2c_irqs = expand_i2c_irqs(collect_iqs5xx_i2c_instances(keyboard_config, None));
             // For Pico W, enabled PIO0_IRQ_0 interrupt
             let (pio0_irq_0, ble_task) = if communication.ble_enabled() {
                 (
@@ -196,11 +198,72 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
                 use ::embassy_rp::bind_interrupts;
                 bind_interrupts!(struct Irqs {
                     #interrupt_name => ::embassy_rp::usb::InterruptHandler<::embassy_rp::peripherals::#peripheral_name>;
+                    #i2c_irqs
                     #pio0_irq_0
                 });
                 #ble_task
             }
         }
         rmk_config::ChipSeries::Esp32 => quote! {},
+    }
+}
+
+pub(crate) fn collect_iqs5xx_i2c_instances(
+    keyboard_config: &KeyboardTomlConfig,
+    peripheral_id: Option<usize>,
+) -> Vec<String> {
+    let mut instances = Vec::new();
+    let board = keyboard_config.get_board_config().unwrap();
+
+    let mut push_from_input_device = |input_device: InputDeviceConfig| {
+        for dev in input_device.iqs5xx.unwrap_or_default() {
+            instances.push(dev.i2c.instance);
+        }
+    };
+
+    match board {
+        BoardConfig::UniBody(uni) => {
+            push_from_input_device(uni.input_device.clone());
+        }
+        BoardConfig::Split(split) => {
+            if let Some(id) = peripheral_id {
+                let peripheral = split.peripheral.get(id).expect("Missing peripheral config");
+                push_from_input_device(peripheral.input_device.clone().unwrap_or_default());
+            } else {
+                // Central only.
+                push_from_input_device(split.central.input_device.clone().unwrap_or_default());
+            }
+        }
+    }
+
+    instances
+}
+
+pub(crate) fn expand_i2c_irqs(instances: Vec<String>) -> TokenStream2 {
+    let mut irqs = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    for inst in instances {
+        let inst = inst.trim().to_string();
+        if !seen.insert(inst.clone()) {
+            continue;
+        }
+        match inst.as_str() {
+            "I2C0" => {
+                irqs.push(quote! {
+                    I2C0_IRQ => ::embassy_rp::i2c::InterruptHandler<::embassy_rp::peripherals::I2C0>;
+                });
+            }
+            "I2C1" => {
+                irqs.push(quote! {
+                    I2C1_IRQ => ::embassy_rp::i2c::InterruptHandler<::embassy_rp::peripherals::I2C1>;
+                });
+            }
+            _ => panic!("Invalid I2C instance: {inst}. Expected I2C0 or I2C1."),
+        }
+    }
+
+    quote! {
+        #(#irqs)*
     }
 }

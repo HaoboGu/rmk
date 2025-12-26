@@ -707,6 +707,7 @@ pub struct InputDeviceConfig {
     pub pointing: Option<Vec<PointingDeviceConfig>>,
     pub joystick: Option<Vec<JoystickConfig>>,
     pub pmw3610: Option<Vec<Pmw3610Config>>,
+    pub iqs5xx: Option<Vec<Iqs5xxConfig>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -754,6 +755,64 @@ pub struct Pmw3610Config {
     /// Enable smart mode for better tracking on shiny surfaces
     #[serde(default)]
     pub smart_mode: bool,
+}
+
+/// IQS5xx trackpad configuration
+#[serde_inline_default]
+#[derive(Clone, Debug, Deserialize)]
+#[allow(unused)]
+#[serde(deny_unknown_fields)]
+pub struct Iqs5xxConfig {
+    /// Name of the device (used for variable naming)
+    pub name: String,
+    /// I2C pins and address
+    pub i2c: I2cConfig,
+    /// Ready pin
+    pub rdy: String,
+    /// Reset pin
+    pub rst: String,
+    /// Enable single tap gesture
+    #[serde_inline_default(true)]
+    pub enable_single_tap: bool,
+    /// Enable press-and-hold gesture
+    #[serde_inline_default(true)]
+    pub enable_press_and_hold: bool,
+    /// Press-and-hold time in ms
+    #[serde_inline_default(250)]
+    pub press_and_hold_time_ms: u16,
+    /// Enable two-finger tap gesture
+    #[serde_inline_default(true)]
+    pub enable_two_finger_tap: bool,
+    /// Enable two-finger scroll gesture
+    #[serde_inline_default(true)]
+    pub enable_scroll: bool,
+    /// Invert X axis
+    #[serde_inline_default(false)]
+    pub invert_x: bool,
+    /// Invert Y axis
+    #[serde_inline_default(false)]
+    pub invert_y: bool,
+    /// Swap X and Y axes
+    #[serde_inline_default(false)]
+    pub swap_xy: bool,
+    /// Bottom beta sensitivity value
+    #[serde_inline_default(5)]
+    pub bottom_beta: u8,
+    /// Stationary threshold sensitivity value
+    #[serde_inline_default(5)]
+    pub stationary_threshold: u8,
+    /// Polling interval in ms
+    #[serde_inline_default(5)]
+    pub poll_interval_ms: u64,
+    /// Scroll divisor for wheel/pan scaling
+    #[serde_inline_default(32)]
+    pub scroll_divisor: u16,
+    /// Natural scrolling on X axis
+    #[serde_inline_default(false)]
+    pub natural_scroll_x: bool,
+    /// Natural scrolling on Y axis
+    #[serde_inline_default(false)]
+    pub natural_scroll_y: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -833,6 +892,7 @@ pub struct I2cConfig {
     pub sda: String,
     pub scl: String,
     pub address: u8,
+    pub frequency: Option<u32>,
 }
 
 /// Configuration for an output pin

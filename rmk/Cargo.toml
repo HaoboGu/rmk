@@ -13,6 +13,7 @@ resolver = "2"
 [dependencies]
 rmk-macro = { version = "=0.7.1", path = "../rmk-macro" }
 rmk-types = { version = "=0.2.2", path = "../rmk-types" }
+rmk-driver-azoteq-iqs5xx = { path = "../../rmk-driver-azoteq-iqs5xx", default-features = false }
 embedded-hal = { version = "1.0.0" }
 embedded-hal-async = { version = "1.0.0" }
 embedded-io-async = { version = "0.6" }
