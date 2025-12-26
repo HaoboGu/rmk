@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `report_hz` option for Pmw3610Device
+
 ### Changed
 
 - **BREAKING**: `PollingController::INTERVAL` constant is now `PollingController::interval()` method, allowing dynamic interval configuration at runtime
