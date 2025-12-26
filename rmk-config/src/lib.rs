@@ -657,6 +657,10 @@ const fn default_false() -> bool {
     false
 }
 
+const fn default_pmw3610_report_hz() -> u16 {
+    125
+}
+
 fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
     let input: String = de::Deserialize::deserialize(deserializer)?;
     let num = input.trim_end_matches(|c: char| !c.is_numeric());
@@ -754,6 +758,10 @@ pub struct Pmw3610Config {
     /// Enable smart mode for better tracking on shiny surfaces
     #[serde(default)]
     pub smart_mode: bool,
+
+    /// Report rate (Hz). Motion will be accumulated and emitted at this rate.
+    #[serde(default = "default_pmw3610_report_hz")]
+    pub report_hz: u16,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

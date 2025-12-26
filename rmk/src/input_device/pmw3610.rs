@@ -5,7 +5,7 @@
 
 use core::cell::RefCell;
 
-use embassy_time::{Duration, Timer};
+use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::spi::SpiBus;
 use usbd_hid::descriptor::MouseReport;
@@ -454,6 +454,11 @@ where
     sensor: Pmw3610<SPI, CS, MOTION>,
     init_state: InitState,
     poll_interval: Duration,
+    report_interval: Duration,
+    last_poll: Instant,
+    last_report: Instant,
+    accumulated_x: i32,
+    accumulated_y: i32,
 }
 
 impl<SPI, CS, MOTION> Pmw3610Device<SPI, CS, MOTION>
@@ -463,14 +468,30 @@ where
     MOTION: InputPin,
 {
     const MAX_INIT_RETRIES: u8 = 3;
+    const DEFAULT_POLL_INTERVAL_US: u64 = 500;
+    const DEFAULT_REPORT_HZ: u16 = 125;
 
     /// Create a new PMW3610 device for RMK
     pub fn new(spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw3610Config) -> Self {
-        Self {
-            sensor: Pmw3610::new(spi, cs, motion_gpio, config),
-            init_state: InitState::Pending,
-            poll_interval: Duration::from_micros(500),
-        }
+        Self::with_poll_interval_and_report_hz(
+            spi,
+            cs,
+            motion_gpio,
+            config,
+            Self::DEFAULT_POLL_INTERVAL_US,
+            Self::DEFAULT_REPORT_HZ,
+        )
+    }
+
+    /// Create a new PMW3610 device with custom report rate (Hz)
+    pub fn with_report_hz(
+        spi: SPI,
+        cs: CS,
+        motion_gpio: Option<MOTION>,
+        config: Pmw3610Config,
+        report_hz: u16,
+    ) -> Self {
+        Self::with_poll_interval_and_report_hz(spi, cs, motion_gpio, config, Self::DEFAULT_POLL_INTERVAL_US, report_hz)
     }
 
     /// Create a new PMW3610 device with custom poll interval
@@ -481,11 +502,82 @@ where
         config: Pmw3610Config,
         poll_interval_us: u64,
     ) -> Self {
+        Self::with_poll_interval_and_report_hz(spi, cs, motion_gpio, config, poll_interval_us, Self::DEFAULT_REPORT_HZ)
+    }
+
+    /// Create a new PMW3610 device with custom poll interval and report rate
+    pub fn with_poll_interval_and_report_hz(
+        spi: SPI,
+        cs: CS,
+        motion_gpio: Option<MOTION>,
+        config: Pmw3610Config,
+        poll_interval_us: u64,
+        report_hz: u16,
+    ) -> Self {
+        let report_interval = Duration::from_hz(report_hz as u64);
+
+        // Polling should be more frequent than reporting
+        let poll_interval = Duration::from_micros(poll_interval_us).min(report_interval);
+
         Self {
             sensor: Pmw3610::new(spi, cs, motion_gpio, config),
             init_state: InitState::Pending,
-            poll_interval: Duration::from_micros(poll_interval_us),
+            poll_interval,
+            report_interval,
+            last_poll: Instant::MIN,
+            last_report: Instant::MIN,
+            accumulated_x: 0,
+            accumulated_y: 0,
         }
+    }
+
+    async fn poll_once(&mut self) {
+        if self.init_state != InitState::Ready && !self.try_init().await {
+            return;
+        }
+
+        if !self.sensor.motion_pending() {
+            return;
+        }
+
+        match self.sensor.read_motion().await {
+            Ok(motion) => {
+                self.accumulated_x = self.accumulated_x.saturating_add(motion.dx as i32);
+                self.accumulated_y = self.accumulated_y.saturating_add(motion.dy as i32);
+            }
+            Err(_e) => {
+                warn!("PMW3610 read error");
+            }
+        }
+    }
+
+    fn take_report_event(&mut self) -> Option<Event> {
+        if self.accumulated_x == 0 && self.accumulated_y == 0 {
+            return None;
+        }
+
+        let dx = self.accumulated_x.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+        let dy = self.accumulated_y.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+        self.accumulated_x = 0;
+        self.accumulated_y = 0;
+
+        Some(Event::Joystick([
+            AxisEvent {
+                typ: AxisValType::Rel,
+                axis: Axis::X,
+                value: dx,
+            },
+            AxisEvent {
+                typ: AxisValType::Rel,
+                axis: Axis::Y,
+                value: dy,
+            },
+            AxisEvent {
+                typ: AxisValType::Rel,
+                axis: Axis::Z,
+                value: 0,
+            },
+        ]))
     }
 
     async fn try_init(&mut self) -> bool {
@@ -532,41 +624,38 @@ where
     MOTION: InputPin,
 {
     async fn read_event(&mut self) -> Event {
+        use embassy_futures::select::{Either, select};
+
+        if self.last_poll == Instant::MIN {
+            self.last_poll = Instant::now();
+        }
+        if self.last_report == Instant::MIN {
+            self.last_report = Instant::now();
+        }
+
         loop {
-            Timer::after(self.poll_interval).await;
+            let poll_wait = Timer::after(
+                self.poll_interval
+                    .checked_sub(self.last_poll.elapsed())
+                    .unwrap_or(Duration::MIN),
+            );
+            let report_wait = Timer::after(
+                self.report_interval
+                    .checked_sub(self.last_report.elapsed())
+                    .unwrap_or(Duration::MIN),
+            );
 
-            if self.init_state != InitState::Ready && !self.try_init().await {
-                continue;
-            }
-
-            if !self.sensor.motion_pending() {
-                continue;
-            }
-
-            match self.sensor.read_motion().await {
-                Ok(motion) => {
-                    if motion.dx != 0 || motion.dy != 0 {
-                        return Event::Joystick([
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::X,
-                                value: motion.dx,
-                            },
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::Y,
-                                value: motion.dy,
-                            },
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::Z,
-                                value: 0,
-                            },
-                        ]);
-                    }
+            match select(poll_wait, report_wait).await {
+                Either::First(_) => {
+                    self.poll_once().await;
+                    self.last_poll = Instant::now();
                 }
-                Err(_e) => {
-                    warn!("PMW3610 read error");
+                Either::Second(_) => {
+                    self.last_report = Instant::now();
+
+                    if let Some(event) = self.take_report_event() {
+                        return event;
+                    }
                 }
             }
         }
