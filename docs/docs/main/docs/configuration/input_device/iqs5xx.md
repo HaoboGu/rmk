@@ -50,6 +50,8 @@ natural_scroll_x = false
 natural_scroll_y = false
 ```
 
+Example project: `examples/use_config/rp2040_iqs5xx`
+
 ## Split keyboards
 
 When using split keyboards, specify where the device is physically connected:
