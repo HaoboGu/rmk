@@ -1,8 +1,8 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::{
-    BoardConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig, MatrixType,
-    SplitBoardConfig, SplitConfig,
+    BleConfig, BoardConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig,
+    MatrixType, SplitBoardConfig, SplitConfig,
 };
 use syn::ItemMod;
 
@@ -229,8 +229,26 @@ fn expand_split_peripheral(
 
     let output_config = expand_output_initialization(peripheral_config.output.clone().unwrap_or_default(), &chip);
 
-    // Peripherals don't need to run processors
-    let (device_initialization, devices, _processors) = expand_peripheral_input_device_config(id, keyboard_config);
+    // Get peripheral device and processor configuration
+    let (device_initialization, devices, processors) = expand_peripheral_input_device_config(id, keyboard_config);
+
+    // Generate minimal keymap if processors need it (e.g., BatteryProcessor)
+    let keymap_init = if !processors.is_empty() {
+        quote! {
+            // Create a minimal keymap for processors that require it
+            // Peripheral doesn't use keymap for key processing, only for processor API compatibility
+            let mut default_keymap = [[[::rmk::types::action::KeyAction::No; 1]; 1]; 1];
+            let mut behavior_config = ::rmk::config::BehaviorConfig::default();
+            let mut per_key_config = ::rmk::config::PositionalConfig::default();
+            let keymap = ::rmk::initialize_keymap(
+                &mut default_keymap,
+                &mut behavior_config,
+                &mut per_key_config
+            ).await;
+        }
+    } else {
+        quote! {}
+    };
 
     // Add controller support for peripherals
     let (controller_initializers, controllers) = expand_controller_init(keyboard_config, &item_mod);
@@ -244,8 +262,15 @@ fn expand_split_peripheral(
         }
     };
 
-    let run_rmk_peripheral =
-        expand_split_peripheral_entry(id, &chip, split_config, peripheral_config, devices, controllers);
+    let run_rmk_peripheral = expand_split_peripheral_entry(
+        id,
+        &chip,
+        split_config,
+        peripheral_config,
+        devices,
+        processors,
+        controllers,
+    );
 
     quote! {
         #imports
@@ -253,6 +278,7 @@ fn expand_split_peripheral(
         #chip_init
         #controller_initializers
         #matrix_config
+        #keymap_init
         #output_config
         #device_initialization
         #run_rmk_peripheral
@@ -265,6 +291,7 @@ fn expand_split_peripheral_entry(
     split_config: &SplitConfig,
     peripheral_config: &SplitBoardConfig,
     devices: Vec<TokenStream2>,
+    processors: Vec<TokenStream2>,
     controllers: Vec<TokenStream2>,
 ) -> TokenStream2 {
     // Add matrix to devices, and run all devices
@@ -276,6 +303,17 @@ fn expand_split_peripheral_entry(
         )
     };
 
+    // Create processor task if there are processors
+    let processor_task = if !processors.is_empty() {
+        quote! {
+            ::rmk::run_processor_chain! {
+                ::rmk::channel::EVENT_CHANNEL => [#(#processors),*],
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     if split_config.connection == "ble" {
         let peripheral_run = quote! {
             ::rmk::split::peripheral::run_rmk_split_peripheral(
@@ -284,8 +322,12 @@ fn expand_split_peripheral_entry(
                 &mut storage,
             )
         };
-        // Add controller tasks
-        let mut tasks = vec![device_task, peripheral_run];
+        // Build task list: device, processor (if any), peripheral, controllers
+        let mut tasks = vec![device_task];
+        if !processors.is_empty() {
+            tasks.push(processor_task);
+        }
+        tasks.push(peripheral_run);
         tasks.extend(controllers);
         let run_rmk_peripheral = join_all_tasks(tasks);
         quote! {
@@ -334,8 +376,7 @@ pub(crate) fn expand_peripheral_input_device_config(
 ) -> (TokenStream2, Vec<TokenStream2>, Vec<TokenStream2>) {
     let mut initializations = TokenStream2::new();
     let mut devices = Vec::new();
-    // Now no processors are used in split peripherals
-    let processors = Vec::new();
+    let mut processors = Vec::new();
 
     let communication = keyboard_config.get_communication_config().unwrap();
     let ble_config = match &communication {
@@ -345,8 +386,29 @@ pub(crate) fn expand_peripheral_input_device_config(
     let board = keyboard_config.get_board_config().unwrap();
     let chip = keyboard_config.get_chip_model().unwrap();
 
+    // Create peripheral-specific BLE config for battery
+    // Only use peripheral's own battery config, do NOT fallback to top-level BLE config
+    let peripheral_ble_config = match &board {
+        BoardConfig::Split(split_config) => {
+            let peripheral_board = &split_config.peripheral[id];
+            // If peripheral has battery config, create a BleConfig with those settings
+            if peripheral_board.battery_adc_pin.is_some() {
+                Some(BleConfig {
+                    enabled: true,
+                    battery_adc_pin: peripheral_board.battery_adc_pin.clone(),
+                    adc_divider_measured: peripheral_board.adc_divider_measured,
+                    adc_divider_total: peripheral_board.adc_divider_total,
+                    ..Default::default()
+                })
+            } else {
+                None
+            }
+        }
+        _ => ble_config.clone(),
+    };
+
     // generate ADC configuration
-    let (adc_devices, _adc_processors) = match &board {
+    let (adc_devices, adc_processors) = match &board {
         BoardConfig::Split(split_config) => expand_adc_device(
             split_config.peripheral[id]
                 .input_device
@@ -354,7 +416,7 @@ pub(crate) fn expand_peripheral_input_device_config(
                 .unwrap_or(InputDeviceConfig::default())
                 .joystick
                 .unwrap_or(Vec::new()),
-            ble_config,
+            peripheral_ble_config,
             chip.series.clone(),
         ),
         _ => (vec![], vec![]),
@@ -364,6 +426,12 @@ pub(crate) fn expand_peripheral_input_device_config(
         initializations.extend(initializer.initializer);
         let device_name = initializer.var_name;
         devices.push(quote! { #device_name });
+    }
+
+    for initializer in adc_processors {
+        initializations.extend(initializer.initializer);
+        let processor_name = initializer.var_name;
+        processors.push(quote! { #processor_name });
     }
 
     // generate encoder configuration, processors are ignored

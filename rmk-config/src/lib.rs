@@ -633,6 +633,12 @@ pub struct SplitBoardConfig {
     pub matrix: MatrixConfig,
     /// Input device config for the split
     pub input_device: Option<InputDeviceConfig>,
+    /// Battery ADC pin for this split board
+    pub battery_adc_pin: Option<String>,
+    /// ADC divider measured value for battery
+    pub adc_divider_measured: Option<u32>,
+    /// ADC divider total value for battery
+    pub adc_divider_total: Option<u32>,
     /// Output Pin config for the split
     pub output: Option<Vec<OutputConfig>>,
 }

@@ -1,22 +1,18 @@
 #[cfg(feature = "_ble")]
 use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
-use embassy_futures::select::select3;
+use embassy_futures::select::{Either4, select4};
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
 #[cfg(all(feature = "_ble", feature = "storage"))]
 use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
-#[cfg(feature = "controller")]
-use {
-    crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
-    crate::event::ControllerEvent,
-};
 #[cfg(feature = "_ble")]
 use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash, trouble_host::prelude::*};
 
 use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
 use crate::CONNECTION_STATE;
-use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
+use crate::channel::{CONTROLLER_CHANNEL, ControllerSub, EVENT_CHANNEL, KEY_EVENT_CHANNEL, send_controller_event};
+use crate::event::ControllerEvent;
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;
@@ -59,11 +55,15 @@ pub async fn run_rmk_split_peripheral<
 /// The split peripheral instance.
 pub(crate) struct SplitPeripheral<S: SplitWriter + SplitReader> {
     split_driver: S,
+    controller_sub: ControllerSub,
 }
 
 impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     pub(crate) fn new(split_driver: S) -> Self {
-        Self { split_driver }
+        Self {
+            split_driver,
+            controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
+        }
     }
 
     /// Run the peripheral keyboard service.
@@ -77,14 +77,15 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
         let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
 
         loop {
-            match select3(
+            match select4(
                 self.split_driver.read(),
                 KEY_EVENT_CHANNEL.receive(),
                 EVENT_CHANNEL.receive(),
+                self.controller_sub.next_message_pure(),
             )
             .await
             {
-                embassy_futures::select::Either3::First(m) => match m {
+                Either4::First(m) => match m {
                     // Currently only handle the central state message
                     Ok(split_message) => match split_message {
                         SplitMessage::ConnectionState(state) => {
@@ -124,7 +125,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         }
                     }
                 },
-                embassy_futures::select::Either3::Second(e) => {
+                Either4::Second(e) => {
                     // Only send the key event if the connection is established
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
                         debug!("Writing split key event to central");
@@ -133,12 +134,21 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         debug!("Connection not established, skipping key event");
                     }
                 }
-                embassy_futures::select::Either3::Third(e) => {
+                Either4::Third(e) => {
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
                         debug!("Writing split event to central: {:?}", e);
                         self.split_driver.write(&SplitMessage::Event(e)).await.ok();
                     } else {
                         debug!("Connection not established, skipping event");
+                    }
+                }
+                Either4::Fourth(controller_event) => {
+                    // Forward battery level to central
+                    if let ControllerEvent::Battery(level) = controller_event
+                        && CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire)
+                    {
+                        debug!("Forwarding battery level to central: {}", level);
+                        self.split_driver.write(&SplitMessage::BatteryLevel(level)).await.ok();
                     }
                 }
             }
