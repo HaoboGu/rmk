@@ -8,8 +8,8 @@ pub trait DebouncerTrait<const ROW: usize, const COL: usize> {
         &mut self,
         row_idx: usize,
         col_idx: usize,
-        pin_state: bool,
-        key_state: &KeyState,
+        key_active: bool,     // Hardware key active signal
+        key_state: &KeyState, // Current key state
     ) -> DebounceState;
 }
 
