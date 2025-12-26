@@ -97,6 +97,19 @@ matrix_type = "normal"
 row_pins = ["P0_12", "P0_13"]
 col_pins = ["P0_14", "P0_15"]
 
+# Test: Add encoder to central
+[[split.central.input_device.encoder]]
+pin_a = "P0_29"
+pin_b = "P0_28"
+phase = "resolution"
+resolution = 4
+
+# Test: Configure processor chain
+[split.central.input_device]
+processor_chain = [
+    "scroll_processor",  # Custom scroll wheel processor for trackball
+]
+
 [[split.peripheral]]
 rows = 2
 cols = 1

@@ -4,10 +4,14 @@ use pmw3610::expand_pmw3610_device;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use rmk_config::{BoardConfig, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig, UniBodyConfig};
+use std::collections::HashMap;
+use syn::ItemMod;
 
 pub(crate) mod adc;
+pub(crate) mod device;
 pub(crate) mod encoder;
 pub(crate) mod pmw3610;
+pub(crate) mod processor;
 
 /// Initializer struct for input devices
 pub(crate) struct Initializer {
@@ -19,10 +23,11 @@ pub(crate) struct Initializer {
 /// Returns a tuple containing: (device_and_processors_initialization, devices, processors)
 pub(crate) fn expand_input_device_config(
     keyboard_config: &KeyboardTomlConfig,
+    item_mod: &ItemMod,
 ) -> (TokenStream, Vec<TokenStream>, Vec<TokenStream>) {
     let mut initialization = TokenStream::new();
     let mut devices = Vec::new();
-    let mut processors = Vec::new();
+    let mut built_in_processors = Vec::new();
 
     // generate ADC configuration
     let communication = keyboard_config.get_communication_config().unwrap();
@@ -59,8 +64,9 @@ pub(crate) fn expand_input_device_config(
 
     for initializer in adc_processors {
         initialization.extend(initializer.initializer);
-        let processor_name = initializer.var_name;
-        processors.push(quote! { #processor_name });
+        let processor_name = initializer.var_name.to_string();
+        let processor_ident = initializer.var_name;
+        built_in_processors.push((processor_name, quote! { #processor_ident }));
     }
 
     // generate encoder configuration
@@ -88,8 +94,9 @@ pub(crate) fn expand_input_device_config(
 
     for initializer in processor_initializer {
         initialization.extend(initializer.initializer);
-        let processor_name = initializer.var_name;
-        processors.push(quote! { #processor_name });
+        let processor_name = initializer.var_name.to_string();
+        let processor_ident = initializer.var_name;
+        built_in_processors.push((processor_name, quote! { #processor_ident }));
     }
 
     // generate PMW3610 configuration
@@ -117,8 +124,9 @@ pub(crate) fn expand_input_device_config(
 
     for initializer in pmw3610_processor_initializers {
         initialization.extend(initializer.initializer);
-        let processor_name = initializer.var_name;
-        processors.push(quote! { #processor_name });
+        let processor_name = initializer.var_name.to_string();
+        let processor_ident = initializer.var_name;
+        built_in_processors.push((processor_name, quote! { #processor_ident }));
     }
 
     // For split keyboards, also generate processors for PMW3610 devices on peripherals
@@ -137,11 +145,116 @@ pub(crate) fn expand_input_device_config(
 
             for initializer in peripheral_pmw3610_processors {
                 initialization.extend(initializer.initializer);
-                let processor_name = initializer.var_name;
-                processors.push(quote! { #processor_name });
+                let processor_name = initializer.var_name.to_string();
+                let processor_ident = initializer.var_name;
+                built_in_processors.push((processor_name, quote! { #processor_ident }));
             }
         }
     }
 
+    // Expand custom devices from #[device] attributes
+    let custom_device_infos = device::expand_custom_devices(item_mod);
+    for device_info in custom_device_infos {
+        initialization.extend(device_info.init);
+        let device_name = device_info.name;
+        devices.push(quote! { #device_name });
+    }
+
+    // Expand custom processors from #[processor] attributes
+    let custom_processor_infos = processor::expand_custom_processors(item_mod);
+
+    // Add custom processor initialization
+    for processor_info in &custom_processor_infos {
+        initialization.extend(processor_info.init.clone());
+    }
+
+    // Order processors according to processor_chain config
+    let input_device_config = match &board {
+        BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => input_device.clone(),
+        BoardConfig::Split(split_config) => split_config.central.input_device.clone().unwrap_or_default(),
+    };
+
+    let processors = order_processors(
+        built_in_processors,
+        custom_processor_infos,
+        input_device_config.processor_chain,
+    );
+
     (initialization, devices, processors)
+}
+
+/// Orders processors according to processor_chain configuration
+///
+/// If processor_chain is specified, processors are ordered according to the chain.
+/// Otherwise, default order is: built-in processors (in TOML order) then custom processors (in code order)
+fn order_processors(
+    built_in: Vec<(String, TokenStream)>,
+    custom: Vec<processor::ProcessorInfo>,
+    processor_chain: Option<Vec<String>>,
+) -> Vec<TokenStream> {
+    // Build a map of all processors (name -> TokenStream)
+    let mut processor_map: HashMap<String, TokenStream> = HashMap::new();
+
+    // Keep track of order for default behavior
+    let mut built_in_order = Vec::new();
+    let mut custom_order = Vec::new();
+
+    // Add built-in processors to map
+    for (name, token_stream) in built_in {
+        built_in_order.push(name.clone());
+        processor_map.insert(name, token_stream);
+    }
+
+    // Add custom processors to map (initialization was already added)
+    for processor_info in custom {
+        let name = processor_info.name.to_string();
+        let processor_ident = processor_info.name;
+        custom_order.push(name.clone());
+        processor_map.insert(name, quote! { #processor_ident });
+    }
+
+    // If processor_chain is specified, use that order
+    if let Some(chain) = processor_chain {
+        // Validate that all processors in the chain exist
+        let available_processors: Vec<String> = processor_map.keys().cloned().collect();
+        for processor_name in &chain {
+            if !processor_map.contains_key(processor_name) {
+                panic!(
+                    "Unknown processor '{}' in processor_chain.\n\n\
+                     Available processors:\n  {}\n\n\
+                     Built-in processor naming rules:\n\
+                     - battery_processor: Battery level monitoring (if BLE battery ADC configured)\n\
+                     - joystick_processor_{{name}}: Joystick (name from [[input_device.joystick]])\n\
+                     - {{name}}_processor: PMW3610 sensor (name from [[input_device.pmw3610]], defaults to pmw3610_{{idx}}_processor)\n\n\
+                     Custom processors: Define with #[processor] attribute in your code",
+                    processor_name,
+                    available_processors.join("\n  ")
+                );
+            }
+        }
+
+        chain
+            .iter()
+            .filter_map(|name| processor_map.get(name).cloned())
+            .collect()
+    } else {
+        // Default order: built-in processors first, then custom processors
+        let mut result = Vec::new();
+
+        // Add built-in processors in order
+        for name in built_in_order {
+            if let Some(ts) = processor_map.get(&name) {
+                result.push(ts.clone());
+            }
+        }
+
+        // Add custom processors in order
+        for name in custom_order {
+            if let Some(ts) = processor_map.get(&name) {
+                result.push(ts.clone());
+            }
+        }
+
+        result
+    }
 }

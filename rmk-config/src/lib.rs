@@ -707,6 +707,10 @@ pub struct InputDeviceConfig {
     pub pointing: Option<Vec<PointingDeviceConfig>>,
     pub joystick: Option<Vec<JoystickConfig>>,
     pub pmw3610: Option<Vec<Pmw3610Config>>,
+    /// Processor chain order
+    /// Specifies the order in which processors handle events
+    /// If not specified, default order is: built-in processors (TOML order) then custom processors (code order)
+    pub processor_chain: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
