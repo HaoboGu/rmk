@@ -5,7 +5,7 @@ IQS5xx is a capacitive trackpad controller used in Azoteq TPS65 modules.
 ::: note
 
 - IQS5xx uses I2C + RDY/RST GPIO.
-- Only RP2040/RP2350 are supported right now.
+- Only RP2040 is supported right now.
 
 :::
 

@@ -14,9 +14,9 @@ pub(crate) fn expand_iqs5xx_device(
     }
 
     match chip.series {
-        ChipSeries::Rp2040 | ChipSeries::Rp2350 => {}
+        ChipSeries::Rp2040 => {}
         _ => {
-            panic!("IQS5xx is only supported on RP2040/RP2350 chips");
+            panic!("IQS5xx is only supported on RP2040 chips");
         }
     }
 
@@ -63,7 +63,7 @@ pub(crate) fn expand_iqs5xx_device(
         let natural_scroll_y = sensor.natural_scroll_y;
 
         let device_init = match chip.series {
-            ChipSeries::Rp2040 | ChipSeries::Rp2350 => quote! {
+            ChipSeries::Rp2040 => quote! {
                 let mut #device_ident = {
                     use ::embassy_rp::gpio::{Input, Output, Pull, Level};
                     use ::embassy_rp::i2c::{Config as I2cConfig, I2c};
