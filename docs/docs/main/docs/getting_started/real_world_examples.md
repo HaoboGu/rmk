@@ -18,6 +18,12 @@ _Sessile_ is an exploration of "minimal" finger travel. You can also read its ci
 
 ![sessile](../../images/sessile.png)
 
+## [Urchin](https://github.com/TimoBbz/urchin-rmk-firmware)
+
+A firmware for the [Urchin Keyboard](https://github.com/duckyb/urchin), to use with the layout [Ergo-L](https://ergol.org/).
+
+![urchin](../../images/urchin.png)
+
 ## Show your keyboard!
 
 If you're using RMK to build your keyboard, feel free to open a PR adding your project to this page!
