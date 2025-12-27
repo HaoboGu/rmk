@@ -7,7 +7,9 @@ use core::cell::RefCell;
 
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
+use embedded_hal_async::digital::Wait;
 use embedded_hal_async::spi::SpiBus;
+use futures::future::pending;
 use usbd_hid::descriptor::MouseReport;
 
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
@@ -157,12 +159,7 @@ pub struct MotionData {
 }
 
 /// PMW3610 driver using embedded-hal SPI traits
-pub struct Pmw3610<SPI, CS, MOTION>
-where
-    SPI: SpiBus,
-    CS: OutputPin,
-    MOTION: InputPin,
-{
+pub struct Pmw3610<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> {
     spi: SPI,
     cs: CS,
     motion_gpio: Option<MOTION>,
@@ -170,12 +167,7 @@ where
     smart_flag: bool,
 }
 
-impl<SPI, CS, MOTION> Pmw3610<SPI, CS, MOTION>
-where
-    SPI: SpiBus,
-    CS: OutputPin,
-    MOTION: InputPin,
-{
+impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> Pmw3610<SPI, CS, MOTION> {
     /// Create a new PMW3610 driver instance
     pub fn new(spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw3610Config) -> Self {
         Self {
@@ -445,12 +437,7 @@ enum InitState {
 /// PMW3610 as an InputDevice for RMK
 ///
 /// This device returns `Event::Joystick` events with relative X/Y movement.
-pub struct Pmw3610Device<SPI, CS, MOTION>
-where
-    SPI: SpiBus,
-    CS: OutputPin,
-    MOTION: InputPin,
-{
+pub struct Pmw3610Device<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> {
     sensor: Pmw3610<SPI, CS, MOTION>,
     init_state: InitState,
     poll_interval: Duration,
@@ -461,12 +448,7 @@ where
     accumulated_y: i32,
 }
 
-impl<SPI, CS, MOTION> Pmw3610Device<SPI, CS, MOTION>
-where
-    SPI: SpiBus,
-    CS: OutputPin,
-    MOTION: InputPin,
-{
+impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> Pmw3610Device<SPI, CS, MOTION> {
     const MAX_INIT_RETRIES: u8 = 3;
     const DEFAULT_POLL_INTERVAL_US: u64 = 500;
     const DEFAULT_REPORT_HZ: u16 = 125;
@@ -617,12 +599,7 @@ where
     }
 }
 
-impl<SPI, CS, MOTION> InputDevice for Pmw3610Device<SPI, CS, MOTION>
-where
-    SPI: SpiBus,
-    CS: OutputPin,
-    MOTION: InputPin,
-{
+impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> InputDevice for Pmw3610Device<SPI, CS, MOTION> {
     async fn read_event(&mut self) -> Event {
         use embassy_futures::select::{Either, select};
 
@@ -634,16 +611,32 @@ where
         }
 
         loop {
-            let poll_wait = Timer::after(
-                self.poll_interval
-                    .checked_sub(self.last_poll.elapsed())
-                    .unwrap_or(Duration::MIN),
-            );
-            let report_wait = Timer::after(
-                self.report_interval
-                    .checked_sub(self.last_report.elapsed())
-                    .unwrap_or(Duration::MIN),
-            );
+            let poll_wait = async {
+                if let Some(gpio) = self.sensor.motion_gpio.as_mut() {
+                    let _ = gpio.wait_for_low().await;
+                } else {
+                    Timer::after(
+                        self.poll_interval
+                            .checked_sub(self.last_poll.elapsed())
+                            .unwrap_or(Duration::MIN),
+                    )
+                    .await;
+                }
+            };
+
+            let report_wait = async {
+                if self.accumulated_x != 0 || self.accumulated_y != 0 {
+                    Timer::after(
+                        self.report_interval
+                            .checked_sub(self.last_report.elapsed())
+                            .unwrap_or(Duration::MIN),
+                    )
+                    .await;
+                } else {
+                    // Don't schedule report if there's no accumulated motion
+                    pending::<()>().await;
+                }
+            };
 
             match select(poll_wait, report_wait).await {
                 Either::First(_) => {
@@ -651,9 +644,8 @@ where
                     self.last_poll = Instant::now();
                 }
                 Either::Second(_) => {
-                    self.last_report = Instant::now();
-
                     if let Some(event) = self.take_report_event() {
+                        self.last_report = Instant::now();
                         return event;
                     }
                 }
