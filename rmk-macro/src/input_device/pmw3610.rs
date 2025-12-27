@@ -59,6 +59,7 @@ pub(crate) fn expand_pmw3610_device(
         let swap_xy = sensor.swap_xy;
         let force_awake = sensor.force_awake;
         let smart_mode = sensor.smart_mode;
+        let report_hz: u16 = sensor.report_hz;
 
         // Generate motion pin initialization (optional)
         let motion_pin_init = if let Some(motion_pin) = &sensor.motion {
@@ -107,7 +108,7 @@ pub(crate) fn expand_pmw3610_device(
                         smart_mode: #smart_mode,
                     };
 
-                    Pmw3610Device::new(spi_bus, cs, motion, config)
+                    Pmw3610Device::with_report_hz(spi_bus, cs, motion, config, #report_hz)
                 };
             },
             ChipSeries::Rp2040 => quote! {
@@ -131,7 +132,7 @@ pub(crate) fn expand_pmw3610_device(
                         smart_mode: #smart_mode,
                     };
 
-                    Pmw3610Device::new(spi_bus, cs, motion, config)
+                    Pmw3610Device::with_report_hz(spi_bus, cs, motion, config, #report_hz)
                 };
             },
             _ => unreachable!(),
