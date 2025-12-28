@@ -13,6 +13,7 @@ pub mod adc;
 pub mod battery;
 pub mod joystick;
 pub mod pmw3610;
+pub mod pmw3360;
 pub mod rotary_encoder;
 
 /// The trait for runnable input devices and processors.
