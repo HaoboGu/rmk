@@ -101,7 +101,7 @@ pub(crate) fn expand_pmw3360_device(
                     Some(::embassy_rp::gpio::Input::new(p.#motion_ident, ::embassy_rp::gpio::Pull::Up))
                 },
                 ChipSeries::Stm32 => quote! {
-                    Some(::embassy_stm32::gpio::Input::new(p.#motion_ident, ::embassy_rp::gpio::Pull::Up))
+                    Some(::embassy_stm32::gpio::Input::new(p.#motion_ident, ::embassy_stm32::gpio::Pull::Up))
                 },
                 _ => unreachable!(),
             }
@@ -191,20 +191,21 @@ pub(crate) fn expand_pmw3360_device(
             ChipSeries::Stm32 => quote! {
                 let mut #device_ident = {
                     use ::embassy_stm32::spi::{Spi, Config, MODE_3};
-                    use ::embassy_stm32::gpio::{Output, Level, Pull};
+                    use ::embassy_stm32::gpio::{Output, Level, Pull, Speed};
+                    use ::embassy_stm32::time::Hertz;
                     use ::rmk::input_device::pmw3360::{Pmw3360Config, Pmw3360Device};
 
                     let spi_inst = p.#instance_ident;
                     let sck = p.#sck_ident;
                     let mosi = p.#mosi_ident;
                     let miso = p.#miso_ident;
-                    let cs = Output::new(p.#cs_ident, Level::High);
-                    let tx_dma = p.#tx_dma_ident,
-                    let rx_dma = p.#rx_dma_ident,
+                    let cs = Output::new(p.#cs_ident, Level::High, Speed::Medium);
+                    let tx_dma = p.#tx_dma_ident;
+                    let rx_dma = p.#rx_dma_ident;
                     let motion = #motion_pin_init;
 
                     let mut spi_config = Config::default();
-                    spi_config.frequency = 2_000_000;
+                    spi_config.frequency = Hertz::mhz(2);
                     spi_config.mode = MODE_3;
 
                     let spi_bus = Spi::new(spi_inst, sck, mosi, miso, tx_dma, rx_dma, spi_config);
