@@ -1,5 +1,14 @@
 # RMK SF32LB52x USB example
 
+> [!NOTE]
+> **Maintenance & Compatibility Note**
+>
+> This example relies on specific HALs that may have different release cycles compared to the upstream Embassy/RMK.
+>
+> To ensure stability, this example **locks the RMK dependency to a specific version** and is **not actively updated** to track the RMK `main` branch daily. It is maintained on a periodic basis to align with major release milestones.
+
+## Flash and Run
+
 ### 1\. Flashing the Firmware
 
 First, you need to configure your serial port. You will find a `runner` command in `.cargo/config.toml`:
@@ -54,5 +63,5 @@ Use the following commands in your terminal to set the variable and start the at
 
 SF32LB52x is a dual-mode Bluetooth (BT/BLE) MCU. However, support for its Bluetooth features has not yet been implemented in the [sifli-rs]([https://github.com/OpenSiFli/sifli-rs](https://github.com/OpenSiFli/sifli-rs)) .
 
-If you are interested, contributions are welcome\! Please visit the [sifli-rs]([https://github.com/OpenSiFli/sifli-rs](https://github.com/OpenSiFli/sifli-rs)) repository to get started.
+If you are interested, contributions are welcome\! Please visit the [sifli-rs](https://github.com/OpenSiFli/sifli-rs) repository to get started.
 
