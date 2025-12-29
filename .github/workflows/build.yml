@@ -52,7 +52,7 @@ jobs:
       - name: Install cargo-make and flip-link
         run: cargo binstall cargo-make flip-link
       - name: Install target
-        run: rustup target add thumbv6m-none-eabi thumbv7em-none-eabihf thumbv7m-none-eabi riscv32imac-unknown-none-elf riscv32imc-unknown-none-elf
+        run: rustup target add thumbv6m-none-eabi thumbv7em-none-eabihf thumbv7m-none-eabi thumbv8m.main-none-eabihf riscv32imac-unknown-none-elf riscv32imc-unknown-none-elf
       - name: Build example
         working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
         run: cargo build --release
@@ -81,4 +81,20 @@ jobs:
       - name: Build
         working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.chip }}_ble
         run: . /home/runner/export-esp.sh && cargo +esp build --release 
-  
+  build-standalone-examples:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        example_path:
+          - use_rust/py32f07x
+          - use_rust/sf32lb52x_usb
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - uses: actions/checkout@v3
+      - name: Install cargo-make and flip-link
+        run: cargo binstall cargo-make flip-link
+      - name: Install target
+        run: rustup target add thumbv6m-none-eabi thumbv7em-none-eabihf thumbv7m-none-eabi thumbv8m.main-none-eabihf riscv32imac-unknown-none-elf riscv32imc-unknown-none-elf
+      - name: Build example
+        working-directory: ./examples/${{ matrix.example_path }}
+        run: cargo build --release
