@@ -1942,6 +1942,7 @@ dependencies = [
  "pio",
  "postcard",
  "rmk-config",
+ "rmk-driver-azoteq-iqs5xx",
  "rmk-macro",
  "rmk-types",
  "rp-pac",
@@ -1973,6 +1974,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmk-driver-azoteq-iqs5xx"
+version = "0.1.0"
+dependencies = [
+ "embassy-time",
+ "embedded-hal 1.0.0",
+ "embedded-hal-async",
+]
+
+[[package]]
 name = "rmk-macro"
 version = "0.7.1"
 dependencies = [
@@ -1992,7 +2002,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rmk-rp2040"
+name = "rmk-rp2040-iqs5xx"
 version = "0.2.0"
 dependencies = [
  "const-gen",
