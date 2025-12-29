@@ -707,6 +707,7 @@ pub struct InputDeviceConfig {
     pub pointing: Option<Vec<PointingDeviceConfig>>,
     pub joystick: Option<Vec<JoystickConfig>>,
     pub pmw3610: Option<Vec<Pmw3610Config>>,
+    pub pmw3360: Option<Vec<Pmw3360Config>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -754,6 +755,33 @@ pub struct Pmw3610Config {
     /// Enable smart mode for better tracking on shiny surfaces
     #[serde(default)]
     pub smart_mode: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[allow(unused)]
+#[serde(deny_unknown_fields)]
+pub struct Pmw3360Config {
+    // Name of the sensor (used for variable naming)
+    pub name: String,
+    // SPI pins
+    pub spi: SpiConfig,
+    // Optional motion interrupt pin
+    pub motion: Option<String>,
+    // CPI resolution (100-12000, step 100).Optional, uses sensor default 1600 if not set.
+    pub cpi: Option<u16>,
+    // Rotational transform angle (-127 to 127) Optional, uses sensor default 0 if not set.
+    pub rot_trans_angle: Option<i8>,
+    // liftoff distance. Optional, uses sensor default 0 if not set.
+    pub liftoff_dist: Option<u8>,
+    // Invert X axis
+    #[serde(default)]
+    pub invert_x: bool,
+    // Invert Y axis
+    #[serde(default)]
+    pub invert_y: bool,
+    // Swap X and Y axes
+    #[serde(default)]
+    pub swap_xy: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -823,6 +851,8 @@ pub struct SpiConfig {
     pub miso: String,
     pub cs: Option<String>,
     pub cpi: Option<u32>,
+    pub tx_dma: Option<String>,
+    pub rx_dma: Option<String>,
 }
 
 /// I2C config
