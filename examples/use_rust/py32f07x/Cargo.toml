@@ -10,7 +10,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", default-features = false, features = ["defmt"] }
+rmk = { version = "=0.8.2", default-features = false, features = ["defmt"] }
 embassy-time = { version = "0.5", features = ["defmt"] }
 py32-hal = { version = "0.4.0", features = [
     "py32f072c1b", 
