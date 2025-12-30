@@ -98,9 +98,9 @@ In each `layer.keys`, the keys are bound to various key actions. Due to the limi
 
 The `layer.keys` string should follow several rules:
 
-1. For a simple keycode (i.e., keys in RMK's [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html) enum), just fill in its name.
+1. For a simple keycode (i.e., keys in RMK's [`HidKeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.HidKeyCode.html) enum), just fill in its name.
 
-   For example, if you set a keycode `Backspace`, it will be turned to `KeyCode::Backspace`. So you have to ensure that the keycode string is valid, or RMK wouldn't compile! However, to make things easier a number of alternative key names (see alias column in [KeyCode table](./keymap_configuration/keycodes)) were added and also case-insensitive search is used to find the valid [KeyCode](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html).
+   For example, if you set a keycode `Backspace`, it will be turned to the corresponding HID keycode. So you have to ensure that the keycode string is valid, or RMK wouldn't compile! However, to make things easier a number of alternative key names (see alias column in [KeyCode table](./keymap_configuration/keycodes)) were added and also case-insensitive search is used to find the valid keycode.
 
    For simple keycodes with modifiers active, you can use `WM(key, modifier)` to create a keypress with modifier action. Modifiers can be chained together like `LShift | RGui` to have multiple modifiers active.
 
