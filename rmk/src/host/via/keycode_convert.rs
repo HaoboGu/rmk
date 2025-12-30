@@ -277,7 +277,7 @@ mod test {
         let via_keycode = 0x104;
         assert_eq!(
             KeyAction::Single(Action::KeyWithModifier(
-                KeyCode::A,
+                KeyCode::Hid(HidKeyCode::A),
                 ModifierCombination::new_from(false, false, false, false, true)
             )),
             from_via_keycode(via_keycode)
@@ -287,7 +287,7 @@ mod test {
         let via_keycode = 0x1104;
         assert_eq!(
             KeyAction::Single(Action::KeyWithModifier(
-                KeyCode::A,
+                KeyCode::Hid(HidKeyCode::A),
                 ModifierCombination::new_from(true, false, false, false, true)
             )),
             from_via_keycode(via_keycode)
@@ -297,7 +297,7 @@ mod test {
         let via_keycode = 0x704;
         assert_eq!(
             KeyAction::Single(Action::KeyWithModifier(
-                KeyCode::A,
+                KeyCode::Hid(HidKeyCode::A),
                 ModifierCombination::new_from(false, false, true, true, true)
             )),
             from_via_keycode(via_keycode)
@@ -307,7 +307,7 @@ mod test {
         let via_keycode = 0xF04;
         assert_eq!(
             KeyAction::Single(Action::KeyWithModifier(
-                KeyCode::A,
+                KeyCode::Hid(HidKeyCode::A),
                 ModifierCombination::new_from(false, true, true, true, true)
             )),
             from_via_keycode(via_keycode)

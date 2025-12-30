@@ -557,7 +557,7 @@ pub(crate) async fn process_vial<
 #[cfg(feature = "storage")]
 mod tests {
     use rmk_types::action::Action;
-    use rmk_types::keycode::KeyCode;
+    use rmk_types::keycode::{HidKeyCode, KeyCode};
     use sequential_storage::map::Value;
 
     use super::*;
@@ -565,10 +565,10 @@ mod tests {
     #[test]
     fn test_combo_serialization_deserialization() {
         let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
-        actions[0] = KeyAction::Single(Action::Key(KeyCode::Kc1));
+        actions[0] = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Kc1)));
         let combo_config = ComboConfig {
             actions,
-            output: KeyAction::Single(Action::Key(KeyCode::Space)),
+            output: KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Space))),
             layer: None,
         };
         let combo_idx: u8 = 20;

@@ -289,7 +289,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 #[cfg(test)]
 mod tests {
     use rmk_types::action::{Action, MorseMode, MorseProfile};
-    use rmk_types::keycode::KeyCode;
+    use rmk_types::keycode::{HidKeyCode, KeyCode};
     use sequential_storage::map::Value;
 
     use super::*;
@@ -298,15 +298,15 @@ mod tests {
     #[test]
     fn test_morse_serialization_deserialization() {
         let morse = Morse::new_from_vial(
-            Action::Key(KeyCode::A),
-            Action::Key(KeyCode::B),
-            Action::Key(KeyCode::C),
-            Action::Key(KeyCode::D),
+            Action::Key(KeyCode::Hid(HidKeyCode::A)),
+            Action::Key(KeyCode::Hid(HidKeyCode::B)),
+            Action::Key(KeyCode::Hid(HidKeyCode::C)),
+            Action::Key(KeyCode::Hid(HidKeyCode::D)),
             MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(190u16), Some(180u16)),
         );
 
         // Serialization
-        let mut buffer = [0u8; 7 + 4 * 4];
+        let mut buffer = [0u8; 64];
         let storage_data = StorageData::VialData(KeymapData::Morse(0, morse.clone()));
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
@@ -332,11 +332,11 @@ mod tests {
     fn test_morse_with_partial_actions() {
         // Create a Morse with partial actions
         let mut morse: Morse = Morse::default();
-        _ = morse.put(TAP, Action::Key(KeyCode::A));
-        _ = morse.put(HOLD, Action::Key(KeyCode::B));
+        _ = morse.put(TAP, Action::Key(KeyCode::Hid(HidKeyCode::A)));
+        _ = morse.put(HOLD, Action::Key(KeyCode::Hid(HidKeyCode::B)));
 
         // Serialization
-        let mut buffer = [0u8; 7 + 4 * 4];
+        let mut buffer = [0u8; 64];
         let storage_data = StorageData::VialData(KeymapData::Morse(0, morse.clone()));
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
@@ -371,19 +371,19 @@ mod tests {
         };
         morse
             .actions
-            .insert(MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::A))
+            .insert(MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::Hid(HidKeyCode::A)))
             .ok();
         morse
             .actions
-            .insert(MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::B))
+            .insert(MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::Hid(HidKeyCode::B)))
             .ok();
         morse
             .actions
-            .insert(MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::C))
+            .insert(MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::Hid(HidKeyCode::C)))
             .ok();
 
         // Serialization
-        let mut buffer = [0u8; 7 + 3 * 4];
+        let mut buffer = [0u8; 64];
         let storage_data = StorageData::VialData(KeymapData::Morse(0, morse.clone()));
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
