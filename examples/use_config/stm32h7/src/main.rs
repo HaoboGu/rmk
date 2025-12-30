@@ -83,7 +83,8 @@ mod my_keyboard {
         join3(
             run_devices!((matrix) => EVENT_CHANNEL),
             keyboard.run(),
-            run_rmk(&keymap, driver, &mut storage, rmk_config),
+            // run_rmk(&keymap, driver, &mut storage, rmk_config),
+            run_rmk(&keymap, driver, rmk_config),
         )
         .await;
     }
