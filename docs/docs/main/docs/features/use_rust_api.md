@@ -38,7 +38,7 @@ After adding the layout of your keyboard, the default keymap should also be upda
 
 RMK provides a bunch of useful [macros](https://docs.rs/rmk/latest/rmk/#macros) to help you define your keymap. Check out the [keymap configuration](../configuration/keymap_configuration) chapter for more details. You can also check the `src/keymap.rs` files in the <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust> examples for reference.
 
-Some `KeyAction`s are not supported by the macros; plain `KeyAction`s also work, for example: `KeyAction::TapHold(Action::Key(KeyCode::Kc1), Action::Key(KeyCode::Kc2))`
+Some `KeyAction`s are not supported by the macros; plain `KeyAction`s also work, for example: `KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::Kc1)), Action::Key(KeyCode::Hid(HidKeyCode::Kc2)))`
 
 ### Define your matrix
 

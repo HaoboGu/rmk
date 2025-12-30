@@ -9,7 +9,7 @@
 //! - [`KeyAction`] - Complex behaviors that keyboards should behave
 //! - [`EncoderAction`] - Rotary encoder actions
 
-use crate::keycode::KeyCode;
+use crate::keycode::{KeyCode, SpecialKey};
 use crate::modifier::ModifierCombination;
 
 /// EncoderAction is the action at a encoder position, stored in encoder_map.
@@ -313,11 +313,6 @@ pub enum Action {
     /// Activate a layer and deactivate all other layers(except default layer)
     LayerToggleOnly(u8),
     /// Triggers the Macro at the 'index'.
-    /// this is an alternative trigger to
-    /// Macro keycodes (0x500 ~ 0x5FF; KeyCode::Macro0 ~ KeyCode::Macro31
-    /// e.g. `Action::TriggerMacro(6)`` will trigger the same Macro as `Action::Key(KeyCode::Macro6)`
-    /// the main purpose for this enum variant is to easily extend to more than 32 macros (to 256)
-    /// without introducing new Keycodes.
     TriggerMacro(u8),
     /// Oneshot layer, keep the layer active until the next key is triggered.
     OneShotLayer(u8),
@@ -325,6 +320,70 @@ pub enum Action {
     OneShotModifier(ModifierCombination),
     /// Oneshot key, keep the key active until the next key is triggered.
     OneShotKey(KeyCode),
+    /// Actions for controlling lights
+    Light(LightAction),
+    /// Actions for controlling the keyboard
+    Keyboard(KeyboardAction),
+    /// Special Keys
+    Special(SpecialKey),
+    /// User Keys
+    User(u8),
+}
+
+/// Actions for controlling the keyboard, for example, enable/disable a particular function
+#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(postcard::experimental::max_size::MaxSize)]
+pub enum KeyboardAction {
+    Bootloader,
+    Reboot,
+    DebugToggle,
+    ClearEeprom,
+    OutputAuto,
+    OutputUsb,
+    OutputBluetooth,
+    ComboOn,
+    ComboOff,
+    ComboToggle,
+    CapsWordToggle,
+    TriLayerLower,
+    TriLayerUpper,
+}
+
+/// Actions for controlling lights
+#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(postcard::experimental::max_size::MaxSize)]
+pub enum LightAction {
+    BacklightOn,
+    BacklightOff,
+    BacklightToggle,
+    BacklightDown,
+    BacklightUp,
+    BacklightStep,
+    BacklightToggleBreathing,
+    RgbTog,
+    RgbModeForward,
+    RgbModeReverse,
+    RgbHui,
+    RgbHud,
+    RgbSai,
+    RgbSad,
+    RgbVai,
+    RgbVad,
+    RgbSpi,
+    RgbSpd,
+    RgbModePlain,
+    RgbModeBreathe,
+    RgbModeRainbow,
+    RgbModeSwirl,
+    RgbModeSnake,
+    RgbModeKnight,
+    RgbModeXmas,
+    RgbModeGradient,
+    // Not in vial
+    RgbModeRgbtest,
+    RgbModeTwinkle,
 }
 
 #[cfg(test)]

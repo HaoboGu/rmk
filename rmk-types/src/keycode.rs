@@ -1,18 +1,13 @@
-//! Complete keycode definitions.
-//!
-//! This module provides keycode definitions following the USB HID
-//! specification, extended with additional codes
 use serde::{Deserialize, Serialize};
-use strum::FromRepr;
 
 use crate::modifier::ModifierCombination;
 
-/// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
-/// Use flat representation of keycodes.
-#[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, FromRepr)]
+// All key codes defined in HID spec
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum KeyCode {
+
+pub enum HidKeyCode {
     /// Reserved, no-key.
     No = 0x0000,
     /// Keyboard roll over error, too many keys are pressed simultaneously, not a physical key.
@@ -377,230 +372,49 @@ pub enum KeyCode {
     RAlt = 0x00E6,
     /// Right GUI
     RGui = 0x00E7,
-    // Macro keycodes, use 0x500 ~ 0x5FF
-    Macro0 = 0x500,
-    Macro1 = 0x501,
-    Macro2 = 0x502,
-    Macro3 = 0x503,
-    Macro4 = 0x504,
-    Macro5 = 0x505,
-    Macro6 = 0x506,
-    Macro7 = 0x507,
-    Macro8 = 0x508,
-    Macro9 = 0x509,
-    Macro10 = 0x50A,
-    Macro11 = 0x50B,
-    Macro12 = 0x50C,
-    Macro13 = 0x50D,
-    Macro14 = 0x50E,
-    Macro15 = 0x50F,
-    Macro16 = 0x510,
-    Macro17 = 0x511,
-    Macro18 = 0x512,
-    Macro19 = 0x513,
-    Macro20 = 0x514,
-    Macro21 = 0x515,
-    Macro22 = 0x516,
-    Macro23 = 0x517,
-    Macro24 = 0x518,
-    Macro25 = 0x519,
-    Macro26 = 0x51A,
-    Macro27 = 0x51B,
-    Macro28 = 0x51C,
-    Macro29 = 0x51D,
-    Macro30 = 0x51E,
-    Macro31 = 0x51F,
-    // Backlight and RGB keycodes, uses 0x600 ~ 0x6FF
-    BacklightOn = 0x600,
-    BacklightOff = 0x601,
-    BacklightToggle = 0x602,
-    BacklightDown = 0x603,
-    BacklightUp = 0x604,
-    BacklightStep = 0x605,
-    BacklightToggleBreathing = 0x606,
-    RgbTog = 0x620,
-    RgbModeForward = 0x621,
-    RgbModeReverse = 0x622,
-    RgbHui = 0x623,
-    RgbHud = 0x624,
-    RgbSai = 0x625,
-    RgbSad = 0x626,
-    RgbVai = 0x627,
-    RgbVad = 0x628,
-    RgbSpi = 0x629,
-    RgbSpd = 0x62A,
-    RgbModePlain = 0x62B,
-    RgbModeBreathe = 0x62C,
-    RgbModeRainbow = 0x62D,
-    RgbModeSwirl = 0x62E,
-    RgbModeSnake = 0x62F,
-    RgbModeKnight = 0x630,
-    RgbModeXmas = 0x631,
-    RgbModeGradient = 0x632,
-    // Not in vial
-    RgbModeRgbtest = 0x633,
-    RgbModeTwinkle = 0x634,
-    // Internal functional keycodes, use 0x700 ~ 0x7FF
-    Bootloader = 0x700,
-    Reboot = 0x701,
-    DebugToggle = 0x702,
-    ClearEeprom = 0x703,
-    GraveEscape = 0x716,
-    OutputAuto = 0x720,
-    OutputUsb = 0x721,
-    OutputBluetooth = 0x722,
-    ComboOn = 0x750,
-    ComboOff = 0x751,
-    ComboToggle = 0x752,
-    CapsWordToggle = 0x773,
-    TriLayerLower = 0x777,
-    TriLayerUpper = 0x778,
-    RepeatKey = 0x779,
-    AltRepeatKey = 0x77A,
-    // User keycodes, use 0x840 ~ 0x85F
-    User0 = 0x840,
-    User1 = 0x841,
-    User2 = 0x842,
-    User3 = 0x843,
-    User4 = 0x844,
-    User5 = 0x845,
-    User6 = 0x846,
-    User7 = 0x847,
-    User8 = 0x848,
-    User9 = 0x849,
-    User10 = 0x84A,
-    User11 = 0x84B,
-    User12 = 0x84C,
-    User13 = 0x84D,
-    User14 = 0x84E,
-    User15 = 0x84F,
-    User16 = 0x850,
-    User17 = 0x851,
-    User18 = 0x852,
-    User19 = 0x853,
-    User20 = 0x854,
-    User21 = 0x855,
-    User22 = 0x856,
-    User23 = 0x857,
-    User24 = 0x858,
-    User25 = 0x859,
-    User26 = 0x85A,
-    User27 = 0x85B,
-    User28 = 0x85C,
-    User29 = 0x85D,
-    User30 = 0x85E,
-    User31 = 0x85F,
 }
 
-impl ::postcard::experimental::max_size::MaxSize for KeyCode {
-    const POSTCARD_MAX_SIZE: usize = 3usize;
-}
-
-impl KeyCode {
+impl HidKeyCode {
     /// Returns `true` if the keycode is a simple keycode defined in HID spec
     pub fn is_simple_key(self) -> bool {
-        KeyCode::No <= self && self <= KeyCode::MouseAccel2
+        HidKeyCode::No <= self && self <= HidKeyCode::MouseAccel2
     }
 
     /// Returns `true` if the keycode is a modifier keycode
     pub fn is_modifier(self) -> bool {
-        KeyCode::LCtrl <= self && self <= KeyCode::RGui
+        HidKeyCode::LCtrl <= self && self <= HidKeyCode::RGui
     }
 
-    /// Returns `true` if the keycode is basic keycode
-    /// The basic keycode = simple key + modifier
-    pub fn is_basic(self) -> bool {
-        KeyCode::No <= self && self <= KeyCode::RGui
-    }
-
-    /// Returns `true` if the keycode is a letter
-    pub fn is_letter(self) -> bool {
-        KeyCode::A <= self && self <= KeyCode::Z
+    /// Returns `true` if the keycode is a mouse keycode
+    pub fn is_mouse_key(self) -> bool {
+        HidKeyCode::MouseUp <= self && self <= HidKeyCode::MouseAccel2
     }
 
     /// Returns the byte with the bit corresponding to the USB HID
     /// modifier bitfield set.
     pub fn to_hid_modifiers(self) -> ModifierCombination {
         match self {
-            KeyCode::LCtrl => ModifierCombination::new().with_left_ctrl(true),
-            KeyCode::LShift => ModifierCombination::new().with_left_shift(true),
-            KeyCode::LAlt => ModifierCombination::new().with_left_alt(true),
-            KeyCode::LGui => ModifierCombination::new().with_left_gui(true),
-            KeyCode::RCtrl => ModifierCombination::new().with_right_ctrl(true),
-            KeyCode::RShift => ModifierCombination::new().with_right_shift(true),
-            KeyCode::RAlt => ModifierCombination::new().with_right_alt(true),
-            KeyCode::RGui => ModifierCombination::new().with_right_gui(true),
+            HidKeyCode::LCtrl => ModifierCombination::LCTRL,
+            HidKeyCode::LShift => ModifierCombination::LSHIFT,
+            HidKeyCode::LAlt => ModifierCombination::LALT,
+            HidKeyCode::LGui => ModifierCombination::LGUI,
+            HidKeyCode::RCtrl => ModifierCombination::RCTRL,
+            HidKeyCode::RShift => ModifierCombination::RSHIFT,
+            HidKeyCode::RAlt => ModifierCombination::RALT,
+            HidKeyCode::RGui => ModifierCombination::RGUI,
             _ => ModifierCombination::new(),
-        }
-    }
-
-    /// Returns `true` if the keycode is a system keycode
-    pub fn is_system(self) -> bool {
-        KeyCode::SystemPower <= self && self <= KeyCode::SystemWake
-    }
-
-    /// Returns `true` if the keycode is a keycode in consumer page
-    pub fn is_consumer(self) -> bool {
-        KeyCode::AudioMute <= self && self <= KeyCode::Launchpad
-    }
-
-    /// Returns `true` if the keycode is a mouse keycode
-    pub fn is_mouse_key(self) -> bool {
-        KeyCode::MouseUp <= self && self <= KeyCode::MouseAccel2
-    }
-
-    /// Returns `true` if the keycode is a combo keycode
-    pub fn is_combo(self) -> bool {
-        KeyCode::ComboOn <= self && self <= KeyCode::ComboToggle
-    }
-
-    /// Returns `true` if the keycode is a macro keycode
-    pub fn is_macro(self) -> bool {
-        KeyCode::Macro0 <= self && self <= KeyCode::Macro31
-    }
-
-    /// Returns `true` if the keycode is a backlight keycode
-    pub fn is_backlight(self) -> bool {
-        KeyCode::BacklightOn <= self && self <= KeyCode::BacklightToggleBreathing
-    }
-
-    /// Returns `true` if the keycode is a rgb keycode
-    pub fn is_rgb(self) -> bool {
-        KeyCode::RgbTog <= self && self <= KeyCode::RgbModeTwinkle
-    }
-
-    /// Returns `true` if the keycode is defined by rmk to achieve special functionalities, such as reboot keyboard, goto bootloader, etc.
-    pub fn is_rmk(self) -> bool {
-        KeyCode::Bootloader <= self && self <= KeyCode::AltRepeatKey
-    }
-
-    /// Returns `true` if the keycode is a boot keycode
-    pub fn is_boot(self) -> bool {
-        KeyCode::Bootloader <= self && self <= KeyCode::Reboot
-    }
-    /// Returns `true` if the keycode is a user keycode
-    pub fn is_user(self) -> bool {
-        KeyCode::User0 <= self && self <= KeyCode::User31
-    }
-
-    /// Convert a keycode to macro number
-    pub fn as_macro_index(self) -> Option<u8> {
-        if self.is_macro() {
-            Some((self as u16 & 0x1F) as u8)
-        } else {
-            None
         }
     }
 
     /// Does current keycode continues Caps Word?
     pub fn is_caps_word_continue_key(self) -> bool {
-        if self >= KeyCode::A && self <= KeyCode::Z {
+        if self >= HidKeyCode::A && self <= HidKeyCode::Z {
             return true;
         }
-        if self >= KeyCode::Kc1 && self <= KeyCode::Kc0 {
+        if self >= HidKeyCode::Kc1 && self <= HidKeyCode::Kc0 {
             return true;
         }
-        if self == KeyCode::Minus || self == KeyCode::Backspace || self == KeyCode::Delete {
+        if self == HidKeyCode::Minus || self == HidKeyCode::Backspace || self == HidKeyCode::Delete {
             return true;
         }
         false
@@ -608,289 +422,319 @@ impl KeyCode {
 
     /// Does current keycode is to be shifted by Caps Word?
     pub fn is_caps_word_shifted_key(self) -> bool {
-        if self >= KeyCode::A && self <= KeyCode::Z {
+        if self >= HidKeyCode::A && self <= HidKeyCode::Z {
             return true;
         }
-        if self == KeyCode::Minus {
+        if self == HidKeyCode::Minus {
             return true;
         }
         false
     }
 
-    /// Convert a keycode to usb hid media key
-    pub fn as_consumer_control_usage_id(self) -> ConsumerKey {
+    /// Some hid keycodes are processed as consumer keys, for compatibility
+    pub fn process_as_consumer(&self) -> Option<ConsumerKey> {
         match self {
-            KeyCode::AudioMute => ConsumerKey::Mute,
-            KeyCode::AudioVolUp => ConsumerKey::VolumeIncrement,
-            KeyCode::AudioVolDown => ConsumerKey::VolumeDecrement,
-            KeyCode::MediaNextTrack => ConsumerKey::NextTrack,
-            KeyCode::MediaPrevTrack => ConsumerKey::PrevTrack,
-            KeyCode::MediaStop => ConsumerKey::StopPlay,
-            KeyCode::MediaPlayPause => ConsumerKey::PlayPause,
-            KeyCode::MediaSelect => ConsumerKey::Record,
-            KeyCode::MediaEject => ConsumerKey::Eject,
-            KeyCode::Mail => ConsumerKey::Email,
-            KeyCode::Calculator => ConsumerKey::Calculator,
-            KeyCode::MyComputer => ConsumerKey::LocalBrowser,
-            KeyCode::WwwSearch => ConsumerKey::Search,
-            KeyCode::WwwHome => ConsumerKey::Home,
-            KeyCode::WwwBack => ConsumerKey::Back,
-            KeyCode::WwwForward => ConsumerKey::Forward,
-            KeyCode::WwwStop => ConsumerKey::Stop,
-            KeyCode::WwwRefresh => ConsumerKey::Refresh,
-            KeyCode::WwwFavorites => ConsumerKey::Bookmarks,
-            KeyCode::MediaFastForward => ConsumerKey::FastForward,
-            KeyCode::MediaRewind => ConsumerKey::Rewind,
-            KeyCode::BrightnessUp => ConsumerKey::BrightnessUp,
-            KeyCode::BrightnessDown => ConsumerKey::BrightnessDown,
-            KeyCode::ControlPanel => ConsumerKey::ControlPanel,
-            KeyCode::Assistant => ConsumerKey::Assistant,
-            KeyCode::MissionControl => ConsumerKey::DesktopShowAllWindows,
-            KeyCode::Launchpad => ConsumerKey::AcSoftKeyLeft,
-            _ => ConsumerKey::No,
+            HidKeyCode::AudioMute => Some(ConsumerKey::Mute),
+            HidKeyCode::AudioVolUp => Some(ConsumerKey::VolumeIncrement),
+            HidKeyCode::AudioVolDown => Some(ConsumerKey::VolumeDecrement),
+            HidKeyCode::MediaNextTrack => Some(ConsumerKey::NextTrack),
+            HidKeyCode::MediaPrevTrack => Some(ConsumerKey::PrevTrack),
+            HidKeyCode::MediaStop => Some(ConsumerKey::StopPlay),
+            HidKeyCode::MediaPlayPause => Some(ConsumerKey::PlayPause),
+            HidKeyCode::MediaSelect => Some(ConsumerKey::Record),
+            HidKeyCode::MediaEject => Some(ConsumerKey::Eject),
+            HidKeyCode::Mail => Some(ConsumerKey::Email),
+            HidKeyCode::Calculator => Some(ConsumerKey::Calculator),
+            HidKeyCode::MyComputer => Some(ConsumerKey::LocalBrowser),
+            HidKeyCode::WwwSearch => Some(ConsumerKey::Search),
+            HidKeyCode::WwwHome => Some(ConsumerKey::Home),
+            HidKeyCode::WwwBack => Some(ConsumerKey::Back),
+            HidKeyCode::WwwForward => Some(ConsumerKey::Forward),
+            HidKeyCode::WwwStop => Some(ConsumerKey::Stop),
+            HidKeyCode::WwwRefresh => Some(ConsumerKey::Refresh),
+            HidKeyCode::WwwFavorites => Some(ConsumerKey::Bookmarks),
+            HidKeyCode::MediaFastForward => Some(ConsumerKey::FastForward),
+            HidKeyCode::MediaRewind => Some(ConsumerKey::Rewind),
+            HidKeyCode::BrightnessUp => Some(ConsumerKey::BrightnessUp),
+            HidKeyCode::BrightnessDown => Some(ConsumerKey::BrightnessDown),
+            HidKeyCode::ControlPanel => Some(ConsumerKey::ControlPanel),
+            HidKeyCode::Assistant => Some(ConsumerKey::Assistant),
+            HidKeyCode::MissionControl => Some(ConsumerKey::DesktopShowAllWindows),
+            HidKeyCode::Launchpad => Some(ConsumerKey::AcSoftKeyLeft),
+            _ => None,
         }
     }
 
-    /// Convert a keycode to usb hid media key
-    pub fn as_system_control_usage_id(self) -> Option<SystemControlKey> {
+    /// Some hid keycodes are processed as system control keys, for compatibility
+    pub fn process_as_system_control(&self) -> Option<SystemControlKey> {
         match self {
-            KeyCode::SystemPower => Some(SystemControlKey::PowerDown),
-            KeyCode::SystemSleep => Some(SystemControlKey::Sleep),
-            KeyCode::SystemWake => Some(SystemControlKey::WakeUp),
+            HidKeyCode::SystemPower => Some(SystemControlKey::PowerDown),
+            HidKeyCode::SystemSleep => Some(SystemControlKey::Sleep),
+            HidKeyCode::SystemWake => Some(SystemControlKey::WakeUp),
             _ => None,
         }
     }
 }
 
-/// Convert a ascii chat to keycode
-/// bool, if the keycode should be shifted
-/// assumes en-us keyboard mapping
-pub fn from_ascii(ascii: u8) -> (KeyCode, bool) {
-    match ascii {
-        b'0' => (KeyCode::Kc0, false),
-        b'1' => (KeyCode::Kc1, false),
-        b'2' => (KeyCode::Kc2, false),
-        b'3' => (KeyCode::Kc3, false),
-        b'4' => (KeyCode::Kc4, false),
-        b'5' => (KeyCode::Kc5, false),
-        b'6' => (KeyCode::Kc6, false),
-        b'7' => (KeyCode::Kc7, false),
-        b'8' => (KeyCode::Kc8, false),
-        b'9' => (KeyCode::Kc9, false),
-        b'a' => (KeyCode::A, false),
-        b'b' => (KeyCode::B, false),
-        b'c' => (KeyCode::C, false),
-        b'd' => (KeyCode::D, false),
-        b'e' => (KeyCode::E, false),
-        b'f' => (KeyCode::F, false),
-        b'g' => (KeyCode::G, false),
-        b'h' => (KeyCode::H, false),
-        b'i' => (KeyCode::I, false),
-        b'j' => (KeyCode::J, false),
-        b'k' => (KeyCode::K, false),
-        b'l' => (KeyCode::L, false),
-        b'm' => (KeyCode::M, false),
-        b'n' => (KeyCode::N, false),
-        b'o' => (KeyCode::O, false),
-        b'p' => (KeyCode::P, false),
-        b'q' => (KeyCode::Q, false),
-        b'r' => (KeyCode::R, false),
-        b's' => (KeyCode::S, false),
-        b't' => (KeyCode::T, false),
-        b'u' => (KeyCode::U, false),
-        b'v' => (KeyCode::V, false),
-        b'w' => (KeyCode::W, false),
-        b'x' => (KeyCode::X, false),
-        b'y' => (KeyCode::Y, false),
-        b'z' => (KeyCode::Z, false),
-        b'A' => (KeyCode::A, true),
-        b'B' => (KeyCode::B, true),
-        b'C' => (KeyCode::C, true),
-        b'D' => (KeyCode::D, true),
-        b'E' => (KeyCode::E, true),
-        b'F' => (KeyCode::F, true),
-        b'G' => (KeyCode::G, true),
-        b'H' => (KeyCode::H, true),
-        b'I' => (KeyCode::I, true),
-        b'J' => (KeyCode::J, true),
-        b'K' => (KeyCode::K, true),
-        b'L' => (KeyCode::L, true),
-        b'M' => (KeyCode::M, true),
-        b'N' => (KeyCode::N, true),
-        b'O' => (KeyCode::O, true),
-        b'P' => (KeyCode::P, true),
-        b'Q' => (KeyCode::Q, true),
-        b'R' => (KeyCode::R, true),
-        b'S' => (KeyCode::S, true),
-        b'T' => (KeyCode::T, true),
-        b'U' => (KeyCode::U, true),
-        b'V' => (KeyCode::V, true),
-        b'W' => (KeyCode::W, true),
-        b'X' => (KeyCode::X, true),
-        b'Y' => (KeyCode::Y, true),
-        b'Z' => (KeyCode::Z, true),
-        b'!' => (KeyCode::Kc1, true),
-        b'@' => (KeyCode::Kc2, true),
-        b'#' => (KeyCode::Kc3, true),
-        b'$' => (KeyCode::Kc4, true),
-        b'%' => (KeyCode::Kc5, true),
-        b'^' => (KeyCode::Kc6, true),
-        b'&' => (KeyCode::Kc7, true),
-        b'*' => (KeyCode::Kc8, true),
-        b'(' => (KeyCode::Kc9, true),
-        b')' => (KeyCode::Kc0, true),
-        b'-' => (KeyCode::Minus, false),
-        b'_' => (KeyCode::Minus, true),
-        b'=' => (KeyCode::Equal, false),
-        b'+' => (KeyCode::Equal, true),
-        b'[' => (KeyCode::LeftBracket, false),
-        b']' => (KeyCode::RightBracket, false),
-        b'{' => (KeyCode::LeftBracket, true),
-        b'}' => (KeyCode::RightBracket, true),
-        b';' => (KeyCode::Semicolon, false),
-        b':' => (KeyCode::Semicolon, true),
-        b'\'' => (KeyCode::Quote, false),
-        b'"' => (KeyCode::Quote, true),
-        b'`' => (KeyCode::Grave, false),
-        b'~' => (KeyCode::Grave, true),
-        b'\\' => (KeyCode::Backslash, false),
-        b'|' => (KeyCode::Backslash, true),
-        b',' => (KeyCode::Comma, false),
-        b'<' => (KeyCode::Comma, true),
-        b'.' => (KeyCode::Dot, false),
-        b'>' => (KeyCode::Dot, true),
-        b'/' => (KeyCode::Slash, false),
-        b'?' => (KeyCode::Slash, true),
-        b' ' => (KeyCode::Space, false),
-        b'\n' => (KeyCode::Enter, false),
-        b'\t' => (KeyCode::Tab, false),
-        b'\x08' => (KeyCode::Backspace, false),
-        b'\x1B' => (KeyCode::Escape, false),
-        b'\x7F' => (KeyCode::Delete, false),
-        _ => (KeyCode::No, false),
+impl ::postcard::experimental::max_size::MaxSize for HidKeyCode {
+    const POSTCARD_MAX_SIZE: usize = 1usize;
+}
+
+impl From<u8> for HidKeyCode {
+    fn from(value: u8) -> Self {
+        match value {
+            0x00 => HidKeyCode::No,
+            0x01 => HidKeyCode::ErrorRollover,
+            0x02 => HidKeyCode::PostFail,
+            0x03 => HidKeyCode::ErrorUndefined,
+            0x04 => HidKeyCode::A,
+            0x05 => HidKeyCode::B,
+            0x06 => HidKeyCode::C,
+            0x07 => HidKeyCode::D,
+            0x08 => HidKeyCode::E,
+            0x09 => HidKeyCode::F,
+            0x0A => HidKeyCode::G,
+            0x0B => HidKeyCode::H,
+            0x0C => HidKeyCode::I,
+            0x0D => HidKeyCode::J,
+            0x0E => HidKeyCode::K,
+            0x0F => HidKeyCode::L,
+            0x10 => HidKeyCode::M,
+            0x11 => HidKeyCode::N,
+            0x12 => HidKeyCode::O,
+            0x13 => HidKeyCode::P,
+            0x14 => HidKeyCode::Q,
+            0x15 => HidKeyCode::R,
+            0x16 => HidKeyCode::S,
+            0x17 => HidKeyCode::T,
+            0x18 => HidKeyCode::U,
+            0x19 => HidKeyCode::V,
+            0x1A => HidKeyCode::W,
+            0x1B => HidKeyCode::X,
+            0x1C => HidKeyCode::Y,
+            0x1D => HidKeyCode::Z,
+            0x1E => HidKeyCode::Kc1,
+            0x1F => HidKeyCode::Kc2,
+            0x20 => HidKeyCode::Kc3,
+            0x21 => HidKeyCode::Kc4,
+            0x22 => HidKeyCode::Kc5,
+            0x23 => HidKeyCode::Kc6,
+            0x24 => HidKeyCode::Kc7,
+            0x25 => HidKeyCode::Kc8,
+            0x26 => HidKeyCode::Kc9,
+            0x27 => HidKeyCode::Kc0,
+            0x28 => HidKeyCode::Enter,
+            0x29 => HidKeyCode::Escape,
+            0x2A => HidKeyCode::Backspace,
+            0x2B => HidKeyCode::Tab,
+            0x2C => HidKeyCode::Space,
+            0x2D => HidKeyCode::Minus,
+            0x2E => HidKeyCode::Equal,
+            0x2F => HidKeyCode::LeftBracket,
+            0x30 => HidKeyCode::RightBracket,
+            0x31 => HidKeyCode::Backslash,
+            0x32 => HidKeyCode::NonusHash,
+            0x33 => HidKeyCode::Semicolon,
+            0x34 => HidKeyCode::Quote,
+            0x35 => HidKeyCode::Grave,
+            0x36 => HidKeyCode::Comma,
+            0x37 => HidKeyCode::Dot,
+            0x38 => HidKeyCode::Slash,
+            0x39 => HidKeyCode::CapsLock,
+            0x3A => HidKeyCode::F1,
+            0x3B => HidKeyCode::F2,
+            0x3C => HidKeyCode::F3,
+            0x3D => HidKeyCode::F4,
+            0x3E => HidKeyCode::F5,
+            0x3F => HidKeyCode::F6,
+            0x40 => HidKeyCode::F7,
+            0x41 => HidKeyCode::F8,
+            0x42 => HidKeyCode::F9,
+            0x43 => HidKeyCode::F10,
+            0x44 => HidKeyCode::F11,
+            0x45 => HidKeyCode::F12,
+            0x46 => HidKeyCode::PrintScreen,
+            0x47 => HidKeyCode::ScrollLock,
+            0x48 => HidKeyCode::Pause,
+            0x49 => HidKeyCode::Insert,
+            0x4A => HidKeyCode::Home,
+            0x4B => HidKeyCode::PageUp,
+            0x4C => HidKeyCode::Delete,
+            0x4D => HidKeyCode::End,
+            0x4E => HidKeyCode::PageDown,
+            0x4F => HidKeyCode::Right,
+            0x50 => HidKeyCode::Left,
+            0x51 => HidKeyCode::Down,
+            0x52 => HidKeyCode::Up,
+            0x53 => HidKeyCode::NumLock,
+            0x54 => HidKeyCode::KpSlash,
+            0x55 => HidKeyCode::KpAsterisk,
+            0x56 => HidKeyCode::KpMinus,
+            0x57 => HidKeyCode::KpPlus,
+            0x58 => HidKeyCode::KpEnter,
+            0x59 => HidKeyCode::Kp1,
+            0x5A => HidKeyCode::Kp2,
+            0x5B => HidKeyCode::Kp3,
+            0x5C => HidKeyCode::Kp4,
+            0x5D => HidKeyCode::Kp5,
+            0x5E => HidKeyCode::Kp6,
+            0x5F => HidKeyCode::Kp7,
+            0x60 => HidKeyCode::Kp8,
+            0x61 => HidKeyCode::Kp9,
+            0x62 => HidKeyCode::Kp0,
+            0x63 => HidKeyCode::KpDot,
+            0x64 => HidKeyCode::NonusBackslash,
+            0x65 => HidKeyCode::Application,
+            0x66 => HidKeyCode::KbPower,
+            0x67 => HidKeyCode::KpEqual,
+            0x68 => HidKeyCode::F13,
+            0x69 => HidKeyCode::F14,
+            0x6A => HidKeyCode::F15,
+            0x6B => HidKeyCode::F16,
+            0x6C => HidKeyCode::F17,
+            0x6D => HidKeyCode::F18,
+            0x6E => HidKeyCode::F19,
+            0x6F => HidKeyCode::F20,
+            0x70 => HidKeyCode::F21,
+            0x71 => HidKeyCode::F22,
+            0x72 => HidKeyCode::F23,
+            0x73 => HidKeyCode::F24,
+            0x74 => HidKeyCode::Execute,
+            0x75 => HidKeyCode::Help,
+            0x76 => HidKeyCode::Menu,
+            0x77 => HidKeyCode::Select,
+            0x78 => HidKeyCode::Stop,
+            0x79 => HidKeyCode::Again,
+            0x7A => HidKeyCode::Undo,
+            0x7B => HidKeyCode::Cut,
+            0x7C => HidKeyCode::Copy,
+            0x7D => HidKeyCode::Paste,
+            0x7E => HidKeyCode::Find,
+            0x7F => HidKeyCode::KbMute,
+            0x80 => HidKeyCode::KbVolumeUp,
+            0x81 => HidKeyCode::KbVolumeDown,
+            0x82 => HidKeyCode::LockingCapsLock,
+            0x83 => HidKeyCode::LockingNumLock,
+            0x84 => HidKeyCode::LockingScrollLock,
+            0x85 => HidKeyCode::KpComma,
+            0x86 => HidKeyCode::KpEqualAs400,
+            0x87 => HidKeyCode::International1,
+            0x88 => HidKeyCode::International2,
+            0x89 => HidKeyCode::International3,
+            0x8A => HidKeyCode::International4,
+            0x8B => HidKeyCode::International5,
+            0x8C => HidKeyCode::International6,
+            0x8D => HidKeyCode::International7,
+            0x8E => HidKeyCode::International8,
+            0x8F => HidKeyCode::International9,
+            0x90 => HidKeyCode::Language1,
+            0x91 => HidKeyCode::Language2,
+            0x92 => HidKeyCode::Language3,
+            0x93 => HidKeyCode::Language4,
+            0x94 => HidKeyCode::Language5,
+            0x95 => HidKeyCode::Language6,
+            0x96 => HidKeyCode::Language7,
+            0x97 => HidKeyCode::Language8,
+            0x98 => HidKeyCode::Language9,
+            0x99 => HidKeyCode::AlternateErase,
+            0x9A => HidKeyCode::SystemRequest,
+            0x9B => HidKeyCode::Cancel,
+            0x9C => HidKeyCode::Clear,
+            0x9D => HidKeyCode::Prior,
+            0x9E => HidKeyCode::Return,
+            0x9F => HidKeyCode::Separator,
+            0xA0 => HidKeyCode::Out,
+            0xA1 => HidKeyCode::Oper,
+            0xA2 => HidKeyCode::ClearAgain,
+            0xA3 => HidKeyCode::Crsel,
+            0xA4 => HidKeyCode::Exsel,
+            0xA5 => HidKeyCode::SystemPower,
+            0xA6 => HidKeyCode::SystemSleep,
+            0xA7 => HidKeyCode::SystemWake,
+            0xA8 => HidKeyCode::AudioMute,
+            0xA9 => HidKeyCode::AudioVolUp,
+            0xAA => HidKeyCode::AudioVolDown,
+            0xAB => HidKeyCode::MediaNextTrack,
+            0xAC => HidKeyCode::MediaPrevTrack,
+            0xAD => HidKeyCode::MediaStop,
+            0xAE => HidKeyCode::MediaPlayPause,
+            0xAF => HidKeyCode::MediaSelect,
+            0xB0 => HidKeyCode::MediaEject,
+            0xB1 => HidKeyCode::Mail,
+            0xB2 => HidKeyCode::Calculator,
+            0xB3 => HidKeyCode::MyComputer,
+            0xB4 => HidKeyCode::WwwSearch,
+            0xB5 => HidKeyCode::WwwHome,
+            0xB6 => HidKeyCode::WwwBack,
+            0xB7 => HidKeyCode::WwwForward,
+            0xB8 => HidKeyCode::WwwStop,
+            0xB9 => HidKeyCode::WwwRefresh,
+            0xBA => HidKeyCode::WwwFavorites,
+            0xBB => HidKeyCode::MediaFastForward,
+            0xBC => HidKeyCode::MediaRewind,
+            0xBD => HidKeyCode::BrightnessUp,
+            0xBE => HidKeyCode::BrightnessDown,
+            0xBF => HidKeyCode::ControlPanel,
+            0xC0 => HidKeyCode::Assistant,
+            0xC1 => HidKeyCode::MissionControl,
+            0xC2 => HidKeyCode::Launchpad,
+            0xCD => HidKeyCode::MouseUp,
+            0xCE => HidKeyCode::MouseDown,
+            0xCF => HidKeyCode::MouseLeft,
+            0xD0 => HidKeyCode::MouseRight,
+            0xD1 => HidKeyCode::MouseBtn1,
+            0xD2 => HidKeyCode::MouseBtn2,
+            0xD3 => HidKeyCode::MouseBtn3,
+            0xD4 => HidKeyCode::MouseBtn4,
+            0xD5 => HidKeyCode::MouseBtn5,
+            0xD6 => HidKeyCode::MouseBtn6,
+            0xD7 => HidKeyCode::MouseBtn7,
+            0xD8 => HidKeyCode::MouseBtn8,
+            0xD9 => HidKeyCode::MouseWheelUp,
+            0xDA => HidKeyCode::MouseWheelDown,
+            0xDB => HidKeyCode::MouseWheelLeft,
+            0xDC => HidKeyCode::MouseWheelRight,
+            0xDD => HidKeyCode::MouseAccel0,
+            0xDE => HidKeyCode::MouseAccel1,
+            0xDF => HidKeyCode::MouseAccel2,
+            0xE0 => HidKeyCode::LCtrl,
+            0xE1 => HidKeyCode::LShift,
+            0xE2 => HidKeyCode::LAlt,
+            0xE3 => HidKeyCode::LGui,
+            0xE4 => HidKeyCode::RCtrl,
+            0xE5 => HidKeyCode::RShift,
+            0xE6 => HidKeyCode::RAlt,
+            0xE7 => HidKeyCode::RGui,
+            _ => HidKeyCode::No,
+        }
     }
 }
 
-/// Convert a ascii chat to keycode
-/// assumes en-us keyboard mapping
-pub fn to_ascii(keycode: KeyCode, shifted: bool) -> u8 {
-    match (keycode, shifted) {
-        (KeyCode::Kc0, false) => b'0',
-        (KeyCode::Kc1, false) => b'1',
-        (KeyCode::Kc2, false) => b'2',
-        (KeyCode::Kc3, false) => b'3',
-        (KeyCode::Kc4, false) => b'4',
-        (KeyCode::Kc5, false) => b'5',
-        (KeyCode::Kc6, false) => b'6',
-        (KeyCode::Kc7, false) => b'7',
-        (KeyCode::Kc8, false) => b'8',
-        (KeyCode::Kc9, false) => b'9',
-        (KeyCode::A, false) => b'a',
-        (KeyCode::B, false) => b'b',
-        (KeyCode::C, false) => b'c',
-        (KeyCode::D, false) => b'd',
-        (KeyCode::E, false) => b'e',
-        (KeyCode::F, false) => b'f',
-        (KeyCode::G, false) => b'g',
-        (KeyCode::H, false) => b'h',
-        (KeyCode::I, false) => b'i',
-        (KeyCode::J, false) => b'j',
-        (KeyCode::K, false) => b'k',
-        (KeyCode::L, false) => b'l',
-        (KeyCode::M, false) => b'm',
-        (KeyCode::N, false) => b'n',
-        (KeyCode::O, false) => b'o',
-        (KeyCode::P, false) => b'p',
-        (KeyCode::Q, false) => b'q',
-        (KeyCode::R, false) => b'r',
-        (KeyCode::S, false) => b's',
-        (KeyCode::T, false) => b't',
-        (KeyCode::U, false) => b'u',
-        (KeyCode::V, false) => b'v',
-        (KeyCode::W, false) => b'w',
-        (KeyCode::X, false) => b'x',
-        (KeyCode::Y, false) => b'y',
-        (KeyCode::Z, false) => b'z',
-        (KeyCode::A, true) => b'A',
-        (KeyCode::B, true) => b'B',
-        (KeyCode::C, true) => b'C',
-        (KeyCode::D, true) => b'D',
-        (KeyCode::E, true) => b'E',
-        (KeyCode::F, true) => b'F',
-        (KeyCode::G, true) => b'G',
-        (KeyCode::H, true) => b'H',
-        (KeyCode::I, true) => b'I',
-        (KeyCode::J, true) => b'J',
-        (KeyCode::K, true) => b'K',
-        (KeyCode::L, true) => b'L',
-        (KeyCode::M, true) => b'M',
-        (KeyCode::N, true) => b'N',
-        (KeyCode::O, true) => b'O',
-        (KeyCode::P, true) => b'P',
-        (KeyCode::Q, true) => b'Q',
-        (KeyCode::R, true) => b'R',
-        (KeyCode::S, true) => b'S',
-        (KeyCode::T, true) => b'T',
-        (KeyCode::U, true) => b'U',
-        (KeyCode::V, true) => b'V',
-        (KeyCode::W, true) => b'W',
-        (KeyCode::X, true) => b'X',
-        (KeyCode::Y, true) => b'Y',
-        (KeyCode::Z, true) => b'Z',
-        (KeyCode::Kc1, true) => b'!',
-        (KeyCode::Kc2, true) => b'@',
-        (KeyCode::Kc3, true) => b'#',
-        (KeyCode::Kc4, true) => b'$',
-        (KeyCode::Kc5, true) => b'%',
-        (KeyCode::Kc6, true) => b'^',
-        (KeyCode::Kc7, true) => b'&',
-        (KeyCode::Kc8, true) => b'*',
-        (KeyCode::Kc9, true) => b'(',
-        (KeyCode::Kc0, true) => b')',
-        (KeyCode::Minus, false) => b'-',
-        (KeyCode::Minus, true) => b'_',
-        (KeyCode::Equal, false) => b'=',
-        (KeyCode::Equal, true) => b'+',
-        (KeyCode::LeftBracket, false) => b'[',
-        (KeyCode::RightBracket, false) => b']',
-        (KeyCode::LeftBracket, true) => b'{',
-        (KeyCode::RightBracket, true) => b'}',
-        (KeyCode::Semicolon, false) => b';',
-        (KeyCode::Semicolon, true) => b':',
-        (KeyCode::Quote, false) => b'\'',
-        (KeyCode::Quote, true) => b'"',
-        (KeyCode::Grave, false) => b'`',
-        (KeyCode::Grave, true) => b'~',
-        (KeyCode::Backslash, true) => b'\\',
-        (KeyCode::Backslash, false) => b'|',
-        (KeyCode::Comma, false) => b',',
-        (KeyCode::Comma, true) => b'<',
-        (KeyCode::Dot, false) => b'.',
-        (KeyCode::Dot, true) => b'>',
-        (KeyCode::Slash, false) => b'/',
-        (KeyCode::Slash, true) => b'?',
-        (KeyCode::Space, false) => b' ',
-        (KeyCode::Enter, false) => b'\n',
-        (KeyCode::Tab, false) => b'\t',
-        (KeyCode::Backspace, false) => b'\x08',
-        (KeyCode::Escape, false) => b'\x1B',
-        (KeyCode::Delete, false) => b'\x7F',
-        // not supported keycodes
-        (_, _) => b'X',
-    }
+/// Key codes which are not in the HID spec, but still commonly used
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(postcard::experimental::max_size::MaxSize)]
+pub enum SpecialKey {
+    // GraveEscape
+    GraveEscape,
+    // Repeat
+    Repeat,
 }
 
-impl From<u16> for KeyCode {
-    fn from(value: u16) -> Self {
-        Self::from_repr(value).unwrap_or(Self::No)
-    }
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(postcard::experimental::max_size::MaxSize)]
+pub enum KeyCode {
+    Hid(HidKeyCode),
+    Consumer(ConsumerKey),
+    SystemControl(SystemControlKey),
 }
 
 /// Keys in consumer page
 /// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=75>
 #[non_exhaustive]
 #[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ConsumerKey {
     No = 0x00,
@@ -953,17 +797,51 @@ pub enum ConsumerKey {
     AcSoftKeyLeft = 0x2A0,
 }
 
-impl From<u16> for ConsumerKey {
-    fn from(value: u16) -> Self {
-        Self::from_repr(value).unwrap_or(Self::No)
+impl ::postcard::experimental::max_size::MaxSize for ConsumerKey {
+    const POSTCARD_MAX_SIZE: usize = 3usize;
+}
+
+impl ConsumerKey {
+    /// Convert ConsumerKey to the corresponding HidKeyCode
+    pub fn to_hid_keycode(&self) -> Option<HidKeyCode> {
+        match self {
+            ConsumerKey::Mute => Some(HidKeyCode::AudioMute),
+            ConsumerKey::VolumeIncrement => Some(HidKeyCode::AudioVolUp),
+            ConsumerKey::VolumeDecrement => Some(HidKeyCode::AudioVolDown),
+            ConsumerKey::NextTrack => Some(HidKeyCode::MediaNextTrack),
+            ConsumerKey::PrevTrack => Some(HidKeyCode::MediaPrevTrack),
+            ConsumerKey::StopPlay => Some(HidKeyCode::MediaStop),
+            ConsumerKey::PlayPause => Some(HidKeyCode::MediaPlayPause),
+            ConsumerKey::Record => Some(HidKeyCode::MediaSelect),
+            ConsumerKey::Eject => Some(HidKeyCode::MediaEject),
+            ConsumerKey::Email => Some(HidKeyCode::Mail),
+            ConsumerKey::Calculator => Some(HidKeyCode::Calculator),
+            ConsumerKey::LocalBrowser => Some(HidKeyCode::MyComputer),
+            ConsumerKey::Search => Some(HidKeyCode::WwwSearch),
+            ConsumerKey::Home => Some(HidKeyCode::WwwHome),
+            ConsumerKey::Back => Some(HidKeyCode::WwwBack),
+            ConsumerKey::Forward => Some(HidKeyCode::WwwForward),
+            ConsumerKey::Stop => Some(HidKeyCode::WwwStop),
+            ConsumerKey::Refresh => Some(HidKeyCode::WwwRefresh),
+            ConsumerKey::Bookmarks => Some(HidKeyCode::WwwFavorites),
+            ConsumerKey::FastForward => Some(HidKeyCode::MediaFastForward),
+            ConsumerKey::Rewind => Some(HidKeyCode::MediaRewind),
+            ConsumerKey::BrightnessUp => Some(HidKeyCode::BrightnessUp),
+            ConsumerKey::BrightnessDown => Some(HidKeyCode::BrightnessDown),
+            ConsumerKey::ControlPanel => Some(HidKeyCode::ControlPanel),
+            ConsumerKey::Assistant => Some(HidKeyCode::Assistant),
+            ConsumerKey::DesktopShowAllWindows => Some(HidKeyCode::MissionControl),
+            ConsumerKey::AcSoftKeyLeft => Some(HidKeyCode::Launchpad),
+            _ => None,
+        }
     }
 }
 
 /// Keys in `Generic Desktop Page`, generally used for system control
 /// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=26>
 #[non_exhaustive]
-#[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr)]
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SystemControlKey {
     No = 0x00,
@@ -973,8 +851,236 @@ pub enum SystemControlKey {
     Restart = 0x8F,
 }
 
-impl From<u16> for SystemControlKey {
-    fn from(value: u16) -> Self {
-        Self::from_repr(value).unwrap_or(Self::No)
+impl ::postcard::experimental::max_size::MaxSize for SystemControlKey {
+    const POSTCARD_MAX_SIZE: usize = 1usize;
+}
+
+impl SystemControlKey {
+    /// Convert SystemControlKey to the corresponding HidKeyCode
+    pub fn to_hid_keycode(&self) -> Option<HidKeyCode> {
+        match self {
+            SystemControlKey::PowerDown => Some(HidKeyCode::SystemPower),
+            SystemControlKey::Sleep => Some(HidKeyCode::SystemSleep),
+            SystemControlKey::WakeUp => Some(HidKeyCode::SystemWake),
+            _ => None,
+        }
+    }
+}
+
+/// Convert a ascii chat to keycode
+/// bool, if the keycode should be shifted
+/// assumes en-us keyboard mapping
+pub fn from_ascii(ascii: u8) -> (HidKeyCode, bool) {
+    match ascii {
+        b'0' => (HidKeyCode::Kc0, false),
+        b'1' => (HidKeyCode::Kc1, false),
+        b'2' => (HidKeyCode::Kc2, false),
+        b'3' => (HidKeyCode::Kc3, false),
+        b'4' => (HidKeyCode::Kc4, false),
+        b'5' => (HidKeyCode::Kc5, false),
+        b'6' => (HidKeyCode::Kc6, false),
+        b'7' => (HidKeyCode::Kc7, false),
+        b'8' => (HidKeyCode::Kc8, false),
+        b'9' => (HidKeyCode::Kc9, false),
+        b'a' => (HidKeyCode::A, false),
+        b'b' => (HidKeyCode::B, false),
+        b'c' => (HidKeyCode::C, false),
+        b'd' => (HidKeyCode::D, false),
+        b'e' => (HidKeyCode::E, false),
+        b'f' => (HidKeyCode::F, false),
+        b'g' => (HidKeyCode::G, false),
+        b'h' => (HidKeyCode::H, false),
+        b'i' => (HidKeyCode::I, false),
+        b'j' => (HidKeyCode::J, false),
+        b'k' => (HidKeyCode::K, false),
+        b'l' => (HidKeyCode::L, false),
+        b'm' => (HidKeyCode::M, false),
+        b'n' => (HidKeyCode::N, false),
+        b'o' => (HidKeyCode::O, false),
+        b'p' => (HidKeyCode::P, false),
+        b'q' => (HidKeyCode::Q, false),
+        b'r' => (HidKeyCode::R, false),
+        b's' => (HidKeyCode::S, false),
+        b't' => (HidKeyCode::T, false),
+        b'u' => (HidKeyCode::U, false),
+        b'v' => (HidKeyCode::V, false),
+        b'w' => (HidKeyCode::W, false),
+        b'x' => (HidKeyCode::X, false),
+        b'y' => (HidKeyCode::Y, false),
+        b'z' => (HidKeyCode::Z, false),
+        b'A' => (HidKeyCode::A, true),
+        b'B' => (HidKeyCode::B, true),
+        b'C' => (HidKeyCode::C, true),
+        b'D' => (HidKeyCode::D, true),
+        b'E' => (HidKeyCode::E, true),
+        b'F' => (HidKeyCode::F, true),
+        b'G' => (HidKeyCode::G, true),
+        b'H' => (HidKeyCode::H, true),
+        b'I' => (HidKeyCode::I, true),
+        b'J' => (HidKeyCode::J, true),
+        b'K' => (HidKeyCode::K, true),
+        b'L' => (HidKeyCode::L, true),
+        b'M' => (HidKeyCode::M, true),
+        b'N' => (HidKeyCode::N, true),
+        b'O' => (HidKeyCode::O, true),
+        b'P' => (HidKeyCode::P, true),
+        b'Q' => (HidKeyCode::Q, true),
+        b'R' => (HidKeyCode::R, true),
+        b'S' => (HidKeyCode::S, true),
+        b'T' => (HidKeyCode::T, true),
+        b'U' => (HidKeyCode::U, true),
+        b'V' => (HidKeyCode::V, true),
+        b'W' => (HidKeyCode::W, true),
+        b'X' => (HidKeyCode::X, true),
+        b'Y' => (HidKeyCode::Y, true),
+        b'Z' => (HidKeyCode::Z, true),
+        b'!' => (HidKeyCode::Kc1, true),
+        b'@' => (HidKeyCode::Kc2, true),
+        b'#' => (HidKeyCode::Kc3, true),
+        b'$' => (HidKeyCode::Kc4, true),
+        b'%' => (HidKeyCode::Kc5, true),
+        b'^' => (HidKeyCode::Kc6, true),
+        b'&' => (HidKeyCode::Kc7, true),
+        b'*' => (HidKeyCode::Kc8, true),
+        b'(' => (HidKeyCode::Kc9, true),
+        b')' => (HidKeyCode::Kc0, true),
+        b'-' => (HidKeyCode::Minus, false),
+        b'_' => (HidKeyCode::Minus, true),
+        b'=' => (HidKeyCode::Equal, false),
+        b'+' => (HidKeyCode::Equal, true),
+        b'[' => (HidKeyCode::LeftBracket, false),
+        b']' => (HidKeyCode::RightBracket, false),
+        b'{' => (HidKeyCode::LeftBracket, true),
+        b'}' => (HidKeyCode::RightBracket, true),
+        b';' => (HidKeyCode::Semicolon, false),
+        b':' => (HidKeyCode::Semicolon, true),
+        b'\'' => (HidKeyCode::Quote, false),
+        b'"' => (HidKeyCode::Quote, true),
+        b'`' => (HidKeyCode::Grave, false),
+        b'~' => (HidKeyCode::Grave, true),
+        b'\\' => (HidKeyCode::Backslash, false),
+        b'|' => (HidKeyCode::Backslash, true),
+        b',' => (HidKeyCode::Comma, false),
+        b'<' => (HidKeyCode::Comma, true),
+        b'.' => (HidKeyCode::Dot, false),
+        b'>' => (HidKeyCode::Dot, true),
+        b'/' => (HidKeyCode::Slash, false),
+        b'?' => (HidKeyCode::Slash, true),
+        b' ' => (HidKeyCode::Space, false),
+        b'\n' => (HidKeyCode::Enter, false),
+        b'\t' => (HidKeyCode::Tab, false),
+        b'\x08' => (HidKeyCode::Backspace, false),
+        b'\x1B' => (HidKeyCode::Escape, false),
+        b'\x7F' => (HidKeyCode::Delete, false),
+        _ => (HidKeyCode::No, false),
+    }
+}
+
+/// Convert a ascii chat to keycode
+/// assumes en-us keyboard mapping
+pub fn to_ascii(keycode: HidKeyCode, shifted: bool) -> u8 {
+    match (keycode, shifted) {
+        (HidKeyCode::Kc0, false) => b'0',
+        (HidKeyCode::Kc1, false) => b'1',
+        (HidKeyCode::Kc2, false) => b'2',
+        (HidKeyCode::Kc3, false) => b'3',
+        (HidKeyCode::Kc4, false) => b'4',
+        (HidKeyCode::Kc5, false) => b'5',
+        (HidKeyCode::Kc6, false) => b'6',
+        (HidKeyCode::Kc7, false) => b'7',
+        (HidKeyCode::Kc8, false) => b'8',
+        (HidKeyCode::Kc9, false) => b'9',
+        (HidKeyCode::A, false) => b'a',
+        (HidKeyCode::B, false) => b'b',
+        (HidKeyCode::C, false) => b'c',
+        (HidKeyCode::D, false) => b'd',
+        (HidKeyCode::E, false) => b'e',
+        (HidKeyCode::F, false) => b'f',
+        (HidKeyCode::G, false) => b'g',
+        (HidKeyCode::H, false) => b'h',
+        (HidKeyCode::I, false) => b'i',
+        (HidKeyCode::J, false) => b'j',
+        (HidKeyCode::K, false) => b'k',
+        (HidKeyCode::L, false) => b'l',
+        (HidKeyCode::M, false) => b'm',
+        (HidKeyCode::N, false) => b'n',
+        (HidKeyCode::O, false) => b'o',
+        (HidKeyCode::P, false) => b'p',
+        (HidKeyCode::Q, false) => b'q',
+        (HidKeyCode::R, false) => b'r',
+        (HidKeyCode::S, false) => b's',
+        (HidKeyCode::T, false) => b't',
+        (HidKeyCode::U, false) => b'u',
+        (HidKeyCode::V, false) => b'v',
+        (HidKeyCode::W, false) => b'w',
+        (HidKeyCode::X, false) => b'x',
+        (HidKeyCode::Y, false) => b'y',
+        (HidKeyCode::Z, false) => b'z',
+        (HidKeyCode::A, true) => b'A',
+        (HidKeyCode::B, true) => b'B',
+        (HidKeyCode::C, true) => b'C',
+        (HidKeyCode::D, true) => b'D',
+        (HidKeyCode::E, true) => b'E',
+        (HidKeyCode::F, true) => b'F',
+        (HidKeyCode::G, true) => b'G',
+        (HidKeyCode::H, true) => b'H',
+        (HidKeyCode::I, true) => b'I',
+        (HidKeyCode::J, true) => b'J',
+        (HidKeyCode::K, true) => b'K',
+        (HidKeyCode::L, true) => b'L',
+        (HidKeyCode::M, true) => b'M',
+        (HidKeyCode::N, true) => b'N',
+        (HidKeyCode::O, true) => b'O',
+        (HidKeyCode::P, true) => b'P',
+        (HidKeyCode::Q, true) => b'Q',
+        (HidKeyCode::R, true) => b'R',
+        (HidKeyCode::S, true) => b'S',
+        (HidKeyCode::T, true) => b'T',
+        (HidKeyCode::U, true) => b'U',
+        (HidKeyCode::V, true) => b'V',
+        (HidKeyCode::W, true) => b'W',
+        (HidKeyCode::X, true) => b'X',
+        (HidKeyCode::Y, true) => b'Y',
+        (HidKeyCode::Z, true) => b'Z',
+        (HidKeyCode::Kc1, true) => b'!',
+        (HidKeyCode::Kc2, true) => b'@',
+        (HidKeyCode::Kc3, true) => b'#',
+        (HidKeyCode::Kc4, true) => b'$',
+        (HidKeyCode::Kc5, true) => b'%',
+        (HidKeyCode::Kc6, true) => b'^',
+        (HidKeyCode::Kc7, true) => b'&',
+        (HidKeyCode::Kc8, true) => b'*',
+        (HidKeyCode::Kc9, true) => b'(',
+        (HidKeyCode::Kc0, true) => b')',
+        (HidKeyCode::Minus, false) => b'-',
+        (HidKeyCode::Minus, true) => b'_',
+        (HidKeyCode::Equal, false) => b'=',
+        (HidKeyCode::Equal, true) => b'+',
+        (HidKeyCode::LeftBracket, false) => b'[',
+        (HidKeyCode::RightBracket, false) => b']',
+        (HidKeyCode::LeftBracket, true) => b'{',
+        (HidKeyCode::RightBracket, true) => b'}',
+        (HidKeyCode::Semicolon, false) => b';',
+        (HidKeyCode::Semicolon, true) => b':',
+        (HidKeyCode::Quote, false) => b'\'',
+        (HidKeyCode::Quote, true) => b'"',
+        (HidKeyCode::Grave, false) => b'`',
+        (HidKeyCode::Grave, true) => b'~',
+        (HidKeyCode::Backslash, true) => b'\\',
+        (HidKeyCode::Backslash, false) => b'|',
+        (HidKeyCode::Comma, false) => b',',
+        (HidKeyCode::Comma, true) => b'<',
+        (HidKeyCode::Dot, false) => b'.',
+        (HidKeyCode::Dot, true) => b'>',
+        (HidKeyCode::Slash, false) => b'/',
+        (HidKeyCode::Slash, true) => b'?',
+        (HidKeyCode::Space, false) => b' ',
+        (HidKeyCode::Enter, false) => b'\n',
+        (HidKeyCode::Tab, false) => b'\t',
+        (HidKeyCode::Backspace, false) => b'\x08',
+        (HidKeyCode::Escape, false) => b'\x1B',
+        (HidKeyCode::Delete, false) => b'\x7F',
+        // not supported keycodes
+        (_, _) => b'X',
     }
 }
