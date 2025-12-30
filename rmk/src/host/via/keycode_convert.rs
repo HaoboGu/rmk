@@ -184,11 +184,10 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         // Caps Word
         0x7C73 => KeyAction::Single(Action::Key(KeyCode::CapsWordToggle)),
         0x7C00..=0x7C5F => {
-            // TODO: Reset/GESC/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro
-            // - [GESC](https://docs.qmk.fm/#/feature_grave_esc)
+            // TODO: Reset/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro
             // - [Space Cadet](https://docs.qmk.fm/#/feature_space_cadet)
             warn!(
-                "Reset/GESC/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro not supported: {:#X}",
+                "Reset/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro not supported: {:#X}",
                 via_keycode
             );
             KeyAction::No
