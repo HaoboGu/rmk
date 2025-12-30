@@ -1,4 +1,4 @@
-// PMW3360 Mouse Sensor Driver 
+// PMW3360 Mouse Sensor Driver
 //
 // Ported from kot149s PMW3610 driver:
 // https://github.com/kot149/pmw3610-rs
@@ -9,8 +9,7 @@ use embassy_time::{Duration, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::spi::SpiBus;
 
-use crate::input_device::InputDevice;
-use crate::event::{Axis, AxisEvent, AxisValType, Event};
+use crate::input_device::pointing::{InitState, MotionData, PointingDevice, PointingDriver, PointingDriverError};
 
 #[allow(dead_code)]
 #[derive(Eq, PartialEq, Debug)]
@@ -161,7 +160,7 @@ const RES_STEP: u16 = 100;
 const RES_MIN: u16 = 100;
 const RES_MAX: u16 = 12000;
 
-// Firware signature 
+// Firware signature
 const FW_SIG_PID: u8 = PRODUCT_ID_PMW3360;
 const FW_SIG_INV_PID: u8 = 0xBD;
 
@@ -209,13 +208,6 @@ pub enum Pmw3360Error {
     InvalidCpi,
     /// Invalid firmware signature detected
     InvalidFwSignature((u8, u8)),
-}
-
-/// Motion data from the sensor
-#[derive(Debug, Clone, Copy, Default)]
-pub struct MotionData {
-    pub dx: i16,
-    pub dy: i16,
 }
 
 /// PMW3360 driver using embedded-hal SPI traits
@@ -269,69 +261,6 @@ where
         }
     }
 
-    /// Check if motion is pending (motion GPIO is active low)
-    pub fn motion_pending(&mut self) -> bool {
-        match &mut self.motion_gpio {
-            Some(gpio) => gpio.is_low().unwrap_or(true),
-            None => true,
-        }
-    }
-
-    /// Initialize the sensor (public API)
-    pub async fn init(&mut self) -> Result<(), Pmw3360Error> {
-        // Set initial pin states
-        let _ = self.cs.set_high();
-        Timer::after(Duration::from_millis(1)).await;
-
-        self.configure().await
-    }
-
-    /// Read motion data from the sensor (motion work handler)
-    pub async fn read_motion(&mut self) -> Result<MotionData, Pmw3360Error> {
-        if !self.in_burst {
-            self.write_reg(Register::MotionBurst, 0x00).await?;
-            self.in_burst = true;
-        }
-
-        let mut burst_data = [0u8; BURST_DATA_LEN];
-        self.read_burst(Register::MotionBurst, &mut burst_data[..BURST_DATA_LEN])
-            .await?;
-
-        debug!("PMW3360: Burst raw data {:?}", burst_data);
-
-        // panic recovery, sometimes burst mode works weird.
-        if (burst_data[BURST_MOTION_FLAGS] & 0b111) != 0x00 {
-            debug!("PMW3360: Burst panic recovery");
-            self.in_burst = false;
-        }
-
-        if (burst_data[BURST_MOTION_FLAGS] & MOTION_STATUS_MOTION) == 0x00 {
-            return Ok(MotionData::default());
-        }
-        if (burst_data[BURST_MOTION_FLAGS] & MOTION_STATUS_LIFTED) != 0x00 {
-            return Ok(MotionData::default());
-        }
-
-        let mut dx: i16 =
-            i16::from_le_bytes([burst_data[BURST_DELTA_X_L], burst_data[BURST_DELTA_X_H]]);
-        let mut dy: i16 =
-            i16::from_le_bytes([burst_data[BURST_DELTA_Y_L], burst_data[BURST_DELTA_Y_H]]);
-
-        if self.config.invert_x {
-            dx = dx * (-1);
-        }
-        if self.config.invert_y {
-            dy = dy * (-1);
-        }
-        if self.config.swap_xy {
-            (dx, dy) = (dy, dx);
-        }
-
-        debug!("PMW3360 motion: x: {}, y: {}", dx, dy);
-
-        Ok(MotionData { dx, dy })
-    }
-
     /// Self check firmware signature of the sensor
     pub async fn check_fw_signature(&mut self) -> Result<(), Pmw3360Error> {
         let product_id = self.read_reg(Register::ProductId).await?;
@@ -344,10 +273,7 @@ where
                 "Firmware signature check failed, expected: {}, {} got: {}, {}",
                 FW_SIG_PID, FW_SIG_INV_PID, product_id, inverse_product_id
             );
-            Err(Pmw3360Error::InvalidFwSignature((
-                product_id,
-                inverse_product_id,
-            )))
+            Err(Pmw3360Error::InvalidFwSignature((product_id, inverse_product_id)))
         }
     }
 
@@ -357,8 +283,7 @@ where
             return Err(Pmw3360Error::InvalidCpi);
         }
 
-        self.write_reg(Register::Config1, ((cpi / RES_STEP) - 1) as u8)
-            .await?;
+        self.write_reg(Register::Config1, ((cpi / RES_STEP) - 1) as u8).await?;
 
         debug!("PMW3360: Resolution set to {} CPI", cpi);
 
@@ -403,10 +328,7 @@ where
         Timer::after(Duration::from_micros(T_SRAD_US)).await;
 
         let mut value = [0u8];
-        self.spi
-            .read(&mut value)
-            .await
-            .map_err(|_| Pmw3360Error::Spi)?;
+        self.spi.read(&mut value).await.map_err(|_| Pmw3360Error::Spi)?;
 
         Self::short_delay();
         let _ = self.cs.set_high();
@@ -416,11 +338,7 @@ where
         Ok(value[0])
     }
 
-    async fn read_burst(
-        &mut self,
-        register: Register,
-        data: &mut [u8],
-    ) -> Result<(), Pmw3360Error> {
+    async fn read_burst(&mut self, register: Register, data: &mut [u8]) -> Result<(), Pmw3360Error> {
         let _ = self.cs.set_low();
         Timer::after(Duration::from_micros(T_NCS_SCLK_US)).await;
 
@@ -460,11 +378,9 @@ where
         Ok(())
     }
 
-
     async fn configure(&mut self) -> Result<(), Pmw3360Error> {
         // Power-up reset
-        self.write_reg(Register::PowerUpReset, POWER_UP_RESET_VAL)
-            .await?;
+        self.write_reg(Register::PowerUpReset, POWER_UP_RESET_VAL).await?;
         Timer::after(Duration::from_millis(RESET_DELAY_MS)).await;
 
         // Verify product ID
@@ -489,8 +405,7 @@ where
 
         self.set_resolution(self.config.res_cpi as u16).await?;
         self.write_reg(Register::Config2, 0x00).await?;
-        self.set_rot_trans_angle(self.config.rot_trans_angle)
-            .await?;
+        self.set_rot_trans_angle(self.config.rot_trans_angle).await?;
         self.set_liftoff_dist(self.config.liftoff_dist).await?;
 
         self.check_fw_signature().await?;
@@ -521,10 +436,7 @@ where
 
         for &byte in firmware {
             debug!("PMW3360: Uploading srom byte: 0x{:02x}", byte);
-            self.spi
-                .write(&[byte])
-                .await
-                .map_err(|_| Pmw3360Error::Spi)?;
+            self.spi.write(&[byte]).await.map_err(|_| Pmw3360Error::Spi)?;
             Timer::after(Duration::from_micros(T_BRSEP_US)).await;
         }
 
@@ -534,7 +446,10 @@ where
 
         let flashed_srom_id = self.read_reg(Register::SromId).await?;
         if srom_id != flashed_srom_id {
-            error!("PMW3360: SROM Firmware upload failed, expected SROM-Id 0x{:02x}, but got 0x{:02x} from the sensor.", srom_id, flashed_srom_id);
+            error!(
+                "PMW3360: SROM Firmware upload failed, expected SROM-Id 0x{:02x}, but got 0x{:02x} from the sensor.",
+                srom_id, flashed_srom_id
+            );
         } else {
             info!("PMW3360: Upload successfull, new SROM-Id: 0x{:02x}", flashed_srom_id);
         }
@@ -545,37 +460,83 @@ where
     }
 }
 
-/// Initialization state for the device
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum InitState {
-    Pending,
-    Initializing(u8),
-    Ready,
-    Failed,
-}
-
-/// PMW3360 as an InputDevice for RMK
-///
-/// This device returns `Event::Joystick` events with relative X/Y movement.
-pub struct Pmw3360Device<'a, SPI, CS, MOTION>
+impl<'a, SPI, CS, MOTION> PointingDriver for Pmw3360<'a, SPI, CS, MOTION>
 where
     SPI: SpiBus,
     CS: OutputPin,
     MOTION: InputPin,
 {
-    sensor: Pmw3360<'a, SPI, CS, MOTION>,
-    init_state: InitState,
-    poll_interval: Duration,
+    /// Initialize the sensor (public API)
+    async fn init(&mut self) -> Result<(), PointingDriverError> {
+        // Set initial pin states
+        let _ = self.cs.set_high();
+        Timer::after(Duration::from_millis(1)).await;
+
+        self.configure().await.map_err(|_| PointingDriverError::InitFailed)
+    }
+
+    /// Read motion data from the sensor (motion work handler)
+    async fn read_motion(&mut self) -> Result<MotionData, PointingDriverError> {
+        if !self.in_burst {
+            self.write_reg(Register::MotionBurst, 0x00)
+                .await
+                .map_err(|_| PointingDriverError::Spi)?;
+            self.in_burst = true;
+        }
+
+        let mut burst_data = [0u8; BURST_DATA_LEN];
+        self.read_burst(Register::MotionBurst, &mut burst_data[..BURST_DATA_LEN])
+            .await
+            .map_err(|_| PointingDriverError::Spi)?;
+
+        debug!("PMW3360: Burst raw data {:?}", burst_data);
+
+        // panic recovery, sometimes burst mode works weird.
+        if (burst_data[BURST_MOTION_FLAGS] & 0b111) != 0x00 {
+            debug!("PMW3360: Burst panic recovery");
+            self.in_burst = false;
+        }
+
+        if (burst_data[BURST_MOTION_FLAGS] & MOTION_STATUS_MOTION) == 0x00 {
+            return Ok(MotionData::default());
+        }
+        if (burst_data[BURST_MOTION_FLAGS] & MOTION_STATUS_LIFTED) != 0x00 {
+            return Ok(MotionData::default());
+        }
+
+        let mut dx: i16 = i16::from_le_bytes([burst_data[BURST_DELTA_X_L], burst_data[BURST_DELTA_X_H]]);
+        let mut dy: i16 = i16::from_le_bytes([burst_data[BURST_DELTA_Y_L], burst_data[BURST_DELTA_Y_H]]);
+
+        if self.config.invert_x {
+            dx = dx * (-1);
+        }
+        if self.config.invert_y {
+            dy = dy * (-1);
+        }
+        if self.config.swap_xy {
+            (dx, dy) = (dy, dx);
+        }
+
+        debug!("PMW3360 motion: x: {}, y: {}", dx, dy);
+
+        Ok(MotionData { dx, dy })
+    }
+
+    /// Check if motion is pending (motion GPIO is active low)
+    fn motion_pending(&mut self) -> bool {
+        match &mut self.motion_gpio {
+            Some(gpio) => gpio.is_low().unwrap_or(true),
+            None => true,
+        }
+    }
 }
 
-impl<'a, SPI, CS, MOTION> Pmw3360Device<'a, SPI, CS, MOTION>
+impl<'a, SPI, CS, MOTION> PointingDevice<Pmw3360<'a, SPI, CS, MOTION>>
 where
     SPI: SpiBus,
     CS: OutputPin,
     MOTION: InputPin,
 {
-    const MAX_INIT_RETRIES: u8 = 3;
-
     /// Create a new PMW3360 device
     pub fn new(spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw3360Config) -> Self {
         Self {
@@ -632,92 +593,6 @@ where
             sensor: Pmw3360::new_with_firmware(spi, cs, motion_gpio, config, firmware),
             init_state: InitState::Pending,
             poll_interval: Duration::from_micros(poll_interval_us),
-        }
-    }
-
-    async fn try_init(&mut self) -> bool {
-        match self.init_state {
-            InitState::Ready => return true,
-            InitState::Failed => return false,
-            InitState::Pending => {
-                self.init_state = InitState::Initializing(0);
-            }
-            InitState::Initializing(_) => {}
-        }
-
-        if let InitState::Initializing(retry_count) = self.init_state {
-            info!("PMW3360: Initializing sensor (attempt {})", retry_count + 1);
-
-            match self.sensor.init().await {
-                Ok(()) => {
-                    info!("PMW3360: Sensor initialized successfully");
-                    self.init_state = InitState::Ready;
-                    return true;
-                }
-                Err(e) => {
-                    error!("PMW3360: Init failed: {:?}", e);
-                    if retry_count + 1 >= Self::MAX_INIT_RETRIES {
-                        error!("PMW3360: Max retries reached, giving up");
-                        self.init_state = InitState::Failed;
-                        return false;
-                    }
-                    self.init_state = InitState::Initializing(retry_count + 1);
-                    Timer::after(Duration::from_millis(100)).await;
-                    return false;
-                }
-            }
-        }
-
-        false
-    }
-}
-
-impl<'a, SPI, CS, MOTION> InputDevice for Pmw3360Device<'a, SPI, CS, MOTION>
-where
-    SPI: SpiBus,
-    CS: OutputPin,
-    MOTION: InputPin,
-{
-    async fn read_event(&mut self) -> Event {
-        loop {
-            Timer::after(self.poll_interval).await;
-
-            if self.init_state != InitState::Ready {
-                if !self.try_init().await {
-                    continue;
-                }
-            }
-
-            if !self.sensor.motion_pending() {
-                continue;
-            }
-
-            match self.sensor.read_motion().await {
-                Ok(motion) => {
-                    if motion.dx != 0 || motion.dy != 0 {
-                        return Event::Joystick([
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::X,
-                                value: motion.dx,
-                            },
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::Y,
-                                value: motion.dy,
-                            },
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::Z,
-                                value: 0,
-                            },
-                        ]);
-                    }
-                }
-                Err(e) => {
-                    warn!("PMW3360 read error: {:?}", e);
-                }
-            }
         }
     }
 }

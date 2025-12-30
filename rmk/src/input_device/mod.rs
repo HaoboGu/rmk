@@ -15,6 +15,7 @@ pub mod joystick;
 pub mod pmw3610;
 pub mod pmw3360;
 pub mod rotary_encoder;
+pub mod pointing;
 
 /// The trait for runnable input devices and processors.
 ///
