@@ -2,6 +2,7 @@
 //!
 //! This module provides keycode definitions following the USB HID
 //! specification, extended with additional codes
+use serde::{Deserialize, Serialize};
 use strum::FromRepr;
 
 use crate::modifier::ModifierCombination;
@@ -9,9 +10,8 @@ use crate::modifier::ModifierCombination;
 /// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
 /// Use flat representation of keycodes.
 #[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, FromRepr)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize)]
 pub enum KeyCode {
     /// Reserved, no-key.
     No = 0x0000,
@@ -377,284 +377,6 @@ pub enum KeyCode {
     RAlt = 0x00E6,
     /// Right GUI
     RGui = 0x00E7,
-    // Magic keycodes, use 0x100 ~ 0x1FF
-    MagicSwapControlCapsLock = 0x100,
-    MagicUnswapControlCapsLock = 0x101,
-    MagicToggleControlCapsLock = 0x102,
-    MagicCapsLockAsControlOff = 0x103,
-    MagicCapsLockAsControlOn = 0x104,
-    MagicSwapLaltLGui = 0x105,
-    MagicUnswapLaltLGui = 0x106,
-    MagicSwapRaltRGui = 0x107,
-    MagicUnswapRaltRGui = 0x108,
-    MagicGuiOn = 0x109,
-    MagicGuiOff = 0x10A,
-    MagicToggleGui = 0x10B,
-    MagicSwapGraveEsc = 0x10C,
-    MagicUnswapGraveEsc = 0x10D,
-    MagicSwapBackslashBackspace = 0x10E,
-    MagicUnswapBackslashBackspace = 0x10F,
-    MagicToggleBackslashBackspace = 0x110,
-    MagicNkroOn = 0x111,
-    MagicNkroOff = 0x112,
-    MagicToggleNkro = 0x113,
-    MagicSwapAltGui = 0x114,
-    MagicUnswapAltGui = 0x115,
-    MagicToggleAltGui = 0x116,
-    MagicSwapLctlLGui = 0x117,
-    MagicUnswapLctlLGui = 0x118,
-    MagicSwapRctlRGui = 0x119,
-    MagicUnswapRctlRGui = 0x11A,
-    MagicSwapCtlGui = 0x11B,
-    MagicUnswapCtlGui = 0x11C,
-    MagicToggleCtlGui = 0x11D,
-    MagicEeHandsLeft = 0x11E,
-    MagicEeHandsRight = 0x11F,
-    MagicSwapEscapeCapsLock = 0x120,
-    MagicUnswapEscapeCapsLock = 0x121,
-    MagicToggleEscapeCapsLock = 0x122,
-    // Midi keycodes, use 0x200 ~ 0x2FF
-    MidiOn = 0x200,
-    MidiOff = 0x201,
-    MidiToggle = 0x202,
-    MidiNoteC0 = 0x203,
-    MidiNoteCSharp0 = 0x204,
-    MidiNoteD0 = 0x205,
-    MidiNoteDSharp0 = 0x206,
-    MidiNoteE0 = 0x207,
-    MidiNoteF0 = 0x208,
-    MidiNoteFSharp0 = 0x209,
-    MidiNoteG0 = 0x20A,
-    MidiNoteGSharp0 = 0x20B,
-    MidiNoteA0 = 0x20C,
-    MidiNoteASharp0 = 0x20D,
-    MidiNoteB0 = 0x20E,
-    MidiNoteC1 = 0x20F,
-    MidiNoteCSharp1 = 0x210,
-    MidiNoteD1 = 0x211,
-    MidiNoteDSharp1 = 0x212,
-    MidiNoteE1 = 0x213,
-    MidiNoteF1 = 0x214,
-    MidiNoteFSharp1 = 0x215,
-    MidiNoteG1 = 0x216,
-    MidiNoteGSharp1 = 0x217,
-    MidiNoteA1 = 0x218,
-    MidiNoteASharp1 = 0x219,
-    MidiNoteB1 = 0x21A,
-    MidiNoteC2 = 0x21B,
-    MidiNoteCSharp2 = 0x21C,
-    MidiNoteD2 = 0x21D,
-    MidiNoteDSharp2 = 0x21E,
-    MidiNoteE2 = 0x21F,
-    MidiNoteF2 = 0x220,
-    MidiNoteFSharp2 = 0x221,
-    MidiNoteG2 = 0x222,
-    MidiNoteGSharp2 = 0x223,
-    MidiNoteA2 = 0x224,
-    MidiNoteASharp2 = 0x225,
-    MidiNoteB2 = 0x226,
-    MidiNoteC3 = 0x227,
-    MidiNoteCSharp3 = 0x228,
-    MidiNoteD3 = 0x229,
-    MidiNoteDSharp3 = 0x22A,
-    MidiNoteE3 = 0x22B,
-    MidiNoteF3 = 0x22C,
-    MidiNoteFSharp3 = 0x22D,
-    MidiNoteG3 = 0x22E,
-    MidiNoteGSharp3 = 0x22F,
-    MidiNoteA3 = 0x230,
-    MidiNoteASharp3 = 0x231,
-    MidiNoteB3 = 0x232,
-    MidiNoteC4 = 0x233,
-    MidiNoteCSharp4 = 0x234,
-    MidiNoteD4 = 0x235,
-    MidiNoteDSharp4 = 0x236,
-    MidiNoteE4 = 0x237,
-    MidiNoteF4 = 0x238,
-    MidiNoteFSharp4 = 0x239,
-    MidiNoteG4 = 0x23A,
-    MidiNoteGSharp4 = 0x23B,
-    MidiNoteA4 = 0x23C,
-    MidiNoteASharp4 = 0x23D,
-    MidiNoteB4 = 0x23E,
-    MidiNoteC5 = 0x23F,
-    MidiNoteCSharp5 = 0x240,
-    MidiNoteD5 = 0x241,
-    MidiNoteDSharp5 = 0x242,
-    MidiNoteE5 = 0x243,
-    MidiNoteF5 = 0x244,
-    MidiNoteFSharp5 = 0x245,
-    MidiNoteG5 = 0x246,
-    MidiNoteGSharp5 = 0x247,
-    MidiNoteA5 = 0x248,
-    MidiNoteASharp5 = 0x249,
-    MidiNoteB5 = 0x24A,
-    MidiOctaveN2 = 0x24B,
-    MidiOctaveN1 = 0x24C,
-    MidiOctave0 = 0x24D,
-    MidiOctave1 = 0x24E,
-    MidiOctave2 = 0x24F,
-    MidiOctave3 = 0x250,
-    MidiOctave4 = 0x251,
-    MidiOctave5 = 0x252,
-    MidiOctave6 = 0x253,
-    MidiOctave7 = 0x254,
-    MidiOctaveDOWN = 0x255,
-    MidiOctaveUP = 0x256,
-    MidiTransposeN6 = 0x257,
-    MidiTransposeN5 = 0x258,
-    MidiTransposeN4 = 0x259,
-    MidiTransposeN3 = 0x25A,
-    MidiTransposeN2 = 0x25B,
-    MidiTransposeN1 = 0x25C,
-    MidiTranspose0 = 0x25D,
-    MidiTranspose1 = 0x25E,
-    MidiTranspose2 = 0x25F,
-    MidiTranspose3 = 0x260,
-    MidiTranspose4 = 0x261,
-    MidiTranspose5 = 0x262,
-    MidiTranspose6 = 0x263,
-    MidiTransposeDown = 0x264,
-    MidiTransposeUp = 0x265,
-    MidiVelocity0 = 0x266,
-    MidiVelocity1 = 0x267,
-    MidiVelocity2 = 0x268,
-    MidiVelocity3 = 0x269,
-    MidiVelocity4 = 0x26A,
-    MidiVelocity5 = 0x26B,
-    MidiVelocity6 = 0x26C,
-    MidiVelocity7 = 0x26D,
-    MidiVelocity8 = 0x26E,
-    MidiVelocity9 = 0x26F,
-    MidiVelocity10 = 0x270,
-    MidiVelocityDOWN = 0x271,
-    MidiVelocityUP = 0x272,
-    MidiChannel1 = 0x273,
-    MidiChannel2 = 0x274,
-    MidiChannel3 = 0x275,
-    MidiChannel4 = 0x276,
-    MidiChannel5 = 0x277,
-    MidiChannel6 = 0x278,
-    MidiChannel7 = 0x279,
-    MidiChannel8 = 0x27A,
-    MidiChannel9 = 0x27B,
-    MidiChannel10 = 0x27C,
-    MidiChannel11 = 0x27D,
-    MidiChannel12 = 0x27E,
-    MidiChannel13 = 0x27F,
-    MidiChannel14 = 0x280,
-    MidiChannel15 = 0x281,
-    MidiChannel16 = 0x282,
-    MidiChannelDOWN = 0x283,
-    MidiChannelUP = 0x284,
-    MidiAllNotesOff = 0x285,
-    MidiSustain = 0x286,
-    MidiPortamento = 0x287,
-    MidiSostenuto = 0x288,
-    MidiSoft = 0x289,
-    MidiLegato = 0x28A,
-    MidiModulation = 0x28B,
-    MidiModulationSpeedDown = 0x28C,
-    MidiModulationSpeedUp = 0x28D,
-    MidiPitchBendDown = 0x28E,
-    MidiPitchBendUp = 0x28F,
-    // Sequencer keycodes, use 0x300 ~ 0x30F
-    SequencerOn = 0x300,
-    SequencerOff = 0x301,
-    SequencerToggle = 0x302,
-    SequencerTempoDown = 0x303,
-    SequencerTempoUp = 0x304,
-    SequencerResolutionDown = 0x305,
-    SequencerResolutionUp = 0x306,
-    SequencerStepsAll = 0x307,
-    SequencerStepsClear = 0x308,
-    // Joystick button keycodes, use 0x400 ~ 0x41F
-    JoystickButton0 = 0x400,
-    JoystickButton1 = 0x401,
-    JoystickButton2 = 0x402,
-    JoystickButton3 = 0x403,
-    JoystickButton4 = 0x404,
-    JoystickButton5 = 0x405,
-    JoystickButton6 = 0x406,
-    JoystickButton7 = 0x407,
-    JoystickButton8 = 0x408,
-    JoystickButton9 = 0x409,
-    JoystickButton10 = 0x40A,
-    JoystickButton11 = 0x40B,
-    JoystickButton12 = 0x40C,
-    JoystickButton13 = 0x40D,
-    JoystickButton14 = 0x40E,
-    JoystickButton15 = 0x40F,
-    JoystickButton16 = 0x410,
-    JoystickButton17 = 0x411,
-    JoystickButton18 = 0x412,
-    JoystickButton19 = 0x413,
-    JoystickButton20 = 0x414,
-    JoystickButton21 = 0x415,
-    JoystickButton22 = 0x416,
-    JoystickButton23 = 0x417,
-    JoystickButton24 = 0x418,
-    JoystickButton25 = 0x419,
-    JoystickButton26 = 0x41A,
-    JoystickButton27 = 0x41B,
-    JoystickButton28 = 0x41C,
-    JoystickButton29 = 0x41D,
-    JoystickButton30 = 0x41E,
-    JoystickButton31 = 0x41F,
-    // Programmable button keycodes, use 0x420 ~ 0x43F
-    ProgrammableButton1 = 0x420,
-    ProgrammableButton2 = 0x421,
-    ProgrammableButton3 = 0x422,
-    ProgrammableButton4 = 0x423,
-    ProgrammableButton5 = 0x424,
-    ProgrammableButton6 = 0x425,
-    ProgrammableButton7 = 0x426,
-    ProgrammableButton8 = 0x427,
-    ProgrammableButton9 = 0x428,
-    ProgrammableButton10 = 0x429,
-    ProgrammableButton11 = 0x42A,
-    ProgrammableButton12 = 0x42B,
-    ProgrammableButton13 = 0x42C,
-    ProgrammableButton14 = 0x42D,
-    ProgrammableButton15 = 0x42E,
-    ProgrammableButton16 = 0x42F,
-    ProgrammableButton17 = 0x430,
-    ProgrammableButton18 = 0x431,
-    ProgrammableButton19 = 0x432,
-    ProgrammableButton20 = 0x433,
-    ProgrammableButton21 = 0x434,
-    ProgrammableButton22 = 0x435,
-    ProgrammableButton23 = 0x436,
-    ProgrammableButton24 = 0x437,
-    ProgrammableButton25 = 0x438,
-    ProgrammableButton26 = 0x439,
-    ProgrammableButton27 = 0x43A,
-    ProgrammableButton28 = 0x43B,
-    ProgrammableButton29 = 0x43C,
-    ProgrammableButton30 = 0x43D,
-    ProgrammableButton31 = 0x43E,
-    ProgrammableButton32 = 0x43F,
-    // Audio keycodes, use 0x460 ~ 0x47F
-    AudioOn = 0x460,
-    AudioOff = 0x461,
-    AudioToggle = 0x462,
-    AudioClickyToggle = 0x46A,
-    AudioClickyOn = 0x46B,
-    AudioClickyOff = 0x46C,
-    AudioClickyUp = 0x46D,
-    AudioClickyDown = 0x46E,
-    AudioClickyReset = 0x46F,
-    MusicOn = 0x470,
-    MusicOff = 0x471,
-    MusicToggle = 0x472,
-    MusicModeNext = 0x473,
-    AudioVoiceNext = 0x474,
-    AudioVoicePrevious = 0x475,
-    // Steno keycodes, use 0x4F0 ~ 0x4FF
-    StenoBolt = 0x4F0,
-    StenoGemini = 0x4F1,
-    StenoComb = 0x4F2,
-    StenoCombMax = 0x4FC,
     // Macro keycodes, use 0x500 ~ 0x5FF
     Macro0 = 0x500,
     Macro1 = 0x501,
@@ -723,110 +445,18 @@ pub enum KeyCode {
     Reboot = 0x701,
     DebugToggle = 0x702,
     ClearEeprom = 0x703,
-    Make = 0x704,
-    AutoShiftDown = 0x710,
-    AutoShiftUp = 0x711,
-    AutoShiftReport = 0x712,
-    AutoShiftOn = 0x713,
-    AutoShiftOff = 0x714,
-    AutoShiftToggle = 0x715,
     GraveEscape = 0x716,
-    VelocikeyToggle = 0x717,
-    SpaceCadetLCtrlParenthesisOpen = 0x718,
-    SpaceCadetRCtrlParenthesisClose = 0x719,
-    SpaceCadetLShiftParenthesisOpen = 0x71A,
-    SpaceCadetRShiftParenthesisClose = 0x71B,
-    SpaceCadetLAltParenthesisOpen = 0x71C,
-    SpaceCadetRAltParenthesisClose = 0x71D,
-    SpaceCadetRShiftEnter = 0x71E,
     OutputAuto = 0x720,
     OutputUsb = 0x721,
     OutputBluetooth = 0x722,
-    UnicodeModeNext = 0x730,
-    UnicodeModePrevious = 0x731,
-    UnicodeModeMacos = 0x732,
-    UnicodeModeLinux = 0x733,
-    UnicodeModeWindows = 0x734,
-    UnicodeModeBsd = 0x735,
-    UnicodeModeWincompose = 0x736,
-    UnicodeModeEmacs = 0x737,
-    HapticOn = 0x740,
-    HapticOff = 0x741,
-    HapticToggle = 0x742,
-    HapticReset = 0x743,
-    HapticFeedbackToggle = 0x744,
-    HapticBuzzToggle = 0x745,
-    HapticModeNext = 0x746,
-    HapticModePrevious = 0x747,
-    HapticContinuousToggle = 0x748,
-    HapticContinuousUp = 0x749,
-    HapticContinuousDown = 0x74A,
-    HapticDwellUp = 0x74B,
-    HapticDwellDown = 0x74C,
     ComboOn = 0x750,
     ComboOff = 0x751,
     ComboToggle = 0x752,
-    DynamicMacroRecordStart1 = 0x753,
-    DynamicMacroRecordStart2 = 0x754,
-    DynamicMacroRecordStop = 0x755,
-    DynamicMacroPlay1 = 0x756,
-    DynamicMacroPlay2 = 0x757,
-    Leader = 0x758,
-    Lock = 0x759,
-    OneShotOn = 0x75A,
-    OneShotOff = 0x75B,
-    OneShotToggle = 0x75C,
-    KeyOverrideToggle = 0x75D,
-    KeyOverrideOn = 0x75E,
-    KeyOverrideOff = 0x75F,
-    SecureLock = 0x760,
-    SecureUnlock = 0x761,
-    SecureToggle = 0x762,
-    SecureRequest = 0x763,
-    DynamicTappingTermPrint = 0x770,
-    DynamicTappingTermUp = 0x771,
-    DynamicTappingTermDown = 0x772,
     CapsWordToggle = 0x773,
-    AutocorrectOn = 0x774,
-    AutocorrectOff = 0x775,
-    AutocorrectToggle = 0x776,
     TriLayerLower = 0x777,
     TriLayerUpper = 0x778,
     RepeatKey = 0x779,
     AltRepeatKey = 0x77A,
-    // Kb keycodes, use 0x800 ~ 0x81F
-    Kb0 = 0x800,
-    Kb1 = 0x801,
-    Kb2 = 0x802,
-    Kb3 = 0x803,
-    Kb4 = 0x804,
-    Kb5 = 0x805,
-    Kb6 = 0x806,
-    Kb7 = 0x807,
-    Kb8 = 0x808,
-    Kb9 = 0x809,
-    Kb10 = 0x80A,
-    Kb11 = 0x80B,
-    Kb12 = 0x80C,
-    Kb13 = 0x80D,
-    Kb14 = 0x80E,
-    Kb15 = 0x80F,
-    Kb16 = 0x810,
-    Kb17 = 0x811,
-    Kb18 = 0x812,
-    Kb19 = 0x813,
-    Kb20 = 0x814,
-    Kb21 = 0x815,
-    Kb22 = 0x816,
-    Kb23 = 0x817,
-    Kb24 = 0x818,
-    Kb25 = 0x819,
-    Kb26 = 0x81A,
-    Kb27 = 0x81B,
-    Kb28 = 0x81C,
-    Kb29 = 0x81D,
-    Kb30 = 0x81E,
-    Kb31 = 0x81F,
     // User keycodes, use 0x840 ~ 0x85F
     User0 = 0x840,
     User1 = 0x841,
@@ -862,28 +492,8 @@ pub enum KeyCode {
     User31 = 0x85F,
 }
 
-// Manual Serialize/Deserialize implementation to avoid derive macro overhead
-// The derive macro on a large enum (~300 variants) generates ~7KB of code
-// Manual implementation serializes directly as u16 repr, saving significant space
-impl serde::Serialize for KeyCode {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_u16(*self as u16)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for KeyCode {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let value = u16::deserialize(deserializer)?;
-        // Use From<u16> trait which already handles invalid values by returning KeyCode::No
-        // This is more efficient than from_repr + ok_or_else
-        Ok(KeyCode::from(value))
-    }
+impl ::postcard::experimental::max_size::MaxSize for KeyCode {
+    const POSTCARD_MAX_SIZE: usize = 3usize;
 }
 
 impl KeyCode {
@@ -939,40 +549,9 @@ impl KeyCode {
         KeyCode::MouseUp <= self && self <= KeyCode::MouseAccel2
     }
 
-    /// Returns `true` if the keycode is a magic keycode
-    pub fn is_magic(self) -> bool {
-        KeyCode::MagicSwapControlCapsLock <= self && self <= KeyCode::MagicToggleEscapeCapsLock
-    }
-
-    /// Returns `true` if the keycode is a midi keycode
-    pub fn is_midi(self) -> bool {
-        KeyCode::MidiOn <= self && self <= KeyCode::MidiPitchBendUp
-    }
-
-    /// Returns `true` if the keycode is a sequencer keycode
-    pub fn is_sequencer(self) -> bool {
-        KeyCode::SequencerOn <= self && self <= KeyCode::SequencerStepsClear
-    }
-
-    /// Returns `true` if the keycode is a joystick keycode
-    pub fn is_joystick(self) -> bool {
-        KeyCode::JoystickButton0 <= self && self <= KeyCode::JoystickButton31
-    }
-
-    /// Returns `true` if the keycode is a programmable button keycode
-    pub fn is_programmable_button(self) -> bool {
-        KeyCode::ProgrammableButton1 <= self && self <= KeyCode::ProgrammableButton32
-    }
-
-    /// Returns `true` if the keycode is a audio keycode
-    /// Note: Basic audio keycodes are not included
-    pub fn is_audio(self) -> bool {
-        KeyCode::AudioOn <= self && self <= KeyCode::AudioVoicePrevious
-    }
-
-    /// Returns `true` if the keycode is a steno keycode
-    pub fn is_steno(self) -> bool {
-        KeyCode::StenoBolt <= self && self <= KeyCode::StenoCombMax
+    /// Returns `true` if the keycode is a combo keycode
+    pub fn is_combo(self) -> bool {
+        KeyCode::ComboOn <= self && self <= KeyCode::ComboToggle
     }
 
     /// Returns `true` if the keycode is a macro keycode
@@ -995,21 +574,10 @@ impl KeyCode {
         KeyCode::Bootloader <= self && self <= KeyCode::AltRepeatKey
     }
 
-    /// Returns `true` if the keycode is a combo keycode
-    pub fn is_combo(self) -> bool {
-        KeyCode::ComboOn <= self && self <= KeyCode::ComboToggle
-    }
-
     /// Returns `true` if the keycode is a boot keycode
     pub fn is_boot(self) -> bool {
         KeyCode::Bootloader <= self && self <= KeyCode::Reboot
     }
-
-    /// Returns `true` if the keycode is a kb keycode
-    pub fn is_kb(self) -> bool {
-        KeyCode::Kb0 <= self && self <= KeyCode::Kb31
-    }
-
     /// Returns `true` if the keycode is a user keycode
     pub fn is_user(self) -> bool {
         KeyCode::User0 <= self && self <= KeyCode::User31
