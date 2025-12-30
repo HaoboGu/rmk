@@ -3,7 +3,7 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::{BoardConfig, KeyboardTomlConfig};
+use rmk_config::{BoardConfig, InputDeviceConfig, KeyboardTomlConfig, UniBodyConfig};
 use syn::ItemMod;
 
 /// Expand `bind_interrupt!` stuffs, and other code before `main` function
@@ -138,8 +138,51 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
                     .build(p, rng, mpsl, mem)
                 },
             };
+
+            // Extract PMW3360 configuration
+            let pmw3360_config = match &board {
+                BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => {
+                    input_device.clone().pmw3360.unwrap_or(Vec::new())
+                }
+                BoardConfig::Split(split_config) => split_config
+                    .central
+                    .input_device
+                    .clone()
+                    .unwrap_or(InputDeviceConfig::default())
+                    .pmw3360
+                    .unwrap_or(Vec::new()),
+            };
+
+            // Generate SPI interrupts for each sensor
+            let mut pmw3360_spi_interrupts = Vec::new();
+
+            for sensor in &pmw3360_config {
+                let instance_ident = format_ident!("{}", &sensor.spi.instance);
+
+                pmw3360_spi_interrupts.push(quote! {
+                    #instance_ident => spim::InterruptHandler<peripherals::#instance_ident>;
+                });
+            }
+
+            let pmw3360_spi_interrupts = if pmw3360_spi_interrupts.is_empty() {
+                quote! {}
+            } else {
+                quote! {
+                    #(#pmw3360_spi_interrupts)*
+                }
+            };
+            let spim_import = if !pmw3360_config.is_empty() {
+                quote! {
+                    use ::embassy_nrf::spim;
+                    use embassy_nrf::peripherals;
+                }
+            } else {
+                quote! {}
+            };
+
             quote! {
                 use ::embassy_nrf::bind_interrupts;
+                #spim_import
                 bind_interrupts!(struct Irqs {
                     #usb_and_clock_interrupt
                     RNG => ::embassy_nrf::rng::InterruptHandler<::embassy_nrf::peripherals::RNG>;
@@ -147,6 +190,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
                     RADIO => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     TIMER0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     RTC0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
+                    #pmw3360_spi_interrupts
                     #extern_irqs
                 });
 

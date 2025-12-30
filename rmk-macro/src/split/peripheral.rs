@@ -35,7 +35,7 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
     let chip = toml_config.get_chip_model().unwrap();
 
     let bind_interrupts =
-        expand_bind_interrupt_for_split_peripheral(&chip, &toml_config.get_communication_config().unwrap());
+        expand_bind_interrupt_for_split_peripheral(&chip, &toml_config, id);
 
     let main_function_sig = if chip.series == ChipSeries::Esp32 {
         quote! {
@@ -63,7 +63,12 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
     }
 }
 
-fn expand_bind_interrupt_for_split_peripheral(chip: &ChipModel, communication: &CommunicationConfig) -> TokenStream2 {
+fn expand_bind_interrupt_for_split_peripheral(
+    chip: &ChipModel,
+    keyboard_config: &KeyboardTomlConfig,
+    peripheral_id: usize
+) -> TokenStream2 {
+    let communication = keyboard_config.get_communication_config().unwrap();
     match chip.series {
         ChipSeries::Nrf52 => {
             let ble_config = communication.get_ble_config().unwrap();
@@ -77,8 +82,52 @@ fn expand_bind_interrupt_for_split_peripheral(chip: &ChipModel, communication: &
             } else {
                 quote! {}
             };
+
+            // Extract PMW3360 configuration
+            let board = keyboard_config.get_board_config().unwrap();
+            let split_config = match &board {
+                BoardConfig::Split(split_config) => split_config,
+                _ => panic!("Expected split configuration"),
+            };
+
+            let pmw3360_config = split_config
+                .peripheral[peripheral_id]
+                .input_device
+                .clone()
+                .unwrap_or(InputDeviceConfig::default())
+                .pmw3360
+                .unwrap_or(Vec::new());
+
+            // Generate SPI interrupts for each sensor
+            let mut pmw3360_spi_interrupts = Vec::new();
+
+            for sensor in &pmw3360_config {
+                let instance_ident = format_ident!("{}", &sensor.spi.instance);
+
+                pmw3360_spi_interrupts.push(quote! {
+                    #instance_ident => spim::InterruptHandler<peripherals::#instance_ident>;
+                });
+            }
+
+            let pmw3360_spi_interrupts = if pmw3360_spi_interrupts.is_empty() {
+                quote! {}
+            } else {
+                quote! {
+                    #(#pmw3360_spi_interrupts)*
+                }
+            };
+            let spim_import = if !pmw3360_config.is_empty() {
+                quote! {
+                    use ::embassy_nrf::spim;
+                    use embassy_nrf::peripherals;
+                }
+            } else {
+                quote! {}
+            };
+
             quote! {
                 use ::embassy_nrf::bind_interrupts;
+                #spim_import
                 bind_interrupts!(struct Irqs {
                     CLOCK_POWER => ::nrf_sdc::mpsl::ClockInterruptHandler;
                     RNG => ::embassy_nrf::rng::InterruptHandler<::embassy_nrf::peripherals::RNG>;
@@ -86,6 +135,7 @@ fn expand_bind_interrupt_for_split_peripheral(chip: &ChipModel, communication: &
                     RADIO => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     TIMER0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     RTC0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
+                    #pmw3360_spi_interrupts
                 });
 
                 #[::embassy_executor::task]

@@ -123,9 +123,9 @@ pub(crate) fn expand_pmw3360_device(
         let device_init = match chip.series {
             ChipSeries::Nrf52 => quote! {
                 let mut #device_ident = {
-                    use ::embassy_nrf::spim::{Spim, Config, MODE_3};
-                    use ::embassy_nrf::gpio::{Output, Level, Pull};
-                    use ::rmk::input_device::pmw3360::Pmw3360Config;
+                    use ::embassy_nrf::spim::{Frequency, Spim, Config, MODE_3};
+                    use ::embassy_nrf::gpio::{Output, OutputDrive, Level};
+                    use ::rmk::input_device::pmw3360::{Pmw3360, Pmw3360Config};
                     use ::rmk::input_device::pointing::PointingDevice;
 
                     let spi_inst = p.#instance_ident;
@@ -136,8 +136,9 @@ pub(crate) fn expand_pmw3360_device(
                     let motion = #motion_pin_init;
 
                     let mut spi_config = Config::default();
-                    spi_config.frequency = 2_000_000;
+                    spi_config.frequency = Frequency::M2;
                     spi_config.mode = MODE_3;
+
                     let spi_bus = Spim::new(spi_inst, Irqs, sck, miso, mosi, spi_config);
 
                     let config = Pmw3360Config {
@@ -150,14 +151,14 @@ pub(crate) fn expand_pmw3360_device(
                         ..Default::default()
                     };
 
-                    PointingDevice::new(spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw3360<_, _, _>>::new(spi_bus, cs, motion, config)
                 };
             },
             ChipSeries::Rp2040 => quote! {
                 let mut #device_ident = {
                     use ::embassy_rp::spi::{Spi, Config, Polarity, Phase};
                     use ::embassy_rp::gpio::{Output, Level, Pull};
-                    use ::rmk::input_device::pmw3360::Pmw3360Config;
+                    use ::rmk::input_device::pmw3360::{Pmw3360, Pmw3360Config};
                     use ::rmk::input_device::pointing::PointingDevice;
 
                     let spi_inst = p.#instance_ident;
@@ -186,7 +187,7 @@ pub(crate) fn expand_pmw3360_device(
                         ..Default::default()
                     };
 
-                    PointingDevice::new(spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw3360<_, _, _>>::new(spi_bus, cs, motion, config)
                 };
             },
             ChipSeries::Stm32 => quote! {
@@ -194,7 +195,7 @@ pub(crate) fn expand_pmw3360_device(
                     use ::embassy_stm32::spi::{Spi, Config, MODE_3};
                     use ::embassy_stm32::gpio::{Output, Level, Pull, Speed};
                     use ::embassy_stm32::time::Hertz;
-                    use ::rmk::input_device::pmw3360::Pmw3360Config;
+                    use ::rmk::input_device::pmw3360::{Pmw3360, Pmw3360Config};
                     use ::rmk::input_device::pointing::PointingDevice;
 
                     let spi_inst = p.#instance_ident;
@@ -222,7 +223,7 @@ pub(crate) fn expand_pmw3360_device(
                         ..Default::default()
                     };
 
-                    PointingDevice::new(spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw3360<_, _, _>>::new(spi_bus, cs, motion, config)
                 };
             },
             _ => unreachable!(),

@@ -89,7 +89,8 @@ pub(crate) fn expand_pmw3610_device(
             ChipSeries::Nrf52 => quote! {
                 let mut #device_ident = {
                     use ::embassy_nrf::gpio::{Output, Flex, Level, OutputDrive};
-                    use ::rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610Config, Pmw3610Device};
+                    use ::rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610, Pmw3610Config};
+                    use ::rmk::input_device::pointing::PointingDevice;
 
                     let sck = Output::new(p.#sck_ident, Level::High, OutputDrive::Standard);
                     let sdio = Flex::new(p.#sdio_ident);
@@ -107,13 +108,14 @@ pub(crate) fn expand_pmw3610_device(
                         smart_mode: #smart_mode,
                     };
 
-                    Pmw3610Device::new(spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw3610<_, _, _>>::new(spi_bus, cs, motion, config)
                 };
             },
             ChipSeries::Rp2040 => quote! {
                 let mut #device_ident = {
                     use ::embassy_rp::gpio::{Output, Flex, Level};
-                    use ::rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610Config, Pmw3610Device};
+                    use ::rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610, Pmw3610Config};
+                    use ::rmk::input_device::pointing::PointingDevice;
 
                     let sck = Output::new(p.#sck_ident, Level::High);
                     let sdio = Flex::new(p.#sdio_ident);
@@ -131,7 +133,7 @@ pub(crate) fn expand_pmw3610_device(
                         smart_mode: #smart_mode,
                     };
 
-                    Pmw3610Device::new(spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw3610<_, _, _>>::new(spi_bus, cs, motion, config)
                 };
             },
             _ => unreachable!(),
@@ -144,7 +146,7 @@ pub(crate) fn expand_pmw3610_device(
 
         // Generate processor initialization
         let processor_init = quote! {
-            let mut #processor_ident = ::rmk::input_device::pmw3610::Pmw3610Processor::new(&keymap);
+            let mut #processor_ident = ::rmk::input_device::pointing::PointingProcessor::new(&keymap);
         };
 
         processor_initializers.push(Initializer {
