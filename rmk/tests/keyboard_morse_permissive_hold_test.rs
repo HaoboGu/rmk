@@ -41,7 +41,11 @@ fn create_permissive_hold_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
         Action::Modifier(ModifierCombination::LGUI),
         Default::default(),
     );
-    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::D)), Action::LayerOn(1), Default::default());
+    let combo_key_3 = KeyAction::TapHold(
+        Action::Key(KeyCode::Hid(HidKeyCode::D)),
+        Action::LayerOn(1),
+        Default::default(),
+    );
     create_simple_morse_keyboard(BehaviorConfig {
         morse: MorsesConfig {
             enable_flow_tap: false,
