@@ -25,13 +25,31 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard
         actions: LinearMap::from_iter(
             [
                 (MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::Hid(HidKeyCode::A))),
-                (MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::Hid(HidKeyCode::B))),
-                (MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::Hid(HidKeyCode::C))),
-                (MorsePattern::from_u16(0b1_101), Action::Key(KeyCode::Hid(HidKeyCode::K))),
+                (
+                    MorsePattern::from_u16(0b1_1000),
+                    Action::Key(KeyCode::Hid(HidKeyCode::B)),
+                ),
+                (
+                    MorsePattern::from_u16(0b1_1010),
+                    Action::Key(KeyCode::Hid(HidKeyCode::C)),
+                ),
+                (
+                    MorsePattern::from_u16(0b1_101),
+                    Action::Key(KeyCode::Hid(HidKeyCode::K)),
+                ),
                 (MorsePattern::from_u16(0b1_11), Action::Key(KeyCode::Hid(HidKeyCode::M))),
-                (MorsePattern::from_u16(0b1_111), Action::Key(KeyCode::Hid(HidKeyCode::O))),
-                (MorsePattern::from_u16(0b1_010), Action::Key(KeyCode::Hid(HidKeyCode::R))),
-                (MorsePattern::from_u16(0b1_000), Action::Key(KeyCode::Hid(HidKeyCode::S))),
+                (
+                    MorsePattern::from_u16(0b1_111),
+                    Action::Key(KeyCode::Hid(HidKeyCode::O)),
+                ),
+                (
+                    MorsePattern::from_u16(0b1_010),
+                    Action::Key(KeyCode::Hid(HidKeyCode::R)),
+                ),
+                (
+                    MorsePattern::from_u16(0b1_000),
+                    Action::Key(KeyCode::Hid(HidKeyCode::S)),
+                ),
             ]
             .into_iter(),
         ),
@@ -69,13 +87,31 @@ pub fn create_morse_keyboard(behavior_config: BehaviorConfig, hand: [[Hand; 5]; 
         actions: LinearMap::from_iter(
             [
                 (MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::Hid(HidKeyCode::A))),
-                (MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::Hid(HidKeyCode::B))),
-                (MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::Hid(HidKeyCode::C))),
-                (MorsePattern::from_u16(0b1_101), Action::Key(KeyCode::Hid(HidKeyCode::K))),
+                (
+                    MorsePattern::from_u16(0b1_1000),
+                    Action::Key(KeyCode::Hid(HidKeyCode::B)),
+                ),
+                (
+                    MorsePattern::from_u16(0b1_1010),
+                    Action::Key(KeyCode::Hid(HidKeyCode::C)),
+                ),
+                (
+                    MorsePattern::from_u16(0b1_101),
+                    Action::Key(KeyCode::Hid(HidKeyCode::K)),
+                ),
                 (MorsePattern::from_u16(0b1_11), Action::Key(KeyCode::Hid(HidKeyCode::M))),
-                (MorsePattern::from_u16(0b1_111), Action::Key(KeyCode::Hid(HidKeyCode::O))),
-                (MorsePattern::from_u16(0b1_010), Action::Key(KeyCode::Hid(HidKeyCode::R))),
-                (MorsePattern::from_u16(0b1_000), Action::Key(KeyCode::Hid(HidKeyCode::S))),
+                (
+                    MorsePattern::from_u16(0b1_111),
+                    Action::Key(KeyCode::Hid(HidKeyCode::O)),
+                ),
+                (
+                    MorsePattern::from_u16(0b1_010),
+                    Action::Key(KeyCode::Hid(HidKeyCode::R)),
+                ),
+                (
+                    MorsePattern::from_u16(0b1_000),
+                    Action::Key(KeyCode::Hid(HidKeyCode::S)),
+                ),
             ]
             .into_iter(),
         ),

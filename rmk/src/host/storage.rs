@@ -375,11 +375,17 @@ mod tests {
             .ok();
         morse
             .actions
-            .insert(MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::Hid(HidKeyCode::B)))
+            .insert(
+                MorsePattern::from_u16(0b1_1000),
+                Action::Key(KeyCode::Hid(HidKeyCode::B)),
+            )
             .ok();
         morse
             .actions
-            .insert(MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::Hid(HidKeyCode::C)))
+            .insert(
+                MorsePattern::from_u16(0b1_1010),
+                Action::Key(KeyCode::Hid(HidKeyCode::C)),
+            )
             .ok();
 
         // Serialization

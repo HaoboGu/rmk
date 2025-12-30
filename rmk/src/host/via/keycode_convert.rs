@@ -15,7 +15,10 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                     if let Some(hid_keycode) = consumer_key.to_hid_keycode() {
                         hid_keycode as u16
                     } else {
-                        warn!("Consumer key {:?} has no corresponding HID keycode for VIA", consumer_key);
+                        warn!(
+                            "Consumer key {:?} has no corresponding HID keycode for VIA",
+                            consumer_key
+                        );
                         0
                     }
                 }
@@ -23,7 +26,10 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                     if let Some(hid_keycode) = system_key.to_hid_keycode() {
                         hid_keycode as u16
                     } else {
-                        warn!("SystemControl key {:?} has no corresponding HID keycode for VIA", system_key);
+                        warn!(
+                            "SystemControl key {:?} has no corresponding HID keycode for VIA",
+                            system_key
+                        );
                         0
                     }
                 }
@@ -212,7 +218,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x7C77 => KeyAction::Single(Action::Keyboard(KeyboardAction::TriLayerLower)),
         0x7C78 => KeyAction::Single(Action::Keyboard(KeyboardAction::TriLayerUpper)),
         0x7C79 => KeyAction::Single(Action::Special(SpecialKey::Repeat)),
-        0x7C00..=0x7C5F => {
+        0x7C02..=0x7C5F => {
             // TODO: Reset/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro
             // - [Space Cadet](https://docs.qmk.fm/#/feature_space_cadet)
             warn!(
@@ -234,8 +240,9 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use rmk_types::keycode::HidKeyCode;
+
+    use super::*;
 
     #[test]
     fn test_convert_via_keycode_to_key_action() {
@@ -316,14 +323,22 @@ mod test {
         // LT0(A) -> LayerTapHold(A, 0)
         let via_keycode = 0x4004;
         assert_eq!(
-            KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::A)), Action::LayerOn(0), Default::default()),
+            KeyAction::TapHold(
+                Action::Key(KeyCode::Hid(HidKeyCode::A)),
+                Action::LayerOn(0),
+                Default::default()
+            ),
             from_via_keycode(via_keycode)
         );
 
         // LT3(A) -> LayerTapHold(A, 3)
         let via_keycode = 0x4304;
         assert_eq!(
-            KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::A)), Action::LayerOn(3), Default::default()),
+            KeyAction::TapHold(
+                Action::Key(KeyCode::Hid(HidKeyCode::A)),
+                Action::LayerOn(3),
+                Default::default()
+            ),
             from_via_keycode(via_keycode)
         );
 
@@ -477,11 +492,19 @@ mod test {
         assert_eq!(0xF04, to_via_keycode(a));
 
         // LT0(A) -> LayerTapHold(A, 0)
-        let a = KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::A)), Action::LayerOn(0), Default::default());
+        let a = KeyAction::TapHold(
+            Action::Key(KeyCode::Hid(HidKeyCode::A)),
+            Action::LayerOn(0),
+            Default::default(),
+        );
         assert_eq!(0x4004, to_via_keycode(a));
 
         // LT3(A) -> LayerTapHold(A, 3)
-        let a = KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::A)), Action::LayerOn(3), Default::default());
+        let a = KeyAction::TapHold(
+            Action::Key(KeyCode::Hid(HidKeyCode::A)),
+            Action::LayerOn(3),
+            Default::default(),
+        );
         assert_eq!(0x4304, to_via_keycode(a));
 
         // LSA_T(A) ->
@@ -583,7 +606,7 @@ mod test {
 
     #[test]
     fn test_convert_from_to_ascii_a() {
-        use rmk_types::keycode::{from_ascii, to_ascii, HidKeyCode};
+        use rmk_types::keycode::{HidKeyCode, from_ascii, to_ascii};
 
         let keycode = HidKeyCode::A;
         let shifted = false;
@@ -594,7 +617,7 @@ mod test {
     }
     #[test]
     fn test_convert_from_to_ascii_K() {
-        use rmk_types::keycode::{from_ascii, to_ascii, HidKeyCode};
+        use rmk_types::keycode::{HidKeyCode, from_ascii, to_ascii};
 
         let keycode = HidKeyCode::K;
         let shifted = true;

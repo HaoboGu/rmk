@@ -44,7 +44,7 @@ impl MacroOperation {
             (0, _) => (MacroOperation::End, offset),
             (1, 1) => {
                 if idx + 2 < macro_sequences.len() {
-                    let keycode = (macro_sequences[idx + 2] as u8).into();
+                    let keycode = macro_sequences[idx + 2].into();
                     (MacroOperation::Tap(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)
@@ -52,7 +52,7 @@ impl MacroOperation {
             }
             (1, 2) => {
                 if idx + 2 < macro_sequences.len() {
-                    let keycode = (macro_sequences[idx + 2] as u8).into();
+                    let keycode = macro_sequences[idx + 2].into();
                     (MacroOperation::Press(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)
@@ -60,7 +60,7 @@ impl MacroOperation {
             }
             (1, 3) => {
                 if idx + 2 < macro_sequences.len() {
-                    let keycode = (macro_sequences[idx + 2] as u8).into();
+                    let keycode = macro_sequences[idx + 2].into();
                     (MacroOperation::Release(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)
