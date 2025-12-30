@@ -7,8 +7,8 @@ use embassy_futures::yield_now;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Timer, with_deadline};
 use heapless::Vec;
-use rmk_types::action::{Action, KeyAction, MorseMode};
-use rmk_types::keycode::KeyCode;
+use rmk_types::action::{Action, KeyAction, KeyboardAction, MorseMode};
+use rmk_types::keycode::{ConsumerKey, HidKeyCode, KeyCode, SpecialKey, SystemControlKey};
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
 use rmk_types::mouse_button::MouseButtons;
@@ -137,7 +137,7 @@ impl CapsWordState {
     /// Check whether to shift the given key, and update the state accordingly
     ///
     /// Note that this function does not check the CapsWord key itself.
-    fn check(&mut self, key: KeyCode) {
+    fn check(&mut self, key: HidKeyCode) {
         if let CapsWordState::Activated { timer, shift_current } = self {
             if key.is_caps_word_continue_key() && timer.elapsed() < Self::TIMEOUT {
                 *timer = Instant::now();
@@ -224,7 +224,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     held_modifiers: ModifierCombination,
 
     /// The held keys for the keyboard hid report, except the modifiers
-    held_keycodes: [KeyCode; 6],
+    held_keycodes: [HidKeyCode; 6],
 
     /// Registered key position.
     /// This is still needed besides `held_keycodes` because multiple keys with same keycode can be registered.
@@ -273,7 +273,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             held_buffer: HeldBuffer::new(),
             registered_keys: [None; 6],
             held_modifiers: ModifierCombination::default(),
-            held_keycodes: [KeyCode::No; 6],
+            held_keycodes: [HidKeyCode::No; 6],
             mouse_report: MouseReport {
                 buttons: 0,
                 x: 0,
@@ -283,7 +283,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             },
             media_report: MediaKeyboardReport { usage_id: 0 },
             system_control_report: SystemControlReport { usage_id: 0 },
-            last_key_code: KeyCode::No,
+            last_key_code: KeyCode::Hid(HidKeyCode::No),
             mouse_accel: 0,
             mouse_repeat: 0,
             mouse_wheel_repeat: 0,
@@ -1207,6 +1207,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 self.update_osl(event);
             }
             Action::OneShotKey(_k) => warn!("One-shot key is not supported: {:?}", action),
+            Action::Light(_light_action) => warn!("Light controll is not supported"),
+            Action::Keyboard(keyboard_action) => self.process_action_keyboard_control(keyboard_action, event).await,
+            Action::Special(special_key) => self.process_action_special(special_key, event).await,
+            Action::User(id) => self.process_user(id, event).await,
         }
     }
 
@@ -1396,7 +1400,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     // Process a basic keypress/release and also take care of applying one shot modifiers
-    async fn process_basic(&mut self, key: KeyCode, event: KeyboardEvent) {
+    async fn process_hid_keycode(&mut self, key: HidKeyCode, event: KeyboardEvent) {
         if event.pressed {
             self.register_key(key, event);
         } else {
@@ -1406,76 +1410,113 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.send_keyboard_report_with_resolved_modifiers(event.pressed).await;
     }
 
-    // Process action key
-    async fn process_action_key(&mut self, key: KeyCode, event: KeyboardEvent) {
-        if matches!(key, KeyCode::TriLayerLower | KeyCode::TriLayerUpper) {
-            // Check tri-layer first
-            let layer = if key == KeyCode::TriLayerLower { 1 } else { 2 };
-            self.process_action_layer_switch(layer, event);
-            self.keymap.borrow_mut().update_fn_layer_state();
-            return;
-        }
-        let key = match key {
-            KeyCode::GraveEscape => {
-                if self.held_modifiers.into_bits() == 0 {
-                    KeyCode::Escape
+    // Process action special keys
+    async fn process_action_special(&mut self, key: SpecialKey, event: KeyboardEvent) {
+        match key {
+            SpecialKey::GraveEscape => {
+                let hid_keycode = if self.held_modifiers.into_bits() == 0 {
+                    HidKeyCode::Escape
                 } else {
-                    KeyCode::Grave
-                }
+                    HidKeyCode::Grave
+                };
+                self.process_hid_keycode(hid_keycode, event).await;
             }
-            KeyCode::CapsWordToggle => {
-                // Handle Caps Word keycode
+            SpecialKey::Repeat => {
+                debug!("Repeat last key code: {:?} , {:?}", self.last_key_code, event);
+                let key = self.last_key_code;
+                self.process_action_key(key, event).await;
+            }
+        };
+    }
+
+    async fn process_action_keyboard_control(&mut self, keyboard_control: KeyboardAction, event: KeyboardEvent) {
+        match keyboard_control {
+            KeyboardAction::TriLayerLower => {
+                // Tri-layer lower, turn layer 1 on and update layer state
+                self.process_action_layer_switch(1, event);
+                self.keymap.borrow_mut().update_fn_layer_state();
+            }
+            KeyboardAction::TriLayerUpper => {
+                // Tri-layer upper, turn layer 2 on and update layer state
+                self.process_action_layer_switch(2, event);
+                self.keymap.borrow_mut().update_fn_layer_state();
+            }
+            KeyboardAction::CapsWordToggle => {
+                // Handle Caps Word
                 if event.pressed {
                     self.caps_word.toggle();
                 };
-                return;
             }
-            KeyCode::Again => {
-                debug!("Repeat last key code: {:?} , {:?}", self.last_key_code, event);
-                self.last_key_code
+            KeyboardAction::ComboOn => self.combo_on = true,
+            KeyboardAction::ComboOff => self.combo_on = false,
+            KeyboardAction::ComboToggle => self.combo_on = !self.combo_on,
+            KeyboardAction::Bootloader => {
+                // When releasing the key, process the boot action
+                if !event.pressed {
+                    boot::jump_to_bootloader();
+                }
             }
-            _ => key,
-        };
+            KeyboardAction::Reboot => {
+                // When releasing the key, process the boot action
+                if !event.pressed {
+                    boot::reboot_keyboard();
+                }
+            }
 
+            _ => warn!("KeyboardAction: {:?} is not supported yet", keyboard_control),
+        }
+    }
+
+    // Process action key
+    async fn process_action_key(&mut self, mut key: KeyCode, event: KeyboardEvent) {
+        // Process `Again` key first.
+        // Not all platform support `Again` key, so we manually repeat it for users.
+        if key == KeyCode::Hid(HidKeyCode::Again) {
+            debug!("Repeat(Again) last key code: {:?} , {:?}", self.last_key_code, event);
+            key = self.last_key_code;
+        }
+
+        // Pre-check
         if event.pressed {
-            // Record last press time
-            if key.is_simple_key() {
-                // Records only the simple key
-                self.last_press_time = Instant::now();
+            if let KeyCode::Hid(hid_keycode) = key {
+                // Check hid keycodes
+                // Record last press time
+                if hid_keycode.is_simple_key() {
+                    // Records only the simple key
+                    self.last_press_time = Instant::now();
+                }
+
+                // Update last key code
+                if hid_keycode != HidKeyCode::Again {
+                    debug!(
+                        "Last key code changed from {:?} to {:?}(pressed: {:?})",
+                        self.last_key_code, key, event.pressed
+                    );
+                    self.last_key_code = key;
+                }
+
+                // Check Caps Word
+                self.caps_word.check(hid_keycode);
             }
-            // Check repeat key
-            if key != KeyCode::Again {
-                debug!(
-                    "Last key code changed from {:?} to {:?}(pressed: {:?})",
-                    self.last_key_code, key, event.pressed
-                );
-                self.last_key_code = key;
-            }
-            // Check Caps Word
-            self.caps_word.check(key);
         }
 
-        // Consumer, system and mouse keys should be processed before basic keycodes, since basic keycodes contain them all
-        if key.is_consumer() {
-            self.process_action_consumer_control(key, event).await;
-        } else if key.is_system() {
-            self.process_action_system_control(key, event).await;
-        } else if key.is_mouse_key() {
-            self.process_action_mouse(key, event).await;
-        } else if key.is_basic() {
-            self.process_basic(key, event).await;
-        } else if key.is_user() {
-            self.process_user(key, event).await;
-        } else if key.is_macro() {
-            // Process macro
-            self.process_action_macro(key, event).await;
-        } else if key.is_combo() {
-            self.process_action_combo(key, event).await;
-        } else if key.is_boot() {
-            self.process_boot(key, event);
-        } else {
-            warn!("Unsupported key: {:?}", key);
+        match key {
+            KeyCode::Hid(hid_keycode) => {
+                if let Some(consumer) = hid_keycode.process_as_consumer() {
+                    self.process_action_consumer_control(consumer, event).await
+                } else if let Some(system_control) = hid_keycode.process_as_system_control() {
+                    self.process_action_system_control(system_control, event).await
+                } else if hid_keycode.is_mouse_key() {
+                    self.process_action_mouse(hid_keycode, event).await;
+                } else {
+                    // Basic keycodes
+                    self.process_hid_keycode(hid_keycode, event).await
+                }
+            }
+            KeyCode::Consumer(consumer) => self.process_action_consumer_control(consumer, event).await,
+            KeyCode::SystemControl(system_control) => self.process_action_system_control(system_control, event).await,
         }
+
         self.update_osm(event);
         self.update_osl(event);
     }
@@ -1494,279 +1535,265 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_action_combo(&mut self, key: KeyCode, event: KeyboardEvent) {
         if event.pressed {
             match key {
-                KeyCode::ComboOn => self.combo_on = true,
-                KeyCode::ComboOff => self.combo_on = false,
-                KeyCode::ComboToggle => self.combo_on = !self.combo_on,
                 _ => (),
             }
         }
     }
 
     /// Process consumer control action. Consumer control keys are keys in hid consumer page, such as media keys.
-    async fn process_action_consumer_control(&mut self, key: KeyCode, event: KeyboardEvent) {
-        if key.is_consumer() {
-            self.media_report.usage_id = if event.pressed {
-                key.as_consumer_control_usage_id() as u16
-            } else {
-                0
-            };
+    async fn process_action_consumer_control(&mut self, key: ConsumerKey, event: KeyboardEvent) {
+        self.media_report.usage_id = if event.pressed { key as u16 } else { 0 };
 
-            self.send_media_report().await;
-        }
+        self.send_media_report().await;
     }
 
     /// Process system control action. System control keys are keys in system page, such as power key.
-    async fn process_action_system_control(&mut self, key: KeyCode, event: KeyboardEvent) {
-        if key.is_system() {
-            if event.pressed {
-                if let Some(system_key) = key.as_system_control_usage_id() {
-                    self.system_control_report.usage_id = system_key as u8;
-                    self.send_system_control_report().await;
-                }
-            } else {
-                self.system_control_report.usage_id = 0;
-                self.send_system_control_report().await;
-            }
+    async fn process_action_system_control(&mut self, key: SystemControlKey, event: KeyboardEvent) {
+        if event.pressed {
+            self.system_control_report.usage_id = key as u8;
+            self.send_system_control_report().await;
+        } else {
+            self.system_control_report.usage_id = 0;
+            self.send_system_control_report().await;
         }
     }
 
     /// Process mouse key action with acceleration support.
-    async fn process_action_mouse(&mut self, key: KeyCode, event: KeyboardEvent) {
-        if key.is_mouse_key() {
-            if event.pressed {
-                match key {
-                    KeyCode::MouseUp => {
-                        // Reset repeat counter for direction change
-                        if self.mouse_report.y > 0 {
-                            self.mouse_repeat = 0;
-                        }
-                        let unit = self.calculate_mouse_move_unit();
-                        self.mouse_report.y = -unit;
+    async fn process_action_mouse(&mut self, key: HidKeyCode, event: KeyboardEvent) {
+        if event.pressed {
+            match key {
+                HidKeyCode::MouseUp => {
+                    // Reset repeat counter for direction change
+                    if self.mouse_report.y > 0 {
+                        self.mouse_repeat = 0;
                     }
-                    KeyCode::MouseDown => {
-                        if self.mouse_report.y < 0 {
-                            self.mouse_repeat = 0;
-                        }
-                        let unit = self.calculate_mouse_move_unit();
-                        self.mouse_report.y = unit;
-                    }
-                    KeyCode::MouseLeft => {
-                        if self.mouse_report.x > 0 {
-                            self.mouse_repeat = 0;
-                        }
-                        let unit = self.calculate_mouse_move_unit();
-                        self.mouse_report.x = -unit;
-                    }
-                    KeyCode::MouseRight => {
-                        if self.mouse_report.x < 0 {
-                            self.mouse_repeat = 0;
-                        }
-                        let unit = self.calculate_mouse_move_unit();
-                        self.mouse_report.x = unit;
-                    }
-                    KeyCode::MouseWheelUp => {
-                        if self.mouse_report.wheel < 0 {
-                            self.mouse_wheel_repeat = 0;
-                        }
-                        let unit = self.calculate_mouse_wheel_unit();
-                        self.mouse_report.wheel = unit;
-                    }
-                    KeyCode::MouseWheelDown => {
-                        if self.mouse_report.wheel > 0 {
-                            self.mouse_wheel_repeat = 0;
-                        }
-                        let unit = self.calculate_mouse_wheel_unit();
-                        self.mouse_report.wheel = -unit;
-                    }
-                    KeyCode::MouseWheelLeft => {
-                        if self.mouse_report.pan > 0 {
-                            self.mouse_wheel_repeat = 0;
-                        }
-                        let unit = self.calculate_mouse_wheel_unit();
-                        self.mouse_report.pan = -unit;
-                    }
-                    KeyCode::MouseWheelRight => {
-                        if self.mouse_report.pan < 0 {
-                            self.mouse_wheel_repeat = 0;
-                        }
-                        let unit = self.calculate_mouse_wheel_unit();
-                        self.mouse_report.pan = unit;
-                    }
-                    KeyCode::MouseBtn1 => self.mouse_report.buttons |= 1 << 0,
-                    KeyCode::MouseBtn2 => self.mouse_report.buttons |= 1 << 1,
-                    KeyCode::MouseBtn3 => self.mouse_report.buttons |= 1 << 2,
-                    KeyCode::MouseBtn4 => self.mouse_report.buttons |= 1 << 3,
-                    KeyCode::MouseBtn5 => self.mouse_report.buttons |= 1 << 4,
-                    KeyCode::MouseBtn6 => self.mouse_report.buttons |= 1 << 5,
-                    KeyCode::MouseBtn7 => self.mouse_report.buttons |= 1 << 6,
-                    KeyCode::MouseBtn8 => self.mouse_report.buttons |= 1 << 7,
-                    KeyCode::MouseAccel0 => {
-                        self.mouse_accel |= 1 << 0;
-                    }
-                    KeyCode::MouseAccel1 => {
-                        self.mouse_accel |= 1 << 1;
-                    }
-                    KeyCode::MouseAccel2 => {
-                        self.mouse_accel |= 1 << 2;
-                    }
-                    _ => {}
+                    let unit = self.calculate_mouse_move_unit();
+                    self.mouse_report.y = -unit;
                 }
-            } else {
-                match key {
-                    KeyCode::MouseUp => {
-                        if self.mouse_report.y < 0 {
-                            self.mouse_report.y = 0;
-                        }
+                HidKeyCode::MouseDown => {
+                    if self.mouse_report.y < 0 {
+                        self.mouse_repeat = 0;
                     }
-                    KeyCode::MouseDown => {
-                        if self.mouse_report.y > 0 {
-                            self.mouse_report.y = 0;
-                        }
-                    }
-                    KeyCode::MouseLeft => {
-                        if self.mouse_report.x < 0 {
-                            self.mouse_report.x = 0;
-                        }
-                    }
-                    KeyCode::MouseRight => {
-                        if self.mouse_report.x > 0 {
-                            self.mouse_report.x = 0;
-                        }
-                    }
-                    KeyCode::MouseWheelUp => {
-                        if self.mouse_report.wheel > 0 {
-                            self.mouse_report.wheel = 0;
-                        }
-                    }
-                    KeyCode::MouseWheelDown => {
-                        if self.mouse_report.wheel < 0 {
-                            self.mouse_report.wheel = 0;
-                        }
-                    }
-                    KeyCode::MouseWheelLeft => {
-                        if self.mouse_report.pan < 0 {
-                            self.mouse_report.pan = 0;
-                        }
-                    }
-                    KeyCode::MouseWheelRight => {
-                        if self.mouse_report.pan > 0 {
-                            self.mouse_report.pan = 0;
-                        }
-                    }
-                    KeyCode::MouseBtn1 => self.mouse_report.buttons &= !(1 << 0),
-                    KeyCode::MouseBtn2 => self.mouse_report.buttons &= !(1 << 1),
-                    KeyCode::MouseBtn3 => self.mouse_report.buttons &= !(1 << 2),
-                    KeyCode::MouseBtn4 => self.mouse_report.buttons &= !(1 << 3),
-                    KeyCode::MouseBtn5 => self.mouse_report.buttons &= !(1 << 4),
-                    KeyCode::MouseBtn6 => self.mouse_report.buttons &= !(1 << 5),
-                    KeyCode::MouseBtn7 => self.mouse_report.buttons &= !(1 << 6),
-                    KeyCode::MouseBtn8 => self.mouse_report.buttons &= !(1 << 7),
-                    KeyCode::MouseAccel0 => {
-                        self.mouse_accel &= !(1 << 0);
-                    }
-                    KeyCode::MouseAccel1 => {
-                        self.mouse_accel &= !(1 << 1);
-                    }
-                    KeyCode::MouseAccel2 => {
-                        self.mouse_accel &= !(1 << 2);
-                    }
-                    _ => {}
+                    let unit = self.calculate_mouse_move_unit();
+                    self.mouse_report.y = unit;
                 }
-
-                // Reset repeat counters when movement stops
-                if self.mouse_report.x == 0 && self.mouse_report.y == 0 {
-                    self.mouse_repeat = 0;
+                HidKeyCode::MouseLeft => {
+                    if self.mouse_report.x > 0 {
+                        self.mouse_repeat = 0;
+                    }
+                    let unit = self.calculate_mouse_move_unit();
+                    self.mouse_report.x = -unit;
                 }
-                if self.mouse_report.wheel == 0 && self.mouse_report.pan == 0 {
-                    self.mouse_wheel_repeat = 0;
+                HidKeyCode::MouseRight => {
+                    if self.mouse_report.x < 0 {
+                        self.mouse_repeat = 0;
+                    }
+                    let unit = self.calculate_mouse_move_unit();
+                    self.mouse_report.x = unit;
                 }
+                HidKeyCode::MouseWheelUp => {
+                    if self.mouse_report.wheel < 0 {
+                        self.mouse_wheel_repeat = 0;
+                    }
+                    let unit = self.calculate_mouse_wheel_unit();
+                    self.mouse_report.wheel = unit;
+                }
+                HidKeyCode::MouseWheelDown => {
+                    if self.mouse_report.wheel > 0 {
+                        self.mouse_wheel_repeat = 0;
+                    }
+                    let unit = self.calculate_mouse_wheel_unit();
+                    self.mouse_report.wheel = -unit;
+                }
+                HidKeyCode::MouseWheelLeft => {
+                    if self.mouse_report.pan > 0 {
+                        self.mouse_wheel_repeat = 0;
+                    }
+                    let unit = self.calculate_mouse_wheel_unit();
+                    self.mouse_report.pan = -unit;
+                }
+                HidKeyCode::MouseWheelRight => {
+                    if self.mouse_report.pan < 0 {
+                        self.mouse_wheel_repeat = 0;
+                    }
+                    let unit = self.calculate_mouse_wheel_unit();
+                    self.mouse_report.pan = unit;
+                }
+                HidKeyCode::MouseBtn1 => self.mouse_report.buttons |= 1 << 0,
+                HidKeyCode::MouseBtn2 => self.mouse_report.buttons |= 1 << 1,
+                HidKeyCode::MouseBtn3 => self.mouse_report.buttons |= 1 << 2,
+                HidKeyCode::MouseBtn4 => self.mouse_report.buttons |= 1 << 3,
+                HidKeyCode::MouseBtn5 => self.mouse_report.buttons |= 1 << 4,
+                HidKeyCode::MouseBtn6 => self.mouse_report.buttons |= 1 << 5,
+                HidKeyCode::MouseBtn7 => self.mouse_report.buttons |= 1 << 6,
+                HidKeyCode::MouseBtn8 => self.mouse_report.buttons |= 1 << 7,
+                HidKeyCode::MouseAccel0 => {
+                    self.mouse_accel |= 1 << 0;
+                }
+                HidKeyCode::MouseAccel1 => {
+                    self.mouse_accel |= 1 << 1;
+                }
+                HidKeyCode::MouseAccel2 => {
+                    self.mouse_accel |= 1 << 2;
+                }
+                _ => {}
+            }
+        } else {
+            match key {
+                HidKeyCode::MouseUp => {
+                    if self.mouse_report.y < 0 {
+                        self.mouse_report.y = 0;
+                    }
+                }
+                HidKeyCode::MouseDown => {
+                    if self.mouse_report.y > 0 {
+                        self.mouse_report.y = 0;
+                    }
+                }
+                HidKeyCode::MouseLeft => {
+                    if self.mouse_report.x < 0 {
+                        self.mouse_report.x = 0;
+                    }
+                }
+                HidKeyCode::MouseRight => {
+                    if self.mouse_report.x > 0 {
+                        self.mouse_report.x = 0;
+                    }
+                }
+                HidKeyCode::MouseWheelUp => {
+                    if self.mouse_report.wheel > 0 {
+                        self.mouse_report.wheel = 0;
+                    }
+                }
+                HidKeyCode::MouseWheelDown => {
+                    if self.mouse_report.wheel < 0 {
+                        self.mouse_report.wheel = 0;
+                    }
+                }
+                HidKeyCode::MouseWheelLeft => {
+                    if self.mouse_report.pan < 0 {
+                        self.mouse_report.pan = 0;
+                    }
+                }
+                HidKeyCode::MouseWheelRight => {
+                    if self.mouse_report.pan > 0 {
+                        self.mouse_report.pan = 0;
+                    }
+                }
+                HidKeyCode::MouseBtn1 => self.mouse_report.buttons &= !(1 << 0),
+                HidKeyCode::MouseBtn2 => self.mouse_report.buttons &= !(1 << 1),
+                HidKeyCode::MouseBtn3 => self.mouse_report.buttons &= !(1 << 2),
+                HidKeyCode::MouseBtn4 => self.mouse_report.buttons &= !(1 << 3),
+                HidKeyCode::MouseBtn5 => self.mouse_report.buttons &= !(1 << 4),
+                HidKeyCode::MouseBtn6 => self.mouse_report.buttons &= !(1 << 5),
+                HidKeyCode::MouseBtn7 => self.mouse_report.buttons &= !(1 << 6),
+                HidKeyCode::MouseBtn8 => self.mouse_report.buttons &= !(1 << 7),
+                HidKeyCode::MouseAccel0 => {
+                    self.mouse_accel &= !(1 << 0);
+                }
+                HidKeyCode::MouseAccel1 => {
+                    self.mouse_accel &= !(1 << 1);
+                }
+                HidKeyCode::MouseAccel2 => {
+                    self.mouse_accel &= !(1 << 2);
+                }
+                _ => {}
             }
 
-            // Apply diagonal compensation for movement
-            if self.mouse_report.x != 0 && self.mouse_report.y != 0 {
-                let (x, y) = self.apply_diagonal_compensation(self.mouse_report.x, self.mouse_report.y);
-                self.mouse_report.x = x;
-                self.mouse_report.y = y;
+            // Reset repeat counters when movement stops
+            if self.mouse_report.x == 0 && self.mouse_report.y == 0 {
+                self.mouse_repeat = 0;
             }
-
-            // Apply diagonal compensation for wheel
-            if self.mouse_report.wheel != 0 && self.mouse_report.pan != 0 {
-                let (wheel, pan) = self.apply_diagonal_compensation(self.mouse_report.wheel, self.mouse_report.pan);
-                self.mouse_report.wheel = wheel;
-                self.mouse_report.pan = pan;
+            if self.mouse_report.wheel == 0 && self.mouse_report.pan == 0 {
+                self.mouse_wheel_repeat = 0;
             }
+        }
 
-            if !matches!(key, KeyCode::MouseAccel0 | KeyCode::MouseAccel1 | KeyCode::MouseAccel2) {
-                // Send mouse report only for movement and wheel keys
-                self.send_mouse_report().await;
-            }
+        // Apply diagonal compensation for movement
+        if self.mouse_report.x != 0 && self.mouse_report.y != 0 {
+            let (x, y) = self.apply_diagonal_compensation(self.mouse_report.x, self.mouse_report.y);
+            self.mouse_report.x = x;
+            self.mouse_report.y = y;
+        }
 
-            // Continue processing ONLY for movement and wheel keys
-            if event.pressed {
-                let is_movement_key = matches!(
-                    key,
-                    KeyCode::MouseUp | KeyCode::MouseDown | KeyCode::MouseLeft | KeyCode::MouseRight
-                );
-                let is_wheel_key = matches!(
-                    key,
-                    KeyCode::MouseWheelUp
-                        | KeyCode::MouseWheelDown
-                        | KeyCode::MouseWheelLeft
-                        | KeyCode::MouseWheelRight
-                );
+        // Apply diagonal compensation for wheel
+        if self.mouse_report.wheel != 0 && self.mouse_report.pan != 0 {
+            let (wheel, pan) = self.apply_diagonal_compensation(self.mouse_report.wheel, self.mouse_report.pan);
+            self.mouse_report.wheel = wheel;
+            self.mouse_report.pan = pan;
+        }
 
-                // Only continue processing for movement and wheel keys
-                if is_movement_key || is_wheel_key {
-                    // Determine the delay for the next repeat using convenience methods
-                    let delay = {
-                        let config = &self.keymap.borrow().behavior.mouse_key;
-                        if is_movement_key {
-                            config.get_movement_delay(self.mouse_repeat)
-                        } else {
-                            config.get_wheel_delay(self.mouse_wheel_repeat)
-                        }
-                    };
+        if !matches!(
+            key,
+            HidKeyCode::MouseAccel0 | HidKeyCode::MouseAccel1 | HidKeyCode::MouseAccel2
+        ) {
+            // Send mouse report only for movement and wheel keys
+            self.send_mouse_report().await;
+        }
 
-                    // Increment the appropriate repeat counter
-                    if is_movement_key && self.mouse_repeat < u8::MAX {
-                        self.mouse_repeat += 1;
+        // Continue processing ONLY for movement and wheel keys
+        if event.pressed {
+            let is_movement_key = matches!(
+                key,
+                HidKeyCode::MouseUp | HidKeyCode::MouseDown | HidKeyCode::MouseLeft | HidKeyCode::MouseRight
+            );
+            let is_wheel_key = matches!(
+                key,
+                HidKeyCode::MouseWheelUp
+                    | HidKeyCode::MouseWheelDown
+                    | HidKeyCode::MouseWheelLeft
+                    | HidKeyCode::MouseWheelRight
+            );
+
+            // Only continue processing for movement and wheel keys
+            if is_movement_key || is_wheel_key {
+                // Determine the delay for the next repeat using convenience methods
+                let delay = {
+                    let config = &self.keymap.borrow().behavior.mouse_key;
+                    if is_movement_key {
+                        config.get_movement_delay(self.mouse_repeat)
+                    } else {
+                        config.get_wheel_delay(self.mouse_wheel_repeat)
                     }
-                    if is_wheel_key && self.mouse_wheel_repeat < u8::MAX {
-                        self.mouse_wheel_repeat += 1;
-                    }
+                };
 
-                    // Schedule next movement after the delay
-                    embassy_time::Timer::after_millis(delay as u64).await;
-                    // Check if there's a release event in the channel, if there's no release event, re-send the event
-                    let len = KEY_EVENT_CHANNEL.len();
-                    let mut released = false;
-                    for _ in 0..len {
-                        let queued_event = KEY_EVENT_CHANNEL.receive().await;
-                        if queued_event.pos != event.pos || !queued_event.pressed {
-                            KEY_EVENT_CHANNEL.send(queued_event).await;
-                        }
-                        // If there's a release event in the channel
-                        if queued_event.pos == event.pos && !queued_event.pressed {
-                            released = true;
-                        }
+                // Increment the appropriate repeat counter
+                if is_movement_key && self.mouse_repeat < u8::MAX {
+                    self.mouse_repeat += 1;
+                }
+                if is_wheel_key && self.mouse_wheel_repeat < u8::MAX {
+                    self.mouse_wheel_repeat += 1;
+                }
+
+                // Schedule next movement after the delay
+                embassy_time::Timer::after_millis(delay as u64).await;
+                // Check if there's a release event in the channel, if there's no release event, re-send the event
+                let len = KEY_EVENT_CHANNEL.len();
+                let mut released = false;
+                for _ in 0..len {
+                    let queued_event = KEY_EVENT_CHANNEL.receive().await;
+                    if queued_event.pos != event.pos || !queued_event.pressed {
+                        KEY_EVENT_CHANNEL.send(queued_event).await;
                     }
-                    if !released {
-                        KEY_EVENT_CHANNEL.send(event).await;
+                    // If there's a release event in the channel
+                    if queued_event.pos == event.pos && !queued_event.pressed {
+                        released = true;
                     }
+                }
+                if !released {
+                    KEY_EVENT_CHANNEL.send(event).await;
                 }
             }
         }
     }
 
-    async fn process_user(&mut self, key: KeyCode, event: KeyboardEvent) {
-        debug!("Processing user key: {:?}, event: {:?}", key, event);
+    async fn process_user(&mut self, id: u8, event: KeyboardEvent) {
+        debug!("Processing user key id: {:?}, event: {:?}", id, event);
         #[cfg(feature = "_ble")]
         {
             use crate::NUM_BLE_PROFILE;
             use crate::ble::profile::BleProfileAction;
             use crate::channel::BLE_PROFILE_CHANNEL;
-            // Get user key id
-            let id = (key as u16 - KeyCode::User0 as u16) as u8;
             if event.pressed {
                 // Clear Peer is processed when pressed
                 if id == NUM_BLE_PROFILE as u8 + 4 {
@@ -1810,28 +1837,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     BLE_PROFILE_CHANNEL.send(BleProfileAction::ToggleConnection).await;
                 }
             }
-        }
-    }
-
-    fn process_boot(&mut self, key: KeyCode, event: KeyboardEvent) {
-        // When releasing the key, process the boot action
-        if !event.pressed {
-            match key {
-                KeyCode::Bootloader => {
-                    boot::jump_to_bootloader();
-                }
-                KeyCode::Reboot => {
-                    boot::reboot_keyboard();
-                }
-                _ => (), // unreachable, do nothing
-            };
-        }
-    }
-
-    async fn process_action_macro(&mut self, key: KeyCode, event: KeyboardEvent) {
-        // Get macro index
-        if let Some(macro_idx) = key.as_macro_index() {
-            self.execute_macro(macro_idx, event).await;
         }
     }
 
@@ -1974,19 +1979,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Register a key, the key can be a basic keycode or a modifier.
-    fn register_key(&mut self, key: KeyCode, event: KeyboardEvent) {
+    fn register_key(&mut self, key: HidKeyCode, event: KeyboardEvent) {
         if key.is_modifier() {
             self.register_modifier_key(key);
-        } else if key.is_basic() {
+        } else {
             self.register_keycode(key, event);
         }
     }
 
     /// Unregister a key, the key can be a basic keycode or a modifier.
-    fn unregister_key(&mut self, key: KeyCode, event: KeyboardEvent) {
+    fn unregister_key(&mut self, key: HidKeyCode, event: KeyboardEvent) {
         if key.is_modifier() {
             self.unregister_modifier_key(key);
-        } else if key.is_basic() {
+        } else {
             self.unregister_keycode(key, event);
         }
     }
@@ -2025,7 +2030,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Register a key to be sent in hid report.
-    fn register_keycode(&mut self, key: KeyCode, event: KeyboardEvent) {
+    fn register_keycode(&mut self, key: HidKeyCode, event: KeyboardEvent) {
         // First, find the key event slot according to the position
         let slot = self.registered_keys.iter().enumerate().find_map(|(i, k)| {
             if let Some(e) = k
@@ -2042,7 +2047,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             self.registered_keys[index] = Some(event);
         } else {
             // Otherwise, find the first free slot
-            if let Some(index) = self.held_keycodes.iter().position(|&k| k == KeyCode::No) {
+            if let Some(index) = self.held_keycodes.iter().position(|&k| k == HidKeyCode::No) {
                 self.held_keycodes[index] = key;
                 self.registered_keys[index] = Some(event);
             }
@@ -2050,7 +2055,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Unregister a key from hid report.
-    fn unregister_keycode(&mut self, key: KeyCode, event: KeyboardEvent) {
+    fn unregister_keycode(&mut self, key: HidKeyCode, event: KeyboardEvent) {
         // First, find the key event slot according to the position
         let slot = self.registered_keys.iter().enumerate().find_map(|(i, k)| {
             if let Some(e) = k
@@ -2063,19 +2068,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // If the slot is found, update the key in the slot
         if let Some(index) = slot {
-            self.held_keycodes[index] = KeyCode::No;
+            self.held_keycodes[index] = HidKeyCode::No;
             self.registered_keys[index] = None;
         } else {
             // Otherwise, release the first same key
             if let Some(index) = self.held_keycodes.iter().position(|&k| k == key) {
-                self.held_keycodes[index] = KeyCode::No;
+                self.held_keycodes[index] = HidKeyCode::No;
                 self.registered_keys[index] = None;
             }
         }
     }
 
     /// Register a modifier to be sent in hid report.
-    fn register_modifier_key(&mut self, key: KeyCode) {
+    fn register_modifier_key(&mut self, key: HidKeyCode) {
         self.held_modifiers |= key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
@@ -2086,7 +2091,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Unregister a modifier from hid report.
-    fn unregister_modifier_key(&mut self, key: KeyCode) {
+    fn unregister_modifier_key(&mut self, key: HidKeyCode) {
         self.held_modifiers &= !key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]

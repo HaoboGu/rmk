@@ -1,4 +1,4 @@
-use rmk_types::keycode::{KeyCode, from_ascii, to_ascii};
+use rmk_types::keycode::{HidKeyCode, from_ascii, to_ascii};
 
 use crate::MACRO_SPACE_SIZE;
 use crate::keymap::fill_vec;
@@ -16,16 +16,16 @@ pub enum MacroOperation {
     /// by MacroOperations::define_macro_sequences()
     End,
     /// 0x01 01 + 1 byte keycode
-    Tap(KeyCode),
+    Tap(HidKeyCode),
     /// 0x01 02 + 1 byte keycode
-    Press(KeyCode),
+    Press(HidKeyCode),
     /// 0x01 03 + 1 byte keycode
-    Release(KeyCode),
+    Release(HidKeyCode),
     /// 0x01 04 + 2 byte for the delay in ms
     Delay(u16),
     /// Anything not covered above (and starting at
     /// 0x30 (= b'0'), is the 1 byte ascii character.
-    Text(KeyCode, bool), // bool = shifted
+    Text(HidKeyCode, bool), // bool = shifted
 }
 
 impl MacroOperation {
@@ -44,7 +44,7 @@ impl MacroOperation {
             (0, _) => (MacroOperation::End, offset),
             (1, 1) => {
                 if idx + 2 < macro_sequences.len() {
-                    let keycode = (macro_sequences[idx + 2] as u16).into();
+                    let keycode = (macro_sequences[idx + 2] as u8).into();
                     (MacroOperation::Tap(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)
@@ -52,7 +52,7 @@ impl MacroOperation {
             }
             (1, 2) => {
                 if idx + 2 < macro_sequences.len() {
-                    let keycode = (macro_sequences[idx + 2] as u16).into();
+                    let keycode = (macro_sequences[idx + 2] as u8).into();
                     (MacroOperation::Press(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)
@@ -60,7 +60,7 @@ impl MacroOperation {
             }
             (1, 3) => {
                 if idx + 2 < macro_sequences.len() {
-                    let keycode = (macro_sequences[idx + 2] as u16).into();
+                    let keycode = (macro_sequences[idx + 2] as u8).into();
                     (MacroOperation::Release(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)
