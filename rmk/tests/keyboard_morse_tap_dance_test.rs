@@ -6,7 +6,7 @@ use rmk::config::{BehaviorConfig, MorsesConfig, PositionalConfig};
 use rmk::keyboard::Keyboard;
 use rmk::morse::Morse;
 use rmk::types::action::{Action, MorseMode, MorseProfile};
-use rmk::types::keycode::KeyCode;
+use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
 use rmk::{k, td};
 use rusty_fork::rusty_fork_test;
@@ -30,23 +30,23 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
             ),
             morses: Vec::from_slice(&[
                 Morse::new_from_vial(
-                    Action::Key(KeyCode::A),
-                    Action::Key(KeyCode::B),
-                    Action::Key(KeyCode::C),
-                    Action::Key(KeyCode::D),
+                    Action::Key(KeyCode::Hid(HidKeyCode::A)),
+                    Action::Key(KeyCode::Hid(HidKeyCode::B)),
+                    Action::Key(KeyCode::Hid(HidKeyCode::C)),
+                    Action::Key(KeyCode::Hid(HidKeyCode::D)),
                     MorseProfile::const_default(),
                 ),
                 Morse::new_from_vial(
-                    Action::Key(KeyCode::X),
-                    Action::Key(KeyCode::Y),
-                    Action::Key(KeyCode::Z),
-                    Action::Key(KeyCode::Space),
+                    Action::Key(KeyCode::Hid(HidKeyCode::X)),
+                    Action::Key(KeyCode::Hid(HidKeyCode::Y)),
+                    Action::Key(KeyCode::Hid(HidKeyCode::Z)),
+                    Action::Key(KeyCode::Hid(HidKeyCode::Space)),
                     MorseProfile::const_default(),
                 ),
                 Morse::new_from_vial(
-                    Action::Key(KeyCode::Kp1),
+                    Action::Key(KeyCode::Hid(HidKeyCode::Kp1)),
                     Action::Modifier(ModifierCombination::LSHIFT),
-                    Action::Key(KeyCode::Kp2),
+                    Action::Key(KeyCode::Hid(HidKeyCode::Kp2)),
                     Action::Modifier(ModifierCombination::LGUI),
                     MorseProfile::const_default(),
                 ),

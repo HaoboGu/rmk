@@ -5,7 +5,7 @@ use rmk::combo::{Combo, ComboConfig};
 use rmk::config::{BehaviorConfig, CombosConfig};
 use rmk::k;
 use rmk::types::action::{Action, KeyAction};
-use rmk::types::keycode::KeyCode;
+use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
 use rusty_fork::rusty_fork_test;
 
@@ -728,8 +728,8 @@ rusty_fork_test! {
                     combo: CombosConfig {
                         combos: [
                             Some(Combo::new(ComboConfig::new(
-                                [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT), Default::default()),
-                                 KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI), Default::default())],
+                                [KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::B)), Action::Modifier(ModifierCombination::LSHIFT), Default::default()),
+                                 KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::C)), Action::Modifier(ModifierCombination::LGUI), Default::default())],
                                 k!(X),
                                 None,
                             ))), None, None, None, None, None, None, None
@@ -760,8 +760,8 @@ rusty_fork_test! {
                     combo: CombosConfig {
                         combos: [
                             Some(Combo::new(ComboConfig::new(
-                                [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT), Default::default()),
-                                 KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI), Default::default())],
+                                [KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::B)), Action::Modifier(ModifierCombination::LSHIFT), Default::default()),
+                                 KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::C)), Action::Modifier(ModifierCombination::LGUI), Default::default())],
                                 k!(X),
                                 None,
                             ))), None, None, None, None, None, None, None

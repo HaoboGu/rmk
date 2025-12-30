@@ -3,7 +3,7 @@ pub mod common;
 use embassy_time::Duration;
 use rmk::combo::{Combo, ComboConfig};
 use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, OneShotConfig};
-use rmk::types::keycode::KeyCode;
+use rmk::types::keycode::HidKeyCode;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{k, osm, th};
 use rmk_types::action::{MorseMode, MorseProfile};
@@ -87,11 +87,11 @@ rusty_fork_test! {
                 [1, 5, false, 10],
             ],
             expected_reports: [
-                [0, [KeyCode::E as u8, 0, 0, 0, 0, 0]],
+                [0, [HidKeyCode::E as u8, 0, 0, 0, 0, 0]],
                 [0, [0; 6]],
-                [0, [KeyCode::R as u8, 0, 0, 0, 0, 0]],
+                [0, [HidKeyCode::R as u8, 0, 0, 0, 0, 0]],
                 [0, [0; 6]],
-                [0, [KeyCode::T as u8, 0, 0, 0, 0, 0]],
+                [0, [HidKeyCode::T as u8, 0, 0, 0, 0, 0]],
                 [0, [0; 6]],
             ]
         }
@@ -130,7 +130,7 @@ rusty_fork_test! {
             ],
             expected_reports: [
                 [KC_LSHIFT, [0; 6]], // V + B = LShift
-                [KC_LSHIFT, [KeyCode::R as u8, 0, 0, 0, 0, 0]], // Press R
+                [KC_LSHIFT, [HidKeyCode::R as u8, 0, 0, 0, 0, 0]], // Press R
                 [KC_LSHIFT, [0; 6]], // Release R
                 [0, [0; 6]], // Release V + B
             ]
@@ -155,7 +155,7 @@ rusty_fork_test! {
                 [1, 3, false, 110],
             ],
             expected_reports: [
-                [KC_LSHIFT, [KeyCode::E as u8, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [HidKeyCode::E as u8, 0, 0, 0, 0, 0]],
                 [0, [0; 6]],
             ]
         }
@@ -178,7 +178,7 @@ rusty_fork_test! {
             ],
             expected_reports: [
                 [KC_LSHIFT, [0; 6]],
-                [KC_LSHIFT, [KeyCode::N as u8, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [HidKeyCode::N as u8, 0, 0, 0, 0, 0]],
                 [KC_LSHIFT, [0; 6]],
                 [0, [0; 6]],
             ]
@@ -199,7 +199,7 @@ rusty_fork_test! {
                 [1, 4, false, 10],
             ],
             expected_reports: [
-                [0, [KeyCode::A as u8, 0, 0, 0, 0, 0]],
+                [0, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]],
                 [0, [0; 6]],
             ]
         }
@@ -219,7 +219,7 @@ rusty_fork_test! {
                 [1, 4, false, 10],
             ],
             expected_reports: [
-                [0, [KeyCode::A as u8, 0, 0, 0, 0, 0]],
+                [0, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]],
                 [0, [0; 6]],
             ]
         }
@@ -256,11 +256,11 @@ rusty_fork_test! {
 
             ],
             expected_reports: [
-                [0, [KeyCode::Space as u8, 0, 0, 0, 0, 0]],
+                [0, [HidKeyCode::Space as u8, 0, 0, 0, 0, 0]],
                 [0, [0; 6]],
-                [KC_LSHIFT, [KeyCode::A as u8, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]],
                 [0, [0; 6]],
-                [0, [KeyCode::Space as u8, 0, 0, 0, 0, 0]],
+                [0, [HidKeyCode::Space as u8, 0, 0, 0, 0, 0]],
                 [0, [0; 6]],
             ]
         }
@@ -284,7 +284,7 @@ rusty_fork_test! {
                 [1, 3, false, 10],
             ],
             expected_reports: [
-                [KC_LSHIFT, [KeyCode::A as u8, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]],
                 [0, [0; 6]],
             ]
         }
