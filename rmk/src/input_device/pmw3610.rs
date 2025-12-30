@@ -3,19 +3,12 @@
 //! Ported from the Zephyr driver implementation:
 //! https://github.com/zephyrproject-rtos/zephyr/blob/d31c6e95033fd6b3763389edba6a655245ae1328/drivers/input/input_pmw3610.c
 
-use core::cell::RefCell;
-
 use embassy_time::{Duration, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::spi::SpiBus;
-use usbd_hid::descriptor::MouseReport;
 
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::input_device::pointing::{InitState, MotionData, PointingDevice, PointingDriver, PointingDriverError};
 pub use crate::driver::bitbang_spi::{BitBangError, BitBangSpiBus};
-use crate::event::{Axis, AxisEvent, AxisValType, Event};
-use crate::hid::Report;
-use crate::input_device::{InputDevice, InputProcessor, ProcessResult};
-use crate::keymap::KeyMap;
 
 // ============================================================================
 // Page 0 registers
@@ -149,13 +142,6 @@ pub enum Pmw3610Error {
     InvalidCpi,
 }
 
-/// Motion data from the sensor
-#[derive(Debug, Clone, Copy, Default)]
-pub struct MotionData {
-    pub dx: i16,
-    pub dy: i16,
-}
-
 /// PMW3610 driver using embedded-hal SPI traits
 pub struct Pmw3610<SPI, CS, MOTION>
 where
@@ -184,14 +170,6 @@ where
             motion_gpio,
             config,
             smart_flag: false,
-        }
-    }
-
-    /// Check if motion is pending (motion GPIO is active low)
-    pub fn motion_pending(&mut self) -> bool {
-        match &mut self.motion_gpio {
-            Some(gpio) => gpio.is_low().unwrap_or(true),
-            None => true,
         }
     }
 
@@ -374,16 +352,33 @@ where
         Ok(())
     }
 
+
+    fn sign_extend(value: u16, bits: usize) -> i16 {
+        let sign_bit = 1 << bits;
+        if value & sign_bit != 0 {
+            (value | !((1 << (bits + 1)) - 1)) as i16
+        } else {
+            value as i16
+        }
+    }
+}
+
+impl<SPI, CS, MOTION> PointingDriver for Pmw3610<SPI, CS, MOTION>
+where
+    SPI: SpiBus,
+    CS: OutputPin,
+    MOTION: InputPin,
+{
     /// Initialize the sensor (public API)
-    pub async fn init(&mut self) -> Result<(), Pmw3610Error> {
+    async fn init(&mut self) -> Result<(), PointingDriverError> {
         let _ = self.cs.set_high();
         Timer::after(Duration::from_millis(1)).await;
 
-        self.configure().await
+        self.configure().await.map_err(|_| PointingDriverError::InitFailed)
     }
 
     /// Read motion data from the sensor
-    pub async fn read_motion(&mut self) -> Result<MotionData, Pmw3610Error> {
+    async fn read_motion(&mut self) -> Result<MotionData, PointingDriverError> {
         let burst_data_len = if self.config.smart_mode {
             BURST_DATA_LEN_SMART
         } else {
@@ -392,7 +387,8 @@ where
 
         let mut burst_data = [0u8; BURST_DATA_LEN_SMART];
         self.read_burst(PMW3610_BURST_READ, &mut burst_data[..burst_data_len])
-            .await?;
+            .await
+            .map_err(|_| PointingDriverError::Spi)?;
 
         if (burst_data[BURST_MOTION] & MOTION_STATUS_MOTION) == 0x00 {
             return Ok(MotionData::default());
@@ -408,14 +404,14 @@ where
             let shutter_val = ((burst_data[BURST_SHUTTER_HI] as u16) << 8) | (burst_data[BURST_SHUTTER_LO] as u16);
 
             if self.smart_flag && shutter_val < SHUTTER_SMART_THRESHOLD {
-                self.spi_clk_on().await?;
-                self.write_reg(PMW3610_SMART_MODE, SMART_MODE_ENABLE).await?;
-                self.spi_clk_off().await?;
+                self.spi_clk_on().await.map_err(|_| PointingDriverError::Spi)?;
+                self.write_reg(PMW3610_SMART_MODE, SMART_MODE_ENABLE).await.map_err(|_| PointingDriverError::Spi)?;
+                self.spi_clk_off().await.map_err(|_| PointingDriverError::Spi)?;
                 self.smart_flag = false;
             } else if !self.smart_flag && shutter_val > SHUTTER_SMART_THRESHOLD {
-                self.spi_clk_on().await?;
-                self.write_reg(PMW3610_SMART_MODE, SMART_MODE_DISABLE).await?;
-                self.spi_clk_off().await?;
+                self.spi_clk_on().await.map_err(|_| PointingDriverError::Spi)?;
+                self.write_reg(PMW3610_SMART_MODE, SMART_MODE_DISABLE).await.map_err(|_| PointingDriverError::Spi)?;
+                self.spi_clk_off().await.map_err(|_| PointingDriverError::Spi)?;
                 self.smart_flag = true;
             }
         }
@@ -423,48 +419,22 @@ where
         Ok(MotionData { dx, dy })
     }
 
-    fn sign_extend(value: u16, bits: usize) -> i16 {
-        let sign_bit = 1 << bits;
-        if value & sign_bit != 0 {
-            (value | !((1 << (bits + 1)) - 1)) as i16
-        } else {
-            value as i16
+    /// Check if motion is pending (motion GPIO is active low)
+    fn motion_pending(&mut self) -> bool {
+        match &mut self.motion_gpio {
+            Some(gpio) => gpio.is_low().unwrap_or(true),
+            None => true,
         }
     }
 }
 
-/// Initialization state for the device
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum InitState {
-    Pending,
-    Initializing(u8),
-    Ready,
-    Failed,
-}
-
-/// PMW3610 as an InputDevice for RMK
-///
-/// This device returns `Event::Joystick` events with relative X/Y movement.
-pub struct Pmw3610Device<SPI, CS, MOTION>
+impl<SPI, CS, MOTION> PointingDevice<Pmw3610<SPI, CS, MOTION>>
 where
     SPI: SpiBus,
     CS: OutputPin,
     MOTION: InputPin,
 {
-    sensor: Pmw3610<SPI, CS, MOTION>,
-    init_state: InitState,
-    poll_interval: Duration,
-}
-
-impl<SPI, CS, MOTION> Pmw3610Device<SPI, CS, MOTION>
-where
-    SPI: SpiBus,
-    CS: OutputPin,
-    MOTION: InputPin,
-{
-    const MAX_INIT_RETRIES: u8 = 3;
-
-    /// Create a new PMW3610 device for RMK
+    /// Create a new PMW3610 device
     pub fn new(spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw3610Config) -> Self {
         Self {
             sensor: Pmw3610::new(spi, cs, motion_gpio, config),
@@ -486,148 +456,5 @@ where
             init_state: InitState::Pending,
             poll_interval: Duration::from_micros(poll_interval_us),
         }
-    }
-
-    async fn try_init(&mut self) -> bool {
-        match self.init_state {
-            InitState::Ready => return true,
-            InitState::Failed => return false,
-            InitState::Pending => {
-                self.init_state = InitState::Initializing(0);
-            }
-            InitState::Initializing(_) => {}
-        }
-
-        if let InitState::Initializing(retry_count) = self.init_state {
-            info!("PMW3610: Initializing sensor (attempt {})", retry_count + 1);
-
-            match self.sensor.init().await {
-                Ok(()) => {
-                    info!("PMW3610: Sensor initialized successfully");
-                    self.init_state = InitState::Ready;
-                    return true;
-                }
-                Err(_e) => {
-                    error!("PMW3610: Init failed: {:?}", _e);
-                    if retry_count + 1 >= Self::MAX_INIT_RETRIES {
-                        error!("PMW3610: Max retries reached, giving up");
-                        self.init_state = InitState::Failed;
-                        return false;
-                    }
-                    self.init_state = InitState::Initializing(retry_count + 1);
-                    Timer::after(Duration::from_millis(100)).await;
-                    return false;
-                }
-            }
-        }
-
-        false
-    }
-}
-
-impl<SPI, CS, MOTION> InputDevice for Pmw3610Device<SPI, CS, MOTION>
-where
-    SPI: SpiBus,
-    CS: OutputPin,
-    MOTION: InputPin,
-{
-    async fn read_event(&mut self) -> Event {
-        loop {
-            Timer::after(self.poll_interval).await;
-
-            if self.init_state != InitState::Ready && !self.try_init().await {
-                continue;
-            }
-
-            if !self.sensor.motion_pending() {
-                continue;
-            }
-
-            match self.sensor.read_motion().await {
-                Ok(motion) => {
-                    if motion.dx != 0 || motion.dy != 0 {
-                        return Event::Joystick([
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::X,
-                                value: motion.dx,
-                            },
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::Y,
-                                value: motion.dy,
-                            },
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::Z,
-                                value: 0,
-                            },
-                        ]);
-                    }
-                }
-                Err(_e) => {
-                    warn!("PMW3610 read error");
-                }
-            }
-        }
-    }
-}
-
-/// PMW3610 Processor that converts motion events to mouse reports
-pub struct Pmw3610Processor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
-    /// Reference to the keymap
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
-}
-
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    Pmw3610Processor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
-{
-    /// Create a new PMW3610 processor with default settings
-    pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>) -> Self {
-        Self { keymap }
-    }
-
-    async fn generate_report(&self, x: i16, y: i16) {
-        let mouse_report = MouseReport {
-            buttons: 0,
-            x: x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
-            y: y.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
-            wheel: 0,
-            pan: 0,
-        };
-        self.send_report(Report::MouseReport(mouse_report)).await;
-    }
-}
-
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER> for Pmw3610Processor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
-{
-    async fn process(&mut self, event: Event) -> ProcessResult {
-        match event {
-            Event::Joystick(axis_events) => {
-                let mut x = 0i16;
-                let mut y = 0i16;
-
-                for axis_event in axis_events.iter() {
-                    match axis_event.axis {
-                        Axis::X => x = axis_event.value,
-                        Axis::Y => y = axis_event.value,
-                        _ => {}
-                    }
-                }
-
-                self.generate_report(x, y).await;
-                ProcessResult::Stop
-            }
-            _ => ProcessResult::Continue(event),
-        }
-    }
-
-    async fn send_report(&self, report: Report) {
-        KEYBOARD_REPORT_CHANNEL.send(report).await;
-    }
-
-    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
-        self.keymap
     }
 }

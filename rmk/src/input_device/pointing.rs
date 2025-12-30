@@ -150,7 +150,7 @@ where
     }
 }
 
-/// PMW3610 Processor that converts motion events to mouse reports
+/// PointingProcessor that converts motion events to mouse reports
 pub struct PointingProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
     /// Reference to the keymap
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
@@ -159,7 +159,7 @@ pub struct PointingProcessor<'a, const ROW: usize, const COL: usize, const NUM_L
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     PointingProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
-    /// Create a new PMW3610 processor with default settings
+    /// Create a new pointing processor with default settings
     pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>) -> Self {
         Self { keymap }
     }

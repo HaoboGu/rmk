@@ -531,6 +531,7 @@ where
     }
 }
 
+/// PMW3360 as an InputDevice for RMK
 impl<'a, SPI, CS, MOTION> PointingDevice<Pmw3360<'a, SPI, CS, MOTION>>
 where
     SPI: SpiBus,
