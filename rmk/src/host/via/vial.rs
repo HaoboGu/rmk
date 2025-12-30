@@ -565,6 +565,8 @@ mod tests {
     use sequential_storage::map::Value;
 
     use super::*;
+    use crate::COMBO_MAX_LENGTH;
+    use crate::combo::ComboConfig;
     use crate::storage::StorageData;
     #[test]
     fn test_combo_serialization_deserialization() {
