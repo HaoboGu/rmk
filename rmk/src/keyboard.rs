@@ -1477,27 +1477,27 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         // Pre-check
-        if event.pressed {
-            if let KeyCode::Hid(hid_keycode) = key {
-                // Check hid keycodes
-                // Record last press time
-                if hid_keycode.is_simple_key() {
-                    // Records only the simple key
-                    self.last_press_time = Instant::now();
-                }
-
-                // Update last key code
-                if hid_keycode != HidKeyCode::Again {
-                    debug!(
-                        "Last key code changed from {:?} to {:?}(pressed: {:?})",
-                        self.last_key_code, key, event.pressed
-                    );
-                    self.last_key_code = key;
-                }
-
-                // Check Caps Word
-                self.caps_word.check(hid_keycode);
+        if event.pressed
+            && let KeyCode::Hid(hid_keycode) = key
+        {
+            // Check hid keycodes
+            // Record last press time
+            if hid_keycode.is_simple_key() {
+                // Records only the simple key
+                self.last_press_time = Instant::now();
             }
+
+            // Update last key code
+            if hid_keycode != HidKeyCode::Again {
+                debug!(
+                    "Last key code changed from {:?} to {:?}(pressed: {:?})",
+                    self.last_key_code, key, event.pressed
+                );
+                self.last_key_code = key;
+            }
+
+            // Check Caps Word
+            self.caps_word.check(hid_keycode);
         }
 
         match key {
@@ -1528,15 +1528,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             self.keymap.borrow_mut().activate_layer(layer_num);
         } else {
             self.keymap.borrow_mut().deactivate_layer(layer_num);
-        }
-    }
-
-    /// Process combo action.
-    async fn process_action_combo(&mut self, key: KeyCode, event: KeyboardEvent) {
-        if event.pressed {
-            match key {
-                _ => (),
-            }
         }
     }
 

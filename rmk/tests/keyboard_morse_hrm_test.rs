@@ -50,7 +50,11 @@ fn create_hrm_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
         Action::Modifier(ModifierCombination::LGUI),
         Default::default(),
     );
-    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::D)), Action::LayerOn(1), Default::default());
+    let combo_key_3 = KeyAction::TapHold(
+        Action::Key(KeyCode::Hid(HidKeyCode::D)),
+        Action::LayerOn(1),
+        Default::default(),
+    );
 
     let hand = [[Hand::Left, Hand::Left, Hand::Right, Hand::Right, Hand::Right]];
 

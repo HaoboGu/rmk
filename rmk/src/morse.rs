@@ -309,7 +309,10 @@ mod tests {
         let deserialized: Morse<4> = postcard::from_bytes(serialized).unwrap();
 
         assert_eq!(morse.actions.len(), deserialized.actions.len());
-        assert_eq!(deserialized.actions.get(&TAP), Some(&Action::Key(KeyCode::Hid(HidKeyCode::A))));
+        assert_eq!(
+            deserialized.actions.get(&TAP),
+            Some(&Action::Key(KeyCode::Hid(HidKeyCode::A)))
+        );
     }
 
     #[test]
@@ -320,9 +323,18 @@ mod tests {
             actions: heapless::LinearMap::default(),
         };
         morse.actions.insert(TAP, Action::Key(KeyCode::Hid(HidKeyCode::A))).ok();
-        morse.actions.insert(HOLD, Action::Key(KeyCode::Hid(HidKeyCode::B))).ok();
-        morse.actions.insert(DOUBLE_TAP, Action::Key(KeyCode::Hid(HidKeyCode::C))).ok();
-        morse.actions.insert(HOLD_AFTER_TAP, Action::Key(KeyCode::Hid(HidKeyCode::D))).ok();
+        morse
+            .actions
+            .insert(HOLD, Action::Key(KeyCode::Hid(HidKeyCode::B)))
+            .ok();
+        morse
+            .actions
+            .insert(DOUBLE_TAP, Action::Key(KeyCode::Hid(HidKeyCode::C)))
+            .ok();
+        morse
+            .actions
+            .insert(HOLD_AFTER_TAP, Action::Key(KeyCode::Hid(HidKeyCode::D)))
+            .ok();
 
         let mut buffer = [0u8; 128];
         let serialized = postcard::to_slice(&morse, &mut buffer).unwrap();
@@ -332,9 +344,18 @@ mod tests {
         assert_eq!(morse.actions.len(), 4);
 
         // Verify each entry
-        assert_eq!(deserialized.actions.get(&TAP), Some(&Action::Key(KeyCode::Hid(HidKeyCode::A))));
-        assert_eq!(deserialized.actions.get(&HOLD), Some(&Action::Key(KeyCode::Hid(HidKeyCode::B))));
-        assert_eq!(deserialized.actions.get(&DOUBLE_TAP), Some(&Action::Key(KeyCode::Hid(HidKeyCode::C))));
+        assert_eq!(
+            deserialized.actions.get(&TAP),
+            Some(&Action::Key(KeyCode::Hid(HidKeyCode::A)))
+        );
+        assert_eq!(
+            deserialized.actions.get(&HOLD),
+            Some(&Action::Key(KeyCode::Hid(HidKeyCode::B)))
+        );
+        assert_eq!(
+            deserialized.actions.get(&DOUBLE_TAP),
+            Some(&Action::Key(KeyCode::Hid(HidKeyCode::C)))
+        );
         assert_eq!(
             deserialized.actions.get(&HOLD_AFTER_TAP),
             Some(&Action::Key(KeyCode::Hid(HidKeyCode::D)))
@@ -354,11 +375,17 @@ mod tests {
             .ok();
         morse
             .actions
-            .insert(MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::Hid(HidKeyCode::F)))
+            .insert(
+                MorsePattern::from_u16(0b1_1000),
+                Action::Key(KeyCode::Hid(HidKeyCode::F)),
+            )
             .ok();
         morse
             .actions
-            .insert(MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::Hid(HidKeyCode::G)))
+            .insert(
+                MorsePattern::from_u16(0b1_1010),
+                Action::Key(KeyCode::Hid(HidKeyCode::G)),
+            )
             .ok();
 
         let mut buffer = [0u8; 128];
@@ -387,7 +414,10 @@ mod tests {
             actions: heapless::LinearMap::default(),
         };
         morse.actions.insert(TAP, Action::Key(KeyCode::Hid(HidKeyCode::H))).ok();
-        morse.actions.insert(HOLD, Action::Key(KeyCode::Hid(HidKeyCode::I))).ok();
+        morse
+            .actions
+            .insert(HOLD, Action::Key(KeyCode::Hid(HidKeyCode::I)))
+            .ok();
 
         let mut buffer = [0u8; 128];
         let serialized = postcard::to_slice(&morse, &mut buffer).unwrap();
@@ -395,8 +425,14 @@ mod tests {
 
         assert_eq!(morse.profile, deserialized.profile);
         assert_eq!(morse.actions.len(), deserialized.actions.len());
-        assert_eq!(deserialized.actions.get(&TAP), Some(&Action::Key(KeyCode::Hid(HidKeyCode::H))));
-        assert_eq!(deserialized.actions.get(&HOLD), Some(&Action::Key(KeyCode::Hid(HidKeyCode::I))));
+        assert_eq!(
+            deserialized.actions.get(&TAP),
+            Some(&Action::Key(KeyCode::Hid(HidKeyCode::H)))
+        );
+        assert_eq!(
+            deserialized.actions.get(&HOLD),
+            Some(&Action::Key(KeyCode::Hid(HidKeyCode::I)))
+        );
     }
 
     #[test]
@@ -406,15 +442,27 @@ mod tests {
             profile: MorseProfile::const_default(),
             actions: heapless::LinearMap::default(),
         };
-        morse1.actions.insert(TAP, Action::Key(KeyCode::Hid(HidKeyCode::A))).ok();
-        morse1.actions.insert(HOLD, Action::Key(KeyCode::Hid(HidKeyCode::B))).ok();
+        morse1
+            .actions
+            .insert(TAP, Action::Key(KeyCode::Hid(HidKeyCode::A)))
+            .ok();
+        morse1
+            .actions
+            .insert(HOLD, Action::Key(KeyCode::Hid(HidKeyCode::B)))
+            .ok();
 
         let mut morse2 = Morse::<4> {
             profile: MorseProfile::const_default(),
             actions: heapless::LinearMap::default(),
         };
-        morse2.actions.insert(HOLD, Action::Key(KeyCode::Hid(HidKeyCode::B))).ok();
-        morse2.actions.insert(TAP, Action::Key(KeyCode::Hid(HidKeyCode::A))).ok();
+        morse2
+            .actions
+            .insert(HOLD, Action::Key(KeyCode::Hid(HidKeyCode::B)))
+            .ok();
+        morse2
+            .actions
+            .insert(TAP, Action::Key(KeyCode::Hid(HidKeyCode::A)))
+            .ok();
 
         let mut buffer1 = [0u8; 128];
         let mut buffer2 = [0u8; 128];

@@ -155,7 +155,9 @@ macro_rules! lm {
 macro_rules! lt {
     ($x: literal, $k: ident) => {
         $crate::types::action::KeyAction::TapHold(
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::$k)),
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
+                $crate::types::keycode::HidKeyCode::$k,
+            )),
             $crate::types::action::Action::LayerOn($x),
             $crate::types::action::MorseProfile::const_default(),
         )
@@ -181,7 +183,9 @@ macro_rules! lt {
 macro_rules! ltp {
     ($x: literal, $k: ident, $p: expr) => {
         $crate::types::action::KeyAction::TapHold(
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::$k)),
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
+                $crate::types::keycode::HidKeyCode::$k,
+            )),
             $crate::types::action::Action::LayerOn($x),
             $p,
         )
@@ -210,7 +214,9 @@ macro_rules! ltp {
 macro_rules! mt {
     ($k: ident, $m: expr) => {
         $crate::types::action::KeyAction::TapHold(
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::$k)),
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
+                $crate::types::keycode::HidKeyCode::$k,
+            )),
             $crate::types::action::Action::Modifier($m),
             $crate::types::action::MorseProfile::const_default(),
         )
@@ -235,7 +241,9 @@ macro_rules! mt {
 macro_rules! mtp {
     ($k: ident, $m: expr, $p: expr) => {
         $crate::types::action::KeyAction::TapHold(
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::$k)),
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
+                $crate::types::keycode::HidKeyCode::$k,
+            )),
             $crate::types::action::Action::Modifier($m),
             $p,
         )
@@ -263,8 +271,12 @@ macro_rules! mtp {
 macro_rules! th {
     ($t: ident, $h: ident) => {
         $crate::types::action::KeyAction::TapHold(
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::$t)),
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::$h)),
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
+                $crate::types::keycode::HidKeyCode::$t,
+            )),
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
+                $crate::types::keycode::HidKeyCode::$h,
+            )),
             $crate::types::action::MorseProfile::const_default(),
         )
     };
@@ -288,8 +300,12 @@ macro_rules! th {
 macro_rules! thp {
     ($t: ident, $h: ident, $p: expr) => {
         $crate::types::action::KeyAction::TapHold(
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::$t)),
-            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::$h)),
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
+                $crate::types::keycode::HidKeyCode::$t,
+            )),
+            $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
+                $crate::types::keycode::HidKeyCode::$h,
+            )),
             $p,
         )
     };
