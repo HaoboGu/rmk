@@ -13,10 +13,9 @@ pub(crate) fn expand_pmw3360_device(
         return (Vec::new(), Vec::new());
     }
 
-    // PMW3360 is only supported on nRF52 and RP2040
+    // PMW3360 is only supported on nRF52, STM32 and RP2040
     match chip.series {
         // NOTE:; Nonblocking SPI with DMA is still marked unstable in esp_hal.
-        // Add chips later on 
         ChipSeries::Nrf52 | ChipSeries::Rp2040 | ChipSeries::Stm32 => {}
         _ => {
             panic!("PMW3360 is only supported on nRF52, STM32, RP2350 and RP2040 chips");
@@ -126,7 +125,8 @@ pub(crate) fn expand_pmw3360_device(
                 let mut #device_ident = {
                     use ::embassy_nrf::spim::{Spim, Config, MODE_3};
                     use ::embassy_nrf::gpio::{Output, Level, Pull};
-                    use ::rmk::input_device::pmw3360::{Pmw3360Config, Pmw3360Device};
+                    use ::rmk::input_device::pmw3360::Pmw3360Config;
+                    use ::rmk::input_device::pointing::PointingDevice;
 
                     let spi_inst = p.#instance_ident;
                     let sck = p.#sck_ident;
@@ -150,14 +150,15 @@ pub(crate) fn expand_pmw3360_device(
                         ..Default::default()
                     };
 
-                    Pmw3360Device::new(spi_bus, cs, motion, config)
+                    PointingDevice::new(spi_bus, cs, motion, config)
                 };
             },
             ChipSeries::Rp2040 => quote! {
                 let mut #device_ident = {
                     use ::embassy_rp::spi::{Spi, Config, Polarity, Phase};
                     use ::embassy_rp::gpio::{Output, Level, Pull};
-                    use ::rmk::input_device::pmw3360::{Pmw3360Config, Pmw3360Device};
+                    use ::rmk::input_device::pmw3360::Pmw3360Config;
+                    use ::rmk::input_device::pointing::PointingDevice;
 
                     let spi_inst = p.#instance_ident;
                     let sck = p.#sck_ident;
@@ -185,7 +186,7 @@ pub(crate) fn expand_pmw3360_device(
                         ..Default::default()
                     };
 
-                    Pmw3360Device::new(spi_bus, cs, motion, config)
+                    PointingDevice::new(spi_bus, cs, motion, config)
                 };
             },
             ChipSeries::Stm32 => quote! {
@@ -193,7 +194,8 @@ pub(crate) fn expand_pmw3360_device(
                     use ::embassy_stm32::spi::{Spi, Config, MODE_3};
                     use ::embassy_stm32::gpio::{Output, Level, Pull, Speed};
                     use ::embassy_stm32::time::Hertz;
-                    use ::rmk::input_device::pmw3360::{Pmw3360Config, Pmw3360Device};
+                    use ::rmk::input_device::pmw3360::Pmw3360Config;
+                    use ::rmk::input_device::pointing::PointingDevice;
 
                     let spi_inst = p.#instance_ident;
                     let sck = p.#sck_ident;
@@ -220,7 +222,7 @@ pub(crate) fn expand_pmw3360_device(
                         ..Default::default()
                     };
 
-                    Pmw3360Device::new(spi_bus, cs, motion, config)
+                    PointingDevice::new(spi_bus, cs, motion, config)
                 };
             },
             _ => unreachable!(),
@@ -233,7 +235,7 @@ pub(crate) fn expand_pmw3360_device(
 
         // Generate processor initialization
         let processor_init = quote! {
-            let mut #processor_ident = ::rmk::input_device::pmw3610::Pmw3610Processor::new(&keymap);
+            let mut #processor_ident = ::rmk::input_device::pointing::PointingProcessor::new(&keymap);
         };
 
         processor_initializers.push(Initializer {

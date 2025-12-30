@@ -1,6 +1,15 @@
-use crate::event::{Axis, AxisEvent, AxisValType, Event};
-use crate::input_device::InputDevice;
+//! Common functionality across pointing devices
+
+use core::cell::RefCell;
+
 use embassy_time::{Duration, Timer};
+use usbd_hid::descriptor::MouseReport;
+
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::event::{Axis, AxisEvent, AxisValType, Event};
+use crate::hid::Report;
+use crate::input_device::{InputDevice, InputProcessor, ProcessResult};
+use crate::keymap::KeyMap;
 
 /// Motion data from the sensor
 #[derive(Debug, Clone, Copy, Default)]
@@ -138,5 +147,64 @@ where
                 }
             }
         }
+    }
+}
+
+/// PMW3610 Processor that converts motion events to mouse reports
+pub struct PointingProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
+    /// Reference to the keymap
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+}
+
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    PointingProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
+{
+    /// Create a new PMW3610 processor with default settings
+    pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>) -> Self {
+        Self { keymap }
+    }
+
+    async fn generate_report(&self, x: i16, y: i16) {
+        let mouse_report = MouseReport {
+            buttons: 0,
+            x: x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+            y: y.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+            wheel: 0,
+            pan: 0,
+        };
+        self.send_report(Report::MouseReport(mouse_report)).await;
+    }
+}
+
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER> for PointingProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
+{
+    async fn process(&mut self, event: Event) -> ProcessResult {
+        match event {
+            Event::Joystick(axis_events) => {
+                let mut x = 0i16;
+                let mut y = 0i16;
+
+                for axis_event in axis_events.iter() {
+                    match axis_event.axis {
+                        Axis::X => x = axis_event.value,
+                        Axis::Y => y = axis_event.value,
+                        _ => {}
+                    }
+                }
+
+                self.generate_report(x, y).await;
+                ProcessResult::Stop
+            }
+            _ => ProcessResult::Continue(event),
+        }
+    }
+
+    async fn send_report(&self, report: Report) {
+        KEYBOARD_REPORT_CHANNEL.send(report).await;
+    }
+
+    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
+        self.keymap
     }
 }
