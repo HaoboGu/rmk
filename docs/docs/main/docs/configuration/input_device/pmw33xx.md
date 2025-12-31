@@ -6,7 +6,7 @@ PMW3360 / PMW3389 are optical mouse sensors.
 Both chips, the PMW3360 and PMW3389 are very similar. The main difference is the higher maximum cpi of the sensor. (12000 on the PMW3360 vs. 16000 on PMW3389)
 They share one driver in RMK and the configuration of both is the same.
 
-- PMW33xx uses full-duplex SPI. (MISO/ MOSI) Please note that because of the special requirements those sensors have for the switching of their chip select pin, they can not share an SPI bus with each other or any other SPI device. For each SPI peripheral (SPI0, SPI1 etc.) there can only be one sensor connected. 
+- PMW33xx uses full-duplex SPI. (MISO/ MOSI) Please note that because of the special requirements those sensors have for the switching of their chip select pin, they can not share an SPI bus with each other or any other SPI device. For each SPI peripheral (SPI0, SPI1 etc.) there can only be one sensor connected.
 - `motion` pin is optional. If omitted, the sensor is polled.
 - Only Nrf, RP2040 and STM32 are supported now.
 
@@ -24,8 +24,13 @@ spi.sck = "PIN_18"
 spi.mosi = "PIN_19"
 spi.miso = "PIN_16"
 spi.cs = "PIN_17"
-spi.tx_dma = "DMA_CH2" # omit for nrf52
-spi.rx_dma = "DMA_CH3" # omit for nrf52
+# By default this driver uses blocking SPI. For a small performance gain,
+# you can define the DMA channels. Then the driver is using SPI with DMA.
+# Figure out the DMA channel using the Peripherals from the embassy hal crate
+# (embassy-rp, embassy-stm32 etc.) similar to the PINs.
+# On nrf52 the driver alsways uses DMA, the channels do not need to be specified.
+# spi.tx_dma = "DMA_CH2" # omit for nrf52
+# spi.rx_dma = "DMA_CH3" # omit for nrf52
 
 motion = "PIN_20" # Optional. If omitted, the sensor is polled.
 

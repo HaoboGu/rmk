@@ -58,14 +58,12 @@ pub(crate) fn expand_pmw33xx_device(
             }
 
             ChipSeries::Rp2040 | ChipSeries::Stm32 => {
-                let rx_dma = spi
-                    .rx_dma
-                    .as_ref()
-                    .expect("pmw33xx requires `rx_dma` in spi config");
-
-                let rx_dma_ident = format_ident!("{}", rx_dma);
-
-                quote! { #rx_dma_ident }
+                if let Some(rx_dma) = &spi.rx_dma {
+                    let rx_dma_ident = format_ident!("{}", rx_dma);
+                    quote! { #rx_dma_ident }
+                } else {
+                    quote! {}
+                }
             }
 
             _ => unreachable!(),
@@ -76,17 +74,36 @@ pub(crate) fn expand_pmw33xx_device(
             }
 
             ChipSeries::Rp2040 | ChipSeries::Stm32 => {
-                let tx_dma = spi
-                    .tx_dma
-                    .as_ref()
-                    .expect("pmw33xx requires `tx_dma` in spi config");
-
-                let tx_dma_ident = format_ident!("{}", tx_dma);
-
-                quote! { #tx_dma_ident }
+                if let Some(tx_dma) = &spi.tx_dma {
+                    let tx_dma_ident = format_ident!("{}", tx_dma);
+                    quote! { #tx_dma_ident }
+                } else {
+                    quote! {}
+                }
             }
 
             _ => unreachable!(),
+        };
+
+
+        // if one dma channel is specified, the other one must also be
+        let spi_bus_init = match (&spi.tx_dma, &spi.rx_dma) {
+            (Some(_), None) => {
+                panic!("{}: tx_dma is specified but rx_dma is missing. Both must be present or both absent.", sensor_name);
+            },
+            (None, Some(_)) => {
+                panic!("{}: rx_dma is specified but tx_dma is missing. Both must be present or both absent.", sensor_name);
+            },
+            (None, None) => {
+                quote! {
+                    ::embassy_embedded_hal::adapter::BlockingAsync::new(Spi::new_blocking(spi_inst, sck, mosi, miso, spi_config))
+                }
+            },
+            (Some(_), Some(_)) => {
+                quote! {
+                    Spi::new(spi_inst, sck, mosi, miso, p.#tx_dma_ident, p.#rx_dma_ident, spi_config)
+                }
+            },
         };
 
         // Generate config values
@@ -174,8 +191,6 @@ pub(crate) fn expand_pmw33xx_device(
                     let mosi = p.#mosi_ident;
                     let miso = p.#miso_ident;
                     let cs = Output::new(p.#cs_ident, Level::High);
-                    let tx_dma = p.#tx_dma_ident;
-                    let rx_dma = p.#rx_dma_ident;
                     let motion = #motion_pin_init;
 
                     let mut spi_config = Config::default();
@@ -183,7 +198,7 @@ pub(crate) fn expand_pmw33xx_device(
                     spi_config.phase = Phase::CaptureOnSecondTransition;
                     spi_config.frequency = 2_000_000;
 
-                    let spi_bus = Spi::new(spi_inst, sck, mosi, miso, tx_dma, rx_dma, spi_config);
+                    let spi_bus = #spi_bus_init;
 
                     let config = Pmw33xxConfig {
                         res_cpi: #res_cpi,
@@ -211,15 +226,13 @@ pub(crate) fn expand_pmw33xx_device(
                     let mosi = p.#mosi_ident;
                     let miso = p.#miso_ident;
                     let cs = Output::new(p.#cs_ident, Level::High, Speed::Medium);
-                    let tx_dma = p.#tx_dma_ident;
-                    let rx_dma = p.#rx_dma_ident;
                     let motion = #motion_pin_init;
 
                     let mut spi_config = Config::default();
                     spi_config.frequency = Hertz::mhz(2);
                     spi_config.mode = MODE_3;
 
-                    let spi_bus = Spi::new(spi_inst, sck, mosi, miso, tx_dma, rx_dma, spi_config);
+                    let spi_bus = #spi_bus_init;
 
                     let config = Pmw33xxConfig {
                         res_cpi: #res_cpi,
