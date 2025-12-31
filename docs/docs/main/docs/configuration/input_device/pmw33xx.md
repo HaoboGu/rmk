@@ -1,20 +1,23 @@
-# PMW3360 Optical Mouse Sensor
+# PMW3360 / PMW3389 Optical Mouse Sensor
 
-PMW3360 is a optical mouse sensor.
+PMW3360 / PMW3389 are optical mouse sensors.
 
 ::: note
+Both chips, the PMW3360 and PMW3389 are very similar. The main difference is the higher maximum cpi of the sensor. (12000 on the PMW3360 vs. 16000 on PMW3389)
+They share one driver in RMK and the configuration of both is the same.
 
-- PMW3360 uses full-duplex SPI. (MISO/ MOSI)
+- PMW33xx uses full-duplex SPI. (MISO/ MOSI) Please note that because of the special requirements those sensors have for the switching of their chip select pin, they can not share an SPI bus with each other or any other SPI device. For each SPI peripheral (SPI0, SPI1 etc.) there can only be one sensor connected. 
 - `motion` pin is optional. If omitted, the sensor is polled.
-- Only Nrf and RP2040 are supported now. TODO: Find out which boards work, actually every board with an SPIBus implementation should
+- Only Nrf, RP2040 and STM32 are supported now.
 
 :::
 
 ## `toml` configuration
 
 ```toml
-[[input_device.pmw3360]]
+[[input_device.pmw33xx]]
 name = "trackball0"
+sensor_type = "PMW3360" # or 3389
 
 spi.instance = "SPI0"
 spi.sck = "PIN_18"
@@ -38,11 +41,11 @@ invert_x = true
 
 To add the sensor to the central or peripheral use 
 ```toml
-[[split.central.input_device.pmw3360]]
+[[split.central.input_device.pmw33xx]]
 name = ...
 
 # resp.
-[[split.peripheral.input_device.pmw3360]]
+[[split.peripheral.input_device.pmw33xx]]
 name = ...
 ```
 
@@ -58,7 +61,7 @@ For nrf52 chips you need to add an interrupt for the used SPI. For expample when
 use ::embassy_nrf::spim;
 
 bind_interrupts!(struct Irqs {
-    ...
+    (...)
     SPI2 => spim::InterruptHandler<peripherals::SPI2>;
 });
 ```
@@ -69,7 +72,10 @@ bind_interrupts!(struct Irqs {
     use embassy_rp::spi::{Spi, Config, Polarity, Phase};
     use embassy_rp::gpio::{Level, Output, Pull};
     use rmk::input_device::pointing::PointingDevice;
-    use rmk::input_device::pmw3360::Pmw3360Config;
+    // for PMW3360 import
+    use rmk::input_device::pmw33xx::{Pmw33xx, Pmw33xxConfig, Pmw3360Spec};
+    // for PMW3389 import
+    use rmk::input_device::pmw33xx::{Pmw33xx, Pmw33xxConfig, Pmw3389Spec};
 
     let mut spi_cfg = Config::default();
     // // MODE_3 = Polarity::IdleHigh + Phase::CaptureOnSecondTransition
@@ -78,17 +84,17 @@ bind_interrupts!(struct Irqs {
     spi_cfg.frequency = 2_000_000;
 
     // // Create GPIO pins
-    let pmw3360_sck = p.PIN_18;
-    let pmw3360_mosi = p.PIN_19;
-    let pmw3360_miso = p.PIN_16;
-    let pmw3360_cs = Output::new(p.PIN_17, Level::High);
-    let pmw3360_irq = Input::new(p.PIN_20, Pull::Up);
+    let sck = p.PIN_18;
+    let mosi = p.PIN_19;
+    let miso = p.PIN_16;
+    let cs = Output::new(p.PIN_17, Level::High);
+    let motion = Input::new(p.PIN_20, Pull::Up);
 
     // Create the SPI bus
-    let pmw3360_spi = Spi::new(p.SPI0, pmw3360_sck,pmw3360_mosi,pmw3360_miso, p.DMA_CH2, p.DMA_CH3, spi_cfg);
+    let spi_bus = Spi::new(p.SPI0, sck, mosi, miso, p.DMA_CH2, p.DMA_CH3, spi_cfg);
 
-    // Initialize PMW3360 mouse sensor
-    let pmw3360_config = Pmw3360Config {
+    // Initialize PMW33xx mouse sensor
+    let sensor_config = Pmw33xxConfig {
         res_cpi: 1600,
         rot_trans_angle: -15,
         liftoff_dist: 0x08,
@@ -99,10 +105,13 @@ bind_interrupts!(struct Irqs {
     };
 
     // Create the sensor device
-    let mut PointingDevice::<Pmw3360<_, _, _>>::new(pmw3360_spi, pmw3360_cs, Some(pmw3360_irq), pmw3360_config);
+    // for PMW3360
+    let mut PointingDevice::<Pmw33xx<_, _, _, Pmw3360Spec>>::new(spi_bus, cs, Some(motion), sensor_config);
+    // for PMW3389
+    let mut PointingDevice::<Pmw33xx<_, _, _, Pmw3389Spec>>::new(spi_bus, cs, Some(motion), sensor_config);
 ```
 
-And define a `PointingProcessor` and add it to `run_processor_chain!` macro to process the events.
+And define a `PointingProcessor` and add it to the `run_processor_chain!` macro to process the events.
 
 ::: warning
 

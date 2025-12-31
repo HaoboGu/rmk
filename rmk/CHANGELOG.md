@@ -7,11 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Add PMW3360 optical mouse sensor support
+- Add PMW3360 / PMW3389 optical mouse sensor support
 
 ### Changed
 
 - **BREAKING**: `PollingController::INTERVAL` constant is now `PollingController::interval()` method, allowing dynamic interval configuration at runtime
+- **BREAKING**: PointingDevice and PointingProcessor replace Pmw3610Device and Pmw3610Processor. For the Pmw3610 the calls of ::new() for these stay the same, only the name changes. If using Rust to configure the keyboard change the calls, if using Toml nothing needs to be done.
 
 ## [0.8.2] - 2025-12-18
 

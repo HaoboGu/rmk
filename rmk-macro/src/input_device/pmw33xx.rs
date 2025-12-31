@@ -1,39 +1,47 @@
 use quote::{format_ident, quote};
-use rmk_config::{ChipModel, ChipSeries, Pmw3360Config};
+use rmk_config::{ChipModel, ChipSeries, Pmw33xxConfig, Pmw33xxType};
 
 use super::Initializer;
 
-/// Expand PMW3360 device configuration.
+/// Expand PMW33xx device configuration.
 /// Returns (device initializers, processor initializers)
-pub(crate) fn expand_pmw3360_device(
-    pmw3360_config: Vec<Pmw3360Config>,
+pub(crate) fn expand_pmw33xx_device(
+    pmw33xx_config: Vec<Pmw33xxConfig>,
     chip: &ChipModel,
 ) -> (Vec<Initializer>, Vec<Initializer>) {
-    if pmw3360_config.is_empty() {
+    if pmw33xx_config.is_empty() {
         return (Vec::new(), Vec::new());
     }
 
-    // PMW3360 is only supported on nRF52, STM32 and RP2040
+    // PMW33xx is only supported on nRF52, STM32 and RP2040
     match chip.series {
         // NOTE:; Nonblocking SPI with DMA is still marked unstable in esp_hal.
         ChipSeries::Nrf52 | ChipSeries::Rp2040 | ChipSeries::Stm32 => {}
         _ => {
-            panic!("PMW3360 is only supported on nRF52, STM32, RP2350 and RP2040 chips");
+            panic!("PMW33xx is only supported on nRF52, STM32, RP2350 and RP2040 chips");
         }
     }
 
     let mut device_initializers = vec![];
     let mut processor_initializers = vec![];
 
-    for (idx, sensor) in pmw3360_config.iter().enumerate() {
+    for (idx, sensor) in pmw33xx_config.iter().enumerate() {
+        let sensor_type = match sensor.sensor_type {
+            Pmw33xxType::PMW3360 => "pmw3360",
+            Pmw33xxType::PMW3389 => "pmw3389",
+        };
         let sensor_name = if sensor.name.is_empty() {
-            format!("pmw3360_{}", idx)
+            format!("{}_{}", sensor_type, idx)
         } else {
             sensor.name.clone()
         };
 
         let device_ident = format_ident!("{}_device", sensor_name);
         let processor_ident = format_ident!("{}_processor", sensor_name);
+        let sensor_spec_ident = match sensor.sensor_type {
+            Pmw33xxType::PMW3360 => format_ident!("{}", "Pmw3360Spec"),
+            Pmw33xxType::PMW3389 => format_ident!("{}", "Pmw3389Spec"),
+        };
 
         // Generate pin initialization
         let spi = &sensor.spi;
@@ -41,7 +49,7 @@ pub(crate) fn expand_pmw3360_device(
         let sck_ident = format_ident!("{}", spi.sck);
         let mosi_ident = format_ident!("{}", spi.mosi);
         let miso_ident = format_ident!("{}", spi.miso);
-        let cs_ident = format_ident!("{}", spi.cs.as_ref().expect("pmw3360 requires `cs` in spi config"));
+        let cs_ident = format_ident!("{}", spi.cs.as_ref().expect("pmw33xx requires `cs` in spi config"));
         let instance_ident = format_ident!("{}", spi.instance);
 
         let rx_dma_ident = match chip.series {
@@ -53,7 +61,7 @@ pub(crate) fn expand_pmw3360_device(
                 let rx_dma = spi
                     .rx_dma
                     .as_ref()
-                    .expect("pmw3360 requires `rx_dma` in spi config");
+                    .expect("pmw33xx requires `rx_dma` in spi config");
 
                 let rx_dma_ident = format_ident!("{}", rx_dma);
 
@@ -71,7 +79,7 @@ pub(crate) fn expand_pmw3360_device(
                 let tx_dma = spi
                     .tx_dma
                     .as_ref()
-                    .expect("pmw3360 requires `tx_dma` in spi config");
+                    .expect("pmw33xx requires `tx_dma` in spi config");
 
                 let tx_dma_ident = format_ident!("{}", tx_dma);
 
@@ -125,7 +133,7 @@ pub(crate) fn expand_pmw3360_device(
                 let mut #device_ident = {
                     use ::embassy_nrf::spim::{Frequency, Spim, Config, MODE_3};
                     use ::embassy_nrf::gpio::{Output, OutputDrive, Level};
-                    use ::rmk::input_device::pmw3360::{Pmw3360, Pmw3360Config};
+                    use ::rmk::input_device::pmw33xx::{Pmw33xx, Pmw33xxConfig, #sensor_spec_ident};
                     use ::rmk::input_device::pointing::PointingDevice;
 
                     let spi_inst = p.#instance_ident;
@@ -141,7 +149,7 @@ pub(crate) fn expand_pmw3360_device(
 
                     let spi_bus = Spim::new(spi_inst, Irqs, sck, miso, mosi, spi_config);
 
-                    let config = Pmw3360Config {
+                    let config = Pmw33xxConfig {
                         res_cpi: #res_cpi,
                         rot_trans_angle: #rot_trans_angle,
                         liftoff_dist: #liftoff_dist,
@@ -151,14 +159,14 @@ pub(crate) fn expand_pmw3360_device(
                         ..Default::default()
                     };
 
-                    PointingDevice::<Pmw3360<_, _, _>>::new(spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::new(spi_bus, cs, motion, config)
                 };
             },
             ChipSeries::Rp2040 => quote! {
                 let mut #device_ident = {
                     use ::embassy_rp::spi::{Spi, Config, Polarity, Phase};
                     use ::embassy_rp::gpio::{Output, Level, Pull};
-                    use ::rmk::input_device::pmw3360::{Pmw3360, Pmw3360Config};
+                    use ::rmk::input_device::pmw33xx::{Pmw33xx, Pmw33xxConfig, #sensor_spec_ident};
                     use ::rmk::input_device::pointing::PointingDevice;
 
                     let spi_inst = p.#instance_ident;
@@ -177,7 +185,7 @@ pub(crate) fn expand_pmw3360_device(
 
                     let spi_bus = Spi::new(spi_inst, sck, mosi, miso, tx_dma, rx_dma, spi_config);
 
-                    let config = Pmw3360Config {
+                    let config = Pmw33xxConfig {
                         res_cpi: #res_cpi,
                         rot_trans_angle: #rot_trans_angle,
                         liftoff_dist: #liftoff_dist,
@@ -187,7 +195,7 @@ pub(crate) fn expand_pmw3360_device(
                         ..Default::default()
                     };
 
-                    PointingDevice::<Pmw3360<_, _, _>>::new(spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::new(spi_bus, cs, motion, config)
                 };
             },
             ChipSeries::Stm32 => quote! {
@@ -195,7 +203,7 @@ pub(crate) fn expand_pmw3360_device(
                     use ::embassy_stm32::spi::{Spi, Config, MODE_3};
                     use ::embassy_stm32::gpio::{Output, Level, Pull, Speed};
                     use ::embassy_stm32::time::Hertz;
-                    use ::rmk::input_device::pmw3360::{Pmw3360, Pmw3360Config};
+                    use ::rmk::input_device::pmw33xx::{Pmw33xx, Pmw33xxConfig, #sensor_spec_ident};
                     use ::rmk::input_device::pointing::PointingDevice;
 
                     let spi_inst = p.#instance_ident;
@@ -213,7 +221,7 @@ pub(crate) fn expand_pmw3360_device(
 
                     let spi_bus = Spi::new(spi_inst, sck, mosi, miso, tx_dma, rx_dma, spi_config);
 
-                    let config = Pmw3360Config {
+                    let config = Pmw33xxConfig {
                         res_cpi: #res_cpi,
                         rot_trans_angle: #rot_trans_angle,
                         liftoff_dist: #liftoff_dist,
@@ -223,7 +231,7 @@ pub(crate) fn expand_pmw3360_device(
                         ..Default::default()
                     };
 
-                    PointingDevice::<Pmw3360<_, _, _>>::new(spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::new(spi_bus, cs, motion, config)
                 };
             },
             _ => unreachable!(),

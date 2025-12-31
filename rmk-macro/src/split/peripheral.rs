@@ -16,7 +16,7 @@ use crate::import::expand_custom_imports;
 use crate::input_device::adc::expand_adc_device;
 use crate::input_device::encoder::expand_encoder_device;
 use crate::input_device::pmw3610::expand_pmw3610_device;
-use crate::input_device::pmw3360::expand_pmw3360_device;
+use crate::input_device::pmw33xx::expand_pmw33xx_device;
 use crate::keyboard::get_debouncer_type;
 use crate::keyboard_config::read_keyboard_toml_config;
 use crate::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
@@ -83,40 +83,40 @@ fn expand_bind_interrupt_for_split_peripheral(
                 quote! {}
             };
 
-            // Extract PMW3360 configuration
+            // Extract PMW33xx configuration
             let board = keyboard_config.get_board_config().unwrap();
             let split_config = match &board {
                 BoardConfig::Split(split_config) => split_config,
                 _ => panic!("Expected split configuration"),
             };
 
-            let pmw3360_config = split_config
+            let pmw33xx_config = split_config
                 .peripheral[peripheral_id]
                 .input_device
                 .clone()
                 .unwrap_or(InputDeviceConfig::default())
-                .pmw3360
+                .pmw33xx
                 .unwrap_or(Vec::new());
 
             // Generate SPI interrupts for each sensor
-            let mut pmw3360_spi_interrupts = Vec::new();
+            let mut pmw33xx_spi_interrupts = Vec::new();
 
-            for sensor in &pmw3360_config {
+            for sensor in &pmw33xx_config {
                 let instance_ident = format_ident!("{}", &sensor.spi.instance);
 
-                pmw3360_spi_interrupts.push(quote! {
+                pmw33xx_spi_interrupts.push(quote! {
                     #instance_ident => spim::InterruptHandler<peripherals::#instance_ident>;
                 });
             }
 
-            let pmw3360_spi_interrupts = if pmw3360_spi_interrupts.is_empty() {
+            let pmw33xx_spi_interrupts = if pmw33xx_spi_interrupts.is_empty() {
                 quote! {}
             } else {
                 quote! {
-                    #(#pmw3360_spi_interrupts)*
+                    #(#pmw33xx_spi_interrupts)*
                 }
             };
-            let spim_import = if !pmw3360_config.is_empty() {
+            let spim_import = if !pmw33xx_config.is_empty() {
                 quote! {
                     use ::embassy_nrf::spim;
                     use embassy_nrf::peripherals;
@@ -135,7 +135,7 @@ fn expand_bind_interrupt_for_split_peripheral(
                     RADIO => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     TIMER0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     RTC0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
-                    #pmw3360_spi_interrupts
+                    #pmw33xx_spi_interrupts
                 });
 
                 #[::embassy_executor::task]
@@ -461,21 +461,21 @@ pub(crate) fn expand_peripheral_input_device_config(
         devices.push(quote! { #device_name });
     }
 
-    // generate PMW3360 configuration
-    let (pmw3360_devices, _pmw3360_processors) = match &board {
-        BoardConfig::Split(split_config) => expand_pmw3360_device(
+    // generate PMW33xx configuration
+    let (pmw33xx_devices, _pmw33xx_processors) = match &board {
+        BoardConfig::Split(split_config) => expand_pmw33xx_device(
             split_config.peripheral[id]
                 .input_device
                 .clone()
                 .unwrap_or(InputDeviceConfig::default())
-                .pmw3360
+                .pmw33xx
                 .unwrap_or(Vec::new()),
             &chip,
         ),
         _ => (vec![], vec![]),
     };
 
-    for initializer in pmw3360_devices {
+    for initializer in pmw33xx_devices {
         initializations.extend(initializer.initializer);
         let device_name = initializer.var_name;
         devices.push(quote! { #device_name });

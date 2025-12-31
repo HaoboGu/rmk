@@ -13,7 +13,7 @@ pub mod adc;
 pub mod battery;
 pub mod joystick;
 pub mod pmw3610;
-pub mod pmw3360;
+pub mod pmw33xx;
 pub mod rotary_encoder;
 pub mod pointing;
 

@@ -707,7 +707,7 @@ pub struct InputDeviceConfig {
     pub pointing: Option<Vec<PointingDeviceConfig>>,
     pub joystick: Option<Vec<JoystickConfig>>,
     pub pmw3610: Option<Vec<Pmw3610Config>>,
-    pub pmw3360: Option<Vec<Pmw3360Config>>,
+    pub pmw33xx: Option<Vec<Pmw33xxConfig>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -760,9 +760,20 @@ pub struct Pmw3610Config {
 #[derive(Clone, Debug, Default, Deserialize)]
 #[allow(unused)]
 #[serde(deny_unknown_fields)]
-pub struct Pmw3360Config {
+pub enum Pmw33xxType {
+    #[default]
+    PMW3360,
+    PMW3389,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[allow(unused)]
+#[serde(deny_unknown_fields)]
+pub struct Pmw33xxConfig {
     // Name of the sensor (used for variable naming)
     pub name: String,
+    // Sensor Type (3360 or 3389)
+    pub sensor_type: Pmw33xxType,
     // SPI pins
     pub spi: SpiConfig,
     // Optional motion interrupt pin
