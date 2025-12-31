@@ -45,6 +45,8 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             Action::LayerOn(l) => 0x5220 | l as u16,
             Action::DefaultLayer(l) => 0x5240 | l as u16,
             Action::LayerToggle(l) => 0x5260 | l as u16,
+            Action::TriLayerLower => 0x7c77,
+            Action::TriLayerUpper => 0x7c78,
             Action::TriggerMacro(idx) => {
                 // if idx < 32 {
                 0x7700 + (idx as u16)
@@ -68,17 +70,15 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                     0
                 }
             }
-            Action::Keyboard(keyboard_action) => match keyboard_action {
+            Action::KeyboardControl(c) => match c {
                 KeyboardAction::Bootloader => 0x7c00,
                 KeyboardAction::Reboot => 0x7c01,
                 KeyboardAction::ComboOn => 0x7c50,
                 KeyboardAction::ComboOff => 0x7c51,
                 KeyboardAction::ComboToggle => 0x7c52,
                 KeyboardAction::CapsWordToggle => 0x7c73,
-                KeyboardAction::TriLayerLower => 0x7c77,
-                KeyboardAction::TriLayerUpper => 0x7c78,
                 _ => {
-                    warn!("KeyboardAction: {:?} vial is not supported yet", keyboard_action);
+                    warn!("KeyboardAction: {:?} vial is not supported yet", c);
                     0
                 }
             },
@@ -208,15 +208,15 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             warn!("Backlight and RGB configuration key not supported");
             KeyAction::No
         }
-        0x7C00 => KeyAction::Single(Action::Keyboard(KeyboardAction::Bootloader)),
-        0x7C01 => KeyAction::Single(Action::Keyboard(KeyboardAction::Reboot)),
-        0x7C50 => KeyAction::Single(Action::Keyboard(KeyboardAction::ComboOn)),
-        0x7C51 => KeyAction::Single(Action::Keyboard(KeyboardAction::ComboOff)),
-        0x7C52 => KeyAction::Single(Action::Keyboard(KeyboardAction::ComboToggle)),
+        0x7C00 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::Bootloader)),
+        0x7C01 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::Reboot)),
+        0x7C50 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::ComboOn)),
+        0x7C51 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::ComboOff)),
+        0x7C52 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::ComboToggle)),
         0x7C16 => KeyAction::Single(Action::Special(SpecialKey::GraveEscape)),
-        0x7C73 => KeyAction::Single(Action::Keyboard(KeyboardAction::CapsWordToggle)),
-        0x7C77 => KeyAction::Single(Action::Keyboard(KeyboardAction::TriLayerLower)),
-        0x7C78 => KeyAction::Single(Action::Keyboard(KeyboardAction::TriLayerUpper)),
+        0x7C73 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::CapsWordToggle)),
+        0x7C77 => KeyAction::Single(Action::TriLayerLower),
+        0x7C78 => KeyAction::Single(Action::TriLayerUpper),
         0x7C79 => KeyAction::Single(Action::Special(SpecialKey::Repeat)),
         0x7C02..=0x7C5F => {
             // TODO: Reset/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro
@@ -406,7 +406,7 @@ mod test {
         // ComboOff
         let via_keycode = 0x7C51;
         assert_eq!(
-            KeyAction::Single(Action::Keyboard(KeyboardAction::ComboOff)),
+            KeyAction::Single(Action::KeyboardControl(KeyboardAction::ComboOff)),
             from_via_keycode(via_keycode)
         );
 
@@ -551,7 +551,7 @@ mod test {
         assert_eq!(0x5039, to_via_keycode(a));
 
         // ComboOff
-        let a = KeyAction::Single(Action::Keyboard(KeyboardAction::ComboOff));
+        let a = KeyAction::Single(Action::KeyboardControl(KeyboardAction::ComboOff));
         assert_eq!(0x7C51, to_via_keycode(a));
 
         // GraveEscape

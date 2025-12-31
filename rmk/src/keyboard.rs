@@ -1126,7 +1126,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     async fn process_key_action_normal(&mut self, action: Action, event: KeyboardEvent) {
         match action {
-            Action::No | Action::Transparent => {}
+            Action::No => {}
             Action::Key(key) => self.process_action_key(key, event).await,
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, event),
             Action::LayerOff(layer_num) => {
@@ -1208,9 +1208,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
             Action::OneShotKey(_k) => warn!("One-shot key is not supported: {:?}", action),
             Action::Light(_light_action) => warn!("Light controll is not supported"),
-            Action::Keyboard(keyboard_action) => self.process_action_keyboard_control(keyboard_action, event).await,
+            Action::KeyboardControl(c) => self.process_action_keyboard_control(c, event).await,
             Action::Special(special_key) => self.process_action_special(special_key, event).await,
             Action::User(id) => self.process_user(id, event).await,
+            Action::TriLayerLower => {
+                // Tri-layer lower, turn layer 1 on and update layer state
+                self.process_action_layer_switch(1, event);
+                self.keymap.borrow_mut().update_fn_layer_state();
+            }
+            Action::TriLayerUpper => {
+                // Tri-layer upper, turn layer 2 on and update layer state
+                self.process_action_layer_switch(2, event);
+                self.keymap.borrow_mut().update_fn_layer_state();
+            }
         }
     }
 
@@ -1431,16 +1441,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     async fn process_action_keyboard_control(&mut self, keyboard_control: KeyboardAction, event: KeyboardEvent) {
         match keyboard_control {
-            KeyboardAction::TriLayerLower => {
-                // Tri-layer lower, turn layer 1 on and update layer state
-                self.process_action_layer_switch(1, event);
-                self.keymap.borrow_mut().update_fn_layer_state();
-            }
-            KeyboardAction::TriLayerUpper => {
-                // Tri-layer upper, turn layer 2 on and update layer state
-                self.process_action_layer_switch(2, event);
-                self.keymap.borrow_mut().update_fn_layer_state();
-            }
             KeyboardAction::CapsWordToggle => {
                 // Handle Caps Word
                 if event.pressed {
