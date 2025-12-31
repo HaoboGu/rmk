@@ -62,7 +62,16 @@ pub fn get_combos_config() -> CombosConfig {
                 k!(Space),
                 Some(0),
             ))),
-            None,
+            Some(Combo::new(ComboConfig::new(
+                [
+                    k!(V), //3,4
+                    k!(B), //3,5
+                    k!(T), //1,5
+                ]
+                .to_vec(),
+                k!(Space),
+                Some(0),
+            ))),
             None,
             None,
         ],

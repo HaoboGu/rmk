@@ -928,14 +928,20 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// When "asd" is pressed, combo "asd" is delayed due to there's "asdf" combo. The delayed combo will be triggered when:
     /// - Timeout
     /// - Any of the key in the delayed combo is released
+    /// - Current delayed combos are interrupted
     ///
     /// When multiple combos are delayed, this function will only trigger the longest one, for example,
     /// combo "as", "sd" and "asd" are delayed, this function will only trigger "asd", and clear the combo state of "as"/"sd"
     ///
     /// If the full combo("asdf") is triggered, the delayed combo will be cleared without triggering it.
+    ///
+    /// Parameters:
+    /// - `key_action`: The action of the key that triggered this function
+    /// - `event`: The keyboard event. When pressing (interrupting), trigger any delayed combo.
+    ///   When releasing, only trigger combos that contain the key_action.
     async fn trigger_delayed_combo(&mut self, key_action: &KeyAction, event: KeyboardEvent) {
         // First, find the delayed combo and trigger it
-        let next_action = self
+        let triggered_combo = self
             .keymap
             .borrow_mut()
             .behavior
@@ -944,20 +950,30 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .iter_mut()
             .filter_map(|c| c.as_mut())
             .filter_map(|c| {
-                if c.is_all_pressed() && !c.is_triggered() && c.config.actions.contains(key_action) {
-                    // All keys are pressed but the combo is not triggered, trigger it
-                    return Some((c.size(), c));
+                if c.is_all_pressed() && !c.is_triggered() {
+                    // When a key is pressed (interrupting a combo wait), trigger any delayed combo.
+                    // When releasing a key, only trigger combos that contain the key_action.
+                    if event.pressed || c.config.actions.contains(key_action) {
+                        // All keys are pressed but the combo is not triggered, trigger it
+                        return Some((c.size(), c));
+                    }
                 }
                 None
             }) // Find all delayed combos
             .max_by_key(|x| x.0) // Find only the longest one
-            .map(|(_, c)| c.trigger()); // Trigger it
+            .map(|(_, c)| (c.trigger(), c.config.actions)); // Trigger it and get the actions
 
         // Clean the held buffer, process the combo output action and clear other combos
-        if let Some(action) = next_action {
-            self.held_buffer
-                .keys
-                .retain(|item| item.state != KeyState::WaitingCombo);
+        if let Some((action, combo_actions)) = triggered_combo {
+            // Only remove keys that are part of the triggered combo from the held buffer
+            self.held_buffer.keys.retain(|item| {
+                if item.state != KeyState::WaitingCombo {
+                    return true;
+                }
+                // Check if this key is part of the triggered combo
+                !combo_actions.contains(&item.action)
+            });
+
             let mut new_event = event;
             new_event.pressed = true;
             self.process_key_action(&action, new_event, true).await;
@@ -1014,10 +1030,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
             })
             .max();
+
         if event.pressed
             && let Some(max_size) = max_size_of_updated_combo
             && max_size > 0
         {
+            // If the max_size > 0, there's at least one combo is updated
             let pressed_time = self.get_timer_value(event).unwrap_or(Instant::now());
             self.held_buffer.push(HeldKey::new(
                 event,
@@ -1054,6 +1072,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
             (None, false)
         } else {
+            // No combo is updated, dispatch combos
             if !event.pressed {
                 info!("Releasing keys in combo: {:?} {:?}", event, key_action);
 
@@ -1100,6 +1119,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     // Dispatch combo keys buffered in the held buffer when the combo isn't being triggered.
     async fn dispatch_combos(&mut self, key_action: &KeyAction, event: KeyboardEvent) {
         self.trigger_delayed_combo(key_action, event).await;
+
         // Dispatch all keys with state `WaitingCombo` in the held buffer
         let mut i = 0;
         while i < self.held_buffer.keys.len() {
