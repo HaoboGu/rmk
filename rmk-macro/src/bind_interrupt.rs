@@ -97,7 +97,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
             } else {
                 quote! {}
             };
-            let use_2m_phy = if ble_config.ble_use_2m_phy.unwrap_or(true) {
+            let use_2m_phy = if ble_config.use_2m_phy.unwrap_or(true) {
                 quote! { .support_le_2m_phy()? }
             } else {
                 quote! {}

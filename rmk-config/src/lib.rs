@@ -370,7 +370,7 @@ pub struct BleConfig {
     pub adc_divider_measured: Option<u32>,
     pub adc_divider_total: Option<u32>,
     pub default_tx_power: Option<i8>,
-    pub ble_use_2m_phy: Option<bool>,
+    pub use_2m_phy: Option<bool>,
 }
 
 /// Config for chip-specific settings
