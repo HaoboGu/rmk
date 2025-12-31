@@ -233,9 +233,9 @@ impl From<MorseProfile> for u32 {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(postcard::experimental::max_size::MaxSize)]
 pub enum KeyAction {
-    /// No action. Serialized as 0x0000.
+    /// No action
     No,
-    /// Transparent action, next layer will be checked. Serialized as 0x0001.
+    /// Transparent action, next layer will be checked
     Transparent,
     /// A single action, such as triggering a key, or activating a layer. Action is triggered when pressed and cancelled when released.
     Single(Action),
@@ -292,11 +292,9 @@ impl PartialEq for KeyAction {
 pub enum Action {
     /// Default action, no action.
     No,
-    /// Transparent action, next layer will be checked.
-    Transparent,
     /// A normal key stroke, uses for all keycodes defined in `KeyCode` enum, including mouse key, consumer/system control, etc.
     Key(KeyCode),
-    /// Modifier Combination, used for oneshot keyaction.
+    /// Modifier Combination, used in tap hold
     Modifier(ModifierCombination),
     /// Key stroke with modifier combination triggered.
     KeyWithModifier(KeyCode, ModifierCombination),
@@ -312,6 +310,8 @@ pub enum Action {
     DefaultLayer(u8),
     /// Activate a layer and deactivate all other layers(except default layer)
     LayerToggleOnly(u8),
+    TriLayerLower,
+    TriLayerUpper,
     /// Triggers the Macro at the 'index'.
     TriggerMacro(u8),
     /// Oneshot layer, keep the layer active until the next key is triggered.
@@ -323,14 +323,14 @@ pub enum Action {
     /// Actions for controlling lights
     Light(LightAction),
     /// Actions for controlling the keyboard
-    Keyboard(KeyboardAction),
+    KeyboardControl(KeyboardAction),
     /// Special Keys
     Special(SpecialKey),
     /// User Keys
     User(u8),
 }
 
-/// Actions for controlling the keyboard, for example, enable/disable a particular function
+/// Actions for controlling the keyboard or changing the keyboard's state, for example, enable/disable a particular function
 #[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(postcard::experimental::max_size::MaxSize)]
@@ -346,8 +346,6 @@ pub enum KeyboardAction {
     ComboOff,
     ComboToggle,
     CapsWordToggle,
-    TriLayerLower,
-    TriLayerUpper,
 }
 
 /// Actions for controlling lights
