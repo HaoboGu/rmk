@@ -18,6 +18,8 @@ They share one driver in RMK and the configuration of both is the same.
 [[input_device.pmw33xx]]
 name = "trackball0"
 sensor_type = "PMW3360" # or 3389
+id = 0 # optional number between 0-255. Ids are used to send controllerevents
+# to the sensor e.g. to set its cpi. Set to 0 if omitted.
 
 spi.instance = "SPI0"
 spi.sck = "PIN_18"
@@ -41,6 +43,9 @@ invert_x = true
 # invert_y = true
 # swap_xy = true
 ```
+
+Tip: If you want to control several pointing sensors with the same ControllerEvent, e.g. set their cpi all at once, then give them the same id.
+Additionally, sending events to `rmk::input_device::pointing::ALL_POINTING_DEVICES` will affect all pointing sensors.
 
 ### Split
 
@@ -111,9 +116,10 @@ bind_interrupts!(struct Irqs {
 
     // Create the sensor device
     // for PMW3360
-    let mut PointingDevice::<Pmw33xx<_, _, _, Pmw3360Spec>>::new(spi_bus, cs, Some(motion), sensor_config);
+    const POINTING_DEV_ID: u8 = 0 // this ID can be anything form 0-255. Just make sure you don't use the same number twice for different sensors. 
+    let mut PointingDevice::<Pmw33xx<_, _, _, Pmw3360Spec>>::new(POINTING_DEV_ID, spi_bus, cs, Some(motion), sensor_config);
     // for PMW3389
-    let mut PointingDevice::<Pmw33xx<_, _, _, Pmw3389Spec>>::new(spi_bus, cs, Some(motion), sensor_config);
+    let mut PointingDevice::<Pmw33xx<_, _, _, Pmw3389Spec>>::new(POINTING_DEV_ID, spi_bus, cs, Some(motion), sensor_config);
 ```
 
 And define a `PointingProcessor` and add it to the `run_processor_chain!` macro to process the events.

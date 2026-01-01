@@ -1,15 +1,15 @@
 use adc::expand_adc_device;
 use encoder::expand_encoder_device;
-use pmw3610::expand_pmw3610_device;
 use pmw33xx::expand_pmw33xx_device;
+use pmw3610::expand_pmw3610_device;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use rmk_config::{BoardConfig, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig, UniBodyConfig};
 
 pub(crate) mod adc;
 pub(crate) mod encoder;
-pub(crate) mod pmw3610;
 pub(crate) mod pmw33xx;
+pub(crate) mod pmw3610;
 
 /// Initializer struct for input devices
 pub(crate) struct Initializer {

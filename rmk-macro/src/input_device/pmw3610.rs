@@ -25,10 +25,11 @@ pub(crate) fn expand_pmw3610_device(
     let mut processor_initializers = vec![];
 
     for (idx, sensor) in pmw3610_config.iter().enumerate() {
+        let sensor_id = sensor.id.unwrap_or(0);
         let sensor_name = if sensor.name.is_empty() {
-            format!("pmw3610_{}", idx)
+            format!("pmw3610_{}_id{}", idx, sensor_id)
         } else {
-            sensor.name.clone()
+            format!("{}_id{}", sensor.name.clone(), sensor_id)
         };
 
         let device_ident = format_ident!("{}_device", sensor_name);
@@ -108,7 +109,7 @@ pub(crate) fn expand_pmw3610_device(
                         smart_mode: #smart_mode,
                     };
 
-                    PointingDevice::<Pmw3610<_, _, _>>::new(spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw3610<_, _, _>>::new(#sensor_id, spi_bus, cs, motion, config)
                 };
             },
             ChipSeries::Rp2040 => quote! {
@@ -133,7 +134,7 @@ pub(crate) fn expand_pmw3610_device(
                         smart_mode: #smart_mode,
                     };
 
-                    PointingDevice::<Pmw3610<_, _, _>>::new(spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw3610<_, _, _>>::new(#sensor_id, spi_bus, cs, motion, config)
                 };
             },
             _ => unreachable!(),

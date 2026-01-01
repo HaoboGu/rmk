@@ -7,8 +7,10 @@ use embassy_time::{Duration, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::spi::SpiBus;
 
-use crate::input_device::pointing::{InitState, MotionData, PointingDevice, PointingDriver, PointingDriverError};
+#[cfg(feature = "controller")]
+use crate::channel::CONTROLLER_CHANNEL;
 pub use crate::driver::bitbang_spi::{BitBangError, BitBangSpiBus};
+use crate::input_device::pointing::{InitState, MotionData, PointingDevice, PointingDriver, PointingDriverError};
 
 // ============================================================================
 // Page 0 registers
@@ -142,6 +144,17 @@ pub enum Pmw3610Error {
     InvalidCpi,
 }
 
+impl From<Pmw3610Error> for PointingDriverError {
+    fn from(err: Pmw3610Error) -> Self {
+        match err {
+            Pmw3610Error::Spi => PointingDriverError::Spi,
+            Pmw3610Error::InvalidProductId(id) => PointingDriverError::InvalidProductId(id),
+            Pmw3610Error::InitFailed => PointingDriverError::InitFailed,
+            Pmw3610Error::InvalidCpi => PointingDriverError::InvalidCpi,
+        }
+    }
+}
+
 /// PMW3610 driver using embedded-hal SPI traits
 pub struct Pmw3610<SPI, CS, MOTION>
 where
@@ -244,46 +257,6 @@ where
         self.write_reg(PMW3610_SPI_CLK_ON_REQ, SPI_CLOCK_ON_REQ_OFF).await
     }
 
-    /// Set sensor resolution in CPI (200-3200, step 200)
-    pub async fn set_resolution(&mut self, cpi: u16) -> Result<(), Pmw3610Error> {
-        if !(RES_MIN..=RES_MAX).contains(&cpi) {
-            return Err(Pmw3610Error::InvalidCpi);
-        }
-
-        self.spi_clk_on().await?;
-
-        self.write_reg(PMW3610_SPI_PAGE0, SPI_PAGE0_1).await?;
-
-        let mut val = self.read_reg(PMW3610_RES_STEP).await?;
-        val &= !RES_STEP_RES_MASK;
-        val |= (cpi / RES_STEP) as u8;
-
-        self.write_reg(PMW3610_RES_STEP, val).await?;
-        self.write_reg(PMW3610_SPI_PAGE1, SPI_PAGE1_0).await?;
-
-        self.spi_clk_off().await?;
-
-        debug!("PMW3610: Resolution set to {} CPI", cpi);
-        Ok(())
-    }
-
-    /// Set force awake mode
-    pub async fn force_awake(&mut self, enable: bool) -> Result<(), Pmw3610Error> {
-        let mut val = self.read_reg(PMW3610_PERFORMANCE).await?;
-        val &= !PERFORMANCE_FMODE_MASK;
-        if enable {
-            val |= PERFORMANCE_FMODE_FORCE_AWAKE;
-        } else {
-            val |= PERFORMANCE_FMODE_NORMAL;
-        }
-
-        self.spi_clk_on().await?;
-        self.write_reg(PMW3610_PERFORMANCE, val).await?;
-        self.spi_clk_off().await?;
-
-        Ok(())
-    }
-
     async fn configure(&mut self) -> Result<(), Pmw3610Error> {
         self.write_reg(PMW3610_POWER_UP_RESET, POWER_UP_RESET_VAL).await?;
         Timer::after(Duration::from_millis(RESET_DELAY_MS)).await;
@@ -343,15 +316,18 @@ where
         self.spi_clk_off().await?;
 
         if self.config.res_cpi > 0 {
-            self.set_resolution(self.config.res_cpi as u16).await?;
+            self.set_resolution(self.config.res_cpi as u16)
+                .await
+                .map_err(|_| Pmw3610Error::Spi)?;
         }
 
-        self.force_awake(self.config.force_awake).await?;
+        self.force_awake(self.config.force_awake)
+            .await
+            .map_err(|_| Pmw3610Error::Spi)?;
 
         info!("PMW3610 initialized successfully");
         Ok(())
     }
-
 
     fn sign_extend(value: u16, bits: usize) -> i16 {
         let sign_bit = 1 << bits;
@@ -374,7 +350,8 @@ where
         let _ = self.cs.set_high();
         Timer::after(Duration::from_millis(1)).await;
 
-        self.configure().await.map_err(|_| PointingDriverError::InitFailed)
+        self.configure().await?;
+        Ok(())
     }
 
     /// Read motion data from the sensor
@@ -387,8 +364,7 @@ where
 
         let mut burst_data = [0u8; BURST_DATA_LEN_SMART];
         self.read_burst(PMW3610_BURST_READ, &mut burst_data[..burst_data_len])
-            .await
-            .map_err(|_| PointingDriverError::Spi)?;
+            .await?;
 
         if (burst_data[BURST_MOTION] & MOTION_STATUS_MOTION) == 0x00 {
             return Ok(MotionData::default());
@@ -404,19 +380,117 @@ where
             let shutter_val = ((burst_data[BURST_SHUTTER_HI] as u16) << 8) | (burst_data[BURST_SHUTTER_LO] as u16);
 
             if self.smart_flag && shutter_val < SHUTTER_SMART_THRESHOLD {
-                self.spi_clk_on().await.map_err(|_| PointingDriverError::Spi)?;
-                self.write_reg(PMW3610_SMART_MODE, SMART_MODE_ENABLE).await.map_err(|_| PointingDriverError::Spi)?;
-                self.spi_clk_off().await.map_err(|_| PointingDriverError::Spi)?;
+                self.spi_clk_on().await?;
+                self.write_reg(PMW3610_SMART_MODE, SMART_MODE_ENABLE)
+                    .await
+                    .map_err(|_| PointingDriverError::Spi)?;
+                self.spi_clk_off().await?;
                 self.smart_flag = false;
             } else if !self.smart_flag && shutter_val > SHUTTER_SMART_THRESHOLD {
-                self.spi_clk_on().await.map_err(|_| PointingDriverError::Spi)?;
-                self.write_reg(PMW3610_SMART_MODE, SMART_MODE_DISABLE).await.map_err(|_| PointingDriverError::Spi)?;
-                self.spi_clk_off().await.map_err(|_| PointingDriverError::Spi)?;
+                self.spi_clk_on().await?;
+                self.write_reg(PMW3610_SMART_MODE, SMART_MODE_DISABLE)
+                    .await
+                    .map_err(|_| PointingDriverError::Spi)?;
+                self.spi_clk_off().await?;
                 self.smart_flag = true;
             }
         }
 
         Ok(MotionData { dx, dy })
+    }
+
+    /// Set sensor resolution in CPI (200-3200, step 200)
+    async fn set_resolution(&mut self, cpi: u16) -> Result<(), PointingDriverError> {
+        if !(RES_MIN..=RES_MAX).contains(&cpi) {
+            return Err(PointingDriverError::InvalidCpi);
+        }
+
+        self.spi_clk_on().await?;
+
+        self.write_reg(PMW3610_SPI_PAGE0, SPI_PAGE0_1).await?;
+
+        let mut val = self.read_reg(PMW3610_RES_STEP).await?;
+        val &= !RES_STEP_RES_MASK;
+        val |= (cpi / RES_STEP) as u8;
+
+        self.write_reg(PMW3610_RES_STEP, val).await?;
+        self.write_reg(PMW3610_SPI_PAGE1, SPI_PAGE1_0).await?;
+
+        self.spi_clk_off().await?;
+
+        debug!("PMW3610: Resolution set to {} CPI", cpi);
+        Ok(())
+    }
+
+    async fn set_rot_trans_angle(&mut self, _angle: i8) -> Result<(), PointingDriverError> {
+        info!("PMW3610: set_ret_trans_angle not a PMW3610 capability");
+
+        Err(PointingDriverError::NotImplementedError)
+    }
+    async fn set_liftoff_dist(&mut self, _dist: u8) -> Result<(), PointingDriverError> {
+        info!("PMW3610: set_liftoff_dist not a PMW3610 capability");
+
+        Err(PointingDriverError::NotImplementedError)
+    }
+
+    /// Set force awake mode
+    async fn force_awake(&mut self, enable: bool) -> Result<(), PointingDriverError> {
+        let mut val = self.read_reg(PMW3610_PERFORMANCE).await?;
+        val &= !PERFORMANCE_FMODE_MASK;
+        if enable {
+            val |= PERFORMANCE_FMODE_FORCE_AWAKE;
+        } else {
+            val |= PERFORMANCE_FMODE_NORMAL;
+        }
+
+        self.spi_clk_on().await?;
+        self.write_reg(PMW3610_PERFORMANCE, val).await?;
+        self.spi_clk_off().await?;
+
+        Ok(())
+    }
+
+    async fn set_invert_x(&mut self, onoff: bool) -> Result<(), PointingDriverError> {
+        self.config.invert_x = onoff;
+        let mut res_step_val = self.read_reg(PMW3610_RES_STEP).await?;
+
+        if self.config.invert_x {
+            res_step_val |= 1 << RES_STEP_INV_X_BIT;
+        } else {
+            res_step_val &= !(1 << RES_STEP_INV_X_BIT);
+        }
+
+        self.write_reg(PMW3610_RES_STEP, res_step_val).await?;
+
+        Ok(())
+    }
+    async fn set_invert_y(&mut self, onoff: bool) -> Result<(), PointingDriverError> {
+        self.config.invert_y = onoff;
+        let mut res_step_val = self.read_reg(PMW3610_RES_STEP).await?;
+
+        if self.config.invert_y {
+            res_step_val |= 1 << RES_STEP_INV_Y_BIT;
+        } else {
+            res_step_val &= !(1 << RES_STEP_INV_Y_BIT);
+        }
+
+        self.write_reg(PMW3610_RES_STEP, res_step_val).await?;
+
+        Ok(())
+    }
+    async fn swap_xy(&mut self, onoff: bool) -> Result<(), PointingDriverError> {
+        self.config.swap_xy = onoff;
+        let mut res_step_val = self.read_reg(PMW3610_RES_STEP).await?;
+
+        if self.config.swap_xy {
+            res_step_val |= 1 << RES_STEP_SWAP_XY_BIT;
+        } else {
+            res_step_val &= !(1 << RES_STEP_SWAP_XY_BIT);
+        }
+
+        self.write_reg(PMW3610_RES_STEP, res_step_val).await?;
+
+        Ok(())
     }
 
     /// Check if motion is pending (motion GPIO is active low)
@@ -435,16 +509,20 @@ where
     MOTION: InputPin,
 {
     /// Create a new PMW3610 device
-    pub fn new(spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw3610Config) -> Self {
+    pub fn new(id: u8, spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw3610Config) -> Self {
         Self {
             sensor: Pmw3610::new(spi, cs, motion_gpio, config),
             init_state: InitState::Pending,
             poll_interval: Duration::from_micros(500),
+            #[cfg(feature = "controller")]
+            controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
+            id,
         }
     }
 
     /// Create a new PMW3610 device with custom poll interval
     pub fn with_poll_interval(
+        id: u8,
         spi: SPI,
         cs: CS,
         motion_gpio: Option<MOTION>,
@@ -455,6 +533,9 @@ where
             sensor: Pmw3610::new(spi, cs, motion_gpio, config),
             init_state: InitState::Pending,
             poll_interval: Duration::from_micros(poll_interval_us),
+            #[cfg(feature = "controller")]
+            controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
+            id,
         }
     }
 }

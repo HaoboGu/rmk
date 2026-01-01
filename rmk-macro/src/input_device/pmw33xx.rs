@@ -30,10 +30,11 @@ pub(crate) fn expand_pmw33xx_device(
             Pmw33xxType::PMW3360 => "pmw3360",
             Pmw33xxType::PMW3389 => "pmw3389",
         };
+        let sensor_id = sensor.id.unwrap_or(0);
         let sensor_name = if sensor.name.is_empty() {
-            format!("{}_{}", sensor_type, idx)
+            format!("{}_{}_id{}", sensor_type, idx, sensor_id)
         } else {
-            sensor.name.clone()
+            format!("{}_id{}", sensor.name.clone(), sensor_id)
         };
 
         let device_ident = format_ident!("{}_device", sensor_name);
@@ -85,25 +86,30 @@ pub(crate) fn expand_pmw33xx_device(
             _ => unreachable!(),
         };
 
-
         // if one dma channel is specified, the other one must also be
         let spi_bus_init = match (&spi.tx_dma, &spi.rx_dma) {
             (Some(_), None) => {
-                panic!("{}: tx_dma is specified but rx_dma is missing. Both must be present or both absent.", sensor_name);
-            },
+                panic!(
+                    "{}: tx_dma is specified but rx_dma is missing. Both must be present or both absent.",
+                    sensor_name
+                );
+            }
             (None, Some(_)) => {
-                panic!("{}: rx_dma is specified but tx_dma is missing. Both must be present or both absent.", sensor_name);
-            },
+                panic!(
+                    "{}: rx_dma is specified but tx_dma is missing. Both must be present or both absent.",
+                    sensor_name
+                );
+            }
             (None, None) => {
                 quote! {
                     ::embassy_embedded_hal::adapter::BlockingAsync::new(Spi::new_blocking(spi_inst, sck, mosi, miso, spi_config))
                 }
-            },
+            }
             (Some(_), Some(_)) => {
                 quote! {
                     Spi::new(spi_inst, sck, mosi, miso, p.#tx_dma_ident, p.#rx_dma_ident, spi_config)
                 }
-            },
+            }
         };
 
         // Generate config values
@@ -176,7 +182,7 @@ pub(crate) fn expand_pmw33xx_device(
                         ..Default::default()
                     };
 
-                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::new(spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::new(#sensor_id, spi_bus, cs, motion, config)
                 };
             },
             ChipSeries::Rp2040 => quote! {
@@ -210,7 +216,7 @@ pub(crate) fn expand_pmw33xx_device(
                         ..Default::default()
                     };
 
-                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::new(spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::new(#sensor_id, spi_bus, cs, motion, config)
                 };
             },
             ChipSeries::Stm32 => quote! {
@@ -244,7 +250,7 @@ pub(crate) fn expand_pmw33xx_device(
                         ..Default::default()
                     };
 
-                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::new(spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::new(#sensor_id, spi_bus, cs, motion, config)
                 };
             },
             _ => unreachable!(),

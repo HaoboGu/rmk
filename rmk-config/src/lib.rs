@@ -734,6 +734,8 @@ pub struct JoystickConfig {
 pub struct Pmw3610Config {
     /// Name of the sensor (used for variable naming)
     pub name: String,
+    /// id of the device
+    pub id: Option<u8>,
     /// SPI pins
     pub spi: SpiConfig,
     /// Optional motion interrupt pin
@@ -772,6 +774,8 @@ pub enum Pmw33xxType {
 pub struct Pmw33xxConfig {
     // Name of the sensor (used for variable naming)
     pub name: String,
+    // id of the device
+    pub id: Option<u8>,
     // Sensor Type (3360 or 3389)
     pub sensor_type: Pmw33xxType,
     // SPI pins

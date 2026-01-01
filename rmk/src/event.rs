@@ -177,4 +177,30 @@ pub enum ControllerEvent {
     BleProfile(u8),
     #[cfg(all(feature = "_ble", feature = "split"))]
     ClearPeer,
+    /// Pointing controller events, u8 is ID of the device
+    PointingContEvent((u8, PointingEvent))
 }
+
+#[cfg(feature = "controller")]
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum PointingEvent {
+    /// Sets the Cpi (Resolution) of the sensor
+    PointingSetCpi(u16),
+    /// Set poll interval
+    PointingSetPollIntervall(u64),
+    /// Set rotational transform angle
+    PointingSetRotTransAngle(i8),
+    /// Set liftoff distance
+    PointigSetLiftoffDist(u8),
+    /// Set force awake mode
+    PointingSetForceAwake(bool),
+    /// Set invert x
+    PointingSetInvertX(bool),
+    /// Set invert y
+    PointingSetInvertY(bool),
+    /// Set swap x/y
+    PointingSwapXY(bool),
+}
+

@@ -5,11 +5,17 @@ use core::cell::RefCell;
 use embassy_time::{Duration, Timer};
 use usbd_hid::descriptor::MouseReport;
 
+#[cfg(feature = "controller")]
+use crate::channel::ControllerSub;
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::event::{Axis, AxisEvent, AxisValType, Event};
+#[cfg(feature = "controller")]
+use crate::event::{ControllerEvent, PointingEvent};
 use crate::hid::Report;
 use crate::input_device::{InputDevice, InputProcessor, ProcessResult};
 use crate::keymap::KeyMap;
+
+pub const ALL_POINTING_DEVICES: u8 = 255;
 
 /// Motion data from the sensor
 #[derive(Debug, Clone, Copy, Default)]
@@ -32,11 +38,20 @@ pub enum PointingDriverError {
     InvalidCpi,
     /// Invalid firmware signature detected
     InvalidFwSignature((u8, u8)),
+    /// Controller event not implement for this device
+    NotImplementedError,
 }
 
 pub trait PointingDriver {
     async fn init(&mut self) -> Result<(), PointingDriverError>;
     async fn read_motion(&mut self) -> Result<MotionData, PointingDriverError>;
+    async fn set_resolution(&mut self, cpi: u16) -> Result<(), PointingDriverError>;
+    async fn set_rot_trans_angle(&mut self, angle: i8) -> Result<(), PointingDriverError>;
+    async fn set_liftoff_dist(&mut self, dist: u8) -> Result<(), PointingDriverError>;
+    async fn force_awake(&mut self, enable: bool) -> Result<(), PointingDriverError>;
+    async fn set_invert_x(&mut self, onoff: bool) -> Result<(), PointingDriverError>;
+    async fn set_invert_y(&mut self, onoff: bool) -> Result<(), PointingDriverError>;
+    async fn swap_xy(&mut self, onoff: bool) -> Result<(), PointingDriverError>;
     fn motion_pending(&mut self) -> bool;
 }
 
@@ -56,13 +71,15 @@ pub struct PointingDevice<S: PointingDriver> {
     pub sensor: S,
     pub init_state: InitState,
     pub poll_interval: Duration,
+    #[cfg(feature = "controller")]
+    pub controller_sub: ControllerSub,
+    pub id: u8,
 }
 
 impl<S> PointingDevice<S>
 where
     S: PointingDriver,
 {
-    // TODO this maybe should have some kind of name for the debug prints
     const MAX_INIT_RETRIES: u8 = 3;
 
     async fn try_init(&mut self) -> bool {
@@ -76,18 +93,22 @@ where
         }
 
         if let InitState::Initializing(retry_count) = self.init_state {
-            info!("PointingDevice: Initializing sensor (attempt {})", retry_count + 1);
+            info!(
+                "PointingDevice {}: Initializing sensor (attempt {})",
+                self.id,
+                retry_count + 1
+            );
 
             match self.sensor.init().await {
                 Ok(()) => {
-                    info!("PointingDevice: Sensor initialized successfully");
+                    info!("PointingDevice {}: Sensor initialized successfully", self.id);
                     self.init_state = InitState::Ready;
                     return true;
                 }
                 Err(e) => {
-                    error!("PointingDevice: Init failed: {:?}", e);
+                    error!("PointingDevice {}: Init failed: {:?}", self.id, e);
                     if retry_count + 1 >= Self::MAX_INIT_RETRIES {
-                        error!("PointingDevice: Max retries reached, giving up");
+                        error!("PointingDevice {}: Max retries reached, giving up", self.id);
                         self.init_state = InitState::Failed;
                         return false;
                     }
@@ -100,6 +121,74 @@ where
 
         false
     }
+
+    /// Handle controller events for the pointing device
+    #[cfg(feature = "controller")]
+    async fn handle_controller_event(&mut self, event: ControllerEvent) -> () {
+        match event {
+            ControllerEvent::PointingContEvent((device_id, pointing_event)) => {
+                if device_id == self.id || device_id == ALL_POINTING_DEVICES {
+                    match pointing_event {
+                        PointingEvent::PointingSetCpi(cpi) => {
+                            debug!("PointingDevice {}: Setting CPI to: {}", self.id, cpi);
+                            if let Err(e) = self.sensor.set_resolution(cpi).await {
+                                warn!("PointingDevice {}: Failed to set CPI: {:?}", self.id, e);
+                            }
+                        }
+                        PointingEvent::PointingSetPollIntervall(interval_us) => {
+                            debug!(
+                                "PointingDevice {}: Setting poll interval to: {}μs",
+                                self.id, interval_us
+                            );
+                            self.poll_interval = Duration::from_micros(interval_us);
+                        }
+                        PointingEvent::PointingSetRotTransAngle(angle) => {
+                            debug!(
+                                "PointingDevice {}: Setting rotational transform angle to: {}",
+                                self.id, angle
+                            );
+                            if let Err(e) = self.sensor.set_rot_trans_angle(angle).await {
+                                warn!("PointingDevice {}: Failed to set rotation angle: {:?}", self.id, e);
+                            }
+                        }
+                        PointingEvent::PointigSetLiftoffDist(dist) => {
+                            debug!("PointingDevice {}: Setting liftoff distance to: {}", self.id, dist);
+                            if let Err(e) = self.sensor.set_liftoff_dist(dist).await {
+                                warn!("PointingDevice {}: Failed to set liftoff distance: {:?}", self.id, e);
+                            }
+                        }
+                        PointingEvent::PointingSetForceAwake(enable) => {
+                            debug!("PointingDevice {}: Setting force awake mode to: {}", self.id, enable);
+                            if let Err(e) = self.sensor.force_awake(enable).await {
+                                warn!("PointingDevice {}: Failed to set force awake: {:?}", self.id, e);
+                            }
+                        }
+                        PointingEvent::PointingSetInvertX(invert) => {
+                            debug!("PointingDevice {}: Setting invert X to: {}", self.id, invert);
+                            if let Err(e) = self.sensor.set_invert_x(invert).await {
+                                warn!("PointingDevice {}: Failed to set force awake: {:?}", self.id, e);
+                            }
+                        }
+                        PointingEvent::PointingSetInvertY(invert) => {
+                            debug!("PointingDevice {}: Setting invert Y to: {}", self.id, invert);
+                            if let Err(e) = self.sensor.set_invert_y(invert).await {
+                                warn!("PointingDevice {}: Failed to set force awake: {:?}", self.id, e);
+                            }
+                        }
+                        PointingEvent::PointingSwapXY(swap) => {
+                            debug!("PointingDevice {}: Setting swap X/Y to: {}", self.id, swap);
+                            if let Err(e) = self.sensor.swap_xy(swap).await {
+                                warn!("PointingDevice {}: Failed to set force awake: {:?}", self.id, e);
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {
+                // Ignore other controller events not meant for pointing device
+            }
+        }
+    }
 }
 
 impl<S> InputDevice for PointingDevice<S>
@@ -107,43 +196,100 @@ where
     S: PointingDriver,
 {
     async fn read_event(&mut self) -> Event {
-        loop {
-            Timer::after(self.poll_interval).await;
+        #[cfg(feature = "controller")]
+        {
+            use embassy_futures::select::{select, Either};
 
-            if self.init_state != InitState::Ready {
-                if !self.try_init().await {
-                    continue;
-                }
-            }
-
-            if !self.sensor.motion_pending() {
-                continue;
-            }
-
-            match self.sensor.read_motion().await {
-                Ok(motion) => {
-                    if motion.dx != 0 || motion.dy != 0 {
-                        return Event::Joystick([
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::X,
-                                value: motion.dx,
-                            },
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::Y,
-                                value: motion.dy,
-                            },
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::Z,
-                                value: 0,
-                            },
-                        ]);
+            loop {
+                if self.init_state != InitState::Ready {
+                    if !self.try_init().await {
+                        Timer::after(Duration::from_millis(100)).await;
+                        continue;
                     }
                 }
-                Err(e) => {
-                    warn!("PointingDevice: read error: {:?}", e);
+
+                match select(
+                    async {
+                        Timer::after(self.poll_interval).await;
+                        if self.sensor.motion_pending() {
+                            self.sensor.read_motion().await.ok()
+                        } else {
+                            None
+                        }
+                    },
+                    self.controller_sub.next_message_pure(),
+                )
+                .await
+                {
+                    Either::First(motion_result) => {
+                        if let Some(motion) = motion_result {
+                            if motion.dx != 0 || motion.dy != 0 {
+                                return Event::Joystick([
+                                    AxisEvent {
+                                        typ: AxisValType::Rel,
+                                        axis: Axis::X,
+                                        value: motion.dx,
+                                    },
+                                    AxisEvent {
+                                        typ: AxisValType::Rel,
+                                        axis: Axis::Y,
+                                        value: motion.dy,
+                                    },
+                                    AxisEvent {
+                                        typ: AxisValType::Rel,
+                                        axis: Axis::Z,
+                                        value: 0,
+                                    },
+                                ]);
+                            }
+                        }
+                    }
+                    Either::Second(controller_event) => {
+                        self.handle_controller_event(controller_event).await;
+                    }
+                }
+            }
+        }
+        #[cfg(not(feature = "controller"))]
+        {
+            loop {
+                Timer::after(self.poll_interval).await;
+
+                if self.init_state != InitState::Ready {
+                    if !self.try_init().await {
+                        continue;
+                    }
+                }
+
+                if !self.sensor.motion_pending() {
+                    continue;
+                }
+
+                match self.sensor.read_motion().await {
+                    Ok(motion) => {
+                        if motion.dx != 0 || motion.dy != 0 {
+                            return Event::Joystick([
+                                AxisEvent {
+                                    typ: AxisValType::Rel,
+                                    axis: Axis::X,
+                                    value: motion.dx,
+                                },
+                                AxisEvent {
+                                    typ: AxisValType::Rel,
+                                    axis: Axis::Y,
+                                    value: motion.dy,
+                                },
+                                AxisEvent {
+                                    typ: AxisValType::Rel,
+                                    axis: Axis::Z,
+                                    value: 0,
+                                },
+                            ]);
+                        }
+                    }
+                    Err(e) => {
+                        warn!("PointingDevice {}: read error: {:?}", self.id, e);
+                    }
                 }
             }
         }
