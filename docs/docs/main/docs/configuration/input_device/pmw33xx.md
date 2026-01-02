@@ -105,12 +105,12 @@ bind_interrupts!(struct Irqs {
 
     // Initialize PMW33xx mouse sensor
     let sensor_config = Pmw33xxConfig {
-        res_cpi: 1600,
-        rot_trans_angle: -15,
-        liftoff_dist: 0x08,
-        swap_xy: false,
-        invert_x: true,
-        invert_y: false,
+         // res_cpi: 1600,
+        // rot_trans_angle: 0,
+        // liftoff_dist: 0x02,
+        // swap_xy: false,
+        // invert_x: false,
+        // invert_y: false,
         ..Default::default()
     };
 
