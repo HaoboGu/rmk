@@ -42,8 +42,8 @@ pub enum Event {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyboardEvent {
-    pub(crate) pressed: bool,
-    pub(crate) pos: KeyboardEventPos,
+    pub pressed: bool,
+    pub pos: KeyboardEventPos,
 }
 
 impl KeyboardEvent {
