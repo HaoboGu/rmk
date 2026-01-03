@@ -250,10 +250,6 @@ async fn main(spawner: Spawner) {
             use rmk::event::ControllerEvent;
             if let ControllerEvent::SplitPeripheralBattery(peripheral_id, level) = event {
                 info!("Peripheral {} battery level: {}%", peripheral_id, level);
-                // You can add custom logic here, such as:
-                // - Updating a display
-                // - Triggering LED warnings for low battery
-                // - Storing battery history
             }
         }
 
