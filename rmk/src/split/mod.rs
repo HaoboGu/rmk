@@ -38,4 +38,6 @@ pub(crate) enum SplitMessage {
     KeyboardIndicator(u8),
     /// Layer number from central to peripheral
     Layer(u8),
+    /// Battery level
+    BatteryLevel(u8),
 }

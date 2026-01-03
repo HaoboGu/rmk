@@ -22,7 +22,7 @@ pub enum Event {
     Joystick([AxisEvent; 3]),
     /// An AxisEvent in a stream of events. The receiver should keep receiving events until it receives [`Event::Eos`] event.
     AxisEventStream(AxisEvent),
-    /// Battery percentage event
+    /// Battery adc read value
     Battery(u16),
     /// Charging state changed event, true means charging, false means not charging
     ChargingState(bool),
@@ -163,6 +163,8 @@ pub enum ControllerEvent {
     ConnectionType(u8),
     /// Split peripheral connection
     SplitPeripheral(usize, bool),
+    /// Split peripheral battery level (peripheral_id, battery_level)
+    SplitPeripheralBattery(usize, u8),
     /// Split central connection
     SplitCentral(bool),
     /// Lock state led indicator
