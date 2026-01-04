@@ -576,3 +576,116 @@ macro_rules! macros {
         $crate::types::action::KeyAction::Single($crate::types::action::Action::TriggerMacro($index))
     };
 }
+
+/// Create a user key action.
+///
+/// This macro creates a key that triggers a user-defined action by index.
+/// User keys (User0-31) can be customized in the keyboard firmware to perform
+/// custom actions specific to your keyboard implementation.
+///
+/// # Parameters
+/// - `$index`: Index of the user key (0-31)
+///
+/// # Example
+/// ```ignore
+/// user!(0)  // Triggers User0
+/// user!(15) // Triggers User15
+/// ```
+///
+/// # Note
+/// The actual behavior of user keys must be implemented in the
+/// keyboard's user key handler. By default, User0-7 are used for
+/// BLE profile switching in wireless keyboards.
+#[macro_export]
+macro_rules! user {
+    ($index: literal) => {
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::User($index))
+    };
+}
+
+/// Create a keyboard control action.
+///
+/// This macro creates actions for system-level keyboard operations.
+///
+/// # Available Actions
+/// - Bootloader: Enter bootloader mode for firmware updates
+/// - Reboot: Reboot the keyboard
+/// - DebugToggle: Toggle debug mode
+/// - ClearEeprom: Clear EEPROM storage
+/// - OutputAuto: Auto-select output (USB/Bluetooth)
+/// - OutputUsb: Force USB output
+/// - OutputBluetooth: Force Bluetooth output
+/// - ComboOn: Enable combos
+/// - ComboOff: Disable combos
+/// - ComboToggle: Toggle combos
+/// - CapsWordToggle: Toggle caps word mode
+///
+/// # Example (internal use only)
+/// ```ignore
+/// kbctrl!(Bootloader)
+/// kbctrl!(OutputUsb)
+/// ```
+#[macro_export]
+macro_rules! kbctrl {
+    ($action: ident) => {
+        $crate::types::action::KeyAction::Single(
+            $crate::types::action::Action::KeyboardControl(
+                $crate::types::action::KeyboardAction::$action
+            )
+        )
+    };
+}
+
+/// Create a light control action.
+///
+/// This macro creates light control actions for backlight and RGB lighting.
+///
+/// # Available Actions
+/// Backlight: BacklightOn, BacklightOff, BacklightToggle, BacklightDown,
+/// BacklightUp, BacklightStep, BacklightToggleBreathing
+///
+/// RGB: RgbTog, RgbModeForward, RgbModeReverse, RgbHui, RgbHud, RgbSai,
+/// RgbSad, RgbVai, RgbVad, RgbSpi, RgbSpd, RgbModePlain, RgbModeBreathe,
+/// RgbModeRainbow, RgbModeSwirl, RgbModeSnake, RgbModeKnight, RgbModeXmas,
+/// RgbModeGradient, RgbModeRgbtest, RgbModeTwinkle
+///
+/// # Example (internal use only)
+/// ```ignore
+/// light!(BacklightOn)
+/// light!(RgbTog)
+/// ```
+#[macro_export]
+macro_rules! light {
+    ($action: ident) => {
+        $crate::types::action::KeyAction::Single(
+            $crate::types::action::Action::Light(
+                $crate::types::action::LightAction::$action
+            )
+        )
+    };
+}
+
+/// Create a special key action.
+///
+/// This macro creates special key actions that are not in the HID spec
+/// but are commonly used.
+///
+/// # Available Actions
+/// - GraveEscape: Acts as Grave when pressed alone, Escape when pressed with Shift/Ctrl/Alt/GUI
+/// - Repeat: Repeats the last key pressed
+///
+/// # Example (internal use only)
+/// ```ignore
+/// special!(GraveEscape)
+/// special!(Repeat)
+/// ```
+#[macro_export]
+macro_rules! special {
+    ($key: ident) => {
+        $crate::types::action::KeyAction::Single(
+            $crate::types::action::Action::Special(
+                $crate::types::keycode::SpecialKey::$key
+            )
+        )
+    };
+}

@@ -490,6 +490,7 @@ impl From<u8> for HidKeyCode {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(postcard::experimental::max_size::MaxSize)]
+#[cfg_attr(feature = "_codegen", derive(strum::VariantNames))]
 pub enum SpecialKey {
     // GraveEscape
     GraveEscape,
