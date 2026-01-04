@@ -11,6 +11,8 @@ use embassy_executor::Spawner;
 use embassy_stm32::flash::Flash;
 use embassy_stm32::gpio::{Input, Output};
 use embassy_stm32::peripherals::USB_OTG_FS;
+use embassy_stm32::rcc::{self, mux};
+use embassy_stm32::time::Hertz;
 use embassy_stm32::usb::{Driver, InterruptHandler};
 use embassy_stm32::{Config, bind_interrupts};
 use keymap::{COL, ROW};
@@ -35,8 +37,29 @@ bind_interrupts!(struct Irqs {
 async fn main(_spawner: Spawner) {
     info!("RMK start!");
     // RCC config
-    let config = Config::default();
+    let mut config = Config::default();
 
+    config.rcc.hse = Some(rcc::Hse {
+        // Adjust according to your boards HSE oscillator.
+        // F411 Blackpill: 25 Mhz (Sometimes 8Mhz on older models!)
+        // F401 Bluepill: 16Mhz
+        freq: Hertz(25_000_000),
+        mode: rcc::HseMode::Oscillator,
+    });
+    config.rcc.pll_src = rcc::PllSource::HSE;
+    config.rcc.pll = Some(rcc::Pll {
+        // Adjust the following multiplier and divisor so divp and divq end up being 48Mhz
+        prediv: rcc::PllPreDiv::DIV25,  // divide 25Mhz by 25 => 1Mhz
+        mul: rcc::PllMul::MUL192,       // 1Mhz * 192 = 192Mhz
+        divp: Some(rcc::PllPDiv::DIV4), // 192Mhz / 4 = 48Mhz
+        divq: Some(rcc::PllQDiv::DIV4), // 192Mhz / 4 = 48Mhz
+        divr: None,
+    });
+    config.rcc.sys = rcc::Sysclk::PLL1_P;
+    config.rcc.ahb_pre = rcc::AHBPrescaler::DIV1;
+    config.rcc.apb1_pre = rcc::APBPrescaler::DIV4;
+    config.rcc.apb2_pre = rcc::APBPrescaler::DIV2;
+    config.rcc.mux.clk48sel = mux::Clk48sel::PLL1_Q;
     // Initialize peripherals
     let p = embassy_stm32::init(config);
 
