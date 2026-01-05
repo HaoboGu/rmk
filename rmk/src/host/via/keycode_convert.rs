@@ -1,5 +1,5 @@
-use rmk_types::action::{Action, KeyAction};
-use rmk_types::keycode::KeyCode;
+use rmk_types::action::{Action, KeyAction, KeyboardAction};
+use rmk_types::keycode::{KeyCode, SpecialKey};
 use rmk_types::modifier::ModifierCombination;
 
 pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
@@ -7,29 +7,46 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
         KeyAction::No => 0x0000,
         KeyAction::Transparent => 0x0001,
         KeyAction::Single(a) => match a {
-            Action::Key(KeyCode::GraveEscape) => 0x7c16,
-            Action::Key(KeyCode::RepeatKey) => 0x7c79,
-            Action::Key(KeyCode::CapsWordToggle) => 0x7c73,
-            Action::Key(KeyCode::TriLayerLower) => 0x7c77,
-            Action::Key(KeyCode::TriLayerUpper) => 0x7c78,
-            Action::Key(k) => {
-                if k.is_macro() {
-                    k as u16 & 0xFF | 0x7700
-                } else if k.is_user() {
-                    k as u16 & 0xF | 0x7E00
-                } else if k.is_combo() || k.is_boot() {
-                    // is_rmk() 's subset
-                    k as u16 & 0xFF | 0x7C00
+            Action::Key(k) => match k {
+                KeyCode::Hid(hid_keycode) => hid_keycode as u16,
+                // Consumer and SystemControl keys are automatically converted to HID keycodes
+                // which are natively supported in VIA protocol
+                KeyCode::Consumer(consumer_key) => {
+                    if let Some(hid_keycode) = consumer_key.to_hid_keycode() {
+                        hid_keycode as u16
+                    } else {
+                        warn!(
+                            "Consumer key {:?} has no corresponding HID keycode for VIA",
+                            consumer_key
+                        );
+                        0
+                    }
+                }
+                KeyCode::SystemControl(system_key) => {
+                    if let Some(hid_keycode) = system_key.to_hid_keycode() {
+                        hid_keycode as u16
+                    } else {
+                        warn!(
+                            "SystemControl key {:?} has no corresponding HID keycode for VIA",
+                            system_key
+                        );
+                        0
+                    }
+                }
+            },
+            Action::KeyWithModifier(k, m) => {
+                if let KeyCode::Hid(hid_keycode) = k {
+                    ((m.into_packed_bits() as u16) << 8) | hid_keycode as u16
                 } else {
-                    k as u16
+                    0
                 }
             }
-            Action::KeyWithModifier(k, m) => ((m.into_packed_bits() as u16) << 8) | k as u16,
             Action::LayerToggleOnly(l) => 0x5200 | l as u16,
             Action::LayerOn(l) => 0x5220 | l as u16,
             Action::DefaultLayer(l) => 0x5240 | l as u16,
             Action::LayerToggle(l) => 0x5260 | l as u16,
-            // convert to KeyCode::Macro0 - Macro31, 0x0 for above (as 0x600 is already reserved)
+            Action::TriLayerLower => 0x7c77,
+            Action::TriLayerUpper => 0x7c78,
             Action::TriggerMacro(idx) => {
                 // if idx < 32 {
                 0x7700 + (idx as u16)
@@ -53,7 +70,27 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                     0
                 }
             }
-            _ => 0x0000,
+            Action::KeyboardControl(c) => match c {
+                KeyboardAction::Bootloader => 0x7c00,
+                KeyboardAction::Reboot => 0x7c01,
+                KeyboardAction::ComboOn => 0x7c50,
+                KeyboardAction::ComboOff => 0x7c51,
+                KeyboardAction::ComboToggle => 0x7c52,
+                KeyboardAction::CapsWordToggle => 0x7c73,
+                _ => {
+                    warn!("KeyboardAction: {:?} vial is not supported yet", c);
+                    0
+                }
+            },
+            Action::Special(special_key) => match special_key {
+                SpecialKey::GraveEscape => 0x7c16,
+                SpecialKey::Repeat => 0x7c79,
+            },
+            Action::User(id) => (id as u16 & 0xF) | 0x7E00,
+            _ => {
+                warn!("Action: {:?} in vial is not supported yet", a);
+                0
+            }
         },
         KeyAction::Tap(_) => {
             warn!("Tap action is not supported by via");
@@ -65,7 +102,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                     0
                 } else {
                     let keycode = match tap {
-                        Action::Key(k) => k as u16,
+                        Action::Key(KeyCode::Hid(k)) => k as u16,
                         _ => 0,
                     };
                     0x4000 | ((l as u16) << 8) | keycode
@@ -73,7 +110,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             }
             Action::Modifier(m) => {
                 let keycode = match tap {
-                    Action::Key(k) => k as u16,
+                    Action::Key(KeyCode::Hid(k)) => k as u16,
                     _ => 0,
                 };
                 0x2000 | ((m.into_packed_bits() as u16) << 8) | keycode
@@ -92,23 +129,23 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
     match via_keycode {
         0x0000 => KeyAction::No,
         0x0001 => KeyAction::Transparent,
-        0x0002..=0x00FF => KeyAction::Single(Action::Key(via_keycode.into())),
+        0x0002..=0x00FF => KeyAction::Single(Action::Key(KeyCode::Hid((via_keycode as u8).into()))),
         0x0100..=0x1FFF => {
             // WithModifier
-            let keycode = (via_keycode & 0x00FF).into();
+            let keycode = KeyCode::Hid((via_keycode as u8).into());
             let modifier = ModifierCombination::from_packed_bits((via_keycode >> 8) as u8);
             KeyAction::Single(Action::KeyWithModifier(keycode, modifier))
         }
         0x2000..=0x3FFF => {
             // Modifier tap-hold.
-            let keycode = (via_keycode & 0x00FF).into();
+            let keycode = KeyCode::Hid((via_keycode as u8).into());
             let modifier = ModifierCombination::from_packed_bits(((via_keycode >> 8) & 0b11111) as u8);
             KeyAction::TapHold(Action::Key(keycode), Action::Modifier(modifier), Default::default())
         }
         0x4000..=0x4FFF => {
             // Layer tap-hold.
             let layer = (via_keycode >> 8) & 0xF;
-            let keycode = (via_keycode & 0x00FF).into();
+            let keycode = KeyCode::Hid((via_keycode as u8).into());
             KeyAction::TapHold(Action::Key(keycode), Action::LayerOn(layer as u8), Default::default())
         }
         0x5000..=0x51FF => {
@@ -163,44 +200,36 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         }
         0x7700..=0x771F => {
             // Macro
-            let keycode = via_keycode & 0xFF | 0x500;
-            KeyAction::Single(Action::Key(keycode.into()))
+            let id = via_keycode as u8 & 0x1F;
+            KeyAction::Single(Action::TriggerMacro(id))
         }
         0x7800..=0x783F => {
             // TODO: backlight and rgb configuration
             warn!("Backlight and RGB configuration key not supported");
             KeyAction::No
         }
-        // boot related | combo related
-        0x7C00..=0x7C01 | 0x7C50..=0x7C52 => {
-            // is_rmk() 's related
-            let keycode = via_keycode & 0xFF | 0x700;
-            KeyAction::Single(Action::Key(keycode.into()))
-        }
-        // GraveEscape
-        0x7C16 => KeyAction::Single(Action::Key(KeyCode::GraveEscape)),
-        // RepeatKey
-        0x7C79 => KeyAction::Single(Action::Key(KeyCode::RepeatKey)),
-        // Caps Word
-        0x7C73 => KeyAction::Single(Action::Key(KeyCode::CapsWordToggle)),
-        0x7C00..=0x7C5F => {
-            // TODO: Reset/GESC/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro
-            // - [GESC](https://docs.qmk.fm/#/feature_grave_esc)
+        0x7C00 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::Bootloader)),
+        0x7C01 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::Reboot)),
+        0x7C50 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::ComboOn)),
+        0x7C51 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::ComboOff)),
+        0x7C52 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::ComboToggle)),
+        0x7C16 => KeyAction::Single(Action::Special(SpecialKey::GraveEscape)),
+        0x7C73 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::CapsWordToggle)),
+        0x7C77 => KeyAction::Single(Action::TriLayerLower),
+        0x7C78 => KeyAction::Single(Action::TriLayerUpper),
+        0x7C79 => KeyAction::Single(Action::Special(SpecialKey::Repeat)),
+        0x7C02..=0x7C5F => {
+            // TODO: Reset/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro
             // - [Space Cadet](https://docs.qmk.fm/#/feature_space_cadet)
             warn!(
-                "Reset/GESC/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro not supported: {:#X}",
+                "Reset/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro not supported: {:#X}",
                 via_keycode
             );
             KeyAction::No
         }
-        // TriLayer Lower
-        0x7C77 => KeyAction::Single(Action::Key(KeyCode::TriLayerLower)),
-        // TriLayer Upper
-        0x7C78 => KeyAction::Single(Action::Key(KeyCode::TriLayerUpper)),
         0x7E00..=0x7E0F => {
             // QK_KB_N, aka UserN
-            let keycode = via_keycode & 0xFF | 0x840;
-            KeyAction::Single(Action::Key(keycode.into()))
+            KeyAction::Single(Action::User(via_keycode as u8 & 0xF))
         }
         _ => {
             warn!("Via keycode {:#X} is not processed", via_keycode);
@@ -211,22 +240,23 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
 
 #[cfg(test)]
 mod test {
+    use rmk_types::keycode::HidKeyCode;
+
     use super::*;
-    use crate::types::keycode::{from_ascii, to_ascii};
 
     #[test]
     fn test_convert_via_keycode_to_key_action() {
         // A
         let via_keycode = 0x04;
         assert_eq!(
-            KeyAction::Single(Action::Key(KeyCode::A)),
+            KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A))),
             from_via_keycode(via_keycode)
         );
 
         // Right shift
         let via_keycode = 0xE5;
         assert_eq!(
-            KeyAction::Single(Action::Key(KeyCode::RShift)),
+            KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::RShift))),
             from_via_keycode(via_keycode)
         );
 
@@ -254,7 +284,7 @@ mod test {
         let via_keycode = 0x104;
         assert_eq!(
             KeyAction::Single(Action::KeyWithModifier(
-                KeyCode::A,
+                KeyCode::Hid(HidKeyCode::A),
                 ModifierCombination::new_from(false, false, false, false, true)
             )),
             from_via_keycode(via_keycode)
@@ -264,7 +294,7 @@ mod test {
         let via_keycode = 0x1104;
         assert_eq!(
             KeyAction::Single(Action::KeyWithModifier(
-                KeyCode::A,
+                KeyCode::Hid(HidKeyCode::A),
                 ModifierCombination::new_from(true, false, false, false, true)
             )),
             from_via_keycode(via_keycode)
@@ -274,7 +304,7 @@ mod test {
         let via_keycode = 0x704;
         assert_eq!(
             KeyAction::Single(Action::KeyWithModifier(
-                KeyCode::A,
+                KeyCode::Hid(HidKeyCode::A),
                 ModifierCombination::new_from(false, false, true, true, true)
             )),
             from_via_keycode(via_keycode)
@@ -284,7 +314,7 @@ mod test {
         let via_keycode = 0xF04;
         assert_eq!(
             KeyAction::Single(Action::KeyWithModifier(
-                KeyCode::A,
+                KeyCode::Hid(HidKeyCode::A),
                 ModifierCombination::new_from(false, true, true, true, true)
             )),
             from_via_keycode(via_keycode)
@@ -293,14 +323,22 @@ mod test {
         // LT0(A) -> LayerTapHold(A, 0)
         let via_keycode = 0x4004;
         assert_eq!(
-            KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(0), Default::default()),
+            KeyAction::TapHold(
+                Action::Key(KeyCode::Hid(HidKeyCode::A)),
+                Action::LayerOn(0),
+                Default::default()
+            ),
             from_via_keycode(via_keycode)
         );
 
         // LT3(A) -> LayerTapHold(A, 3)
         let via_keycode = 0x4304;
         assert_eq!(
-            KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(3), Default::default()),
+            KeyAction::TapHold(
+                Action::Key(KeyCode::Hid(HidKeyCode::A)),
+                Action::LayerOn(3),
+                Default::default()
+            ),
             from_via_keycode(via_keycode)
         );
 
@@ -308,7 +346,7 @@ mod test {
         let via_keycode = 0x2604;
         assert_eq!(
             KeyAction::TapHold(
-                Action::Key(KeyCode::A),
+                Action::Key(KeyCode::Hid(HidKeyCode::A)),
                 Action::Modifier(ModifierCombination::new_from(false, false, true, true, false)),
                 Default::default(),
             ), //hrm
@@ -319,7 +357,7 @@ mod test {
         let via_keycode = 0x3D05;
         assert_eq!(
             KeyAction::TapHold(
-                Action::Key(KeyCode::B),
+                Action::Key(KeyCode::Hid(HidKeyCode::B)),
                 Action::Modifier(ModifierCombination::new_from(true, true, true, false, true)),
                 Default::default(),
             ),
@@ -330,7 +368,7 @@ mod test {
         let via_keycode: u16 = 0x2F04;
         assert_eq!(
             KeyAction::TapHold(
-                Action::Key(KeyCode::A),
+                Action::Key(KeyCode::Hid(HidKeyCode::A)),
                 Action::Modifier(ModifierCombination::new_from(false, true, true, true, true)),
                 Default::default(),
             ), //hrm
@@ -341,7 +379,7 @@ mod test {
         let via_keycode = 0x2705;
         assert_eq!(
             KeyAction::TapHold(
-                Action::Key(KeyCode::B),
+                Action::Key(KeyCode::Hid(HidKeyCode::B)),
                 Action::Modifier(ModifierCombination::new_from(false, false, true, true, true)),
                 Default::default(),
             ),
@@ -368,21 +406,21 @@ mod test {
         // ComboOff
         let via_keycode = 0x7C51;
         assert_eq!(
-            KeyAction::Single(Action::Key(KeyCode::ComboOff)),
+            KeyAction::Single(Action::KeyboardControl(KeyboardAction::ComboOff)),
             from_via_keycode(via_keycode)
         );
 
         // GraveEscape
         let via_keycode = 0x7C16;
         assert_eq!(
-            KeyAction::Single(Action::Key(KeyCode::GraveEscape)),
+            KeyAction::Single(Action::Special(SpecialKey::GraveEscape)),
             from_via_keycode(via_keycode)
         );
 
         // RepeatKey
         let via_keycode = 0x7C79;
         assert_eq!(
-            KeyAction::Single(Action::Key(KeyCode::RepeatKey)),
+            KeyAction::Single(Action::Special(SpecialKey::Repeat)),
             from_via_keycode(via_keycode)
         );
 
@@ -401,12 +439,14 @@ mod test {
 
     #[test]
     fn test_convert_key_action_to_via_keycode() {
+        use rmk_types::keycode::HidKeyCode;
+
         // A
-        let a = KeyAction::Single(Action::Key(KeyCode::A));
+        let a = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A)));
         assert_eq!(0x04, to_via_keycode(a));
 
         // Right shift
-        let a = KeyAction::Single(Action::Key(KeyCode::RShift));
+        let a = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::RShift)));
         assert_eq!(0xE5, to_via_keycode(a));
 
         // Mo(3)
@@ -425,43 +465,51 @@ mod test {
 
         // LCtrl(A) -> WithModifier(A)
         let a = KeyAction::Single(Action::KeyWithModifier(
-            KeyCode::A,
+            KeyCode::Hid(HidKeyCode::A),
             ModifierCombination::new_from(false, false, false, false, true),
         ));
         assert_eq!(0x104, to_via_keycode(a));
 
         // RCtrl(A) -> WithModifier(A)
         let a = KeyAction::Single(Action::KeyWithModifier(
-            KeyCode::A,
+            KeyCode::Hid(HidKeyCode::A),
             ModifierCombination::new_from(true, false, false, false, true),
         ));
         assert_eq!(0x1104, to_via_keycode(a));
 
         // Meh(A) -> WithModifier(A)
         let a = KeyAction::Single(Action::KeyWithModifier(
-            KeyCode::A,
+            KeyCode::Hid(HidKeyCode::A),
             ModifierCombination::new_from(false, false, true, true, true),
         ));
         assert_eq!(0x704, to_via_keycode(a));
 
         // Hypr(A) -> WithModifier(A)
         let a = KeyAction::Single(Action::KeyWithModifier(
-            KeyCode::A,
+            KeyCode::Hid(HidKeyCode::A),
             ModifierCombination::new_from(false, true, true, true, true),
         ));
         assert_eq!(0xF04, to_via_keycode(a));
 
         // LT0(A) -> LayerTapHold(A, 0)
-        let a = KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(0), Default::default());
+        let a = KeyAction::TapHold(
+            Action::Key(KeyCode::Hid(HidKeyCode::A)),
+            Action::LayerOn(0),
+            Default::default(),
+        );
         assert_eq!(0x4004, to_via_keycode(a));
 
         // LT3(A) -> LayerTapHold(A, 3)
-        let a = KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(3), Default::default());
+        let a = KeyAction::TapHold(
+            Action::Key(KeyCode::Hid(HidKeyCode::A)),
+            Action::LayerOn(3),
+            Default::default(),
+        );
         assert_eq!(0x4304, to_via_keycode(a));
 
         // LSA_T(A) ->
         let a = KeyAction::TapHold(
-            Action::Key(KeyCode::A),
+            Action::Key(KeyCode::Hid(HidKeyCode::A)),
             Action::Modifier(ModifierCombination::new_from(false, false, true, true, false)),
             Default::default(),
         );
@@ -469,7 +517,7 @@ mod test {
 
         // RCAG_T(A) ->
         let a = KeyAction::TapHold(
-            Action::Key(KeyCode::A),
+            Action::Key(KeyCode::Hid(HidKeyCode::A)),
             Action::Modifier(ModifierCombination::new_from(true, true, true, false, true)),
             Default::default(),
         );
@@ -477,7 +525,7 @@ mod test {
 
         // ALL_T(A) ->
         let a = KeyAction::TapHold(
-            Action::Key(KeyCode::A),
+            Action::Key(KeyCode::Hid(HidKeyCode::A)),
             Action::Modifier(ModifierCombination::new_from(false, true, true, true, true)),
             Default::default(),
         );
@@ -485,7 +533,7 @@ mod test {
 
         // Meh_T(A) ->
         let a = KeyAction::TapHold(
-            Action::Key(KeyCode::A),
+            Action::Key(KeyCode::Hid(HidKeyCode::A)),
             Action::Modifier(ModifierCombination::new_from(false, false, true, true, true)),
             Default::default(),
         );
@@ -503,15 +551,15 @@ mod test {
         assert_eq!(0x5039, to_via_keycode(a));
 
         // ComboOff
-        let a = KeyAction::Single(Action::Key(KeyCode::ComboOff));
+        let a = KeyAction::Single(Action::KeyboardControl(KeyboardAction::ComboOff));
         assert_eq!(0x7C51, to_via_keycode(a));
 
         // GraveEscape
-        let a = KeyAction::Single(Action::Key(KeyCode::GraveEscape));
+        let a = KeyAction::Single(Action::Special(SpecialKey::GraveEscape));
         assert_eq!(0x7C16, to_via_keycode(a));
 
         // RepeatKey
-        let a = KeyAction::Single(Action::Key(KeyCode::RepeatKey));
+        let a = KeyAction::Single(Action::Special(SpecialKey::Repeat));
         assert_eq!(0x7C79, to_via_keycode(a));
 
         // Morse
@@ -526,8 +574,41 @@ mod test {
     }
 
     #[test]
+    fn test_convert_consumer_system_keys_to_via() {
+        use rmk_types::keycode::{ConsumerKey, SystemControlKey};
+
+        // Test Consumer keys conversion
+        // AudioMute (ConsumerKey::Mute) -> HidKeyCode::AudioMute (0xA8)
+        let a = KeyAction::Single(Action::Key(KeyCode::Consumer(ConsumerKey::Mute)));
+        assert_eq!(0xA8, to_via_keycode(a));
+
+        // PlayPause (ConsumerKey::PlayPause) -> HidKeyCode::MediaPlayPause (0xAE)
+        let a = KeyAction::Single(Action::Key(KeyCode::Consumer(ConsumerKey::PlayPause)));
+        assert_eq!(0xAE, to_via_keycode(a));
+
+        // VolumeIncrement (ConsumerKey::VolumeIncrement) -> HidKeyCode::AudioVolUp (0xA9)
+        let a = KeyAction::Single(Action::Key(KeyCode::Consumer(ConsumerKey::VolumeIncrement)));
+        assert_eq!(0xA9, to_via_keycode(a));
+
+        // Test SystemControl keys conversion
+        // PowerDown (SystemControlKey::PowerDown) -> HidKeyCode::SystemPower (0xA5)
+        let a = KeyAction::Single(Action::Key(KeyCode::SystemControl(SystemControlKey::PowerDown)));
+        assert_eq!(0xA5, to_via_keycode(a));
+
+        // Sleep (SystemControlKey::Sleep) -> HidKeyCode::SystemSleep (0xA6)
+        let a = KeyAction::Single(Action::Key(KeyCode::SystemControl(SystemControlKey::Sleep)));
+        assert_eq!(0xA6, to_via_keycode(a));
+
+        // WakeUp (SystemControlKey::WakeUp) -> HidKeyCode::SystemWake (0xA7)
+        let a = KeyAction::Single(Action::Key(KeyCode::SystemControl(SystemControlKey::WakeUp)));
+        assert_eq!(0xA7, to_via_keycode(a));
+    }
+
+    #[test]
     fn test_convert_from_to_ascii_a() {
-        let keycode = KeyCode::A;
+        use rmk_types::keycode::{HidKeyCode, from_ascii, to_ascii};
+
+        let keycode = HidKeyCode::A;
         let shifted = false;
         let ascii = b'a';
 
@@ -536,7 +617,9 @@ mod test {
     }
     #[test]
     fn test_convert_from_to_ascii_K() {
-        let keycode = KeyCode::K;
+        use rmk_types::keycode::{HidKeyCode, from_ascii, to_ascii};
+
+        let keycode = HidKeyCode::K;
         let shifted = true;
         let ascii = b'K';
 

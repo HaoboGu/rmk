@@ -437,6 +437,16 @@ pub(crate) fn parse_key(key: String, profiles: &Option<HashMap<String, MorseProf
                 ::rmk::m!(#index)
             }
         }
+        s if s.to_lowercase().starts_with("macro")
+            && s[5..].chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) =>
+        {
+            // Support Macro0, Macro1, Macro2, etc.
+            let index_str = &s[5..];
+            let index = index_str.parse::<u8>().unwrap();
+            quote! {
+                ::rmk::macros!(#index)
+            }
+        }
         _ => {
             let ident = get_key_with_alias(key);
             quote! { ::rmk::k!(#ident) }

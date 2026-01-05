@@ -9,7 +9,7 @@ use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::stora
 
 use super::SplitMessage;
 use crate::CONNECTION_STATE;
-use crate::channel::{CONTROLLER_CHANNEL, EVENT_CHANNEL, KEY_EVENT_CHANNEL};
+use crate::channel::{CONTROLLER_CHANNEL, EVENT_CHANNEL, KEY_EVENT_CHANNEL, send_controller_event};
 use crate::event::{ControllerEvent, Event, KeyboardEvent, KeyboardEventPos};
 use crate::input_device::InputDevice;
 
@@ -214,6 +214,14 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                         return event;
                     } else {
                         warn!("Event from peripheral is ignored because the connection is not established.");
+                    }
+                }
+                Ok(SplitMessage::BatteryLevel(level)) => {
+                    // Publish peripheral battery level to controller channel when connected
+                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire)
+                        && let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher()
+                    {
+                        send_controller_event(&mut publisher, ControllerEvent::SplitPeripheralBattery(self.id, level));
                     }
                 }
                 Ok(_) => {

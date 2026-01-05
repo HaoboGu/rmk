@@ -370,7 +370,7 @@ pub struct BleConfig {
     pub adc_divider_measured: Option<u32>,
     pub adc_divider_total: Option<u32>,
     pub default_tx_power: Option<i8>,
-    pub ble_use_2m_phy: Option<bool>,
+    pub use_2m_phy: Option<bool>,
 }
 
 /// Config for chip-specific settings
@@ -633,6 +633,12 @@ pub struct SplitBoardConfig {
     pub matrix: MatrixConfig,
     /// Input device config for the split
     pub input_device: Option<InputDeviceConfig>,
+    /// Battery ADC pin for this split board
+    pub battery_adc_pin: Option<String>,
+    /// ADC divider measured value for battery
+    pub adc_divider_measured: Option<u32>,
+    /// ADC divider total value for battery
+    pub adc_divider_total: Option<u32>,
     /// Output Pin config for the split
     pub output: Option<Vec<OutputConfig>>,
 }
@@ -655,6 +661,10 @@ const fn default_true() -> bool {
 
 const fn default_false() -> bool {
     false
+}
+
+const fn default_pmw3610_report_hz() -> u16 {
+    125
 }
 
 fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
@@ -758,6 +768,10 @@ pub struct Pmw3610Config {
     /// Enable smart mode for better tracking on shiny surfaces
     #[serde(default)]
     pub smart_mode: bool,
+
+    /// Report rate (Hz). Motion will be accumulated and emitted at this rate.
+    #[serde(default = "default_pmw3610_report_hz")]
+    pub report_hz: u16,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

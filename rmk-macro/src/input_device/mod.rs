@@ -3,7 +3,7 @@ use encoder::expand_encoder_device;
 use pmw3610::expand_pmw3610_device;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use rmk_config::{BoardConfig, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig, UniBodyConfig};
+use rmk_config::{BleConfig, BoardConfig, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig, UniBodyConfig};
 use std::collections::HashMap;
 use syn::ItemMod;
 
@@ -43,17 +43,53 @@ pub(crate) fn expand_input_device_config(
             ble_config,
             chip.series.clone(),
         ),
-        BoardConfig::Split(split_config) => expand_adc_device(
-            split_config
-                .central
-                .input_device
-                .clone()
-                .unwrap_or(InputDeviceConfig::default())
-                .joystick
-                .unwrap_or(Vec::new()),
-            ble_config,
-            chip.series.clone(),
-        ),
+        BoardConfig::Split(split_config) => {
+            // For split central, read battery config from split.central instead of [ble]
+            // This provides better consistency with peripheral configuration
+            let central_ble_config = if split_config.central.battery_adc_pin.is_some() {
+                // Validate: warn if both [ble] and [split.central] have different battery configs
+                if let Some(ref ble_cfg) = ble_config
+                    && ble_cfg.battery_adc_pin.is_some()
+                {
+                    let ble_matches = ble_cfg.battery_adc_pin == split_config.central.battery_adc_pin
+                        && ble_cfg.adc_divider_measured == split_config.central.adc_divider_measured
+                        && ble_cfg.adc_divider_total == split_config.central.adc_divider_total;
+
+                    if !ble_matches {
+                        eprintln!(
+                            "warning: Battery configuration found in both [ble] and [split.central] sections with different values"
+                        );
+                        eprintln!(
+                            "help: [split.central] configuration will be used. Remove [ble] battery config to avoid confusion."
+                        );
+                    }
+                }
+
+                // Central has its own battery config in [split.central]
+                Some(BleConfig {
+                    enabled: ble_config.as_ref().map(|c| c.enabled).unwrap_or(false),
+                    battery_adc_pin: split_config.central.battery_adc_pin.clone(),
+                    adc_divider_measured: split_config.central.adc_divider_measured,
+                    adc_divider_total: split_config.central.adc_divider_total,
+                    ..Default::default()
+                })
+            } else {
+                // Fall back to [ble] section for backward compatibility
+                ble_config
+            };
+
+            expand_adc_device(
+                split_config
+                    .central
+                    .input_device
+                    .clone()
+                    .unwrap_or(InputDeviceConfig::default())
+                    .joystick
+                    .unwrap_or(Vec::new()),
+                central_ble_config,
+                chip.series.clone(),
+            )
+        }
     };
 
     for initializer in adc_initializers {

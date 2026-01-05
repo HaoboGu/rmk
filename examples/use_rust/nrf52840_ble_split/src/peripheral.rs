@@ -19,14 +19,17 @@ use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::StorageConfig;
+use rmk::config::{BehaviorConfig, PositionalConfig, StorageConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join;
+use rmk::futures::future::join3;
+use rmk::input_device::adc::{AnalogEventType, NrfAdc};
+use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::matrix::Matrix;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
-use rmk::{HostResources, run_devices};
+use rmk::types::action::KeyAction;
+use rmk::{HostResources, initialize_keymap, run_devices, run_processor_chain};
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -155,11 +158,28 @@ async fn main(spawner: Spawner) {
     let pin_b = Input::new(p.P1_04, embassy_nrf::gpio::Pull::None);
     let mut encoder = RotaryEncoder::with_resolution(pin_a, pin_b, 4, true, 1);
 
+    // Battery monitoring for peripheral
+    // 1. Initialize ADC device:
+    let mut adc_device = NrfAdc::new(
+        saadc,
+        [AnalogEventType::Battery],
+        embassy_time::Duration::from_secs(12),
+        None,
+    );
+    let mut default_keymap = [[[KeyAction::No; 1]; 1]; 1];
+    let mut behavior_config = BehaviorConfig::default();
+    let mut per_key_config = PositionalConfig::default();
+    let keymap = initialize_keymap(&mut default_keymap, &mut behavior_config, &mut per_key_config).await;
+    let mut battery_processor = BatteryProcessor::new(2000, 2806, &keymap);
+
     // Start
-    join(
+    join3(
         run_devices! (
-            (matrix, encoder) => EVENT_CHANNEL, // Peripheral uses EVENT_CHANNEL to send events to central
+            (matrix, encoder, adc_device) => EVENT_CHANNEL, // Peripheral uses EVENT_CHANNEL to send events to central
         ),
+        run_processor_chain! {
+            EVENT_CHANNEL => [battery_processor],
+        },
         run_rmk_split_peripheral(0, &stack, &mut storage),
     )
     .await;

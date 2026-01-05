@@ -1,4 +1,4 @@
-use rmk_types::keycode::{KeyCode, from_ascii, to_ascii};
+use rmk_types::keycode::{HidKeyCode, from_ascii, to_ascii};
 
 use crate::MACRO_SPACE_SIZE;
 use crate::keymap::fill_vec;
@@ -16,16 +16,16 @@ pub enum MacroOperation {
     /// by MacroOperations::define_macro_sequences()
     End,
     /// 0x01 01 + 1 byte keycode
-    Tap(KeyCode),
+    Tap(HidKeyCode),
     /// 0x01 02 + 1 byte keycode
-    Press(KeyCode),
+    Press(HidKeyCode),
     /// 0x01 03 + 1 byte keycode
-    Release(KeyCode),
+    Release(HidKeyCode),
     /// 0x01 04 + 2 byte for the delay in ms
     Delay(u16),
     /// Anything not covered above (and starting at
     /// 0x30 (= b'0'), is the 1 byte ascii character.
-    Text(KeyCode, bool), // bool = shifted
+    Text(HidKeyCode, bool), // bool = shifted
 }
 
 impl MacroOperation {
@@ -44,7 +44,7 @@ impl MacroOperation {
             (0, _) => (MacroOperation::End, offset),
             (1, 1) => {
                 if idx + 2 < macro_sequences.len() {
-                    let keycode = (macro_sequences[idx + 2] as u16).into();
+                    let keycode = macro_sequences[idx + 2].into();
                     (MacroOperation::Tap(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)
@@ -52,7 +52,7 @@ impl MacroOperation {
             }
             (1, 2) => {
                 if idx + 2 < macro_sequences.len() {
-                    let keycode = (macro_sequences[idx + 2] as u16).into();
+                    let keycode = macro_sequences[idx + 2].into();
                     (MacroOperation::Press(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)
@@ -60,7 +60,7 @@ impl MacroOperation {
             }
             (1, 3) => {
                 if idx + 2 < macro_sequences.len() {
-                    let keycode = (macro_sequences[idx + 2] as u16).into();
+                    let keycode = macro_sequences[idx + 2].into();
                     (MacroOperation::Release(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)
@@ -226,11 +226,11 @@ mod test {
     #[test]
     fn test_define_one_macro_sequence_manual() {
         let macro_sequences = &[heapless::Vec::from_slice(&[
-            MacroOperation::Press(KeyCode::LShift),
-            MacroOperation::Tap(KeyCode::P),
-            MacroOperation::Release(KeyCode::LShift),
-            MacroOperation::Tap(KeyCode::A),
-            MacroOperation::Tap(KeyCode::T),
+            MacroOperation::Press(HidKeyCode::LShift),
+            MacroOperation::Tap(HidKeyCode::P),
+            MacroOperation::Release(HidKeyCode::LShift),
+            MacroOperation::Tap(HidKeyCode::A),
+            MacroOperation::Tap(HidKeyCode::T),
         ])
         .expect("too many elements")];
         let macro_sequences_binary = define_macro_sequences(macro_sequences);
@@ -248,16 +248,16 @@ mod test {
     fn test_define_two_macro_sequence_manual() {
         let macro_sequences_terminated_uneccessarily = [
             heapless::Vec::from_slice(&[
-                MacroOperation::Text(KeyCode::H, true),
-                MacroOperation::Text(KeyCode::I, false),
+                MacroOperation::Text(HidKeyCode::H, true),
+                MacroOperation::Text(HidKeyCode::I, false),
             ])
             .expect("too many elements"),
             heapless::Vec::from_slice(&[
-                MacroOperation::Press(KeyCode::LShift),
-                MacroOperation::Tap(KeyCode::P),
-                MacroOperation::Release(KeyCode::LShift),
-                MacroOperation::Tap(KeyCode::A),
-                MacroOperation::Tap(KeyCode::T),
+                MacroOperation::Press(HidKeyCode::LShift),
+                MacroOperation::Tap(HidKeyCode::P),
+                MacroOperation::Release(HidKeyCode::LShift),
+                MacroOperation::Tap(HidKeyCode::A),
+                MacroOperation::Tap(HidKeyCode::T),
             ])
             .expect("too many elements"),
         ];
@@ -277,27 +277,27 @@ mod test {
     fn test_define_macro_sequences_clean() {
         let macro_sequences_clean = [
             heapless::Vec::from_slice(&[
-                MacroOperation::Press(KeyCode::LShift),
-                MacroOperation::Tap(KeyCode::H),
-                MacroOperation::Release(KeyCode::LShift),
-                MacroOperation::Tap(KeyCode::E),
-                MacroOperation::Tap(KeyCode::L),
-                MacroOperation::Tap(KeyCode::L),
-                MacroOperation::Tap(KeyCode::O),
+                MacroOperation::Press(HidKeyCode::LShift),
+                MacroOperation::Tap(HidKeyCode::H),
+                MacroOperation::Release(HidKeyCode::LShift),
+                MacroOperation::Tap(HidKeyCode::E),
+                MacroOperation::Tap(HidKeyCode::L),
+                MacroOperation::Tap(HidKeyCode::L),
+                MacroOperation::Tap(HidKeyCode::O),
             ])
             .expect("too many elements"),
             heapless::Vec::from_slice(&[
-                MacroOperation::Tap(KeyCode::W),
-                MacroOperation::Tap(KeyCode::O),
-                MacroOperation::Tap(KeyCode::R),
-                MacroOperation::Tap(KeyCode::L),
-                MacroOperation::Tap(KeyCode::D),
+                MacroOperation::Tap(HidKeyCode::W),
+                MacroOperation::Tap(HidKeyCode::O),
+                MacroOperation::Tap(HidKeyCode::R),
+                MacroOperation::Tap(HidKeyCode::L),
+                MacroOperation::Tap(HidKeyCode::D),
             ])
             .expect("too many elements"),
             heapless::Vec::from_slice(&[
-                MacroOperation::Press(KeyCode::LShift),
-                MacroOperation::Tap(KeyCode::Kc2),
-                MacroOperation::Release(KeyCode::LShift),
+                MacroOperation::Press(HidKeyCode::LShift),
+                MacroOperation::Tap(HidKeyCode::Kc2),
+                MacroOperation::Release(HidKeyCode::LShift),
             ])
             .expect("too many elements"),
         ];
@@ -317,28 +317,28 @@ mod test {
     fn test_define_macro_sequences_uneccessarily_terminated() {
         let macro_sequences_terminated_uneccessarily = [
             heapless::Vec::from_slice(&[
-                MacroOperation::Press(KeyCode::LShift),
-                MacroOperation::Tap(KeyCode::H),
-                MacroOperation::Release(KeyCode::LShift),
-                MacroOperation::Tap(KeyCode::E),
-                MacroOperation::Tap(KeyCode::L),
-                MacroOperation::Tap(KeyCode::L),
-                MacroOperation::Tap(KeyCode::O),
+                MacroOperation::Press(HidKeyCode::LShift),
+                MacroOperation::Tap(HidKeyCode::H),
+                MacroOperation::Release(HidKeyCode::LShift),
+                MacroOperation::Tap(HidKeyCode::E),
+                MacroOperation::Tap(HidKeyCode::L),
+                MacroOperation::Tap(HidKeyCode::L),
+                MacroOperation::Tap(HidKeyCode::O),
                 MacroOperation::End,
             ])
             .expect("too many elements"),
             heapless::Vec::from_slice(&[
-                MacroOperation::Tap(KeyCode::W),
-                MacroOperation::Tap(KeyCode::O),
-                MacroOperation::Tap(KeyCode::R),
-                MacroOperation::Tap(KeyCode::L),
+                MacroOperation::Tap(HidKeyCode::W),
+                MacroOperation::Tap(HidKeyCode::O),
+                MacroOperation::Tap(HidKeyCode::R),
+                MacroOperation::Tap(HidKeyCode::L),
                 MacroOperation::End,
             ])
             .expect("too many elements"),
             heapless::Vec::from_slice(&[
-                MacroOperation::Press(KeyCode::LShift),
-                MacroOperation::Tap(KeyCode::Kc2),
-                MacroOperation::Release(KeyCode::LShift),
+                MacroOperation::Press(HidKeyCode::LShift),
+                MacroOperation::Tap(HidKeyCode::Kc2),
+                MacroOperation::Release(HidKeyCode::LShift),
                 MacroOperation::End,
             ])
             .expect("too many elements"),
@@ -359,35 +359,35 @@ mod test {
     fn test_define_macro_sequences_random_end_markers() {
         let macro_sequences_random_end_markers = [
             heapless::Vec::from_slice(&[
-                MacroOperation::Press(KeyCode::LShift),
-                MacroOperation::Tap(KeyCode::H),
+                MacroOperation::Press(HidKeyCode::LShift),
+                MacroOperation::Tap(HidKeyCode::H),
                 MacroOperation::End,
-                MacroOperation::Release(KeyCode::LShift),
-                MacroOperation::Tap(KeyCode::E),
+                MacroOperation::Release(HidKeyCode::LShift),
+                MacroOperation::Tap(HidKeyCode::E),
                 MacroOperation::End,
                 MacroOperation::End,
-                MacroOperation::Tap(KeyCode::L),
+                MacroOperation::Tap(HidKeyCode::L),
                 MacroOperation::End,
-                MacroOperation::Tap(KeyCode::L),
-                MacroOperation::Tap(KeyCode::O),
+                MacroOperation::Tap(HidKeyCode::L),
+                MacroOperation::Tap(HidKeyCode::O),
                 MacroOperation::End,
             ])
             .expect("too many elements"),
             heapless::Vec::from_slice(&[
-                MacroOperation::Tap(KeyCode::W),
-                MacroOperation::Tap(KeyCode::O),
+                MacroOperation::Tap(HidKeyCode::W),
+                MacroOperation::Tap(HidKeyCode::O),
                 MacroOperation::End,
                 MacroOperation::End,
                 MacroOperation::End,
                 MacroOperation::End,
-                MacroOperation::Tap(KeyCode::R),
-                MacroOperation::Tap(KeyCode::L),
+                MacroOperation::Tap(HidKeyCode::R),
+                MacroOperation::Tap(HidKeyCode::L),
             ])
             .expect("too many elements"),
             heapless::Vec::from_slice(&[
-                MacroOperation::Press(KeyCode::LShift),
-                MacroOperation::Tap(KeyCode::Kc2),
-                MacroOperation::Release(KeyCode::LShift),
+                MacroOperation::Press(HidKeyCode::LShift),
+                MacroOperation::Tap(HidKeyCode::Kc2),
+                MacroOperation::Release(HidKeyCode::LShift),
                 MacroOperation::End,
                 MacroOperation::End,
                 MacroOperation::End,

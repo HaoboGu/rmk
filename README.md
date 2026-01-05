@@ -47,6 +47,10 @@
 
 <img src="https://raw.githubusercontent.com/HaoboGu/rmk/refs/heads/main/docs/docs/main/images/sessile.png" width="60%">
 
+### [Urchin](https://github.com/TimoBbz/urchin-rmk-firmware)
+
+<img src="https://raw.githubusercontent.com/HaoboGu/rmk/refs/heads/main/docs/docs/main/images/urchin.png" width="60%">
+
 ## Getting Started
 
 ### Option 1: Start with a Template

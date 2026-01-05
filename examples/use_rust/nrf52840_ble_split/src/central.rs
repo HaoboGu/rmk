@@ -26,10 +26,10 @@ use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{
     BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
-use rmk::controller::EventController as _;
+use rmk::controller::EventController;
 use rmk::controller::led_indicator::KeyboardIndicatorController;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join4;
+use rmk::futures::future::{join4, join5};
 use rmk::input_device::Runnable;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
@@ -235,6 +235,32 @@ async fn main(spawner: Spawner) {
         rmk::types::led_indicator::LedIndicatorType::CapsLock,
     );
 
+    // Peripheral battery monitor controller
+    // This controller subscribes to ControllerEvent::SplitPeripheralBattery events
+    // and logs the battery level of each peripheral
+    use rmk::channel::ControllerSub;
+    use rmk::controller::Controller;
+    struct PeripheralBatteryMonitor {
+        controller_sub: ControllerSub,
+    }
+    impl Controller for PeripheralBatteryMonitor {
+        type Event = rmk::event::ControllerEvent;
+
+        async fn process_event(&mut self, event: Self::Event) {
+            use rmk::event::ControllerEvent;
+            if let ControllerEvent::SplitPeripheralBattery(peripheral_id, level) = event {
+                info!("Peripheral {} battery level: {}%", peripheral_id, level);
+            }
+        }
+
+        async fn next_message(&mut self) -> Self::Event {
+            self.controller_sub.next_message_pure().await
+        }
+    }
+    let mut peripheral_battery_monitor = PeripheralBatteryMonitor {
+        controller_sub: unwrap!(rmk::channel::CONTROLLER_CHANNEL.subscriber()),
+    };
+
     // Start
     join4(
         run_devices! (
@@ -244,11 +270,12 @@ async fn main(spawner: Spawner) {
             EVENT_CHANNEL => [batt_proc],
         },
         keyboard.run(),
-        join4(
+        join5(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
             run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
             scan_peripherals(&stack, &peripheral_addrs),
             capslock_led.event_loop(),
+            peripheral_battery_monitor.event_loop(),
         ),
     )
     .await;
