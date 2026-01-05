@@ -43,6 +43,8 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     /// Matrix state
     #[cfg(feature = "vial_lock")]
     pub(crate) matrix_state: MatrixState<ROW, COL>,
+    /// Mouse button state (buttons 0-7 as bits)
+    pub(crate) mouse_buttons: u8,
 }
 
 /// fills up the vector to its capacity
@@ -79,6 +81,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
             #[cfg(feature = "vial_lock")]
             matrix_state: MatrixState::new(),
+            mouse_buttons: 0,
         }
     }
 
@@ -137,6 +140,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
             #[cfg(feature = "vial_lock")]
             matrix_state: MatrixState::new(),
+            mouse_buttons: 0,
         }
     }
 
