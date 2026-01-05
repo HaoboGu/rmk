@@ -89,9 +89,9 @@ impl<
         match event {
             Event::Custom(data) => {
                 // Process trackball movement events
-                let x_movement = data[0] as i8;
+                let _x_movement = data[0] as i8;
                 let y_movement = data[1] as i8;
-                let button_state = data[2];
+                let _button_state = data[2];
 
                 // Check if scroll modifier key is held
                 self.scroll_mode = self.check_scroll_modifier();
