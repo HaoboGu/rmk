@@ -10,7 +10,7 @@ one_shot = { timeout = "1s" }
 
 ## Tri Layer
 
-Tri-layer enables a third layer (often called `adjust`) automatically when two other layers(`upper` and `lower`) are both active.
+Tri-layer enables a third layer (often called `adjust`) automatically when two other layers (`upper` and `lower`) are both active.
 
 You can enable Tri-Layer by specifying the `upper`, `lower` and `adjust` layers in the `tri_layer` sub-table:
 
@@ -196,7 +196,7 @@ A profile contains the following fields:
 
 - `unilateral_tap`: (Experimental) Enables unilateral tap mode. When enabled, tap action will be triggered when a key from "same" hand is pressed. In current experimental version, the "same" hand is calculated using the `<hand>`, which can be given in `matrix_map`. This option is recommended to set to true when `enable_flow_tap` is set to true.
 
-- The morse mode, which is can be set by enabling one of these:
+- The morse mode, which can be set by enabling one of these:
   - `permissive_hold`: Enables permissive hold mode. When enabled, hold action will be triggered when a key is pressed and released during tap-hold decision. This option is recommended to set to true when `enable_flow_tap` is set to true.
   - `hold_on_other_press`: Enables hold-on-other-key-press mode. When enabled, hold action will be triggered immediately when any other non-tap-hold key is pressed while a tap-hold key is being held. This provides faster modifier activation without waiting for the timeout. Defaults to `false`.
   - `normal_mode` : this is the default mode, when nor the `permissive_hold` nor the `hold_on_other_press` is set.
@@ -213,7 +213,7 @@ The following are some examples for default profile setting:
 ```toml
 # This default setting enables HRM with all tap-hold features
 [behavior.morse]
-enable_flow_tap = true,
+enable_flow_tap = true
 prior_idle_time = "120ms"
 hold_on_other_press = true
 hold_timeout = "250ms"
@@ -373,38 +373,6 @@ MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_
 PN = { hold_on_other_press = true, unilateral_tap = false, hold_timeout = "250ms", gap_timeout = "250ms" }
 ```
 
-### Assigning the profile to a position
-
-```toml
-# split ortho example for matrix map, with L/R hand information filled and home row, thumb keys have profile names:
-[layout]
-rows = 4
-cols = 10
-layers = 3
-matrix_map = """
-(0, 0, L)    (0, 1, L)    (0, 2, L)    (0, 3, L)    (0, 4, L)         (0, 5, R)   (0, 6, R)    (0, 7, R)    (0, 8, R)    (0, 9, R)
-(1, 0, L:H2) (1, 1, L:H2) (1, 2, L:H1) (1, 3, L:H1) (1, 4, L)         (1, 5, R)   (1, 6, R:H1) (1, 7, R:H1) (1, 8, R:H2) (1, 9, R:H2)
-(2, 0, L)    (2, 1, L)    (2, 2, L)    (2, 3, L)    (2, 4, L)         (2, 5, R)   (2, 6, R)    (2, 7, R)    (2, 8, R)    (2, 9, R)
-                                       (3, 3, L:T)  (3, 4, L:T)       (3, 5, R:T) (3, 6, R:T)
-"""
-
-# default profile for morse, tap dance and tap-hold keys:
-[behavior.morse]
-enable_flow_tap = true,
-prior_idle_time = "120ms"
-hold_on_other_press = true
-hold_timeout = "250ms"
-gap_timeout = "250ms"
-
-[behavior.morse.profiles]
-# matrix_map may refer these to override the defaults given in [behavior.morse] for some key positions by referring these profiles by their name
-# this example is a home row mod
-H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
-H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
-# thumb tap-hold example
-T = { hold_on_other_press = true, unilateral_tap = false, hold_timeout = "250ms", gap_timeout = "250ms" }
-```
-
 ### Using Morse(Tap Dance) in Keymaps
 
 You can use both `Morse` and `TD` to represent a morse key in your keymap, you can reference it by its index (starting from 0):
@@ -431,7 +399,7 @@ keymap = [
 
 ## Fork
 
-In the `fork` sub-table, you can configure the keyboard's state based key fork functionality. Forks allows you to define a trigger key and condition dependent possible replacement keys. When the trigger key is pressed, the condition is checked by the following rule: If any of the `match_any` states are active AND none of the `match_none` states active, the trigger key will be replaced with positive_output, otherwise with the negative_output. By default the modifiers listed in `match_any` will be suppressed (even the one-shot modifiers) for the time the replacement key action is executed. However, with `kept_modifiers` some of them can be kept instead of automatic suppression.
+In the `fork` sub-table, you can configure the keyboard's state-based key fork functionality. Forks allow you to define a trigger key and condition-dependent possible replacement keys. When the trigger key is pressed, the condition is checked by the following rule: If any of the `match_any` states are active AND none of the `match_none` states are active, the trigger key will be replaced with positive_output; otherwise, it will be replaced with the negative_output. By default, the modifiers listed in `match_any` will be suppressed (even the one-shot modifiers) for the time the replacement key action is executed. However, with `kept_modifiers` some of them can be kept instead of automatic suppression.
 
 Fork configuration includes the following parameters:
 
@@ -439,14 +407,14 @@ Fork configuration includes the following parameters:
   - `trigger`: Defines the triggering key.
   - `negative_output`: A string defining the output action to be triggered when the conditions are not met
   - `positive_output`: A string defining the output action to be triggered when the conditions are met
-  - `match_any`: A strings defining a combination of modifier keys, lock leds, mouse buttons (optional)
-  - `match_none`: A strings defining a combination of modifier keys, lock leds, mouse buttons (optional)
-  - `kept_modifiers`: A strings defining a combination of modifier keys, which should not be 'suppressed' form the keyboard state for the time the replacement action is executed. (optional)
-  - `bindable`: Enables the evaluation of not yet triggered forks on the output of this fork to further manipulate the output. Advanced use cases can be solved using this option. (optional)
+  - `match_any`: A string defining a combination of modifier keys, lock LEDs, mouse buttons (optional)
+  - `match_none`: A string defining a combination of modifier keys, lock LEDs, mouse buttons (optional)
+  - `kept_modifiers`: A string defining a combination of modifier keys, which should not be 'suppressed' from the keyboard state for the time the replacement action is executed (optional)
+  - `bindable`: Enables the evaluation of not yet triggered forks on the output of this fork to further manipulate the output. Advanced use cases can be solved using this option (optional)
 
 For `match_any`, `match_none` the legal values are listed below (many values may be combined with "|"):
 
-- `LShift`, `LCtrl`, `LAlt`, `LGui`, `RShift`, `RCtrl`, `RAlt`, `RGui` (these are including the effect of explicitly held and one-shot modifiers too)
+- `LShift`, `LCtrl`, `LAlt`, `LGui`, `RShift`, `RCtrl`, `RAlt`, `RGui` (these include the effect of explicitly held and one-shot modifiers too)
 - `CapsLock`, `ScrollLock`, `NumLock`, `Compose`, `Kana`
 - `MouseBtn1` .. `MouseBtn8`
 
@@ -494,6 +462,6 @@ forks = [
 ]
 ```
 
-Please note that the processing of forks happen after combos and before others, so the trigger key must be the one listed in your keymap (or combo output). For example if `LT(2, Backspace)` is in your keymap, then `trigger = "Backspace"` will NOT work, you should "replace" the full key and use `trigger = "LT(2, Backspace)"` instead, like in the example above. You may want to include `F24` or similar dummy keys in your keymap, and use them as trigger for your pre-configured forks, such as Shift/CapsLock dependent macros to enter unicode characters of your language.
+Please note that the processing of forks happens after combos and before others, so the trigger key must be the one listed in your keymap (or combo output). For example if `LT(2, Backspace)` is in your keymap, then `trigger = "Backspace"` will NOT work, you should "replace" the full key and use `trigger = "LT(2, Backspace)"` instead, like in the example above. You may want to include `F24` or similar dummy keys in your keymap, and use them as trigger for your pre-configured forks, such as Shift/CapsLock dependent macros to enter unicode characters of your language.
 
 Vial does not support fork configuration yet.

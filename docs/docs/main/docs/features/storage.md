@@ -4,7 +4,7 @@ RMK's storage system provides persistent flash memory for storing data like keyb
 
 ## Storage Feature
 
-RMK's storage system is enabled by `storage` feature. Enabling features related to `vial` and `ble` automatically enables the `storage` feature because they require keymap and BLE bonding data to be persisted to non-volatile storage
+RMK's storage system is enabled by the `storage` feature. Enabling features related to `vial` and `ble` automatically enables the `storage` feature because they require keymap and BLE bonding data to be persisted to non-volatile storage.
 
 ## Storage Configuration
 
@@ -16,5 +16,5 @@ By default, RMK saves data to your microcontroller's internal flash memory.
 
 
 ::: warning
-Ensure you allocate sufficient storage space for your keymap and bonding information. 32KiB is generally adequate for most keyboards. 
+Ensure you allocate sufficient storage space for your keymap and bonding information. 32 KiB is generally adequate for most keyboards.
 :::

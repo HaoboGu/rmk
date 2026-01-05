@@ -46,7 +46,7 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
 - [x] 🔴 BLE support - esp32c3 and esp32s3
 - [x] Sleep mode to save battery
 - [x] 🔵 Universal BLE wrapper, including BLE management, battery management, supports both nRF and ESP
-- [x] Stablizing BLE feature gate/API
+- [x] Stabilizing BLE feature gate/API
 - [x] Support more MCUs, such as cyw(used in rp2040w/rp2350w)
 - [ ] Deep-sleep mode
 - [ ] Better support for dongle

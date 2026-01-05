@@ -13,6 +13,7 @@ use crate::controller::expand_controller_init;
 use crate::entry::expand_rmk_entry;
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::flash::expand_flash_init;
+use crate::gpio_config::expand_output_config;
 use crate::import::expand_custom_imports;
 use crate::input_device::expand_input_device_config;
 use crate::keyboard_config::{expand_keyboard_info, expand_vial_config, read_keyboard_toml_config};
@@ -136,6 +137,7 @@ fn expand_main(
     let flash_init = expand_flash_init(keyboard_config);
     let behavior_config = expand_behavior_config(keyboard_config);
     let matrix_config = expand_matrix_config(keyboard_config, rmk_features);
+    let output_config = expand_output_config(keyboard_config);
     let (ble_config, set_ble_config) = expand_ble_config(keyboard_config);
     let keymap_and_storage = expand_keymap_and_storage(keyboard_config);
     let split_central_config = expand_split_central_config(keyboard_config);
@@ -202,6 +204,9 @@ fn expand_main(
 
             // Initialize matrix config as `(row_pins, col_pins)` or `direct_pins`
             #matrix_config
+
+            // Initialize static output pins
+            #output_config
 
             // Initialize flash driver as `flash` and storage config as `storage_config`
             #flash_init
@@ -343,7 +348,8 @@ pub(crate) fn expand_matrix_and_keyboard_init(keyboard_config: &KeyboardTomlConf
                     let debouncer_type = get_debouncer_type(&split_config.central.matrix);
                     quote! {
                         let debouncer = #debouncer_type::new();
-                        let mut matrix = ::rmk::split::central::CentralMatrix::<_, _, _, #central_row_offset, #central_col_offset, #central_row, #central_col, #col2row>::new(row_pins, col_pins, debouncer);
+                        let matrix = ::rmk::matrix::Matrix::<_, _, _, #central_row, #central_col, #col2row>::new(row_pins, col_pins, debouncer);
+                        let mut matrix = ::rmk::matrix::OffsetMatrixWrapper::<_, _, _, #central_row_offset, #central_col_offset>(matrix);
                     }
                 }
                 MatrixType::direct_pin => {
@@ -352,7 +358,8 @@ pub(crate) fn expand_matrix_and_keyboard_init(keyboard_config: &KeyboardTomlConf
                     let debouncer_type = get_debouncer_type(&split_config.central.matrix);
                     quote! {
                         let debouncer = #debouncer_type::new();
-                        let mut matrix = ::rmk::split::central::CentralDirectPinMatrix::<_, _, #central_row_offset, #central_col_offset, #central_row, #central_col, #size>::new(direct_pins, debouncer, #low_active);
+                        let matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #central_row, #central_col, #size>::new(direct_pins, debouncer, #low_active);
+                        let mut matrix = ::rmk::matrix::OffsetMatrixWrapper::<_, _, _, #central_row_offset, #central_col_offset>(matrix);
                     }
                 }
             }

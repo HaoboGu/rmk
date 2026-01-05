@@ -6,7 +6,7 @@ mod macro_test {
     use rmk::keyboard::Keyboard;
     use rmk::keyboard_macros::{MacroOperation, define_macro_sequences, to_macro_sequence};
     use rmk::types::action::{Action, KeyAction};
-    use rmk::types::keycode::KeyCode;
+    use rmk_types::keycode::HidKeyCode;
     use rusty_fork::rusty_fork_test;
 
     use crate::common::{KC_LSHIFT, wrap_keymap};
@@ -14,8 +14,8 @@ mod macro_test {
 
     fn create_simple_macro_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'static, 1, 2, 1> {
         let keymap = [[[
-            KeyAction::Single(Action::Key(KeyCode::Macro0)),
-            KeyAction::Single(Action::Key(KeyCode::Macro1)),
+            KeyAction::Single(Action::TriggerMacro(0)),
+            KeyAction::Single(Action::TriggerMacro(1)),
         ]]];
         static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
         let behavior_config: &'static mut BehaviorConfig = BEHAVIOR_CONFIG.init(behavior_config);
@@ -29,8 +29,8 @@ mod macro_test {
         #[test]
         fn test_macro_key_a_press_release() {
             let macro_sequences = &[Vec::from_slice(&[
-                MacroOperation::Press(KeyCode::A),
-                MacroOperation::Release(KeyCode::A),
+                MacroOperation::Press(HidKeyCode::A),
+                MacroOperation::Release(HidKeyCode::A),
             ])
             .expect("too many elements")];
 
@@ -100,7 +100,7 @@ mod macro_test {
 
         #[test]
         fn test_macro_tap_key_a() {
-            let macro_sequences = &[Vec::from_slice(&[MacroOperation::Tap(KeyCode::A)]).expect("too many elements")];
+            let macro_sequences = &[Vec::from_slice(&[MacroOperation::Tap(HidKeyCode::A)]).expect("too many elements")];
 
             let macro_data = define_macro_sequences(macro_sequences);
             let mut config = BehaviorConfig::default();
@@ -124,10 +124,10 @@ mod macro_test {
         #[test]
         fn test_macro_multiple_operations() {
             let macro_sequences = &[Vec::from_slice(&[
-                MacroOperation::Press(KeyCode::LShift),
-                MacroOperation::Tap(KeyCode::A),
-                MacroOperation::Release(KeyCode::LShift),
-                MacroOperation::Tap(KeyCode::B),
+                MacroOperation::Press(HidKeyCode::LShift),
+                MacroOperation::Tap(HidKeyCode::A),
+                MacroOperation::Release(HidKeyCode::LShift),
+                MacroOperation::Tap(HidKeyCode::B),
             ])
             .expect("too many elements")];
 
@@ -157,9 +157,9 @@ mod macro_test {
         #[test]
         fn test_macro_with_delay() {
             let macro_sequences = &[Vec::from_slice(&[
-                MacroOperation::Tap(KeyCode::A),
+                MacroOperation::Tap(HidKeyCode::A),
                 MacroOperation::Delay(50 << 8), // 50 ms
-                MacroOperation::Tap(KeyCode::B),
+                MacroOperation::Tap(HidKeyCode::B),
             ])
             .expect("too many elements")];
 

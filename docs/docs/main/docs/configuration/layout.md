@@ -44,7 +44,19 @@ matrix_map = """
 (1,0) (1,1) (1,2) (1,3)
 (2,0) (2,1) (2,2)
 (3,0) (3,1) (3,2) (3,3)
-   (4,0)    (4,1)
+   (4,0)      (4,1)
+"""
+
+# split ortho example for matrix map, with L/R hand information filled
+[layout]
+rows = 4
+cols = 10
+layers = 3
+matrix_map = """
+(0, 0, L)  (0, 1, L)  (0, 2, L)  (0, 3, L)  (0, 4, L)    (0, 5, R)  (0, 6, R)  (0, 7, R)  (0, 8, R)  (0, 9, R)
+(1, 0, L)  (1, 1, L)  (1, 2, L)  (1, 3, L)  (1, 4, L)    (1, 5, R)  (1, 6, R)  (1, 7, R)  (1, 8, R)  (1, 9, R)
+(2, 0, L)  (2, 1, L)  (2, 2, L)  (2, 3, L)  (2, 4, L)    (2, 5, R)  (2, 6, R)  (2, 7, R)  (2, 8, R)  (2, 9, R)
+                                 (3, 3, L)  (3, 4, L)    (3, 5, R)  (3, 6, R)
 """
 ```
 
@@ -74,21 +86,21 @@ MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
 """
 ```
 
-The number and order of entries on each defined layers must be identical with the number and order of entries in `matrix_map`. White spaces, line breaks are free to vary, but its worth to keep a consistent arrangement with the real keyboard.
+The number and order of entries on each defined layer must be identical with the number and order of entries in `matrix_map`. White spaces and line breaks are free to vary, but it's worth keeping a consistent arrangement with the real keyboard.
 
 ::: warning
 
-If the number of defined layers is smaller than what was defined in `layout.layers`, RMK will fill empty layers automatically (so you can configure them freely in Vial). But the empty layers still consumes flash and RAM, so if you don't have a enough space for them, it's not recommended to use a big layer count.
+If the number of defined layers is smaller than what was defined in `layout.layers`, RMK will fill empty layers automatically (so you can configure them freely in Vial). But the empty layers still consume flash and RAM, so if you don't have enough space for them, it's not recommended to use a big layer count.
 
 :::
 
-In each `layer.keys`, the keys are bound to various key actions. Due to the limitation of `toml` file, this is done in a string. RMK parses the string and fill the to actual keymap initializer, like what's in [`keymap.rs`](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/rp2040/src/keymap.rs)
+In each `layer.keys`, the keys are bound to various key actions. Due to the limitation of the `toml` file format, this is done in a string. RMK parses the string and fills in the actual keymap initializer, like what's in [`keymap.rs`](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/rp2040/src/keymap.rs)
 
 The `layer.keys` string should follow several rules:
 
-1. For a simple keycode(aka keys in RMK's [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html) enum), just fill its name.
+1. For a simple keycode (i.e., keys in RMK's [`HidKeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.HidKeyCode.html) enum), just fill in its name.
 
-   For example, if you set a keycode `Backspace`, it will be turned to `KeyCode::Backspace`. So you have to ensure that the keycode string is valid, or RMK wouldn't compile! However, to make things easier a number of alternative key names (see alias column in [KeyCode table](./keymap_configuration/keycodes)) were added and also case-insensitive search is used to find the valid [KeyCode](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html).
+   For example, if you set a keycode `Backspace`, it will be turned to the corresponding HID keycode. So you have to ensure that the keycode string is valid, or RMK wouldn't compile! However, to make things easier a number of alternative key names (see alias column in [KeyCode table](./keymap_configuration/keycodes)) were added and also case-insensitive search is used to find the valid keycode.
 
    For simple keycodes with modifiers active, you can use `WM(key, modifier)` to create a keypress with modifier action. Modifiers can be chained together like `LShift | RGui` to have multiple modifiers active.
 
@@ -116,7 +128,7 @@ The `layer.keys` string should follow several rules:
    8. Use `TG(n)` to create a layer toggle action, `n` is the layer number
    9. Use `TO(n)` to create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
 
-The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
+The definitions of these operations are the same as QMK's; you can find them [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [file an issue](https://github.com/HaoboGu/rmk/issues/new).
 
 5. For modifier-tap-hold, use `MT(key, modifier, <profile_name>)` where the modifier can be a chain like explained on point 1. The `profile_name` is optional, which defines the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning)
 <!-- If you're using home-row mod(HRM), you can also use `HRM(key, modifier)` to create a modifier-tap-hold whose configuration is optimized for home-row mod. -->
@@ -146,3 +158,15 @@ my_paste = "WM(V, LCtrl)"
 Please note that alias names may not contain white spaces and they are case sensitive.
 
 :::
+
+## Assigning the left/right hand to a position
+
+
+# default profile for morse, tap dance and tap-hold keys:
+[behavior.morse]
+enable_flow_tap = true,
+prior_idle_time = "120ms"
+hold_on_other_press = true
+hold_timeout = "250ms"
+gap_timeout = "250ms"
+```

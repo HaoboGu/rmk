@@ -48,12 +48,16 @@ pub struct KeyboardTomlConfig {
     storage: Option<StorageConfig>,
     /// Ble config
     ble: Option<BleConfig>,
+    /// Chip-specific configs (e.g., [chip.nrf52840])
+    chip: Option<HashMap<String, ChipConfig>>,
     /// Dependency config
     dependency: Option<DependencyConfig>,
     /// Split config
     split: Option<SplitConfig>,
     /// Input device config
     input_device: Option<InputDeviceConfig>,
+    /// Output Pin config
+    output: Option<Vec<OutputConfig>>,
     /// Set host configurations
     pub host: Option<HostConfig>,
     /// RMK config constants
@@ -178,7 +182,7 @@ pub struct RmkConstantsConfig {
     #[serde_inline_default(16)]
     pub controller_channel_size: usize,
     /// Number of publishers to controllers
-    #[serde_inline_default(8)]
+    #[serde_inline_default(12)]
     pub controller_channel_pubs: usize,
     /// Number of controllers
     #[serde_inline_default(8)]
@@ -262,7 +266,7 @@ impl Default for RmkConstantsConfig {
             debounce_time: 20,
             event_channel_size: 16,
             controller_channel_size: 16,
-            controller_channel_pubs: 8,
+            controller_channel_pubs: 12,
             controller_channel_subs: 8,
             report_channel_size: 16,
             vial_channel_size: 4,
@@ -281,8 +285,9 @@ pub struct LayoutTomlConfig {
     pub rows: u8,
     pub cols: u8,
     pub layers: u8,
-    pub keymap: Option<Vec<Vec<Vec<String>>>>, // will be deprecated in the future
-    pub matrix_map: Option<String>,            //temporarily allow both matrix_map and keymap to be set
+    pub keymap: Option<Vec<Vec<Vec<String>>>>, // Will be deprecated in the future
+    pub matrix_map: Option<String>,            // Temporarily allow both matrix_map and keymap to be set
+    pub encoder_map: Option<Vec<Vec<[String; 2]>>>, // Will be deprecated together with keymap
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -290,6 +295,7 @@ pub struct LayoutTomlConfig {
 pub struct LayerTomlConfig {
     pub name: Option<String>,
     pub keys: String,
+    pub encoders: Option<Vec<[String; 2]>>,
 }
 
 /// Configurations for keyboard info
@@ -364,7 +370,20 @@ pub struct BleConfig {
     pub adc_divider_measured: Option<u32>,
     pub adc_divider_total: Option<u32>,
     pub default_tx_power: Option<i8>,
-    pub ble_use_2m_phy: Option<bool>,
+    pub use_2m_phy: Option<bool>,
+}
+
+/// Config for chip-specific settings
+#[derive(Clone, Default, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChipConfig {
+    /// DCDC regulator 0 enabled (for nrf52840)
+    pub dcdc_reg0: Option<bool>,
+    /// DCDC regulator 1 enabled (for nrf52840, nrf52833)
+    pub dcdc_reg1: Option<bool>,
+    /// DCDC regulator 0 voltage (for nrf52840)
+    /// Values: "3V3" or "1V8"
+    pub dcdc_reg0_voltage: Option<String>,
 }
 
 /// Config for lights
@@ -407,6 +426,7 @@ pub struct LayoutConfig {
     pub cols: u8,
     pub layers: u8,
     pub keymap: Vec<Vec<Vec<String>>>,
+    pub encoder_map: Vec<Vec<[String; 2]>>, // Empty if there are no encoders or not configured
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -613,6 +633,14 @@ pub struct SplitBoardConfig {
     pub matrix: MatrixConfig,
     /// Input device config for the split
     pub input_device: Option<InputDeviceConfig>,
+    /// Battery ADC pin for this split board
+    pub battery_adc_pin: Option<String>,
+    /// ADC divider measured value for battery
+    pub adc_divider_measured: Option<u32>,
+    /// ADC divider total value for battery
+    pub adc_divider_total: Option<u32>,
+    /// Output Pin config for the split
+    pub output: Option<Vec<OutputConfig>>,
 }
 
 /// Serial port config
@@ -633,6 +661,10 @@ const fn default_true() -> bool {
 
 const fn default_false() -> bool {
     false
+}
+
+const fn default_pmw3610_report_hz() -> u16 {
+    125
 }
 
 fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
@@ -684,6 +716,7 @@ pub struct InputDeviceConfig {
     pub encoder: Option<Vec<EncoderConfig>>,
     pub pointing: Option<Vec<PointingDeviceConfig>>,
     pub joystick: Option<Vec<JoystickConfig>>,
+    pub pmw3610: Option<Vec<Pmw3610Config>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -701,6 +734,40 @@ pub struct JoystickConfig {
     pub transform: Vec<Vec<i16>>,
     pub bias: Vec<i16>,
     pub resolution: u16,
+}
+
+/// PMW3610 optical mouse sensor configuration
+#[derive(Clone, Debug, Default, Deserialize)]
+#[allow(unused)]
+#[serde(deny_unknown_fields)]
+pub struct Pmw3610Config {
+    /// Name of the sensor (used for variable naming)
+    pub name: String,
+    /// SPI pins
+    pub spi: SpiConfig,
+    /// Optional motion interrupt pin
+    pub motion: Option<String>,
+    /// CPI resolution (200-3200, step 200). Optional, uses sensor default if not set.
+    pub cpi: Option<u16>,
+    /// Invert X axis
+    #[serde(default)]
+    pub invert_x: bool,
+    /// Invert Y axis
+    #[serde(default)]
+    pub invert_y: bool,
+    /// Swap X and Y axes
+    #[serde(default)]
+    pub swap_xy: bool,
+    /// Force awake mode (disable power saving)
+    #[serde(default)]
+    pub force_awake: bool,
+    /// Enable smart mode for better tracking on shiny surfaces
+    #[serde(default)]
+    pub smart_mode: bool,
+
+    /// Report rate (Hz). Motion will be accumulated and emitted at this rate.
+    #[serde(default = "default_pmw3610_report_hz")]
+    pub report_hz: u16,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -780,4 +847,29 @@ pub struct I2cConfig {
     pub sda: String,
     pub scl: String,
     pub address: u8,
+}
+
+/// Configuration for an output pin
+#[allow(unused)]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OutputConfig {
+    pub pin: String,
+    #[serde(default)]
+    pub low_active: bool,
+    #[serde(default)]
+    pub initial_state_active: bool,
+}
+
+impl KeyboardTomlConfig {
+    pub fn get_output_config(&self) -> Result<Vec<OutputConfig>, String> {
+        let output_config = self.output.clone();
+        let split = self.split.clone();
+        match (output_config, split) {
+            (None, Some(s)) => Ok(s.central.output.unwrap_or_default()),
+            (Some(c), None) => Ok(c),
+            (None, None) => Ok(Default::default()),
+            _ => Err("Use [[split.output]] to define outputs for split in your keyboard.toml!".to_string()),
+        }
+    }
 }

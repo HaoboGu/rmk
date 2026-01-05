@@ -12,6 +12,11 @@ on:
         default: "vial.json"
         required: false
         type: string
+      rmk_version:
+        description: "Used rmk version"
+        default: "main"
+        required: false
+        type: string
 env:
   LIBSSL: "libssl1.1_1.1.1f-1ubuntu2_amd64.deb"
 jobs:
@@ -64,19 +69,19 @@ jobs:
         run: cargo binstall cargo-make rmkit flip-link -y
       - name: Create firmware project
         working-directory: .
-        run: rmkit create --keyboard-toml-path ${{ inputs.keyboard_toml_path }} --vial-json-path ${{ inputs.vial_json_path }} --target-dir rmk
+        run: rmkit create --keyboard-toml-path ${{ inputs.keyboard_toml_path }} --vial-json-path ${{ inputs.vial_json_path }} --version ${{ inputs.rmk_version }} --target-dir rmk
       - name: Build firmware
         working-directory: ./rmk
         run: cargo build --release
       - name: Build uf2 firmware
         working-directory: ./rmk
         run: cargo make uf2 --release
-      - name: Upload artifacts
+      - name: Upload uf2 artifacts
         uses: actions/upload-artifact@v4
         with:
           name: firmware_uf2
           path: rmk/*.uf2
-      - name: Upload artifacts
+      - name: Upload hex artifacts
         uses: actions/upload-artifact@v4
         with:
           name: firmware_hex
@@ -103,7 +108,7 @@ jobs:
         run: espup install
       - name: Create firmware project
         working-directory: .
-        run: rmkit create --keyboard-toml-path ${{ inputs.keyboard_toml_path }} --vial-json-path ${{ inputs.vial_json_path }} --target-dir rmk
+        run: rmkit create --keyboard-toml-path ${{ inputs.keyboard_toml_path }} --vial-json-path ${{ inputs.vial_json_path }} --version ${{ inputs.rmk_version }} --target-dir rmk
       - name: Build firmware for esp32
         working-directory: ./rmk
         run: . /home/runner/export-esp.sh && cargo +esp build --release
@@ -134,7 +139,7 @@ jobs:
           echo "project_name=$OUTPUT" >> $GITHUB_OUTPUT
       - name: convert firmware to bin
         working-directory: ./rmk
-        run: espflash save-image --chip ${{ needs.get_chip_name.outputs.chip_name }} target/${{ steps.arch.outputs.arch }}/release/${{ steps.project_name.outputs.project_name }} ./rmk.bin
+        run: espflash save-image --chip ${{ needs.get_chip_name.outputs.chip_name }} target/${{ steps.arch.outputs.arch }}/release/${{ steps.project_name.outputs.project_name }} --merge ./rmk.bin
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

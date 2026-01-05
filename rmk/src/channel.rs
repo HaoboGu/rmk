@@ -78,8 +78,19 @@ pub(crate) static FLASH_CHANNEL: Channel<RawMutex, FlashOperationMessage, FLASH_
 #[cfg(feature = "_ble")]
 pub(crate) static BLE_PROFILE_CHANNEL: Channel<RawMutex, BleProfileAction, 1> = Channel::new();
 
+/// Send the specified `event` to `CONTROLLER_CHANNEL`.
 #[cfg(feature = "controller")]
 pub fn send_controller_event(publisher: &mut ControllerPub, event: ControllerEvent) {
     info!("Sending ControllerEvent: {:?}", event);
     publisher.publish_immediate(event);
+}
+
+/// Send the specified `event` to `CONTROLLER_CHANNEL`.
+/// Do not use this function if you plan to send events multiple times, use `send_controller_event`
+/// instead for better performance.
+#[cfg(feature = "controller")]
+pub fn send_controller_event_new(event: ControllerEvent) {
+    if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
+        send_controller_event(&mut publisher, event);
+    }
 }

@@ -9,6 +9,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `report_hz` option for Pmw3610Device
+
+### Changed
+
+- **BREAKING**: `PollingController::INTERVAL` constant is now `PollingController::interval()` method, allowing dynamic interval configuration at runtime
+- Optimize the timing for motion read and sending reports on the PMW3610
+
+## [0.8.2] - 2025-12-18
+
+### Added
+
+- Add PMW3610 optical mouse sensor support for nRF and RP2040 with bit-bang SPI
+- Add support for configuring static output pins
+- DCDC config for nRF52840/nRF52833
+- Add `encoder_map` support in `keyboard.toml`
+- Add devcontainer config
+- Add sitemap to rmk.rs
+
+### Changed
+
+- Make `embedded-hal-async` a required dependency
+- Update default BLE connection parameters
+- Increase the default number of controller channel pub
+- Documentation update
+
+### Fixed
+
+- Fix compilation error when use `Macro()` in keymap config
+- Fix row2col matrix doesn't work issue
+- Fix `lm` key is not properly released
+
+
+## [0.8.1] - 2025-11-25
+
+### Changed
+
+- Remove unused `EnumIter` in `rmk-types`
+
+### Fixed
+
+- Fix storage ser/de format error
+- Fix a bug of Caps Word
+
+## [0.8.0] - 2025-11-25
+
+### Added
+
 - Add dongle support back, checkout [this example](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/nrf52840_ble_split_dongle)
 - Add `detent` and `pulse` settings to encoder config
 - Add `Controller` support for peripheral #584
@@ -19,6 +66,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add capsword support
 - Add `default_tx_power` and `use_2m_phy` config for BLE
 - Add lock and matrix tester support for Vial
+- Add `[host]` config section
+- Support changing permissive hold option at the runtime
+- Add `detent` and `pulse` config for encoders
 
 ### Changed
 
@@ -29,6 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rewrite led indicator, use controller system
 - Rename `RapidDebouncer` to `FastDebouncer`
 - Remove `col2row`, `bidirectional` and `rapid_debouncer` features
+- Use postcard for serialization/deserialization of storage data
+- Change central sleep timeout to be in seconds 
 - Migrate documentation site to rspress
 
 ### Fixed
@@ -39,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix combo reorder issue
 - Fix key stuck when one shot key rolling with tap hold 
 - Fix flow-tap misorder
+- Fix peripheral message loss
 
 ## [0.7.8] - 2025-07-23
 

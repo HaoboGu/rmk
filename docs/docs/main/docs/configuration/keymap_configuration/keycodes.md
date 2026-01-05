@@ -50,7 +50,31 @@ When used in configuration files, all keycodes are case-insensitive.
 | `Kc9`   | `9`     | `9` and `(` |
 | `Kc0`   | `0`     | `0` and `)` |
 
-## Punctation keys
+## Keypad keys
+
+| Keycode        | Aliases               | Usage               |
+| -------------- | --------------------- | ------------------- |
+| `KpSlash`      | `kp_slash`, `psls`    | Keypad `/`          |
+| `KpAsterisk`   | `kp_asterisk`, `past` | Keypad `*`          |
+| `KpMinus`      | `kp_minus`, `pmns`    | Keypad `-`          |
+| `KpPlus`       | `kp_plus`, `ppls`     | Keypad `+`          |
+| `KpEnter`      | `kp_enter`, `pent`    | Keypad Enter        |
+| `Kp1`          | `kp_1`                | Keypad 1            |
+| `Kp2`          | `kp_2`                | Keypad 2            |
+| `Kp3`          | `kp_3`                | Keypad 3            |
+| `Kp4`          | `kp_4`                | Keypad 4            |
+| `Kp5`          | `kp_5`                | Keypad 5            |
+| `Kp6`          | `kp_6`                | Keypad 6            |
+| `Kp7`          | `kp_7`                | Keypad 7            |
+| `Kp8`          | `kp_8`                | Keypad 8            |
+| `Kp9`          | `kp_9`                | Keypad 9            |
+| `Kp0`          | `kp_0`                | Keypad 0            |
+| `KpDot`        | `kp_dot`, `pdot`      | Keypad `.`          |
+| `KpComma`      | `kp_comma`, `pcmm`    | Keypad `,`          |
+| `KpEqual`      | `kp_equal`, `peql`    | Keypad `=`          |
+| `KpEqualAs400` | `kp_equal_as400`      | Keypad `=` (AS/400) |
+
+## Punctuation keys
 
 | Keycode          | Aliases                      | Usage                      |
 | ---------------- | ---------------------------- | -------------------------- |
@@ -150,6 +174,100 @@ When used in configuration files, all keycodes are case-insensitive.
 | `Language7`      | `language_7`, `lng7`      | Language 7             |
 | `Language8`      | `language_8`, `lng8`      | Language 8             |
 | `Language9`      | `language_9`, `lng9`      | Language 9             |
+
+## Consumer keys
+
+| Keycode            | Aliases                      | Usage                                                 |
+| ------------------ | ---------------------------- | ----------------------------------------------------- |
+| `AudioMute`        | `audio_mute`, `mute`         | Audio Mute                                            |
+| `AudioVolUp`       | `audio_vol_up`, `volu`       | Audio Volume Up                                       |
+| `AudioVolDown`     | `audio_vol_down`, `vold`     | Audio Volume Down                                     |
+| `MediaNextTrack`   | `media_next_track`, `mnxt`   | Media Next Track                                      |
+| `MediaPrevTrack`   | `media_prev_track`, `mprv`   | Media Previous Track                                  |
+| `MediaStop`        | `media_stop`, `mstp`         | Media Stop                                            |
+| `MediaPlayPause`   | `media_play_pause`, `mply`   | Media Play / Pause                                    |
+| `MediaFastForward` | `media_fast_forward`, `mffd` | Media Fast Forward                                    |
+| `MediaRewind`      | `media_rewind`, `mrwd`       | Media Rewind                                          |
+| `MediaSelect`      | `media_select`, `msel`       | Media Select / Record                                 |
+| `MediaEject`       | `media_eject`, `ejct`        | Media Eject                                           |
+| `Mail`             | —                            | Open Email Client                                     |
+| `Calculator`       | `calc`                       | Open Calculator                                       |
+| `MyComputer`       | `my_computer`, `mycm`        | Open “My Computer” / File Explorer                    |
+| `WwwSearch`        | `www_search`, `wsch`         | Browser Search                                        |
+| `WwwHome`          | `www_home`, `whom`           | Browser Home                                          |
+| `WwwBack`          | `www_back`, `wbak`           | Browser Back                                          |
+| `WwwForward`       | `www_forward`, `wfwd`        | Browser Forward                                       |
+| `WwwStop`          | `www_stop`, `wstp`           | Browser Stop                                          |
+| `WwwRefresh`       | `www_refresh`, `wref`        | Browser Refresh                                       |
+| `WwwFavorites`     | `www_favorites`, `wfav`      | Browser Bookmarks / Favorites                         |
+| `BrightnessUp`     | `brightness_up`, `briu`      | Screen Brightness Up                                  |
+| `BrightnessDown`   | `brightness_down`, `brid`    | Screen Brightness Down                                |
+| `ControlPanel`     | `control_panel`, `cpnl`      | Open Control Panel                                    |
+| `Assistant`        | `asst`                       | Open OS Assistant (Cortana / Google Assistant / Siri) |
+| `MissionControl`   | `mission_control`, `mctl`    | macOS Mission Control                                 |
+| `Launchpad`        | `lpad`                       | macOS Launchpad                                       |
+
+## Navigation & editing keys
+
+| Keycode       | Aliases                       | Usage                                 |
+| ------------- | ----------------------------- | ------------------------------------- |
+| `PrintScreen` | `print_screen`, `pscr`        | Print Screen                          |
+| `ScrollLock`  | `scroll_lock`, `scrl`, `brmd` | Scroll Lock / macOS brightness toggle |
+| `Pause`       | `paus`, `brk`, `brmu`         | Pause / Break                         |
+| `Insert`      | `ins`                         | Insert                                |
+| `Home`        | —                             | Home                                  |
+| `PageUp`      | `page_up`, `pgup`             | Page Up                               |
+| `Delete`      | `del`                         | Delete                                |
+| `End`         | —                             | End                                   |
+| `PageDown`    | `page_down`, `pgdn`           | Page Down                             |
+| `Right`       | `rght`                        | Right arrow                           |
+| `Left`        | —                             | Left arrow                            |
+| `Down`        | —                             | Down arrow                            |
+| `Up`          | —                             | Up arrow                              |
+| `Execute`     | `exec`                        | Execute                               |
+| `Help`        | —                             | Help                                  |
+| `Menu`        | —                             | Application/Menu key                  |
+| `Select`      | `slct`                        | Select                                |
+| `Stop`        | —                             | Stop                                  |
+| `Again`       | `agin`                        | Again / Redo                          |
+| `Undo`        | —                             | Undo                                  |
+| `Cut`         | —                             | Cut                                   |
+| `Copy`        | —                             | Copy                                  |
+| `Paste`       | `pste`                        | Paste                                 |
+| `Find`        | —                             | Find                                  |
+| `Clear`       | `clr`                         | Clear                                 |
+| `Prior`       | `prir`                        | Prior / Previous                      |
+| `Return`      | `retn`                        | Return (alias of Enter)               |
+| `Separator`   | `sepr`                        | Separator (numeric/document use)      |
+| `Out`         | —                             | Out                                   |
+| `Oper`        | —                             | Oper                                  |
+| `ClearAgain`  | `clear_again`, `clag`         | Clear Again                           |
+| `Crsel`       | `crsl`                        | Cursor Select                         |
+| `Exsel`       | `exsl`                        | Extend Selection                      |
+
+## Mouse keys
+
+| Keycode           | Aliases                                                                  | Usage                      |
+| ----------------- | ------------------------------------------------------------------------ | -------------------------- |
+| `MouseUp`         | `mousecursorup`, `mouse_cursor_up`, `ms_up`                              | Move mouse cursor up       |
+| `MouseDown`       | `mousecursordown`, `mouse_cursor_down`, `ms_down`                        | Move mouse cursor down     |
+| `MouseLeft`       | `mousecursorleft`, `mouse_cursor_left`, `ms_left`                        | Move mouse cursor left     |
+| `MouseRight`      | `mousecursorright`, `mouse_cursor_right`, `ms_right`                     | Move mouse cursor right    |
+| `MouseBtn1`       | `mouse_btn_1`, `mousebutton1`, `mouse_button_1`, `ms_btn1`               | Mouse button 1 (left)      |
+| `MouseBtn2`       | `mouse_btn_2`, `mousebutton2`, `mouse_button_2`, `ms_btn2`               | Mouse button 2 (right)     |
+| `MouseBtn3`       | `mouse_btn_3`, `mousebutton3`, `mouse_button_3`, `ms_btn3`               | Mouse button 3 (middle)    |
+| `MouseBtn4`       | `mouse_btn_4`, `mousebutton4`, `mouse_button_4`, `ms_btn4`               | Mouse button 4             |
+| `MouseBtn5`       | `mouse_btn_5`, `mousebutton5`, `mouse_button_5`, `ms_btn5`               | Mouse button 5             |
+| `MouseBtn6`       | `mouse_btn_6`, `mousebutton6`, `mouse_button_6`, `ms_btn6`               | Mouse button 6             |
+| `MouseBtn7`       | `mouse_btn_7`, `mousebutton7`, `mouse_button_7`, `ms_btn7`               | Mouse button 7             |
+| `MouseBtn8`       | `mouse_btn_8`, `mousebutton8`, `mouse_button_8`, `ms_btn8`               | Mouse button 8             |
+| `MouseWheelUp`    | `mouse_wheel_up`, `ms_whlu`                                              | Mouse wheel up             |
+| `MouseWheelDown`  | `mouse_wheel_down`, `ms_whld`                                            | Mouse wheel down           |
+| `MouseWheelLeft`  | `mouse_wheel_left`, `ms_whll`                                            | Mouse wheel left           |
+| `MouseWheelRight` | `mouse_wheel_right`, `ms_whlr`                                           | Mouse wheel right          |
+| `MouseAccel0`     | `mouse_accel_0`, `mouseacceleration0`, `mouse_acceleration_0`, `ms_acl0` | Mouse acceleration level 0 |
+| `MouseAccel1`     | `mouse_accel_1`, `mouseacceleration1`, `mouse_acceleration_1`, `ms_acl1` | Mouse acceleration level 1 |
+| `MouseAccel2`     | `mouse_accel_2`, `mouseacceleration2`, `mouse_acceleration_2`, `ms_acl2` | Mouse acceleration level 2 |
 
 ## Special keys
 

@@ -1,6 +1,6 @@
 # Keyboard Macros
 
-rmk supports keyboard macros: Pressing a trigger to execute a sequence of keypresses.
+RMK supports keyboard macros: Pressing a trigger to execute a sequence of keypresses.
 
 This can be configured via Vial or rust. A configuration via the toml configuration file will be provided in the future.
 
@@ -8,21 +8,21 @@ This can be configured via Vial or rust. A configuration via the toml configurat
 
 The following operations, coming from Vial, can be used to form a macro sequence. They are in `rmk::config::keyboard_macros::keyboard_macro`:
 
-### Text(KeyCode, bool)
+### Text(HidKeyCode, bool)
 
-Execute a key press from any available KeyCode. The boolean flags if the key should be pressed with the shift modifier.
+Execute a key press from any available HID keycode. The boolean flags if the key should be pressed with the shift modifier.
 
 Note that other modifiers pressed outside of a sequence with `Text` are disabled.
 
-### Tap(KeyCode)
+### Tap(HidKeyCode)
 
-Presses and releases a key. Modifiers pressed outside of a macro sequence are considered as well. If you don't need this prefer `Text(KeyCode, bool)` above, as the resulting macro is 3 times smaller in size.
+Presses and releases a key. Modifiers pressed outside of a macro sequence are considered as well. If you don't need this prefer `Text(HidKeyCode, bool)` above, as the resulting macro is 3 times smaller in size.
 
-### Press(KeyCode)
+### Press(HidKeyCode)
 
 Press (and hold) a keycode. Useful for modifier keys.
 
-### Release(KeyCode)
+### Release(HidKeyCode)
 
 Release (a formerly pressed) keycode. Useful for modifier keys.
 
@@ -56,21 +56,21 @@ There are two helper functions to define macro sequences:
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     define_macro_sequences(&[
         Vec::from_slice(&[
-            MacroOperation::Text(KeyCode::H, true),
-            MacroOperation::Text(KeyCode::E, false),
-            MacroOperation::Text(KeyCode::L, false),
-            MacroOperation::Text(KeyCode::L, false),
-            MacroOperation::Text(KeyCode::O, false),
+            MacroOperation::Text(HidKeyCode::H, true),
+            MacroOperation::Text(HidKeyCode::E, false),
+            MacroOperation::Text(HidKeyCode::L, false),
+            MacroOperation::Text(HidKeyCode::L, false),
+            MacroOperation::Text(HidKeyCode::O, false),
         ])
         .expect("too many elements"),
         Vec::from_slice(&[
-            MacroOperation::Press(KeyCode::LShift),
-            MacroOperation::Tap(KeyCode::W),
-            MacroOperation::Release(KeyCode::LShift),
-            MacroOperation::Tap(KeyCode::O),
-            MacroOperation::Tap(KeyCode::R),
-            MacroOperation::Tap(KeyCode::L),
-            MacroOperation::Tap(KeyCode::D),
+            MacroOperation::Press(HidKeyCode::LShift),
+            MacroOperation::Tap(HidKeyCode::W),
+            MacroOperation::Release(HidKeyCode::LShift),
+            MacroOperation::Tap(HidKeyCode::O),
+            MacroOperation::Tap(HidKeyCode::R),
+            MacroOperation::Tap(HidKeyCode::L),
+            MacroOperation::Tap(HidKeyCode::D),
         ])
         .expect("too many elements"),
     ])
@@ -94,7 +94,7 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
 
 (With the improvement that the `Text` macro operation is used in both cases.)
 
-Note that you are still limited to the ascii characters defined as `KeyCode`s. For example, you can't enter a German Umlaut (`ü`) or unicode directly with a `KeyCode` binding. If you enter an illegal character it will be converted to `X`.
+Note that you are still limited to the ascii characters defined as `HidKeyCode`s. For example, you can't enter a German Umlaut (`ü`) or unicode directly with a `HidKeyCode` binding. If you enter an illegal character it will be converted to `X`.
 
 Entering these special characters usually require a key combination which depends on your operating system and chosen keyboard layout (setting in the OS). For example, in MacOS with a en-US layout you can define the following sequence to enter an `ö`:
 
@@ -102,10 +102,10 @@ Entering these special characters usually require a key combination which depend
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     define_macro_sequences(&[
         Vec::from_slice(&[
-            MacroOperation::Press(KeyCode::LAlt),
-            MacroOperation::Tap(KeyCode::U),
-            MacroOperation::Release(KeyCode::LAlt),
-            MacroOperation::Tap(KeyCode::O),
+            MacroOperation::Press(HidKeyCode::LAlt),
+            MacroOperation::Tap(HidKeyCode::U),
+            MacroOperation::Release(HidKeyCode::LAlt),
+            MacroOperation::Tap(HidKeyCode::O),
         ])
         .expect("too many elements"),
     ])
@@ -118,11 +118,11 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
 
 A macro can be triggered in two ways:
 
-1. Using the `KeyCode::Macro0` - `KeyCode::Macro31`.
-2. Using the `Action::MacroTrigger(index)`, where index can be any number. If the total number of macro sequences is less than the index passed, nothing is executed (and an error "Macro not found" is logged). Remember that the index starts at `0`.
-3. Defined macro sequences are automatically bound to a sequence: The first macro sequence defined is executed when triggering `KeyCode::Macro0` and `Action::MacroTrigger(0)`.
+1. Using the macro shortcuts in keymap configuration (e.g., `Macro(0)` - `Macro(31)` in toml config, or `macros!(0)` - `macros!(31)` in Rust).
+2. Using the `Action::TriggerMacro(index)`, where index can be any number between 0~31. If the total number of macro sequences is less than the index passed, nothing is executed (and an error "Macro not found" is logged). Remember that the index starts at `0`.
+3. Defined macro sequences are automatically bound to a sequence: The first macro sequence defined is executed when triggering `Macro(0)` and `Action::TriggerMacro(0)`.
 
-There is no difference using either, other than that there is no `KeyCode::Macro32`. To trigger the 33th macro and above you need to use `Action::TriggerMacro(index)`.
+There is no difference using either, other than that there are only 32 shortcuts available (0-31). To trigger the 33rd macro and above you need to use `Action::TriggerMacro(index)`.
 
 ### Combining
 
@@ -139,14 +139,12 @@ For example:
 ```rust
 // Trigger macro(1) when tapping and switch to layer 1 when holding
 KeyAction::TapHold(Action::TriggerMacro(1), Action::LayerOn(1))
-// Or
-KeyAction::TapHold(Action::Key(KeyCode::Macro0), Action::LayerOn(1))
 ```
 
 Probably you most likely will need
 
 ```rust
-k!(Macro0)
+macros!(0)
 ```
 
 or
@@ -171,14 +169,14 @@ This is the configuration for the above example, assuming `1` is the chording la
 
     CombosConfig {
         combos: [
-            Some(Combo::new([k!(T), k!(Y)], k!(Macro0), Some(1))),
+            Some(Combo::new([k!(T), k!(Y)], macros!(0), Some(1))),
             Some(Combo::new([k!(T), k!(Y), k!(G)], KeyAction::Single(Action::TriggerMacro(1)), Some(1))),
         ],
         timeout: Duration::from_millis(50),
     }
 ```
 
-(`Action::TriggerMacro(1)` was used for demonstration only. Using `k!(Macro1)` is recommended to keep it brief.)
+(`Action::TriggerMacro(1)` was used for demonstration only. Using `macros!(1)` is recommended to keep it brief.)
 
 Note that instead of having a second macro for all verbs (normal and `ing` form) you can define a macro which converts a word to the `ing` form:
 
@@ -186,17 +184,17 @@ Note that instead of having a second macro for all verbs (normal and `ing` form)
     define_macro_sequences(&[
         to_macro_sequence("type"),
         Vec::from_slice(&[
-            MacroOperation::Press(KeyCode::Backspace),
-            MacroOperation::Text(KeyCode::I, false),
-            MacroOperation::Text(KeyCode::N, false),
-            MacroOperation::Text(KeyCode::G, false),
+            MacroOperation::Press(HidKeyCode::Backspace),
+            MacroOperation::Text(HidKeyCode::I, false),
+            MacroOperation::Text(HidKeyCode::N, false),
+            MacroOperation::Text(HidKeyCode::G, false),
         ])
         .expect("too many elements"),
     ])
 
     CombosConfig {
         combos: [
-            Some(Combo::new([k!(T), k!(Y)], k!(Macro0), Some(1))),
+            Some(Combo::new([k!(T), k!(Y)], macros!(0), Some(1))),
             Some(Combo::new([k!(G)], KeyAction::Single(Action::TriggerMacro(1)), Some(1))),
         ],
         timeout: Duration::from_millis(50),
@@ -222,9 +220,9 @@ pub(crate) fn get_forks() -> ForksConfig {
     ForksConfig {
         forks: Vec::from_slice(&[
             Fork::new(
-                k!(Macro0),
-                k!(Macro0),
-                k!(Macro1),
+                macros!(0),
+                macros!(0),
+                macros!(1),
                 StateBits::new_from(
                     ModifierCombination::LSHIFT,
                     LedIndicator::default(),
@@ -254,22 +252,22 @@ Thus, implement the macro:
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     define_macro_sequences(&[
         Vec::from_slice(&[
-            MacroOperation::Text(KeyCode::Q, false),
-            MacroOperation::Text(KeyCode::U, false),
+            MacroOperation::Text(HidKeyCode::Q, false),
+            MacroOperation::Text(HidKeyCode::U, false),
         ])
         .expect("too many elements"),
     ])
 }
 ```
 
-When you press `shift` and use `MacroOperation::Text`, like in the code above, no letter gets capitalized (outputs `qu`). Remember that `MacroOperation::Text` ignores all modifiers not being part of the sequence. `MacroOperation:Tap` doesn't, thus you can use `MacroOperation::Tap` for the first letter, and `MacroOperation::Text` for the following letters, to capitalize the first letter only.
+When you press `shift` and use `MacroOperation::Text`, like in the code above, no letter gets capitalized (outputs `qu`). Remember that `MacroOperation::Text` ignores all modifiers not being part of the sequence. `MacroOperation::Tap` doesn't, thus you can use `MacroOperation::Tap` for the first letter, and `MacroOperation::Text` for the following letters, to capitalize the first letter only.
 
 ```rust
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     define_macro_sequences(&[
         Vec::from_slice(&[
-            MacroOperation::Text(KeyCode::Q, false),
-            MacroOperation::Tap(KeyCode::U),
+            MacroOperation::Text(HidKeyCode::Q, false),
+            MacroOperation::Tap(HidKeyCode::U),
         ])
         .expect("too many elements"),
     ])

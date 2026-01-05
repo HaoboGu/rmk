@@ -1307,7 +1307,7 @@ checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
 
 [[package]]
 name = "rmk"
-version = "0.7.8"
+version = "0.8.2"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -1323,6 +1323,7 @@ dependencies = [
  "embassy-time",
  "embassy-usb",
  "embedded-hal 1.0.0",
+ "embedded-hal-async",
  "embedded-io-async",
  "futures",
  "heapless 0.9.2",
@@ -1343,7 +1344,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.5.6"
+version = "0.6.1"
 dependencies = [
  "cargo_toml",
  "config",
@@ -1359,7 +1360,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.6.8"
+version = "0.7.1"
 dependencies = [
  "cargo_toml",
  "darling",
@@ -1395,7 +1396,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-types"
-version = "0.1.0"
+version = "0.2.2"
 dependencies = [
  "bitfield-struct",
  "postcard",

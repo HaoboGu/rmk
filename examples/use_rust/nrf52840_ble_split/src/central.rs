@@ -26,17 +26,18 @@ use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{
     BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
-use rmk::controller::EventController as _;
+use rmk::controller::EventController;
 use rmk::controller::led_indicator::KeyboardIndicatorController;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join4;
+use rmk::futures::future::{join4, join5};
 use rmk::input_device::Runnable;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
+use rmk::matrix::{Matrix, OffsetMatrixWrapper};
 use rmk::split::ble::central::{read_peripheral_addresses, scan_peripherals};
-use rmk::split::central::{CentralMatrix, run_peripheral_manager};
+use rmk::split::central::run_peripheral_manager;
 use rmk::{HostResources, initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -206,7 +207,8 @@ async fn main(spawner: Spawner) {
 
     // Initialize the matrix and keyboard
     let debouncer = DefaultDebouncer::new();
-    let mut matrix = CentralMatrix::<_, _, _, 0, 0, 4, 7, true>::new(row_pins, col_pins, debouncer);
+    let mut matrix =
+        OffsetMatrixWrapper::<_, _, _, 0, 0>(Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer));
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap);
 
@@ -233,6 +235,32 @@ async fn main(spawner: Spawner) {
         rmk::types::led_indicator::LedIndicatorType::CapsLock,
     );
 
+    // Peripheral battery monitor controller
+    // This controller subscribes to ControllerEvent::SplitPeripheralBattery events
+    // and logs the battery level of each peripheral
+    use rmk::channel::ControllerSub;
+    use rmk::controller::Controller;
+    struct PeripheralBatteryMonitor {
+        controller_sub: ControllerSub,
+    }
+    impl Controller for PeripheralBatteryMonitor {
+        type Event = rmk::event::ControllerEvent;
+
+        async fn process_event(&mut self, event: Self::Event) {
+            use rmk::event::ControllerEvent;
+            if let ControllerEvent::SplitPeripheralBattery(peripheral_id, level) = event {
+                info!("Peripheral {} battery level: {}%", peripheral_id, level);
+            }
+        }
+
+        async fn next_message(&mut self) -> Self::Event {
+            self.controller_sub.next_message_pure().await
+        }
+    }
+    let mut peripheral_battery_monitor = PeripheralBatteryMonitor {
+        controller_sub: unwrap!(rmk::channel::CONTROLLER_CHANNEL.subscriber()),
+    };
+
     // Start
     join4(
         run_devices! (
@@ -242,11 +270,12 @@ async fn main(spawner: Spawner) {
             EVENT_CHANNEL => [batt_proc],
         },
         keyboard.run(),
-        join4(
+        join5(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
             run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
             scan_peripherals(&stack, &peripheral_addrs),
             capslock_led.event_loop(),
+            peripheral_battery_monitor.event_loop(),
         ),
     )
     .await;

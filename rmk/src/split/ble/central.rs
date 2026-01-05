@@ -295,8 +295,8 @@ fn defaul_central_conn_param() -> ConnectParams {
     ConnectParams {
         min_connection_interval: Duration::from_micros(7500),
         max_connection_interval: Duration::from_micros(7500),
-        max_latency: 400, // 3s
-        supervision_timeout: Duration::from_secs(7),
+        max_latency: 30, // 225ms
+        supervision_timeout: Duration::from_secs(5),
         ..Default::default()
     }
 }
@@ -532,6 +532,9 @@ async fn sleep_manager_task<
         SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS
     );
 
+    #[cfg(feature = "controller")]
+    let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
+
     loop {
         if !SLEEPING_STATE.load(Ordering::Acquire) {
             // Wait for timeout or activity (false signal means activity/wakeup)
@@ -559,6 +562,7 @@ async fn sleep_manager_task<
 
             // Connection parameters are different when central is broadcasting and connected to host
             let conn_params = if CONNECTION_STATE.load(Ordering::Acquire) {
+                // Connected, the connection interval is 20ms
                 ConnectParams {
                     min_connection_interval: Duration::from_millis(20),
                     max_connection_interval: Duration::from_millis(20),
@@ -567,6 +571,7 @@ async fn sleep_manager_task<
                     ..Default::default()
                 }
             } else {
+                // Advertising ,the connection interval can be longer
                 ConnectParams {
                     min_connection_interval: Duration::from_millis(200),
                     max_connection_interval: Duration::from_millis(200),
@@ -579,12 +584,16 @@ async fn sleep_manager_task<
             // Update connection parameters
             update_conn_params(stack, conn, &conn_params).await;
             SLEEPING_STATE.store(true, Ordering::Release);
+            #[cfg(feature = "controller")]
+            send_controller_event(&mut controller_pub, ControllerEvent::Sleep(true));
         } else {
             // Wait for activity to wake up (false signal means activity/wakeup)
             let signal_value = CENTRAL_SLEEP.wait().await;
             if !signal_value {
                 info!("Waking up from sleep mode due to activity");
                 SLEEPING_STATE.store(false, Ordering::Release);
+                #[cfg(feature = "controller")]
+                send_controller_event(&mut controller_pub, ControllerEvent::Sleep(false));
 
                 // Restore normal connection parameters
                 update_conn_params(stack, conn, &defaul_central_conn_param()).await;

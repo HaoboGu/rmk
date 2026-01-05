@@ -1,6 +1,6 @@
 # Real World Examples
 
-This pages contains real world examples of RMK keyboards.
+This page contains real world examples of RMK keyboards.
 
 ## [rmk-ble-keyboard](https://github.com/HaoboGu/rmk-ble-keyboard)
 
@@ -17,6 +17,12 @@ A BLE/USB dual-mode GH60 keyboard using Ebyte's E73 nRF52840 module.
 _Sessile_ is an exploration of "minimal" finger travel. You can also read its circuitous [origin story](https://kbd.news/Typing-in-the-upside-down-2603.html).
 
 ![sessile](../../images/sessile.png)
+
+## [Urchin](https://github.com/TimoBbz/urchin-rmk-firmware)
+
+A firmware for the [Urchin Keyboard](https://github.com/duckyb/urchin), to use with the layout [Ergo-L](https://ergol.org/).
+
+![urchin](../../images/urchin.png)
 
 ## Show your keyboard!
 

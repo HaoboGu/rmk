@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
 use rmk_config::{KEYCODE_ALIAS, KeyboardTomlConfig, MorseProfile};
+use strum::VariantNames;
 
 use crate::behavior::expand_profile_name;
 
@@ -15,19 +16,29 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> Tok
         .unwrap()
         .morse
         .and_then(|m| m.profiles);
-    let num_encoder = keyboard_config.get_board_config().unwrap().get_num_encoder();
-    let total_num_encoder = num_encoder.iter().sum::<usize>();
-
-    // TODO: config encoder actions in keyboard.toml
-    let encoders = vec![quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No))}; total_num_encoder];
+    let num_encoder = keyboard_config
+        .get_board_config()
+        .unwrap()
+        .get_num_encoder()
+        .iter()
+        .sum();
 
     let (layout, _) = keyboard_config.get_layout_config().unwrap();
+
     let mut layers = vec![];
     let mut encoder_map = vec![];
-    for layer in layout.keymap {
-        layers.push(expand_layer(layer, profiles));
-        encoder_map.push(quote! { [#(#encoders), *] });
+
+    for layer in &layout.keymap {
+        layers.push(expand_layer(layer.clone(), profiles));
     }
+
+    for encoder_layer in &layout.encoder_map {
+        encoder_map.push(expand_encoder_layer(encoder_layer.clone(), num_encoder, profiles));
+    }
+    encoder_map.resize(
+        layout.keymap.len(),
+        quote! { [::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)); NUM_ENCODER] },
+    );
 
     quote! {
         pub const fn get_default_keymap() -> [[[::rmk::types::action::KeyAction; COL]; ROW]; NUM_LAYER] {
@@ -40,7 +51,7 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> Tok
     }
 }
 
-/// Push rows in the layer
+/// Expand a layer for keymap
 fn expand_layer(layer: Vec<Vec<String>>, profiles: &Option<HashMap<String, MorseProfile>>) -> TokenStream2 {
     let mut rows = vec![];
     for row in layer {
@@ -49,13 +60,33 @@ fn expand_layer(layer: Vec<Vec<String>>, profiles: &Option<HashMap<String, Morse
     quote! { [#(#rows), *] }
 }
 
-/// Push keys in the row
+/// Expand a row for keymap
 fn expand_row(row: Vec<String>, profiles: &Option<HashMap<String, MorseProfile>>) -> TokenStream2 {
     let mut keys = vec![];
     for key in row {
         keys.push(parse_key(key, profiles));
     }
     quote! { [#(#keys), *] }
+}
+
+/// Expand a layer for encoder map
+fn expand_encoder_layer(
+    encoder_layer: Vec<[String; 2]>,
+    num_encoder: usize,
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> TokenStream2 {
+    let mut encoders = vec![];
+
+    for encoder in encoder_layer {
+        let cw_action = parse_key(encoder[0].clone(), profiles);
+        let ccw_action = parse_key(encoder[1].clone(), profiles);
+        encoders.push(quote! { ::rmk::encoder!(#cw_action, #ccw_action) });
+    }
+
+    // Make sure it configures correct number of encoders
+    encoders.resize(num_encoder, quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)) });
+
+    quote! { [#(#encoders), *] }
 }
 
 struct ModifierCombinationMacro {
@@ -315,6 +346,12 @@ pub(crate) fn parse_key(key: String, profiles: &Option<HashMap<String, MorseProf
                 );
             }
         }
+        s if s.to_lowercase().starts_with("macro(") => {
+            let number = get_number(s.clone(), s.get(0..6).unwrap(), ")");
+            quote! {
+                ::rmk::macros!(#number)
+            }
+        }
         // s if s.to_lowercase().starts_with("hrm(") => {
         //     let prefix = s.get(0..4).unwrap();
         //     if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
@@ -395,13 +432,75 @@ pub(crate) fn parse_key(key: String, profiles: &Option<HashMap<String, MorseProf
                 ::rmk::td!(#index)
             }
         }
-        s if s.to_lowercase().starts_with("m(") => {
-            let index = get_number(s.clone(), s.get(0..2).unwrap(), ")");
+        s if s.to_lowercase().starts_with("user") => {
+            // Support both User(X) and UserX formats
+            let number_str = if s.to_lowercase().starts_with("user(") {
+                // User(X) format
+                s.trim_start_matches(|c: char| !c.is_ascii_digit())
+                 .trim_end_matches(')')
+            } else if s[4..].chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                // UserX format
+                &s[4..]
+            } else {
+                ""
+            };
+
+            let number = number_str.parse::<u8>().unwrap_or(255);
+
+            if number > 31 {
+                panic!(
+                    "\n❌ keyboard.toml: {} is not a valid user key! User keys are numbered 0-31. Please check the documentation: https://rmk.rs/docs/features/configuration/layout.html",
+                    s
+                );
+            }
+
             quote! {
-                ::rmk::m!(#index)
+                ::rmk::user!(#number)
+            }
+        }
+        s if s.to_lowercase().starts_with("macro")
+            && s[5..].chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) =>
+        {
+            // Support Macro0, Macro1, Macro2, etc.
+            let index_str = &s[5..];
+            let index = index_str.parse::<u8>().unwrap();
+            quote! {
+                ::rmk::macros!(#index)
             }
         }
         _ => {
+            // Check if it's a keyboard control, light control, or special key action (case-insensitive)
+            let key_lower = key.to_lowercase();
+
+            // Try to find exact match (case-insensitive) in keyboard actions
+            // Use strum::VariantNames to automatically get all enum variants
+            if let Some(action) = rmk_types::action::KeyboardAction::VARIANTS
+                .iter()
+                .find(|&&a| a.to_lowercase() == key_lower)
+            {
+                let action_ident = format_ident!("{}", action);
+                return quote! { ::rmk::kbctrl!(#action_ident) };
+            }
+
+            // Try to find exact match (case-insensitive) in light actions
+            if let Some(action) = rmk_types::action::LightAction::VARIANTS
+                .iter()
+                .find(|&&a| a.to_lowercase() == key_lower)
+            {
+                let action_ident = format_ident!("{}", action);
+                return quote! { ::rmk::light!(#action_ident) };
+            }
+
+            // Try to find exact match (case-insensitive) in special keys
+            if let Some(special_key) = rmk_types::keycode::SpecialKey::VARIANTS
+                .iter()
+                .find(|&&k| k.to_lowercase() == key_lower)
+            {
+                let key_ident = format_ident!("{}", special_key);
+                return quote! { ::rmk::special!(#key_ident) };
+            }
+
+            // Default: try to use as HID keycode
             let ident = get_key_with_alias(key);
             quote! { ::rmk::k!(#ident) }
         }

@@ -85,8 +85,8 @@ impl<
                         };
 
                         let debounce_state = self.debouncer.detect_change_with_debounce(
-                            col_idx,
                             row_idx,
+                            col_idx,
                             pin_state,
                             &self.key_states[row_idx][col_idx],
                         );

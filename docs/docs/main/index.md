@@ -22,7 +22,7 @@ features:
     icon: 🖥️
 
   - title: Real-time Keymap Configuration
-    details: Native Vial support, enabling real-time keymap modification over BLE connections wirelessly
+    details: Native Vial support, enabling real-time keymap modification
     icon: 🧪
 
   - title: Advanced Features

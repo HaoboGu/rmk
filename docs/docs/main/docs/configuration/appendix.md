@@ -2,7 +2,7 @@
 
 ### `keyboard.toml`
 
-The following toml contains all available settings in `keyboard.toml`
+The following TOML contains all available settings in `keyboard.toml`
 
 ```toml
 # Basic info of the keyboard
@@ -21,7 +21,7 @@ board = "nice!nano_v2"
 # Set to false if you don't want USB
 usb_enable = true
 
-# Set matrix IO for the board. This section is for non-split keyboard and is conflict with [split] section
+# Set matrix IO for the board. This section is for non-split keyboards and is in conflict with the [split] section
 [matrix]
 # `matrix_type` is optional. Default is "normal"
 matrix_type = "normal"
@@ -45,9 +45,9 @@ direct_pin_low_active = true
 
 # Layout info for the keyboard, this section is mandatory
 [layout]
-# Number of rows. For split keyboard, this is the total rows contains all splits
+# Number of rows. For a split keyboard, this is the total number of rows for all splits
 rows = 5
-# Number of cols. For split keyboard, this is the total cols contains all splits
+# Number of cols. For a split keyboard, this is the total number of cols for all splits
 cols = 4
 # Number of layers. Be careful, since large layer number takes more flash and RAM
 layers = 3
@@ -81,7 +81,7 @@ my_paste = "WM(V, LCtrl)"
 # The number (and order) of entries on each layer should be
 # identical with the number (and order) of entries in `matrix_map`.
 # Empty layers will be used to fill if the number of explicitly
-# defined layers is smaller then `layout.layers` setting
+# defined layers is smaller than the `layout.layers` setting
 
 # layer 0 (default):
 # (the number comes from the order of '[[layer]] entries' in the file)
@@ -205,6 +205,14 @@ capslock = { pin = "PIN_0", low_active = true }
 scrolllock = { pin = "PIN_1", low_active = true }
 numslock = { pin = "PIN_2", low_active = true }
 
+# Output configuration, if you don't neet to set an output pin, just ignore this section.
+# Note the double brackets [[ ]], which indicate that multiple outputs can be defined.
+[[output]]
+# Only the pin name is required, the rest of the fields are optional
+pin = "PIN_13"
+initial_state_active = false
+low_active = false
+
 # Storage configuration.
 # To use the default configuration, ignore this section completely
 [storage]
@@ -232,10 +240,10 @@ battery_adc_pin = "vddh"
 adc_divider_measured = 2000
 # Total resistance of the full path for input adc
 adc_divider_total = 2806
-# [Depreciated] Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
+# [Deprecated] Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 # Input pin that indicates the charging state
 # charge_state = { pin = "PIN_1", low_active = true }
-# [Depreciated] Output LED pin that blinks when the battery is low
+# [Deprecated] Output LED pin that blinks when the battery is low
 # charge_led= { pin = "PIN_2", low_active = true }
 
 # RMK internal configuration
@@ -261,6 +269,12 @@ macro_space_size = 256
 debounce_time = 20
 # Event channel size
 event_channel_size = 16
+# Controller event channel size
+controller_channel_size = 16
+# Number of publishers to controllers
+controller_channel_pubs = 12
+# Number of controllers (subscribers)
+controller_channel_subs = 8
 # Report channel size
 report_channel_size = 16
 # Vial channel size
@@ -271,9 +285,11 @@ flash_channel_size = 4
 split_peripherals_num = 1
 # The number of available BLE profiles
 ble_profiles_num = 3
+# BLE Split Central sleep timeout in seconds (0 = disabled)
+split_central_sleep_timeout_seconds = 0
 
 # Split configuration
-# This section is conflict with [split] section, you could only have either [matrix] or [split], but NOT BOTH
+# This section conflicts with the [matrix] section. You can only have either [matrix] or [split], but NOT BOTH
 [split]
 # Connection type of split, "serial" or "ble"
 connection = "serial"
@@ -313,7 +329,7 @@ col_pins = ["PIN_10", "PIN_12"]
 
 # Configuration for the first split peripheral
 # Note the double brackets [[ ]], which indicate that multiple split peripherals can be defined.
-# The order of peripherals is important: it should match the order of the serial instances(if serial is used).
+# The order of peripherals is important: it should match the order of the serial instances (if serial is used).
 [[split.peripheral]]
 # Number of rows on peripheral board
 rows = 2
@@ -323,7 +339,7 @@ cols = 1
 row_offset = 2
 # Col offset of peripheral matrix to the whole matrix
 col_offset = 2
-# The serial instance used to communication with the central board, if the connection type is "serial"
+# The serial instance used to communicate with the central board, if the connection type is "serial"
 serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
 # Override the BLE random static address of the peripheral board
 ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3]
@@ -334,9 +350,17 @@ matrix_type = "normal"
 row_pins = ["PIN_9", "PIN_11"]
 col_pins = ["PIN_10"]
 
-# More split peripherals(if you have)
+# Output configuration, if you don't neet to set an output pin, just ignore this section.
+# Note the double brackets [[ ]], which indicate that multiple outputs can be defined.
+[[split.peripheral.output]]
+# Only the pin name is required, the rest of the fields are optional
+pin = "PIN_13"
+initial_state_active = false
+low_active = false
+
+# More split peripherals (if you have any)
 [[split.peripheral]]
-# The configuration is same with the first split peripheral
+# The configuration is the same as the first split peripheral
 ...
 ...
 ...
@@ -353,6 +377,22 @@ vial_enabled = true
 # The unlock keys are the combo of the row 0, col 0 key and
 # the row 0, col 1 key
 unlock_keys = [[0, 0], [0, 1]]
+
+# Chip-specific configuration
+# To use the default configuration, ignore this section completely
+# Use chip-specific sections like [chip.nrf52840] for chip-specific settings
+[chip.nrf52840]
+# DCDC regulator 0 enabled (nrf52840 only, default: true)
+# **Note**: Do not enable DC/DC regulator without an external LC filter being connected
+# as this will inhibit device operation, including debug access, until an LC filter is connected.
+dcdc_reg0 = true
+# DCDC regulator 1 enabled (nrf52840, nrf52833, default: true)
+# **Note**: Do not enable DC/DC regulator without an external LC filter being connected
+# as this will inhibit device operation, including debug access, until an LC filter is connected.
+dcdc_reg1 = true
+# DCDC regulator 0 voltage (nrf52840 only, default: "3V3")
+# Valid values: "3V3" or "1V8"
+dcdc_reg0_voltage = "3V3"
 ```
 
 ### Available chip names

@@ -1,6 +1,6 @@
 [package]
 name = "rmk-types"
-version = "0.1.0"
+version = "0.2.2"
 edition = "2024"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Common types in RMK"
@@ -20,7 +20,10 @@ strum = { version = "0.27", default-features = false, features = ["derive"] }
 bitfield-struct = "0.12"
 
 [features]
+default = []
 defmt = [
     "dep:defmt",
     "postcard/defmt",
 ]
+# Feature for proc-macro code generation only, not included in firmware
+_codegen = []

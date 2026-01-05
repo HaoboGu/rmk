@@ -63,12 +63,44 @@ Controllers that need periodic updates implement `PollingController`:
 
 ```rust
 impl PollingController for MyPollingController {
-    const INTERVAL: embassy_time::Duration = embassy_time::Duration::from_millis(100);
+    fn interval(&self) -> embassy_time::Duration {
+        embassy_time::Duration::from_millis(100)
+    }
 
     async fn update(&mut self) {
         // Periodic update logic (e.g., LED animations, sensor readings)
     }
 }
+```
+
+The polling interval can also be passed as a parameter like this:
+
+```rust
+struct ConfigurableController {
+    interval: embassy_time::Duration,
+}
+
+impl ConfigurableController {
+    /// Create a controller with a specific update frequency in Hz
+    pub fn with_hz(hz: u32) -> Self {
+        Self {
+            interval: embassy_time::Duration::from_hz(hz as u64),
+        }
+    }
+}
+
+impl PollingController for ConfigurableController {
+    fn interval(&self) -> embassy_time::Duration {
+        self.interval
+    }
+
+    async fn update(&mut self) {
+        // update periodic
+    }
+}
+
+// Usage: create a controller with 60Hz update rate
+let controller = ConfigurableController::with_hz(60);
 ```
 
 ### Controller Events
@@ -99,8 +131,8 @@ scrolllock.low_active = false
 ### Custom Controllers
 
 Custom controllers are declared using the `#[controller(event)]` or `#[controller(poll)]` attribute within your keyboard module.
-If `#[controller(event)]` is used the controller must implement `EventController` (or just `Controller`) and the `EventController::event_loop` method will be called.
-If `#[controller(poll)]` is used the controller must implement `PollingController` and the `PollingController::polling_loop` method will be called.
+If `#[controller(event)]` is used, the controller must implement `EventController` (or just `Controller`) and the `EventController::event_loop` method will be called.
+If `#[controller(poll)]` is used, the controller must implement `PollingController` and the `PollingController::polling_loop` method will be called.
 
 A `p` variable containing the chip peripherals is in scope inside the function.
 It's also possible to define extra interrupts using the `bind_interrupts!` macro.
@@ -201,10 +233,12 @@ impl<P: StatefulOutputPin> Controller for BlinkingController<P> {
 }
 
 impl<P: StatefulOutputPin> PollingController for BlinkingController<P> {
-    const INTERVAL: embassy_time::Duration = embassy_time::Duration::from_millis(500);
+    fn interval(&self) -> embassy_time::Duration {
+        embassy_time::Duration::from_millis(500)
+    }
 
     async fn update(&mut self) {
-        // Toggle LED every 500ms when active(aka current layer is not 0)
+        // Toggle LED every 500ms when active (i.e., current layer is not 0)
         if self.active {
             self.pin.toggle();
         }
