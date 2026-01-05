@@ -558,18 +558,13 @@ macro_rules! morse {
 /// Macros can send multiple keypresses or perform complex sequences.
 ///
 /// # Parameters
-/// - `$index`: Index of the macro configuration (0-255)
+/// - `$index`: Index of the macro (0-255)
 ///
 /// # Example
 /// ```ignore
 /// macros!(0)  // Triggers macro at index 0
 /// macros!(1)  // Triggers macro at index 1
 /// ```
-///
-/// # Note
-/// - Named `macros` because `macro` is a Rust keyword
-/// - The actual macro sequence must be configured separately in the
-///   keyboard's macro configuration array
 #[macro_export]
 macro_rules! macros {
     ($index: literal) => {
@@ -577,25 +572,10 @@ macro_rules! macros {
     };
 }
 
-/// Create a user key action.
-///
-/// This macro creates a key that triggers a user-defined action by index.
-/// User keys (User0-31) can be customized in the keyboard firmware to perform
-/// custom actions specific to your keyboard implementation.
+/// Create a user key action with given index.
 ///
 /// # Parameters
 /// - `$index`: Index of the user key (0-31)
-///
-/// # Example
-/// ```ignore
-/// user!(0)  // Triggers User0
-/// user!(15) // Triggers User15
-/// ```
-///
-/// # Note
-/// The actual behavior of user keys must be implemented in the
-/// keyboard's user key handler. By default, User0-7 are used for
-/// BLE profile switching in wireless keyboards.
 #[macro_export]
 macro_rules! user {
     ($index: literal) => {
@@ -628,11 +608,9 @@ macro_rules! user {
 #[macro_export]
 macro_rules! kbctrl {
     ($action: ident) => {
-        $crate::types::action::KeyAction::Single(
-            $crate::types::action::Action::KeyboardControl(
-                $crate::types::action::KeyboardAction::$action
-            )
-        )
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::KeyboardControl(
+            $crate::types::action::KeyboardAction::$action,
+        ))
     };
 }
 
@@ -657,11 +635,9 @@ macro_rules! kbctrl {
 #[macro_export]
 macro_rules! light {
     ($action: ident) => {
-        $crate::types::action::KeyAction::Single(
-            $crate::types::action::Action::Light(
-                $crate::types::action::LightAction::$action
-            )
-        )
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::Light(
+            $crate::types::action::LightAction::$action,
+        ))
     };
 }
 
@@ -682,10 +658,8 @@ macro_rules! light {
 #[macro_export]
 macro_rules! special {
     ($key: ident) => {
-        $crate::types::action::KeyAction::Single(
-            $crate::types::action::Action::Special(
-                $crate::types::keycode::SpecialKey::$key
-            )
-        )
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::Special(
+            $crate::types::keycode::SpecialKey::$key,
+        ))
     };
 }
