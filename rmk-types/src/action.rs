@@ -334,6 +334,7 @@ pub enum Action {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(postcard::experimental::max_size::MaxSize)]
+#[cfg_attr(feature = "_codegen", derive(strum::VariantNames))]
 pub enum KeyboardAction {
     Bootloader,
     Reboot,
@@ -352,6 +353,7 @@ pub enum KeyboardAction {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(postcard::experimental::max_size::MaxSize)]
+#[cfg_attr(feature = "_codegen", derive(strum::VariantNames))]
 pub enum LightAction {
     BacklightOn,
     BacklightOff,
