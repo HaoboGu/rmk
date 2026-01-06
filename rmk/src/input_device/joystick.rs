@@ -61,8 +61,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         debug!("JoystickProcessor::generate_report: report = {:?}", report);
         // map to mouse
+        let buttons = self.keymap.borrow().mouse_buttons;
         let mouse_report = MouseReport {
-            buttons: 0,
+            buttons,
             x: (report[0].clamp(i8::MIN as i16, i8::MAX as i16)) as i8,
             y: (report[1].clamp(i8::MIN as i16, i8::MAX as i16)) as i8,
             wheel: 0,

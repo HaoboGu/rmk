@@ -1734,6 +1734,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             self.mouse_report.pan = pan;
         }
 
+        // Sync button state to keymap
+        self.keymap.borrow_mut().mouse_buttons = self.mouse_report.buttons;
+
         if !matches!(
             key,
             HidKeyCode::MouseAccel0 | HidKeyCode::MouseAccel1 | HidKeyCode::MouseAccel2
