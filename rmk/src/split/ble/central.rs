@@ -19,7 +19,7 @@ use {
 use crate::ble::{SLEEPING_STATE, update_ble_phy, update_conn_params};
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
-use crate::{CONNECTION_STATE, SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES};
+use crate::{CONNECTION_STATE, SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS};
 #[cfg(feature = "storage")]
 use {
     crate::channel::FLASH_CHANNEL,
@@ -154,9 +154,9 @@ pub async fn read_peripheral_addresses<
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) -> RefCell<Vec<Option<[u8; 6]>, PERI_NUM>> {
     let mut peripheral_addresses: heapless::Vec<Option<[u8; 6]>, PERI_NUM> = heapless::Vec::new();
-    for id in 0..PERI_NUM {
+    for _id in 0..PERI_NUM {
         #[cfg(feature = "storage")]
-        if let Ok(Some(peer_address)) = storage.read_peer_address(id as u8).await
+        if let Ok(Some(peer_address)) = storage.read_peer_address(_id as u8).await
             && peer_address.is_valid
         {
             peripheral_addresses.push(Some(peer_address.address)).unwrap();

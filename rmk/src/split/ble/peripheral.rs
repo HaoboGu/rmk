@@ -1,7 +1,6 @@
 use bt_hci::cmd::le::LeSetPhy;
 use bt_hci::controller::ControllerCmdAsync;
 use embassy_futures::join::join;
-use embassy_futures::select::select;
 use embassy_time::{Duration, Timer, with_timeout};
 use trouble_host::prelude::*;
 #[cfg(feature = "storage")]
@@ -156,7 +155,11 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
     } = stack.build();
 
     // First, read central address from storage
+    #[cfg(feature = "storage")]
     let mut central_saved = false;
+    #[cfg(not(feature = "storage"))]
+    let central_saved = false;
+
     #[cfg(feature = "storage")]
     let mut central_addr = if let Ok(Some(central_addr)) = storage.read_peer_address(0).await {
         if central_addr.is_valid {
@@ -169,7 +172,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
         None
     };
     #[cfg(not(feature = "storage"))]
-    let mut central_addr = None;
+    let central_addr = None;
 
     let peri_task = async {
         let server = BleSplitPeripheralServer::new_default("rmk").unwrap();

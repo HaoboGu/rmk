@@ -8,36 +8,25 @@ mod keymap;
 
 use defmt::{info, unwrap};
 use embassy_executor::Spawner;
-use embassy_nrf::Peri;
 use embassy_nrf::cracen;
 use embassy_nrf::gpio::{Input, Output};
-use embassy_nrf::interrupt::{self, InterruptExt};
-use embassy_nrf::mode::Async;
 use embassy_nrf::mode::Blocking;
-use embassy_nrf::peripherals::SAADC;
-use embassy_nrf::saadc::{self, AnyInput, Input as _, Saadc};
 use embassy_nrf::{bind_interrupts, pac};
-// use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{
-    BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
-};
-use rmk::controller::EventController as _;
-use rmk::controller::led_indicator::KeyboardIndicatorController;
+use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::{join3, join4};
 use rmk::input_device::Runnable;
-use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
-use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
+use rmk::matrix::{Matrix, OffsetMatrixWrapper};
 use rmk::split::ble::central::{read_peripheral_addresses, scan_peripherals};
-use rmk::split::central::{CentralMatrix, run_peripheral_manager};
+use rmk::split::central::run_peripheral_manager;
 use rmk::{HostResources, run_devices, run_processor_chain, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -203,8 +192,7 @@ async fn main(spawner: Spawner) {
 
     // Initialize the matrix and keyboard
     let debouncer = DefaultDebouncer::new();
-    let mut matrix = CentralMatrix::<_, _, _, 0, 0, 4, 7, true>::new(row_pins, col_pins, debouncer);
-    // let mut matrix = TestMatrix::<ROW, COL>::new();
+    let mut matrix = OffsetMatrixWrapper::<_, _, _, 0, 0>(Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer));
     let mut keyboard = Keyboard::new(&keymap);
 
     // Read peripheral address from storage

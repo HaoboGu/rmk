@@ -14,9 +14,11 @@ use trouble_host::prelude::*;
 use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap, core::cell::RefCell};
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{CONTROLLER_CHANNEL, send_controller_event, send_controller_event_new},
+    crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
     crate::event::ControllerEvent,
 };
+#[cfg(all(feature = "controller", feature = "storage"))]
+use crate::channel::send_controller_event_new;
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
 use {crate::descriptor::ViaReport, crate::host::UsbHostReaderWriter};
 #[cfg(not(feature = "_no_usb"))]
