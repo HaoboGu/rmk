@@ -141,7 +141,7 @@ fn expand_main(
     let (ble_config, set_ble_config) = expand_ble_config(keyboard_config);
     let keymap_and_storage = expand_keymap_and_storage(keyboard_config);
     let split_central_config = expand_split_central_config(keyboard_config);
-    let (input_device_config, devices, processors) = expand_input_device_config(keyboard_config);
+    let (input_device_config, devices, processors) = expand_input_device_config(keyboard_config, &item_mod);
     let matrix_and_keyboard = expand_matrix_and_keyboard_init(keyboard_config);
     let (controller_initializers, controllers) = expand_controller_init(keyboard_config, &item_mod);
     let run_rmk = expand_rmk_entry(keyboard_config, &item_mod, devices, processors, controllers);
