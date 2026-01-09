@@ -242,7 +242,7 @@ impl Handler for UsbDeviceHandler {
     fn enabled(&mut self, enabled: bool) {
         if enabled {
             info!("Device enabled");
-            USB_ENABLED.signal(());
+            // Signal only after the host configures the device.
         } else {
             info!("Device disabled");
             if USB_ENABLED.signaled() {
