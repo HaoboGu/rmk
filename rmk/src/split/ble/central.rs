@@ -10,11 +10,6 @@ use embassy_time::{Duration, Timer, with_timeout};
 use embedded_storage_async::nor_flash::NorFlash;
 use heapless::{Vec, VecView};
 use trouble_host::prelude::*;
-#[cfg(feature = "controller")]
-use {
-    crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
-    crate::event::ControllerEvent,
-};
 
 use crate::ble::{SLEEPING_STATE, update_ble_phy, update_conn_params};
 use crate::channel::FLASH_CHANNEL;
@@ -208,9 +203,6 @@ pub(crate) async fn run_ble_peripheral_manager<
 ) {
     trace!("SPLIT_MESSAGE_MAX_SIZE: {}", SPLIT_MESSAGE_MAX_SIZE);
 
-    #[cfg(feature = "controller")]
-    let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
-
     loop {
         // Check until the address is available
         let address = loop {
@@ -236,7 +228,7 @@ pub(crate) async fn run_ble_peripheral_manager<
         wait_for_stack_started().await;
 
         #[cfg(feature = "controller")]
-        send_controller_event(&mut controller_pub, ControllerEvent::SplitPeripheral(peri_id, false));
+        crate::event::publish_controller_event(crate::builtin_events::SplitEvent::peripheral_connected(peri_id, false));
 
         // Connect to peripheral
         match with_timeout(Duration::from_secs(5), async {
@@ -258,7 +250,9 @@ pub(crate) async fn run_ble_peripheral_manager<
                 info!("Connected to peripheral {}", peri_id);
 
                 #[cfg(feature = "controller")]
-                send_controller_event(&mut controller_pub, ControllerEvent::SplitPeripheral(peri_id, true));
+                crate::event::publish_controller_event(crate::builtin_events::SplitEvent::peripheral_connected(
+                    peri_id, true,
+                ));
 
                 if let Err(e) =
                     run_central_manager_task::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(peri_id, stack, &conn).await
@@ -527,9 +521,6 @@ async fn sleep_manager_task<
         SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS
     );
 
-    #[cfg(feature = "controller")]
-    let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
-
     loop {
         if !SLEEPING_STATE.load(Ordering::Acquire) {
             // Wait for timeout or activity (false signal means activity/wakeup)
@@ -580,7 +571,7 @@ async fn sleep_manager_task<
             update_conn_params(stack, conn, &conn_params).await;
             SLEEPING_STATE.store(true, Ordering::Release);
             #[cfg(feature = "controller")]
-            send_controller_event(&mut controller_pub, ControllerEvent::Sleep(true));
+            crate::event::publish_controller_event(crate::builtin_events::PowerEvent::sleep(true));
         } else {
             // Wait for activity to wake up (false signal means activity/wakeup)
             let signal_value = CENTRAL_SLEEP.wait().await;
@@ -588,7 +579,7 @@ async fn sleep_manager_task<
                 info!("Waking up from sleep mode due to activity");
                 SLEEPING_STATE.store(false, Ordering::Release);
                 #[cfg(feature = "controller")]
-                send_controller_event(&mut controller_pub, ControllerEvent::Sleep(false));
+                crate::event::publish_controller_event(crate::builtin_events::PowerEvent::sleep(false));
 
                 // Restore normal connection parameters
                 update_conn_params(stack, conn, &defaul_central_conn_param()).await;

@@ -2,13 +2,9 @@ use core::cell::RefCell;
 
 use embassy_sync::signal::Signal;
 use embedded_hal::digital::InputPin;
-#[cfg(all(feature = "_ble", feature = "controller"))]
-use {crate::channel::send_controller_event, crate::event::ControllerEvent};
 
 use super::{InputDevice, InputProcessor};
 use crate::KeyMap;
-#[cfg(feature = "controller")]
-use crate::channel::{CONTROLLER_CHANNEL, ControllerPub};
 use crate::event::Event;
 use crate::input_device::ProcessResult;
 
@@ -83,9 +79,6 @@ pub struct BatteryProcessor<'a, const ROW: usize, const COL: usize, const NUM_LA
     adc_divider_total: u32,
     /// Current battery state
     battery_state: BatteryState,
-    /// Publisher for controller channel
-    #[cfg(feature = "controller")]
-    controller_pub: ControllerPub,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -101,8 +94,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             adc_divider_measured,
             adc_divider_total,
             battery_state: BatteryState::NotAvailable,
-            #[cfg(feature = "controller")]
-            controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
         }
     }
 
@@ -157,7 +148,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         let battery_percent = self.get_battery_percent(val);
 
                         #[cfg(feature = "controller")]
-                        send_controller_event(&mut self.controller_pub, ControllerEvent::Battery(battery_percent));
+                        crate::event::publish_controller_event(crate::builtin_events::PowerEvent::battery(battery_percent));
 
                         // Update the battery state
                         if self.battery_state != BatteryState::Normal(battery_percent) {
@@ -175,7 +166,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 #[cfg(feature = "_ble")]
                 {
                     #[cfg(feature = "controller")]
-                    send_controller_event(&mut self.controller_pub, ControllerEvent::ChargingState(charging));
+                    crate::event::publish_controller_event(crate::builtin_events::PowerEvent::charging(charging));
 
                     if charging {
                         self.battery_state = BatteryState::Charging;

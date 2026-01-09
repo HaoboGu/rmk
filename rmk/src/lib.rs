@@ -12,6 +12,9 @@
 // Enable std for espidf and test
 #![cfg_attr(not(test), no_std)]
 
+// Re-export self as ::rmk for macro-generated code to work both inside and outside the crate
+extern crate self as rmk;
+
 // Include generated constants
 include!(concat!(env!("OUT_DIR"), "/constants.rs"));
 
@@ -67,6 +70,8 @@ use crate::state::ConnectionState;
 #[cfg(feature = "_ble")]
 pub mod ble;
 mod boot;
+#[cfg(feature = "controller")]
+pub mod builtin_events;
 pub mod channel;
 pub mod combo;
 pub mod config;
@@ -355,17 +360,14 @@ pub(crate) async fn run_keyboard<
     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
     let writer_fut = keyboard_writer.run_writer();
     let led_fut = async {
-        #[cfg(feature = "controller")]
-        let mut controller_pub = unwrap!(crate::channel::CONTROLLER_CHANNEL.publisher());
         loop {
             match led_reader.read_report().await {
                 Ok(led_indicator) => {
                     info!("Got led indicator");
                     LOCK_LED_STATES.store(led_indicator.into_bits(), core::sync::atomic::Ordering::Relaxed);
                     #[cfg(feature = "controller")]
-                    crate::channel::send_controller_event(
-                        &mut controller_pub,
-                        crate::event::ControllerEvent::KeyboardIndicator(led_indicator),
+                    crate::event::publish_controller_event(
+                        crate::builtin_events::KeyboardStateEvent::indicator(led_indicator)
                     );
                 }
                 Err(e) => {

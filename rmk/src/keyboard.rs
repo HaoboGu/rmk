@@ -13,11 +13,6 @@ use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
 use rmk_types::mouse_button::MouseButtons;
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
-#[cfg(feature = "controller")]
-use {
-    crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
-    crate::event::ControllerEvent,
-};
 
 use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use crate::combo::Combo;
@@ -246,10 +241,6 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Used for temporarily disabling combos
     combo_on: bool,
-
-    /// Publisher for controller channel
-    #[cfg(feature = "controller")]
-    controller_pub: ControllerPub,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -288,8 +279,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             mouse_repeat: 0,
             mouse_wheel_repeat: 0,
             combo_on: true,
-            #[cfg(feature = "controller")]
-            controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
         }
     }
 
@@ -789,7 +778,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         LAST_KEY_TIMESTAMP.signal(Instant::now().as_secs() as u32);
 
         #[cfg(feature = "controller")]
-        send_controller_event(&mut self.controller_pub, ControllerEvent::Key(event, key_action));
+        crate::event::publish_controller_event(crate::builtin_events::KeyboardInputEvent::key(event, key_action));
 
         if !key_action.is_morse() {
             match key_action {
@@ -1819,7 +1808,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             Either::First(_) => {
                                 // Timeout reached, send clear peer message
                                 #[cfg(feature = "controller")]
-                                send_controller_event(&mut self.controller_pub, ControllerEvent::ClearPeer);
+                                crate::event::publish_controller_event(crate::builtin_events::SplitEvent::clear_peer());
                                 info!("Clear peer");
                             }
                             Either::Second(e) => {
@@ -2098,7 +2087,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers |= key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        send_controller_event(&mut self.controller_pub, ControllerEvent::Modifier(self.held_modifiers));
+        crate::event::publish_controller_event(crate::builtin_events::KeyboardInputEvent::modifier(self.held_modifiers));
 
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= key.to_hid_modifiers();
@@ -2109,7 +2098,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers &= !key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        send_controller_event(&mut self.controller_pub, ControllerEvent::Modifier(self.held_modifiers));
+        crate::event::publish_controller_event(crate::builtin_events::KeyboardInputEvent::modifier(self.held_modifiers));
     }
 
     /// Register a modifier combination to be sent in hid report.
@@ -2117,7 +2106,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers |= modifiers;
 
         #[cfg(feature = "controller")]
-        send_controller_event(&mut self.controller_pub, ControllerEvent::Modifier(self.held_modifiers));
+        crate::event::publish_controller_event(crate::builtin_events::KeyboardInputEvent::modifier(self.held_modifiers));
 
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= modifiers;
@@ -2128,7 +2117,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers &= !modifiers;
 
         #[cfg(feature = "controller")]
-        send_controller_event(&mut self.controller_pub, ControllerEvent::Modifier(self.held_modifiers));
+        crate::event::publish_controller_event(crate::builtin_events::KeyboardInputEvent::modifier(self.held_modifiers));
     }
 
     /// Calculate mouse movement distance based on current repeat count and acceleration settings

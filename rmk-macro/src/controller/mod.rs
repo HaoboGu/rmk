@@ -1,3 +1,6 @@
+pub(crate) mod controller;
+pub(crate) mod event;
+
 use proc_macro2::TokenStream;
 use quote::quote;
 use rmk_config::{ChipModel, KeyboardTomlConfig, PinConfig};
