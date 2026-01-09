@@ -40,6 +40,8 @@ pub enum PointingDriverError {
     InvalidFwSignature((u8, u8)),
     /// Controller event not implement for this device
     NotImplementedError,
+    /// Invalid rotational transform angle
+    InvalidRotTransAngle,
 }
 
 pub trait PointingDriver {

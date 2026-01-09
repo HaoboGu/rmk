@@ -46,6 +46,10 @@ const T_SCLK_NCS_WR_US: u64 = 35 - T_NCS_SCLK_US;
 const T_BEXIT_US: u64 = 1;
 const T_BRSEP_US: u64 = 15;
 
+// Rotational transform angle limits
+const ROT_MIN: i8 = -127;
+const ROT_MAX: i8 = 127;
+
 // PMW3360/ 3389 registers are almost alike. This Enum contains a few extra registers that are not available for the 3360
 #[allow(dead_code)]
 #[derive(Eq, PartialEq, Debug)]
@@ -636,6 +640,10 @@ where
 
     /// Set sensor rotational transform angle (-127 to 127)
     async fn set_rot_trans_angle(&mut self, angle: i8) -> Result<(), PointingDriverError> {
+        if !(ROT_MIN..=ROT_MAX).contains(&angle) {
+            return Err(PointingDriverError::InvalidRotTransAngle);
+        }
+
         self.write_reg(Register::AngleTune, angle as u8).await?;
 
         debug!("PMW33{}: Rotational transform angle set to {}", SPEC::TYPENAME, angle);
