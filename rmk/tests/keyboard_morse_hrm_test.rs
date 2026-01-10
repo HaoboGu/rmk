@@ -9,7 +9,7 @@ use rmk::config::{BehaviorConfig, CombosConfig, Hand, MorsesConfig};
 use rmk::k;
 use rmk::keyboard::Keyboard;
 use rmk::types::action::{Action, KeyAction};
-use rmk::types::keycode::KeyCode;
+use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
 use rmk_types::action::{MorseMode, MorseProfile};
 use rusty_fork::rusty_fork_test;
@@ -41,16 +41,20 @@ fn create_hrm_keyboard() -> Keyboard<'static, 1, 5, 2> {
 
 fn create_hrm_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
     let combo_key = KeyAction::TapHold(
-        Action::Key(KeyCode::B),
+        Action::Key(KeyCode::Hid(HidKeyCode::B)),
         Action::Modifier(ModifierCombination::LSHIFT),
         Default::default(),
     );
     let combo_key_2 = KeyAction::TapHold(
-        Action::Key(KeyCode::C),
+        Action::Key(KeyCode::Hid(HidKeyCode::C)),
         Action::Modifier(ModifierCombination::LGUI),
         Default::default(),
     );
-    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1), Default::default());
+    let combo_key_3 = KeyAction::TapHold(
+        Action::Key(KeyCode::Hid(HidKeyCode::D)),
+        Action::LayerOn(1),
+        Default::default(),
+    );
 
     let hand = [[Hand::Left, Hand::Left, Hand::Right, Hand::Right, Hand::Right]];
 

@@ -3,9 +3,14 @@
 //! Ported from the Zephyr driver implementation:
 //! https://github.com/zephyrproject-rtos/zephyr/blob/d31c6e95033fd6b3763389edba6a655245ae1328/drivers/input/input_pmw3610.c
 
-use embassy_time::{Duration, Timer};
+use core::cell::RefCell;
+
+use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
+use embedded_hal_async::digital::Wait;
 use embedded_hal_async::spi::SpiBus;
+use futures::future::pending;
+use usbd_hid::descriptor::MouseReport;
 
 #[cfg(feature = "controller")]
 use crate::channel::CONTROLLER_CHANNEL;
@@ -156,12 +161,7 @@ impl From<Pmw3610Error> for PointingDriverError {
 }
 
 /// PMW3610 driver using embedded-hal SPI traits
-pub struct Pmw3610<SPI, CS, MOTION>
-where
-    SPI: SpiBus,
-    CS: OutputPin,
-    MOTION: InputPin,
-{
+pub struct Pmw3610<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> {
     spi: SPI,
     cs: CS,
     motion_gpio: Option<MOTION>,
@@ -169,12 +169,7 @@ where
     smart_flag: bool,
 }
 
-impl<SPI, CS, MOTION> Pmw3610<SPI, CS, MOTION>
-where
-    SPI: SpiBus,
-    CS: OutputPin,
-    MOTION: InputPin,
-{
+impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> Pmw3610<SPI, CS, MOTION> {
     /// Create a new PMW3610 driver instance
     pub fn new(spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw3610Config) -> Self {
         Self {
@@ -529,6 +524,23 @@ where
         config: Pmw3610Config,
         poll_interval_us: u64,
     ) -> Self {
+        Self::with_poll_interval_and_report_hz(spi, cs, motion_gpio, config, poll_interval_us, Self::DEFAULT_REPORT_HZ)
+    }
+
+    /// Create a new PMW3610 device with custom poll interval and report rate
+    pub fn with_poll_interval_and_report_hz(
+        spi: SPI,
+        cs: CS,
+        motion_gpio: Option<MOTION>,
+        config: Pmw3610Config,
+        poll_interval_us: u64,
+        report_hz: u16,
+    ) -> Self {
+        let report_interval = Duration::from_hz(report_hz as u64);
+
+        // Polling should be more frequent than reporting
+        let poll_interval = Duration::from_micros(poll_interval_us).min(report_interval);
+
         Self {
             sensor: Pmw3610::new(spi, cs, motion_gpio, config),
             init_state: InitState::Pending,

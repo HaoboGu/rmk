@@ -7,13 +7,12 @@ use rmk_types::protocol::vial::{
     SettingKey, VIAL_COMBO_MAX_LENGTH, VIAL_EP_SIZE, VIAL_PROTOCOL_VERSION, VialCommand, VialDynamic,
 };
 
-use crate::combo::{Combo, ComboConfig};
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
 use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, TAP};
-use crate::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, MORSE_MAX_NUM};
+use crate::{COMBO_MAX_NUM, MORSE_MAX_NUM};
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, host::storage::KeymapData, storage::FlashOperationMessage};
 
@@ -416,56 +415,61 @@ pub(crate) async fn process_vial<
                     debug!("DynamicEntryOp - DynamicVialComboSet");
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
-                    // Drop combos to release the borrowed keymap, avoid potential run-time panics
-                    let combo_idx = report.output_data[3] as usize;
-                    let (actions, output) = {
-                        let km = &mut keymap.borrow_mut();
-                        let combos = &mut km.behavior.combo.combos;
-                        if combo_idx >= combos.len() {
-                            return;
-                        }
-
-                        let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
-                        let mut n: usize = 0;
-                        for i in 0..VIAL_COMBO_MAX_LENGTH {
-                            let action =
-                                from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
-                            if !action.is_empty() {
-                                if n >= COMBO_MAX_LENGTH {
-                                    // Fail if the combo action buffer is too small
-                                    return;
-                                }
-                                actions[n] = action;
-                                n += 1;
-                            }
-                        }
-                        let output = from_via_keycode(LittleEndian::read_u16(
-                            &report.output_data[4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
-                        ));
-                        combos[combo_idx] = if !actions.iter().any(|&x| x != KeyAction::No) && output == KeyAction::No {
-                            debug!("combo is empty");
-                            None
-                        } else {
-                            Some(Combo::new(ComboConfig {
-                                actions,
-                                output,
-                                layer: None,
-                            }))
-                        };
-                        (actions, output)
-                    };
-
                     #[cfg(feature = "storage")]
-                    FLASH_CHANNEL
-                        .send(FlashOperationMessage::VialMessage(KeymapData::Combo(
-                            combo_idx as u8,
-                            ComboConfig {
-                                actions,
-                                output,
-                                layer: None,
-                            },
-                        )))
-                        .await;
+                    {
+                        use crate::COMBO_MAX_LENGTH;
+                        use crate::combo::{Combo, ComboConfig};
+                        // Drop combos to release the borrowed keymap, avoid potential run-time panics
+                        let combo_idx = report.output_data[3] as usize;
+                        let (actions, output) = {
+                            let km = &mut keymap.borrow_mut();
+                            let combos = &mut km.behavior.combo.combos;
+                            if combo_idx >= combos.len() {
+                                return;
+                            }
+
+                            let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
+                            let mut n: usize = 0;
+                            for i in 0..VIAL_COMBO_MAX_LENGTH {
+                                let action =
+                                    from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
+                                if !action.is_empty() {
+                                    if n >= COMBO_MAX_LENGTH {
+                                        // Fail if the combo action buffer is too small
+                                        return;
+                                    }
+                                    actions[n] = action;
+                                    n += 1;
+                                }
+                            }
+                            let output = from_via_keycode(LittleEndian::read_u16(
+                                &report.output_data[4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
+                            ));
+                            combos[combo_idx] =
+                                if !actions.iter().any(|&x| x != KeyAction::No) && output == KeyAction::No {
+                                    debug!("combo is empty");
+                                    None
+                                } else {
+                                    Some(Combo::new(ComboConfig {
+                                        actions,
+                                        output,
+                                        layer: None,
+                                    }))
+                                };
+                            (actions, output)
+                        };
+
+                        FLASH_CHANNEL
+                            .send(FlashOperationMessage::VialMessage(KeymapData::Combo(
+                                combo_idx as u8,
+                                ComboConfig {
+                                    actions,
+                                    output,
+                                    layer: None,
+                                },
+                            )))
+                            .await;
+                    }
                 }
                 VialDynamic::DynamicVialKeyOverrideGet => {
                     warn!("DynamicEntryOp - DynamicVialKeyOverrideGet -- to be implemented");
@@ -557,18 +561,20 @@ pub(crate) async fn process_vial<
 #[cfg(feature = "storage")]
 mod tests {
     use rmk_types::action::Action;
-    use rmk_types::keycode::KeyCode;
+    use rmk_types::keycode::{HidKeyCode, KeyCode};
     use sequential_storage::map::Value;
 
     use super::*;
+    use crate::COMBO_MAX_LENGTH;
+    use crate::combo::ComboConfig;
     use crate::storage::StorageData;
     #[test]
     fn test_combo_serialization_deserialization() {
         let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
-        actions[0] = KeyAction::Single(Action::Key(KeyCode::Kc1));
+        actions[0] = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Kc1)));
         let combo_config = ComboConfig {
             actions,
-            output: KeyAction::Single(Action::Key(KeyCode::Space)),
+            output: KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Space))),
             layer: None,
         };
         let combo_idx: u8 = 20;
