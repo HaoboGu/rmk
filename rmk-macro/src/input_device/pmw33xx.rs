@@ -132,7 +132,7 @@ pub(crate) fn expand_pmw33xx_device(
                     Some(::embassy_rp::gpio::Input::new(p.#motion_ident, ::embassy_rp::gpio::Pull::Up))
                 },
                 ChipSeries::Stm32 => quote! {
-                    Some(::embassy_stm32::gpio::Input::new(p.#motion_ident, ::embassy_stm32::gpio::Pull::Up))
+                    None::<::embassy_stm32::exti::ExtiInput<'static>>
                 },
                 _ => unreachable!(),
             }
@@ -145,7 +145,7 @@ pub(crate) fn expand_pmw33xx_device(
                     None::<::embassy_rp::gpio::Input<'static>>
                 },
                 ChipSeries::Stm32 => quote! {
-                    None::<::embassy_stm32::gpio::Input<'static>>
+                    None::<::embassy_stm32::exti::ExtiInput<'static>>
                 },
                 _ => unreachable!(),
             }
@@ -225,6 +225,7 @@ pub(crate) fn expand_pmw33xx_device(
                     use ::embassy_stm32::spi::{Spi, Config, MODE_3};
                     use ::embassy_stm32::gpio::{Output, Level, Pull, Speed};
                     use ::embassy_stm32::time::Hertz;
+                    use ::embassy_stm32::exti::ExtiInput;
                     use ::rmk::input_device::pmw33xx::{Pmw33xx, Pmw33xxConfig, #sensor_spec_ident};
                     use ::rmk::input_device::pointing::PointingDevice;
 
