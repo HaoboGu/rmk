@@ -46,7 +46,7 @@
     // "examples/use_rust/nef52832_ble/Cargo.toml",
     // "examples/use_rust/nrf52840/Cargo.toml",
     // "examples/use_rust/nrf52840_ble/Cargo.toml",
-    "examples/use_rust/nrf52840_ble_split_dongle/Cargo.toml",
+    "examples/use_rust/nrf54l15_ble/Cargo.toml",
     // "examples/use_rust/py32f07x/Cargo.toml",
     // "examples/use_rust/pi_pico_w_ble/Cargo.toml"
     // "examples/use_rust/rp2040/Cargo.toml"

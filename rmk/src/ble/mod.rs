@@ -14,9 +14,11 @@ use trouble_host::prelude::*;
 use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap, core::cell::RefCell};
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{CONTROLLER_CHANNEL, send_controller_event, send_controller_event_new},
+    crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
     crate::event::ControllerEvent,
 };
+#[cfg(all(feature = "controller", feature = "storage"))]
+use crate::channel::send_controller_event_new;
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
 use {crate::descriptor::ViaReport, crate::host::UsbHostReaderWriter};
 #[cfg(not(feature = "_no_usb"))]
@@ -47,10 +49,13 @@ use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
-use crate::state::{ConnectionState, ConnectionType};
+use crate::state::ConnectionState;
+#[cfg(any(feature = "storage", not(feature = "_no_usb")))]
+use crate::state::ConnectionType;
 #[cfg(feature = "usb_log")]
 use crate::usb::add_usb_logger;
 use crate::{CONNECTION_STATE, run_keyboard};
+
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;

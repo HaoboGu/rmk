@@ -3,10 +3,13 @@ use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
 use embassy_futures::select::{Either4, select4};
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
-#[cfg(all(feature = "_ble", feature = "storage"))]
-use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 #[cfg(feature = "_ble")]
-use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash, trouble_host::prelude::*};
+use trouble_host::prelude::*;
+#[cfg(all(feature = "_ble", feature = "storage"))]
+use {
+    super::ble::PeerAddress, crate::channel::FLASH_CHANNEL, crate::storage::Storage,
+    embedded_storage_async::nor_flash::NorFlash,
+};
 
 use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
@@ -29,15 +32,15 @@ pub async fn run_rmk_split_peripheral<
     'a,
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy>,
     #[cfg(not(feature = "_ble"))] S: Write + Read,
-    #[cfg(feature = "_ble")] F: NorFlash,
-    #[cfg(feature = "_ble")] const ROW: usize,
-    #[cfg(feature = "_ble")] const COL: usize,
-    #[cfg(feature = "_ble")] const NUM_LAYER: usize,
-    #[cfg(feature = "_ble")] const NUM_ENCODER: usize,
+    #[cfg(all(feature = "storage", feature = "_ble"))] F: NorFlash,
+    #[cfg(all(feature = "storage", feature = "_ble"))] const ROW: usize,
+    #[cfg(all(feature = "storage", feature = "_ble"))] const COL: usize,
+    #[cfg(all(feature = "storage", feature = "_ble"))] const NUM_LAYER: usize,
+    #[cfg(all(feature = "storage", feature = "_ble"))] const NUM_ENCODER: usize,
 >(
     #[cfg(feature = "_ble")] id: usize,
     #[cfg(feature = "_ble")] stack: &'a Stack<'a, C, DefaultPacketPool>,
-    #[cfg(feature = "_ble")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+    #[cfg(all(feature = "storage", feature = "_ble"))] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     #[cfg(not(feature = "_ble"))] serial: S,
 ) {
     #[cfg(not(feature = "_ble"))]
@@ -48,8 +51,10 @@ pub async fn run_rmk_split_peripheral<
         }
     }
 
-    #[cfg(feature = "_ble")]
+    #[cfg(all(feature = "storage", feature = "_ble"))]
     crate::split::ble::peripheral::initialize_nrf_ble_split_peripheral_and_run(id, stack, storage).await;
+    #[cfg(all(not(feature = "storage"), feature = "_ble"))]
+    crate::split::ble::peripheral::initialize_nrf_ble_split_peripheral_and_run(id, stack).await;
 }
 
 /// The split peripheral instance.

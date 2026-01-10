@@ -191,6 +191,8 @@ _no_usb = []
 #! ### BLE feature flags
 #!
 #! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder of RMK repo for their usages.
+## Enable feature if you want to use nRF54L15 with BLE.
+nrf54l15_ble = ["_nrf_ble", "_no_usb"]
 ## Enable feature if you want to use nRF52840 with BLE.
 nrf52840_ble = ["_nrf_ble"]
 ## Enable feature if you want to use nRF52833 with BLE.
@@ -215,7 +217,7 @@ _esp_ble = ["_ble", "dep:esp-hal"]
 pico_w_ble = ["_ble", "dep:embassy-rp"]
 
 ## Enable feature if you want to use trouble BLE stack
-_ble = ["dep:trouble-host", "dep:rand_core", "dep:bt-hci", "storage"]
+_ble = ["dep:trouble-host", "dep:rand_core", "dep:bt-hci"]
 
 [lib]
 # Don't run doctest for lib
