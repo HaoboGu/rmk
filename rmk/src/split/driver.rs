@@ -2,15 +2,15 @@
 //!
 use core::sync::atomic::Ordering;
 
-use embassy_time::{Instant, Timer};
+use embassy_time::Instant;
+#[cfg(all(feature = "storage", feature = "_ble"))]
+use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::storage::FlashOperationMessage};
 
 use super::SplitMessage;
 use crate::CONNECTION_STATE;
 use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::event::{Event, KeyboardEvent, KeyboardEventPos};
 use crate::input_device::InputDevice;
-#[cfg(all(feature = "storage", feature = "_ble"))]
-use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::storage::FlashOperationMessage};
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -65,9 +65,14 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
     /// The manager receives from the peripheral and forward the message to `KEY_EVENT_CHANNEL`.
     /// It also sync the `ConnectionState` to the peripheral periodically.
     pub(crate) async fn run(mut self) {
-        use crate::event::{ControllerEventTrait, EventSubscriber};
+        #[cfg(feature = "_ble")]
         use embassy_futures::select::Either4;
+        #[cfg(not(feature = "_ble"))]
+        use embassy_futures::select::{Either3, select3};
+        #[cfg(feature = "_ble")]
         use futures::FutureExt;
+
+        use crate::event::{ControllerEventTrait, EventSubscriber};
 
         let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
         // Send connection state once on start
@@ -85,12 +90,12 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
         let mut clear_peer_sub = crate::builtin_events::SplitEvent::subscriber();
 
         loop {
-            // Calculate the time until the next 3000ms sync
-            let elapsed = last_sync_time.elapsed().as_millis();
-            let wait_time = if elapsed >= 3000 { 1 } else { 3000 - elapsed };
-
             #[cfg(feature = "_ble")]
             let result = {
+                // Calculate the time until the next 3000ms sync
+                use embassy_time::Timer;
+                let elapsed = last_sync_time.elapsed().as_millis();
+                let wait_time = if elapsed >= 3000 { 1 } else { 3000 - elapsed };
                 // With BLE, we have 4 sources to select from
                 futures::select_biased! {
                     event = self.read_event().fuse() => Either4::First(event),
@@ -189,7 +194,6 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             #[cfg(not(feature = "_ble"))]
             {
                 // Without BLE feature, handle only 3 cases
-                use embassy_futures::select::Either3;
                 match result {
                     Either3::First(event) => match event {
                         Event::Key(key_event) => KEY_EVENT_CHANNEL.send(key_event).await,

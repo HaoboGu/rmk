@@ -184,7 +184,8 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
 
 /// Parse macro attributes to extract channel_size and subs
 fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usize>) {
-    use syn::{Token, punctuated::Punctuated};
+    use syn::Token;
+    use syn::punctuated::Punctuated;
 
     let mut channel_size = None;
     let mut subs = None;
@@ -198,24 +199,18 @@ fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usi
     match parser.parse2(attr2) {
         Ok(parsed) => {
             for meta in parsed {
-                match meta {
-                    Meta::NameValue(nv) => {
-                        if nv.path.is_ident("channel_size") {
-                            if let syn::Expr::Lit(expr_lit) = nv.value {
-                                if let Lit::Int(lit) = expr_lit.lit {
-                                    channel_size =
-                                        Some(lit.base10_parse().expect("channel_size must be a valid usize"));
-                                }
+                if let Meta::NameValue(nv) = meta {
+                    if nv.path.is_ident("channel_size") {
+                        if let syn::Expr::Lit(expr_lit) = nv.value
+                            && let Lit::Int(lit) = expr_lit.lit {
+                                channel_size =
+                                    Some(lit.base10_parse().expect("channel_size must be a valid usize"));
                             }
-                        } else if nv.path.is_ident("subs") {
-                            if let syn::Expr::Lit(expr_lit) = nv.value {
-                                if let Lit::Int(lit) = expr_lit.lit {
-                                    subs = Some(lit.base10_parse().expect("subs must be a valid usize"));
-                                }
+                    } else if nv.path.is_ident("subs")
+                        && let syn::Expr::Lit(expr_lit) = nv.value
+                            && let Lit::Int(lit) = expr_lit.lit {
+                                subs = Some(lit.base10_parse().expect("subs must be a valid usize"));
                             }
-                        }
-                    }
-                    _ => {}
                 }
             }
         }
@@ -230,11 +225,10 @@ fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usi
 /// Check if a struct has a specific derive
 fn has_derive(attrs: &[Attribute], derive_name: &str) -> bool {
     attrs.iter().any(|attr| {
-        if attr.path().is_ident("derive") {
-            if let Meta::List(meta_list) = &attr.meta {
+        if attr.path().is_ident("derive")
+            && let Meta::List(meta_list) = &attr.meta {
                 return meta_list.tokens.to_string().contains(derive_name);
             }
-        }
         false
     })
 }

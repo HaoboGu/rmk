@@ -1,9 +1,9 @@
 use embedded_hal::digital::StatefulOutputPin;
+use rmk_macro::controller;
 
 use crate::builtin_events::PowerEvent;
 use crate::controller::PollingController;
 use crate::driver::gpio::OutputController;
-use rmk_macro::controller;
 
 /// Battery state
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

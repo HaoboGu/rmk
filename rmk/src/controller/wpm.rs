@@ -1,7 +1,8 @@
+use rmk_macro::controller;
+
 use super::PollingController;
 use crate::builtin_events::KeyboardInputEvent;
 use crate::event::{KeyboardEvent, publish_controller_event};
-use rmk_macro::controller;
 
 const CHARS_PER_WORD: u8 = 5;
 const SAMPLES: u8 = 5;
@@ -24,7 +25,11 @@ impl WpmController {
     }
 
     async fn on_keyboard_input_event(&mut self, event: KeyboardInputEvent) {
-        if let KeyboardInputEvent::Key { keyboard_event: KeyboardEvent { pressed: false, .. }, .. } = event {
+        if let KeyboardInputEvent::Key {
+            keyboard_event: KeyboardEvent { pressed: false, .. },
+            ..
+        } = event
+        {
             self.keys_pressed += 1
         }
     }

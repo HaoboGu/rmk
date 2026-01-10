@@ -2087,7 +2087,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers |= key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        crate::event::publish_controller_event(crate::builtin_events::KeyboardInputEvent::modifier(self.held_modifiers));
+        crate::event::publish_controller_event(crate::builtin_events::KeyboardInputEvent::modifier(
+            self.held_modifiers,
+        ));
 
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= key.to_hid_modifiers();
@@ -2098,7 +2100,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers &= !key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        crate::event::publish_controller_event(crate::builtin_events::KeyboardInputEvent::modifier(self.held_modifiers));
+        crate::event::publish_controller_event(crate::builtin_events::KeyboardInputEvent::modifier(
+            self.held_modifiers,
+        ));
     }
 
     /// Register a modifier combination to be sent in hid report.
@@ -2106,7 +2110,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers |= modifiers;
 
         #[cfg(feature = "controller")]
-        crate::event::publish_controller_event(crate::builtin_events::KeyboardInputEvent::modifier(self.held_modifiers));
+        crate::event::publish_controller_event(crate::builtin_events::KeyboardInputEvent::modifier(
+            self.held_modifiers,
+        ));
 
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= modifiers;
@@ -2117,7 +2123,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers &= !modifiers;
 
         #[cfg(feature = "controller")]
-        crate::event::publish_controller_event(crate::builtin_events::KeyboardInputEvent::modifier(self.held_modifiers));
+        crate::event::publish_controller_event(crate::builtin_events::KeyboardInputEvent::modifier(
+            self.held_modifiers,
+        ));
     }
 
     /// Calculate mouse movement distance based on current repeat count and acceleration settings

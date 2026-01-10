@@ -1,10 +1,10 @@
 /// The controller for handling LED indicators defined in HID spec, including NumLock, CapsLock, ScrollLock, Compose, and Kana.
 use embedded_hal::digital::StatefulOutputPin;
+use rmk_macro::controller;
 use rmk_types::led_indicator::LedIndicatorType;
 
 use crate::builtin_events::KeyboardStateEvent;
 use crate::driver::gpio::OutputController;
-use rmk_macro::controller;
 
 #[controller(subscribe = [KeyboardStateEvent])]
 pub struct KeyboardIndicatorController<P: StatefulOutputPin> {

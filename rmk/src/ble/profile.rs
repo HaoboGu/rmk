@@ -424,7 +424,9 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             info!("Switching connection type to: {}", updated);
 
                             #[cfg(feature = "controller")]
-                            crate::event::publish_controller_event(crate::builtin_events::ConnectionEvent::connection_type(updated.into()));
+                            crate::event::publish_controller_event(
+                                crate::builtin_events::ConnectionEvent::connection_type(updated.into()),
+                            );
 
                             #[cfg(feature = "storage")]
                             FLASH_CHANNEL.send(FlashOperationMessage::ConnectionType(updated)).await;

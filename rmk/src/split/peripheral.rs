@@ -1,10 +1,3 @@
-use super::SplitMessage;
-use super::driver::{SplitReader, SplitWriter};
-use crate::CONNECTION_STATE;
-use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
-#[cfg(not(feature = "_ble"))]
-use crate::split::serial::SerialSplitDriver;
-use crate::state::ConnectionState;
 #[cfg(feature = "_ble")]
 use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
 use embassy_futures::select::{Either4, select4};
@@ -14,6 +7,14 @@ use embedded_io_async::{Read, Write};
 use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 #[cfg(feature = "_ble")]
 use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash, trouble_host::prelude::*};
+
+use super::SplitMessage;
+use super::driver::{SplitReader, SplitWriter};
+use crate::CONNECTION_STATE;
+use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
+#[cfg(not(feature = "_ble"))]
+use crate::split::serial::SerialSplitDriver;
+use crate::state::ConnectionState;
 
 /// Run the split peripheral service.
 ///
@@ -102,14 +103,14 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                             crate::event::publish_controller_event(
                                 crate::builtin_events::KeyboardStateEvent::indicator(
                                     rmk_types::led_indicator::LedIndicator::from_bits(indicator),
-                                )
+                                ),
                             );
                         }
                         SplitMessage::Layer(layer) => {
                             // Publish Layer event
-                            crate::event::publish_controller_event(
-                                crate::builtin_events::KeyboardStateEvent::layer(layer)
-                            );
+                            crate::event::publish_controller_event(crate::builtin_events::KeyboardStateEvent::layer(
+                                layer,
+                            ));
                         }
                         _ => (),
                     },
@@ -142,10 +143,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                     if let PowerEvent::Battery(level) = power_event {
                         if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
                             debug!("Forwarding battery level to central: {}", level);
-                            self.split_driver
-                                .write(&SplitMessage::BatteryLevel(level))
-                                .await
-                                .ok();
+                            self.split_driver.write(&SplitMessage::BatteryLevel(level)).await.ok();
                         }
                     }
                 }

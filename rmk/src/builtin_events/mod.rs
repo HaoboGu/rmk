@@ -74,10 +74,9 @@ use rmk_types::action::KeyAction;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
 
-use crate::event::KeyboardEvent;
-
 #[cfg(feature = "_ble")]
 use crate::ble::BleState;
+use crate::event::KeyboardEvent;
 
 // ============================================================================
 // High-Frequency Events - PubSub Channel
@@ -226,10 +225,7 @@ pub enum ConnectionEvent {
     /// Connection type changed (USB or BLE)
     Type(ConnectionType),
     /// BLE profile state changed
-    BleState {
-        profile: u8,
-        state: BleState,
-    },
+    BleState { profile: u8, state: BleState },
     /// Active BLE profile changed
     BleProfile(u8),
 }
@@ -262,15 +258,9 @@ impl ConnectionEvent {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SplitEvent {
     /// Split peripheral connection state changed
-    PeripheralConnected {
-        id: usize,
-        connected: bool,
-    },
+    PeripheralConnected { id: usize, connected: bool },
     /// Split peripheral battery level changed
-    PeripheralBattery {
-        id: usize,
-        level: u8,
-    },
+    PeripheralBattery { id: usize, level: u8 },
     /// Split central connection state changed (from peripheral's perspective)
     CentralConnected(bool),
     /// Clear BLE peer information signal

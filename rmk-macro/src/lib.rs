@@ -106,5 +106,5 @@ pub fn controller_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn controller(attr: TokenStream, item: TokenStream) -> TokenStream {
-    controller::controller::controller_impl(attr, item)
+    controller::controller_impl(attr, item)
 }

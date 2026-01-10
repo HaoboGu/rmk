@@ -4,12 +4,9 @@
 //! - Input device events (keyboard, touchpad, joystick, etc.)
 //! - Controller event infrastructure (publish/subscribe patterns)
 
-use embassy_sync::{
-    blocking_mutex::raw::RawMutex,
-    channel,
-    pubsub::{ImmediatePublisher, Subscriber},
-    watch,
-};
+use embassy_sync::blocking_mutex::raw::RawMutex;
+use embassy_sync::pubsub::{ImmediatePublisher, Subscriber};
+use embassy_sync::{channel, watch};
 
 // Sub-modules
 mod controller;
@@ -17,7 +14,6 @@ mod input_device;
 
 // Re-export controller event system
 pub use controller::{ControllerEventTrait, publish_controller_event};
-
 // Re-export input device events
 pub use input_device::*;
 

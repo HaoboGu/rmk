@@ -148,7 +148,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         let battery_percent = self.get_battery_percent(val);
 
                         #[cfg(feature = "controller")]
-                        crate::event::publish_controller_event(crate::builtin_events::PowerEvent::battery(battery_percent));
+                        crate::event::publish_controller_event(crate::builtin_events::PowerEvent::battery(
+                            battery_percent,
+                        ));
 
                         // Update the battery state
                         if self.battery_state != BatteryState::Normal(battery_percent) {
