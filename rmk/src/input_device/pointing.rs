@@ -150,7 +150,7 @@ where
                 self.accumulated_y = self.accumulated_y.saturating_add(motion.dy as i32);
             }
             Err(_e) => {
-                warn!("PMW3610 read error");
+                warn!("PointingDevice {}: Read motion error", self.id);
             }
         }
     }
