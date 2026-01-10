@@ -3,14 +3,10 @@
 //! Ported from the Zephyr driver implementation:
 //! https://github.com/zephyrproject-rtos/zephyr/blob/d31c6e95033fd6b3763389edba6a655245ae1328/drivers/input/input_pmw3610.c
 
-use core::cell::RefCell;
-
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
 use embedded_hal_async::spi::SpiBus;
-use futures::future::pending;
-use usbd_hid::descriptor::MouseReport;
 
 #[cfg(feature = "controller")]
 use crate::channel::CONTROLLER_CHANNEL;
@@ -338,8 +334,10 @@ impl<SPI, CS, MOTION> PointingDriver for Pmw3610<SPI, CS, MOTION>
 where
     SPI: SpiBus,
     CS: OutputPin,
-    MOTION: InputPin,
+    MOTION: InputPin + Wait,
 {
+    type MOTION = MOTION;
+
     /// Initialize the sensor (public API)
     async fn init(&mut self) -> Result<(), PointingDriverError> {
         let _ = self.cs.set_high();
@@ -495,24 +493,52 @@ where
             None => true,
         }
     }
+
+    fn motion_gpio(&mut self) -> Option<&mut MOTION> {
+        self.motion_gpio.as_mut()
+    }
 }
 
 impl<SPI, CS, MOTION> PointingDevice<Pmw3610<SPI, CS, MOTION>>
 where
     SPI: SpiBus,
     CS: OutputPin,
-    MOTION: InputPin,
+    MOTION: InputPin + Wait,
 {
+    const DEFAULT_POLL_INTERVAL_US: u64 = 500;
+    const DEFAULT_REPORT_HZ: u16 = 125;
+
     /// Create a new PMW3610 device
     pub fn new(id: u8, spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw3610Config) -> Self {
-        Self {
-            sensor: Pmw3610::new(spi, cs, motion_gpio, config),
-            init_state: InitState::Pending,
-            poll_interval: Duration::from_micros(500),
-            #[cfg(feature = "controller")]
-            controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
+        Self::with_poll_interval_and_report_hz(
             id,
-        }
+            spi,
+            cs,
+            motion_gpio,
+            config,
+            Self::DEFAULT_POLL_INTERVAL_US,
+            Self::DEFAULT_REPORT_HZ,
+        )
+    }
+
+    /// Create a new PMW3610 device with custom report rate (Hz)
+    pub fn with_report_hz(
+        id: u8,
+        spi: SPI,
+        cs: CS,
+        motion_gpio: Option<MOTION>,
+        config: Pmw3610Config,
+        report_hz: u16,
+    ) -> Self {
+        Self::with_poll_interval_and_report_hz(
+            id,
+            spi,
+            cs,
+            motion_gpio,
+            config,
+            Self::DEFAULT_POLL_INTERVAL_US,
+            report_hz,
+        )
     }
 
     /// Create a new PMW3610 device with custom poll interval
@@ -524,11 +550,20 @@ where
         config: Pmw3610Config,
         poll_interval_us: u64,
     ) -> Self {
-        Self::with_poll_interval_and_report_hz(spi, cs, motion_gpio, config, poll_interval_us, Self::DEFAULT_REPORT_HZ)
+        Self::with_poll_interval_and_report_hz(
+            id,
+            spi,
+            cs,
+            motion_gpio,
+            config,
+            poll_interval_us,
+            Self::DEFAULT_REPORT_HZ,
+        )
     }
 
     /// Create a new PMW3610 device with custom poll interval and report rate
     pub fn with_poll_interval_and_report_hz(
+        id: u8,
         spi: SPI,
         cs: CS,
         motion_gpio: Option<MOTION>,
@@ -542,12 +577,17 @@ where
         let poll_interval = Duration::from_micros(poll_interval_us).min(report_interval);
 
         Self {
+            id,
             sensor: Pmw3610::new(spi, cs, motion_gpio, config),
             init_state: InitState::Pending,
-            poll_interval: Duration::from_micros(poll_interval_us),
+            poll_interval,
+            report_interval,
+            last_poll: Instant::MIN,
+            last_report: Instant::MIN,
+            accumulated_x: 0,
+            accumulated_y: 0,
             #[cfg(feature = "controller")]
             controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
-            id,
         }
     }
 }

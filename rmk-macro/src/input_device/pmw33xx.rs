@@ -119,6 +119,7 @@ pub(crate) fn expand_pmw33xx_device(
         let invert_x = sensor.invert_x;
         let invert_y = sensor.invert_y;
         let swap_xy = sensor.swap_xy;
+        let report_hz: u16 = sensor.report_hz;
 
         // Generate motion pin initialization (optional)
         let motion_pin_init = if let Some(motion_pin) = &sensor.motion {
@@ -182,7 +183,7 @@ pub(crate) fn expand_pmw33xx_device(
                         ..Default::default()
                     };
 
-                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::new(#sensor_id, spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::with_report_hz(#sensor_id, spi_bus, cs, motion, config, #report_hz)
                 };
             },
             ChipSeries::Rp2040 => quote! {
@@ -216,7 +217,7 @@ pub(crate) fn expand_pmw33xx_device(
                         ..Default::default()
                     };
 
-                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::new(#sensor_id, spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::with_report_hz(#sensor_id, spi_bus, cs, motion, config, #report_hz)
                 };
             },
             ChipSeries::Stm32 => quote! {
@@ -250,7 +251,7 @@ pub(crate) fn expand_pmw33xx_device(
                         ..Default::default()
                     };
 
-                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::new(#sensor_id, spi_bus, cs, motion, config)
+                    PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::with_report_hz(#sensor_id, spi_bus, cs, motion, config, #report_hz)
                 };
             },
             _ => unreachable!(),

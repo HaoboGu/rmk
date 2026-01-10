@@ -663,7 +663,7 @@ const fn default_false() -> bool {
     false
 }
 
-const fn default_pmw3610_report_hz() -> u16 {
+const fn default_pointing_report_hz() -> u16 {
     125
 }
 
@@ -767,9 +767,8 @@ pub struct Pmw3610Config {
     /// Enable smart mode for better tracking on shiny surfaces
     #[serde(default)]
     pub smart_mode: bool,
-
     /// Report rate (Hz). Motion will be accumulated and emitted at this rate.
-    #[serde(default = "default_pmw3610_report_hz")]
+    #[serde(default = "default_pointing_report_hz")]
     pub report_hz: u16,
 }
 
@@ -811,6 +810,9 @@ pub struct Pmw33xxConfig {
     // Swap X and Y axes
     #[serde(default)]
     pub swap_xy: bool,
+    /// Report rate (Hz). Motion will be accumulated and emitted at this rate.
+    #[serde(default = "default_pointing_report_hz")]
+    pub report_hz: u16,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

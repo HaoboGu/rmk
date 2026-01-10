@@ -5,8 +5,9 @@
 // Which is ported from the Zephyr driver implementation:
 // https://github.com/zephyrproject-rtos/zephyr/blob/d31c6e95033fd6b3763389edba6a655245ae1328/drivers/input/input_pmw3610.c
 
-use embassy_time::{Duration, Timer};
+use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
+use embedded_hal_async::digital::Wait;
 use embedded_hal_async::spi::SpiBus;
 
 #[cfg(feature = "controller")]
@@ -195,7 +196,7 @@ pub trait Pmw33xxSpec {
     where
         SPI: SpiBus,
         CS: OutputPin,
-        MOTION: InputPin,
+        MOTION: InputPin + Wait,
         SPEC: Pmw33xxSpec;
 }
 
@@ -217,7 +218,7 @@ impl Pmw33xxSpec for Pmw3360Spec {
     where
         SPI: SpiBus,
         CS: OutputPin,
-        MOTION: InputPin,
+        MOTION: InputPin + Wait,
         SPEC: Pmw33xxSpec,
     {
         driver
@@ -245,7 +246,7 @@ impl Pmw33xxSpec for Pmw3389Spec {
     where
         SPI: SpiBus,
         CS: OutputPin,
-        MOTION: InputPin,
+        MOTION: InputPin + Wait,
         SPEC: Pmw33xxSpec,
     {
         if !(Self::RES_MIN..=Self::RES_MAX).contains(&cpi) {
@@ -323,7 +324,7 @@ pub struct Pmw33xx<'a, SPI, CS, MOTION, SPEC>
 where
     SPI: SpiBus,
     CS: OutputPin,
-    MOTION: InputPin,
+    MOTION: InputPin + Wait,
     SPEC: Pmw33xxSpec,
 {
     spi: SPI,
@@ -339,7 +340,7 @@ impl<'a, SPI, CS, MOTION, SPEC> Pmw33xx<'a, SPI, CS, MOTION, SPEC>
 where
     SPI: SpiBus,
     CS: OutputPin,
-    MOTION: InputPin,
+    MOTION: InputPin + Wait,
     SPEC: Pmw33xxSpec,
 {
     /// Create a new PMW33xx driver instance
@@ -568,9 +569,11 @@ impl<'a, SPI, CS, MOTION, SPEC> PointingDriver for Pmw33xx<'a, SPI, CS, MOTION, 
 where
     SPI: SpiBus,
     CS: OutputPin,
-    MOTION: InputPin,
+    MOTION: InputPin + Wait,
     SPEC: Pmw33xxSpec,
 {
+    type MOTION = MOTION;
+
     /// Initialize the sensor (public API)
     async fn init(&mut self) -> Result<(), PointingDriverError> {
         // Set initial pin states
@@ -689,6 +692,10 @@ where
             None => true,
         }
     }
+
+    fn motion_gpio(&mut self) -> Option<&mut MOTION> {
+        self.motion_gpio.as_mut()
+    }
 }
 
 /// PMW33xx as an InputDevice for RMK
@@ -696,22 +703,46 @@ impl<'a, SPI, CS, MOTION, SPEC> PointingDevice<Pmw33xx<'a, SPI, CS, MOTION, SPEC
 where
     SPI: SpiBus,
     CS: OutputPin,
-    MOTION: InputPin,
+    MOTION: InputPin + Wait,
     SPEC: Pmw33xxSpec,
 {
+    const DEFAULT_POLL_INTERVAL_US: u64 = 500;
+    const DEFAULT_REPORT_HZ: u16 = 125;
+
     /// Create a new PMW33xx device
     pub fn new(id: u8, spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw33xxConfig) -> Self {
-        Self {
-            sensor: Pmw33xx::new(spi, cs, motion_gpio, config),
-            init_state: InitState::Pending,
-            poll_interval: Duration::from_micros(500),
-            #[cfg(feature = "controller")]
-            controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
+        Self::with_poll_interval_and_report_hz(
             id,
-        }
+            spi,
+            cs,
+            motion_gpio,
+            config,
+            Self::DEFAULT_POLL_INTERVAL_US,
+            Self::DEFAULT_REPORT_HZ,
+        )
     }
 
-    /// Create a new PMW33xx device with custom poll interval
+    /// Create a new PMW33xx device with custom report rate (Hz)
+    pub fn with_report_hz(
+        id: u8,
+        spi: SPI,
+        cs: CS,
+        motion_gpio: Option<MOTION>,
+        config: Pmw33xxConfig,
+        report_hz: u16,
+    ) -> Self {
+        Self::with_poll_interval_and_report_hz(
+            id,
+            spi,
+            cs,
+            motion_gpio,
+            config,
+            Self::DEFAULT_POLL_INTERVAL_US,
+            report_hz,
+        )
+    }
+
+    /// Create a new PMW3360 device with custom poll interval
     pub fn with_poll_interval(
         id: u8,
         spi: SPI,
@@ -720,56 +751,77 @@ where
         config: Pmw33xxConfig,
         poll_interval_us: u64,
     ) -> Self {
-        Self {
-            sensor: Pmw33xx::new(spi, cs, motion_gpio, config),
-            init_state: InitState::Pending,
-            poll_interval: Duration::from_micros(poll_interval_us),
-            #[cfg(feature = "controller")]
-            controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
+        Self::with_poll_interval_and_report_hz(
             id,
-        }
+            spi,
+            cs,
+            motion_gpio,
+            config,
+            poll_interval_us,
+            Self::DEFAULT_REPORT_HZ,
+        )
     }
 
-    /// Create a new PMW33xx device with SROM firmware
-    ///
-    /// Firmware is downloaded to the sensor on every startup
-    pub fn new_with_firmware(
-        id: u8,
-        spi: SPI,
-        cs: CS,
-        motion_gpio: Option<MOTION>,
-        config: Pmw33xxConfig,
-        firmware: &'a [u8],
-    ) -> Self {
-        Self {
-            sensor: Pmw33xx::new_with_firmware(spi, cs, motion_gpio, config, firmware),
-            init_state: InitState::Pending,
-            poll_interval: Duration::from_micros(500),
-            #[cfg(feature = "controller")]
-            controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
-            id,
-        }
-    }
-
-    /// Create a new PMW33xx device with SROM firmware and custom poll intervall
-    ///
-    /// Firmware is downloaded to the sensor on every startup
-    pub fn new_with_firmware_poll_interval(
+    /// Create a new PMW3360 device with custom poll interval and report rate
+    pub fn with_poll_interval_and_report_hz(
         id: u8,
         spi: SPI,
         cs: CS,
         motion_gpio: Option<MOTION>,
         config: Pmw33xxConfig,
         poll_interval_us: u64,
-        firmware: &'a [u8],
+        report_hz: u16,
     ) -> Self {
+        let report_interval = Duration::from_hz(report_hz as u64);
+
+        // Polling should be more frequent than reporting
+        let poll_interval = Duration::from_micros(poll_interval_us).min(report_interval);
+
         Self {
-            sensor: Pmw33xx::new_with_firmware(spi, cs, motion_gpio, config, firmware),
+            id,
+            sensor: Pmw33xx::new(spi, cs, motion_gpio, config),
             init_state: InitState::Pending,
-            poll_interval: Duration::from_micros(poll_interval_us),
+            poll_interval,
+            report_interval,
+            last_poll: Instant::MIN,
+            last_report: Instant::MIN,
+            accumulated_x: 0,
+            accumulated_y: 0,
             #[cfg(feature = "controller")]
             controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
+        }
+    }
+
+    /// Create a new PMW33xx device with SROM firmware and custom poll intervall and report rate
+    ///
+    /// Firmware is downloaded to the sensor on every startup
+    pub fn new_with_firmware_poll_interval_report_hertz(
+        id: u8,
+        spi: SPI,
+        cs: CS,
+        motion_gpio: Option<MOTION>,
+        config: Pmw33xxConfig,
+        poll_interval_us: u64,
+        report_hz: u16,
+        firmware: &'a [u8],
+    ) -> Self {
+        let report_interval = Duration::from_hz(report_hz as u64);
+
+        // Polling should be more frequent than reporting
+        let poll_interval = Duration::from_micros(poll_interval_us).min(report_interval);
+
+        Self {
             id,
+            sensor: Pmw33xx::new_with_firmware(spi, cs, motion_gpio, config, firmware),
+            init_state: InitState::Pending,
+            poll_interval,
+            report_interval,
+            last_poll: Instant::MIN,
+            last_report: Instant::MIN,
+            accumulated_x: 0,
+            accumulated_y: 0,
+            #[cfg(feature = "controller")]
+            controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
         }
     }
 }

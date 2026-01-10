@@ -36,6 +36,8 @@ spi.cs = "PIN_17"
 
 motion = "PIN_20" # Optional. If omitted, the sensor is polled.
 
+report_hz = 125 # Optional: Report rate in Hz
+
 cpi = 1600
 rot_trans_angle = -15
 liftoff_dist = 8

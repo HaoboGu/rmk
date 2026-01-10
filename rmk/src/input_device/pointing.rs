@@ -2,7 +2,7 @@
 
 use core::cell::RefCell;
 
-use embassy_time::{Duration, Timer};
+use embassy_time::{Duration, Instant, Timer};
 use usbd_hid::descriptor::MouseReport;
 
 #[cfg(feature = "controller")]
@@ -14,6 +14,9 @@ use crate::event::{ControllerEvent, PointingEvent};
 use crate::hid::Report;
 use crate::input_device::{InputDevice, InputProcessor, ProcessResult};
 use crate::keymap::KeyMap;
+use embedded_hal::digital::InputPin;
+use embedded_hal_async::digital::Wait;
+use futures::future::pending;
 
 pub const ALL_POINTING_DEVICES: u8 = 255;
 
@@ -45,6 +48,8 @@ pub enum PointingDriverError {
 }
 
 pub trait PointingDriver {
+    type MOTION: InputPin + Wait;
+
     async fn init(&mut self) -> Result<(), PointingDriverError>;
     async fn read_motion(&mut self) -> Result<MotionData, PointingDriverError>;
     async fn set_resolution(&mut self, cpi: u16) -> Result<(), PointingDriverError>;
@@ -55,6 +60,7 @@ pub trait PointingDriver {
     async fn set_invert_y(&mut self, onoff: bool) -> Result<(), PointingDriverError>;
     async fn swap_xy(&mut self, onoff: bool) -> Result<(), PointingDriverError>;
     fn motion_pending(&mut self) -> bool;
+    fn motion_gpio(&mut self) -> Option<&mut Self::MOTION>;
 }
 
 /// Initialization state for the device
@@ -76,6 +82,11 @@ pub struct PointingDevice<S: PointingDriver> {
     #[cfg(feature = "controller")]
     pub controller_sub: ControllerSub,
     pub id: u8,
+    pub report_interval: Duration,
+    pub last_poll: Instant,
+    pub last_report: Instant,
+    pub accumulated_x: i32,
+    pub accumulated_y: i32,
 }
 
 impl<S> PointingDevice<S>
@@ -122,6 +133,55 @@ where
         }
 
         false
+    }
+
+    async fn poll_once(&mut self) {
+        if self.init_state != InitState::Ready && !self.try_init().await {
+            return;
+        }
+
+        if !self.sensor.motion_pending() {
+            return;
+        }
+
+        match self.sensor.read_motion().await {
+            Ok(motion) => {
+                self.accumulated_x = self.accumulated_x.saturating_add(motion.dx as i32);
+                self.accumulated_y = self.accumulated_y.saturating_add(motion.dy as i32);
+            }
+            Err(_e) => {
+                warn!("PMW3610 read error");
+            }
+        }
+    }
+
+    fn take_report_event(&mut self) -> Option<Event> {
+        if self.accumulated_x == 0 && self.accumulated_y == 0 {
+            return None;
+        }
+
+        let dx = self.accumulated_x.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+        let dy = self.accumulated_y.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+        self.accumulated_x = 0;
+        self.accumulated_y = 0;
+
+        Some(Event::Joystick([
+            AxisEvent {
+                typ: AxisValType::Rel,
+                axis: Axis::X,
+                value: dx,
+            },
+            AxisEvent {
+                typ: AxisValType::Rel,
+                axis: Axis::Y,
+                value: dy,
+            },
+            AxisEvent {
+                typ: AxisValType::Rel,
+                axis: Axis::Z,
+                value: 0,
+            },
+        ]))
     }
 
     /// Handle controller events for the pointing device
@@ -200,53 +260,55 @@ where
     async fn read_event(&mut self) -> Event {
         #[cfg(feature = "controller")]
         {
-            use embassy_futures::select::{Either, select};
+            use embassy_futures::select::{Either3, select3};
+
+            if self.last_poll == Instant::MIN {
+                self.last_poll = Instant::now();
+            }
+            if self.last_report == Instant::MIN {
+                self.last_report = Instant::now();
+            }
 
             loop {
-                if self.init_state != InitState::Ready {
-                    if !self.try_init().await {
-                        Timer::after(Duration::from_millis(100)).await;
-                        continue;
+                let poll_wait = async {
+                    if let Some(gpio) = self.sensor.motion_gpio() {
+                        let _ = gpio.wait_for_low().await;
+                    } else {
+                        Timer::after(
+                            self.poll_interval
+                                .checked_sub(self.last_poll.elapsed())
+                                .unwrap_or(Duration::MIN),
+                        )
+                        .await;
                     }
-                }
+                };
 
-                match select(
-                    async {
-                        Timer::after(self.poll_interval).await;
-                        if self.sensor.motion_pending() {
-                            self.sensor.read_motion().await.ok()
-                        } else {
-                            None
-                        }
-                    },
-                    self.controller_sub.next_message_pure(),
-                )
-                .await
-                {
-                    Either::First(motion_result) => {
-                        if let Some(motion) = motion_result {
-                            if motion.dx != 0 || motion.dy != 0 {
-                                return Event::Joystick([
-                                    AxisEvent {
-                                        typ: AxisValType::Rel,
-                                        axis: Axis::X,
-                                        value: motion.dx,
-                                    },
-                                    AxisEvent {
-                                        typ: AxisValType::Rel,
-                                        axis: Axis::Y,
-                                        value: motion.dy,
-                                    },
-                                    AxisEvent {
-                                        typ: AxisValType::Rel,
-                                        axis: Axis::Z,
-                                        value: 0,
-                                    },
-                                ]);
-                            }
+                let report_wait = async {
+                    if self.accumulated_x != 0 || self.accumulated_y != 0 {
+                        Timer::after(
+                            self.report_interval
+                                .checked_sub(self.last_report.elapsed())
+                                .unwrap_or(Duration::MIN),
+                        )
+                        .await;
+                    } else {
+                        // Don't schedule report if there's no accumulated motion
+                        pending::<()>().await;
+                    }
+                };
+
+                match select3(poll_wait, report_wait, self.controller_sub.next_message_pure()).await {
+                    Either3::First(_) => {
+                        self.poll_once().await;
+                        self.last_poll = Instant::now();
+                    }
+                    Either3::Second(_) => {
+                        if let Some(event) = self.take_report_event() {
+                            self.last_report = Instant::now();
+                            return event;
                         }
                     }
-                    Either::Second(controller_event) => {
+                    Either3::Third(controller_event) => {
                         self.handle_controller_event(controller_event).await;
                     }
                 }
@@ -254,43 +316,53 @@ where
         }
         #[cfg(not(feature = "controller"))]
         {
+            use embassy_futures::select::{Either, select};
+
+            if self.last_poll == Instant::MIN {
+                self.last_poll = Instant::now();
+            }
+            if self.last_report == Instant::MIN {
+                self.last_report = Instant::now();
+            }
+
             loop {
-                Timer::after(self.poll_interval).await;
-
-                if self.init_state != InitState::Ready {
-                    if !self.try_init().await {
-                        continue;
+                let poll_wait = async {
+                    if let Some(gpio) = self.sensor.motion_gpio() {
+                        let _ = gpio.wait_for_low().await;
+                    } else {
+                        Timer::after(
+                            self.poll_interval
+                                .checked_sub(self.last_poll.elapsed())
+                                .unwrap_or(Duration::MIN),
+                        )
+                        .await;
                     }
-                }
+                };
 
-                if !self.sensor.motion_pending() {
-                    continue;
-                }
+                let report_wait = async {
+                    if self.accumulated_x != 0 || self.accumulated_y != 0 {
+                        Timer::after(
+                            self.report_interval
+                                .checked_sub(self.last_report.elapsed())
+                                .unwrap_or(Duration::MIN),
+                        )
+                        .await;
+                    } else {
+                        // Don't schedule report if there's no accumulated motion
+                        pending::<()>().await;
+                    }
+                };
 
-                match self.sensor.read_motion().await {
-                    Ok(motion) => {
-                        if motion.dx != 0 || motion.dy != 0 {
-                            return Event::Joystick([
-                                AxisEvent {
-                                    typ: AxisValType::Rel,
-                                    axis: Axis::X,
-                                    value: motion.dx,
-                                },
-                                AxisEvent {
-                                    typ: AxisValType::Rel,
-                                    axis: Axis::Y,
-                                    value: motion.dy,
-                                },
-                                AxisEvent {
-                                    typ: AxisValType::Rel,
-                                    axis: Axis::Z,
-                                    value: 0,
-                                },
-                            ]);
+                match select(poll_wait, report_wait).await {
+                    Either::First(_) => {
+                        self.poll_once().await;
+                        self.last_poll = Instant::now();
+                    }
+                    Either::Second(_) => {
+                        if let Some(event) = self.take_report_event() {
+                            self.last_report = Instant::now();
+                            return event;
                         }
-                    }
-                    Err(e) => {
-                        warn!("PointingDevice {}: read error: {:?}", self.id, e);
                     }
                 }
             }
