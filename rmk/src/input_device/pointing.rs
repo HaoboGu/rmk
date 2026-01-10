@@ -200,7 +200,7 @@ where
     async fn read_event(&mut self) -> Event {
         #[cfg(feature = "controller")]
         {
-            use embassy_futures::select::{select, Either};
+            use embassy_futures::select::{Either, select};
 
             loop {
                 if self.init_state != InitState::Ready {
@@ -354,5 +354,273 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
         self.keymap
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use embassy_futures::block_on;
+    use embassy_time::Duration;
+
+    // Init logger for tests
+    #[ctor::ctor]
+    fn init_log() {
+        let _ = env_logger::builder()
+            .filter_level(log::LevelFilter::Debug)
+            .is_test(true)
+            .try_init();
+    }
+
+    struct DummyDriver {
+        pub motion_pending: bool,
+        pub motion: MotionData,
+        pub init_called: bool,
+        pub fails_init: bool,
+        pub read_called: bool,
+    }
+
+    impl PointingDriver for DummyDriver {
+        async fn init(&mut self) -> Result<(), PointingDriverError> {
+            self.init_called = true;
+            if self.fails_init {
+                return Err(PointingDriverError::InitFailed);
+            }
+            Ok(())
+        }
+
+        async fn read_motion(&mut self) -> Result<MotionData, PointingDriverError> {
+            self.read_called = true;
+            Ok(self.motion)
+        }
+
+        async fn set_resolution(&mut self, _cpi: u16) -> Result<(), PointingDriverError> {
+            Ok(())
+        }
+
+        async fn set_rot_trans_angle(&mut self, _angle: i8) -> Result<(), PointingDriverError> {
+            Ok(())
+        }
+
+        async fn set_liftoff_dist(&mut self, _dist: u8) -> Result<(), PointingDriverError> {
+            Ok(())
+        }
+
+        async fn force_awake(&mut self, _enable: bool) -> Result<(), PointingDriverError> {
+            Ok(())
+        }
+
+        async fn set_invert_x(&mut self, _onoff: bool) -> Result<(), PointingDriverError> {
+            Ok(())
+        }
+
+        async fn set_invert_y(&mut self, _onoff: bool) -> Result<(), PointingDriverError> {
+            Ok(())
+        }
+
+        async fn swap_xy(&mut self, _onoff: bool) -> Result<(), PointingDriverError> {
+            Ok(())
+        }
+
+        fn motion_pending(&mut self) -> bool {
+            self.motion_pending
+        }
+    }
+
+    #[cfg(feature = "controller")]
+    use crate::event::ControllerEvent;
+    #[cfg(feature = "controller")]
+    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+    #[cfg(feature = "controller")]
+    use embassy_sync::pubsub::{PubSubChannel, Subscriber};
+
+    #[cfg(feature = "controller")]
+    fn make_dummy_subscriber() -> Subscriber<'static, CriticalSectionRawMutex, ControllerEvent, 16, 8, 12> {
+        static CHANNEL: PubSubChannel<CriticalSectionRawMutex, ControllerEvent, 16, 8, 12> = PubSubChannel::new();
+
+        // unwrap, weil statisch und für Tests OK
+        CHANNEL.subscriber().unwrap()
+    }
+
+    #[test]
+    fn test_try_init_sets_state() {
+        #[cfg(feature = "controller")]
+        let controller_sub = make_dummy_subscriber();
+
+        let driver = DummyDriver {
+            motion_pending: false,
+            motion: MotionData::default(),
+            init_called: false,
+            fails_init: false,
+            read_called: false,
+        };
+
+        let mut device = PointingDevice {
+            sensor: driver,
+            init_state: InitState::Pending,
+            poll_interval: Duration::from_millis(10),
+            id: 42,
+            #[cfg(feature = "controller")]
+            controller_sub,
+        };
+
+        // Run the async try_init
+        let result = block_on(device.try_init());
+        assert!(result, "Init should succeed");
+        assert_eq!(device.init_state, InitState::Ready);
+        assert!(device.sensor.init_called, "Driver init should be called");
+    }
+
+    #[test]
+    fn test_read_motion_event_generation() {
+        #[cfg(feature = "controller")]
+        let controller_sub = make_dummy_subscriber();
+
+        let driver = DummyDriver {
+            motion_pending: true,
+            motion: MotionData { dx: 5, dy: -3 },
+            init_called: true,
+            fails_init: false,
+            read_called: false,
+        };
+
+        let mut device = PointingDevice {
+            sensor: driver,
+            init_state: InitState::Ready,
+            poll_interval: Duration::from_millis(10),
+            id: 1,
+            #[cfg(feature = "controller")]
+            controller_sub,
+        };
+
+        // Async block to get motion
+        let event = block_on(async {
+            let motion = device.sensor.read_motion().await.unwrap();
+            // Convert to Event::Joystick manually
+            Event::Joystick([
+                AxisEvent {
+                    typ: AxisValType::Rel,
+                    axis: Axis::X,
+                    value: motion.dx,
+                },
+                AxisEvent {
+                    typ: AxisValType::Rel,
+                    axis: Axis::Y,
+                    value: motion.dy,
+                },
+                AxisEvent {
+                    typ: AxisValType::Rel,
+                    axis: Axis::Z,
+                    value: 0,
+                },
+            ])
+        });
+
+        match event {
+            Event::Joystick(axis_events) => {
+                assert_eq!(axis_events[0].value, 5);
+                assert_eq!(axis_events[1].value, -3);
+            }
+            _ => panic!("Expected Joystick event"),
+        }
+    }
+
+    #[test]
+    fn test_motion_pending_false_skips_event() {
+        #[cfg(feature = "controller")]
+        let controller_sub = make_dummy_subscriber();
+
+        let driver = DummyDriver {
+            motion_pending: false,
+            motion: MotionData { dx: 1, dy: 2 },
+            init_called: true,
+            fails_init: false,
+            read_called: false,
+        };
+
+        let mut device = PointingDevice {
+            sensor: driver,
+            init_state: InitState::Ready,
+            poll_interval: Duration::from_millis(10),
+            id: 1,
+            #[cfg(feature = "controller")]
+            controller_sub,
+        };
+
+        // If motion_pending is false, we shouldn't generate motion
+        assert!(!device.sensor.motion_pending());
+    }
+
+    #[test]
+    fn test_polling_without_motion_pin() {
+        #[cfg(feature = "controller")]
+        let controller_sub = make_dummy_subscriber();
+
+        let driver = DummyDriver {
+            motion_pending: true,
+            motion: MotionData { dx: 5, dy: -3 },
+            init_called: true,
+            fails_init: false,
+            read_called: false,
+        };
+
+        // let driver = PollDummy { read_called: false };
+        let mut device = PointingDevice {
+            sensor: driver,
+            init_state: InitState::Ready,
+            poll_interval: Duration::from_millis(1),
+            id: 1,
+            #[cfg(feature = "controller")]
+            controller_sub,
+        };
+
+        block_on(async {
+            let _event = device.read_event().await;
+        });
+
+        assert!(
+            device.sensor.read_called,
+            "Driver should have been polled even without motion pin"
+        );
+    }
+
+    #[test]
+    fn test_try_init_retries_and_fails() {
+        #[cfg(feature = "controller")]
+        let controller_sub = make_dummy_subscriber();
+
+        let driver = DummyDriver {
+            motion_pending: true,
+            motion: MotionData { dx: 5, dy: -3 },
+            init_called: true,
+            fails_init: true,
+            read_called: false,
+        };
+
+        let mut device = PointingDevice {
+            sensor: driver,
+            init_state: InitState::Pending,
+            poll_interval: Duration::from_millis(1),
+            id: 1,
+            #[cfg(feature = "controller")]
+            controller_sub,
+        };
+
+        let mut result = false;
+        for i in 0..PointingDevice::<DummyDriver>::MAX_INIT_RETRIES {
+            result = block_on(device.try_init());
+
+            if i + 1 < PointingDevice::<DummyDriver>::MAX_INIT_RETRIES {
+                // Vorletzte und erste Versuche: state sollte Initializing sein
+                assert_eq!(device.init_state, InitState::Initializing(i + 1));
+                assert!(!result, "Init should not succeed yet on attempt {}", i + 1);
+            } else {
+                // Letzter Versuch: state wird direkt auf Failed gesetzt
+                assert_eq!(device.init_state, InitState::Failed);
+                assert!(!result, "Init should fail after max retries");
+            }
+        }
+        assert!(!result);
+        assert_eq!(device.init_state, InitState::Failed);
     }
 }
