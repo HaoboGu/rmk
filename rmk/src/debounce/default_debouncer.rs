@@ -23,6 +23,12 @@ pub struct DefaultDebouncer<const ROW: usize, const COL: usize> {
     counters: [[DebounceCounter; ROW]; COL],
 }
 
+impl<const ROW: usize, const COL: usize> Default for DefaultDebouncer<ROW, COL> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const ROW: usize, const COL: usize> DefaultDebouncer<ROW, COL> {
     pub fn new() -> Self {
         DefaultDebouncer {

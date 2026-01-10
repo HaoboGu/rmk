@@ -28,17 +28,14 @@ pub struct RmkConfig<'a> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
+#[derive(Default)]
 pub enum Hand {
+    #[default]
     Unknown,
     Left,
     Right,
 }
 
-impl Default for Hand {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
 
 /// Config for configurable action behavior
 #[derive(Debug, Default)]

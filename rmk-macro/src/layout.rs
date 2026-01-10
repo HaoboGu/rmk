@@ -437,7 +437,7 @@ pub(crate) fn parse_key(key: String, profiles: &Option<HashMap<String, MorseProf
             let number_str = if s.to_lowercase().starts_with("user(") {
                 // User(X) format
                 s.trim_start_matches(|c: char| !c.is_ascii_digit())
-                 .trim_end_matches(')')
+                    .trim_end_matches(')')
             } else if s[4..].chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
                 // UserX format
                 &s[4..]
