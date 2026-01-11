@@ -91,6 +91,7 @@ critical-section = "1.2"
 env_logger = "0.11"
 ctor = "0.6.0"
 rusty-fork = "0.3.0"
+embedded-hal-mock = { version = "0.11.1", features =["embedded-hal-async"] }
 
 [build-dependencies]
 rmk-config = { path = "../rmk-config", version = "=0.6.1" }

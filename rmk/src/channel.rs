@@ -22,7 +22,7 @@ use crate::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, RawMutex};
 use crate::{FLASH_CHANNEL_SIZE, storage::FlashOperationMessage};
 
 #[cfg(feature = "controller")]
-const CONTROLLER_CHANNEL_FINAL_SIZE: usize = const {
+pub(crate) const CONTROLLER_CHANNEL_FINAL_SIZE: usize = const {
     // Calculate CONTROLLER_CHANNEL_FINAL_SIZE at compile-time
     #[cfg(feature = "split")]
     {
