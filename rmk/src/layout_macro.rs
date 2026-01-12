@@ -137,22 +137,62 @@ macro_rules! lm {
 /// Create a layer-tap action (tap/hold behavior).
 ///
 /// This macro creates a dual-function key:
-/// - **Tap**: Sends the specified key
+/// - **Tap**: Sends the specified key or triggers an action
 /// - **Hold**: Activates the specified layer
 ///
 /// Uses default timing configuration for tap/hold detection.
 ///
 /// # Parameters
 /// - `$x`: Layer number to activate when held
-/// - `$k`: HID keycode to send when tapped
+/// - Second parameter (tap action) can be:
+///   - HID keycode identifier (e.g., `Space`, `Enter`)
+///   - Action variant with arguments (e.g., `TriggerMacro(0)`, `LayerToggle(1)`)
+///   - Action variant without arguments (e.g., `Action::TriLayerLower`)
+///   - Fully qualified Action (e.g., `Action::TriggerMacro(0)`)
 ///
-/// # Example
+/// # Examples
 /// ```ignore
+/// // Traditional usage - HID keycode
 /// lt!(1, Space)  // Tap for Space, hold for layer 1
 /// lt!(2, Enter)  // Tap for Enter, hold for layer 2
+///
+/// // New usage - Action variants
+/// lt!(1, TriggerMacro(0))  // Tap triggers macro 0, hold for layer 1
+/// lt!(2, Action::TriLayerLower)  // Tap tri-layer lower, hold for layer 2
+///
+/// // Fully qualified Action
+/// lt!(1, Action::TriggerMacro(0))  // Also works
 /// ```
 #[macro_export]
 macro_rules! lt {
+    // Rule 1: Fully qualified Action with arguments
+    ($x: literal, Action::$variant:ident($($args:expr),+)) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::$variant($($args),*),
+            $crate::types::action::Action::LayerOn($x),
+            $crate::types::action::MorseProfile::const_default(),
+        )
+    };
+
+    // Rule 2: Fully qualified Action without arguments
+    ($x: literal, Action::$variant:ident) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::$variant,
+            $crate::types::action::Action::LayerOn($x),
+            $crate::types::action::MorseProfile::const_default(),
+        )
+    };
+
+    // Rule 3: Bare Action variant with arguments
+    ($x: literal, $variant:ident($($args:expr),+)) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::$variant($($args),*),
+            $crate::types::action::Action::LayerOn($x),
+            $crate::types::action::MorseProfile::const_default(),
+        )
+    };
+
+    // Rule 4: HID keycode (backward compatible)
     ($x: literal, $k: ident) => {
         $crate::types::action::KeyAction::TapHold(
             $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
@@ -171,16 +211,54 @@ macro_rules! lt {
 ///
 /// # Parameters
 /// - `$x`: Layer number to activate when held
-/// - `$k`: HID keycode to send when tapped
+/// - Second parameter (tap action) can be:
+///   - HID keycode identifier (e.g., `Space`, `Enter`)
+///   - Action variant with arguments (e.g., `TriggerMacro(0)`, `LayerToggle(1)`)
+///   - Action variant without arguments (e.g., `Action::TriLayerLower`)
+///   - Fully qualified Action (e.g., `Action::TriggerMacro(0)`)
 /// - `$p`: Custom `MorseProfile` for timing configuration
 ///
-/// # Example
+/// # Examples
 /// ```ignore
 /// let profile = MorseProfile::new(Some(true), None, Some(200), Some(300));
+///
+/// // Traditional usage - HID keycode
 /// ltp!(1, Space, profile)  // Layer-tap with custom timing
+///
+/// // New usage - Action variants
+/// ltp!(1, TriggerMacro(0), profile)  // Tap macro 0, hold layer 1
+/// ltp!(2, Action::TriLayerLower, profile)  // Tap tri-layer, hold layer 2
 /// ```
 #[macro_export]
 macro_rules! ltp {
+    // Rule 1: Fully qualified Action with arguments
+    ($x: literal, Action::$variant:ident($($args:expr),+), $p: expr) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::$variant($($args),*),
+            $crate::types::action::Action::LayerOn($x),
+            $p,
+        )
+    };
+
+    // Rule 2: Fully qualified Action without arguments
+    ($x: literal, Action::$variant:ident, $p: expr) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::$variant,
+            $crate::types::action::Action::LayerOn($x),
+            $p,
+        )
+    };
+
+    // Rule 3: Bare Action variant with arguments
+    ($x: literal, $variant:ident($($args:expr),+), $p: expr) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::$variant($($args),*),
+            $crate::types::action::Action::LayerOn($x),
+            $p,
+        )
+    };
+
+    // Rule 4: HID keycode (backward compatible)
     ($x: literal, $k: ident, $p: expr) => {
         $crate::types::action::KeyAction::TapHold(
             $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
@@ -195,24 +273,67 @@ macro_rules! ltp {
 /// Create a modifier-tap action (tap/hold behavior).
 ///
 /// This macro creates a dual-function key:
-/// - **Tap**: Sends the specified key
+/// - **Tap**: Sends the specified key or triggers an action
 /// - **Hold**: Applies the specified modifier(s)
 ///
 /// Commonly used for home row mods. Uses default timing configuration.
 ///
 /// # Parameters
-/// - `$k`: HID keycode to send when tapped
+/// - First parameter can be:
+///   - HID keycode identifier (e.g., `A`, `Space`)
+///   - Action variant with arguments (e.g., `TriggerMacro(0)`, `LayerToggle(1)`)
+///   - Action variant without arguments (e.g., `Action::TriLayerLower`)
+///   - Fully qualified Action (e.g., `Action::TriggerMacro(0)`)
 /// - `$m`: `ModifierCombination` to apply when held
 ///
-/// # Example
+/// # Examples
 /// ```ignore
+/// // HID keycode (traditional usage)
 /// mt!(A, ModifierCombination::LCTRL)   // Tap for A, hold for Ctrl
 /// mt!(S, ModifierCombination::LSHIFT)  // Tap for S, hold for Shift
-/// mt!(D, ModifierCombination::LALT)    // Tap for D, hold for Alt
+///
+/// // Action variant with arguments (new usage)
+/// mt!(TriggerMacro(0), ModifierCombination::LSHIFT)  // Tap triggers macro 0, hold for Shift
+/// mt!(LayerToggle(1), ModifierCombination::LCTRL)    // Tap toggles layer 1, hold for Ctrl
+///
+/// // Action variant without arguments (must use fully qualified syntax)
+/// mt!(Action::TriLayerLower, ModifierCombination::LSHIFT)  // Tap tri-layer lower, hold for Shift
+/// mt!(Action::TriLayerUpper, ModifierCombination::LCTRL)   // Tap tri-layer upper, hold for Ctrl
+///
+/// // Fully qualified Action with arguments
+/// mt!(Action::TriggerMacro(0), ModifierCombination::LSHIFT)  // Also works
 /// ```
 #[macro_export]
 macro_rules! mt {
-    ($k: ident, $m: expr) => {
+    // Rule 1: Fully qualified Action variant with arguments (e.g., Action::TriggerMacro(0))
+    (Action::$variant:ident($($args:expr),+), $m:expr) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::$variant($($args),*),
+            $crate::types::action::Action::Modifier($m),
+            $crate::types::action::MorseProfile::const_default(),
+        )
+    };
+
+    // Rule 2: Fully qualified Action variant without arguments (e.g., Action::TriLayerLower)
+    (Action::$variant:ident, $m:expr) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::$variant,
+            $crate::types::action::Action::Modifier($m),
+            $crate::types::action::MorseProfile::const_default(),
+        )
+    };
+
+    // Rule 3: Bare Action variant with arguments (e.g., TriggerMacro(0))
+    ($variant:ident($($args:expr),+), $m:expr) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::$variant($($args),*),
+            $crate::types::action::Action::Modifier($m),
+            $crate::types::action::MorseProfile::const_default(),
+        )
+    };
+
+    // Rule 4: HID keycode identifier (backward compatible)
+    ($k:ident, $m:expr) => {
         $crate::types::action::KeyAction::TapHold(
             $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
                 $crate::types::keycode::HidKeyCode::$k,
@@ -225,21 +346,65 @@ macro_rules! mt {
 
 /// Create a modifier-tap action with custom timing profile.
 ///
-/// Same as `mt!` but allows specifying custom tap/hold timing configuration.
+/// Same as `mt!` but allows specifying custom tap/hold timing configuration
+/// through a `MorseProfile`.
 ///
 /// # Parameters
-/// - `$k`: HID keycode to send when tapped
+/// - First parameter can be:
+///   - HID keycode identifier (e.g., `A`, `Space`)
+///   - Action variant with arguments (e.g., `TriggerMacro(0)`, `LayerToggle(1)`)
+///   - Action variant without arguments (e.g., `Action::TriLayerLower`)
+///   - Fully qualified Action (e.g., `Action::TriggerMacro(0)`)
 /// - `$m`: `ModifierCombination` to apply when held
 /// - `$p`: Custom `MorseProfile` for timing configuration
 ///
-/// # Example
+/// # Examples
 /// ```ignore
 /// let profile = MorseProfile::new(Some(false), None, Some(180), None);
+///
+/// // HID keycode (traditional usage)
 /// mtp!(A, ModifierCombination::LCTRL, profile)
+///
+/// // Action variant with arguments (new usage)
+/// mtp!(TriggerMacro(0), ModifierCombination::LSHIFT, profile)
+///
+/// // Action variant without arguments
+/// mtp!(Action::TriLayerLower, ModifierCombination::LSHIFT, profile)
+///
+/// // Fully qualified Action with arguments
+/// mtp!(Action::TriggerMacro(0), ModifierCombination::LSHIFT, profile)
 /// ```
 #[macro_export]
 macro_rules! mtp {
-    ($k: ident, $m: expr, $p: expr) => {
+    // Rule 1: Fully qualified Action variant with arguments
+    (Action::$variant:ident($($args:expr),+), $m:expr, $p:expr) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::$variant($($args),*),
+            $crate::types::action::Action::Modifier($m),
+            $p,
+        )
+    };
+
+    // Rule 2: Fully qualified Action variant without arguments
+    (Action::$variant:ident, $m:expr, $p:expr) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::$variant,
+            $crate::types::action::Action::Modifier($m),
+            $p,
+        )
+    };
+
+    // Rule 3: Bare Action variant with arguments
+    ($variant:ident($($args:expr),+), $m:expr, $p:expr) => {
+        $crate::types::action::KeyAction::TapHold(
+            $crate::types::action::Action::$variant($($args),*),
+            $crate::types::action::Action::Modifier($m),
+            $p,
+        )
+    };
+
+    // Rule 4: HID keycode identifier (backward compatible)
+    ($k:ident, $m:expr, $p:expr) => {
         $crate::types::action::KeyAction::TapHold(
             $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
                 $crate::types::keycode::HidKeyCode::$k,
