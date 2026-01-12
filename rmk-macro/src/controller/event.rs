@@ -7,10 +7,12 @@ use syn::{Attribute, DeriveInput, Lit, Meta, parse_macro_input};
 /// This macro generates:
 /// 1. A static channel (Watch or PubSubChannel based on attributes)
 /// 2. Implementation of ControllerEventTrait for the event type
+/// 3. Implementation of AwaitableControllerEventTrait (when channel_size is specified)
 ///
 /// Attributes:
 /// - `channel_size = N`: Use PubSubChannel instead of Watch (for buffering)
 /// - `subs = N`: Number of subscribers (required for Watch, default 4 for PubSubChannel)
+/// - `pubs = N`: Number of publishers for PubSubChannel (default 1, only valid with channel_size)
 ///
 /// Examples:
 /// ```ignore
@@ -18,8 +20,8 @@ use syn::{Attribute, DeriveInput, Lit, Meta, parse_macro_input};
 /// #[controller_event(subs = 1)]
 /// pub struct BatteryEvent(pub u8);
 ///
-/// // PubSubChannel with buffering
-/// #[controller_event(channel_size = 8, subs = 4)]
+/// // PubSubChannel with buffering and awaitable publish
+/// #[controller_event(channel_size = 8, subs = 4, pubs = 2)]
 /// pub struct KeyEvent { /* ... */ }
 ///
 /// // Also works with enums
@@ -33,8 +35,8 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
     let input = parse_macro_input!(item as DeriveInput);
 
     // Parse attributes
-    let (channel_size, subs) = if attr.is_empty() {
-        (None, None)
+    let (channel_size, subs, pubs) = if attr.is_empty() {
+        (None, None, None)
     } else {
         parse_attributes(attr)
     };
@@ -90,8 +92,28 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
 
     // Generate channel and trait implementation based on channel_size
     let (channel_static, trait_impl) = if let Some(cap) = channel_size {
-        // PubSubChannel with ImmediatePublisher
+        // PubSubChannel with ImmediatePublisher for ControllerEventTrait
+        // and Publisher for AwaitableControllerEventTrait
         let subs_val = subs.unwrap_or(4);
+        let pubs_val = pubs.unwrap_or(1);
+
+        let awaitable_trait_impl = quote! {
+            impl #impl_generics ::rmk::event::AwaitableControllerEventTrait for #type_name #ty_generics #where_clause {
+                type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
+                    'static,
+                    ::rmk::RawMutex,
+                    #type_name #ty_generics,
+                    #cap,
+                    #subs_val,
+                    #pubs_val
+                >;
+
+                fn async_publisher() -> Self::AsyncPublisher {
+                    #channel_name.publisher().unwrap()
+                }
+            }
+        };
+
         (
             quote! {
                 static #channel_name: ::embassy_sync::pubsub::PubSubChannel<
@@ -99,7 +121,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
                     #type_name #ty_generics,
                     #cap,
                     #subs_val,
-                    1
+                    #pubs_val
                 > = ::embassy_sync::pubsub::PubSubChannel::new();
             },
             quote! {
@@ -110,7 +132,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
                         #type_name #ty_generics,
                         #cap,
                         #subs_val,
-                        1
+                        #pubs_val
                     >;
                     type Subscriber = ::embassy_sync::pubsub::Subscriber<
                         'static,
@@ -118,7 +140,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
                         #type_name #ty_generics,
                         #cap,
                         #subs_val,
-                        1
+                        #pubs_val
                     >;
 
                     fn publisher() -> Self::Publisher {
@@ -129,10 +151,12 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
                         #channel_name.subscriber().unwrap()
                     }
                 }
+
+                #awaitable_trait_impl
             },
         )
     } else {
-        // Watch channel (default)
+        // Watch channel (default) - no AwaitableControllerEventTrait
         let subs_val = subs.unwrap_or(4);
         (
             quote! {
@@ -182,13 +206,14 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
     expanded.into()
 }
 
-/// Parse macro attributes to extract channel_size and subs
-fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usize>) {
+/// Parse macro attributes to extract channel_size, subs, and pubs
+fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usize>, Option<usize>) {
     use syn::Token;
     use syn::punctuated::Punctuated;
 
     let mut channel_size = None;
     let mut subs = None;
+    let mut pubs = None;
 
     // Parse as Meta::List containing name-value pairs
     let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
@@ -206,11 +231,17 @@ fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usi
                                 channel_size =
                                     Some(lit.base10_parse().expect("channel_size must be a valid usize"));
                             }
-                    } else if nv.path.is_ident("subs")
-                        && let syn::Expr::Lit(expr_lit) = nv.value
+                    } else if nv.path.is_ident("subs") {
+                        if let syn::Expr::Lit(expr_lit) = nv.value
                             && let Lit::Int(lit) = expr_lit.lit {
                                 subs = Some(lit.base10_parse().expect("subs must be a valid usize"));
                             }
+                    } else if nv.path.is_ident("pubs") {
+                        if let syn::Expr::Lit(expr_lit) = nv.value
+                            && let Lit::Int(lit) = expr_lit.lit {
+                                pubs = Some(lit.base10_parse().expect("pubs must be a valid usize"));
+                            }
+                    }
                 }
             }
         }
@@ -219,7 +250,7 @@ fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usi
         }
     }
 
-    (channel_size, subs)
+    (channel_size, subs, pubs)
 }
 
 /// Check if a struct has a specific derive

@@ -5,15 +5,17 @@
 //! - Controller event infrastructure (publish/subscribe patterns)
 
 use embassy_sync::blocking_mutex::raw::RawMutex;
-use embassy_sync::pubsub::{ImmediatePublisher, Subscriber};
-use embassy_sync::{channel, watch};
+use embassy_sync::pubsub::{ImmediatePublisher, Publisher, Subscriber};
+use embassy_sync::watch;
 
 // Sub-modules
 mod controller;
 mod input_device;
 
 // Re-export controller event system
-pub use controller::{ControllerEventTrait, publish_controller_event};
+pub use controller::{
+    AwaitableControllerEventTrait, ControllerEventTrait, publish_controller_event, publish_controller_event_async,
+};
 // Re-export input device events
 pub use input_device::*;
 
@@ -27,7 +29,7 @@ pub trait EventPublisher<T> {
 
 /// Async version of event publisher trait
 pub trait AsyncEventPublisher<T> {
-    fn publish(&self, message: T);
+    async fn async_publish(&self, message: T);
 }
 
 /// Trait for event subscribers
@@ -38,27 +40,20 @@ pub trait EventSubscriber<T> {
     async fn next_event(&mut self) -> T;
 }
 
-// Implementation for embassy-sync Channel
-impl<'a, M: RawMutex, T: Clone, const N: usize> EventPublisher<T> for channel::Sender<'a, M, T, N> {
-    fn publish(&self, message: T) {
-        if let Err(_e) = self.try_send(message) {
-            error!("Failed to publish event: the channel is full")
-        }
-    }
-}
-
-impl<'a, M: RawMutex, T: Clone, const N: usize> EventSubscriber<T> for channel::Receiver<'a, M, T, N> {
-    async fn next_event(&mut self) -> T {
-        self.receive().await
-    }
-}
-
 // Implementations for embassy-sync PubSubChannel
 impl<'a, M: RawMutex, T: Clone, const CAP: usize, const SUBS: usize, const PUBS: usize> EventPublisher<T>
     for ImmediatePublisher<'a, M, T, CAP, SUBS, PUBS>
 {
     fn publish(&self, message: T) {
         self.publish_immediate(message);
+    }
+}
+
+impl<'a, M: RawMutex, T: Clone, const CAP: usize, const SUBS: usize, const PUBS: usize> AsyncEventPublisher<T>
+    for Publisher<'a, M, T, CAP, SUBS, PUBS>
+{
+    async fn async_publish(&self, message: T) {
+        self.publish(message).await
     }
 }
 
