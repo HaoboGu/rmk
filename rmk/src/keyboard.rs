@@ -491,7 +491,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 let pattern = match held_key.state {
                                     KeyState::Pressed(pattern) => pattern.followed_by_tap(), // The HeldKeyDecision turned this into tap!
                                     KeyState::Holding(pattern) => pattern,
-                                    _ => unreachable!(),
+                                    _ => unreachable!("Invalid held key state: {:?}", held_key.state),
                                 };
                                 debug!("Pattern after unilateral tap or flow tap: {:?}", pattern);
                                 let action =
@@ -531,7 +531,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     let pattern = match held_key.state {
                                         KeyState::Pressed(pattern) => pattern.followed_by_hold(), // The HeldKeyDecision turned this into hold!
                                         KeyState::Holding(pattern) => pattern,
-                                        _ => unreachable!(),
+                                        _ => unreachable!("Invalid held key state: {:?}", held_key.state),
                                     };
                                     keyboard_state_updated = true;
                                     debug!("pattern after permissive hold: {:?}", pattern);
@@ -573,7 +573,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 KeyAction::Tap(action) => {
                                     self.process_key_action_tap(action, held_key.event).await;
                                 }
-                                _ => unreachable!(),
+                                KeyAction::No | KeyAction::Transparent => (),
+                                _ => unreachable!("Invalid key action when releasing: {:?}", key_action),
                             }
                         } else {
                             match held_key.state {
@@ -583,7 +584,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     let pattern = match held_key.state {
                                         KeyState::Pressed(pattern) => pattern.followed_by_tap(), // TODO? should we double check the timeout with Instant::now() >= held_key.timeout_time?
                                         KeyState::Holding(pattern) => pattern,
-                                        _ => unreachable!(),
+                                        _ => unreachable!("Invalid held key state: {:?}", held_key.state),
                                     };
 
                                     debug!("pattern by decided tap release: {:?}", pattern);
@@ -799,7 +800,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     self.process_key_action_normal(action, event).await;
                 }
                 KeyAction::Tap(action) => self.process_key_action_tap(action, event).await,
-                _ => unreachable!(),
+                _ => unreachable!("Invalid key action: {:?}", key_action),
             }
         } else {
             self.process_key_action_morse(&key_action, event).await;
@@ -1008,11 +1009,47 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_combo(&mut self, key_action: &KeyAction, event: KeyboardEvent) -> (Option<KeyAction>, bool) {
         let current_layer = self.keymap.borrow().get_activated_layer();
 
-        // First, when releasing a key, check whether there's untriggered combo, if so, triggerer it first
+        // Handle key release: check combo release logic
         if !event.pressed {
+            // First, trigger any pending delayed combos
             self.trigger_delayed_combo(key_action, event).await;
+
+            // Then check if we're releasing a combo key
+            let mut combo_output = None;
+            let mut releasing_triggered_combo = false;
+
+            for combo in self
+                .keymap
+                .borrow_mut()
+                .behavior
+                .combo
+                .combos
+                .iter_mut()
+                .filter_map(|c| c.as_mut())
+                .filter(|c| c.started() || c.is_triggered())
+            // Only check active combos
+            {
+                if combo.config.actions.contains(key_action) {
+                    releasing_triggered_combo |= combo.is_triggered();
+                    debug!("[Combo] Releasing key in combo: {:?} {:?}", event, key_action);
+
+                    if combo.update_released(key_action) {
+                        debug!("[Combo] {:?} is released", combo.config.output);
+                        combo_output = combo_output.or(Some(combo.config.output));
+                    }
+                }
+            }
+
+            if releasing_triggered_combo {
+                return (combo_output, true);
+            }
+
+            // Dispatch buffered combo keys if combo is interrupted
+            self.dispatch_combos(key_action, event).await;
+            return (Some(*key_action), false);
         }
 
+        // Handle key press: update combo states
         let max_size_of_updated_combo = self
             .keymap
             .borrow_mut()
@@ -1031,8 +1068,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             })
             .max();
 
-        if event.pressed
-            && let Some(max_size) = max_size_of_updated_combo
+        if let Some(max_size) = max_size_of_updated_combo
             && max_size > 0
         {
             // If the max_size > 0, there's at least one combo is updated
@@ -1072,45 +1108,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
             (None, false)
         } else {
-            // No combo is updated, dispatch combos
-            if !event.pressed {
-                info!("Releasing keys in combo: {:?} {:?}", event, key_action);
-
-                let mut combo_output = None;
-                let mut releasing_triggered_combo = false;
-
-                for combo in self
-                    .keymap
-                    .borrow_mut()
-                    .behavior
-                    .combo
-                    .combos
-                    .iter_mut()
-                    .filter_map(|c| c.as_mut())
-                {
-                    if combo.config.actions.contains(key_action) {
-                        // Releasing a combo key in triggered combo
-                        releasing_triggered_combo |= combo.is_triggered();
-                        info!("[Combo] releasing: {:?}", combo);
-
-                        // Release the combo key, check whether the combo is fully released
-                        if combo.update_released(key_action) {
-                            // If the combo is fully released, update the combo output
-                            debug!("[Combo] {:?} is released", combo.config.output);
-                            combo_output = combo_output.or(Some(combo.config.output));
-                        }
-                    }
-                }
-
-                // Releasing a triggered combo
-                // - Return the output of the triggered combo when the combo is fully released
-                // - Return None when the combo is not fully released yet
-                if releasing_triggered_combo {
-                    return (combo_output, true);
-                }
-            }
-
-            // When no key is updated(the combo is interruptted), or a key is released,
+            // No combo was updated by this key press, dispatch buffered combo keys
             self.dispatch_combos(key_action, event).await;
             (Some(*key_action), false)
         }
