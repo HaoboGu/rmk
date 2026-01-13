@@ -6,7 +6,7 @@ use embedded_hal::digital::InputPin;
 use super::{InputDevice, InputProcessor};
 use crate::KeyMap;
 use crate::event::Event;
-#[cfg(feature = "controller")]
+#[cfg(all(feature = "controller", feature = "_ble"))]
 use crate::event::{BatteryLevelEvent, ChargingStateEvent, publish_controller_event};
 use crate::input_device::ProcessResult;
 

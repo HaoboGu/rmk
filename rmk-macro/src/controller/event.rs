@@ -245,18 +245,25 @@ fn has_derive(attrs: &[Attribute], derive_name: &str) -> bool {
 /// Convert CamelCase to UPPER_SNAKE_CASE for channel names
 fn to_upper_snake_case(s: &str) -> String {
     let mut result = String::new();
-    let mut prev_is_upper = false;
+    let chars: Vec<char> = s.chars().collect();
 
-    for (i, c) in s.chars().enumerate() {
+    for i in 0..chars.len() {
+        let c = chars[i];
+
         if c.is_uppercase() {
-            if i > 0 && !prev_is_upper {
+            // Add underscore before uppercase letter if:
+            // 1. Not at start (i > 0)
+            // 2. Previous char is lowercase OR
+            // 3. Next char exists and is lowercase (end of acronym: "HTMLParser" -> "HTML_Parser")
+            let add_underscore =
+                i > 0 && (chars[i - 1].is_lowercase() || (i + 1 < chars.len() && chars[i + 1].is_lowercase()));
+
+            if add_underscore {
                 result.push('_');
             }
             result.push(c);
-            prev_is_upper = true;
         } else {
             result.push(c.to_ascii_uppercase());
-            prev_is_upper = false;
         }
     }
 
@@ -269,12 +276,21 @@ mod tests {
 
     #[test]
     fn test_to_upper_snake_case() {
+        // Basic cases
         assert_eq!(to_upper_snake_case("BatteryEvent"), "BATTERY_EVENT");
         assert_eq!(to_upper_snake_case("KeyEvent"), "KEY_EVENT");
-        assert_eq!(to_upper_snake_case("WPMEvent"), "W_P_M_EVENT");
         assert_eq!(
             to_upper_snake_case("SplitPeripheralBatteryEvent"),
             "SPLIT_PERIPHERAL_BATTERY_EVENT"
         );
+
+        // Acronyms should stay together
+        assert_eq!(to_upper_snake_case("WPMEvent"), "WPM_EVENT");
+        assert_eq!(to_upper_snake_case("BLEState"), "BLE_STATE");
+        assert_eq!(to_upper_snake_case("USBConnection"), "USB_CONNECTION");
+
+        // Mixed acronyms and words
+        assert_eq!(to_upper_snake_case("HTMLParser"), "HTML_PARSER");
+        assert_eq!(to_upper_snake_case("parseHTMLString"), "PARSE_HTML_STRING");
     }
 }

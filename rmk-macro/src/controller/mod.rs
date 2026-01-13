@@ -293,18 +293,25 @@ fn event_type_to_method_name(path: &Path) -> syn::Ident {
 /// Convert CamelCase to snake_case
 fn to_snake_case(s: &str) -> String {
     let mut result = String::new();
-    let mut prev_is_lower = false;
+    let chars: Vec<char> = s.chars().collect();
 
-    for (i, c) in s.chars().enumerate() {
+    for i in 0..chars.len() {
+        let c = chars[i];
+
         if c.is_uppercase() {
-            if i > 0 && prev_is_lower {
+            // Add underscore before uppercase letter if:
+            // 1. Not at start (i > 0)
+            // 2. Previous char is lowercase OR
+            // 3. Next char exists and is lowercase (end of acronym: "HTMLParser" -> "html_parser")
+            let add_underscore =
+                i > 0 && (chars[i - 1].is_lowercase() || (i + 1 < chars.len() && chars[i + 1].is_lowercase()));
+
+            if add_underscore {
                 result.push('_');
             }
             result.push(c.to_ascii_lowercase());
-            prev_is_lower = false;
         } else {
             result.push(c);
-            prev_is_lower = true;
         }
     }
 
@@ -360,9 +367,19 @@ mod tests {
 
     #[test]
     fn test_to_snake_case() {
+        // Basic cases
         assert_eq!(to_snake_case("Battery"), "battery");
         assert_eq!(to_snake_case("ChargingState"), "charging_state");
         assert_eq!(to_snake_case("KeyboardIndicator"), "keyboard_indicator");
-        assert_eq!(to_snake_case("BLE"), "b_l_e");
+
+        // Acronyms should stay together
+        assert_eq!(to_snake_case("BLE"), "ble");
+        assert_eq!(to_snake_case("WPM"), "wpm");
+        assert_eq!(to_snake_case("USB"), "usb");
+
+        // Mixed acronyms and words
+        assert_eq!(to_snake_case("HTMLParser"), "html_parser");
+        assert_eq!(to_snake_case("BLEConnection"), "ble_connection");
+        assert_eq!(to_snake_case("parseHTMLString"), "parse_html_string");
     }
 }
