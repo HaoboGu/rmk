@@ -13,6 +13,8 @@ use super::driver::{SplitReader, SplitWriter};
 use crate::CONNECTION_STATE;
 use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::event::ControllerEventTrait;
+#[cfg(feature = "controller")]
+use crate::event::{LayerChangeEvent, LedIndicatorEvent, publish_controller_event};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;
@@ -100,13 +102,13 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         }
                         SplitMessage::KeyboardIndicator(indicator) => {
                             // Publish KeyboardIndicator event
-                            crate::event::publish_controller_event(crate::event::LedIndicatorEvent {
+                            publish_controller_event(LedIndicatorEvent {
                                 indicator: rmk_types::led_indicator::LedIndicator::from_bits(indicator),
                             });
                         }
                         SplitMessage::Layer(layer) => {
                             // Publish Layer event
-                            crate::event::publish_controller_event(crate::event::LayerChangeEvent { layer });
+                            publish_controller_event(LayerChangeEvent { layer });
                         }
                         _ => (),
                     },

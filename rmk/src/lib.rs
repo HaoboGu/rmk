@@ -64,6 +64,8 @@ use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Stor
 use crate::config::PositionalConfig;
 #[cfg(feature = "vial")]
 use crate::config::VialConfig;
+#[cfg(feature = "controller")]
+use crate::event::{LedIndicatorEvent, publish_controller_event};
 use crate::keyboard::LOCK_LED_STATES;
 use crate::state::ConnectionState;
 
@@ -364,7 +366,7 @@ pub(crate) async fn run_keyboard<
                     info!("Got led indicator");
                     LOCK_LED_STATES.store(led_indicator.into_bits(), core::sync::atomic::Ordering::Relaxed);
                     #[cfg(feature = "controller")]
-                    crate::event::publish_controller_event(crate::event::LedIndicatorEvent {
+                    publish_controller_event(LedIndicatorEvent {
                         indicator: led_indicator,
                     });
                 }

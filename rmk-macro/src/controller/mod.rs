@@ -138,29 +138,9 @@ fn expand_custom_controller(fn_item: &syn::ItemFn) -> (TokenStream, &syn::Ident)
     (initializer, task_name)
 }
 
-/// Implements the #[controller] macro
+/// Generates Controller trait implementation with automatic event routing.
 ///
-/// This macro generates:
-/// 1. An internal enum to wrap all subscribed event types
-/// 2. Implementation of Controller trait with event routing
-/// 3. Generated `next_message()` using embassy_futures::select
-///
-/// Attributes:
-/// - `subscribe = [EventType1, EventType2, ...]`: List of event types to subscribe to
-///
-/// Examples:
-/// ```ignore
-/// #[controller(subscribe = [BatteryEvent, ChargingStateEvent])]
-/// pub struct BatteryLedController<P> {
-///     pin: OutputController<P>,
-///     state: BatteryState,
-/// }
-///
-/// impl<P> BatteryLedController<P> {
-///     async fn on_battery_event(&mut self, event: BatteryEvent) { /* ... */ }
-///     async fn on_charging_state_event(&mut self, event: ChargingStateEvent) { /* ... */ }
-/// }
-/// ```
+/// See `rmk::controller::Controller` trait documentation for usage.
 pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
@@ -260,7 +240,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     expanded.into()
 }
 
-/// Parse #[controller] attributes to extract event types
+/// Parse #[controller] subscribe attribute
 fn parse_controller_attributes(attr: proc_macro::TokenStream) -> Vec<Path> {
     use syn::punctuated::Punctuated;
     use syn::{ExprArray, Token};
@@ -296,8 +276,7 @@ fn parse_controller_attributes(attr: proc_macro::TokenStream) -> Vec<Path> {
     event_types
 }
 
-/// Convert event type path to method name
-/// Example: BatteryEvent -> on_battery_event
+/// Convert event type to handler method name: BatteryLevelEvent -> on_battery_level_event
 fn event_type_to_method_name(path: &Path) -> syn::Ident {
     let type_name = path.segments.last().unwrap().ident.to_string();
 
@@ -332,7 +311,7 @@ fn to_snake_case(s: &str) -> String {
     result
 }
 
-/// Generate next_message implementation using futures::select_biased
+/// Generate next_message using select_biased for concurrent event polling
 fn generate_next_message(event_types: &[Path], enum_name: &syn::Ident) -> proc_macro2::TokenStream {
     let num_events = event_types.len();
 

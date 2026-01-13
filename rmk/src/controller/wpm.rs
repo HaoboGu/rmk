@@ -1,7 +1,7 @@
 use rmk_macro::controller;
 
 use super::PollingController;
-use crate::event::{KeyEvent, KeyboardEvent, ModifierEvent, publish_controller_event};
+use crate::event::{KeyEvent, KeyboardEvent, ModifierEvent, WpmUpdateEvent, publish_controller_event};
 
 const CHARS_PER_WORD: u8 = 5;
 const SAMPLES: u8 = 5;
@@ -53,7 +53,7 @@ impl PollingController for WpmController {
 
         if avg_wpm != self.wpm {
             self.wpm = avg_wpm;
-            publish_controller_event(crate::event::WpmUpdateEvent { wpm: self.wpm });
+            publish_controller_event(WpmUpdateEvent { wpm: self.wpm });
         }
 
         self.keys_pressed = 0;

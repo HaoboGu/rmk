@@ -2,34 +2,9 @@ use quote::quote;
 use syn::parse::Parser;
 use syn::{Attribute, DeriveInput, Lit, Meta, parse_macro_input};
 
-/// Generates controller event infrastructure with static channel and trait implementations.
+/// Generates controller event infrastructure.
 ///
-/// Generates:
-/// - Static channel (Watch or PubSubChannel)
-/// - ControllerEventTrait implementation
-/// - AwaitableControllerEventTrait (if channel_size specified)
-///
-/// Channel types:
-/// - Watch (default): Latest value only, low overhead
-/// - PubSubChannel (with channel_size): Buffered, awaitable publish
-///
-/// Attributes:
-/// - `channel_size = N`: Use PubSubChannel with buffer size N
-/// - `subs = N`: Subscriber count (default 4)
-/// - `pubs = N`: Publisher count (default 1, only with channel_size)
-///
-/// Example:
-/// ```ignore
-/// #[controller_event(subs = 1)]
-/// #[derive(Clone, Copy)]
-/// pub struct BatteryLevelEvent { pub level: u8 }
-///
-/// #[controller_event(channel_size = 8, subs = 2)]
-/// #[derive(Clone, Copy)]
-/// pub struct KeyEvent { pub pressed: bool }
-/// ```
-///
-/// Requirements: Type must derive Clone + Copy and be a struct or enum.
+/// See `rmk::event::ControllerEventTrait` for usage.
 pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 

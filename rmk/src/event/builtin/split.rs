@@ -3,12 +3,20 @@
 
 use rmk_macro::controller_event;
 
-/// Peripheral connection state changed event
+/// Peripheral connected state changed event
 #[controller_event(subs = 2)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct PeripheralConnectionEvent {
+pub struct PeripheralConnectedEvent {
     pub id: usize,
+    pub connected: bool,
+}
+
+/// Connected to central state changed event
+#[controller_event(subs = 2)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct CentralConnectedEvent {
     pub connected: bool,
 }
 
@@ -19,14 +27,6 @@ pub struct PeripheralConnectionEvent {
 pub struct PeripheralBatteryEvent {
     pub id: usize,
     pub level: u8,
-}
-
-/// Central connection state changed event
-#[controller_event(subs = 2)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct CentralConnectionEvent {
-    pub connected: bool,
 }
 
 /// Clear BLE peer information event

@@ -10,6 +10,8 @@ use super::SplitMessage;
 use crate::CONNECTION_STATE;
 use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::event::{Event, KeyboardEvent, KeyboardEventPos};
+#[cfg(feature = "controller")]
+use crate::event::{PeripheralBatteryEvent, publish_controller_event};
 use crate::input_device::InputDevice;
 
 #[derive(Debug, Clone, Copy)]
@@ -297,10 +299,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 Ok(SplitMessage::BatteryLevel(level)) => {
                     // Publish peripheral battery level to controller channel when connected
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                        crate::event::publish_controller_event(crate::event::PeripheralBatteryEvent {
-                            id: self.id,
-                            level,
-                        });
+                        publish_controller_event(PeripheralBatteryEvent { id: self.id, level });
                     }
                 }
                 Ok(_) => {

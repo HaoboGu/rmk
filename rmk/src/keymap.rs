@@ -7,6 +7,8 @@ use {
 
 use crate::config::{BehaviorConfig, PositionalConfig};
 use crate::event::{KeyboardEvent, KeyboardEventPos};
+#[cfg(feature = "controller")]
+use crate::event::{LayerChangeEvent, publish_controller_event};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
 #[cfg(feature = "vial_lock")]
@@ -332,7 +334,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             #[cfg(feature = "controller")]
             {
                 let layer = self.get_activated_layer();
-                crate::event::publish_controller_event(crate::event::LayerChangeEvent { layer });
+                publish_controller_event(LayerChangeEvent { layer });
             }
         }
     }
@@ -347,7 +349,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         #[cfg(feature = "controller")]
         {
             let layer = self.get_activated_layer();
-            crate::event::publish_controller_event(crate::event::LayerChangeEvent { layer });
+            publish_controller_event(LayerChangeEvent { layer });
         }
     }
 
@@ -392,7 +394,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         #[cfg(feature = "controller")]
         {
             let layer = self.get_activated_layer();
-            crate::event::publish_controller_event(crate::event::LayerChangeEvent { layer });
+            publish_controller_event(LayerChangeEvent { layer });
         }
     }
 }

@@ -18,6 +18,10 @@ use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use crate::combo::Combo;
 use crate::config::Hand;
 use crate::descriptor::KeyboardReport;
+#[cfg(all(feature = "split", feature = "_ble", feature = "controller"))]
+use crate::event::ClearPeerEvent;
+#[cfg(feature = "controller")]
+use crate::event::{KeyEvent, ModifierEvent, publish_controller_event};
 use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
@@ -778,7 +782,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         LAST_KEY_TIMESTAMP.signal(Instant::now().as_secs() as u32);
 
         #[cfg(feature = "controller")]
-        crate::event::publish_controller_event(crate::event::KeyEvent {
+        publish_controller_event(KeyEvent {
             keyboard_event: event,
             key_action,
         });
@@ -1811,7 +1815,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             Either::First(_) => {
                                 // Timeout reached, send clear peer message
                                 #[cfg(feature = "controller")]
-                                crate::event::publish_controller_event(crate::event::ClearPeerEvent);
+                                publish_controller_event(ClearPeerEvent);
                                 info!("Clear peer");
                             }
                             Either::Second(e) => {
@@ -2090,7 +2094,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers |= key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        crate::event::publish_controller_event(crate::event::ModifierEvent {
+        publish_controller_event(ModifierEvent {
             modifier: self.held_modifiers,
         });
 
@@ -2103,7 +2107,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers &= !key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        crate::event::publish_controller_event(crate::event::ModifierEvent {
+        publish_controller_event(ModifierEvent {
             modifier: self.held_modifiers,
         });
     }
@@ -2113,7 +2117,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers |= modifiers;
 
         #[cfg(feature = "controller")]
-        crate::event::publish_controller_event(crate::event::ModifierEvent {
+        publish_controller_event(ModifierEvent {
             modifier: self.held_modifiers,
         });
 
@@ -2126,7 +2130,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers &= !modifiers;
 
         #[cfg(feature = "controller")]
-        crate::event::publish_controller_event(crate::event::ModifierEvent {
+        publish_controller_event(ModifierEvent {
             modifier: self.held_modifiers,
         });
     }

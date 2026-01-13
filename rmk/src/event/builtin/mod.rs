@@ -19,5 +19,5 @@ pub use power::{BatteryLevelEvent, ChargingStateEvent, SleepStateEvent};
 #[cfg(all(feature = "split", feature = "_ble"))]
 pub use split::ClearPeerEvent;
 #[cfg(feature = "split")]
-pub use split::{CentralConnectionEvent, PeripheralBatteryEvent, PeripheralConnectionEvent};
+pub use split::{CentralConnectedEvent, PeripheralBatteryEvent, PeripheralConnectedEvent};
 pub use usb::ConnectionTypeEvent;

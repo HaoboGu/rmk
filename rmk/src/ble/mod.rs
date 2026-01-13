@@ -39,6 +39,8 @@ use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
+#[cfg(feature = "controller")]
+use crate::event::{BleStateChangeEvent, ConnectionTypeEvent, publish_controller_event};
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
@@ -158,7 +160,7 @@ pub(crate) async fn run_ble<
         }
 
         #[cfg(feature = "controller")]
-        crate::event::publish_controller_event(crate::event::ConnectionTypeEvent {
+        publish_controller_event(ConnectionTypeEvent {
             connection_type: CONNECTION_TYPE.load(Ordering::SeqCst).into(),
         });
     }
@@ -244,7 +246,7 @@ pub(crate) async fn run_ble<
         loop {
             // Advertising state
             #[cfg(feature = "controller")]
-            crate::event::publish_controller_event(crate::event::BleStateChangeEvent {
+            publish_controller_event(BleStateChangeEvent {
                 profile: ACTIVE_PROFILE.load(Ordering::Relaxed),
                 state: BleState::Advertising,
             });
@@ -269,7 +271,7 @@ pub(crate) async fn run_ble<
                             Either4::First(_) => {
                                 info!("USB enabled, run USB keyboard");
                                 #[cfg(feature = "controller")]
-                                crate::event::publish_controller_event(crate::event::BleStateChangeEvent {
+                                publish_controller_event(BleStateChangeEvent {
                                     profile: 0,
                                     state: BleState::None,
                                 });
@@ -312,7 +314,7 @@ pub(crate) async fn run_ble<
                             Either4::Second(Err(BleHostError::BleHost(Error::Timeout))) => {
                                 warn!("Advertising timeout, sleep and wait for any key");
                                 #[cfg(feature = "controller")]
-                                crate::event::publish_controller_event(crate::event::BleStateChangeEvent {
+                                publish_controller_event(BleStateChangeEvent {
                                     profile: 0,
                                     state: BleState::None,
                                 });
@@ -372,7 +374,7 @@ pub(crate) async fn run_ble<
                                 warn!("Advertising timeout, sleep and wait for any key");
 
                                 #[cfg(feature = "controller")]
-                                crate::event::publish_controller_event(crate::event::BleStateChangeEvent {
+                                publish_controller_event(BleStateChangeEvent {
                                     profile: 0,
                                     state: BleState::None,
                                 });
@@ -700,7 +702,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
         #[cfg(feature = "controller")]
         if connected && !published_connected_state {
             let profile = ACTIVE_PROFILE.load(Ordering::Acquire);
-            crate::event::publish_controller_event(crate::event::BleStateChangeEvent {
+            publish_controller_event(BleStateChangeEvent {
                 profile,
                 state: BleState::Connected,
             });

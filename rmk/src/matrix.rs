@@ -44,7 +44,7 @@ impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
     }
     pub fn update(&mut self, event: &crate::event::KeyboardEvent) {
         use crate::event::KeyboardEventPos;
-        if let KeyboardEventPos::Key(crate::event::KeyPos { row, col }) = event.pos {
+        if let KeyboardEventPos::Key(KeyPos { row, col }) = event.pos {
             if row as usize >= ROW || col as usize >= COL {
                 warn!("Matrix read out of bounds");
                 return;

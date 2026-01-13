@@ -18,6 +18,8 @@ use super::ble_server::CCCD_TABLE_SIZE;
 use crate::NUM_BLE_PROFILE;
 use crate::ble::ACTIVE_PROFILE;
 use crate::channel::BLE_PROFILE_CHANNEL;
+#[cfg(feature = "controller")]
+use crate::event::{BleProfileChangeEvent, ConnectionTypeEvent, publish_controller_event};
 use crate::state::CONNECTION_TYPE;
 
 pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal::new();
@@ -224,14 +226,14 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             ACTIVE_PROFILE.store(profile, Ordering::SeqCst);
 
             #[cfg(feature = "controller")]
-            crate::event::publish_controller_event(crate::event::BleProfileChangeEvent { profile });
+            publish_controller_event(BleProfileChangeEvent { profile });
         } else {
             // If no saved active profile, use 0 as default
             debug!("Loaded default active profile",);
             ACTIVE_PROFILE.store(0, Ordering::SeqCst);
 
             #[cfg(feature = "controller")]
-            crate::event::publish_controller_event(crate::event::BleProfileChangeEvent { profile: 0 });
+            publish_controller_event(BleProfileChangeEvent { profile: 0 });
         };
     }
 
@@ -368,7 +370,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
         info!("Switched to BLE profile: {}", profile);
 
         #[cfg(feature = "controller")]
-        crate::event::publish_controller_event(crate::event::BleProfileChangeEvent { profile });
+        publish_controller_event(BleProfileChangeEvent { profile });
 
         true
     }
@@ -424,7 +426,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             info!("Switching connection type to: {}", updated);
 
                             #[cfg(feature = "controller")]
-                            crate::event::publish_controller_event(crate::event::ConnectionTypeEvent {
+                            publish_controller_event(ConnectionTypeEvent {
                                 connection_type: updated.into(),
                             });
 
