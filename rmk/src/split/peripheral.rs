@@ -6,13 +6,15 @@ use embedded_io_async::{Read, Write};
 #[cfg(all(feature = "_ble", feature = "storage"))]
 use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 #[cfg(feature = "_ble")]
-use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash, trouble_host::prelude::*};
+use {
+    crate::event::ControllerEventTrait, crate::event::EventSubscriber, crate::storage::Storage,
+    embedded_storage_async::nor_flash::NorFlash, trouble_host::prelude::*,
+};
 
 use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
 use crate::CONNECTION_STATE;
 use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
-use crate::event::ControllerEventTrait;
 #[cfg(feature = "controller")]
 use crate::event::{LayerChangeEvent, LedIndicatorEvent, publish_controller_event};
 #[cfg(not(feature = "_ble"))]
@@ -69,10 +71,9 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     /// The peripheral uses the general matrix, does scanning and send the key events through `SplitWriter`.
     /// If also receives split messages from the central through `SplitReader`.
     pub(crate) async fn run(&mut self) {
-        use crate::event::EventSubscriber;
-
         CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
 
+        #[cfg(feature = "_ble")]
         let mut battery_sub = crate::event::BatteryLevelEvent::subscriber();
 
         loop {
@@ -80,7 +81,10 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                 self.split_driver.read(),
                 KEY_EVENT_CHANNEL.receive(),
                 EVENT_CHANNEL.receive(),
+                #[cfg(feature = "_ble")]
                 battery_sub.next_event(),
+                #[cfg(not(feature = "_ble"))]
+                core::future::pending::<()>(),
             )
             .await
             {
@@ -136,6 +140,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         debug!("Connection not established, skipping event");
                     }
                 }
+                #[cfg(feature = "_ble")]
                 Either4::Fourth(battery_event) => {
                     // Forward battery level to central
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
@@ -146,6 +151,8 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                             .ok();
                     }
                 }
+                #[cfg(not(feature = "_ble"))]
+                _ => (),
             }
         }
     }

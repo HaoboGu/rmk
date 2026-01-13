@@ -8,16 +8,15 @@ mod keyboard_state;
 mod power;
 #[cfg(feature = "split")]
 mod split;
-mod usb;
 
 #[cfg(feature = "_ble")]
 pub use ble::{BleProfileChangeEvent, BleStateChangeEvent};
-pub use connection::ConnectionType;
+pub use connection::{ConnectionType, ConnectionTypeEvent};
 pub use input::{KeyEvent, ModifierEvent};
 pub use keyboard_state::{LayerChangeEvent, LedIndicatorEvent, WpmUpdateEvent};
+#[cfg(feature = "_ble")]
 pub use power::{BatteryLevelEvent, ChargingStateEvent, SleepStateEvent};
 #[cfg(all(feature = "split", feature = "_ble"))]
 pub use split::ClearPeerEvent;
 #[cfg(feature = "split")]
 pub use split::{CentralConnectedEvent, PeripheralBatteryEvent, PeripheralConnectedEvent};
-pub use usb::ConnectionTypeEvent;

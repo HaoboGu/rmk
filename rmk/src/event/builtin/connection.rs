@@ -1,4 +1,6 @@
-//! Connection related types
+//! Connection related events
+
+use rmk_macro::controller_event;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -24,4 +26,12 @@ impl From<ConnectionType> for u8 {
             ConnectionType::Ble => 1,
         }
     }
+}
+
+/// Connection type changed event
+#[controller_event(subs = 2)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct ConnectionTypeEvent {
+    pub connection_type: ConnectionType,
 }

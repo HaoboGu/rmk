@@ -212,13 +212,12 @@ fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usi
                         {
                             subs = Some(lit.base10_parse().expect("subs must be a valid usize"));
                         }
-                    } else if nv.path.is_ident("pubs") {
-                        if let syn::Expr::Lit(expr_lit) = nv.value
+                    } else if nv.path.is_ident("pubs")
+                        && let syn::Expr::Lit(expr_lit) = nv.value
                             && let Lit::Int(lit) = expr_lit.lit
                         {
                             pubs = Some(lit.base10_parse().expect("pubs must be a valid usize"));
                         }
-                    }
                 }
             }
         }
