@@ -3,9 +3,8 @@
 //! This module provides the infrastructure for type-safe controller events.
 //! Each event type has its own dedicated channel and can be subscribed to independently.
 
-use crate::event::AsyncEventPublisher;
-
 use super::{EventPublisher, EventSubscriber};
+use crate::event::AsyncEventPublisher;
 
 /// Trait for controller event types
 ///
@@ -68,10 +67,9 @@ pub trait AwaitableControllerEventTrait: ControllerEventTrait {
 /// # Example
 ///
 /// ```ignore
-/// use rmk::event::publish_controller_event;
-/// use rmk::builtin_events::BatteryEvent;
+/// use rmk::event::{publish_controller_event, BatteryLevelEvent};
 ///
-/// publish_controller_event(BatteryEvent(80)).await;
+/// publish_controller_event(BatteryLevelEvent { level: 80 });
 /// ```
 pub fn publish_controller_event<E: ControllerEventTrait>(e: E) {
     E::publisher().publish(e);
@@ -85,11 +83,10 @@ pub fn publish_controller_event<E: ControllerEventTrait>(e: E) {
 /// # Example
 ///
 /// ```ignore
-/// use rmk::event::publish_controller_event_async;
-/// use rmk::builtin_events::KeyEvent;
+/// use rmk::event::{publish_controller_event_async, KeyEvent};
 ///
 /// // This will wait if the channel is full
-/// publish_controller_event_async(KeyEvent::new()).await;
+/// publish_controller_event_async(KeyEvent { /* fields */ }).await;
 /// ```
 pub async fn publish_controller_event_async<E: AwaitableControllerEventTrait>(e: E) {
     E::async_publisher().async_publish(e).await;

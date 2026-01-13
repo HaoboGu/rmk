@@ -332,7 +332,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             #[cfg(feature = "controller")]
             {
                 let layer = self.get_activated_layer();
-                crate::event::publish_controller_event(crate::builtin_events::KeyboardStateEvent::layer(layer));
+                crate::event::publish_controller_event(crate::event::LayerChangeEvent { layer });
             }
         }
     }
@@ -347,7 +347,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         #[cfg(feature = "controller")]
         {
             let layer = self.get_activated_layer();
-            crate::event::publish_controller_event(crate::builtin_events::KeyboardStateEvent::layer(layer));
+            crate::event::publish_controller_event(crate::event::LayerChangeEvent { layer });
         }
     }
 
@@ -392,7 +392,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         #[cfg(feature = "controller")]
         {
             let layer = self.get_activated_layer();
-            crate::event::publish_controller_event(crate::builtin_events::KeyboardStateEvent::layer(layer));
+            crate::event::publish_controller_event(crate::event::LayerChangeEvent { layer });
         }
     }
 }

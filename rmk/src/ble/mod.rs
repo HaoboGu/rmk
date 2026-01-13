@@ -158,9 +158,9 @@ pub(crate) async fn run_ble<
         }
 
         #[cfg(feature = "controller")]
-        crate::event::publish_controller_event(crate::builtin_events::ConnectionEvent::connection_type(
-            CONNECTION_TYPE.load(Ordering::SeqCst).into(),
-        ));
+        crate::event::publish_controller_event(crate::event::ConnectionTypeEvent {
+            connection_type: CONNECTION_TYPE.load(Ordering::SeqCst).into(),
+        });
     }
 
     // Create profile manager
@@ -244,10 +244,10 @@ pub(crate) async fn run_ble<
         loop {
             // Advertising state
             #[cfg(feature = "controller")]
-            crate::event::publish_controller_event(crate::builtin_events::ConnectionEvent::ble_state(
-                ACTIVE_PROFILE.load(Ordering::Relaxed),
-                BleState::Advertising,
-            ));
+            crate::event::publish_controller_event(crate::event::BleStateChangeEvent {
+                profile: ACTIVE_PROFILE.load(Ordering::Relaxed),
+                state: BleState::Advertising,
+            });
             let adv_fut = advertise(rmk_config.device_config.product_name, &mut peripheral, &server);
             // USB + BLE dual mode
             #[cfg(not(feature = "_no_usb"))]
@@ -269,9 +269,10 @@ pub(crate) async fn run_ble<
                             Either4::First(_) => {
                                 info!("USB enabled, run USB keyboard");
                                 #[cfg(feature = "controller")]
-                                crate::event::publish_controller_event(
-                                    crate::builtin_events::ConnectionEvent::ble_state(0, BleState::None),
-                                );
+                                crate::event::publish_controller_event(crate::event::BleStateChangeEvent {
+                                    profile: 0,
+                                    state: BleState::None,
+                                });
                                 // Re-send the consumed flag
                                 USB_ENABLED.signal(());
                                 let usb_fut = run_keyboard(
@@ -311,9 +312,10 @@ pub(crate) async fn run_ble<
                             Either4::Second(Err(BleHostError::BleHost(Error::Timeout))) => {
                                 warn!("Advertising timeout, sleep and wait for any key");
                                 #[cfg(feature = "controller")]
-                                crate::event::publish_controller_event(
-                                    crate::builtin_events::ConnectionEvent::ble_state(0, BleState::None),
-                                );
+                                crate::event::publish_controller_event(crate::event::BleStateChangeEvent {
+                                    profile: 0,
+                                    state: BleState::None,
+                                });
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
@@ -370,9 +372,10 @@ pub(crate) async fn run_ble<
                                 warn!("Advertising timeout, sleep and wait for any key");
 
                                 #[cfg(feature = "controller")]
-                                crate::event::publish_controller_event(
-                                    crate::builtin_events::ConnectionEvent::ble_state(0, BleState::None),
-                                );
+                                crate::event::publish_controller_event(crate::event::BleStateChangeEvent {
+                                    profile: 0,
+                                    state: BleState::None,
+                                });
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
@@ -697,10 +700,10 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
         #[cfg(feature = "controller")]
         if connected && !published_connected_state {
             let profile = ACTIVE_PROFILE.load(Ordering::Acquire);
-            crate::event::publish_controller_event(crate::builtin_events::ConnectionEvent::ble_state(
+            crate::event::publish_controller_event(crate::event::BleStateChangeEvent {
                 profile,
-                BleState::Connected,
-            ));
+                state: BleState::Connected,
+            });
             published_connected_state = true;
         }
     }

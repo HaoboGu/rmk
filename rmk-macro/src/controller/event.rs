@@ -227,20 +227,22 @@ fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usi
                 if let Meta::NameValue(nv) = meta {
                     if nv.path.is_ident("channel_size") {
                         if let syn::Expr::Lit(expr_lit) = nv.value
-                            && let Lit::Int(lit) = expr_lit.lit {
-                                channel_size =
-                                    Some(lit.base10_parse().expect("channel_size must be a valid usize"));
-                            }
+                            && let Lit::Int(lit) = expr_lit.lit
+                        {
+                            channel_size = Some(lit.base10_parse().expect("channel_size must be a valid usize"));
+                        }
                     } else if nv.path.is_ident("subs") {
                         if let syn::Expr::Lit(expr_lit) = nv.value
-                            && let Lit::Int(lit) = expr_lit.lit {
-                                subs = Some(lit.base10_parse().expect("subs must be a valid usize"));
-                            }
+                            && let Lit::Int(lit) = expr_lit.lit
+                        {
+                            subs = Some(lit.base10_parse().expect("subs must be a valid usize"));
+                        }
                     } else if nv.path.is_ident("pubs") {
                         if let syn::Expr::Lit(expr_lit) = nv.value
-                            && let Lit::Int(lit) = expr_lit.lit {
-                                pubs = Some(lit.base10_parse().expect("pubs must be a valid usize"));
-                            }
+                            && let Lit::Int(lit) = expr_lit.lit
+                        {
+                            pubs = Some(lit.base10_parse().expect("pubs must be a valid usize"));
+                        }
                     }
                 }
             }
@@ -257,9 +259,10 @@ fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usi
 fn has_derive(attrs: &[Attribute], derive_name: &str) -> bool {
     attrs.iter().any(|attr| {
         if attr.path().is_ident("derive")
-            && let Meta::List(meta_list) = &attr.meta {
-                return meta_list.tokens.to_string().contains(derive_name);
-            }
+            && let Meta::List(meta_list) = &attr.meta
+        {
+            return meta_list.tokens.to_string().contains(derive_name);
+        }
         false
     })
 }

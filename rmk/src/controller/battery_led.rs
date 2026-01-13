@@ -1,7 +1,7 @@
 use embedded_hal::digital::StatefulOutputPin;
 use rmk_macro::controller;
 
-use crate::builtin_events::PowerEvent;
+use crate::event::{BatteryLevelEvent, ChargingStateEvent};
 use crate::controller::PollingController;
 use crate::driver::gpio::OutputController;
 
@@ -13,7 +13,7 @@ enum BatteryState {
     Charging,
 }
 
-#[controller(subscribe = [PowerEvent])]
+#[controller(subscribe = [BatteryLevelEvent, ChargingStateEvent])]
 pub struct BatteryLedController<P: StatefulOutputPin> {
     pin: OutputController<P>,
     state: BatteryState,
@@ -27,27 +27,21 @@ impl<P: StatefulOutputPin> BatteryLedController<P> {
         }
     }
 
-    async fn on_power_event(&mut self, event: PowerEvent) {
-        match event {
-            PowerEvent::Battery(level) => {
-                if self.state != BatteryState::Charging {
-                    if level < 10 {
-                        self.state = BatteryState::Low;
-                    } else {
-                        self.state = BatteryState::Normal;
-                    }
-                }
+    async fn on_battery_level_event(&mut self, event: BatteryLevelEvent) {
+        if self.state != BatteryState::Charging {
+            if event.level < 10 {
+                self.state = BatteryState::Low;
+            } else {
+                self.state = BatteryState::Normal;
             }
-            PowerEvent::Charging(charging) => {
-                if charging {
-                    self.state = BatteryState::Charging;
-                } else {
-                    self.state = BatteryState::Normal;
-                }
-            }
-            PowerEvent::Sleep(_) => {
-                // Ignore sleep events for battery LED
-            }
+        }
+    }
+
+    async fn on_charging_state_event(&mut self, event: ChargingStateEvent) {
+        if event.charging {
+            self.state = BatteryState::Charging;
+        } else {
+            self.state = BatteryState::Normal;
         }
     }
 }

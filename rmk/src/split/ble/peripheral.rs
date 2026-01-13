@@ -140,7 +140,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
     stack: &'stack Stack<'stack, C, DefaultPacketPool>,
     storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
-    crate::event::publish_controller_event(crate::builtin_events::SplitEvent::central_connected(false));
+    crate::event::publish_controller_event(crate::event::CentralConnectionEvent { connected: false });
 
     let Host {
         mut peripheral, runner, ..
@@ -163,11 +163,13 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
         let server = BleSplitPeripheralServer::new_default("rmk").unwrap();
         loop {
             CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
-            crate::event::publish_controller_event(crate::builtin_events::SplitEvent::central_connected(false));
+            crate::event::publish_controller_event(crate::event::CentralConnectionEvent { connected: false });
             match split_peripheral_advertise(id, central_addr, &mut peripheral, &server).await {
                 Ok(conn) => {
                     info!("Connected to the central");
-                    crate::event::publish_controller_event(crate::builtin_events::SplitEvent::central_connected(true));
+                    crate::event::publish_controller_event(crate::event::CentralConnectionEvent {
+                        connected: true,
+                    });
                     let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
                     // Save central address to storage if the central address is not saved
                     if !central_saved || conn.raw().peer_address().into_inner() != central_addr.unwrap_or_default() {

@@ -3,10 +3,10 @@ use embedded_hal::digital::StatefulOutputPin;
 use rmk_macro::controller;
 use rmk_types::led_indicator::LedIndicatorType;
 
-use crate::builtin_events::KeyboardStateEvent;
+use crate::event::LedIndicatorEvent;
 use crate::driver::gpio::OutputController;
 
-#[controller(subscribe = [KeyboardStateEvent])]
+#[controller(subscribe = [LedIndicatorEvent])]
 pub struct KeyboardIndicatorController<P: StatefulOutputPin> {
     pin: OutputController<P>,
     indicator: LedIndicatorType,
@@ -20,21 +20,19 @@ impl<P: StatefulOutputPin> KeyboardIndicatorController<P> {
         }
     }
 
-    async fn on_keyboard_state_event(&mut self, event: KeyboardStateEvent) {
-        if let KeyboardStateEvent::Indicator(state) = event {
-            let activated = match self.indicator {
-                LedIndicatorType::NumLock => state.num_lock(),
-                LedIndicatorType::CapsLock => state.caps_lock(),
-                LedIndicatorType::ScrollLock => state.scroll_lock(),
-                LedIndicatorType::Compose => state.compose(),
-                LedIndicatorType::Kana => state.kana(),
-            };
-            info!("Activating {:?} {}", self.indicator, activated);
-            if activated {
-                self.pin.activate();
-            } else {
-                self.pin.deactivate();
-            }
+    async fn on_led_indicator_event(&mut self, event: LedIndicatorEvent) {
+        let activated = match self.indicator {
+            LedIndicatorType::NumLock => event.indicator.num_lock(),
+            LedIndicatorType::CapsLock => event.indicator.caps_lock(),
+            LedIndicatorType::ScrollLock => event.indicator.scroll_lock(),
+            LedIndicatorType::Compose => event.indicator.compose(),
+            LedIndicatorType::Kana => event.indicator.kana(),
+        };
+        info!("Activating {:?} {}", self.indicator, activated);
+        if activated {
+            self.pin.activate();
+        } else {
+            self.pin.deactivate();
         }
     }
 }

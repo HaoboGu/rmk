@@ -12,6 +12,7 @@ use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
 use crate::CONNECTION_STATE;
 use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
+use crate::event::ControllerEventTrait;
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;
@@ -66,19 +67,18 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     /// The peripheral uses the general matrix, does scanning and send the key events through `SplitWriter`.
     /// If also receives split messages from the central through `SplitReader`.
     pub(crate) async fn run(&mut self) {
-        use crate::builtin_events::PowerEvent;
-        use crate::event::{ControllerEventTrait, EventSubscriber};
+        use crate::event::EventSubscriber;
 
         CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
 
-        let mut power_sub = PowerEvent::subscriber();
+        let mut battery_sub = crate::event::BatteryLevelEvent::subscriber();
 
         loop {
             match select4(
                 self.split_driver.read(),
                 KEY_EVENT_CHANNEL.receive(),
                 EVENT_CHANNEL.receive(),
-                power_sub.next_event(),
+                battery_sub.next_event(),
             )
             .await
             {
@@ -100,17 +100,13 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         }
                         SplitMessage::KeyboardIndicator(indicator) => {
                             // Publish KeyboardIndicator event
-                            crate::event::publish_controller_event(
-                                crate::builtin_events::KeyboardStateEvent::indicator(
-                                    rmk_types::led_indicator::LedIndicator::from_bits(indicator),
-                                ),
-                            );
+                            crate::event::publish_controller_event(crate::event::LedIndicatorEvent {
+                                indicator: rmk_types::led_indicator::LedIndicator::from_bits(indicator),
+                            });
                         }
                         SplitMessage::Layer(layer) => {
                             // Publish Layer event
-                            crate::event::publish_controller_event(crate::builtin_events::KeyboardStateEvent::layer(
-                                layer,
-                            ));
+                            crate::event::publish_controller_event(crate::event::LayerChangeEvent { layer });
                         }
                         _ => (),
                     },
@@ -138,13 +134,14 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         debug!("Connection not established, skipping event");
                     }
                 }
-                Either4::Fourth(power_event) => {
+                Either4::Fourth(battery_event) => {
                     // Forward battery level to central
-                    if let PowerEvent::Battery(level) = power_event {
-                        if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                            debug!("Forwarding battery level to central: {}", level);
-                            self.split_driver.write(&SplitMessage::BatteryLevel(level)).await.ok();
-                        }
+                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                        debug!("Forwarding battery level to central: {}", battery_event.level);
+                        self.split_driver
+                            .write(&SplitMessage::BatteryLevel(battery_event.level))
+                            .await
+                            .ok();
                     }
                 }
             }

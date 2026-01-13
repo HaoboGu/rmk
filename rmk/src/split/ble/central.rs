@@ -228,7 +228,10 @@ pub(crate) async fn run_ble_peripheral_manager<
         wait_for_stack_started().await;
 
         #[cfg(feature = "controller")]
-        crate::event::publish_controller_event(crate::builtin_events::SplitEvent::peripheral_connected(peri_id, false));
+        crate::event::publish_controller_event(crate::event::PeripheralConnectionEvent {
+            id: peri_id,
+            connected: false,
+        });
 
         // Connect to peripheral
         match with_timeout(Duration::from_secs(5), async {
@@ -250,9 +253,10 @@ pub(crate) async fn run_ble_peripheral_manager<
                 info!("Connected to peripheral {}", peri_id);
 
                 #[cfg(feature = "controller")]
-                crate::event::publish_controller_event(crate::builtin_events::SplitEvent::peripheral_connected(
-                    peri_id, true,
-                ));
+                crate::event::publish_controller_event(crate::event::PeripheralConnectionEvent {
+                    id: peri_id,
+                    connected: true,
+                });
 
                 if let Err(e) =
                     run_central_manager_task::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(peri_id, stack, &conn).await
@@ -571,7 +575,7 @@ async fn sleep_manager_task<
             update_conn_params(stack, conn, &conn_params).await;
             SLEEPING_STATE.store(true, Ordering::Release);
             #[cfg(feature = "controller")]
-            crate::event::publish_controller_event(crate::builtin_events::PowerEvent::sleep(true));
+            crate::event::publish_controller_event(crate::event::SleepStateEvent { sleeping: true });
         } else {
             // Wait for activity to wake up (false signal means activity/wakeup)
             let signal_value = CENTRAL_SLEEP.wait().await;
@@ -579,7 +583,7 @@ async fn sleep_manager_task<
                 info!("Waking up from sleep mode due to activity");
                 SLEEPING_STATE.store(false, Ordering::Release);
                 #[cfg(feature = "controller")]
-                crate::event::publish_controller_event(crate::builtin_events::PowerEvent::sleep(false));
+                crate::event::publish_controller_event(crate::event::SleepStateEvent { sleeping: false });
 
                 // Restore normal connection parameters
                 update_conn_params(stack, conn, &defaul_central_conn_param()).await;

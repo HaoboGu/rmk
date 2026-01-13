@@ -84,10 +84,10 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
         }
 
         let mut last_sync_time = Instant::now();
-        let mut keyboard_indicator_sub = crate::builtin_events::KeyboardStateEvent::subscriber();
-        let mut layer_sub = crate::builtin_events::KeyboardStateEvent::subscriber();
+        let mut keyboard_indicator_sub = crate::event::LedIndicatorEvent::subscriber();
+        let mut layer_sub = crate::event::LayerChangeEvent::subscriber();
         #[cfg(feature = "_ble")]
-        let mut clear_peer_sub = crate::builtin_events::SplitEvent::subscriber();
+        let mut clear_peer_sub = crate::event::ClearPeerEvent::subscriber();
 
         loop {
             #[cfg(feature = "_ble")]
@@ -128,36 +128,35 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                         EVENT_CHANNEL.send(event).await;
                     }
                 },
-                Either4::Second(kbd_state_event) => {
+                Either4::Second(indicator_event) => {
                     // Send KeyboardIndicator state to peripheral
-                    if let crate::builtin_events::KeyboardStateEvent::Indicator(indicator) = kbd_state_event {
-                        debug!("Sending KeyboardIndicator to peripheral {}: {:?}", self.id, indicator);
-                        if let Err(e) = self
-                            .transceiver
-                            .write(&SplitMessage::KeyboardIndicator(indicator.into_bits()))
-                            .await
-                        {
-                            match e {
-                                SplitDriverError::Disconnected => return,
-                                _ => error!("SplitDriver write error: {:?}", e),
-                            }
+                    debug!(
+                        "Sending KeyboardIndicator to peripheral {}: {:?}",
+                        self.id, indicator_event.indicator
+                    );
+                    if let Err(e) = self
+                        .transceiver
+                        .write(&SplitMessage::KeyboardIndicator(indicator_event.indicator.into_bits()))
+                        .await
+                    {
+                        match e {
+                            SplitDriverError::Disconnected => return,
+                            _ => error!("SplitDriver write error: {:?}", e),
                         }
                     }
                 }
-                Either4::Third(kbd_state_event) => {
+                Either4::Third(layer_event) => {
                     // Send layer number to peripheral
-                    if let crate::builtin_events::KeyboardStateEvent::Layer(layer) = kbd_state_event {
-                        debug!("Sending layer number to peripheral {}: {}", self.id, layer);
-                        if let Err(e) = self.transceiver.write(&SplitMessage::Layer(layer)).await {
-                            match e {
-                                SplitDriverError::Disconnected => return,
-                                _ => error!("SplitDriver write error: {:?}", e),
-                            }
+                    debug!("Sending layer number to peripheral {}: {}", self.id, layer_event.layer);
+                    if let Err(e) = self.transceiver.write(&SplitMessage::Layer(layer_event.layer)).await {
+                        match e {
+                            SplitDriverError::Disconnected => return,
+                            _ => error!("SplitDriver write error: {:?}", e),
                         }
                     }
                 }
                 Either4::Fourth(maybe_clear_peer) => {
-                    if let Some(crate::builtin_events::SplitEvent::ClearPeer) = maybe_clear_peer {
+                    if maybe_clear_peer.is_some() {
                         #[cfg(feature = "storage")]
                         // Clear the peer address in storage
                         FLASH_CHANNEL
@@ -204,31 +203,30 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                             EVENT_CHANNEL.send(event).await;
                         }
                     },
-                    Either3::Second(kbd_state_event) => {
+                    Either3::Second(indicator_event) => {
                         // Send KeyboardIndicator state to peripheral
-                        if let crate::builtin_events::KeyboardStateEvent::Indicator(indicator) = kbd_state_event {
-                            debug!("Sending KeyboardIndicator to peripheral {}: {:?}", self.id, indicator);
-                            if let Err(e) = self
-                                .transceiver
-                                .write(&SplitMessage::KeyboardIndicator(indicator.into_bits()))
-                                .await
-                            {
-                                match e {
-                                    SplitDriverError::Disconnected => return,
-                                    _ => error!("SplitDriver write error: {:?}", e),
-                                }
+                        debug!(
+                            "Sending KeyboardIndicator to peripheral {}: {:?}",
+                            self.id, indicator_event.indicator
+                        );
+                        if let Err(e) = self
+                            .transceiver
+                            .write(&SplitMessage::KeyboardIndicator(indicator_event.indicator.into_bits()))
+                            .await
+                        {
+                            match e {
+                                SplitDriverError::Disconnected => return,
+                                _ => error!("SplitDriver write error: {:?}", e),
                             }
                         }
                     }
-                    Either3::Third(kbd_state_event) => {
+                    Either3::Third(layer_event) => {
                         // Send layer number to peripheral
-                        if let crate::builtin_events::KeyboardStateEvent::Layer(layer) = kbd_state_event {
-                            debug!("Sending layer number to peripheral {}: {}", self.id, layer);
-                            if let Err(e) = self.transceiver.write(&SplitMessage::Layer(layer)).await {
-                                match e {
-                                    SplitDriverError::Disconnected => return,
-                                    _ => error!("SplitDriver write error: {:?}", e),
-                                }
+                        debug!("Sending layer number to peripheral {}: {}", self.id, layer_event.layer);
+                        if let Err(e) = self.transceiver.write(&SplitMessage::Layer(layer_event.layer)).await {
+                            match e {
+                                SplitDriverError::Disconnected => return,
+                                _ => error!("SplitDriver write error: {:?}", e),
                             }
                         }
                     }
@@ -299,9 +297,10 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 Ok(SplitMessage::BatteryLevel(level)) => {
                     // Publish peripheral battery level to controller channel when connected
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                        crate::event::publish_controller_event(crate::builtin_events::SplitEvent::peripheral_battery(
-                            self.id, level,
-                        ));
+                        crate::event::publish_controller_event(crate::event::PeripheralBatteryEvent {
+                            id: self.id,
+                            level,
+                        });
                     }
                 }
                 Ok(_) => {

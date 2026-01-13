@@ -36,7 +36,6 @@ pub enum Hand {
     Right,
 }
 
-
 /// Config for configurable action behavior
 #[derive(Debug, Default)]
 pub struct BehaviorConfig {

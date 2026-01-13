@@ -236,21 +236,18 @@ async fn main(spawner: Spawner) {
     );
 
     // Peripheral battery monitor controller
-    // This controller subscribes to SplitEvent::PeripheralBattery events
+    // This controller subscribes to PeripheralBatteryEvent events
     // and logs the battery level of each peripheral
     use rmk::controller::Controller;
-    use rmk::event::{ControllerEventTrait, EventSubscriber};
+    use rmk::event::{ControllerEventTrait, EventSubscriber, PeripheralBatteryEvent};
     struct PeripheralBatteryMonitor {
-        subscriber: <rmk::builtin_events::SplitEvent as ControllerEventTrait>::Subscriber,
+        subscriber: <PeripheralBatteryEvent as ControllerEventTrait>::Subscriber,
     }
     impl Controller for PeripheralBatteryMonitor {
-        type Event = rmk::builtin_events::SplitEvent;
+        type Event = PeripheralBatteryEvent;
 
         async fn process_event(&mut self, event: Self::Event) {
-            use rmk::builtin_events::SplitEvent;
-            if let SplitEvent::PeripheralBattery { id, level } = event {
-                info!("Peripheral {} battery level: {}%", id, level);
-            }
+            info!("Peripheral {} battery level: {}%", event.id, event.level);
         }
 
         async fn next_message(&mut self) -> Self::Event {
@@ -258,7 +255,7 @@ async fn main(spawner: Spawner) {
         }
     }
     let mut peripheral_battery_monitor = PeripheralBatteryMonitor {
-        subscriber: rmk::builtin_events::SplitEvent::subscriber(),
+        subscriber: PeripheralBatteryEvent::subscriber(),
     };
 
     // Start

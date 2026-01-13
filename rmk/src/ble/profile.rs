@@ -224,14 +224,14 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             ACTIVE_PROFILE.store(profile, Ordering::SeqCst);
 
             #[cfg(feature = "controller")]
-            crate::event::publish_controller_event(crate::builtin_events::ConnectionEvent::ble_profile(profile));
+            crate::event::publish_controller_event(crate::event::BleProfileChangeEvent { profile });
         } else {
             // If no saved active profile, use 0 as default
             debug!("Loaded default active profile",);
             ACTIVE_PROFILE.store(0, Ordering::SeqCst);
 
             #[cfg(feature = "controller")]
-            crate::event::publish_controller_event(crate::builtin_events::ConnectionEvent::ble_profile(0));
+            crate::event::publish_controller_event(crate::event::BleProfileChangeEvent { profile: 0 });
         };
     }
 
@@ -368,7 +368,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
         info!("Switched to BLE profile: {}", profile);
 
         #[cfg(feature = "controller")]
-        crate::event::publish_controller_event(crate::builtin_events::ConnectionEvent::ble_profile(profile));
+        crate::event::publish_controller_event(crate::event::BleProfileChangeEvent { profile });
 
         true
     }
@@ -424,9 +424,9 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             info!("Switching connection type to: {}", updated);
 
                             #[cfg(feature = "controller")]
-                            crate::event::publish_controller_event(
-                                crate::builtin_events::ConnectionEvent::connection_type(updated.into()),
-                            );
+                            crate::event::publish_controller_event(crate::event::ConnectionTypeEvent {
+                                connection_type: updated.into(),
+                            });
 
                             #[cfg(feature = "storage")]
                             FLASH_CHANNEL.send(FlashOperationMessage::ConnectionType(updated)).await;

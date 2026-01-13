@@ -1,14 +1,14 @@
 use rmk_macro::controller;
 
 use super::PollingController;
-use crate::builtin_events::KeyboardInputEvent;
+use crate::event::{KeyEvent, ModifierEvent};
 use crate::event::{KeyboardEvent, publish_controller_event};
 
 const CHARS_PER_WORD: u8 = 5;
 const SAMPLES: u8 = 5;
 
 /// Controller to estimate typing speed in words per minute (WPM)
-#[controller(subscribe = [KeyboardInputEvent])]
+#[controller(subscribe = [KeyEvent, ModifierEvent])]
 pub(crate) struct WpmController {
     keys_pressed: u8,
     wpm: u16,
@@ -24,14 +24,14 @@ impl WpmController {
         }
     }
 
-    async fn on_keyboard_input_event(&mut self, event: KeyboardInputEvent) {
-        if let KeyboardInputEvent::Key {
-            keyboard_event: KeyboardEvent { pressed: false, .. },
-            ..
-        } = event
-        {
+    async fn on_key_event(&mut self, event: KeyEvent) {
+        if let KeyboardEvent { pressed: false, .. } = event.keyboard_event {
             self.keys_pressed += 1
         }
+    }
+
+    async fn on_modifier_event(&mut self, _event: ModifierEvent) {
+        // No action needed for modifier events
     }
 }
 
@@ -54,7 +54,7 @@ impl PollingController for WpmController {
 
         if avg_wpm != self.wpm {
             self.wpm = avg_wpm;
-            publish_controller_event(crate::builtin_events::KeyboardStateEvent::wpm(self.wpm));
+            publish_controller_event(crate::event::WpmUpdateEvent { wpm: self.wpm });
         }
 
         self.keys_pressed = 0;
