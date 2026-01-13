@@ -365,10 +365,10 @@ fn generate_next_message(event_types: &[Path], enum_name: &syn::Ident) -> proc_m
     quote! {
         async fn next_message(&mut self) -> Self::Event {
             use ::rmk::event::EventSubscriber;
-            use ::futures::FutureExt;
+            use ::rmk::futures::FutureExt;
             #(#sub_inits)*
 
-            ::futures::select_biased! {
+            ::rmk::futures::select_biased! {
                 #(#select_arms)*
             }
         }

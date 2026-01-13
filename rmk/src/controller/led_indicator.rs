@@ -3,8 +3,8 @@ use embedded_hal::digital::StatefulOutputPin;
 use rmk_macro::controller;
 use rmk_types::led_indicator::LedIndicatorType;
 
-use crate::event::LedIndicatorEvent;
 use crate::driver::gpio::OutputController;
+use crate::event::LedIndicatorEvent;
 
 #[controller(subscribe = [LedIndicatorEvent])]
 pub struct KeyboardIndicatorController<P: StatefulOutputPin> {

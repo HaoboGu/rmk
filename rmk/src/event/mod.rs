@@ -16,12 +16,10 @@ mod input_device;
 
 // Re-export all built-in events at top level
 pub use builtin::*;
-
 // Re-export controller event system
 pub use controller::{
     AwaitableControllerEventTrait, ControllerEventTrait, publish_controller_event, publish_controller_event_async,
 };
-
 // Re-export input device events
 pub use input_device::*;
 

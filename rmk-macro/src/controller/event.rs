@@ -2,35 +2,34 @@ use quote::quote;
 use syn::parse::Parser;
 use syn::{Attribute, DeriveInput, Lit, Meta, parse_macro_input};
 
-/// Implements the #[controller_event] macro
+/// Generates controller event infrastructure with static channel and trait implementations.
 ///
-/// This macro generates:
-/// 1. A static channel (Watch or PubSubChannel based on attributes)
-/// 2. Implementation of ControllerEventTrait for the event type
-/// 3. Implementation of AwaitableControllerEventTrait (when channel_size is specified)
+/// Generates:
+/// - Static channel (Watch or PubSubChannel)
+/// - ControllerEventTrait implementation
+/// - AwaitableControllerEventTrait (if channel_size specified)
+///
+/// Channel types:
+/// - Watch (default): Latest value only, low overhead
+/// - PubSubChannel (with channel_size): Buffered, awaitable publish
 ///
 /// Attributes:
-/// - `channel_size = N`: Use PubSubChannel instead of Watch (for buffering)
-/// - `subs = N`: Number of subscribers (required for Watch, default 4 for PubSubChannel)
-/// - `pubs = N`: Number of publishers for PubSubChannel (default 1, only valid with channel_size)
+/// - `channel_size = N`: Use PubSubChannel with buffer size N
+/// - `subs = N`: Subscriber count (default 4)
+/// - `pubs = N`: Publisher count (default 1, only with channel_size)
 ///
-/// Examples:
+/// Example:
 /// ```ignore
-/// // Watch channel (default)
 /// #[controller_event(subs = 1)]
-/// pub struct BatteryEvent(pub u8);
+/// #[derive(Clone, Copy)]
+/// pub struct BatteryLevelEvent { pub level: u8 }
 ///
-/// // PubSubChannel with buffering and awaitable publish
-/// #[controller_event(channel_size = 8, subs = 4, pubs = 2)]
-/// pub struct KeyEvent { /* ... */ }
-///
-/// // Also works with enums
-/// #[controller_event(subs = 1)]
-/// pub enum ConnectionState {
-///     Connected,
-///     Disconnected,
-/// }
+/// #[controller_event(channel_size = 8, subs = 2)]
+/// #[derive(Clone, Copy)]
+/// pub struct KeyEvent { pub pressed: bool }
 /// ```
+///
+/// Requirements: Type must derive Clone + Copy and be a struct or enum.
 pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
@@ -84,16 +83,15 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
         _ => unreachable!(),
     };
 
-    // Generate channel name: TYPE_NAME_UPPER_SNAKE_CHANNEL
+    // Generate channel name: BatteryLevelEvent -> BATTERY_LEVEL_EVENT_CHANNEL
     let channel_name = syn::Ident::new(
         &format!("{}_CHANNEL", to_upper_snake_case(&type_name.to_string())),
         type_name.span(),
     );
 
-    // Generate channel and trait implementation based on channel_size
+    // Generate channel and trait implementations
     let (channel_static, trait_impl) = if let Some(cap) = channel_size {
-        // PubSubChannel with ImmediatePublisher for ControllerEventTrait
-        // and Publisher for AwaitableControllerEventTrait
+        // PubSubChannel: buffered events with awaitable publish support
         let subs_val = subs.unwrap_or(4);
         let pubs_val = pubs.unwrap_or(1);
 
@@ -108,6 +106,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
                     #pubs_val
                 >;
 
+                // Awaitable publisher: waits if channel is full
                 fn async_publisher() -> Self::AsyncPublisher {
                     #channel_name.publisher().unwrap()
                 }
@@ -143,6 +142,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
                         #pubs_val
                     >;
 
+                    // Immediate publisher: drops events if buffer is full
                     fn publisher() -> Self::Publisher {
                         #channel_name.immediate_publisher()
                     }
@@ -156,7 +156,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
             },
         )
     } else {
-        // Watch channel (default) - no AwaitableControllerEventTrait
+        // Watch channel: only latest value, no awaitable publish
         let subs_val = subs.unwrap_or(4);
         (
             quote! {
@@ -206,7 +206,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
     expanded.into()
 }
 
-/// Parse macro attributes to extract channel_size, subs, and pubs
+/// Parse macro attributes: (channel_size, subs, pubs)
 fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usize>, Option<usize>) {
     use syn::Token;
     use syn::punctuated::Punctuated;
@@ -255,7 +255,7 @@ fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usi
     (channel_size, subs, pubs)
 }
 
-/// Check if a struct has a specific derive
+/// Check if a type has a specific derive attribute
 fn has_derive(attrs: &[Attribute], derive_name: &str) -> bool {
     attrs.iter().any(|attr| {
         if attr.path().is_ident("derive")
@@ -267,7 +267,7 @@ fn has_derive(attrs: &[Attribute], derive_name: &str) -> bool {
     })
 }
 
-/// Convert CamelCase to UPPER_SNAKE_CASE
+/// Convert CamelCase to UPPER_SNAKE_CASE for channel names
 fn to_upper_snake_case(s: &str) -> String {
     let mut result = String::new();
     let mut prev_is_upper = false;

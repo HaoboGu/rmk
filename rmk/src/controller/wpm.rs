@@ -1,8 +1,7 @@
 use rmk_macro::controller;
 
 use super::PollingController;
-use crate::event::{KeyEvent, ModifierEvent};
-use crate::event::{KeyboardEvent, publish_controller_event};
+use crate::event::{KeyEvent, KeyboardEvent, ModifierEvent, publish_controller_event};
 
 const CHARS_PER_WORD: u8 = 5;
 const SAMPLES: u8 = 5;
