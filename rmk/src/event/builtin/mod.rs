@@ -11,7 +11,7 @@ mod split;
 
 #[cfg(feature = "_ble")]
 pub use ble::{BleProfileChangeEvent, BleStateChangeEvent};
-pub use connection::{ConnectionType, ConnectionTypeEvent};
+pub use connection::{ConnectionChangeEvent, ConnectionType};
 pub use input::{KeyEvent, ModifierEvent};
 pub use keyboard_state::{LayerChangeEvent, LedIndicatorEvent, WpmUpdateEvent};
 #[cfg(feature = "_ble")]

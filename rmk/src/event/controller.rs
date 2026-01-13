@@ -9,28 +9,6 @@ use crate::event::AsyncEventPublisher;
 /// Trait for controller event types
 ///
 /// Automatically implemented by `#[controller_event]` macro.
-///
-/// # Usage
-///
-/// ```ignore
-/// use rmk_macro::controller_event;
-///
-/// // Watch channel (default): latest value only
-/// #[controller_event(subs = 1)]
-/// #[derive(Clone, Copy)]
-/// pub struct BatteryLevelEvent { pub level: u8 }
-///
-/// // PubSubChannel: buffered, awaitable publish
-/// #[controller_event(channel_size = 8, subs = 2)]
-/// #[derive(Clone, Copy)]
-/// pub struct KeyEvent { pub pressed: bool }
-/// ```
-///
-/// # Attributes
-///
-/// - `channel_size = N`: Use PubSubChannel with buffer size N
-/// - `subs = N`: Subscriber count (default 4)
-/// - `pubs = N`: Publisher count (default 1, only with channel_size)
 pub trait ControllerEventTrait: Copy + Clone + Send {
     type Publisher: EventPublisher<Self>;
     type Subscriber: EventSubscriber<Self>;

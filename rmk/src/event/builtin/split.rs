@@ -4,7 +4,7 @@
 use rmk_macro::controller_event;
 
 /// Peripheral connected state changed event
-#[controller_event(subs = 2)]
+#[controller_event(subs = 1)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PeripheralConnectedEvent {
@@ -13,7 +13,7 @@ pub struct PeripheralConnectedEvent {
 }
 
 /// Connected to central state changed event
-#[controller_event(subs = 2)]
+#[controller_event(subs = 1)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CentralConnectedEvent {
@@ -31,7 +31,7 @@ pub struct PeripheralBatteryEvent {
 
 /// Clear BLE peer information event
 #[cfg(feature = "_ble")]
-#[controller_event(channel_size = 1, subs = 2)]
+#[controller_event(subs = 1)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ClearPeerEvent;

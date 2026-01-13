@@ -6,6 +6,7 @@ use rmk_types::modifier::ModifierCombination;
 
 use crate::event::KeyboardEvent;
 
+/// TODO: Split the KeyEvent to KeyboardEvent and processed KeyAction, or maybe HidReportEvent?
 /// Key press/release event
 #[controller_event(channel_size = 8, subs = 4)]
 #[derive(Clone, Copy, Debug)]
