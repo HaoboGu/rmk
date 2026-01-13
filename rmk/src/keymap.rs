@@ -120,9 +120,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .is_err()
         {
             error!("Failed to read from storage, clearing...");
-            sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
-                .await
-                .ok();
+            storage.flash.erase_all().await.ok();
 
             reboot_keyboard();
         }
