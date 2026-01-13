@@ -14,6 +14,12 @@ pub struct BleStateChangeEvent {
     pub state: BleState,
 }
 
+impl BleStateChangeEvent {
+    pub fn new(profile: u8, state: BleState) -> Self {
+        Self { profile, state }
+    }
+}
+
 /// BLE profile changed event
 #[controller_event(subs = 2)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
