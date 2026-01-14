@@ -7,7 +7,15 @@ RMK's controller system provides a unified interface for managing output devices
 RMK uses an event-driven architecture where event producers (keyboard, BLE stack, etc.) are decoupled from event consumers (controllers). This allows controllers to independently react to specific events they care about.
 
 ```
-Event Publisher ----publish---> Events ----subscribe----> Controllers
+                             ┌──────┐               ┌────────────┐
+                             │      │       ┌──────▶│controller a│
+                             │      │       │       └────────────┘
+┌───────────────┐            │      │       │       ┌────────────┐
+│event publisher│──publish──▶│events│──subscribe───▶│controller b│
+└───────────────┘            │      │       │       └────────────┘
+                             │      │       │       ┌────────────┐
+                             │      │       └──────▶│controller c│
+                             └──────┘               └────────────┘
 ```
 
 **Key concepts:**
