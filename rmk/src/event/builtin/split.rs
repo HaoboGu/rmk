@@ -1,4 +1,3 @@
-#![cfg(feature = "split")]
 //! Split keyboard events
 
 use rmk_macro::controller_event;

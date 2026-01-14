@@ -9,18 +9,14 @@ use embassy_sync::blocking_mutex::raw::RawMutex;
 use embassy_sync::pubsub::{ImmediatePublisher, Publisher, Subscriber};
 use embassy_sync::watch;
 
-// Sub-modules
 mod builtin;
 mod controller;
 mod input_device;
 
-// Re-export all built-in events at top level
 pub use builtin::*;
-// Re-export controller event system
 pub use controller::{
     AwaitableControllerEventTrait, ControllerEventTrait, publish_controller_event, publish_controller_event_async,
 };
-// Re-export input device events
 pub use input_device::*;
 
 /// Trait for event publishers

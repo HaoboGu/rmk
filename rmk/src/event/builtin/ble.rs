@@ -1,4 +1,3 @@
-#![cfg(feature = "_ble")]
 //! BLE connection events
 
 use rmk_macro::controller_event;

@@ -40,7 +40,7 @@ use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDAT
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
 #[cfg(feature = "controller")]
-use crate::event::{BleStateChangeEvent, ConnectionChangeEvent, publish_controller_event};
+use crate::event::{BleStateChangeEvent, ConnectionChangedEvent, publish_controller_event};
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
@@ -160,7 +160,7 @@ pub(crate) async fn run_ble<
         }
 
         #[cfg(feature = "controller")]
-        publish_controller_event(ConnectionChangeEvent {
+        publish_controller_event(ConnectionChangedEvent {
             connection_type: CONNECTION_TYPE.load(Ordering::SeqCst).into(),
         });
     }

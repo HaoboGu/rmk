@@ -26,3 +26,11 @@ pub struct WpmUpdateEvent {
 pub struct LedIndicatorEvent {
     pub indicator: LedIndicator,
 }
+
+/// Sleep state changed event
+#[controller_event(subs = 2)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct SleepStateEvent {
+    pub sleeping: bool,
+}

@@ -17,11 +17,3 @@ pub struct BatteryLevelEvent {
 pub struct ChargingStateEvent {
     pub charging: bool,
 }
-
-/// Sleep state changed event
-#[controller_event(subs = 2)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct SleepStateEvent {
-    pub sleeping: bool,
-}
