@@ -32,6 +32,6 @@ impl From<ConnectionType> for u8 {
 #[controller_event(subs = 1)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct ConnectionChangedEvent {
+pub struct ConnectionChangeEvent {
     pub connection_type: ConnectionType,
 }

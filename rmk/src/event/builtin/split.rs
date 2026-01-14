@@ -30,7 +30,7 @@ pub struct PeripheralBatteryEvent {
 
 /// Clear BLE peer information event
 #[cfg(feature = "_ble")]
-#[controller_event(subs = 1)]
+#[controller_event(subs = 2)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ClearPeerEvent;
