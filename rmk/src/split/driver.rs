@@ -2,6 +2,7 @@
 //!
 use core::sync::atomic::Ordering;
 
+use embassy_futures::select::{Either3, select3};
 use embassy_time::Instant;
 #[cfg(all(feature = "storage", feature = "_ble"))]
 use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::storage::FlashOperationMessage};
@@ -67,13 +68,6 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
     /// The manager receives from the peripheral and forward the message to `KEY_EVENT_CHANNEL`.
     /// It also sync the `ConnectionState` to the peripheral periodically.
     pub(crate) async fn run(mut self) {
-        #[cfg(feature = "_ble")]
-        use embassy_futures::select::Either4;
-        #[cfg(not(feature = "_ble"))]
-        use embassy_futures::select::{Either3, select3};
-        #[cfg(feature = "_ble")]
-        use futures::FutureExt;
-
         use crate::event::{ControllerEventTrait, EventSubscriber};
 
         let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
@@ -92,36 +86,25 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
         let mut clear_peer_sub = crate::event::ClearPeerEvent::subscriber();
 
         loop {
-            #[cfg(feature = "_ble")]
-            let result = {
-                // Calculate the time until the next 3000ms sync
-                use embassy_time::Timer;
-                let elapsed = last_sync_time.elapsed().as_millis();
-                let wait_time = if elapsed >= 3000 { 1 } else { 3000 - elapsed };
-                // With BLE, we have 4 sources to select from
-                futures::select_biased! {
-                    event = self.read_event().fuse() => Either4::First(event),
-                    kbd_ind = keyboard_indicator_sub.next_event().fuse() => Either4::Second(kbd_ind),
-                    layer = layer_sub.next_event().fuse() => Either4::Third(layer),
-                    clear = clear_peer_sub.next_event().fuse() => Either4::Fourth(Some(clear)),
-                    _ = Timer::after_millis(wait_time).fuse() => Either4::Fourth(None),
-                }
-            };
-
-            #[cfg(not(feature = "_ble"))]
-            let result = {
-                // Without BLE, we only have 3 sources (no clear_peer)
+            // Calculate the time until the next 3000ms sync
+            use embassy_time::Timer;
+            let elapsed = last_sync_time.elapsed().as_millis();
+            let wait_time = if elapsed >= 3000 { 1 } else { 3000 - elapsed };
+            match select3(
+                self.read_event(),
                 select3(
-                    self.read_event(),
                     keyboard_indicator_sub.next_event(),
                     layer_sub.next_event(),
-                )
-                .await
-            };
-
-            #[cfg(feature = "_ble")]
-            match result {
-                Either4::First(event) => match event {
+                    #[cfg(feature = "_ble")]
+                    clear_peer_sub.next_event(),
+                    #[cfg(not(feature = "_ble"))]
+                    core::future::pending::<()>(),
+                ),
+                Timer::after_millis(wait_time),
+            )
+            .await
+            {
+                Either3::First(event) => match event {
                     Event::Key(key_event) => KEY_EVENT_CHANNEL.send(key_event).await,
                     _ => {
                         if EVENT_CHANNEL.is_full() {
@@ -130,113 +113,40 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                         EVENT_CHANNEL.send(event).await;
                     }
                 },
-                Either4::Second(indicator_event) => {
-                    // Send KeyboardIndicator state to peripheral
-                    debug!(
-                        "Sending KeyboardIndicator to peripheral {}: {:?}",
-                        self.id, indicator_event.indicator
-                    );
-                    if let Err(e) = self
-                        .transceiver
-                        .write(&SplitMessage::KeyboardIndicator(indicator_event.indicator.into_bits()))
-                        .await
-                    {
+                Either3::Second(e) => {
+                    let message_to_peri = match e {
+                        Either3::First(indicator_event) => {
+                            SplitMessage::KeyboardIndicator(indicator_event.indicator.into_bits())
+                        }
+                        Either3::Second(layer_event) => SplitMessage::Layer(layer_event.layer),
+                        #[cfg(feature = "_ble")]
+                        Either3::Third(_clear_peer) => {
+                            #[cfg(feature = "storage")]
+                            // Clear the peer address in storage
+                            FLASH_CHANNEL
+                                .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
+                                    self.id as u8,
+                                    false,
+                                    [0; 6],
+                                )))
+                                .await;
+
+                            SplitMessage::ClearPeer
+                        }
+                        #[cfg(not(feature = "_ble"))]
+                        _ => continue,
+                    };
+                    // Send message to peripheral
+                    debug!("Sending message to peripheral {}: {:?}", self.id, message_to_peri);
+                    if let Err(e) = self.transceiver.write(&message_to_peri).await {
                         match e {
                             SplitDriverError::Disconnected => return,
                             _ => error!("SplitDriver write error: {:?}", e),
                         }
                     }
                 }
-                Either4::Third(layer_event) => {
-                    // Send layer number to peripheral
-                    debug!("Sending layer number to peripheral {}: {}", self.id, layer_event.layer);
-                    if let Err(e) = self.transceiver.write(&SplitMessage::Layer(layer_event.layer)).await {
-                        match e {
-                            SplitDriverError::Disconnected => return,
-                            _ => error!("SplitDriver write error: {:?}", e),
-                        }
-                    }
-                }
-                Either4::Fourth(maybe_clear_peer) => {
-                    if maybe_clear_peer.is_some() {
-                        #[cfg(feature = "storage")]
-                        // Clear the peer address in storage
-                        FLASH_CHANNEL
-                            .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
-                                self.id as u8,
-                                false,
-                                [0; 6],
-                            )))
-                            .await;
-
-                        // Write `ClearPeer` message to peripheral
-                        debug!("Write ClearPeer message to peripheral {}", self.id);
-                        if let Err(e) = self.transceiver.write(&SplitMessage::ClearPeer).await {
-                            match e {
-                                SplitDriverError::Disconnected => return,
-                                _ => error!("SplitDriver write error: {:?}", e),
-                            }
-                        }
-                    } else {
-                        // Timer elapsed, sync the connection state
-                        conn_state = CONNECTION_STATE.load(Ordering::Acquire);
-                        trace!("Syncing connection state to peripheral: {}", conn_state);
-                        if let Err(e) = self.transceiver.write(&SplitMessage::ConnectionState(conn_state)).await {
-                            match e {
-                                SplitDriverError::Disconnected => return,
-                                _ => error!("SplitDriver write error: {:?}", e),
-                            }
-                        }
-                        last_sync_time = Instant::now();
-                    }
-                }
-            }
-
-            #[cfg(not(feature = "_ble"))]
-            {
-                // Without BLE feature, handle only 3 cases
-                match result {
-                    Either3::First(event) => match event {
-                        Event::Key(key_event) => KEY_EVENT_CHANNEL.send(key_event).await,
-                        _ => {
-                            if EVENT_CHANNEL.is_full() {
-                                let _ = EVENT_CHANNEL.receive().await;
-                            }
-                            EVENT_CHANNEL.send(event).await;
-                        }
-                    },
-                    Either3::Second(indicator_event) => {
-                        // Send KeyboardIndicator state to peripheral
-                        debug!(
-                            "Sending KeyboardIndicator to peripheral {}: {:?}",
-                            self.id, indicator_event.indicator
-                        );
-                        if let Err(e) = self
-                            .transceiver
-                            .write(&SplitMessage::KeyboardIndicator(indicator_event.indicator.into_bits()))
-                            .await
-                        {
-                            match e {
-                                SplitDriverError::Disconnected => return,
-                                _ => error!("SplitDriver write error: {:?}", e),
-                            }
-                        }
-                    }
-                    Either3::Third(layer_event) => {
-                        // Send layer number to peripheral
-                        debug!("Sending layer number to peripheral {}: {}", self.id, layer_event.layer);
-                        if let Err(e) = self.transceiver.write(&SplitMessage::Layer(layer_event.layer)).await {
-                            match e {
-                                SplitDriverError::Disconnected => return,
-                                _ => error!("SplitDriver write error: {:?}", e),
-                            }
-                        }
-                    }
-                }
-
-                // Check timer separately for non-BLE case
-                let elapsed = last_sync_time.elapsed().as_millis();
-                if elapsed >= 3000 {
+                Either3::Third(_) => {
+                    // Timer elapsed, sync the connection state
                     conn_state = CONNECTION_STATE.load(Ordering::Acquire);
                     trace!("Syncing connection state to peripheral: {}", conn_state);
                     if let Err(e) = self.transceiver.write(&SplitMessage::ConnectionState(conn_state)).await {
