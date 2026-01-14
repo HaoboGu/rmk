@@ -28,25 +28,25 @@ pub(crate) fn expand_controller_init(
     if let Some((_, items)) = &item_mod.content {
         items.iter().for_each(|item| {
             if let syn::Item::Fn(item_fn) = &item
-                && let Some(attr) = item_fn.attrs.iter().find(|attr| attr.path().is_ident("controller")) {
+                && let Some(attr) = item_fn.attrs.iter().find(|attr| attr.path().is_ident("register_controller")) {
                     let _ = attr.parse_nested_meta(|meta| {
                         if !controller_feature_enabled {
-                            panic!("\"controller\" feature of RMK must be enabled to use the #[controller] attribute");
+                            panic!("\"controller\" feature of RMK must be enabled to use the #[register_controller] attribute");
                         }
                         let (custom_init, custom_exec) = expand_custom_controller(item_fn);
                         initializers.extend(custom_init);
 
                         if meta.path.is_ident("event") {
-                            // #[controller(event)]
+                            // #[register_controller(event)]
                             executors.push(quote! { #custom_exec.event_loop() });
                             return Ok(());
                         } else if meta.path.is_ident("poll") {
-                            // #[controller(poll)]
+                            // #[register_controller(poll)]
                             executors.push(quote! { #custom_exec.polling_loop() });
                             return Ok(());
                         }
 
-                        panic!("\"controller\" attribute must specify execution mode with #[controller(event)] or #[controller(poll)]")
+                        panic!("#[register_controller] must specify execution mode with `event` or `poll`. Use `#[register_controller(event)]` or `#[register_controller(poll)]`")
                     });
                 }
         });
@@ -141,13 +141,19 @@ fn expand_custom_controller(fn_item: &syn::ItemFn) -> (TokenStream, &syn::Ident)
 /// Generates Controller trait implementation with automatic event routing.
 ///
 /// See `rmk::controller::Controller` trait documentation for usage.
+///
+/// This macro is used to define Controller structs:
+/// ```rust
+/// #[controller(subscribe = [BatteryEvent, ChargingStateEvent])]
+/// pub struct BatteryLedController { ... }
+/// ```
 pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
-    // Parse attributes to extract event types
-    let event_types = parse_controller_attributes(attr);
+    // Parse attributes to extract event types and polling configuration
+    let config = parse_controller_attributes(attr);
 
-    if event_types.is_empty() {
+    if config.event_types.is_empty() {
         return syn::Error::new_spanned(
             input,
             "#[controller] requires `subscribe` attribute with at least one event type. Use `#[controller(subscribe = [EventType1, EventType2])]`"
@@ -189,7 +195,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     let enum_name = format_ident!("{}EventEnum", struct_name);
 
     // Generate enum variants and related code
-    let enum_variants: Vec<_> = event_types
+    let enum_variants: Vec<_> = config.event_types
         .iter()
         .enumerate()
         .map(|(idx, event_type)| {
@@ -199,7 +205,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         .collect();
 
     // Generate match arms for process_event
-    let process_event_arms: Vec<_> = event_types
+    let process_event_arms: Vec<_> = config.event_types
         .iter()
         .enumerate()
         .map(|(idx, event_type)| {
@@ -212,7 +218,24 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         .collect();
 
     // Generate next_message implementation using embassy_futures::select
-    let next_message_impl = generate_next_message(&event_types, &enum_name);
+    let next_message_impl = generate_next_message(&config.event_types, &enum_name);
+
+    // Generate PollingController implementation if poll_interval is specified
+    let polling_controller_impl = if let Some(interval_ms) = config.poll_interval_ms {
+        quote! {
+            impl #impl_generics ::rmk::controller::PollingController for #struct_name #ty_generics #where_clause {
+                fn interval(&self) -> ::embassy_time::Duration {
+                    ::embassy_time::Duration::from_millis(#interval_ms)
+                }
+
+                async fn update(&mut self) {
+                    self.poll().await
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
 
     // Generate the complete output
     let expanded = quote! {
@@ -235,17 +258,26 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
 
             #next_message_impl
         }
+
+        #polling_controller_impl
     };
 
     expanded.into()
 }
 
+/// Controller attribute configuration
+struct ControllerConfig {
+    event_types: Vec<Path>,
+    poll_interval_ms: Option<u64>,
+}
+
 /// Parse #[controller] subscribe attribute
-fn parse_controller_attributes(attr: proc_macro::TokenStream) -> Vec<Path> {
+fn parse_controller_attributes(attr: proc_macro::TokenStream) -> ControllerConfig {
     use syn::punctuated::Punctuated;
     use syn::{ExprArray, Token};
 
     let mut event_types = Vec::new();
+    let mut poll_interval_ms = None;
 
     // Parse as Meta::List containing name-value pairs
     let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
@@ -254,15 +286,24 @@ fn parse_controller_attributes(attr: proc_macro::TokenStream) -> Vec<Path> {
     match parser.parse2(attr2) {
         Ok(parsed) => {
             for meta in parsed {
-                if let Meta::NameValue(nv) = meta
-                    && nv.path.is_ident("subscribe")
-                {
-                    // Parse the array of event types
-                    if let syn::Expr::Array(ExprArray { elems, .. }) = nv.value {
-                        for elem in elems {
-                            if let syn::Expr::Path(expr_path) = elem {
-                                event_types.push(expr_path.path);
+                if let Meta::NameValue(nv) = meta {
+                    if nv.path.is_ident("subscribe") {
+                        // Parse the array of event types
+                        if let syn::Expr::Array(ExprArray { elems, .. }) = nv.value {
+                            for elem in elems {
+                                if let syn::Expr::Path(expr_path) = elem {
+                                    event_types.push(expr_path.path);
+                                }
                             }
+                        }
+                    } else if nv.path.is_ident("poll_interval") {
+                        // Parse poll_interval as integer (milliseconds)
+                        if let syn::Expr::Lit(syn::ExprLit { 
+                            lit: syn::Lit::Int(lit_int), .. 
+                        }) = nv.value {
+                            poll_interval_ms = Some(lit_int.base10_parse::<u64>().expect("poll_interval must be a valid u64"));
+                        } else {
+                            panic!("poll_interval must be an integer literal (milliseconds)");
                         }
                     }
                 }
@@ -273,7 +314,10 @@ fn parse_controller_attributes(attr: proc_macro::TokenStream) -> Vec<Path> {
         }
     }
 
-    event_types
+    ControllerConfig {
+        event_types,
+        poll_interval_ms,
+    }
 }
 
 /// Convert event type to handler method name: BatteryLevelEvent -> on_battery_level_event
