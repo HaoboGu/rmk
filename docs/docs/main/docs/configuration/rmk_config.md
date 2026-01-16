@@ -26,12 +26,6 @@ macro_space_size = 256
 debounce_time = 20
 # Event channel size
 event_channel_size = 16
-# Controller event channel size
-controller_channel_size = 16
-# Number of publishers to controllers
-controller_channel_pubs = 12
-# Number of controllers (subscribers)
-controller_channel_subs = 8
 # Report channel size
 report_channel_size = 16
 # Vial channel size
@@ -77,9 +71,6 @@ Increasing the number of combos, forks, morses (tap dances), and macros will inc
 In RMK there are several channels used for communication between tasks. The length of the channel can be adjusted. Larger channel size means more events can be buffered, but it will increase memory usage.
 
 - `event_channel_size`: The length of event channel, default value is 16. Used for buffering keyboard matrix events.
-- `controller_channel_size`: The length of controller event channel, default value is 16. Used for communication between controller and other tasks.
-- `controller_channel_pubs`: Number of publishers that can send messages to controllers, default value is 12. This controls how many concurrent senders can publish to the controller channel.
-- `controller_channel_subs`: Number of controllers (subscribers) that can receive messages, default value is 8. This controls how many concurrent receivers can subscribe to the controller channel.
 - `report_channel_size`: The length of report channel, default value is 16. Used for buffering HID reports to be sent to the host.
 - `vial_channel_size`: The length of vial channel, default value is 4. Used for communication with Vial protocol.
 - `flash_channel_size`: The length of flash channel, default value is 4. Used for buffering flash storage operations.
