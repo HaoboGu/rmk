@@ -1,7 +1,4 @@
-pub mod dummy_flash;
-
 use core::fmt::Debug;
-use core::ops::Range;
 
 use embassy_embedded_hal::adapter::BlockingAsync;
 use embassy_sync::signal::Signal;
@@ -11,7 +8,7 @@ use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use rmk_types::action::MorseProfile;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
-use sequential_storage::map::{SerializationError, Value, fetch_item, store_item};
+use sequential_storage::map::{MapConfig, MapStorage, SerializationError, Value};
 #[cfg(feature = "host")]
 use {
     crate::host::storage::{KeymapData, KeymapKey},
@@ -409,28 +406,18 @@ pub struct Storage<
     const NUM_LAYER: usize,
     const NUM_ENCODER: usize = 0,
 > {
-    pub(crate) flash: F,
-    pub(crate) storage_range: Range<u32>,
+    pub(crate) flash: MapStorage<u32, F, NoCache>,
     pub(crate) buffer: [u8; get_buffer_size()],
 }
 
 /// Read out storage config, update and then save back.
 /// This macro applies to only some of the configs.
 macro_rules! update_storage_field {
-    ($f: expr, $buf: expr, $cache:expr, $key:ident, $field:ident, $range:expr) => {
-        if let Ok(Some(StorageData::$key(mut saved))) =
-            fetch_item::<u32, StorageData, _>($f, $range, $cache, $buf, &(StorageKeys::$key as u32)).await
-        {
+    ($f: expr, $buf: expr, $key:ident, $field:ident) => {
+        if let Ok(Some(StorageData::$key(mut saved))) = $f.fetch_item($buf, &(StorageKeys::$key as u32)).await {
             saved.$field = $field;
-            store_item::<u32, StorageData, _>(
-                $f,
-                $range,
-                $cache,
-                $buf,
-                &(StorageKeys::$key as u32),
-                &StorageData::$key(saved),
-            )
-            .await
+            $f.store_item($buf, &(StorageKeys::$key as u32), &StorageData::$key(saved))
+                .await
         } else {
             Ok(())
         }
@@ -485,8 +472,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         };
 
         let mut storage = Self {
-            flash,
-            storage_range,
+            flash: MapStorage::new(flash, MapConfig::new(storage_range), NoCache::new()),
             buffer: [0; get_buffer_size()],
         };
 
@@ -494,7 +480,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         if !storage.check_enable().await || storage_config.clear_storage {
             // Clear storage first
             debug!("Clearing storage!");
-            let _ = sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone()).await;
+            let _ = storage.flash.erase_all().await;
 
             // Initialize storage from keymap and config
             if storage
@@ -509,19 +495,18 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 .is_err()
             {
                 // When there's an error, `enable: false` should be saved back to storage, preventing partial initialization of storage
-                store_item(
-                    &mut storage.flash,
-                    storage.storage_range.clone(),
-                    &mut NoCache::new(),
-                    &mut storage.buffer,
-                    &(StorageKeys::StorageConfig as u32),
-                    &StorageData::StorageConfig(LocalStorageConfig {
-                        enable: false,
-                        build_hash: BUILD_HASH,
-                    }),
-                )
-                .await
-                .ok();
+                storage
+                    .flash
+                    .store_item(
+                        &mut storage.buffer,
+                        &(StorageKeys::StorageConfig as u32),
+                        &StorageData::StorageConfig(LocalStorageConfig {
+                            enable: false,
+                            build_hash: BUILD_HASH,
+                        }),
+                    )
+                    .await
+                    .ok();
             }
         } else if storage_config.clear_layout {
             #[cfg(feature = "host")]
@@ -536,152 +521,95 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     pub(crate) async fn run(&mut self) {
-        let mut storage_cache = NoCache::new();
         loop {
             let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
             debug!("Flash operation: {:?}", info);
             match match info {
                 FlashOperationMessage::LayoutOptions(layout_option) => {
                     // Read out layout options, update layer option and save back
-                    update_storage_field!(
-                        &mut self.flash,
-                        &mut self.buffer,
-                        &mut storage_cache,
-                        LayoutConfig,
-                        layout_option,
-                        self.storage_range.clone()
-                    )
+                    update_storage_field!(&mut self.flash, &mut self.buffer, LayoutConfig, layout_option)
                 }
-                FlashOperationMessage::Reset => {
-                    sequential_storage::erase_all(&mut self.flash, self.storage_range.clone()).await
-                }
+                FlashOperationMessage::Reset => self.flash.erase_all().await,
                 FlashOperationMessage::ResetLayout => {
                     info!("Ignoring ResetLayout at runtime (handled at startup via clear_layout).");
                     Ok(())
                 }
                 FlashOperationMessage::DefaultLayer(default_layer) => {
                     // Read out layout options, update layer option and save back
-                    update_storage_field!(
-                        &mut self.flash,
-                        &mut self.buffer,
-                        &mut storage_cache,
-                        LayoutConfig,
-                        default_layer,
-                        self.storage_range.clone()
-                    )
+                    update_storage_field!(&mut self.flash, &mut self.buffer, LayoutConfig, default_layer)
                 }
                 #[cfg(feature = "host")]
                 FlashOperationMessage::VialMessage(vial_data) => match vial_data {
                     KeymapData::Macro(macro_data) => {
                         info!("Saving keyboard macro data");
-                        store_item(
-                            &mut self.flash,
-                            self.storage_range.clone(),
-                            &mut storage_cache,
-                            &mut self.buffer,
-                            &(StorageKeys::MacroData as u32),
-                            &StorageData::VialData(KeymapData::Macro(macro_data)),
-                        )
-                        .await
+                        self.flash
+                            .store_item(
+                                &mut self.buffer,
+                                &(StorageKeys::MacroData as u32),
+                                &StorageData::VialData(KeymapData::Macro(macro_data)),
+                            )
+                            .await
                     }
                     KeymapData::KeymapKey(keymap_key) => {
                         let key = get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key);
                         let data = StorageData::VialData(KeymapData::KeymapKey(keymap_key));
-                        store_item(
-                            &mut self.flash,
-                            self.storage_range.clone(),
-                            &mut storage_cache,
-                            &mut self.buffer,
-                            &key,
-                            &data,
-                        )
-                        .await
+                        self.flash.store_item(&mut self.buffer, &key, &data).await
                     }
                     KeymapData::Encoder(encoder_config) => {
-                        let data = KeymapData::Encoder(encoder_config);
+                        let data = StorageData::VialData(KeymapData::Encoder(encoder_config));
                         let key = get_encoder_config_key::<NUM_ENCODER>(encoder_config.idx, encoder_config.layer);
-                        store_item(
-                            &mut self.flash,
-                            self.storage_range.clone(),
-                            &mut storage_cache,
-                            &mut self.buffer,
-                            &key,
-                            &data,
-                        )
-                        .await
+                        self.flash.store_item(&mut self.buffer, &key, &data).await
                     }
                     KeymapData::Combo(idx, config) => {
                         let key = get_combo_key(idx);
-                        store_item(
-                            &mut self.flash,
-                            self.storage_range.clone(),
-                            &mut storage_cache,
-                            &mut self.buffer,
-                            &key,
-                            &StorageData::VialData(KeymapData::Combo(idx, config)),
-                        )
-                        .await
+                        self.flash
+                            .store_item(
+                                &mut self.buffer,
+                                &key,
+                                &StorageData::VialData(KeymapData::Combo(idx, config)),
+                            )
+                            .await
                     }
                     KeymapData::Fork(idx, fork) => {
-                        store_item(
-                            &mut self.flash,
-                            self.storage_range.clone(),
-                            &mut storage_cache,
-                            &mut self.buffer,
-                            &get_fork_key(idx),
-                            &StorageData::VialData(KeymapData::Fork(idx, fork)),
-                        )
-                        .await
+                        self.flash
+                            .store_item(
+                                &mut self.buffer,
+                                &get_fork_key(idx),
+                                &StorageData::VialData(KeymapData::Fork(idx, fork)),
+                            )
+                            .await
                     }
                     KeymapData::Morse(id, morse) => {
-                        store_item(
-                            &mut self.flash,
-                            self.storage_range.clone(),
-                            &mut storage_cache,
-                            &mut self.buffer,
-                            &get_morse_key(id),
-                            &StorageData::VialData(KeymapData::Morse(id, morse)),
-                        )
-                        .await
+                        self.flash
+                            .store_item(
+                                &mut self.buffer,
+                                &get_morse_key(id),
+                                &StorageData::VialData(KeymapData::Morse(id, morse)),
+                            )
+                            .await
                     }
                 },
                 FlashOperationMessage::ConnectionType(ty) => {
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut storage_cache,
-                        &mut self.buffer,
-                        &(StorageKeys::ConnectionType as u32),
-                        &StorageData::ConnectionType(ty),
-                    )
-                    .await
+                    self.flash
+                        .store_item(
+                            &mut self.buffer,
+                            &(StorageKeys::ConnectionType as u32),
+                            &StorageData::ConnectionType(ty),
+                        )
+                        .await
                 }
                 #[cfg(all(feature = "_ble", feature = "split"))]
                 FlashOperationMessage::PeerAddress(peer) => {
                     let key = get_peer_address_key(peer.peer_id);
                     let data = StorageData::PeerAddress(peer);
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut storage_cache,
-                        &mut self.buffer,
-                        &key,
-                        &data,
-                    )
-                    .await
+                    self.flash.store_item(&mut self.buffer, &key, &data).await
                 }
                 #[cfg(feature = "_ble")]
                 FlashOperationMessage::ActiveBleProfile(profile) => {
                     let data = StorageData::ActiveBleProfile(profile);
-                    store_item::<u32, StorageData, _>(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut storage_cache,
-                        &mut self.buffer,
-                        &(StorageKeys::ActiveBleProfile as u32),
-                        &data,
-                    )
-                    .await
+                    self.flash
+                        .store_item(&mut self.buffer, &(StorageKeys::ActiveBleProfile as u32), &data)
+                        .await
                 }
                 #[cfg(feature = "_ble")]
                 FlashOperationMessage::ClearSlot(slot_num) => {
@@ -708,79 +636,35 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         cccd_table: CccdTable::new([(0u16, CCCD::default()); CCCD_TABLE_SIZE]),
                     };
                     let data = StorageData::BondInfo(empty);
-                    store_item::<u32, StorageData, _>(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut storage_cache,
-                        &mut self.buffer,
-                        &get_bond_info_key(slot_num),
-                        &data,
-                    )
-                    .await
+                    self.flash
+                        .store_item(&mut self.buffer, &get_bond_info_key(slot_num), &data)
+                        .await
                 }
                 #[cfg(feature = "_ble")]
                 FlashOperationMessage::ProfileInfo(b) => {
                     debug!("Saving profile info: {:?}", b);
                     let data = StorageData::BondInfo(b.clone());
-                    store_item::<u32, StorageData, _>(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut storage_cache,
-                        &mut self.buffer,
-                        &get_bond_info_key(b.slot_num),
-                        &data,
-                    )
-                    .await
+                    self.flash
+                        .store_item(&mut self.buffer, &get_bond_info_key(b.slot_num), &data)
+                        .await
                 }
-                FlashOperationMessage::ComboTimeout(combo_timeout) => update_storage_field!(
-                    &mut self.flash,
-                    &mut self.buffer,
-                    &mut storage_cache,
-                    BehaviorConfig,
-                    combo_timeout,
-                    self.storage_range.clone()
-                ),
-                FlashOperationMessage::OneShotTimeout(one_shot_timeout) => update_storage_field!(
-                    &mut self.flash,
-                    &mut self.buffer,
-                    &mut storage_cache,
-                    BehaviorConfig,
-                    one_shot_timeout,
-                    self.storage_range.clone()
-                ),
-                FlashOperationMessage::TapInterval(tap_interval) => update_storage_field!(
-                    &mut self.flash,
-                    &mut self.buffer,
-                    &mut storage_cache,
-                    BehaviorConfig,
-                    tap_interval,
-                    self.storage_range.clone()
-                ),
-                FlashOperationMessage::TapCapslockInterval(tap_capslock_interval) => update_storage_field!(
-                    &mut self.flash,
-                    &mut self.buffer,
-                    &mut storage_cache,
-                    BehaviorConfig,
-                    tap_capslock_interval,
-                    self.storage_range.clone()
-                ),
-                FlashOperationMessage::PriorIdleTime(prior_idle_time) => update_storage_field!(
-                    &mut self.flash,
-                    &mut self.buffer,
-                    &mut storage_cache,
-                    BehaviorConfig,
-                    prior_idle_time,
-                    self.storage_range.clone()
-                ),
+                FlashOperationMessage::ComboTimeout(combo_timeout) => {
+                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, combo_timeout)
+                }
+                FlashOperationMessage::OneShotTimeout(one_shot_timeout) => {
+                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, one_shot_timeout)
+                }
+                FlashOperationMessage::TapInterval(tap_interval) => {
+                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, tap_interval)
+                }
+                FlashOperationMessage::TapCapslockInterval(tap_capslock_interval) => {
+                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, tap_capslock_interval)
+                }
+                FlashOperationMessage::PriorIdleTime(prior_idle_time) => {
+                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, prior_idle_time)
+                }
                 FlashOperationMessage::MorseDefaultProfile(morse_default_profile) => {
-                    update_storage_field!(
-                        &mut self.flash,
-                        &mut self.buffer,
-                        &mut storage_cache,
-                        BehaviorConfig,
-                        morse_default_profile,
-                        self.storage_range.clone()
-                    )
+                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, morse_default_profile)
                 }
                 #[cfg(not(feature = "_ble"))]
                 _ => Ok(()),
@@ -800,15 +684,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         &mut self,
         behavior_config: &mut config::BehaviorConfig,
     ) -> Result<(), ()> {
-        if let Some(StorageData::BehaviorConfig(c)) = fetch_item::<u32, StorageData, _>(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut NoCache::new(),
-            &mut self.buffer,
-            &(StorageKeys::BehaviorConfig as u32),
-        )
-        .await
-        .map_err(|e| print_storage_error::<F>(e))?
+        if let Some(StorageData::BehaviorConfig(c)) = self
+            .flash
+            .fetch_item(&mut self.buffer, &(StorageKeys::BehaviorConfig as u32))
+            .await
+            .map_err(|e| print_storage_error::<F>(e))?
         {
             behavior_config.morse.prior_idle_time = Duration::from_millis(c.prior_idle_time as u64);
             behavior_config.morse.default_profile = c.morse_default_profile;
@@ -828,38 +708,25 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         #[cfg(feature = "host")] encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         behavior: &config::BehaviorConfig,
     ) -> Result<(), ()> {
-        let mut cache = NoCache::new();
         // Save storage config
         let storage_config = StorageData::StorageConfig(LocalStorageConfig {
             enable: true,
             build_hash: BUILD_HASH,
         });
-        store_item(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut cache,
-            &mut self.buffer,
-            &storage_config.key(),
-            &storage_config,
-        )
-        .await
-        .map_err(|e| print_storage_error::<F>(e))?;
+        self.flash
+            .store_item(&mut self.buffer, &storage_config.key(), &storage_config)
+            .await
+            .map_err(|e| print_storage_error::<F>(e))?;
 
         // Save layout config
         let layout_config = StorageData::LayoutConfig(LayoutConfig {
             default_layer: 0,
             layout_option: 0,
         });
-        store_item(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut cache,
-            &mut self.buffer,
-            &layout_config.key(),
-            &layout_config,
-        )
-        .await
-        .map_err(|e| print_storage_error::<F>(e))?;
+        self.flash
+            .store_item(&mut self.buffer, &layout_config.key(), &layout_config)
+            .await
+            .map_err(|e| print_storage_error::<F>(e))?;
 
         // Save behavior config
         let behavior_config = StorageData::BehaviorConfig(BehaviorConfig {
@@ -872,16 +739,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             tap_capslock_interval: behavior.tap.tap_capslock_interval,
         });
 
-        store_item(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut cache,
-            &mut self.buffer,
-            &behavior_config.key(),
-            &behavior_config,
-        )
-        .await
-        .map_err(|e| print_storage_error::<F>(e))?;
+        self.flash
+            .store_item(&mut self.buffer, &behavior_config.key(), &behavior_config)
+            .await
+            .map_err(|e| print_storage_error::<F>(e))?;
 
         #[cfg(feature = "host")]
         for (layer, layer_data) in keymap.iter().enumerate() {
@@ -893,16 +754,14 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         layer: layer as u8,
                         action: *action,
                     };
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut cache,
-                        &mut self.buffer,
-                        &get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key),
-                        &StorageData::VialData(KeymapData::KeymapKey(keymap_key)),
-                    )
-                    .await
-                    .map_err(|e| print_storage_error::<F>(e))?;
+                    self.flash
+                        .store_item(
+                            &mut self.buffer,
+                            &get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key),
+                            &StorageData::VialData(KeymapData::KeymapKey(keymap_key)),
+                        )
+                        .await
+                        .map_err(|e| print_storage_error::<F>(e))?;
                 }
             }
         }
@@ -919,16 +778,14 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         layer: layer as u8,
                         action: *action,
                     };
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut cache,
-                        &mut self.buffer,
-                        &get_encoder_config_key::<NUM_ENCODER>(encoder.idx, encoder.layer),
-                        &StorageData::VialData(KeymapData::Encoder(encoder)),
-                    )
-                    .await
-                    .map_err(|e| print_storage_error::<F>(e))?;
+                    self.flash
+                        .store_item(
+                            &mut self.buffer,
+                            &get_encoder_config_key::<NUM_ENCODER>(encoder.idx, encoder.layer),
+                            &StorageData::VialData(KeymapData::Encoder(encoder)),
+                        )
+                        .await
+                        .map_err(|e| print_storage_error::<F>(e))?;
                 }
             }
         }
@@ -943,21 +800,13 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         encoder_map: &Option<&[[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         behavior: &config::BehaviorConfig,
     ) -> Result<(), SSError<F::Error>> {
-        let mut cache = NoCache::new();
-
         let layout_config = StorageData::LayoutConfig(LayoutConfig {
             default_layer: 0,
             layout_option: 0,
         });
-        store_item(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut cache,
-            &mut self.buffer,
-            &layout_config.key(),
-            &layout_config,
-        )
-        .await?;
+        self.flash
+            .store_item(&mut self.buffer, &layout_config.key(), &layout_config)
+            .await?;
 
         let behavior_config = StorageData::BehaviorConfig(BehaviorConfig {
             prior_idle_time: behavior.morse.prior_idle_time.as_millis() as u16,
@@ -968,15 +817,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             tap_interval: behavior.tap.tap_interval,
             tap_capslock_interval: behavior.tap.tap_capslock_interval,
         });
-        store_item(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut cache,
-            &mut self.buffer,
-            &behavior_config.key(),
-            &behavior_config,
-        )
-        .await?;
+        self.flash
+            .store_item(&mut self.buffer, &behavior_config.key(), &behavior_config)
+            .await?;
 
         // TODO: Generic reset for vial and other hosts
         for (layer, layer_data) in keymap.iter().enumerate() {
@@ -988,15 +831,13 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         layer: layer as u8,
                         action: *action,
                     };
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut cache,
-                        &mut self.buffer,
-                        &get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key),
-                        &StorageData::VialData(KeymapData::KeymapKey(keymap_key)),
-                    )
-                    .await?;
+                    self.flash
+                        .store_item(
+                            &mut self.buffer,
+                            &get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key),
+                            &StorageData::VialData(KeymapData::KeymapKey(keymap_key)),
+                        )
+                        .await?;
                 }
             }
         }
@@ -1006,19 +847,17 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             for (layer, layer_data) in encoder_map.iter().enumerate() {
                 for (idx, action) in layer_data.iter().enumerate() {
                     use crate::host::storage::EncoderKeymap;
-                    store_item(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut cache,
-                        &mut self.buffer,
-                        &get_encoder_config_key::<NUM_ENCODER>(idx as u8, layer as u8),
-                        &StorageData::VialData(KeymapData::Encoder(EncoderKeymap {
-                            idx: idx as u8,
-                            layer: layer as u8,
-                            action: *action,
-                        })),
-                    )
-                    .await?;
+                    self.flash
+                        .store_item(
+                            &mut self.buffer,
+                            &get_encoder_config_key::<NUM_ENCODER>(idx as u8, layer as u8),
+                            &StorageData::VialData(KeymapData::Encoder(EncoderKeymap {
+                                idx: idx as u8,
+                                layer: layer as u8,
+                                action: *action,
+                            })),
+                        )
+                        .await?;
                 }
             }
         }
@@ -1027,14 +866,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     async fn check_enable(&mut self) -> bool {
-        if let Ok(Some(StorageData::StorageConfig(config))) = fetch_item::<u32, StorageData, _>(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut NoCache::new(),
-            &mut self.buffer,
-            &(StorageKeys::StorageConfig as u32),
-        )
-        .await
+        if let Ok(Some(StorageData::StorageConfig(config))) = self
+            .flash
+            .fetch_item(&mut self.buffer, &(StorageKeys::StorageConfig as u32))
+            .await
         {
             // if config.enable && config.build_hash == BUILD_HASH {
             if config.enable {
@@ -1046,15 +881,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
     #[cfg(feature = "_ble")]
     pub(crate) async fn read_trouble_bond_info(&mut self, slot_num: u8) -> Result<Option<ProfileInfo>, ()> {
-        let read_data = fetch_item::<u32, StorageData, _>(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut NoCache::new(),
-            &mut self.buffer,
-            &get_bond_info_key(slot_num),
-        )
-        .await
-        .map_err(|e| print_storage_error::<F>(e))?;
+        let read_data = self
+            .flash
+            .fetch_item(&mut self.buffer, &get_bond_info_key(slot_num))
+            .await
+            .map_err(|e| print_storage_error::<F>(e))?;
 
         if let Some(StorageData::BondInfo(info)) = read_data {
             Ok(Some(info))
@@ -1065,15 +896,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
     #[cfg(all(feature = "_ble", feature = "split"))]
     pub async fn read_peer_address(&mut self, peer_id: u8) -> Result<Option<PeerAddress>, ()> {
-        let read_data = fetch_item::<u32, StorageData, _>(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut NoCache::new(),
-            &mut self.buffer,
-            &get_peer_address_key(peer_id),
-        )
-        .await
-        .map_err(|e| print_storage_error::<F>(e))?;
+        let read_data = self
+            .flash
+            .fetch_item(&mut self.buffer, &get_peer_address_key(peer_id))
+            .await
+            .map_err(|e| print_storage_error::<F>(e))?;
 
         if let Some(StorageData::PeerAddress(data)) = read_data {
             Ok(Some(data))
@@ -1087,16 +914,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         let peer_id = peer_address.peer_id;
         let item = StorageData::PeerAddress(peer_address);
 
-        store_item(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut NoCache::new(),
-            &mut self.buffer,
-            &get_peer_address_key(peer_id),
-            &item,
-        )
-        .await
-        .map_err(|e| print_storage_error::<F>(e))
+        self.flash
+            .store_item(&mut self.buffer, &get_peer_address_key(peer_id), &item)
+            .await
+            .map_err(|e| print_storage_error::<F>(e))
     }
 }
 
@@ -1140,13 +961,6 @@ const fn get_buffer_size() -> usize {
 /// Helper macro for reading storage config
 macro_rules! read_storage {
     ($storage: ident, $key: expr, $buf: expr) => {
-        ::sequential_storage::map::fetch_item::<u32, $crate::storage::StorageData, _>(
-            &mut $storage.flash,
-            $storage.storage_range.clone(),
-            &mut sequential_storage::cache::NoCache::new(),
-            &mut $buf,
-            $key,
-        )
-        .await
+        $storage.flash.fetch_item(&mut $buf, $key).await
     };
 }
