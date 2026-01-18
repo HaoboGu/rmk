@@ -663,12 +663,6 @@ where
         Ok(())
     }
 
-    async fn force_awake(&mut self, _enable: bool) -> Result<(), PointingDriverError> {
-        info!("PMW33{0}: force_awake not a PMW33{0} capability", SPEC::TYPENAME);
-
-        Err(PointingDriverError::NotImplementedError)
-    }
-
     async fn set_invert_x(&mut self, onoff: bool) -> Result<(), PointingDriverError> {
         self.config.invert_x = onoff;
 
@@ -679,7 +673,7 @@ where
 
         Ok(())
     }
-    async fn swap_xy(&mut self, onoff: bool) -> Result<(), PointingDriverError> {
+    async fn set_swap_xy(&mut self, onoff: bool) -> Result<(), PointingDriverError> {
         self.config.swap_xy = onoff;
 
         Ok(())

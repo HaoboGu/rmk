@@ -52,13 +52,34 @@ pub trait PointingDriver {
 
     async fn init(&mut self) -> Result<(), PointingDriverError>;
     async fn read_motion(&mut self) -> Result<MotionData, PointingDriverError>;
-    async fn set_resolution(&mut self, cpi: u16) -> Result<(), PointingDriverError>;
-    async fn set_rot_trans_angle(&mut self, angle: i8) -> Result<(), PointingDriverError>;
-    async fn set_liftoff_dist(&mut self, dist: u8) -> Result<(), PointingDriverError>;
-    async fn force_awake(&mut self, enable: bool) -> Result<(), PointingDriverError>;
-    async fn set_invert_x(&mut self, onoff: bool) -> Result<(), PointingDriverError>;
-    async fn set_invert_y(&mut self, onoff: bool) -> Result<(), PointingDriverError>;
-    async fn swap_xy(&mut self, onoff: bool) -> Result<(), PointingDriverError>;
+    async fn set_resolution(&mut self, _cpi: u16) -> Result<(), PointingDriverError> {
+        debug!("set_resolution() is not implemented for this sensor.");
+        Err(PointingDriverError::NotImplementedError)
+    }
+    async fn set_rot_trans_angle(&mut self, _angle: i8) -> Result<(), PointingDriverError> {
+        debug!("set_rot_trans_angle() is not implemented for this sensor.");
+        Err(PointingDriverError::NotImplementedError)
+    }
+    async fn set_liftoff_dist(&mut self, _dist: u8) -> Result<(), PointingDriverError> {
+        debug!("set_liftoff_dist() is not implemented for this sensor.");
+        Err(PointingDriverError::NotImplementedError)
+    }
+    async fn set_force_awake(&mut self, _enable: bool) -> Result<(), PointingDriverError> {
+        debug!("set_force_awake() is not implemented for this sensor.");
+        Err(PointingDriverError::NotImplementedError)
+    }
+    async fn set_invert_x(&mut self, _onoff: bool) -> Result<(), PointingDriverError> {
+        debug!("set_invert_x() is not implemented for this sensor.");
+        Err(PointingDriverError::NotImplementedError)
+    }
+    async fn set_invert_y(&mut self, _onoff: bool) -> Result<(), PointingDriverError> {
+        debug!("set_invert_y() is not implemented for this sensor.");
+        Err(PointingDriverError::NotImplementedError)
+    }
+    async fn set_swap_xy(&mut self, _onoff: bool) -> Result<(), PointingDriverError> {
+        debug!("set_swap_xy() is not implemented for this sensor.");
+        Err(PointingDriverError::NotImplementedError)
+    }
     fn motion_pending(&mut self) -> bool;
     fn motion_gpio(&mut self) -> Option<&mut Self::MOTION>;
 }
@@ -221,7 +242,7 @@ where
                         }
                         PointingEvent::PointingSetForceAwake(enable) => {
                             debug!("PointingDevice {}: Setting force awake mode to: {}", self.id, enable);
-                            if let Err(e) = self.sensor.force_awake(enable).await {
+                            if let Err(e) = self.sensor.set_force_awake(enable).await {
                                 warn!("PointingDevice {}: Failed to set force awake: {:?}", self.id, e);
                             }
                         }
@@ -239,7 +260,7 @@ where
                         }
                         PointingEvent::PointingSwapXY(swap) => {
                             debug!("PointingDevice {}: Setting swap X/Y to: {}", self.id, swap);
-                            if let Err(e) = self.sensor.swap_xy(swap).await {
+                            if let Err(e) = self.sensor.set_swap_xy(swap).await {
                                 warn!("PointingDevice {}: Failed to set force awake: {:?}", self.id, e);
                             }
                         }

@@ -312,7 +312,7 @@ impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> Pmw3610<SPI, CS, MOTIO
                 .map_err(|_| Pmw3610Error::Spi)?;
         }
 
-        self.force_awake(self.config.force_awake)
+        self.set_force_awake(self.config.force_awake)
             .await
             .map_err(|_| Pmw3610Error::Spi)?;
 
@@ -415,19 +415,8 @@ where
         Ok(())
     }
 
-    async fn set_rot_trans_angle(&mut self, _angle: i8) -> Result<(), PointingDriverError> {
-        info!("PMW3610: set_ret_trans_angle not a PMW3610 capability");
-
-        Err(PointingDriverError::NotImplementedError)
-    }
-    async fn set_liftoff_dist(&mut self, _dist: u8) -> Result<(), PointingDriverError> {
-        info!("PMW3610: set_liftoff_dist not a PMW3610 capability");
-
-        Err(PointingDriverError::NotImplementedError)
-    }
-
     /// Set force awake mode
-    async fn force_awake(&mut self, enable: bool) -> Result<(), PointingDriverError> {
+    async fn set_force_awake(&mut self, enable: bool) -> Result<(), PointingDriverError> {
         let mut val = self.read_reg(PMW3610_PERFORMANCE).await?;
         val &= !PERFORMANCE_FMODE_MASK;
         if enable {
@@ -471,7 +460,7 @@ where
 
         Ok(())
     }
-    async fn swap_xy(&mut self, onoff: bool) -> Result<(), PointingDriverError> {
+    async fn set_swap_xy(&mut self, onoff: bool) -> Result<(), PointingDriverError> {
         self.config.swap_xy = onoff;
         let mut res_step_val = self.read_reg(PMW3610_RES_STEP).await?;
 
