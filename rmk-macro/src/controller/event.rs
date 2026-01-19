@@ -65,8 +65,9 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
     );
 
     // Generate channel and trait implementations
-    let (channel_static, trait_impl) = if let Some(cap) = channel_size {
+    let (channel_static, trait_impl) = {
         // PubSubChannel: buffered events with awaitable publish support
+        let cap = channel_size.unwrap_or(1);
         let subs_val = subs.unwrap_or(4);
         let pubs_val = pubs.unwrap_or(1);
 
@@ -130,42 +131,6 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
                 #awaitable_trait_impl
             },
         )
-    } else {
-        // Watch channel: only latest value, no awaitable publish
-        let subs_val = subs.unwrap_or(4);
-        (
-            quote! {
-                static #channel_name: ::embassy_sync::watch::Watch<
-                    ::rmk::RawMutex,
-                    #type_name #ty_generics,
-                    #subs_val
-                > = ::embassy_sync::watch::Watch::new();
-            },
-            quote! {
-                impl #impl_generics ::rmk::event::ControllerEventTrait for #type_name #ty_generics #where_clause {
-                    type Publisher = ::embassy_sync::watch::Sender<
-                        'static,
-                        ::rmk::RawMutex,
-                        #type_name #ty_generics,
-                        #subs_val
-                    >;
-                    type Subscriber = ::embassy_sync::watch::Receiver<
-                        'static,
-                        ::rmk::RawMutex,
-                        #type_name #ty_generics,
-                        #subs_val
-                    >;
-
-                    fn publisher() -> Self::Publisher {
-                        #channel_name.sender()
-                    }
-
-                    fn subscriber() -> Self::Subscriber {
-                        #channel_name.receiver().unwrap()
-                    }
-                }
-            },
-        )
     };
 
     // Generate the complete output
@@ -214,10 +179,10 @@ fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usi
                         }
                     } else if nv.path.is_ident("pubs")
                         && let syn::Expr::Lit(expr_lit) = nv.value
-                            && let Lit::Int(lit) = expr_lit.lit
-                        {
-                            pubs = Some(lit.base10_parse().expect("pubs must be a valid usize"));
-                        }
+                        && let Lit::Int(lit) = expr_lit.lit
+                    {
+                        pubs = Some(lit.base10_parse().expect("pubs must be a valid usize"));
+                    }
                 }
             }
         }

@@ -73,6 +73,9 @@ impl<'a, M: RawMutex, T: Clone, const N: usize> EventPublisher<T> for watch::Sen
 }
 
 impl<'a, M: RawMutex, T: Clone, const N: usize> EventSubscriber<T> for watch::Receiver<'a, M, T, N> {
+    // WARNING: it won't work when using `XEvent::subscriber().next_event().await`,
+    // because `subscriber()` creates a new subscriber, which will immediately return when `changed()` is called.
+    // A possible solution is to call `changed()` twice in `next_event()`, but it looks ugly.
     async fn next_event(&mut self) -> T {
         self.changed().await
     }
