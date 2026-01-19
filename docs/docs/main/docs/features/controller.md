@@ -24,9 +24,9 @@ RMK uses an event-driven architecture where event producers (keyboard, BLE stack
 
 Controllers can operate in two modes:
 - **Event-driven** - React to controller events as they arrive
-- **Polling** - Subscribe the controller evevnts and periodic updates at specified intervals
+- **Polling** - Subscribe to controller events and perform periodic updates at specified intervals
 
-## Using Controllers
+## Built-in Features
 
 RMK provides built-in events and controllers that you can use directly without writing custom code.
 
@@ -84,14 +84,7 @@ The LED indicators automatically subscribe to `LedIndicatorEvent` and update bas
 
 ## Custom Controllers
 
-RMK's controller system is **designed for easy extension without modifying core code**. You can:
-
-- Use built-in events and controllers
-- Define custom controllers using `#[controller]` macro
-- Create custom events using `#[controller_event]` macro
-- Seamlessly integrate custom components with built-in ones
-
-This allows you to extend keyboard functionality for displays, sensors, LEDs, and any other peripherals.
+RMK's controller system is **designed for easy extension without modifying core code**. You can define custom controllers using the `#[controller]` macro to extend keyboard functionality for displays, sensors, LEDs, and any other peripherals.
 
 ### Defining Controllers
 
@@ -117,9 +110,9 @@ impl MyController {
 - `poll_interval = <ms>` (optional): Enable polling with fixed interval, requires `poll()` method
 
 **How it works:**
-- `#[controller]` Implements `Controller` trait automatically.
-- Routes events to `on_<event_name>_event()` handler methods, where `<event_name>` is a snake case name converted from the subscribed event. For example, if your controller subscribe `BatteryLevelEvent`, then `async fn on_battery_level_event(&mut self, event: BatteryLevelEvent)` should be implemented.
-- If `poll_interval` is set, the controller operates in **polling mode**, a `poll()` method is required. `poll()` will be called at every `poll_interval`.
+- `#[controller]` implements `Controller` trait automatically
+- Routes events to `on_<event_name>_event()` handler methods, where `<event_name>` is a snake case name converted from the subscribed event. For example, if your controller subscribes to `BatteryLevelEvent`, then `async fn on_battery_level_event(&mut self, event: BatteryLevelEvent)` should be implemented
+- If `poll_interval` is set, the controller operates in **polling mode**, a `poll()` method is required. `poll()` will be called at every `poll_interval`
 
 ### Registering Controllers
 
@@ -144,9 +137,9 @@ Inside the registration function:
 - `p` variable provides access to chip peripherals
 - Use `bind_interrupts!` macro if additional interrupts are needed
 
-## Examples
+### Examples
 
-### Event-based Controller
+#### Event-based Controller
 
 Controllers can subscribe to one or multiple event types. This example monitors layer changes and battery level:
 
@@ -195,7 +188,7 @@ mod keyboard {
 }
 ```
 
-### Polling Controller
+#### Polling Controller
 
 Blinking LED when layer 0 is activated, using `poll_interval` parameter:
 
@@ -244,7 +237,7 @@ mod keyboard {
 }
 ```
 
-### Split Keyboard Controller
+#### Split Keyboard Controller
 
 CapsLock LED on peripheral (events auto-sync from central):
 
@@ -298,7 +291,7 @@ Use the `#[controller_event]` macro to define custom events:
 ```rust
 use rmk_macro::controller_event;
 
-#[controller_event(subs = 2)]
+#[controller_event(channel_size = 8, subs = 2)]
 #[derive(Clone, Copy, Debug)]
 pub struct BacklightEvent {
     pub brightness: u8,
@@ -306,38 +299,15 @@ pub struct BacklightEvent {
 ```
 
 **Macro parameters:**
-- `channel_size` (optional): Buffer size for `PubSubChannel`. If omitted, uses `Watch`
+- `channel_size` (optional): Buffer size for `PubSubChannel`. Default is 1
 - `subs` (optional): Maximum number of subscribers. Default is 4
 - `pubs` (optional): Maximum number of async publishers. Default is 1
 
-### Event Channel Types
+The `#[controller_event]` macro uses `PubSubChannel` for all events, which buffers events with configurable capacity and supports both immediate (non-blocking) and async (awaitable) publishing.
 
-The `#[controller_event]` macro generates one of two channel types according to whether `channel_size` is specified:
-
-**Watch (no `channel_size`):**
-- Stores only the latest value
-- For state-like events (layer, battery level, connection state)
-- Overwrites previous value on publish
-
-```rust
-#[controller_event(subs = 2)]
-pub struct LayerChangeEvent {
-    pub layer: u8,
-}
-```
-
-**PubSubChannel (with `channel_size`):**
-- Buffers multiple events
-- For event streams that need history
-- Supports async publishing with backpressure
-
-```rust
-#[controller_event(channel_size = 8, subs = 4)]
-pub struct KeyEvent {
-    pub keyboard_event: KeyboardEvent,
-    pub key_action: KeyAction,
-}
-```
+**Choosing buffer size:**
+- Use `channel_size = 1`(which is the default value) for state-like events (layer, battery level, connection state) where only the latest value matters
+- Use larger buffer sizes (e.g., `channel_size = 8`) for event streams that need history (key events, input events)
 
 ### Publishing Custom Events
 
@@ -351,24 +321,25 @@ use rmk::event::publish_controller_event;
 publish_controller_event(BacklightEvent { brightness: 50 });
 ```
 
-**Async publish** (for events with `channel_size`):
+This publishes immediately and drops the event if the buffer is full.
+
+**Async publish:**
 
 ```rust
 use rmk::event::publish_controller_event_async;
 
-publish_controller_event_async(KeyEvent {
-    keyboard_event,
-    key_action,
-}).await;
+publish_controller_event_async(BacklightEvent { brightness: 75 }).await;
 ```
+
+This waits if the buffer is full (backpressure).
 
 ::: warning
 When using `publish_controller_event_async()`, ensure at least one subscriber exists to avoid infinite blocking.
 :::
 
-## Complete Example
+### Complete Example
 
-Define a custom event, create a controller for it, and publish it:
+Here's a complete example showing how to define a custom event, create a controller for it, and publish it:
 
 ```rust
 use rmk_macro::{controller_event, controller};
@@ -398,7 +369,16 @@ impl DisplayController {
     }
 }
 
-// 3. Publish from anywhere
+// 3. Register the controller
+#[rmk_keyboard]
+mod keyboard {
+    #[register_controller(event)]
+    fn display_controller() -> DisplayController {
+        DisplayController::new()
+    }
+}
+
+// 4. Publish from anywhere in your code
 publish_controller_event(DisplayUpdateEvent {
     line: 0,
     text: *b"Hello RMK!      ",

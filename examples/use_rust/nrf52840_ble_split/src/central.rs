@@ -29,6 +29,7 @@ use rmk::config::{
 use rmk::controller::EventController;
 use rmk::controller::led_indicator::KeyboardIndicatorController;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::event::*;
 use rmk::futures::future::{join4, join5};
 use rmk::input_device::Runnable;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
@@ -241,12 +242,18 @@ async fn main(spawner: Spawner) {
     use rmk::event::PeripheralBatteryEvent;
     use rmk::macros::controller;
 
-    #[controller(subscribe = [PeripheralBatteryEvent])]
+    #[controller(subscribe = [PeripheralBatteryEvent, BatteryLevelEvent, LayerChangeEvent])]
     struct PeripheralBatteryMonitor {}
 
     impl PeripheralBatteryMonitor {
         async fn on_peripheral_battery_event(&mut self, event: PeripheralBatteryEvent) {
             info!("Peripheral {} battery level: {}%", event.id, event.level);
+        }
+        async fn on_battery_level_event(&mut self, event: BatteryLevelEvent) {
+            info!("Central battery level: {}%", event.level);
+        }
+        async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
+            info!("Layer changed to: {}", event.layer);
         }
     }
 
