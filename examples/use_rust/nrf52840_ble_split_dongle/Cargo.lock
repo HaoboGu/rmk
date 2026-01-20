@@ -1852,8 +1852,10 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rmk-config",
+ "rmk-types",
  "serde",
  "serde_derive",
+ "strum",
  "syn 2.0.111",
  "toml",
 ]

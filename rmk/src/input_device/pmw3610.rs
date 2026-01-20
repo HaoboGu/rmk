@@ -669,8 +669,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     async fn generate_report(&self, x: i16, y: i16) {
+        let buttons = self.keymap.borrow().mouse_buttons;
         let mouse_report = MouseReport {
-            buttons: 0,
+            buttons,
             x: x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
             y: y.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
             wheel: 0,

@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
 use rmk_config::{KEYCODE_ALIAS, KeyboardTomlConfig, MorseProfile};
+use strum::VariantNames;
 
 use crate::behavior::expand_profile_name;
 
@@ -431,10 +432,30 @@ pub(crate) fn parse_key(key: String, profiles: &Option<HashMap<String, MorseProf
                 ::rmk::td!(#index)
             }
         }
-        s if s.to_lowercase().starts_with("m(") => {
-            let index = get_number(s.clone(), s.get(0..2).unwrap(), ")");
+        s if s.to_lowercase().starts_with("user") => {
+            // Support both User(X) and UserX formats
+            let number_str = if s.to_lowercase().starts_with("user(") {
+                // User(X) format
+                s.trim_start_matches(|c: char| !c.is_ascii_digit())
+                    .trim_end_matches(')')
+            } else if s[4..].chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                // UserX format
+                &s[4..]
+            } else {
+                ""
+            };
+
+            let number = number_str.parse::<u8>().unwrap_or(255);
+
+            if number > 31 {
+                panic!(
+                    "\n❌ keyboard.toml: {} is not a valid user key! User keys are numbered 0-31. Please check the documentation: https://rmk.rs/docs/features/configuration/layout.html",
+                    s
+                );
+            }
+
             quote! {
-                ::rmk::m!(#index)
+                ::rmk::user!(#number)
             }
         }
         s if s.to_lowercase().starts_with("macro")
@@ -448,6 +469,38 @@ pub(crate) fn parse_key(key: String, profiles: &Option<HashMap<String, MorseProf
             }
         }
         _ => {
+            // Check if it's a keyboard control, light control, or special key action (case-insensitive)
+            let key_lower = key.to_lowercase();
+
+            // Try to find exact match (case-insensitive) in keyboard actions
+            // Use strum::VariantNames to automatically get all enum variants
+            if let Some(action) = rmk_types::action::KeyboardAction::VARIANTS
+                .iter()
+                .find(|&&a| a.to_lowercase() == key_lower)
+            {
+                let action_ident = format_ident!("{}", action);
+                return quote! { ::rmk::kbctrl!(#action_ident) };
+            }
+
+            // Try to find exact match (case-insensitive) in light actions
+            if let Some(action) = rmk_types::action::LightAction::VARIANTS
+                .iter()
+                .find(|&&a| a.to_lowercase() == key_lower)
+            {
+                let action_ident = format_ident!("{}", action);
+                return quote! { ::rmk::light!(#action_ident) };
+            }
+
+            // Try to find exact match (case-insensitive) in special keys
+            if let Some(special_key) = rmk_types::keycode::SpecialKey::VARIANTS
+                .iter()
+                .find(|&&k| k.to_lowercase() == key_lower)
+            {
+                let key_ident = format_ident!("{}", special_key);
+                return quote! { ::rmk::special!(#key_ident) };
+            }
+
+            // Default: try to use as HID keycode
             let ident = get_key_with_alias(key);
             quote! { ::rmk::k!(#ident) }
         }

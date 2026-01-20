@@ -1,9 +1,4 @@
 use rmk_types::action::{EncoderAction, KeyAction};
-#[cfg(feature = "controller")]
-use {
-    crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
-    crate::event::ControllerEvent,
-};
 #[cfg(all(feature = "storage", feature = "host"))]
 use {
     crate::{boot::reboot_keyboard, storage::Storage},
@@ -12,6 +7,8 @@ use {
 
 use crate::config::{BehaviorConfig, PositionalConfig};
 use crate::event::{KeyboardEvent, KeyboardEventPos};
+#[cfg(feature = "controller")]
+use crate::event::{LayerChangeEvent, publish_controller_event};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
 #[cfg(feature = "vial_lock")]
@@ -37,12 +34,11 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     /// Options for configurable action behavior
     pub(crate) behavior: &'a mut BehaviorConfig,
     pub positional_config: &'a mut PositionalConfig<ROW, COL>,
-    /// Publisher for controller channel
-    #[cfg(feature = "controller")]
-    controller_pub: ControllerPub,
     /// Matrix state
     #[cfg(feature = "vial_lock")]
     pub(crate) matrix_state: MatrixState<ROW, COL>,
+    /// Mouse button state (buttons 0-7 as bits)
+    pub(crate) mouse_buttons: u8,
 }
 
 /// fills up the vector to its capacity
@@ -75,10 +71,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             encoder_layer_cache: [[0; 2]; NUM_ENCODER],
             behavior,
             positional_config,
-            #[cfg(feature = "controller")]
-            controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
             #[cfg(feature = "vial_lock")]
             matrix_state: MatrixState::new(),
+            mouse_buttons: 0,
         }
     }
 
@@ -117,9 +112,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .is_err()
         {
             error!("Failed to read from storage, clearing...");
-            sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
-                .await
-                .ok();
+            storage.flash.erase_all().await.ok();
 
             reboot_keyboard();
         }
@@ -133,10 +126,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             encoder_layer_cache: [[0; 2]; NUM_ENCODER],
             behavior,
             positional_config,
-            #[cfg(feature = "controller")]
-            controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
             #[cfg(feature = "vial_lock")]
             matrix_state: MatrixState::new(),
+            mouse_buttons: 0,
         }
     }
 
@@ -340,7 +332,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             #[cfg(feature = "controller")]
             {
                 let layer = self.get_activated_layer();
-                send_controller_event(&mut self.controller_pub, ControllerEvent::Layer(layer));
+                publish_controller_event(LayerChangeEvent { layer });
             }
         }
     }
@@ -355,7 +347,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         #[cfg(feature = "controller")]
         {
             let layer = self.get_activated_layer();
-            send_controller_event(&mut self.controller_pub, ControllerEvent::Layer(layer));
+            publish_controller_event(LayerChangeEvent { layer });
         }
     }
 
@@ -400,7 +392,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         #[cfg(feature = "controller")]
         {
             let layer = self.get_activated_layer();
-            send_controller_event(&mut self.controller_pub, ControllerEvent::Layer(layer));
+            publish_controller_event(LayerChangeEvent { layer });
         }
     }
 }

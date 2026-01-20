@@ -1,8 +1,7 @@
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use postcard::experimental::max_size::MaxSize;
 use rmk_types::action::{EncoderAction, KeyAction};
-use sequential_storage::cache::NoCache;
-use sequential_storage::map::{SerializationError, Value, fetch_item};
+use sequential_storage::map::{SerializationError, Value};
 use serde::{Deserialize, Serialize};
 
 use crate::combo::{Combo, ComboConfig};
@@ -157,18 +156,12 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: &mut Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
     ) -> Result<(), ()> {
-        use sequential_storage::map::fetch_all_items;
-
-        let mut storage_cache = NoCache::new();
         // Use fetch_all_items to speed up the keymap reading
-        let mut key_iterator = fetch_all_items::<u32, _, _>(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut storage_cache,
-            &mut self.buffer,
-        )
-        .await
-        .map_err(|e| print_storage_error::<F>(e))?;
+        let mut key_iterator = self
+            .flash
+            .fetch_all_items(&mut self.buffer)
+            .await
+            .map_err(|e| print_storage_error::<F>(e))?;
 
         // Read all keymap keys and encoder configs
         while let Some((_key, item)) = key_iterator
@@ -202,15 +195,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     pub(crate) async fn read_macro_cache(&mut self, macro_cache: &mut [u8]) -> Result<(), ()> {
-        let read_data = fetch_item::<u32, StorageData, _>(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut NoCache::new(),
-            &mut self.buffer,
-            &(StorageKeys::MacroData as u32),
-        )
-        .await
-        .map_err(|e| print_storage_error::<F>(e))?;
+        let read_data = self
+            .flash
+            .fetch_item(&mut self.buffer, &(StorageKeys::MacroData as u32))
+            .await
+            .map_err(|e| print_storage_error::<F>(e))?;
 
         if let Some(StorageData::VialData(KeymapData::Macro(data))) = read_data {
             macro_cache.copy_from_slice(&data);
@@ -224,15 +213,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
         for (i, item) in combos.iter_mut().enumerate() {
             let key = get_combo_key(i as u8);
-            let read_data = fetch_item::<u32, StorageData, _>(
-                &mut self.flash,
-                self.storage_range.clone(),
-                &mut NoCache::new(),
-                &mut self.buffer,
-                &key,
-            )
-            .await
-            .map_err(|e| print_storage_error::<F>(e))?;
+            let read_data = self
+                .flash
+                .fetch_item(&mut self.buffer, &key)
+                .await
+                .map_err(|e| print_storage_error::<F>(e))?;
 
             if let Some(StorageData::VialData(KeymapData::Combo(_idx, config))) = read_data {
                 debug!("Read combo config: {:?}", config);
@@ -246,15 +231,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     pub(crate) async fn read_forks(&mut self, forks: &mut heapless::Vec<Fork, FORK_MAX_NUM>) -> Result<(), ()> {
         for (i, item) in forks.iter_mut().enumerate() {
             let key = get_fork_key(i as u8);
-            let read_data = fetch_item::<u32, StorageData, _>(
-                &mut self.flash,
-                self.storage_range.clone(),
-                &mut NoCache::new(),
-                &mut self.buffer,
-                &key,
-            )
-            .await
-            .map_err(|e| print_storage_error::<F>(e))?;
+            let read_data = self
+                .flash
+                .fetch_item(&mut self.buffer, &key)
+                .await
+                .map_err(|e| print_storage_error::<F>(e))?;
 
             if let Some(StorageData::VialData(KeymapData::Fork(_idx, fork))) = read_data {
                 *item = fork;
@@ -267,15 +248,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     pub(crate) async fn read_morses(&mut self, morses: &mut heapless::Vec<Morse, MORSE_MAX_NUM>) -> Result<(), ()> {
         for (i, item) in morses.iter_mut().enumerate() {
             let key = get_morse_key(i as u8);
-            let read_data = fetch_item::<u32, StorageData, _>(
-                &mut self.flash,
-                self.storage_range.clone(),
-                &mut NoCache::new(),
-                &mut self.buffer,
-                &key,
-            )
-            .await
-            .map_err(|e| print_storage_error::<F>(e))?;
+            let read_data = self
+                .flash
+                .fetch_item(&mut self.buffer, &key)
+                .await
+                .map_err(|e| print_storage_error::<F>(e))?;
 
             if let Some(StorageData::VialData(KeymapData::Morse(_, morse))) = read_data {
                 *item = morse;

@@ -178,15 +178,6 @@ pub struct RmkConstantsConfig {
     /// Event channel size
     #[serde_inline_default(16)]
     pub event_channel_size: usize,
-    /// Controller event channel size
-    #[serde_inline_default(16)]
-    pub controller_channel_size: usize,
-    /// Number of publishers to controllers
-    #[serde_inline_default(12)]
-    pub controller_channel_pubs: usize,
-    /// Number of controllers
-    #[serde_inline_default(8)]
-    pub controller_channel_subs: usize,
     /// Report channel size
     #[serde_inline_default(16)]
     pub report_channel_size: usize,
@@ -265,9 +256,6 @@ impl Default for RmkConstantsConfig {
             macro_space_size: 256,
             debounce_time: 20,
             event_channel_size: 16,
-            controller_channel_size: 16,
-            controller_channel_pubs: 12,
-            controller_channel_subs: 8,
             report_channel_size: 16,
             vial_channel_size: 4,
             flash_channel_size: 4,

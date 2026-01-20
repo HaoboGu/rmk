@@ -1,117 +1,69 @@
 # Controller Support
 
-RMK's controller system provides a unified interface for managing output devices like displays, LEDs, and other peripherals that respond to keyboard events. Controllers are software modules that implement the `Controller` trait and receive events from the keyboard through RMK's event system.
+RMK's controller system provides a unified interface for managing output devices like displays, LEDs, and other peripherals that respond to keyboard events.
 
 ## Overview
 
-Controllers in RMK are software modules that manage external hardware components and respond to keyboard events. They provide:
+RMK uses an event-driven architecture where event producers (keyboard, BLE stack, etc.) are decoupled from event consumers (controllers). This allows controllers to independently react to specific events they care about.
 
-- **Event-driven architecture** that reacts to keyboard state changes
-- **Two execution modes**: event-driven and polling-based
-- **Custom controller support** through the `#[controller]` attribute
-
-## Controller Architecture
-
-### Controller Trait
-
-All controllers must implement the `Controller` trait:
-
-```rust
-pub trait Controller {
-    /// Type of the received events
-    type Event;
-
-    /// Process the received event
-    async fn process_event(&mut self, event: Self::Event);
-
-    /// Block waiting for next message
-    async fn next_message(&mut self) -> Self::Event;
-}
+```
+                             ┌──────┐               ┌────────────┐
+                             │      │       ┌──────▶│controller a│
+                             │      │       │       └────────────┘
+┌───────────────┐            │      │       │       ┌────────────┐
+│event publisher│──publish──▶│events│──subscribe───▶│controller b│
+└───────────────┘            │      │       │       └────────────┘
+                             │      │       │       ┌────────────┐
+                             │      │       └──────▶│controller c│
+                             └──────┘               └────────────┘
 ```
 
-### Execution Modes
+**Key concepts:**
+- **Events** - Carry state changes and keyboard events through type-safe channels
+- **Controllers** - Subscribe to events and react accordingly
 
 Controllers can operate in two modes:
+- **Event-driven** - React to controller events as they arrive
+- **Polling** - Subscribe to controller events and perform periodic updates at specified intervals
 
-**Event-Driven Controllers:**
-Controllers that react only to events implement `EventController` (auto-implemented for all `Controller`s):
+## Built-in Features
 
-```rust
-impl Controller for MyEventController {
-    type Event = ControllerEvent;
+RMK provides built-in events and controllers that you can use directly without writing custom code.
 
-    async fn process_event(&mut self, event: Self::Event) {
-        match event {
-            ControllerEvent::KeyboardIndicator(state) => {
-                // Handle LED indicator changes
-            },
-            ControllerEvent::Battery(level) => {
-                // Handle battery level changes
-            },
-            _ => {}
-        }
-    }
+### Built-in Events
 
-    async fn next_message(&mut self) -> Self::Event {
-        self.sub.next_message_pure().await
-    }
-}
-```
+RMK provides a type-safe event system where each event type has its own dedicated channel. The following built-in event types are available for controllers to subscribe:
 
-**Polling Controllers:**
-Controllers that need periodic updates implement `PollingController`:
+**Keyboard State Events:**
+- `LayerChangeEvent` - Active layer changed
+- `LedIndicatorEvent` - LED indicator state changed (NumLock, CapsLock, ScrollLock)
+- `WpmUpdateEvent` - Words per minute updated
+- `SleepStateEvent` - Sleep state changed
 
-```rust
-impl PollingController for MyPollingController {
-    fn interval(&self) -> embassy_time::Duration {
-        embassy_time::Duration::from_millis(100)
-    }
+**Input Events:**
+- `KeyEvent` - Key press/release event with processed key action
+- `ModifierEvent` - Modifier keys combination changed
 
-    async fn update(&mut self) {
-        // Periodic update logic (e.g., LED animations, sensor readings)
-    }
-}
-```
+**Connection Events:**
+- `ConnectionChangeEvent` - Connection type changed (USB/BLE)
 
-The polling interval can also be passed as a parameter like this:
+**BLE Events** (when BLE is enabled):
+- `BleStateChangeEvent` - BLE connection state changed
+- `BleProfileChangeEvent` - BLE profile switched
 
-```rust
-struct ConfigurableController {
-    interval: embassy_time::Duration,
-}
+**Power Events** (when BLE is enabled):
+- `BatteryLevelEvent` - Battery level changed
+- `ChargingStateEvent` - Charging state changed
 
-impl ConfigurableController {
-    /// Create a controller with a specific update frequency in Hz
-    pub fn with_hz(hz: u32) -> Self {
-        Self {
-            interval: embassy_time::Duration::from_hz(hz as u64),
-        }
-    }
-}
+**Split Keyboard Events** (when split is enabled):
+- `PeripheralConnectedEvent` - Peripheral connection state changed
+- `CentralConnectedEvent` - Connected to central state changed
+- `PeripheralBatteryEvent` - Peripheral battery level changed
+- `ClearPeerEvent` - Clear BLE peer information (BLE split only)
 
-impl PollingController for ConfigurableController {
-    fn interval(&self) -> embassy_time::Duration {
-        self.interval
-    }
+### Built-in Controllers
 
-    async fn update(&mut self) {
-        // update periodic
-    }
-}
-
-// Usage: create a controller with 60Hz update rate
-let controller = ConfigurableController::with_hz(60);
-```
-
-### Controller Events
-
-Controller events are signals sent from other parts of RMK and handled by `Controller`s. Each controller receives the [`ControllerEvent`](https://docs.rs/rmk/latest/rmk/event/enum.ControllerEvent.html) from the `CONTROLLER_CHANNEL` and reacts only to the events that it is responsible for.
-
-## Using Controllers
-
-### TOML Configuration (Built-in Controllers)
-
-Built-in LED indicators can be configured in keyboard.toml:
+RMK provides built-in LED indicator controllers for NumLock, CapsLock, and ScrollLock. These can be easily configured in `keyboard.toml` without writing any code:
 
 ```toml
 [light]
@@ -128,175 +80,307 @@ scrolllock.pin = "PIN_3"
 scrolllock.low_active = false
 ```
 
-### Custom Controllers
+The LED indicators automatically subscribe to `LedIndicatorEvent` and update based on host keyboard state.
 
-Custom controllers are declared using the `#[controller(event)]` or `#[controller(poll)]` attribute within your keyboard module.
-If `#[controller(event)]` is used, the controller must implement `EventController` (or just `Controller`) and the `EventController::event_loop` method will be called.
-If `#[controller(poll)]` is used, the controller must implement `PollingController` and the `PollingController::polling_loop` method will be called.
+## Custom Controllers
 
-A `p` variable containing the chip peripherals is in scope inside the function.
-It's also possible to define extra interrupts using the `bind_interrupts!` macro.
+RMK's controller system is **designed for easy extension without modifying core code**. You can define custom controllers using the `#[controller]` macro to extend keyboard functionality for displays, sensors, LEDs, and any other peripherals.
+
+### Defining Controllers
+
+Controllers are defined using the `#[controller]` attribute macro on structs:
+
+```rust
+use rmk_macro::controller;
+
+#[controller(subscribe = [LayerChangeEvent])]
+pub struct MyController {
+    // Your controller fields
+}
+
+impl MyController {
+    async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
+        // Handle layer changes
+    }
+}
+```
+
+**Parameters:**
+- `subscribe = [Event1, Event2, ...]` (required): Event types to subscribe to
+- `poll_interval = <ms>` (optional): Enable polling with fixed interval, requires `poll()` method
+
+**How it works:**
+- `#[controller]` implements `Controller` trait automatically
+- Routes events to `on_<event_name>_event()` handler methods, where `<event_name>` is a snake case name converted from the subscribed event. For example, if your controller subscribes to `BatteryLevelEvent`, then `async fn on_battery_level_event(&mut self, event: BatteryLevelEvent)` should be implemented
+- If `poll_interval` is set, the controller operates in **polling mode**, a `poll()` method is required. `poll()` will be called at every `poll_interval`
+
+### Registering Controllers
+
+Register controllers in your keyboard module with `#[register_controller]`:
 
 ```rust
 #[rmk_keyboard]
 mod keyboard {
-    // ... keyboard configuration ...
-
-    #[controller(event)]
-    fn my_custom_controller() -> MyCustomController {
-        // Initialize your controller
+    #[register_controller(event)]
+    fn battery_led() -> BatteryLedController {
         let pin = Output::new(p.PIN_4, Level::Low, OutputDrive::Standard);
-        MyCustomController::new(pin)
+        BatteryLedController::new(pin, false)
     }
 }
 ```
 
-## Creating Custom Controllers
+**Execution modes:**
+- `#[register_controller(event)]`: Event-driven only, responds to events as they arrive
+- `#[register_controller(poll)]`: Event-driven + periodic polling, requires `poll_interval` parameter in `#[controller]` macro
 
-### Implement `Controller` Trait
+Inside the registration function:
+- `p` variable provides access to chip peripherals
+- Use `bind_interrupts!` macro if additional interrupts are needed
 
-Here's a complete example of a custom LED controller:
+### Examples
+
+#### Event-based Controller
+
+Controllers can subscribe to one or multiple event types. This example monitors layer changes and battery level:
 
 ```rust
-use embedded_hal::digital::StatefulOutputPin;
-use crate::channel::{CONTROLLER_CHANNEL, ControllerSub};
-use crate::controller::Controller;
-use crate::event::ControllerEvent;
+use rmk_macro::controller;
+use rmk::event::{LayerChangeEvent, BatteryLevelEvent};
 
-pub struct CustomLedController<P: StatefulOutputPin> {
-    pin: P,
-    sub: ControllerSub,
-    state: bool,
+// Subscribe to multiple events
+#[controller(subscribe = [LayerChangeEvent, BatteryLevelEvent])]
+pub struct StatusController {
+    current_layer: u8,
+    battery_level: u8,
 }
 
-impl<P: StatefulOutputPin> CustomLedController<P> {
-    pub fn new(pin: P) -> Self {
+impl StatusController {
+    pub fn new() -> Self {
         Self {
-            pin,
-            sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
-            state: false,
-        }
-    }
-}
-
-impl<P: StatefulOutputPin> Controller for CustomLedController<P> {
-    type Event = ControllerEvent;
-
-    async fn process_event(&mut self, event: Self::Event) {
-        match event {
-            ControllerEvent::Layer(layer) => {
-                // Toggle LED based on layer
-                if layer > 0 && !self.state {
-                    let _ = self.pin.set_high();
-                    self.state = true;
-                } else if layer == 0 && self.state {
-                    let _ = self.pin.set_low();
-                    self.state = false;
-                }
-            }
-            _ => {}
+            current_layer: 0,
+            battery_level: 100,
         }
     }
 
-    async fn next_message(&mut self) -> Self::Event {
-        self.sub.next_message_pure().await
+    // Handler for LayerChangeEvent
+    async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
+        self.current_layer = event.layer;
+        info!("Layer: {}", event.layer);
+    }
+
+    // Handler for BatteryLevelEvent
+    async fn on_battery_level_event(&mut self, event: BatteryLevelEvent) {
+        self.battery_level = event.level;
+        info!("Battery: {}%", event.level);
     }
 }
 ```
 
-### Polling Controller Example
-
-For controllers that need periodic updates (like animations):
+Register with `#[register_controller(event)]`:
 
 ```rust
-use crate::controller::PollingController;
-
-impl<P: StatefulOutputPin> Controller for BlinkingController<P> {
-    type Event = ControllerEvent;
-    async fn process_event(&mut self, event: Self::Event) {
-        match event {
-            ControllerEvent::Layer(layer) => {
-                // Set active when current layer is not 0
-                if layer != 0 {
-                    self.active = false;
-                    self.pin.set_low();
-                } else {
-                    self.active = true;
-                }
-            }
-            _ => {}
-        }
-    }
-    async fn next_message(&mut self) -> Self::Event {
-        self.sub.next_message_pure().await
+#[rmk_keyboard]
+mod keyboard {
+    #[register_controller(event)]
+    fn status_controller() -> StatusController {
+        StatusController::new()
     }
 }
+```
 
-impl<P: StatefulOutputPin> PollingController for BlinkingController<P> {
-    fn interval(&self) -> embassy_time::Duration {
-        embassy_time::Duration::from_millis(500)
+#### Polling Controller
+
+Blinking LED when layer 0 is activated, using `poll_interval` parameter:
+
+```rust
+use rmk_macro::controller;
+use rmk::event::LayerChangeEvent;
+use embedded_hal::digital::StatefulOutputPin;
+
+#[controller(subscribe = [LayerChangeEvent], poll_interval = 500)]
+pub struct BlinkingController<P: StatefulOutputPin> {
+    pin: P,
+    active: bool,
+}
+
+impl<P: StatefulOutputPin> BlinkingController<P> {
+    pub fn new(pin: P) -> Self {
+        Self { pin, active: true }
     }
 
-    async fn update(&mut self) {
-        // Toggle LED every 500ms when active (i.e., current layer is not 0)
+    async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
+        self.active = event.layer == 0;
+        if !self.active {
+            let _ = self.pin.set_low();
+        }
+    }
+
+    // Called every 500ms automatically
+    async fn poll(&mut self) {
         if self.active {
-            self.pin.toggle();
+            let _ = self.pin.toggle();
         }
     }
 }
 ```
 
-## Controllers in Split Keyboards
-
-Controllers can be used in split keyboards. Peripheral devices can use controllers to respond to events from the central, such as LED indicators for CapsLock state or layer changes.
-
-### Peripheral Controllers
-
-Peripheral devices can use controllers to manage local output devices like keyboard indicators. Events from the central (such as CapsLock state) are automatically synchronized to peripherals through the split communication protocol.
-
-#### Example: CapsLock LED on Peripheral
-
-Here's an example of implementing a CapsLock LED indicator on a split peripheral:
+Register with `#[register_controller(poll)]`:
 
 ```rust
+#[rmk_keyboard]
+mod keyboard {
+    #[register_controller(poll)]
+    fn blinking_led() -> BlinkingController {
+        let pin = Output::new(p.PIN_5, Level::Low, OutputDrive::Standard);
+        BlinkingController::new(pin)
+    }
+}
+```
+
+#### Split Keyboard Controller
+
+CapsLock LED on peripheral (events auto-sync from central):
+
+```rust
+use rmk_macro::controller;
+use rmk::event::LedIndicatorEvent;
+use embassy_nrf::gpio::Output;
+
+#[controller(subscribe = [LedIndicatorEvent])]
 pub struct CapsLockController {
     led: Output<'static>,
-    sub: ControllerSub,
     caps_lock_on: bool,
 }
 
-impl Controller for CapsLockController {
-    type Event = ControllerEvent;
-
-    async fn process_event(&mut self, event: Self::Event) {
-        match event {
-            ControllerEvent::KeyboardIndicator(state) => {
-                if state.caps_lock() != self.caps_lock_on {
-                    self.caps_lock_on = state.caps_lock();
-                    // Update LED state
-                    self.led.set_state(self.caps_lock_on);
-                }
-            }
-            _ => {}
-        }
+impl CapsLockController {
+    pub fn new(led: Output<'static>) -> Self {
+        Self { led, caps_lock_on: false }
     }
 
-    async fn next_message(&mut self) -> Self::Event {
-        self.sub.next_message_pure().await
+    async fn on_led_indicator_event(&mut self, event: LedIndicatorEvent) {
+        let new_state = event.indicator.caps_lock();
+        if new_state != self.caps_lock_on {
+            self.caps_lock_on = new_state;
+            if new_state {
+                self.led.set_high();
+            } else {
+                self.led.set_low();
+            }
+        }
     }
 }
 
 #[rmk_peripheral(id = 0)]
 mod keyboard_peripheral {
-    #[controller(event)]
+    #[register_controller(event)]
     fn capslock_led() -> CapsLockController {
         let led = Output::new(p.PIN_4, Level::Low, OutputDrive::Standard);
-
-        CapsLockController {
-            led,
-            sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
-            caps_lock_on: false,
-        }
+        CapsLockController::new(led)
     }
 }
+```
+
+## Custom Events
+
+In addition to built-in controller events, you can define custom event types using the `#[controller_event]` macro. Custom events work seamlessly alongside built-in events and follow the same usage patterns.
+
+### Defining Custom Events
+
+Use the `#[controller_event]` macro to define custom events:
+
+```rust
+use rmk_macro::controller_event;
+
+#[controller_event(channel_size = 8, subs = 2)]
+#[derive(Clone, Copy, Debug)]
+pub struct BacklightEvent {
+    pub brightness: u8,
+}
+```
+
+**Macro parameters:**
+- `channel_size` (optional): Buffer size for `PubSubChannel`. Default is 1
+- `subs` (optional): Maximum number of subscribers. Default is 4
+- `pubs` (optional): Maximum number of async publishers. Default is 1
+
+The `#[controller_event]` macro uses `PubSubChannel` for all events, which buffers events with configurable capacity and supports both immediate (non-blocking) and async (awaitable) publishing.
+
+**Choosing buffer size:**
+- Use `channel_size = 1`(which is the default value) for state-like events (layer, battery level, connection state) where only the latest value matters
+- Use larger buffer sizes (e.g., `channel_size = 8`) for event streams that need history (key events, input events)
+
+### Publishing Custom Events
+
+Events can be published from anywhere in your code:
+
+**Non-blocking publish:**
+
+```rust
+use rmk::event::publish_controller_event;
+
+publish_controller_event(BacklightEvent { brightness: 50 });
+```
+
+This publishes immediately and drops the event if the buffer is full.
+
+**Async publish:**
+
+```rust
+use rmk::event::publish_controller_event_async;
+
+publish_controller_event_async(BacklightEvent { brightness: 75 }).await;
+```
+
+This waits if the buffer is full (backpressure).
+
+::: warning
+When using `publish_controller_event_async()`, ensure at least one subscriber exists to avoid infinite blocking.
+:::
+
+### Complete Example
+
+Here's a complete example showing how to define a custom event, create a controller for it, and publish it:
+
+```rust
+use rmk_macro::{controller_event, controller};
+use rmk::event::publish_controller_event;
+
+// 1. Define custom event
+#[controller_event(channel_size = 8, subs = 2)]
+#[derive(Clone, Copy, Debug)]
+pub struct DisplayUpdateEvent {
+    pub line: u8,
+    pub text: [u8; 16],
+}
+
+// 2. Create controller that subscribes to it
+#[controller(subscribe = [DisplayUpdateEvent])]
+pub struct DisplayController {
+    // ... display hardware fields
+}
+
+impl DisplayController {
+    pub fn new() -> Self {
+        Self { /* ... */ }
+    }
+
+    async fn on_display_update_event(&mut self, event: DisplayUpdateEvent) {
+        // Update display with event.line and event.text
+    }
+}
+
+// 3. Register the controller
+#[rmk_keyboard]
+mod keyboard {
+    #[register_controller(event)]
+    fn display_controller() -> DisplayController {
+        DisplayController::new()
+    }
+}
+
+// 4. Publish from anywhere in your code
+publish_controller_event(DisplayUpdateEvent {
+    line: 0,
+    text: *b"Hello RMK!      ",
+});
 ```

@@ -9,14 +9,11 @@ use {super::PeerAddress, crate::storage::Storage, embedded_storage_async::nor_fl
 
 use crate::CONNECTION_STATE;
 use crate::channel::KEY_EVENT_CHANNEL;
+#[cfg(feature = "controller")]
+use crate::event::{CentralConnectedEvent, publish_controller_event};
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
-#[cfg(feature = "controller")]
-use crate::{
-    channel::{CONTROLLER_CHANNEL, send_controller_event},
-    event::ControllerEvent,
-};
 
 /// Gatt service used in split peripheral to send split message to central
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -145,11 +142,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
     stack: &'stack Stack<'stack, C, DefaultPacketPool>,
     storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
-    #[cfg(feature = "controller")]
-    let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
-
-    #[cfg(feature = "controller")]
-    send_controller_event(&mut controller_pub, ControllerEvent::SplitCentral(false));
+    publish_controller_event(CentralConnectedEvent { connected: false });
 
     let Host {
         mut peripheral, runner, ..
@@ -172,13 +165,11 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
         let server = BleSplitPeripheralServer::new_default("rmk").unwrap();
         loop {
             CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
-            #[cfg(feature = "controller")]
-            send_controller_event(&mut controller_pub, ControllerEvent::SplitCentral(false));
+            publish_controller_event(CentralConnectedEvent { connected: false });
             match split_peripheral_advertise(id, central_addr, &mut peripheral, &server).await {
                 Ok(conn) => {
                     info!("Connected to the central");
-                    #[cfg(feature = "controller")]
-                    send_controller_event(&mut controller_pub, ControllerEvent::SplitCentral(true));
+                    publish_controller_event(CentralConnectedEvent { connected: true });
                     let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
                     // Save central address to storage if the central address is not saved
                     if !central_saved || conn.raw().peer_address().into_inner() != central_addr.unwrap_or_default() {
