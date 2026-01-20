@@ -14,9 +14,6 @@ mod controller;
 mod input_device;
 
 pub use builtin::*;
-pub use controller::{
-    AwaitableControllerEventTrait, ControllerEventTrait, publish_controller_event, publish_controller_event_async,
-};
 pub use input_device::*;
 
 /// Trait for event publishers
@@ -29,7 +26,7 @@ pub trait EventPublisher<T> {
 
 /// Async version of event publisher trait
 pub trait AsyncEventPublisher<T> {
-    async fn async_publish(&self, message: T);
+    async fn publish_async(&self, message: T);
 }
 
 /// Trait for event subscribers
@@ -38,6 +35,37 @@ pub trait AsyncEventPublisher<T> {
 /// It's used by both controller events and potentially other event systems.
 pub trait EventSubscriber<T> {
     async fn next_event(&mut self) -> T;
+}
+
+pub trait Event: Clone + Send {
+    type Publisher: EventPublisher<Self>;
+    type Subscriber: EventSubscriber<Self>;
+
+    fn publisher() -> Self::Publisher;
+    fn subscriber() -> Self::Subscriber;
+}
+
+pub trait AsyncEvent: Event {
+    type AsyncPublisher: AsyncEventPublisher<Self>;
+
+    fn publisher_async() -> Self::AsyncPublisher;
+}
+
+pub trait ControllerEvent: Event {}
+pub trait AsyncControllerEvent: AsyncEvent {}
+
+/// Publish a controller event (non-blocking, may drop if buffer full)
+///
+/// Example: `publish_controller_event(BatteryLevelEvent { level: 80 })`
+pub fn publish_controller_event<E: ControllerEvent>(e: E) {
+    E::publisher().publish(e);
+}
+
+/// Publish event with backpressure (waits if buffer full, requires `channel_size`)
+///
+/// Example: `publish_controller_event_async(KeyEvent { pressed: true }).await`
+pub async fn publish_controller_event_async<E: AsyncControllerEvent>(e: E) {
+    E::publisher_async().publish_async(e).await;
 }
 
 // Implementations for embassy-sync PubSubChannel
@@ -52,7 +80,7 @@ impl<'a, M: RawMutex, T: Clone, const CAP: usize, const SUBS: usize, const PUBS:
 impl<'a, M: RawMutex, T: Clone, const CAP: usize, const SUBS: usize, const PUBS: usize> AsyncEventPublisher<T>
     for Publisher<'a, M, T, CAP, SUBS, PUBS>
 {
-    async fn async_publish(&self, message: T) {
+    async fn publish_async(&self, message: T) {
         self.publish(message).await
     }
 }

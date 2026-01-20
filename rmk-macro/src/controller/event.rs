@@ -4,7 +4,7 @@ use syn::{Attribute, DeriveInput, Lit, Meta, parse_macro_input};
 
 /// Generates controller event infrastructure.
 ///
-/// See `rmk::event::ControllerEventTrait` for usage.
+/// See `rmk::event::Event` for usage.
 pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
@@ -72,7 +72,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
         let pubs_val = pubs.unwrap_or(1);
 
         let awaitable_trait_impl = quote! {
-            impl #impl_generics ::rmk::event::AwaitableControllerEventTrait for #type_name #ty_generics #where_clause {
+            impl #impl_generics ::rmk::event::AsyncControllerEvent for #type_name #ty_generics #where_clause {
                 type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
                     'static,
                     ::rmk::RawMutex,
@@ -100,7 +100,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
                 > = ::embassy_sync::pubsub::PubSubChannel::new();
             },
             quote! {
-                impl #impl_generics ::rmk::event::ControllerEventTrait for #type_name #ty_generics #where_clause {
+                impl #impl_generics ::rmk::event::ControllerEvent for #type_name #ty_generics #where_clause {
                     type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
                         'static,
                         ::rmk::RawMutex,

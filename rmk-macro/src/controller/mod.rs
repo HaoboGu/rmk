@@ -195,7 +195,8 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     let enum_name = format_ident!("{}EventEnum", struct_name);
 
     // Generate enum variants and related code
-    let enum_variants: Vec<_> = config.event_types
+    let enum_variants: Vec<_> = config
+        .event_types
         .iter()
         .enumerate()
         .map(|(idx, event_type)| {
@@ -205,7 +206,8 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         .collect();
 
     // Generate match arms for process_event
-    let process_event_arms: Vec<_> = config.event_types
+    let process_event_arms: Vec<_> = config
+        .event_types
         .iter()
         .enumerate()
         .map(|(idx, event_type)| {
@@ -298,10 +300,16 @@ fn parse_controller_attributes(attr: proc_macro::TokenStream) -> ControllerConfi
                         }
                     } else if nv.path.is_ident("poll_interval") {
                         // Parse poll_interval as integer (milliseconds)
-                        if let syn::Expr::Lit(syn::ExprLit { 
-                            lit: syn::Lit::Int(lit_int), .. 
-                        }) = nv.value {
-                            poll_interval_ms = Some(lit_int.base10_parse::<u64>().expect("poll_interval must be a valid u64"));
+                        if let syn::Expr::Lit(syn::ExprLit {
+                            lit: syn::Lit::Int(lit_int),
+                            ..
+                        }) = nv.value
+                        {
+                            poll_interval_ms = Some(
+                                lit_int
+                                    .base10_parse::<u64>()
+                                    .expect("poll_interval must be a valid u64"),
+                            );
                         } else {
                             panic!("poll_interval must be an integer literal (milliseconds)");
                         }
@@ -375,7 +383,7 @@ fn generate_next_message(event_types: &[Path], enum_name: &syn::Ident) -> proc_m
         .zip(&sub_vars)
         .map(|(event_type, sub_var)| {
             quote! {
-                let mut #sub_var = <#event_type as ::rmk::event::ControllerEventTrait>::subscriber();
+                let mut #sub_var = <#event_type as ::rmk::event::ControllerEvent>::subscriber();
             }
         })
         .collect();
