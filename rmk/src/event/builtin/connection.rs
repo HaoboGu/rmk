@@ -29,7 +29,7 @@ impl From<ConnectionType> for u8 {
 }
 
 /// Connection type changed event
-#[controller_event(subs = 1)]
+#[controller_event(channel_size = crate::CONNECTION_CHANGE_EVENT_CHANNEL_SIZE, pubs = crate::CONNECTION_CHANGE_EVENT_PUB_SIZE, subs = crate::CONNECTION_CHANGE_EVENT_SUB_SIZE)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ConnectionChangeEvent {
