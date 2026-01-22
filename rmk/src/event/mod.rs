@@ -9,11 +9,9 @@ use embassy_sync::blocking_mutex::raw::RawMutex;
 use embassy_sync::pubsub::{ImmediatePublisher, Publisher, Subscriber};
 use embassy_sync::{channel, watch};
 
-mod builtin;
 mod controller;
 mod input_device;
 
-pub use builtin::*;
 pub use controller::*;
 pub use input_device::*;
 
