@@ -18,7 +18,6 @@ use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
-use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, PositionalConfig, StorageConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
@@ -29,7 +28,7 @@ use rmk::matrix::Matrix;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
 use rmk::types::action::KeyAction;
-use rmk::{HostResources, initialize_keymap, run_devices, run_processor_chain};
+use rmk::{HostResources, initialize_keymap, run_all};
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -174,12 +173,8 @@ async fn main(spawner: Spawner) {
 
     // Start
     join3(
-        run_devices! (
-            (matrix, encoder, adc_device) => EVENT_CHANNEL, // Peripheral uses EVENT_CHANNEL to send events to central
-        ),
-        run_processor_chain! {
-            EVENT_CHANNEL => [battery_processor],
-        },
+        run_all!(matrix, encoder, adc_device),
+        run_all!(battery_processor),
         run_rmk_split_peripheral(0, &stack, &mut storage),
     )
     .await;

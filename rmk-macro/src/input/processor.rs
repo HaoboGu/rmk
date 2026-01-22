@@ -56,7 +56,7 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
     };
 
     // Generate internal enum name
-    let enum_name = format_ident!("{}PEventEnum", struct_name);
+    let enum_name = format_ident!("{}EventEnum", struct_name);
 
     // Generate enum variants and related code
     let enum_variants: Vec<_> = config
@@ -66,6 +66,27 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
         .map(|(idx, event_type)| {
             let variant_name = format_ident!("Event{}", idx);
             quote! { #variant_name(#event_type) }
+        })
+        .collect();
+
+    let enum_subs_defs: Vec<_> = config
+        .event_types
+        .iter()
+        .enumerate()
+        .map(|(idx, event_type)| {
+            let sub_name = format_ident!("sub{}", idx);
+            quote! { let mut #sub_name = #event_type::subscriber(); }
+        })
+        .collect();
+
+    let enum_subs_arms: Vec<_> = config
+        .event_types
+        .iter()
+        .enumerate()
+        .map(|(idx, _event_type)| {
+            let sub_name = format_ident!("sub{}", idx);
+            let variant_name = format_ident!("Event{}", idx);
+            quote! { e = #sub_name.next_event().fuse() => <Self as ::rmk::input_device::InputProcessor<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>>::Event::#variant_name(e) }
         })
         .collect();
 
@@ -91,6 +112,23 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
         // Internal enum for event routing
         #vis enum #enum_name {
             #(#enum_variants),*
+        }
+
+        // FIXME: allow users to override `run()` function
+        impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
+            async fn run(&mut self) -> ! {
+                use ::rmk::input_device::InputProcessor;
+                use ::rmk::event::Event;
+                use ::rmk::event::EventSubscriber;
+                use ::futures::FutureExt;
+                #(#enum_subs_defs)*
+                loop {
+                    let e = ::futures::select_biased! {
+                        #(#enum_subs_arms),*
+                    };
+                    self.process(e).await;
+                }
+            }
         }
 
         impl #impl_generics ::rmk::input_device::InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER> for #struct_name #ty_generics #where_clause {

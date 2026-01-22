@@ -19,7 +19,7 @@ pub mod rotary_encoder;
 /// For some input devices or processors, they should keep running in a separate task.
 /// This trait is used to run them in a separate task.
 pub trait Runnable {
-    async fn run(&mut self);
+    async fn run(&mut self) -> !;
 }
 
 /// The trait for input devices.
@@ -56,13 +56,11 @@ pub trait InputDevice {
     async fn read_event(&mut self) -> !;
 }
 
-/// Processing result of the processor chain
-// pub enum ProcessResult {
-//     /// Continue processing the event
-//     Continue(Event),
-//     /// Stop processing
-//     Stop,
-// }
+impl<T: InputDevice> Runnable for T {
+    async fn run(&mut self) -> ! {
+        self.read_event().await
+    }
+}
 
 /// The trait for input processors.
 ///
@@ -70,7 +68,9 @@ pub trait InputDevice {
 /// Take the normal keyboard as the example:
 ///
 /// The [`crate::matrix::Matrix`] is actually an input device and the [`crate::keyboard::Keyboard`] is actually an input processor.
-pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0> {
+pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0>:
+    Runnable
+{
     type Event;
     /// Process the incoming events, convert them to HID report [`Report`],
     /// then send the report to the USB/BLE.
@@ -121,33 +121,24 @@ pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER
 /// ```
 #[macro_export]
 macro_rules! run_devices {
-    ( $( ( $( $dev:ident ),* ) => $channel:expr),+ $(,)? ) => {{
+    ($( $dev:ident ),*) => {{
         use $crate::input_device::InputDevice;
         $crate::join_all!(
             $(
-                $crate::join_all!(
-                    $(
-                        async {
-                            loop {
-                                let e = $dev.read_event().await;
-                                // For KeyboardEvent, send it to KEY_EVENT_CHANNEL
-                                match e {
-                                    $crate::event::Event::Key(key_event) => {
-                                        $crate::channel::KEY_EVENT_CHANNEL.send(key_event).await;
-                                    }
-                                    _ => {
-                                        // Drop the oldest event if the channel is full
-                                        if $channel.is_full() {
-                                            let _ = $channel.receive().await;
-                                        }
-                                        $channel.send(e).await;
-                                    }
-                                }
-                            }
-                        }
-                    ),*
-                )
-            ),+
+                $dev.read_event()
+            ),*
+        )
+    }};
+}
+
+#[macro_export]
+macro_rules! run_all {
+    ($( $dev:ident ),*) => {{
+        use $crate::input_device::Runnable;
+        $crate::join_all!(
+            $(
+                $dev.run()
+            ),*
         )
     }};
 }

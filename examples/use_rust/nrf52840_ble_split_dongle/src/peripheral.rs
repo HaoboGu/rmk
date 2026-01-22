@@ -18,7 +18,6 @@ use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
-use rmk::channel::EVENT_CHANNEL;
 use rmk::config::StorageConfig;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join;
@@ -157,9 +156,7 @@ async fn main(spawner: Spawner) {
 
     // Start
     join(
-        run_devices! (
-            (matrix, encoder) => EVENT_CHANNEL, // Peripheral uses EVENT_CHANNEL to send events to central
-        ),
+        run_devices!(matrix, encoder),
         run_rmk_split_peripheral(0, &stack, &mut storage),
     )
     .await;

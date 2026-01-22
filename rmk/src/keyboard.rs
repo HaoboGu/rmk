@@ -153,7 +153,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
 {
     /// Main keyboard processing task, it receives input devices result, processes keys.
     /// The report is sent using `send_report`.
-    async fn run(&mut self) {
+    async fn run(&mut self) -> ! {
         loop {
             // TODO: Now the unprocessed_events is only used in one-shot keys and clear peer key.
             // Maybe it can be removed in the future?
