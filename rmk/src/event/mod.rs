@@ -1,19 +1,19 @@
 //! Event system for RMK
 //!
 //! This module provides:
+//! - Event infrastructure (traits, publish/subscribe patterns, implementations)
 //! - Built-in controller events (battery, connection, input, etc.)
-//! - Input device events (keyboard, touchpad, joystick, etc.)
-//! - Controller event infrastructure (publish/subscribe patterns)
+//! - Built-in input device events (keyboard, touchpad, joystick, etc.)
 
 use embassy_sync::blocking_mutex::raw::RawMutex;
 use embassy_sync::pubsub::{ImmediatePublisher, Publisher, Subscriber};
 use embassy_sync::{channel, watch};
 
 mod controller;
-mod input_device;
+mod input;
 
 pub use controller::*;
-pub use input_device::*;
+pub use input::*;
 
 /// Trait for event publishers
 ///

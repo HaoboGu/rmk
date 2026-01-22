@@ -53,17 +53,18 @@ pub trait Runnable {
 /// .await;
 /// ```
 pub trait InputDevice {
+    type Event: Event;
     /// Read the raw input event
-    async fn read_event(&mut self) -> Event;
+    async fn read_event(&mut self) -> Self::Event;
 }
 
 /// Processing result of the processor chain
-pub enum ProcessResult {
-    /// Continue processing the event
-    Continue(Event),
-    /// Stop processing
-    Stop,
-}
+// pub enum ProcessResult {
+//     /// Continue processing the event
+//     Continue(Event),
+//     /// Stop processing
+//     Stop,
+// }
 
 /// The trait for input processors.
 ///
@@ -72,13 +73,14 @@ pub enum ProcessResult {
 ///
 /// The [`crate::matrix::Matrix`] is actually an input device and the [`crate::keyboard::Keyboard`] is actually an input processor.
 pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0> {
+    type Event;
     /// Process the incoming events, convert them to HID report [`Report`],
     /// then send the report to the USB/BLE.
     ///
     /// Note there might be mulitple HID reports are generated for one event,
     /// so the "sending report" operation should be done in the `process` method.
     /// The input processor implementor should be aware of this.
-    async fn process(&mut self, event: Event) -> ProcessResult;
+    async fn process(&mut self, event: Self::Event);
 
     /// Send the processed report.
     async fn send_report(&self, report: Report) {

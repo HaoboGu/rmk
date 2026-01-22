@@ -2,13 +2,13 @@ use core::cell::RefCell;
 
 use embassy_sync::signal::Signal;
 use embedded_hal::digital::InputPin;
+use rmk_macro::input_processor;
 
-use super::{InputDevice, InputProcessor};
-use crate::KeyMap;
-use crate::event::Event;
+use super::InputDevice;
+use crate::event::{BatteryEvent, publish_input_event_async};
 #[cfg(all(feature = "controller", feature = "_ble"))]
 use crate::event::{BatteryLevelEvent, ChargingStateEvent, publish_controller_event};
-use crate::input_device::ProcessResult;
+use crate::{KeyMap, event::InputChargingStateEvent};
 
 pub(crate) static BATTERY_UPDATE: Signal<crate::RawMutex, BatteryState> = Signal::new();
 
@@ -48,7 +48,9 @@ impl<I: InputPin> ChargingStateReader<I> {
 }
 
 impl<I: InputPin> InputDevice for ChargingStateReader<I> {
-    async fn read_event(&mut self) -> Event {
+    type Event = InputChargingStateEvent;
+
+    async fn read_event(&mut self) -> Self::Event {
         // For the first read, don't check whether the charging state is changed
         if !self.first_read {
             // Wait 2s before reading the first value
@@ -56,7 +58,7 @@ impl<I: InputPin> InputDevice for ChargingStateReader<I> {
             let charging_state = self.state_input.is_low().unwrap_or(false);
             self.current_charging_state = charging_state;
             self.first_read = true;
-            return Event::ChargingState(charging_state);
+            publish_input_event_async(InputChargingStateEvent { state: charging_state }).await;
         }
 
         loop {
@@ -66,7 +68,7 @@ impl<I: InputPin> InputDevice for ChargingStateReader<I> {
             // Only send event when charging state changes
             if charging_state != self.current_charging_state {
                 self.current_charging_state = charging_state;
-                return Event::ChargingState(charging_state);
+                publish_input_event_async(InputChargingStateEvent { state: charging_state }).await;
             }
 
             // Check charging state every 5 seconds
@@ -75,6 +77,7 @@ impl<I: InputPin> InputDevice for ChargingStateReader<I> {
     }
 }
 
+#[input_processor(subscribe = [BatteryEvent, InputChargingStateEvent])]
 pub struct BatteryProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     adc_divider_measured: u32,
@@ -137,56 +140,46 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER> for BatteryProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
+    BatteryProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
-    async fn process(&mut self, event: Event) -> ProcessResult {
-        match event {
-            Event::Battery(val) => {
-                trace!("Detected battery ADC value: {:?}", val);
+    async fn on_battery_event(&mut self, event: BatteryEvent) {
+        let val = event.0;
+        trace!("Detected battery ADC value: {:?}", val);
 
-                #[cfg(feature = "_ble")]
-                {
-                    if matches!(self.battery_state, BatteryState::Normal(_) | BatteryState::NotAvailable) {
-                        let battery_percent = self.get_battery_percent(val);
+        #[cfg(feature = "_ble")]
+        {
+            if matches!(self.battery_state, BatteryState::Normal(_) | BatteryState::NotAvailable) {
+                let battery_percent = self.get_battery_percent(val);
 
-                        #[cfg(feature = "controller")]
-                        publish_controller_event(BatteryLevelEvent { level: battery_percent });
+                #[cfg(feature = "controller")]
+                publish_controller_event(BatteryLevelEvent { level: battery_percent });
 
-                        // Update the battery state
-                        if self.battery_state != BatteryState::Normal(battery_percent) {
-                            self.battery_state = BatteryState::Normal(battery_percent);
-                            // Send signal
-                            BATTERY_UPDATE.signal(self.battery_state);
-                        }
-                    }
+                // Update the battery state
+                if self.battery_state != BatteryState::Normal(battery_percent) {
+                    self.battery_state = BatteryState::Normal(battery_percent);
+                    // Send signal
+                    BATTERY_UPDATE.signal(self.battery_state);
                 }
-                ProcessResult::Stop
             }
-            Event::ChargingState(charging) => {
-                info!("Charging state changed: {:?}", charging);
-
-                #[cfg(feature = "_ble")]
-                {
-                    #[cfg(feature = "controller")]
-                    publish_controller_event(ChargingStateEvent { charging });
-
-                    if charging {
-                        self.battery_state = BatteryState::Charging;
-                    } else {
-                        // When discharging, the battery state is changed to not available
-                        // Then wait for the `Event::Battery` to update the battery level to real value
-                        self.battery_state = BatteryState::NotAvailable;
-                    }
-                }
-
-                ProcessResult::Stop
-            }
-            _ => ProcessResult::Continue(event),
         }
     }
 
-    /// Get the current keymap
-    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
-        self.keymap
+    async fn on_input_charging_state_event(&mut self, event: InputChargingStateEvent) {
+        let charging = event.state;
+        info!("Charging state changed: {:?}", charging);
+
+        #[cfg(feature = "_ble")]
+        {
+            #[cfg(feature = "controller")]
+            publish_controller_event(ChargingStateEvent { charging });
+
+            if charging {
+                self.battery_state = BatteryState::Charging;
+            } else {
+                // When discharging, the battery state is changed to not available
+                // Then wait for the `Event::Battery` to update the battery level to real value
+                self.battery_state = BatteryState::NotAvailable;
+            }
+        }
     }
 }
