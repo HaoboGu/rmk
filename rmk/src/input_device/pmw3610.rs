@@ -10,13 +10,13 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
 use embedded_hal_async::spi::SpiBus;
 use futures::future::pending;
+use rmk_macro::input_processor;
 use usbd_hid::descriptor::MouseReport;
 
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
 pub use crate::driver::bitbang_spi::{BitBangError, BitBangSpiBus};
-use crate::event::{Axis, AxisEvent, AxisValType, Event};
+use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent, publish_input_event_async};
 use crate::hid::Report;
-use crate::input_device::{InputDevice, InputProcessor, ProcessResult};
+use crate::input_device::{InputDevice, InputProcessor};
 use crate::keymap::KeyMap;
 
 // ============================================================================
@@ -533,7 +533,7 @@ impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> Pmw3610Device<SPI, CS,
         }
     }
 
-    fn take_report_event(&mut self) -> Option<Event> {
+    fn take_report_event(&mut self) -> Option<PointingEvent> {
         if self.accumulated_x == 0 && self.accumulated_y == 0 {
             return None;
         }
@@ -543,7 +543,7 @@ impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> Pmw3610Device<SPI, CS,
         self.accumulated_x = 0;
         self.accumulated_y = 0;
 
-        Some(Event::Joystick([
+        Some(PointingEvent([
             AxisEvent {
                 typ: AxisValType::Rel,
                 axis: Axis::X,
@@ -600,7 +600,7 @@ impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> Pmw3610Device<SPI, CS,
 }
 
 impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> InputDevice for Pmw3610Device<SPI, CS, MOTION> {
-    async fn read_event(&mut self) -> Event {
+    async fn read_event(&mut self) -> ! {
         use embassy_futures::select::{Either, select};
 
         if self.last_poll == Instant::MIN {
@@ -646,7 +646,7 @@ impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> InputDevice for Pmw361
                 Either::Second(_) => {
                     if let Some(event) = self.take_report_event() {
                         self.last_report = Instant::now();
-                        return event;
+                        publish_input_event_async(event).await;
                     }
                 }
             }
@@ -655,6 +655,7 @@ impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> InputDevice for Pmw361
 }
 
 /// PMW3610 Processor that converts motion events to mouse reports
+#[input_processor(subscribe = [PointingEvent])]
 pub struct Pmw3610Processor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
     /// Reference to the keymap
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
@@ -682,34 +683,20 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER> for Pmw3610Processor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
+    Pmw3610Processor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
-    async fn process(&mut self, event: Event) -> ProcessResult {
-        match event {
-            Event::Joystick(axis_events) => {
-                let mut x = 0i16;
-                let mut y = 0i16;
+    async fn on_pointing_event(&mut self, event: PointingEvent) {
+        let mut x = 0i16;
+        let mut y = 0i16;
 
-                for axis_event in axis_events.iter() {
-                    match axis_event.axis {
-                        Axis::X => x = axis_event.value,
-                        Axis::Y => y = axis_event.value,
-                        _ => {}
-                    }
-                }
-
-                self.generate_report(x, y).await;
-                ProcessResult::Stop
+        for axis_event in event.0.iter() {
+            match axis_event.axis {
+                Axis::X => x = axis_event.value,
+                Axis::Y => y = axis_event.value,
+                _ => {}
             }
-            _ => ProcessResult::Continue(event),
         }
-    }
 
-    async fn send_report(&self, report: Report) {
-        KEYBOARD_REPORT_CHANNEL.send(report).await;
-    }
-
-    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
-        self.keymap
+        self.generate_report(x, y).await;
     }
 }

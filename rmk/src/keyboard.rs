@@ -14,15 +14,15 @@ use rmk_types::modifier::ModifierCombination;
 use rmk_types::mouse_button::MouseButtons;
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 
-use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::combo::Combo;
 use crate::config::Hand;
 use crate::descriptor::KeyboardReport;
 #[cfg(all(feature = "split", feature = "_ble", feature = "controller"))]
 use crate::event::ClearPeerEvent;
+use crate::event::{Event, KeyPos, KeyboardEvent, KeyboardEventPos, publish_input_event_async};
 #[cfg(feature = "controller")]
 use crate::event::{KeyEvent, ModifierEvent, publish_controller_event};
-use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::input_device::Runnable;
@@ -167,7 +167,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
                 self.process_buffered_key(key).await
             } else {
                 // No buffered tap-hold event, wait for new key
-                let event = KEY_EVENT_CHANNEL.receive().await;
+                let event = KeyboardEvent::receive().await;
                 // Process the key event
                 self.process_inner(event).await
             };
@@ -332,7 +332,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     "[Combo] Waiting combo, timeout in: {:?}ms",
                     (key.timeout_time.saturating_duration_since(Instant::now())).as_millis()
                 );
-                match with_deadline(key.timeout_time, KEY_EVENT_CHANNEL.receive()).await {
+                match with_deadline(key.timeout_time, KeyboardEvent::receive()).await {
                     Ok(event) => {
                         // Process new key event
                         debug!("[Combo] Interrupted by a new key event: {:?}", event);
@@ -349,7 +349,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if key.action.is_morse() {
                     // Wait for timeout or new key event
                     info!("Waiting morse key: {:?}", key.action);
-                    match with_deadline(key.timeout_time, KEY_EVENT_CHANNEL.receive()).await {
+                    match with_deadline(key.timeout_time, KeyboardEvent::receive()).await {
                         Ok(event) => {
                             debug!("Buffered morse key interrupted by a new key event: {:?}", event);
                             self.process_inner(event).await;
@@ -1280,7 +1280,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 OneShotState::Initial(m) | OneShotState::Single(m) => {
                     self.osm_state = OneShotState::Single(m);
                     let timeout = Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
-                    match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
+                    match select(timeout, KeyboardEvent::receive()).await {
                         Either::First(_) => {
                             // Timeout, release modifiers
                             self.update_osl(event);
@@ -1333,7 +1333,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     self.osl_state = OneShotState::Single(l);
 
                     let timeout = embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
-                    match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
+                    match select(timeout, KeyboardEvent::receive()).await {
                         Either::First(_) => {
                             // Timeout, deactivate layer
                             self.keymap.borrow_mut().deactivate_layer(layer_num);
@@ -1778,12 +1778,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // Schedule next movement after the delay
                 embassy_time::Timer::after_millis(delay as u64).await;
                 // Check if there's a release event in the channel, if there's no release event, re-send the event
-                let len = KEY_EVENT_CHANNEL.len();
+                let keyboard_event_sub = KeyboardEvent::subscriber();
+                let len = keyboard_event_sub.len();
                 let mut released = false;
                 for _ in 0..len {
-                    let queued_event = KEY_EVENT_CHANNEL.receive().await;
+                    let queued_event = keyboard_event_sub.receive().await;
                     if queued_event.pos != event.pos || !queued_event.pressed {
-                        KEY_EVENT_CHANNEL.send(queued_event).await;
+                        publish_input_event_async(queued_event).await;
                     }
                     // If there's a release event in the channel
                     if queued_event.pos == event.pos && !queued_event.pressed {
@@ -1791,7 +1792,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                 }
                 if !released {
-                    KEY_EVENT_CHANNEL.send(event).await;
+                    publish_input_event_async(event).await;
                 }
             }
         }
@@ -1811,7 +1812,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     if event.pressed {
                         // Wait for 5s, if the key is still pressed, clear split peer info
                         // If there's any other key event received during this period, skip
-                        match select(embassy_time::Timer::after_millis(5000), KEY_EVENT_CHANNEL.receive()).await {
+                        match select(embassy_time::Timer::after_millis(5000), KeyboardEvent::receive()).await {
                             Either::First(_) => {
                                 // Timeout reached, send clear peer message
                                 #[cfg(feature = "controller")]

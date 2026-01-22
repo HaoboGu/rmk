@@ -5,10 +5,13 @@ use embedded_hal::digital::InputPin;
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
 use crate::MatrixTrait;
-use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::event::{Event, KeyboardEvent};
+use crate::event::KeyboardEvent;
 use crate::input_device::InputDevice;
 use crate::matrix::KeyState;
+use crate::{
+    debounce::{DebounceState, DebouncerTrait},
+    event::publish_input_event_async,
+};
 
 /// DirectPinMartex only has input pins.
 pub struct DirectPinMatrix<
@@ -64,7 +67,7 @@ impl<
     const SIZE: usize,
 > InputDevice for DirectPinMatrix<In, D, ROW, COL, SIZE>
 {
-    async fn read_event(&mut self) -> crate::event::Event {
+    async fn read_event(&mut self) -> ! {
         loop {
             let (row_idx_start, col_idx_start) = self.scan_pos;
 
@@ -96,7 +99,12 @@ impl<
                             let key_state = self.key_states[row_idx][col_idx];
 
                             self.scan_pos = (row_idx, col_idx);
-                            return Event::Key(KeyboardEvent::key(row_idx as u8, col_idx as u8, key_state.pressed));
+                            publish_input_event_async(KeyboardEvent::key(
+                                row_idx as u8,
+                                col_idx as u8,
+                                key_state.pressed,
+                            ))
+                            .await;
                         }
 
                         // If there's key still pressed, always refresh the self.scan_start

@@ -5,7 +5,6 @@
 use core::cell::RefCell;
 
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
-use crate::event::Event;
 use crate::hid::Report;
 use crate::keymap::KeyMap;
 
@@ -53,9 +52,8 @@ pub trait Runnable {
 /// .await;
 /// ```
 pub trait InputDevice {
-    type Event: Event;
     /// Read the raw input event
-    async fn read_event(&mut self) -> Self::Event;
+    async fn read_event(&mut self) -> !;
 }
 
 /// Processing result of the processor chain

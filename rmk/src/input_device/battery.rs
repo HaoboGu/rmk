@@ -48,9 +48,7 @@ impl<I: InputPin> ChargingStateReader<I> {
 }
 
 impl<I: InputPin> InputDevice for ChargingStateReader<I> {
-    type Event = InputChargingStateEvent;
-
-    async fn read_event(&mut self) -> Self::Event {
+    async fn read_event(&mut self) -> ! {
         // For the first read, don't check whether the charging state is changed
         if !self.first_read {
             // Wait 2s before reading the first value

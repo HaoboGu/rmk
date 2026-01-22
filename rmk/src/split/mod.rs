@@ -1,7 +1,7 @@
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
-use crate::event::{Event, KeyboardEvent};
+use crate::event::{KeyboardEvent, PointingEvent, TouchpadEvent};
 
 #[cfg(feature = "_ble")]
 pub mod ble;
@@ -22,9 +22,12 @@ pub const SPLIT_MESSAGE_MAX_SIZE: usize = SplitMessage::POSTCARD_MAX_SIZE + 4;
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum SplitMessage {
+    /// Keyboard event, from peripheral to central
     Key(KeyboardEvent),
-    /// Event from peripheral to central
-    Event(Event),
+    /// Touchpad event, from peripheral to central
+    Touchpad(TouchpadEvent),
+    /// Pointing device event, from peripheral to central
+    Pointing(PointingEvent),
     /// Led state, on/off, from central to peripheral
     LedState(bool),
     /// The central connection state, true if central has been connected to host.
@@ -38,6 +41,8 @@ pub(crate) enum SplitMessage {
     KeyboardIndicator(u8),
     /// Layer number from central to peripheral
     Layer(u8),
-    /// Battery level
+    /// Battery level, bidirectional
     BatteryLevel(u8),
+    /// Charging state, bidirectional
+    ChargingState(bool),
 }

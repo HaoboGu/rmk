@@ -2,6 +2,7 @@ use postcard::experimental::max_size::MaxSize;
 use rmk_macro::input_event;
 use serde::{Deserialize, Serialize};
 
+use crate::event::Event;
 use crate::input_device::rotary_encoder::Direction;
 
 /// `KeyboardEvent` is the event whose `KeyAction` is stored in the keymap.
@@ -30,6 +31,10 @@ impl KeyboardEvent {
             pressed,
             pos: KeyboardEventPos::RotaryEncoder(RotaryEncoderPos { id, direction }),
         }
+    }
+
+    pub async fn receive() -> Self {
+        Self::subscriber().receive().await
     }
 }
 

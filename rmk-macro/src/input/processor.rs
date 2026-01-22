@@ -56,7 +56,7 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
     };
 
     // Generate internal enum name
-    let enum_name = format_ident!("{}ProcessorEventEnum", struct_name);
+    let enum_name = format_ident!("{}PEventEnum", struct_name);
 
     // Generate enum variants and related code
     let enum_variants: Vec<_> = config
@@ -89,7 +89,7 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
         #vis #struct_def
 
         // Internal enum for event routing
-        enum #enum_name {
+        #vis enum #enum_name {
             #(#enum_variants),*
         }
 
@@ -149,9 +149,7 @@ fn parse_processor_attributes(attr: proc_macro::TokenStream) -> ProcessorConfig 
         }
     }
 
-    ProcessorConfig {
-        event_types,
-    }
+    ProcessorConfig { event_types }
 }
 
 /// Convert event type to handler method name: BatteryEvent -> on_battery_event

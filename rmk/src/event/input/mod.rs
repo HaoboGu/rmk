@@ -10,7 +10,7 @@ mod touchpad;
 
 pub use battery::{BatteryEvent, ChargingStateEvent as InputChargingStateEvent};
 pub use keyboard::{KeyPos, KeyboardEvent, KeyboardEventPos, RotaryEncoderPos};
-pub use pointing::{Axis, AxisEvent, AxisValType};
+pub use pointing::{Axis, AxisEvent, AxisValType, PointingEvent};
 pub use touchpad::TouchpadEvent;
 
 use crate::event::{AsyncEvent, AsyncEventPublisher as _, Event, EventPublisher as _};

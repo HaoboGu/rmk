@@ -1,25 +1,32 @@
 #[cfg(feature = "_ble")]
 use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
-use embassy_futures::select::{Either4, select4};
+use embassy_futures::select::{Either, select};
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
+use futures::select_biased;
 #[cfg(all(feature = "_ble", feature = "storage"))]
 use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 #[cfg(feature = "_ble")]
 use {
-    crate::event::ControllerEventTrait, crate::event::EventSubscriber, crate::storage::Storage,
-    embedded_storage_async::nor_flash::NorFlash, trouble_host::prelude::*,
+    crate::event::Event,
+    crate::event::{BatteryLevelEvent, EventSubscriber},
+    crate::storage::Storage,
+    embedded_storage_async::nor_flash::NorFlash,
+    trouble_host::prelude::*,
 };
 
 use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
-use crate::CONNECTION_STATE;
-use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
 #[cfg(feature = "controller")]
 use crate::event::{LayerChangeEvent, LedIndicatorEvent, publish_controller_event};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
-use crate::state::ConnectionState;
+use crate::{
+    CONNECTION_STATE,
+    event::{KeyboardEvent, PointingEvent, TouchpadEvent},
+    with_feature,
+};
+use crate::{event::InputChargingStateEvent, state::ConnectionState};
 
 /// Run the split peripheral service.
 ///
@@ -73,22 +80,26 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     pub(crate) async fn run(&mut self) {
         CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
 
-        #[cfg(feature = "_ble")]
-        let mut battery_sub = crate::event::BatteryLevelEvent::subscriber();
-
         loop {
-            match select4(
-                self.split_driver.read(),
-                KEY_EVENT_CHANNEL.receive(),
-                EVENT_CHANNEL.receive(),
+            use futures::FutureExt;
+            let read_message_to_send = async {
+                let key_sub = KeyboardEvent::subscriber();
+                let charging_state_sub = InputChargingStateEvent::subscriber();
+                let touch_sub = TouchpadEvent::subscriber();
+                let pointing_sub = PointingEvent::subscriber();
                 #[cfg(feature = "_ble")]
-                battery_sub.next_event(),
-                #[cfg(not(feature = "_ble"))]
-                core::future::pending::<()>(),
-            )
-            .await
-            {
-                Either4::First(m) => match m {
+                let mut battery_sub = BatteryLevelEvent::subscriber();
+                select_biased! {
+                    e = key_sub.receive().fuse() => SplitMessage::Key(e),
+                    e = charging_state_sub.receive().fuse() => SplitMessage::ChargingState(e.state),
+                    e = with_feature!("_ble", battery_sub.next_event(), BatteryLevelEvent) => SplitMessage::BatteryLevel(e.level),
+                    e = touch_sub.receive().fuse() => SplitMessage::Touchpad(e),
+                    e = pointing_sub.receive().fuse() => SplitMessage::Pointing(e),
+                }
+            };
+
+            match select(self.split_driver.read(), read_message_to_send).await {
+                Either::First(m) => match m {
                     // Currently only handle the central state message
                     Ok(split_message) => match split_message {
                         SplitMessage::ConnectionState(state) => {
@@ -123,36 +134,15 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         }
                     }
                 },
-                Either4::Second(e) => {
+                Either::Second(e) => {
                     // Only send the key event if the connection is established
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                        debug!("Writing split key event to central");
-                        self.split_driver.write(&SplitMessage::Key(e)).await.ok();
+                        debug!("Writing split message {:?} to central", e);
+                        self.split_driver.write(&e).await.ok();
                     } else {
                         debug!("Connection not established, skipping key event");
                     }
                 }
-                Either4::Third(e) => {
-                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                        debug!("Writing split event to central: {:?}", e);
-                        self.split_driver.write(&SplitMessage::Event(e)).await.ok();
-                    } else {
-                        debug!("Connection not established, skipping event");
-                    }
-                }
-                #[cfg(feature = "_ble")]
-                Either4::Fourth(battery_event) => {
-                    // Forward battery level to central
-                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                        debug!("Forwarding battery level to central: {}", battery_event.level);
-                        self.split_driver
-                            .write(&SplitMessage::BatteryLevel(battery_event.level))
-                            .await
-                            .ok();
-                    }
-                }
-                #[cfg(not(feature = "_ble"))]
-                _ => (),
             }
         }
     }

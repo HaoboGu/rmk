@@ -24,6 +24,16 @@ macro_rules! join_all {
 
 #[macro_export]
 macro_rules! with_feature {
+    ($feature:literal, $future:expr, $t:ty) => {{
+        #[cfg(feature = $feature)]
+        {
+            core::pin::pin!($future.fuse())
+        }
+        #[cfg(not(feature = $feature))]
+        {
+            core::future::pending::<$t>().fuse()
+        }
+    }};
     ($feature:literal, $future:expr) => {{
         #[cfg(feature = $feature)]
         {
