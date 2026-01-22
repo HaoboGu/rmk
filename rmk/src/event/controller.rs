@@ -3,39 +3,24 @@
 //! This module provides the infrastructure for type-safe controller events.
 //! Each event type has its own dedicated channel and can be subscribed to independently.
 
-use super::{EventPublisher, EventSubscriber};
-use crate::event::AsyncEventPublisher;
+use crate::event::{AsyncEvent, AsyncEventPublisher as _, Event, EventPublisher as _};
 
-/// Trait for controller event types
-///
-/// Automatically implemented by `#[controller_event]` macro.
-pub trait ControllerEventTrait: Copy + Clone + Send {
-    type Publisher: EventPublisher<Self>;
-    type Subscriber: EventSubscriber<Self>;
+pub trait ControllerEvent: Event {}
+pub trait AsyncControllerEvent: AsyncEvent {}
 
-    fn publisher() -> Self::Publisher;
-    fn subscriber() -> Self::Subscriber;
-}
-
-/// Trait for events with awaitable publishing (PubSubChannel with backpressure)
-///
-/// Automatically implemented by `#[controller_event]` when `channel_size` is specified.
-pub trait AwaitableControllerEventTrait: ControllerEventTrait {
-    type AsyncPublisher: AsyncEventPublisher<Self>;
-
-    fn async_publisher() -> Self::AsyncPublisher;
-}
+impl<T: Event> ControllerEvent for T {}
+impl<T: AsyncEvent> AsyncControllerEvent for T {}
 
 /// Publish a controller event (non-blocking, may drop if buffer full)
 ///
 /// Example: `publish_controller_event(BatteryLevelEvent { level: 80 })`
-pub fn publish_controller_event<E: ControllerEventTrait>(e: E) {
+pub fn publish_controller_event<E: ControllerEvent>(e: E) {
     E::publisher().publish(e);
 }
 
 /// Publish event with backpressure (waits if buffer full, requires `channel_size`)
 ///
 /// Example: `publish_controller_event_async(KeyEvent { pressed: true }).await`
-pub async fn publish_controller_event_async<E: AwaitableControllerEventTrait>(e: E) {
-    E::async_publisher().async_publish(e).await;
+pub async fn publish_controller_event_async<E: AsyncControllerEvent>(e: E) {
+    E::publisher_async().publish_async(e).await;
 }

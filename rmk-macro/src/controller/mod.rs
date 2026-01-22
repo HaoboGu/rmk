@@ -383,7 +383,7 @@ fn generate_next_message(event_types: &[Path], enum_name: &syn::Ident) -> proc_m
         .zip(&sub_vars)
         .map(|(event_type, sub_var)| {
             quote! {
-                let mut #sub_var = <#event_type as ::rmk::event::ControllerEvent>::subscriber();
+                let mut #sub_var = <#event_type as ::rmk::event::Event>::subscriber();
             }
         })
         .collect();

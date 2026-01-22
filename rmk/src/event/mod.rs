@@ -7,13 +7,14 @@
 
 use embassy_sync::blocking_mutex::raw::RawMutex;
 use embassy_sync::pubsub::{ImmediatePublisher, Publisher, Subscriber};
-use embassy_sync::watch;
+use embassy_sync::{channel, watch};
 
 mod builtin;
 mod controller;
 mod input_device;
 
 pub use builtin::*;
+pub use controller::*;
 pub use input_device::*;
 
 /// Trait for event publishers
@@ -49,23 +50,6 @@ pub trait AsyncEvent: Event {
     type AsyncPublisher: AsyncEventPublisher<Self>;
 
     fn publisher_async() -> Self::AsyncPublisher;
-}
-
-pub trait ControllerEvent: Event {}
-pub trait AsyncControllerEvent: AsyncEvent {}
-
-/// Publish a controller event (non-blocking, may drop if buffer full)
-///
-/// Example: `publish_controller_event(BatteryLevelEvent { level: 80 })`
-pub fn publish_controller_event<E: ControllerEvent>(e: E) {
-    E::publisher().publish(e);
-}
-
-/// Publish event with backpressure (waits if buffer full, requires `channel_size`)
-///
-/// Example: `publish_controller_event_async(KeyEvent { pressed: true }).await`
-pub async fn publish_controller_event_async<E: AsyncControllerEvent>(e: E) {
-    E::publisher_async().publish_async(e).await;
 }
 
 // Implementations for embassy-sync PubSubChannel
@@ -106,5 +90,26 @@ impl<'a, M: RawMutex, T: Clone, const N: usize> EventSubscriber<T> for watch::Re
     // A possible solution is to call `changed()` twice in `next_event()`, but it looks ugly.
     async fn next_event(&mut self) -> T {
         self.changed().await
+    }
+}
+
+// Implementation for embassy-sync Channel
+impl<'a, M: RawMutex, T: Clone, const N: usize> EventPublisher<T> for channel::Sender<'a, M, T, N> {
+    fn publish(&self, message: T) {
+        if let Err(_) = self.try_send(message) {
+            error!("Send event to Channel error, channel is full");
+        }
+    }
+}
+
+impl<'a, M: RawMutex, T: Clone, const N: usize> AsyncEventPublisher<T> for channel::Sender<'a, M, T, N> {
+    async fn publish_async(&self, message: T) {
+        self.send(message).await
+    }
+}
+
+impl<'a, M: RawMutex, T: Clone, const N: usize> EventSubscriber<T> for channel::Receiver<'a, M, T, N> {
+    async fn next_event(&mut self) -> T {
+        self.receive().await
     }
 }

@@ -72,7 +72,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
         let pubs_val = pubs.unwrap_or(1);
 
         let awaitable_trait_impl = quote! {
-            impl #impl_generics ::rmk::event::AsyncControllerEvent for #type_name #ty_generics #where_clause {
+            impl #impl_generics ::rmk::event::AsyncEvent for #type_name #ty_generics #where_clause {
                 type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
                     'static,
                     ::rmk::RawMutex,
@@ -83,7 +83,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
                 >;
 
                 // Awaitable publisher: waits if channel is full
-                fn async_publisher() -> Self::AsyncPublisher {
+                fn publisher_async() -> Self::AsyncPublisher {
                     #channel_name.publisher().unwrap()
                 }
             }
@@ -100,7 +100,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
                 > = ::embassy_sync::pubsub::PubSubChannel::new();
             },
             quote! {
-                impl #impl_generics ::rmk::event::ControllerEvent for #type_name #ty_generics #where_clause {
+                impl #impl_generics ::rmk::event::Event for #type_name #ty_generics #where_clause {
                     type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
                         'static,
                         ::rmk::RawMutex,
