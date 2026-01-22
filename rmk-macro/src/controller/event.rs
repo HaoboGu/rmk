@@ -1,6 +1,6 @@
 use quote::quote;
 use syn::parse::Parser;
-use syn::{Attribute, DeriveInput, Lit, Meta, parse_macro_input};
+use syn::{Attribute, DeriveInput, Meta, parse_macro_input};
 
 /// Generates controller event infrastructure.
 ///
@@ -67,9 +67,10 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
     // Generate channel and trait implementations
     let (channel_static, trait_impl) = {
         // PubSubChannel: buffered events with awaitable publish support
-        let cap = channel_size.unwrap_or(1);
-        let subs_val = subs.unwrap_or(4);
-        let pubs_val = pubs.unwrap_or(1);
+        // Wrap in braces to support const expressions in generic parameters
+        let cap = channel_size.unwrap_or_else(|| quote::quote! { 1 });
+        let subs_val = subs.unwrap_or_else(|| quote::quote! { 4 });
+        let pubs_val = pubs.unwrap_or_else(|| quote::quote! { 1 });
 
         let awaitable_trait_impl = quote! {
             impl #impl_generics ::rmk::event::AsyncEvent for #type_name #ty_generics #where_clause {
@@ -77,9 +78,9 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
                     'static,
                     ::rmk::RawMutex,
                     #type_name #ty_generics,
-                    #cap,
-                    #subs_val,
-                    #pubs_val
+                    { #cap },
+                    { #subs_val },
+                    { #pubs_val }
                 >;
 
                 // Awaitable publisher: waits if channel is full
@@ -94,9 +95,9 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
                 static #channel_name: ::embassy_sync::pubsub::PubSubChannel<
                     ::rmk::RawMutex,
                     #type_name #ty_generics,
-                    #cap,
-                    #subs_val,
-                    #pubs_val
+                    { #cap },
+                    { #subs_val },
+                    { #pubs_val }
                 > = ::embassy_sync::pubsub::PubSubChannel::new();
             },
             quote! {
@@ -105,17 +106,17 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
                         'static,
                         ::rmk::RawMutex,
                         #type_name #ty_generics,
-                        #cap,
-                        #subs_val,
-                        #pubs_val
+                        { #cap },
+                        { #subs_val },
+                        { #pubs_val }
                     >;
                     type Subscriber = ::embassy_sync::pubsub::Subscriber<
                         'static,
                         ::rmk::RawMutex,
                         #type_name #ty_generics,
-                        #cap,
-                        #subs_val,
-                        #pubs_val
+                        { #cap },
+                        { #subs_val },
+                        { #pubs_val }
                     >;
 
                     // Immediate publisher: drops events if buffer is full
@@ -147,7 +148,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
 }
 
 /// Parse macro attributes: (channel_size, subs, pubs)
-fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usize>, Option<usize>) {
+fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<proc_macro2::TokenStream>, Option<proc_macro2::TokenStream>, Option<proc_macro2::TokenStream>) {
     use syn::Token;
     use syn::punctuated::Punctuated;
 
@@ -166,22 +167,15 @@ fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<usize>, Option<usi
             for meta in parsed {
                 if let Meta::NameValue(nv) = meta {
                     if nv.path.is_ident("channel_size") {
-                        if let syn::Expr::Lit(expr_lit) = nv.value
-                            && let Lit::Int(lit) = expr_lit.lit
-                        {
-                            channel_size = Some(lit.base10_parse().expect("channel_size must be a valid usize"));
-                        }
+                        // Support both literals and path expressions
+                        let expr = &nv.value;
+                        channel_size = Some(quote::quote! { #expr });
                     } else if nv.path.is_ident("subs") {
-                        if let syn::Expr::Lit(expr_lit) = nv.value
-                            && let Lit::Int(lit) = expr_lit.lit
-                        {
-                            subs = Some(lit.base10_parse().expect("subs must be a valid usize"));
-                        }
-                    } else if nv.path.is_ident("pubs")
-                        && let syn::Expr::Lit(expr_lit) = nv.value
-                        && let Lit::Int(lit) = expr_lit.lit
-                    {
-                        pubs = Some(lit.base10_parse().expect("pubs must be a valid usize"));
+                        let expr = &nv.value;
+                        subs = Some(quote::quote! { #expr });
+                    } else if nv.path.is_ident("pubs") {
+                        let expr = &nv.value;
+                        pubs = Some(quote::quote! { #expr });
                     }
                 }
             }
