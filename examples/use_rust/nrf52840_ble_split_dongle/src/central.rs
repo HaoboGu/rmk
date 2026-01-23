@@ -236,10 +236,6 @@ async fn main(spawner: Spawner) {
 
     // Start
     join4(
-        // run_devices!(matrix, encoder, adc_device),
-        // run_processor_chain! {
-        // EVENT_CHANNEL => [batt_proc],
-        // },
         async {},
         run_all!(matrix, encoder, adc_device, batt_proc),
         join(keyboard.run(), capslock_led.event_loop()),

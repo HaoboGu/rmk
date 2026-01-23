@@ -298,17 +298,17 @@ fn expand_split_peripheral_entry(
     let mut devs = devices.clone();
     devs.push(quote! {matrix});
     let device_task = quote! {
-        ::rmk::run_devices! (
-            (#(#devs),*) => ::rmk::channel::EVENT_CHANNEL,
+        ::rmk::run_all! (
+            #(#devs),*
         )
     };
 
     // Create processor task if there are processors
     let processor_task = if !processors.is_empty() {
         quote! {
-            ::rmk::run_processor_chain! {
-                ::rmk::channel::EVENT_CHANNEL => [#(#processors),*],
-            }
+            ::rmk::run_all! (
+                #(#processors),*
+            )
         }
     } else {
         quote! {}

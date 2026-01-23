@@ -15,16 +15,15 @@ use embassy_rp::gpio::{Input, Output};
 use embassy_rp::peripherals::{UART0, USB};
 use embassy_rp::uart::{self, BufferedUart};
 use embassy_rp::usb::{Driver, InterruptHandler};
-use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join4;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
-use rmk::matrix::{Matrix, OffsetMatrixWrapper};
+use rmk::matrix::Matrix;
 use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
 use rmk::split::central::run_peripheral_manager;
-use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
+use rmk::{initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -91,15 +90,12 @@ async fn main(_spawner: Spawner) {
 
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::new();
-    let mut matrix =
-        OffsetMatrixWrapper::<_, _, _, 0, 0>(Matrix::<_, _, _, 2, 2, true>::new(row_pins, col_pins, debouncer));
+    let mut matrix = Matrix::<_, _, _, 2, 2, true>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
 
     // Start
     join4(
-        run_devices! (
-            (matrix) => EVENT_CHANNEL,
-        ),
+        run_all!(matrix),
         keyboard.run(),
         run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver),
         run_rmk(&keymap, driver, &mut storage, rmk_config),

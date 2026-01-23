@@ -21,6 +21,8 @@ pub struct DirectPinMatrix<
     const ROW: usize,
     const COL: usize,
     const SIZE: usize,
+    const ROW_OFFSET: usize = 0,
+    const COL_OFFSET: usize = 0,
 > {
     /// Input pins of the pcb matrix
     direct_pins: [[Option<In>; COL]; ROW],
@@ -43,7 +45,9 @@ impl<
     const ROW: usize,
     const COL: usize,
     const SIZE: usize,
-> DirectPinMatrix<In, D, ROW, COL, SIZE>
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+> DirectPinMatrix<In, D, ROW, COL, SIZE, ROW_OFFSET, COL_OFFSET>
 {
     /// Create a matrix from input and output pins.
     pub fn new(direct_pins: [[Option<In>; COL]; ROW], debouncer: D, low_active: bool) -> Self {
@@ -65,7 +69,9 @@ impl<
     const ROW: usize,
     const COL: usize,
     const SIZE: usize,
-> InputDevice for DirectPinMatrix<In, D, ROW, COL, SIZE>
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+> InputDevice for DirectPinMatrix<In, D, ROW, COL, SIZE, ROW_OFFSET, COL_OFFSET>
 {
     async fn read_event(&mut self) -> ! {
         loop {
@@ -100,8 +106,8 @@ impl<
 
                             self.scan_pos = (row_idx, col_idx);
                             publish_input_event_async(KeyboardEvent::key(
-                                row_idx as u8,
-                                col_idx as u8,
+                                (row_idx + ROW_OFFSET) as u8,
+                                (col_idx + COL_OFFSET) as u8,
                                 key_state.pressed,
                             ))
                             .await;
@@ -130,7 +136,9 @@ impl<
     const ROW: usize,
     const COL: usize,
     const SIZE: usize,
-> MatrixTrait<ROW, COL> for DirectPinMatrix<In, D, ROW, COL, SIZE>
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+> MatrixTrait<ROW, COL> for DirectPinMatrix<In, D, ROW, COL, SIZE, ROW_OFFSET, COL_OFFSET>
 {
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {

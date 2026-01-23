@@ -25,7 +25,7 @@ use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::matrix::Matrix;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
-use rmk::{HostResources, run_devices};
+use rmk::{HostResources, run_all};
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -156,7 +156,7 @@ async fn main(spawner: Spawner) {
 
     // Start
     join(
-        run_devices!(matrix, encoder),
+        run_all!(matrix, encoder),
         run_rmk_split_peripheral(0, &stack, &mut storage),
     )
     .await;

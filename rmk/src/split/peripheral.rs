@@ -3,12 +3,13 @@ use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
 use embassy_futures::select::{Either, select};
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
-use futures::select_biased;
+use futures::FutureExt;
 #[cfg(all(feature = "_ble", feature = "storage"))]
 use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
+
+use crate::event::Event;
 #[cfg(feature = "_ble")]
 use {
-    crate::event::Event,
     crate::event::{BatteryLevelEvent, EventSubscriber},
     crate::storage::Storage,
     embedded_storage_async::nor_flash::NorFlash,
@@ -24,7 +25,6 @@ use crate::split::serial::SerialSplitDriver;
 use crate::{
     CONNECTION_STATE,
     event::{KeyboardEvent, PointingEvent, TouchpadEvent},
-    with_feature,
 };
 use crate::{event::InputChargingStateEvent, state::ConnectionState};
 
@@ -81,7 +81,6 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
         CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
 
         loop {
-            use futures::FutureExt;
             let read_message_to_send = async {
                 let key_sub = KeyboardEvent::subscriber();
                 let charging_state_sub = InputChargingStateEvent::subscriber();
@@ -89,13 +88,14 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                 let pointing_sub = PointingEvent::subscriber();
                 #[cfg(feature = "_ble")]
                 let mut battery_sub = BatteryLevelEvent::subscriber();
-                select_biased! {
+                let message = crate::select_biased_with_feature! {
                     e = key_sub.receive().fuse() => SplitMessage::Key(e),
                     e = charging_state_sub.receive().fuse() => SplitMessage::ChargingState(e.state),
-                    e = with_feature!("_ble", battery_sub.next_event(), BatteryLevelEvent) => SplitMessage::BatteryLevel(e.level),
                     e = touch_sub.receive().fuse() => SplitMessage::Touchpad(e),
                     e = pointing_sub.receive().fuse() => SplitMessage::Pointing(e),
-                }
+                    with_feature("_ble"): e = battery_sub.next_event().fuse() => SplitMessage::BatteryLevel(e.level),
+                };
+                message
             };
 
             match select(self.split_driver.read(), read_message_to_send).await {
