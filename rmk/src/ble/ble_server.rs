@@ -14,26 +14,16 @@ use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
 pub(crate) const CCCD_TABLE_SIZE: usize = _CCCD_TABLE_SIZE;
 
 // GATT Server definition
-// NOTE: ideally we would conditionally add the `via_service` member, based on the
-// `vial` feature flag. But when doing that, rust still compiles the member as if
-// the flag was on, for some reason. I suspect it might have something to do with
-// the `gatt_server` macro, but I'm not sure. So we need 2 versions of the Server
-// struct, one with vial support, and one without.
-#[cfg(feature = "host")]
+// NOTE: We use field-level #[cfg] attributes to conditionally include services.
+// This works correctly with the #[gatt_server] macro - the macro respects
+// cfg attributes on struct fields during code generation.
 #[gatt_server]
 pub(crate) struct Server {
+    #[cfg(feature = "battery-service")]
     pub(crate) battery_service: BatteryService,
     pub(crate) hid_service: HidService,
+    #[cfg(feature = "host")]
     pub(crate) host_service: HostService,
-    pub(crate) composite_service: CompositeService,
-    pub(crate) device_config_service: DeviceConfigrmationService,
-}
-
-#[cfg(not(feature = "host"))]
-#[gatt_server]
-pub(crate) struct Server {
-    pub(crate) battery_service: BatteryService,
-    pub(crate) hid_service: HidService,
     pub(crate) composite_service: CompositeService,
     pub(crate) device_config_service: DeviceConfigrmationService,
 }

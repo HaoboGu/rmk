@@ -110,7 +110,10 @@ cortex-m = { version = "0.7" }
 
 # Reminder: when changing feature configuration, double check `rmk-macro/src/feature.rs`
 [features]
-default = ["defmt", "storage", "vial", "vial_lock"]
+default = ["defmt", "storage", "vial", "vial_lock", "battery-service"]
+
+## Enable battery service in BLE GATT server
+battery-service = []
 
 ## Enable host configurator support
 host = []

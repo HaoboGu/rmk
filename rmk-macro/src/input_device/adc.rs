@@ -51,6 +51,10 @@ pub(crate) fn expand_adc_device(
                 let bat_ident = format_ident!("battery_processor");
                 let battery_processor = Initializer {
                     initializer: quote! {
+                        // Compile-time check to ensure battery-service feature is enabled
+                        #[cfg(not(feature = "battery-service"))]
+                        compile_error!("Battery ADC is configured but battery-service feature is not enabled. Please enable the battery-service feature in Cargo.toml");
+
                         let mut #bat_ident = ::rmk::input_device::battery::BatteryProcessor::new(#adc_divider_measured, #adc_divider_total, &keymap);
                     },
                     var_name: bat_ident,
