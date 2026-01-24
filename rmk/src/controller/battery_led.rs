@@ -1,9 +1,9 @@
 use embedded_hal::digital::StatefulOutputPin;
+use rmk_macro::controller;
 
-use crate::channel::{CONTROLLER_CHANNEL, ControllerSub};
-use crate::controller::{Controller, PollingController};
+use crate::controller::PollingController;
 use crate::driver::gpio::OutputController;
-use crate::event::ControllerEvent;
+use crate::event::{BatteryLevelEvent, ChargingStateEvent};
 
 /// Battery state
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -13,9 +13,9 @@ enum BatteryState {
     Charging,
 }
 
+#[controller(subscribe = [BatteryLevelEvent, ChargingStateEvent])]
 pub struct BatteryLedController<P: StatefulOutputPin> {
     pin: OutputController<P>,
-    sub: ControllerSub,
     state: BatteryState,
 }
 
@@ -23,39 +23,26 @@ impl<P: StatefulOutputPin> BatteryLedController<P> {
     pub fn new(pin: P, low_active: bool) -> Self {
         Self {
             pin: OutputController::new(pin, low_active),
-            sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
             state: BatteryState::Normal,
         }
     }
-}
 
-impl<P: StatefulOutputPin> Controller for BatteryLedController<P> {
-    type Event = ControllerEvent;
-
-    async fn process_event(&mut self, event: Self::Event) {
-        match event {
-            ControllerEvent::Battery(level) => {
-                if self.state != BatteryState::Charging {
-                    if level < 10 {
-                        self.state = BatteryState::Low;
-                    } else {
-                        self.state = BatteryState::Normal;
-                    }
-                }
+    async fn on_battery_level_event(&mut self, event: BatteryLevelEvent) {
+        if self.state != BatteryState::Charging {
+            if event.level < 10 {
+                self.state = BatteryState::Low;
+            } else {
+                self.state = BatteryState::Normal;
             }
-            ControllerEvent::ChargingState(charging) => {
-                if charging {
-                    self.state = BatteryState::Charging;
-                } else {
-                    self.state = BatteryState::Normal;
-                }
-            }
-            _ => (),
         }
     }
 
-    async fn next_message(&mut self) -> Self::Event {
-        self.sub.next_message_pure().await
+    async fn on_charging_state_event(&mut self, event: ChargingStateEvent) {
+        if event.charging {
+            self.state = BatteryState::Charging;
+        } else {
+            self.state = BatteryState::Normal;
+        }
     }
 }
 

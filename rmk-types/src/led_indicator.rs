@@ -42,6 +42,7 @@ impl BitOr for LedIndicator {
         Self::from_bits(self.into_bits() | rhs.into_bits())
     }
 }
+
 impl BitAnd for LedIndicator {
     type Output = Self;
 
@@ -49,6 +50,7 @@ impl BitAnd for LedIndicator {
         Self::from_bits(self.into_bits() & rhs.into_bits())
     }
 }
+
 impl Not for LedIndicator {
     type Output = Self;
 
@@ -56,11 +58,13 @@ impl Not for LedIndicator {
         Self::from_bits(!self.into_bits())
     }
 }
+
 impl BitAndAssign for LedIndicator {
     fn bitand_assign(&mut self, rhs: Self) {
         *self = *self & rhs;
     }
 }
+
 impl BitOrAssign for LedIndicator {
     fn bitor_assign(&mut self, rhs: Self) {
         *self = *self | rhs;

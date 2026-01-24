@@ -1,7 +1,10 @@
+//! Input device events
+//!
+//! This module contains event types for various input devices like keyboards,
+//! touchpads, joysticks, and rotary encoders.
+
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "controller")]
-use {rmk_types::action::KeyAction, rmk_types::led_indicator::LedIndicator, rmk_types::modifier::ModifierCombination};
 
 use crate::input_device::rotary_encoder::Direction;
 
@@ -139,63 +142,4 @@ pub enum Axis {
     H,
     V,
     // .. More is allowed
-}
-
-/// Event for controllers
-#[cfg(feature = "controller")]
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum ControllerEvent {
-    /// Key event and action
-    Key(KeyboardEvent, KeyAction),
-    /// Battery percent changed
-    Battery(u8),
-    /// Charging state changed, true means charging, false means not charging
-    ChargingState(bool),
-    /// Layer changed
-    Layer(u8),
-    /// Modifier changed
-    Modifier(ModifierCombination),
-    /// Typing speed
-    Wpm(u16),
-    /// Usb or Ble connection
-    ConnectionType(u8),
-    /// Split peripheral connection
-    SplitPeripheral(usize, bool),
-    /// Split peripheral battery level (peripheral_id, battery_level)
-    SplitPeripheralBattery(usize, u8),
-    /// Split central connection
-    SplitCentral(bool),
-    /// Lock state led indicator
-    KeyboardIndicator(LedIndicator),
-    /// Sleep state changed
-    Sleep(bool),
-    /// Ble state changed
-    #[cfg(feature = "_ble")]
-    BleState(u8, crate::ble::BleState),
-    /// Ble profile changed
-    #[cfg(feature = "_ble")]
-    BleProfile(u8),
-    #[cfg(all(feature = "_ble", feature = "split"))]
-    ClearPeer,
-    /// Pointing controller events, u8 is ID of the device
-    PointingContEvent((u8, PointingEvent))
-}
-
-#[cfg(feature = "controller")]
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum PointingEvent {
-    /// Sets the Cpi (Resolution) of the sensor
-    PointingSetCpi(u16),
-    /// Set poll interval
-    PointingSetPollIntervall(u64),
-    /// Set rotational transform angle
-    PointingSetRotTransAngle(i8),
-    /// Set liftoff distance
-    PointigSetLiftoffDist(u8),
-    /// Set force awake mode
-    PointingSetForceAwake(bool),
 }

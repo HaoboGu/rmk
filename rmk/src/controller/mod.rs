@@ -2,6 +2,7 @@
 //!
 //! This module defines the `Controller` trait and its variations for different modes of execution.
 
+#[cfg(feature = "_ble")]
 pub mod battery_led;
 pub mod led_indicator;
 pub(crate) mod wpm;
