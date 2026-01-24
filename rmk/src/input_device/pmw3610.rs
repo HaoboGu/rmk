@@ -3,15 +3,18 @@
 //! Ported from the Zephyr driver implementation:
 //! https://github.com/zephyrproject-rtos/zephyr/blob/d31c6e95033fd6b3763389edba6a655245ae1328/drivers/input/input_pmw3610.c
 
+pub use crate::driver::bitbang_spi::{BitBangError, BitBangSpiBus};
+#[cfg(feature = "controller")]
+use crate::event::{PointingSetCpiEvent, PointingSetForceAwakeEvent};
+#[cfg(feature = "controller")]
+use crate::input_device::pointing::ALL_POINTING_DEVICES;
+use crate::input_device::pointing::{InitState, MotionData, PointingDevice, PointingDriver, PointingDriverError};
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
 use embedded_hal_async::spi::SpiBus;
-
 #[cfg(feature = "controller")]
-use crate::channel::CONTROLLER_CHANNEL;
-pub use crate::driver::bitbang_spi::{BitBangError, BitBangSpiBus};
-use crate::input_device::pointing::{InitState, MotionData, PointingDevice, PointingDriver, PointingDriverError};
+use rmk_macro::controller;
 
 // ============================================================================
 // Page 0 registers
@@ -157,7 +160,17 @@ impl From<Pmw3610Error> for PointingDriverError {
 }
 
 /// PMW3610 driver using embedded-hal SPI traits
+#[cfg_attr(
+    feature = "controller",
+    controller(
+        subscribe = [
+            PointingSetCpiEvent,
+            PointingSetForceAwakeEvent
+        ]
+    )
+)]
 pub struct Pmw3610<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> {
+    id: u8,
     spi: SPI,
     cs: CS,
     motion_gpio: Option<MOTION>,
@@ -167,14 +180,80 @@ pub struct Pmw3610<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> {
 
 impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> Pmw3610<SPI, CS, MOTION> {
     /// Create a new PMW3610 driver instance
-    pub fn new(spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw3610Config) -> Self {
+    pub fn new(id: u8, spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw3610Config) -> Self {
         Self {
+            id,
             spi,
             cs,
             motion_gpio,
             config,
             smart_flag: false,
         }
+    }
+
+    /// Listen for controller events to adjust settings
+    #[cfg(feature = "controller")]
+    async fn on_pointing_set_cpi_event(&mut self, event: PointingSetCpiEvent) {
+        if self.id == event.device_id || event.device_id == ALL_POINTING_DEVICES {
+            debug!("PMW3610 {}: Setting CPI to: {}", self.id, event.cpi);
+            if let Err(e) = self.set_resolution(event.cpi).await {
+                warn!("PMW3610 {}: Failed to set CPI: {:?}", self.id, e);
+            }
+        }
+    }
+
+    /// Listen for controller events to adjust settings
+    #[cfg(feature = "controller")]
+    async fn on_pointing_set_force_awake_event(&mut self, event: PointingSetForceAwakeEvent) {
+        if self.id == event.device_id || event.device_id == ALL_POINTING_DEVICES {
+            debug!(
+                "PMW3610 {}: Setting force awake mode to: {}",
+                self.id, event.force_awake
+            );
+            if let Err(e) = self.set_force_awake(event.force_awake).await {
+                warn!("PMW3610 {}: Failed to set force awake: {:?}", self.id, e);
+            }
+        }
+    }
+
+    /// Set sensor resolution in CPI (200-3200, step 200)
+    async fn set_resolution(&mut self, cpi: u16) -> Result<(), PointingDriverError> {
+        if !(RES_MIN..=RES_MAX).contains(&cpi) {
+            return Err(PointingDriverError::InvalidCpi);
+        }
+
+        self.spi_clk_on().await?;
+
+        self.write_reg(PMW3610_SPI_PAGE0, SPI_PAGE0_1).await?;
+
+        let mut val = self.read_reg(PMW3610_RES_STEP).await?;
+        val &= !RES_STEP_RES_MASK;
+        val |= (cpi / RES_STEP) as u8;
+
+        self.write_reg(PMW3610_RES_STEP, val).await?;
+        self.write_reg(PMW3610_SPI_PAGE1, SPI_PAGE1_0).await?;
+
+        self.spi_clk_off().await?;
+
+        debug!("PMW3610: Resolution set to {} CPI", cpi);
+        Ok(())
+    }
+
+    /// Set force awake mode
+    async fn set_force_awake(&mut self, enable: bool) -> Result<(), PointingDriverError> {
+        let mut val = self.read_reg(PMW3610_PERFORMANCE).await?;
+        val &= !PERFORMANCE_FMODE_MASK;
+        if enable {
+            val |= PERFORMANCE_FMODE_FORCE_AWAKE;
+        } else {
+            val |= PERFORMANCE_FMODE_NORMAL;
+        }
+
+        self.spi_clk_on().await?;
+        self.write_reg(PMW3610_PERFORMANCE, val).await?;
+        self.spi_clk_off().await?;
+
+        Ok(())
     }
 
     #[inline(always)]
@@ -392,46 +471,6 @@ where
         Ok(MotionData { dx, dy })
     }
 
-    /// Set sensor resolution in CPI (200-3200, step 200)
-    async fn set_resolution(&mut self, cpi: u16) -> Result<(), PointingDriverError> {
-        if !(RES_MIN..=RES_MAX).contains(&cpi) {
-            return Err(PointingDriverError::InvalidCpi);
-        }
-
-        self.spi_clk_on().await?;
-
-        self.write_reg(PMW3610_SPI_PAGE0, SPI_PAGE0_1).await?;
-
-        let mut val = self.read_reg(PMW3610_RES_STEP).await?;
-        val &= !RES_STEP_RES_MASK;
-        val |= (cpi / RES_STEP) as u8;
-
-        self.write_reg(PMW3610_RES_STEP, val).await?;
-        self.write_reg(PMW3610_SPI_PAGE1, SPI_PAGE1_0).await?;
-
-        self.spi_clk_off().await?;
-
-        debug!("PMW3610: Resolution set to {} CPI", cpi);
-        Ok(())
-    }
-
-    /// Set force awake mode
-    async fn set_force_awake(&mut self, enable: bool) -> Result<(), PointingDriverError> {
-        let mut val = self.read_reg(PMW3610_PERFORMANCE).await?;
-        val &= !PERFORMANCE_FMODE_MASK;
-        if enable {
-            val |= PERFORMANCE_FMODE_FORCE_AWAKE;
-        } else {
-            val |= PERFORMANCE_FMODE_NORMAL;
-        }
-
-        self.spi_clk_on().await?;
-        self.write_reg(PMW3610_PERFORMANCE, val).await?;
-        self.spi_clk_off().await?;
-
-        Ok(())
-    }
-
     /// Check if motion is pending (motion GPIO is active low)
     fn motion_pending(&mut self) -> bool {
         match &mut self.motion_gpio {
@@ -524,7 +563,7 @@ where
 
         Self {
             id,
-            sensor: Pmw3610::new(spi, cs, motion_gpio, sensor_config),
+            sensor: Pmw3610::new(id, spi, cs, motion_gpio, sensor_config),
             init_state: InitState::Pending,
             poll_interval,
             report_interval,
@@ -532,8 +571,6 @@ where
             last_report: Instant::MIN,
             accumulated_x: 0,
             accumulated_y: 0,
-            #[cfg(feature = "controller")]
-            controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
         }
     }
 }

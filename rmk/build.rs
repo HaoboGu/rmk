@@ -88,6 +88,11 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
     let (central_connected_size, central_connected_pubs, central_connected_subs) = events.central_connected.into_values();
     let (peripheral_battery_size, peripheral_battery_pubs, peripheral_battery_subs) = events.peripheral_battery.into_values();
     let (clear_peer_size, clear_peer_pubs, clear_peer_subs) = events.clear_peer.into_values();
+    let (set_cpi_size, set_cpi_pubs, set_cpi_subs) = events.set_cpi.into_values();
+    let (set_angle_size, set_angle_pubs, set_angle_subs) = events.set_angle.into_values();
+    let (set_lo_size, set_lo_pubs, set_lo_subs) = events.set_lift_off.into_values();
+    let (set_force_awake_size, set_force_awake_pubs, set_force_awake_subs) = events.set_force_awake.into_values();
+
 
     constant_strs.extend([
         // BLE events
@@ -155,6 +160,24 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) CLEAR_PEER_EVENT_CHANNEL_SIZE = clear_peer_size),
         const_declaration!(pub(crate) CLEAR_PEER_EVENT_PUB_SIZE = clear_peer_pubs),
         const_declaration!(pub(crate) CLEAR_PEER_EVENT_SUB_SIZE = clear_peer_subs),
+
+        // pointing control events
+        const_declaration!(pub(crate) POINTING_CONTROL_SET_CPI_EVENT_CHANNEL_SIZE = set_cpi_size),
+        const_declaration!(pub(crate) POINTING_CONTROL_SET_CPI_EVENT_PUB_SIZE = set_cpi_pubs),
+        const_declaration!(pub(crate) POINTING_CONTROL_SET_CPI_EVENT_SUB_SIZE = set_cpi_subs),
+
+        const_declaration!(pub(crate) POINTING_CONTROL_ANGLE_EVENT_CHANNEL_SIZE = set_angle_size),
+        const_declaration!(pub(crate) POINTING_CONTROL_ANGLE_EVENT_PUB_SIZE = set_angle_pubs),
+        const_declaration!(pub(crate) POINTING_CONTROL_ANGLE_EVENT_SUB_SIZE = set_angle_subs),
+
+        const_declaration!(pub(crate) POINTING_CONTROL_SET_LO_EVENT_CHANNEL_SIZE = set_lo_size),
+        const_declaration!(pub(crate) POINTING_CONTROL_SET_LO_EVENT_PUB_SIZE = set_lo_pubs),
+        const_declaration!(pub(crate) POINTING_CONTROL_SET_LO_EVENT_SUB_SIZE = set_lo_subs),
+
+        const_declaration!(pub(crate) POINTING_CONTROL_FORCE_AWAKE_EVENT_CHANNEL_SIZE = set_force_awake_size),
+        const_declaration!(pub(crate) POINTING_CONTROL_FORCE_AWAKE_EVENT_PUB_SIZE = set_force_awake_pubs),
+        const_declaration!(pub(crate) POINTING_CONTROL_FORCE_AWAKE_EVENT_SUB_SIZE = set_force_awake_subs),
+
     ]);
 
     constant_strs
