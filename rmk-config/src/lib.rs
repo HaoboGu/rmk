@@ -770,6 +770,14 @@ pub struct Pmw3610Config {
     /// Report rate (Hz). Motion will be accumulated and emitted at this rate.
     #[serde(default = "default_pointing_report_hz")]
     pub report_hz: u16,
+    #[serde(default)]
+    pub proc_invert_x: bool,
+    /// Invert Y axis
+    #[serde(default)]
+    pub proc_invert_y: bool,
+    /// Swap X and Y axes
+    #[serde(default)]
+    pub proc_swap_xy: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -803,13 +811,13 @@ pub struct Pmw33xxConfig {
     pub liftoff_dist: Option<u8>,
     // Invert X axis
     #[serde(default)]
-    pub invert_x: bool,
+    pub proc_invert_x: bool,
     // Invert Y axis
     #[serde(default)]
-    pub invert_y: bool,
+    pub proc_invert_y: bool,
     // Swap X and Y axes
     #[serde(default)]
-    pub swap_xy: bool,
+    pub proc_swap_xy: bool,
     /// Report rate (Hz). Motion will be accumulated and emitted at this rate.
     #[serde(default = "default_pointing_report_hz")]
     pub report_hz: u16,

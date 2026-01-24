@@ -34,6 +34,7 @@ pub(crate) fn expand_pmw3610_device(
 
         let device_ident = format_ident!("{}_device", sensor_name);
         let processor_ident = format_ident!("{}_processor", sensor_name);
+        let processor_ident_config = format_ident!("{}_config", processor_ident);
 
         // Generate pin initialization
         let spi = &sensor.spi;
@@ -58,6 +59,9 @@ pub(crate) fn expand_pmw3610_device(
         let invert_x = sensor.invert_x;
         let invert_y = sensor.invert_y;
         let swap_xy = sensor.swap_xy;
+        let proc_invert_x = sensor.proc_invert_x;
+        let proc_invert_y = sensor.proc_invert_y;
+        let proc_swap_xy = sensor.proc_swap_xy;
         let force_awake = sensor.force_awake;
         let smart_mode = sensor.smart_mode;
         let report_hz: u16 = sensor.report_hz;
@@ -148,6 +152,14 @@ pub(crate) fn expand_pmw3610_device(
 
         // Generate processor initialization
         let processor_init = quote! {
+
+            let #processor_ident_config =::rmk::input_device::pointing::PointingProcessorConfig {
+                invert_x: #proc_invert_x
+                invert_y: #proc_invert_y,
+                swap_xy: #proc_swap_xy,
+                ..Default::default()
+            };
+
             let mut #processor_ident = ::rmk::input_device::pointing::PointingProcessor::new(&keymap);
         };
 

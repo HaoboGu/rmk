@@ -45,9 +45,9 @@ report_hz = 125 # Optional: Report rate in Hz
 cpi = 1600
 rot_trans_angle = -15
 liftoff_dist = 8
-invert_x = true
-# invert_y = true
-# swap_xy = true
+proc_invert_x = true
+# proc_invert_y = true
+# proc_swap_xy = true
 ```
 
 Tip: If you want to control several pointing sensors with the same ControllerEvent, e.g. set their cpi all at once, then give them the same id.
@@ -114,9 +114,6 @@ bind_interrupts!(struct Irqs {
          // res_cpi: 1600,
         // rot_trans_angle: 0,
         // liftoff_dist: 0x02,
-        // swap_xy: false,
-        // invert_x: false,
-        // invert_y: false,
         ..Default::default()
     };
 
@@ -150,9 +147,16 @@ This should be added to the `central.rs`-File even if the sensor is on split per
 :::
 
 ```rust
-    use rmk::input_device::pointing::PointingProcessor;
+    use rmk::input_device::pointing::{ PointingProcessor, PointingProcessorConfig };
 
-    let mut pmw3360_processor = PointingProcessor::new(&keymap);
+    let pmw3360_proc_config = PointingProcessorConfig {
+        // invert_x: true, // invert axis if neccesary
+        // invert_y: true,
+        // swap_y: true,
+        ..Default::default()
+    };
+
+    let mut pmw3360_processor = PointingProcessor::new(&keymap, pmw3360_proc_config);
 
     run_processor_chain! {
         EVENT_CHANNEL => [pmw3360_processor],

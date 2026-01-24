@@ -39,6 +39,7 @@ pub(crate) fn expand_pmw33xx_device(
 
         let device_ident = format_ident!("{}_device", sensor_name);
         let processor_ident = format_ident!("{}_processor", sensor_name);
+        let processor_ident_config = format_ident!("{}_config", processor_ident);
         let sensor_spec_ident = match sensor.sensor_type {
             Pmw33xxType::PMW3360 => format_ident!("{}", "Pmw3360Spec"),
             Pmw33xxType::PMW3389 => format_ident!("{}", "Pmw3389Spec"),
@@ -116,9 +117,9 @@ pub(crate) fn expand_pmw33xx_device(
         let res_cpi: u16 = sensor.cpi.unwrap_or(1600);
         let rot_trans_angle: i8 = sensor.rot_trans_angle.unwrap_or(0);
         let liftoff_dist: u8 = sensor.liftoff_dist.unwrap_or(0);
-        let invert_x = sensor.invert_x;
-        let invert_y = sensor.invert_y;
-        let swap_xy = sensor.swap_xy;
+        let proc_invert_x = sensor.proc_invert_x;
+        let proc_invert_y = sensor.proc_invert_y;
+        let proc_swap_xy = sensor.proc_swap_xy;
         let report_hz: u16 = sensor.report_hz;
 
         // Generate motion pin initialization (optional)
@@ -177,9 +178,6 @@ pub(crate) fn expand_pmw33xx_device(
                         res_cpi: #res_cpi,
                         rot_trans_angle: #rot_trans_angle,
                         liftoff_dist: #liftoff_dist,
-                        invert_x: #invert_x,
-                        invert_y: #invert_y,
-                        swap_xy: #swap_xy,
                         ..Default::default()
                     };
 
@@ -211,9 +209,6 @@ pub(crate) fn expand_pmw33xx_device(
                         res_cpi: #res_cpi,
                         rot_trans_angle: #rot_trans_angle,
                         liftoff_dist: #liftoff_dist,
-                        invert_x: #invert_x,
-                        invert_y: #invert_y,
-                        swap_xy: #swap_xy,
                         ..Default::default()
                     };
 
@@ -246,13 +241,11 @@ pub(crate) fn expand_pmw33xx_device(
                         res_cpi: #res_cpi,
                         rot_trans_angle: #rot_trans_angle,
                         liftoff_dist: #liftoff_dist,
-                        invert_x: #invert_x,
-                        invert_y: #invert_y,
-                        swap_xy: #swap_xy,
                         ..Default::default()
                     };
 
                     PointingDevice::<Pmw33xx<_, _, _, #sensor_spec_ident>>::with_report_hz(#sensor_id, spi_bus, cs, motion, config, #report_hz)
+
                 };
             },
             _ => unreachable!(),
@@ -265,7 +258,15 @@ pub(crate) fn expand_pmw33xx_device(
 
         // Generate processor initialization
         let processor_init = quote! {
-            let mut #processor_ident = ::rmk::input_device::pointing::PointingProcessor::new(&keymap);
+
+            let #processor_ident_config =::rmk::input_device::pointing::PointingProcessorConfig {
+                invert_x: #proc_invert_x
+                invert_y: #proc_invert_y,
+                swap_xy: #proc_swap_xy,
+                ..Default::default()
+            };
+
+            let mut #processor_ident = ::rmk::input_device::pointing::PointingProcessor::new(&keymap, #processor_ident_config);
         };
 
         processor_initializers.push(Initializer {
