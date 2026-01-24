@@ -235,7 +235,7 @@ where
                                 warn!("PointingDevice {}: Failed to set force awake: {:?}", self.id, e);
                             }
                         }
-                        _ => {},
+                        _ => {}
                     }
                 }
             }
@@ -374,18 +374,32 @@ where
     }
 }
 
+#[derive(Clone, Default)]
+pub struct PointingProcessorConfig {
+    /// Invert X axis
+    pub invert_x: bool,
+    /// Invert Y axis
+    pub invert_y: bool,
+    /// Swap X and Y axes
+    pub swap_xy: bool,
+}
+
 /// PointingProcessor that converts motion events to mouse reports
 pub struct PointingProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
     /// Reference to the keymap
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    config: PointingProcessorConfig,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     PointingProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     /// Create a new pointing processor with default settings
-    pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>) -> Self {
-        Self { keymap }
+    pub fn new(
+        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+        config: PointingProcessorConfig,
+    ) -> Self {
+        Self { keymap, config }
     }
 
     async fn generate_report(&self, x: i16, y: i16) {
@@ -415,6 +429,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         Axis::Y => y = axis_event.value,
                         _ => {}
                     }
+                }
+
+                if self.config.invert_x {
+                    x = -x;
+                }
+                if self.config.invert_y {
+                    y = -y;
+                }
+                if self.config.swap_xy {
+                    (x, y) = (y, x);
                 }
 
                 self.generate_report(x, y).await;
