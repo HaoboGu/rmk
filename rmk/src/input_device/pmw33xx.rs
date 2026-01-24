@@ -5,14 +5,17 @@
 // Which is ported from the Zephyr driver implementation:
 // https://github.com/zephyrproject-rtos/zephyr/blob/d31c6e95033fd6b3763389edba6a655245ae1328/drivers/input/input_pmw3610.c
 
+#[cfg(feature = "controller")]
+use crate::event::{PointingSetCpiEvent, PointingSetLiftoffDistEvent, PointingSetRotTransAngleEvent};
+#[cfg(feature = "controller")]
+use crate::input_device::pointing::ALL_POINTING_DEVICES;
+use crate::input_device::pointing::{InitState, MotionData, PointingDevice, PointingDriver, PointingDriverError};
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
 use embedded_hal_async::spi::SpiBus;
-
 #[cfg(feature = "controller")]
-use crate::channel::CONTROLLER_CHANNEL;
-use crate::input_device::pointing::{InitState, MotionData, PointingDevice, PointingDriver, PointingDriverError};
+use rmk_macro::controller;
 
 // ============================================================================
 // Burst register offsets
@@ -311,13 +314,18 @@ impl From<Pmw33xxError> for PointingDriverError {
 }
 
 /// PMW33xx driver using embedded-hal SPI traits
-pub struct Pmw33xx<'a, SPI, CS, MOTION, SPEC>
-where
-    SPI: SpiBus,
-    CS: OutputPin,
-    MOTION: InputPin + Wait,
-    SPEC: Pmw33xxSpec,
-{
+#[cfg_attr(
+    feature = "controller",
+    controller(
+        subscribe = [
+            PointingSetCpiEvent,
+            PointingSetRotTransAngleEvent,
+            PointingSetLiftoffDistEvent
+        ]
+    )
+)]
+pub struct Pmw33xx<'a, SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait, SPEC: Pmw33xxSpec> {
+    id: u8,
     spi: SPI,
     cs: CS,
     motion_gpio: Option<MOTION>,
@@ -335,8 +343,9 @@ where
     SPEC: Pmw33xxSpec,
 {
     /// Create a new PMW33xx driver instance
-    pub fn new(spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw33xxConfig) -> Self {
+    pub fn new(id: u8, spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw33xxConfig) -> Self {
         Self {
+            id,
             spi,
             cs,
             motion_gpio,
@@ -349,6 +358,7 @@ where
 
     /// Create a new PMW33xx driver instance with firmware (SROM)
     pub fn new_with_firmware(
+        id: u8,
         spi: SPI,
         cs: CS,
         motion_gpio: Option<MOTION>,
@@ -356,6 +366,7 @@ where
         firmware: &'a [u8],
     ) -> Self {
         Self {
+            id,
             spi,
             cs,
             motion_gpio,
@@ -364,6 +375,94 @@ where
             srom_firmware: Some(firmware),
             _spec: core::marker::PhantomData,
         }
+    }
+
+    /// Listen for controller events to adjust settings
+    #[cfg(feature = "controller")]
+    async fn on_pointing_set_cpi_event(&mut self, event: PointingSetCpiEvent) {
+        if self.id == event.device_id || event.device_id == ALL_POINTING_DEVICES {
+            debug!("PMW33{} {}: Setting CPI to: {}", SPEC::TYPENAME, self.id, event.cpi);
+            if let Err(e) = self.set_resolution(event.cpi).await {
+                warn!("PMW33{} {}: Failed to set CPI: {:?}", SPEC::TYPENAME, self.id, e);
+            }
+        }
+    }
+
+    /// Listen for controller events to adjust settings
+    #[cfg(feature = "controller")]
+    async fn on_pointing_set_rot_trans_angle_event(&mut self, event: PointingSetRotTransAngleEvent) {
+        if self.id == event.device_id || event.device_id == ALL_POINTING_DEVICES {
+            debug!(
+                "PMW33{} {}: Setting rotational transform angle to: {}",
+                SPEC::TYPENAME,
+                self.id,
+                event.angle
+            );
+            if let Err(e) = self.set_rot_trans_angle(event.angle).await {
+                warn!(
+                    "PMW33{} {}: Failed to set rotation angle: {:?}",
+                    SPEC::TYPENAME,
+                    self.id,
+                    e
+                );
+            }
+        }
+    }
+
+    /// Listen for controller events to adjust settings
+    #[cfg(feature = "controller")]
+    async fn on_pointing_set_liftoff_dist_event(&mut self, event: PointingSetLiftoffDistEvent) {
+        if self.id == event.device_id || event.device_id == ALL_POINTING_DEVICES {
+            debug!(
+                "PMW33{} {}: Setting liftoff distance to: {}",
+                SPEC::TYPENAME,
+                self.id,
+                event.distance
+            );
+            if let Err(e) = self.set_liftoff_dist(event.distance).await {
+                warn!(
+                    "PMW33{} {}: Failed to set liftoff distance: {:?}",
+                    SPEC::TYPENAME,
+                    self.id,
+                    e
+                );
+            }
+        }
+    }
+
+    /// Set sensor resolution in CPI (100-12000, step 100)
+    async fn set_resolution(&mut self, cpi: u16) -> Result<(), PointingDriverError> {
+        if !(SPEC::RES_MIN..=SPEC::RES_MAX).contains(&cpi) {
+            return Err(PointingDriverError::InvalidCpi);
+        }
+
+        SPEC::write_resolution(self, cpi).await?;
+
+        debug!("PMW33{}: Resolution set to {} CPI", SPEC::TYPENAME, cpi);
+
+        Ok(())
+    }
+
+    /// Set sensor rotational transform angle (-127 to 127)
+    async fn set_rot_trans_angle(&mut self, angle: i8) -> Result<(), PointingDriverError> {
+        if !(ROT_MIN..=ROT_MAX).contains(&angle) {
+            return Err(PointingDriverError::InvalidRotTransAngle);
+        }
+
+        self.write_reg(Register::AngleTune, angle as u8).await?;
+
+        debug!("PMW33{}: Rotational transform angle set to {}", SPEC::TYPENAME, angle);
+
+        Ok(())
+    }
+
+    /// Set sensor liftoff distance
+    async fn set_liftoff_dist(&mut self, dist: u8) -> Result<(), PointingDriverError> {
+        self.write_reg(Register::LiftConfig, dist).await?;
+
+        debug!("PMW33{}: Liftoff distance set to {}", SPEC::TYPENAME, dist);
+
+        Ok(())
     }
 
     /// Self check firmware signature of the sensor
@@ -609,41 +708,6 @@ where
         Ok(MotionData { dx, dy })
     }
 
-    /// Set sensor resolution in CPI (100-12000, step 100)
-    async fn set_resolution(&mut self, cpi: u16) -> Result<(), PointingDriverError> {
-        if !(SPEC::RES_MIN..=SPEC::RES_MAX).contains(&cpi) {
-            return Err(PointingDriverError::InvalidCpi);
-        }
-
-        SPEC::write_resolution(self, cpi).await?;
-
-        debug!("PMW33{}: Resolution set to {} CPI", SPEC::TYPENAME, cpi);
-
-        Ok(())
-    }
-
-    /// Set sensor rotational transform angle (-127 to 127)
-    async fn set_rot_trans_angle(&mut self, angle: i8) -> Result<(), PointingDriverError> {
-        if !(ROT_MIN..=ROT_MAX).contains(&angle) {
-            return Err(PointingDriverError::InvalidRotTransAngle);
-        }
-
-        self.write_reg(Register::AngleTune, angle as u8).await?;
-
-        debug!("PMW33{}: Rotational transform angle set to {}", SPEC::TYPENAME, angle);
-
-        Ok(())
-    }
-
-    /// Set sensor liftoff distance
-    async fn set_liftoff_dist(&mut self, dist: u8) -> Result<(), PointingDriverError> {
-        self.write_reg(Register::LiftConfig, dist).await?;
-
-        debug!("PMW33{}: Liftoff distance set to {}", SPEC::TYPENAME, dist);
-
-        Ok(())
-    }
-
     /// Check if motion is pending (motion GPIO is active low)
     fn motion_pending(&mut self) -> bool {
         match &mut self.motion_gpio {
@@ -738,7 +802,7 @@ where
 
         Self {
             id,
-            sensor: Pmw33xx::new(spi, cs, motion_gpio, sensor_config),
+            sensor: Pmw33xx::new(id, spi, cs, motion_gpio, sensor_config),
             init_state: InitState::Pending,
             poll_interval,
             report_interval,
@@ -746,8 +810,6 @@ where
             last_report: Instant::MIN,
             accumulated_x: 0,
             accumulated_y: 0,
-            #[cfg(feature = "controller")]
-            controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
         }
     }
 
@@ -771,7 +833,7 @@ where
 
         Self {
             id,
-            sensor: Pmw33xx::new_with_firmware(spi, cs, motion_gpio, sensor_config, firmware),
+            sensor: Pmw33xx::new_with_firmware(id, spi, cs, motion_gpio, sensor_config, firmware),
             init_state: InitState::Pending,
             poll_interval,
             report_interval,
@@ -779,8 +841,6 @@ where
             last_report: Instant::MIN,
             accumulated_x: 0,
             accumulated_y: 0,
-            #[cfg(feature = "controller")]
-            controller_sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
         }
     }
 }

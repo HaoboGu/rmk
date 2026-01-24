@@ -5,12 +5,8 @@ use core::cell::RefCell;
 use embassy_time::{Duration, Instant, Timer};
 use usbd_hid::descriptor::MouseReport;
 
-#[cfg(feature = "controller")]
-use crate::channel::ControllerSub;
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::event::{Axis, AxisEvent, AxisValType, Event};
-#[cfg(feature = "controller")]
-use crate::event::{ControllerEvent, PointingEvent};
 use crate::hid::Report;
 use crate::input_device::{InputDevice, InputProcessor, ProcessResult};
 use crate::keymap::KeyMap;
@@ -41,8 +37,6 @@ pub enum PointingDriverError {
     InvalidCpi,
     /// Invalid firmware signature detected
     InvalidFwSignature((u8, u8)),
-    /// Controller event not implement for this device
-    NotImplementedError,
     /// Invalid rotational transform angle
     InvalidRotTransAngle,
 }
@@ -52,22 +46,6 @@ pub trait PointingDriver {
 
     async fn init(&mut self) -> Result<(), PointingDriverError>;
     async fn read_motion(&mut self) -> Result<MotionData, PointingDriverError>;
-    async fn set_resolution(&mut self, _cpi: u16) -> Result<(), PointingDriverError> {
-        debug!("set_resolution() is not implemented for this sensor.");
-        Err(PointingDriverError::NotImplementedError)
-    }
-    async fn set_rot_trans_angle(&mut self, _angle: i8) -> Result<(), PointingDriverError> {
-        debug!("set_rot_trans_angle() is not implemented for this sensor.");
-        Err(PointingDriverError::NotImplementedError)
-    }
-    async fn set_liftoff_dist(&mut self, _dist: u8) -> Result<(), PointingDriverError> {
-        debug!("set_liftoff_dist() is not implemented for this sensor.");
-        Err(PointingDriverError::NotImplementedError)
-    }
-    async fn set_force_awake(&mut self, _enable: bool) -> Result<(), PointingDriverError> {
-        debug!("set_force_awake() is not implemented for this sensor.");
-        Err(PointingDriverError::NotImplementedError)
-    }
     fn motion_pending(&mut self) -> bool;
     fn motion_gpio(&mut self) -> Option<&mut Self::MOTION>;
 }
@@ -88,8 +66,6 @@ pub struct PointingDevice<S: PointingDriver> {
     pub sensor: S,
     pub init_state: InitState,
     pub poll_interval: Duration,
-    #[cfg(feature = "controller")]
-    pub controller_sub: ControllerSub,
     pub id: u8,
     pub report_interval: Duration,
     pub last_poll: Instant,
@@ -193,56 +169,6 @@ where
             },
         ]))
     }
-
-    /// Handle controller events for the pointing device
-    #[cfg(feature = "controller")]
-    async fn handle_controller_event(&mut self, event: ControllerEvent) -> () {
-        match event {
-            ControllerEvent::PointingContEvent((device_id, pointing_event)) => {
-                if device_id == self.id || device_id == ALL_POINTING_DEVICES {
-                    match pointing_event {
-                        PointingEvent::PointingSetCpi(cpi) => {
-                            debug!("PointingDevice {}: Setting CPI to: {}", self.id, cpi);
-                            if let Err(e) = self.sensor.set_resolution(cpi).await {
-                                warn!("PointingDevice {}: Failed to set CPI: {:?}", self.id, e);
-                            }
-                        }
-                        PointingEvent::PointingSetPollIntervall(interval_us) => {
-                            debug!(
-                                "PointingDevice {}: Setting poll interval to: {}μs",
-                                self.id, interval_us
-                            );
-                            self.poll_interval = Duration::from_micros(interval_us);
-                        }
-                        PointingEvent::PointingSetRotTransAngle(angle) => {
-                            debug!(
-                                "PointingDevice {}: Setting rotational transform angle to: {}",
-                                self.id, angle
-                            );
-                            if let Err(e) = self.sensor.set_rot_trans_angle(angle).await {
-                                warn!("PointingDevice {}: Failed to set rotation angle: {:?}", self.id, e);
-                            }
-                        }
-                        PointingEvent::PointigSetLiftoffDist(dist) => {
-                            debug!("PointingDevice {}: Setting liftoff distance to: {}", self.id, dist);
-                            if let Err(e) = self.sensor.set_liftoff_dist(dist).await {
-                                warn!("PointingDevice {}: Failed to set liftoff distance: {:?}", self.id, e);
-                            }
-                        }
-                        PointingEvent::PointingSetForceAwake(enable) => {
-                            debug!("PointingDevice {}: Setting force awake mode to: {}", self.id, enable);
-                            if let Err(e) = self.sensor.set_force_awake(enable).await {
-                                warn!("PointingDevice {}: Failed to set force awake: {:?}", self.id, e);
-                            }
-                        }
-                    }
-                }
-            }
-            _ => {
-                // Ignore other controller events not meant for pointing device
-            }
-        }
-    }
 }
 
 impl<S> InputDevice for PointingDevice<S>
@@ -261,63 +187,6 @@ where
     +------------------------------------+
     */
     async fn read_event(&mut self) -> Event {
-        #[cfg(feature = "controller")]
-        {
-            use embassy_futures::select::{Either3, select3};
-
-            if self.last_poll == Instant::MIN {
-                self.last_poll = Instant::now();
-            }
-            if self.last_report == Instant::MIN {
-                self.last_report = Instant::now();
-            }
-
-            loop {
-                let poll_wait = async {
-                    if let Some(gpio) = self.sensor.motion_gpio() {
-                        let _ = gpio.wait_for_low().await;
-                    } else {
-                        Timer::after(
-                            self.poll_interval
-                                .checked_sub(self.last_poll.elapsed())
-                                .unwrap_or(Duration::MIN),
-                        )
-                        .await;
-                    }
-                };
-
-                let report_wait = async {
-                    if self.accumulated_x != 0 || self.accumulated_y != 0 {
-                        Timer::after(
-                            self.report_interval
-                                .checked_sub(self.last_report.elapsed())
-                                .unwrap_or(Duration::MIN),
-                        )
-                        .await;
-                    } else {
-                        // Don't schedule report if there's no accumulated motion
-                        pending::<()>().await;
-                    }
-                };
-
-                match select3(poll_wait, report_wait, self.controller_sub.next_message_pure()).await {
-                    Either3::First(_) => {
-                        self.poll_once().await;
-                        self.last_poll = Instant::now();
-                    }
-                    Either3::Second(_) => {
-                        if let Some(event) = self.take_report_event() {
-                            self.last_report = Instant::now();
-                            return event;
-                        }
-                    }
-                    Either3::Third(controller_event) => {
-                        self.handle_controller_event(controller_event).await;
-                    }
-                }
-            }
-        }
-        #[cfg(not(feature = "controller"))]
         {
             use embassy_futures::select::{Either, select};
 
