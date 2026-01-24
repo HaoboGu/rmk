@@ -25,14 +25,16 @@ pub(crate) fn expand_pmw3610_device(
     let mut processor_initializers = vec![];
 
     for (idx, sensor) in pmw3610_config.iter().enumerate() {
+        let sensor_id = sensor.id.unwrap_or(0);
         let sensor_name = if sensor.name.is_empty() {
-            format!("pmw3610_{}", idx)
+            format!("pmw3610_{}_id{}", idx, sensor_id)
         } else {
-            sensor.name.clone()
+            format!("{}_id{}", sensor.name.clone(), sensor_id)
         };
 
         let device_ident = format_ident!("{}_device", sensor_name);
         let processor_ident = format_ident!("{}_processor", sensor_name);
+        let processor_ident_config = format_ident!("{}_config", processor_ident);
 
         // Generate pin initialization
         let spi = &sensor.spi;
@@ -57,6 +59,9 @@ pub(crate) fn expand_pmw3610_device(
         let invert_x = sensor.invert_x;
         let invert_y = sensor.invert_y;
         let swap_xy = sensor.swap_xy;
+        let proc_invert_x = sensor.proc_invert_x;
+        let proc_invert_y = sensor.proc_invert_y;
+        let proc_swap_xy = sensor.proc_swap_xy;
         let force_awake = sensor.force_awake;
         let smart_mode = sensor.smart_mode;
         let report_hz: u16 = sensor.report_hz;
@@ -90,7 +95,8 @@ pub(crate) fn expand_pmw3610_device(
             ChipSeries::Nrf52 => quote! {
                 let mut #device_ident = {
                     use ::embassy_nrf::gpio::{Output, Flex, Level, OutputDrive};
-                    use ::rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610Config, Pmw3610Device};
+                    use ::rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610, Pmw3610Config};
+                    use ::rmk::input_device::pointing::PointingDevice;
 
                     let sck = Output::new(p.#sck_ident, Level::High, OutputDrive::Standard);
                     let sdio = Flex::new(p.#sdio_ident);
@@ -108,13 +114,14 @@ pub(crate) fn expand_pmw3610_device(
                         smart_mode: #smart_mode,
                     };
 
-                    Pmw3610Device::with_report_hz(spi_bus, cs, motion, config, #report_hz)
+                    PointingDevice::<Pmw3610<_, _, _>>::with_report_hz(#sensor_id, spi_bus, cs, motion, config, #report_hz)
                 };
             },
             ChipSeries::Rp2040 => quote! {
                 let mut #device_ident = {
                     use ::embassy_rp::gpio::{Output, Flex, Level};
-                    use ::rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610Config, Pmw3610Device};
+                    use ::rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610, Pmw3610Config};
+                    use ::rmk::input_device::pointing::PointingDevice;
 
                     let sck = Output::new(p.#sck_ident, Level::High);
                     let sdio = Flex::new(p.#sdio_ident);
@@ -132,7 +139,7 @@ pub(crate) fn expand_pmw3610_device(
                         smart_mode: #smart_mode,
                     };
 
-                    Pmw3610Device::with_report_hz(spi_bus, cs, motion, config, #report_hz)
+                    PointingDevice::<Pmw3610<_, _, _>>::with_report_hz(#sensor_id, spi_bus, cs, motion, config, #report_hz)
                 };
             },
             _ => unreachable!(),
@@ -145,7 +152,15 @@ pub(crate) fn expand_pmw3610_device(
 
         // Generate processor initialization
         let processor_init = quote! {
-            let mut #processor_ident = ::rmk::input_device::pmw3610::Pmw3610Processor::new(&keymap);
+
+            let #processor_ident_config =::rmk::input_device::pointing::PointingProcessorConfig {
+                invert_x: #proc_invert_x
+                invert_y: #proc_invert_y,
+                swap_xy: #proc_swap_xy,
+                ..Default::default()
+            };
+
+            let mut #processor_ident = ::rmk::input_device::pointing::PointingProcessor::new(&keymap);
         };
 
         processor_initializers.push(Initializer {

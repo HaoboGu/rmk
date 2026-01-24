@@ -348,6 +348,16 @@ pub struct EventConfig {
     pub peripheral_battery: EventChannelConfig,
     #[serde(default = "default_monitored_event")]
     pub clear_peer: EventChannelConfig,
+
+    // Pointing control events
+    #[serde(default = "default_event")]
+    pub set_cpi: EventChannelConfig,
+    #[serde(default = "default_event")]
+    pub set_angle: EventChannelConfig,
+    #[serde(default = "default_event")]
+    pub set_lift_off: EventChannelConfig,
+    #[serde(default = "default_event")]
+    pub set_force_awake: EventChannelConfig,
 }
 
 impl EventConfig {
@@ -370,6 +380,10 @@ impl EventConfig {
             .peripheral_battery
             .with_defaults(default_peripheral_battery_event());
         self.clear_peer = self.clear_peer.with_defaults(default_monitored_event());
+        self.set_cpi =self.set_cpi.with_defaults(default_event());
+        self.set_angle =self.set_angle.with_defaults(default_event());
+        self.set_lift_off =self.set_lift_off.with_defaults(default_event());
+        self.set_force_awake =self.set_force_awake.with_defaults(default_event());
         self
     }
 }
@@ -453,6 +467,10 @@ impl Default for EventConfig {
             central_connected: default_event(),
             peripheral_battery: default_peripheral_battery_event(),
             clear_peer: default_monitored_event(),
+            set_cpi: default_event(),
+            set_angle: default_event(),
+            set_lift_off: default_event(),
+            set_force_awake: default_event(),
         }
     }
 }
@@ -842,7 +860,7 @@ const fn default_false() -> bool {
     false
 }
 
-const fn default_pmw3610_report_hz() -> u16 {
+const fn default_pointing_report_hz() -> u16 {
     125
 }
 
@@ -896,6 +914,7 @@ pub struct InputDeviceConfig {
     pub pointing: Option<Vec<PointingDeviceConfig>>,
     pub joystick: Option<Vec<JoystickConfig>>,
     pub pmw3610: Option<Vec<Pmw3610Config>>,
+    pub pmw33xx: Option<Vec<Pmw33xxConfig>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -922,6 +941,8 @@ pub struct JoystickConfig {
 pub struct Pmw3610Config {
     /// Name of the sensor (used for variable naming)
     pub name: String,
+    /// id of the device
+    pub id: Option<u8>,
     /// SPI pins
     pub spi: SpiConfig,
     /// Optional motion interrupt pin
@@ -943,9 +964,59 @@ pub struct Pmw3610Config {
     /// Enable smart mode for better tracking on shiny surfaces
     #[serde(default)]
     pub smart_mode: bool,
-
     /// Report rate (Hz). Motion will be accumulated and emitted at this rate.
-    #[serde(default = "default_pmw3610_report_hz")]
+    #[serde(default = "default_pointing_report_hz")]
+    pub report_hz: u16,
+    #[serde(default)]
+    pub proc_invert_x: bool,
+    /// Invert Y axis
+    #[serde(default)]
+    pub proc_invert_y: bool,
+    /// Swap X and Y axes
+    #[serde(default)]
+    pub proc_swap_xy: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[allow(unused)]
+#[serde(deny_unknown_fields)]
+pub enum Pmw33xxType {
+    #[default]
+    PMW3360,
+    PMW3389,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[allow(unused)]
+#[serde(deny_unknown_fields)]
+pub struct Pmw33xxConfig {
+    // Name of the sensor (used for variable naming)
+    pub name: String,
+    // id of the device
+    pub id: Option<u8>,
+    // Sensor Type (3360 or 3389)
+    pub sensor_type: Pmw33xxType,
+    // SPI pins
+    pub spi: SpiConfig,
+    // Optional motion interrupt pin
+    pub motion: Option<String>,
+    // CPI resolution (100-12000, step 100).Optional, uses sensor default 1600 if not set.
+    pub cpi: Option<u16>,
+    // Rotational transform angle (-127 to 127) Optional, uses sensor default 0 if not set.
+    pub rot_trans_angle: Option<i8>,
+    // liftoff distance. Optional, uses sensor default 0 if not set.
+    pub liftoff_dist: Option<u8>,
+    // Invert X axis
+    #[serde(default)]
+    pub proc_invert_x: bool,
+    // Invert Y axis
+    #[serde(default)]
+    pub proc_invert_y: bool,
+    // Swap X and Y axes
+    #[serde(default)]
+    pub proc_swap_xy: bool,
+    /// Report rate (Hz). Motion will be accumulated and emitted at this rate.
+    #[serde(default = "default_pointing_report_hz")]
     pub report_hz: u16,
 }
 
@@ -1016,6 +1087,8 @@ pub struct SpiConfig {
     pub miso: String,
     pub cs: Option<String>,
     pub cpi: Option<u32>,
+    pub tx_dma: Option<String>,
+    pub rx_dma: Option<String>,
 }
 
 /// I2C config
