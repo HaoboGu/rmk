@@ -432,49 +432,6 @@ where
         Ok(())
     }
 
-    async fn set_invert_x(&mut self, onoff: bool) -> Result<(), PointingDriverError> {
-        self.config.invert_x = onoff;
-        let mut res_step_val = self.read_reg(PMW3610_RES_STEP).await?;
-
-        if self.config.invert_x {
-            res_step_val |= 1 << RES_STEP_INV_X_BIT;
-        } else {
-            res_step_val &= !(1 << RES_STEP_INV_X_BIT);
-        }
-
-        self.write_reg(PMW3610_RES_STEP, res_step_val).await?;
-
-        Ok(())
-    }
-    async fn set_invert_y(&mut self, onoff: bool) -> Result<(), PointingDriverError> {
-        self.config.invert_y = onoff;
-        let mut res_step_val = self.read_reg(PMW3610_RES_STEP).await?;
-
-        if self.config.invert_y {
-            res_step_val |= 1 << RES_STEP_INV_Y_BIT;
-        } else {
-            res_step_val &= !(1 << RES_STEP_INV_Y_BIT);
-        }
-
-        self.write_reg(PMW3610_RES_STEP, res_step_val).await?;
-
-        Ok(())
-    }
-    async fn set_swap_xy(&mut self, onoff: bool) -> Result<(), PointingDriverError> {
-        self.config.swap_xy = onoff;
-        let mut res_step_val = self.read_reg(PMW3610_RES_STEP).await?;
-
-        if self.config.swap_xy {
-            res_step_val |= 1 << RES_STEP_SWAP_XY_BIT;
-        } else {
-            res_step_val &= !(1 << RES_STEP_SWAP_XY_BIT);
-        }
-
-        self.write_reg(PMW3610_RES_STEP, res_step_val).await?;
-
-        Ok(())
-    }
-
     /// Check if motion is pending (motion GPIO is active low)
     fn motion_pending(&mut self) -> bool {
         match &mut self.motion_gpio {
@@ -498,13 +455,13 @@ where
     const DEFAULT_REPORT_HZ: u16 = 125;
 
     /// Create a new PMW3610 device
-    pub fn new(id: u8, spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw3610Config) -> Self {
+    pub fn new(id: u8, spi: SPI, cs: CS, motion_gpio: Option<MOTION>, sensor_config: Pmw3610Config) -> Self {
         Self::with_poll_interval_and_report_hz(
             id,
             spi,
             cs,
             motion_gpio,
-            config,
+            sensor_config,
             Self::DEFAULT_POLL_INTERVAL_US,
             Self::DEFAULT_REPORT_HZ,
         )
@@ -516,7 +473,7 @@ where
         spi: SPI,
         cs: CS,
         motion_gpio: Option<MOTION>,
-        config: Pmw3610Config,
+        sensor_config: Pmw3610Config,
         report_hz: u16,
     ) -> Self {
         Self::with_poll_interval_and_report_hz(
@@ -524,7 +481,7 @@ where
             spi,
             cs,
             motion_gpio,
-            config,
+            sensor_config,
             Self::DEFAULT_POLL_INTERVAL_US,
             report_hz,
         )
@@ -536,7 +493,7 @@ where
         spi: SPI,
         cs: CS,
         motion_gpio: Option<MOTION>,
-        config: Pmw3610Config,
+        sensor_config: Pmw3610Config,
         poll_interval_us: u64,
     ) -> Self {
         Self::with_poll_interval_and_report_hz(
@@ -544,7 +501,7 @@ where
             spi,
             cs,
             motion_gpio,
-            config,
+            sensor_config,
             poll_interval_us,
             Self::DEFAULT_REPORT_HZ,
         )
@@ -556,7 +513,7 @@ where
         spi: SPI,
         cs: CS,
         motion_gpio: Option<MOTION>,
-        config: Pmw3610Config,
+        sensor_config: Pmw3610Config,
         poll_interval_us: u64,
         report_hz: u16,
     ) -> Self {
@@ -567,7 +524,7 @@ where
 
         Self {
             id,
-            sensor: Pmw3610::new(spi, cs, motion_gpio, config),
+            sensor: Pmw3610::new(spi, cs, motion_gpio, sensor_config),
             init_state: InitState::Pending,
             poll_interval,
             report_interval,

@@ -270,12 +270,6 @@ pub struct Pmw33xxConfig {
     pub rot_trans_angle: i8,
     /// liftoff distance
     pub liftoff_dist: u8,
-    /// Invert X axis
-    pub invert_x: bool,
-    /// Invert Y axis
-    pub invert_y: bool,
-    /// Swap X and Y axes
-    pub swap_xy: bool,
 }
 
 impl Default for Pmw33xxConfig {
@@ -284,9 +278,6 @@ impl Default for Pmw33xxConfig {
             res_cpi: 1600,
             rot_trans_angle: 0,
             liftoff_dist: 0x02,
-            invert_x: false,
-            invert_y: false,
-            swap_xy: false,
         }
     }
 }
@@ -610,18 +601,8 @@ where
             return Ok(MotionData::default());
         }
 
-        let mut dx: i16 = i16::from_le_bytes([burst_data[BURST_DELTA_X_L], burst_data[BURST_DELTA_X_H]]);
-        let mut dy: i16 = i16::from_le_bytes([burst_data[BURST_DELTA_Y_L], burst_data[BURST_DELTA_Y_H]]);
-
-        if self.config.invert_x {
-            dx = dx * (-1);
-        }
-        if self.config.invert_y {
-            dy = dy * (-1);
-        }
-        if self.config.swap_xy {
-            (dx, dy) = (dy, dx);
-        }
+        let dx: i16 = i16::from_le_bytes([burst_data[BURST_DELTA_X_L], burst_data[BURST_DELTA_X_H]]);
+        let dy: i16 = i16::from_le_bytes([burst_data[BURST_DELTA_Y_L], burst_data[BURST_DELTA_Y_H]]);
 
         debug!("PMW33{} motion: x: {}, y: {}", SPEC::TYPENAME, dx, dy);
 
@@ -663,22 +644,6 @@ where
         Ok(())
     }
 
-    async fn set_invert_x(&mut self, onoff: bool) -> Result<(), PointingDriverError> {
-        self.config.invert_x = onoff;
-
-        Ok(())
-    }
-    async fn set_invert_y(&mut self, onoff: bool) -> Result<(), PointingDriverError> {
-        self.config.invert_y = onoff;
-
-        Ok(())
-    }
-    async fn set_swap_xy(&mut self, onoff: bool) -> Result<(), PointingDriverError> {
-        self.config.swap_xy = onoff;
-
-        Ok(())
-    }
-
     /// Check if motion is pending (motion GPIO is active low)
     fn motion_pending(&mut self) -> bool {
         match &mut self.motion_gpio {
@@ -704,13 +669,13 @@ where
     const DEFAULT_REPORT_HZ: u16 = 125;
 
     /// Create a new PMW33xx device
-    pub fn new(id: u8, spi: SPI, cs: CS, motion_gpio: Option<MOTION>, config: Pmw33xxConfig) -> Self {
+    pub fn new(id: u8, spi: SPI, cs: CS, motion_gpio: Option<MOTION>, sensor_config: Pmw33xxConfig) -> Self {
         Self::with_poll_interval_and_report_hz(
             id,
             spi,
             cs,
             motion_gpio,
-            config,
+            sensor_config,
             Self::DEFAULT_POLL_INTERVAL_US,
             Self::DEFAULT_REPORT_HZ,
         )
@@ -722,7 +687,7 @@ where
         spi: SPI,
         cs: CS,
         motion_gpio: Option<MOTION>,
-        config: Pmw33xxConfig,
+        sensor_config: Pmw33xxConfig,
         report_hz: u16,
     ) -> Self {
         Self::with_poll_interval_and_report_hz(
@@ -730,7 +695,7 @@ where
             spi,
             cs,
             motion_gpio,
-            config,
+            sensor_config,
             Self::DEFAULT_POLL_INTERVAL_US,
             report_hz,
         )
@@ -742,7 +707,7 @@ where
         spi: SPI,
         cs: CS,
         motion_gpio: Option<MOTION>,
-        config: Pmw33xxConfig,
+        sensor_config: Pmw33xxConfig,
         poll_interval_us: u64,
     ) -> Self {
         Self::with_poll_interval_and_report_hz(
@@ -750,7 +715,7 @@ where
             spi,
             cs,
             motion_gpio,
-            config,
+            sensor_config,
             poll_interval_us,
             Self::DEFAULT_REPORT_HZ,
         )
@@ -762,7 +727,7 @@ where
         spi: SPI,
         cs: CS,
         motion_gpio: Option<MOTION>,
-        config: Pmw33xxConfig,
+        sensor_config: Pmw33xxConfig,
         poll_interval_us: u64,
         report_hz: u16,
     ) -> Self {
@@ -773,7 +738,7 @@ where
 
         Self {
             id,
-            sensor: Pmw33xx::new(spi, cs, motion_gpio, config),
+            sensor: Pmw33xx::new(spi, cs, motion_gpio, sensor_config),
             init_state: InitState::Pending,
             poll_interval,
             report_interval,
@@ -794,7 +759,7 @@ where
         spi: SPI,
         cs: CS,
         motion_gpio: Option<MOTION>,
-        config: Pmw33xxConfig,
+        sensor_config: Pmw33xxConfig,
         poll_interval_us: u64,
         report_hz: u16,
         firmware: &'a [u8],
@@ -806,7 +771,7 @@ where
 
         Self {
             id,
-            sensor: Pmw33xx::new_with_firmware(spi, cs, motion_gpio, config, firmware),
+            sensor: Pmw33xx::new_with_firmware(spi, cs, motion_gpio, sensor_config, firmware),
             init_state: InitState::Pending,
             poll_interval,
             report_interval,

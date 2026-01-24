@@ -68,18 +68,6 @@ pub trait PointingDriver {
         debug!("set_force_awake() is not implemented for this sensor.");
         Err(PointingDriverError::NotImplementedError)
     }
-    async fn set_invert_x(&mut self, _onoff: bool) -> Result<(), PointingDriverError> {
-        debug!("set_invert_x() is not implemented for this sensor.");
-        Err(PointingDriverError::NotImplementedError)
-    }
-    async fn set_invert_y(&mut self, _onoff: bool) -> Result<(), PointingDriverError> {
-        debug!("set_invert_y() is not implemented for this sensor.");
-        Err(PointingDriverError::NotImplementedError)
-    }
-    async fn set_swap_xy(&mut self, _onoff: bool) -> Result<(), PointingDriverError> {
-        debug!("set_swap_xy() is not implemented for this sensor.");
-        Err(PointingDriverError::NotImplementedError)
-    }
     fn motion_pending(&mut self) -> bool;
     fn motion_gpio(&mut self) -> Option<&mut Self::MOTION>;
 }
@@ -183,6 +171,7 @@ where
 
         let dx = self.accumulated_x.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
         let dy = self.accumulated_y.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+
         self.accumulated_x = 0;
         self.accumulated_y = 0;
 
@@ -246,24 +235,7 @@ where
                                 warn!("PointingDevice {}: Failed to set force awake: {:?}", self.id, e);
                             }
                         }
-                        PointingEvent::PointingSetInvertX(invert) => {
-                            debug!("PointingDevice {}: Setting invert X to: {}", self.id, invert);
-                            if let Err(e) = self.sensor.set_invert_x(invert).await {
-                                warn!("PointingDevice {}: Failed to set force awake: {:?}", self.id, e);
-                            }
-                        }
-                        PointingEvent::PointingSetInvertY(invert) => {
-                            debug!("PointingDevice {}: Setting invert Y to: {}", self.id, invert);
-                            if let Err(e) = self.sensor.set_invert_y(invert).await {
-                                warn!("PointingDevice {}: Failed to set force awake: {:?}", self.id, e);
-                            }
-                        }
-                        PointingEvent::PointingSwapXY(swap) => {
-                            debug!("PointingDevice {}: Setting swap X/Y to: {}", self.id, swap);
-                            if let Err(e) = self.sensor.set_swap_xy(swap).await {
-                                warn!("PointingDevice {}: Failed to set force awake: {:?}", self.id, e);
-                            }
-                        }
+                        _ => {},
                     }
                 }
             }
@@ -464,12 +436,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::Cell;
     use embassy_futures::block_on;
     use embassy_time::Duration;
     use embedded_hal::digital::ErrorType;
     use embedded_hal::digital::InputPin;
     use embedded_hal_async::digital::Wait;
+    use std::cell::Cell;
 
     // Init logger for tests
     #[ctor::ctor]
@@ -556,16 +528,16 @@ mod tests {
         CONTROLLER_CHANNEL_FINAL_SIZE,
         CONTROLLER_CHANNEL_SUBS,
         CONTROLLER_CHANNEL_PUBS,
-        > {
-            static CHANNEL: PubSubChannel<
-                CriticalSectionRawMutex,
-                ControllerEvent,
-                CONTROLLER_CHANNEL_FINAL_SIZE,
-                CONTROLLER_CHANNEL_SUBS,
-                CONTROLLER_CHANNEL_PUBS,
-                > = PubSubChannel::new();
-            CHANNEL.subscriber().unwrap()
-        }
+    > {
+        static CHANNEL: PubSubChannel<
+            CriticalSectionRawMutex,
+            ControllerEvent,
+            CONTROLLER_CHANNEL_FINAL_SIZE,
+            CONTROLLER_CHANNEL_SUBS,
+            CONTROLLER_CHANNEL_PUBS,
+        > = PubSubChannel::new();
+        CHANNEL.subscriber().unwrap()
+    }
 
     #[derive(Debug)]
     struct DummyError;
