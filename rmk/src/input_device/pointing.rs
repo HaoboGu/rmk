@@ -235,7 +235,6 @@ where
                                 warn!("PointingDevice {}: Failed to set force awake: {:?}", self.id, e);
                             }
                         }
-                        _ => {}
                     }
                 }
             }

@@ -198,11 +198,4 @@ pub enum PointingEvent {
     PointigSetLiftoffDist(u8),
     /// Set force awake mode
     PointingSetForceAwake(bool),
-    /// Set invert x
-    PointingSetInvertX(bool),
-    /// Set invert y
-    PointingSetInvertY(bool),
-    /// Set swap x/y
-    PointingSwapXY(bool),
 }
-
