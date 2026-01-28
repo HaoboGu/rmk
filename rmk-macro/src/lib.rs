@@ -9,6 +9,7 @@ mod feature;
 mod flash;
 mod gpio_config;
 mod import;
+mod input;
 mod input_device;
 mod keyboard;
 mod keyboard_config;
@@ -107,4 +108,59 @@ pub fn controller_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn controller(attr: TokenStream, item: TokenStream) -> TokenStream {
     controller::controller_impl(attr, item)
+}
+
+/// Macro for defining input events.
+///
+/// This macro generates a static Channel and implements the `Event` trait.
+///
+/// # Parameters
+///
+/// - `channel_size`: Buffer size of the channel (default: 8)
+///
+/// # Examples
+///
+/// ```ignore
+/// #[input_event(channel_size = 8)]
+/// #[derive(Clone, Copy, Debug)]
+/// pub struct KeyEvent {
+///     pub row: u8,
+///     pub col: u8,
+///     pub pressed: bool,
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn input_event(attr: TokenStream, item: TokenStream) -> TokenStream {
+    input::event::input_event_impl(attr, item)
+}
+
+/// Macro for defining input processors that subscribe to multiple events.
+///
+/// This macro generates event routing infrastructure and implements the `InputProcessor` trait.
+///
+/// # Parameters
+///
+/// - `subscribe`: Array of event types to subscribe to (required)
+///
+/// # Examples
+///
+/// ```ignore
+/// #[input_processor(subscribe = [KeyEvent, ModifierEvent])]
+/// pub struct MyInputProcessor {
+///     // processor state
+/// }
+///
+/// impl MyInputProcessor {
+///     async fn on_key_event(&mut self, event: KeyEvent) {
+///         // Handle key event
+///     }
+///
+///     async fn on_modifier_event(&mut self, event: ModifierEvent) {
+///         // Handle modifier event
+///     }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn input_processor(attr: TokenStream, item: TokenStream) -> TokenStream {
+    input::processor::input_processor_impl(attr, item)
 }

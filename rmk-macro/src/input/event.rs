@@ -2,22 +2,22 @@ use quote::quote;
 use syn::parse::Parser;
 use syn::{Attribute, DeriveInput, Meta, parse_macro_input};
 
-/// Generates controller event infrastructure.
+/// Generates input event infrastructure using embassy_sync::channel::Channel.
 ///
 /// See `rmk::event::Event` for usage.
-pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
-    // Parse attributes
-    let (channel_size, subs, pubs) = if attr.is_empty() {
-        (None, None, None)
+    // Parse attributes - only channel_size is used for Channel
+    let channel_size = if attr.is_empty() {
+        None
     } else {
         parse_attributes(attr)
     };
 
     // Validate input is a struct or enum
     if !matches!(input.data, syn::Data::Struct(_) | syn::Data::Enum(_)) {
-        return syn::Error::new_spanned(input, "#[controller_event] can only be applied to structs or enums")
+        return syn::Error::new_spanned(input, "#[input_event] can only be applied to structs or enums")
             .to_compile_error()
             .into();
     }
@@ -26,7 +26,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
     if !has_derive(&input.attrs, "Clone") || !has_derive(&input.attrs, "Copy") {
         return syn::Error::new_spanned(
             input,
-            "#[controller_event] requires the struct to derive Clone and Copy",
+            "#[input_event] requires the struct to derive Clone and Copy",
         )
         .to_compile_error()
         .into();
@@ -58,74 +58,63 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
         _ => unreachable!(),
     };
 
-    // Generate channel name: BatteryLevelEvent -> BATTERY_LEVEL_EVENT_CHANNEL
+    // Generate channel name: KeyEvent -> KEY_EVENT_CHANNEL
     let channel_name = syn::Ident::new(
         &format!("{}_CHANNEL", to_upper_snake_case(&type_name.to_string())),
         type_name.span(),
     );
 
-    // Generate channel and trait implementations
+    // Generate channel and trait implementations using Channel
     let (channel_static, trait_impl) = {
-        // PubSubChannel: buffered events with awaitable publish support
-        // Wrap in braces to support const expressions in generic parameters
-        let cap = channel_size.unwrap_or_else(|| quote::quote! { 1 });
-        let subs_val = subs.unwrap_or_else(|| quote::quote! { 4 });
-        let pubs_val = pubs.unwrap_or_else(|| quote::quote! { 1 });
+        // Channel: simple MPMC channel with a buffer
+        let cap = channel_size.unwrap_or_else(|| quote::quote! { 8 });
 
         let awaitable_trait_impl = quote! {
             impl #impl_generics ::rmk::event::AsyncEvent for #type_name #ty_generics #where_clause {
-                type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
+                type AsyncPublisher = ::embassy_sync::channel::Sender<
                     'static,
                     ::rmk::RawMutex,
                     #type_name #ty_generics,
-                    { #cap },
-                    { #subs_val },
-                    { #pubs_val }
+                    { #cap }
                 >;
 
                 // Awaitable publisher: waits if channel is full
                 fn publisher_async() -> Self::AsyncPublisher {
-                    #channel_name.publisher().unwrap()
+                    #channel_name.sender()
                 }
             }
         };
 
         (
             quote! {
-                static #channel_name: ::embassy_sync::pubsub::PubSubChannel<
+                static #channel_name: ::embassy_sync::channel::Channel<
                     ::rmk::RawMutex,
                     #type_name #ty_generics,
-                    { #cap },
-                    { #subs_val },
-                    { #pubs_val }
-                > = ::embassy_sync::pubsub::PubSubChannel::new();
+                    { #cap }
+                > = ::embassy_sync::channel::Channel::new();
             },
             quote! {
                 impl #impl_generics ::rmk::event::Event for #type_name #ty_generics #where_clause {
-                    type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
+                    type Publisher = ::embassy_sync::channel::Sender<
                         'static,
                         ::rmk::RawMutex,
                         #type_name #ty_generics,
-                        { #cap },
-                        { #subs_val },
-                        { #pubs_val }
+                        { #cap }
                     >;
-                    type Subscriber = ::embassy_sync::pubsub::Subscriber<
+                    type Subscriber = ::embassy_sync::channel::Receiver<
                         'static,
                         ::rmk::RawMutex,
                         #type_name #ty_generics,
-                        { #cap },
-                        { #subs_val },
-                        { #pubs_val }
+                        { #cap }
                     >;
 
-                    // Immediate publisher: drops events if buffer is full
+                    // Publisher: may wait or drop events if buffer is full (based on EventPublisher impl)
                     fn publisher() -> Self::Publisher {
-                        #channel_name.immediate_publisher()
+                        #channel_name.sender()
                     }
 
                     fn subscriber() -> Self::Subscriber {
-                        #channel_name.subscriber().unwrap()
+                        #channel_name.receiver()
                     }
                 }
 
@@ -147,14 +136,12 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
     expanded.into()
 }
 
-/// Parse macro attributes: (channel_size, subs, pubs)
-fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<proc_macro2::TokenStream>, Option<proc_macro2::TokenStream>, Option<proc_macro2::TokenStream>) {
+/// Parse macro attributes: only channel_size is needed for Channel
+fn parse_attributes(attr: proc_macro::TokenStream) -> Option<proc_macro2::TokenStream> {
     use syn::Token;
     use syn::punctuated::Punctuated;
 
     let mut channel_size = None;
-    let mut subs = None;
-    let mut pubs = None;
 
     // Parse as Meta::List containing name-value pairs
     let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
@@ -170,22 +157,16 @@ fn parse_attributes(attr: proc_macro::TokenStream) -> (Option<proc_macro2::Token
                         // Support both literals and path expressions
                         let expr = &nv.value;
                         channel_size = Some(quote::quote! { #expr });
-                    } else if nv.path.is_ident("subs") {
-                        let expr = &nv.value;
-                        subs = Some(quote::quote! { #expr });
-                    } else if nv.path.is_ident("pubs") {
-                        let expr = &nv.value;
-                        pubs = Some(quote::quote! { #expr });
                     }
                 }
             }
         }
         Err(e) => {
-            panic!("Failed to parse controller_event attributes: {}", e);
+            panic!("Failed to parse input_event attributes: {}", e);
         }
     }
 
-    (channel_size, subs, pubs)
+    channel_size
 }
 
 /// Check if a type has a specific derive attribute
@@ -235,20 +216,15 @@ mod tests {
     #[test]
     fn test_to_upper_snake_case() {
         // Basic cases
-        assert_eq!(to_upper_snake_case("BatteryEvent"), "BATTERY_EVENT");
         assert_eq!(to_upper_snake_case("KeyEvent"), "KEY_EVENT");
+        assert_eq!(to_upper_snake_case("ModifierEvent"), "MODIFIER_EVENT");
         assert_eq!(
-            to_upper_snake_case("SplitPeripheralBatteryEvent"),
-            "SPLIT_PERIPHERAL_BATTERY_EVENT"
+            to_upper_snake_case("TouchpadEvent"),
+            "TOUCHPAD_EVENT"
         );
 
         // Acronyms should stay together
-        assert_eq!(to_upper_snake_case("WPMEvent"), "WPM_EVENT");
-        assert_eq!(to_upper_snake_case("BLEState"), "BLE_STATE");
-        assert_eq!(to_upper_snake_case("USBConnection"), "USB_CONNECTION");
-
-        // Mixed acronyms and words
-        assert_eq!(to_upper_snake_case("HTMLParser"), "HTML_PARSER");
-        assert_eq!(to_upper_snake_case("parseHTMLString"), "PARSE_HTML_STRING");
+        assert_eq!(to_upper_snake_case("USBEvent"), "USB_EVENT");
+        assert_eq!(to_upper_snake_case("HIDDevice"), "HID_DEVICE");
     }
 }

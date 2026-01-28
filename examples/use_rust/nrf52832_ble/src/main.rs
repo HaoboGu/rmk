@@ -19,14 +19,13 @@ use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
-use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable as _;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::{HostResources, initialize_keymap_and_storage, run_devices, run_rmk};
+use rmk::{HostResources, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -161,9 +160,7 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
 
     join3(
-        run_devices! (
-            (matrix) => EVENT_CHANNEL,
-        ),
+        run_all!(matrix),
         keyboard.run(), // Keyboard is special
         run_rmk(&keymap, &stack, &mut storage, rmk_config),
     )

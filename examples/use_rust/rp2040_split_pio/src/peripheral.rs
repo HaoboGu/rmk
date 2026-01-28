@@ -10,11 +10,10 @@ use embassy_rp::bind_interrupts;
 use embassy_rp::gpio::{Input, Output};
 use embassy_rp::peripherals::{PIO0, USB};
 use embassy_rp::usb::InterruptHandler;
-use rmk::channel::EVENT_CHANNEL;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join;
 use rmk::matrix::Matrix;
-use rmk::run_devices;
+use rmk::run_all;
 use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::split::rp::uart::{BufferedUart, UartInterruptHandler};
@@ -44,9 +43,5 @@ async fn main(_spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, 2, 2, true>::new(row_pins, col_pins, debouncer);
 
     // Start
-    join(
-        run_devices!((matrix) => EVENT_CHANNEL), // Peripheral uses EVENT_CHANNEL to send events to central
-        run_rmk_split_peripheral(uart_instance),
-    )
-    .await;
+    join(run_all!(matrix), run_rmk_split_peripheral(uart_instance)).await;
 }

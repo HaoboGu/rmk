@@ -8,12 +8,11 @@ use embassy_time::Instant;
 use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::storage::FlashOperationMessage};
 
 use super::SplitMessage;
-use crate::CONNECTION_STATE;
-use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::event::{Event, KeyboardEvent, KeyboardEventPos};
 #[cfg(feature = "controller")]
 use crate::event::{PeripheralBatteryEvent, publish_controller_event};
 use crate::input_device::InputDevice;
+use crate::{CONNECTION_STATE, event::publish_input_event_async};
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -68,7 +67,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
     /// The manager receives from the peripheral and forward the message to `KEY_EVENT_CHANNEL`.
     /// It also sync the `ConnectionState` to the peripheral periodically.
     pub(crate) async fn run(mut self) {
-        use crate::event::{ControllerEventTrait, EventSubscriber};
+        use crate::event::EventSubscriber;
 
         let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
         // Send connection state once on start
@@ -104,15 +103,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             )
             .await
             {
-                Either3::First(event) => match event {
-                    Event::Key(key_event) => KEY_EVENT_CHANNEL.send(key_event).await,
-                    _ => {
-                        if EVENT_CHANNEL.is_full() {
-                            let _ = EVENT_CHANNEL.receive().await;
-                        }
-                        EVENT_CHANNEL.send(event).await;
-                    }
-                },
+                Either3::First(_) => (),
                 Either3::Second(e) => {
                     let message_to_peri = match e {
                         Either3::First(indicator_event) => {
@@ -165,7 +156,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
 impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFSET: usize, R: SplitReader + SplitWriter>
     InputDevice for PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
 {
-    async fn read_event(&mut self) -> Event {
+    async fn read_event(&mut self) -> ! {
         loop {
             match self.transceiver.read().await {
                 Ok(SplitMessage::Key(e)) => {
@@ -184,7 +175,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                                     key_pos.col + COL_OFFSET as u8,
                                     e.pressed,
                                 );
-                                return Event::Key(adjusted_key_event);
+                                publish_input_event_async(adjusted_key_event).await;
                             } else {
                                 warn!(
                                     "Key event from peripheral is ignored because the connection is not established."
@@ -192,20 +183,21 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                             }
                         }
                         _ => {
+                            // For rotary encoder
                             if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
                                 // Only when the connection is established, send the key event.
-                                return Event::Key(e);
+                                publish_input_event_async(e).await;
                             }
                         }
                     }
                 }
-                Ok(SplitMessage::Event(event)) => {
-                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                        return event;
-                    } else {
-                        warn!("Event from peripheral is ignored because the connection is not established.");
-                    }
-                }
+                // Ok(SplitMessage::Event(event)) => {
+                //     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                //         return event;
+                //     } else {
+                //         warn!("Event from peripheral is ignored because the connection is not established.");
+                //     }
+                // }
                 Ok(SplitMessage::BatteryLevel(level)) => {
                     // Publish peripheral battery level to controller channel when connected
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {

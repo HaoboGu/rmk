@@ -20,14 +20,13 @@ use embassy_rp::usb::{self, Driver};
 use keymap::{COL, ROW};
 use rand::SeedableRng;
 use rmk::ble::build_ble_stack;
-use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::{HostResources, initialize_keymap_and_storage, run_devices, run_rmk};
+use rmk::{HostResources, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, embassy_time as _, panic_probe as _};
@@ -149,9 +148,7 @@ async fn main(spawner: Spawner) {
     let stack = build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
     // Start
     join3(
-        run_devices! (
-            (matrix) => EVENT_CHANNEL,
-        ),
+        run_all!(matrix),
         keyboard.run(),
         run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
     )

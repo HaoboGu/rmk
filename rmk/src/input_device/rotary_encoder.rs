@@ -8,7 +8,7 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 use super::InputDevice;
-use crate::event::{Event, KeyboardEvent};
+use crate::event::{KeyboardEvent, publish_input_event_async};
 
 /// Holds current/old state and both [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)
 #[derive(Clone, Debug)]
@@ -232,13 +232,12 @@ impl<
     P: Phase,
 > InputDevice for RotaryEncoder<A, B, P>
 {
-    async fn read_event(&mut self) -> Event {
+    async fn read_event(&mut self) -> ! {
         // Read until a valid rotary encoder event is detected
         if let Some(last_action) = self.last_action {
             embassy_time::Timer::after_millis(5).await;
-            let e = Event::Key(KeyboardEvent::rotary_encoder(self.id, last_action, false));
+            publish_input_event_async(KeyboardEvent::rotary_encoder(self.id, last_action, false)).await;
             self.last_action = None;
-            return e;
         }
 
         loop {
@@ -252,7 +251,7 @@ impl<
 
             if direction != Direction::None {
                 self.last_action = Some(direction);
-                return Event::Key(KeyboardEvent::rotary_encoder(self.id, direction, true));
+                publish_input_event_async(KeyboardEvent::rotary_encoder(self.id, direction, true)).await;
             }
 
             #[cfg(not(feature = "async_matrix"))]

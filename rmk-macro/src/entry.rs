@@ -49,8 +49,8 @@ pub(crate) fn rmk_entry_select(
         let mut devs = devices.clone();
         devs.push(quote! {matrix});
         quote! {
-            ::rmk::run_devices! (
-                (#(#devs),*) => ::rmk::channel::EVENT_CHANNEL,
+            ::rmk::run_all! (
+                #(#devs),*
             )
         }
     };
@@ -58,8 +58,8 @@ pub(crate) fn rmk_entry_select(
         quote! {}
     } else {
         quote! {
-            ::rmk::run_processor_chain! (
-                ::rmk::channel::EVENT_CHANNEL=> [#(#processors),*],
+            ::rmk::run_all! (
+                #(#processors),*
             )
         }
     };
