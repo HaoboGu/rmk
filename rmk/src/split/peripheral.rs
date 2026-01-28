@@ -80,14 +80,15 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     pub(crate) async fn run(&mut self) {
         CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
 
+        let key_sub = KeyboardEvent::subscriber();
+        let charging_state_sub = InputChargingStateEvent::subscriber();
+        let touch_sub = TouchpadEvent::subscriber();
+        let pointing_sub = PointingEvent::subscriber();
+        #[cfg(feature = "_ble")]
+        let mut battery_sub = BatteryLevelEvent::subscriber();
+
         loop {
             let read_message_to_send = async {
-                let key_sub = KeyboardEvent::subscriber();
-                let charging_state_sub = InputChargingStateEvent::subscriber();
-                let touch_sub = TouchpadEvent::subscriber();
-                let pointing_sub = PointingEvent::subscriber();
-                #[cfg(feature = "_ble")]
-                let mut battery_sub = BatteryLevelEvent::subscriber();
                 let message = crate::select_biased_with_feature! {
                     e = key_sub.receive().fuse() => SplitMessage::Key(e),
                     e = charging_state_sub.receive().fuse() => SplitMessage::ChargingState(e.state),
