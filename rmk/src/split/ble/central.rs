@@ -448,7 +448,7 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> Sp
                 | SplitMessage::Pointing(_)
                 | SplitMessage::ChargingState(_)
         ) {
-            debug!("Activity {} detected from peripheral", &message);
+            debug!("Activity {:?} detected from peripheral", &message);
             update_activity_time();
         }
 

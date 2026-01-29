@@ -12,7 +12,10 @@ use crate::event::{Event, KeyboardEvent, KeyboardEventPos};
 #[cfg(feature = "controller")]
 use crate::event::{PeripheralBatteryEvent, publish_controller_event};
 use crate::input_device::InputDevice;
-use crate::{CONNECTION_STATE, event::publish_input_event_async};
+use crate::{
+    CONNECTION_STATE,
+    event::{InputChargingStateEvent, publish_input_event_async},
+};
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -191,22 +194,26 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                         }
                     }
                 }
-                // Ok(SplitMessage::Event(event)) => {
-                //     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                //         return event;
-                //     } else {
-                //         warn!("Event from peripheral is ignored because the connection is not established.");
-                //     }
-                // }
-                Ok(SplitMessage::BatteryLevel(level)) => {
-                    // Publish peripheral battery level to controller channel when connected
+                Ok(split_message) => {
+                    // Process other split messages which requires connection to host
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                        publish_controller_event(PeripheralBatteryEvent { id: self.id, level });
+                        match split_message {
+                            SplitMessage::Touchpad(e) => publish_input_event_async(e).await,
+                            SplitMessage::Pointing(e) => publish_input_event_async(e).await,
+                            SplitMessage::BatteryLevel(level) => {
+                                publish_controller_event(PeripheralBatteryEvent { id: self.id, level })
+                            }
+                            SplitMessage::ChargingState(state) => {
+                                publish_input_event_async(InputChargingStateEvent { state }).await
+                            }
+                            _ => warn!("{:?} should not come from peripheral", split_message),
+                        }
+                    } else {
+                        warn!(
+                            "{:?} from peripheral is ignored because the connection is not established.",
+                            split_message
+                        );
                     }
-                }
-                Ok(_) => {
-                    // Ignore other types of messages
-                    debug!("Ignored non-event split message");
                 }
                 Err(e) => {
                     error!("Peripheral message read error: {:?}", e);
