@@ -9,8 +9,10 @@ pub(crate) mod wpm;
 
 use embassy_futures::select::{Either, select};
 
+use crate::input_device::Runnable;
+
 /// This trait provides the interface for individual output device controllers.
-pub trait Controller {
+pub trait Controller: Runnable {
     /// Type of the received events
     type Event;
 

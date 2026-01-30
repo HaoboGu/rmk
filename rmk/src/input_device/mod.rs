@@ -51,15 +51,9 @@ pub trait Runnable {
 /// )
 /// .await;
 /// ```
-pub trait InputDevice {
+pub trait InputDevice: Runnable {
     /// Read the raw input event
     async fn read_event(&mut self) -> !;
-}
-
-impl<T: InputDevice> Runnable for T {
-    async fn run(&mut self) -> ! {
-        self.read_event().await
-    }
 }
 
 /// The trait for input processors.
@@ -72,6 +66,7 @@ pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER
     Runnable
 {
     type Event;
+
     /// Process the incoming events, convert them to HID report [`Report`],
     /// then send the report to the USB/BLE.
     ///
