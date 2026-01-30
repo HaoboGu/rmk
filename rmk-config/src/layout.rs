@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use pest::Parser;
 use pest_derive::Parser;
 
+use crate::error::{ConfigError, ConfigResult};
 use crate::{KeyInfo, KeyboardTomlConfig, LayoutConfig};
 
 // Pest parser using the grammar files
@@ -15,21 +16,23 @@ const MAX_ALIAS_RESOLUTION_DEPTH: usize = 10;
 
 impl KeyboardTomlConfig {
     /// Layout is a mandatory field in toml, so we mainly check the sizes
-    pub fn get_layout_config(&self) -> Result<(LayoutConfig, Vec<Vec<KeyInfo>>), String> {
+    pub fn get_layout_config(&self) -> ConfigResult<(LayoutConfig, Vec<Vec<KeyInfo>>)> {
         let aliases = self.aliases.clone().unwrap_or_default();
         let layers = self.layer.clone().unwrap_or_default();
-        let mut layout = self.layout.clone().expect("layout config is required");
-
-        // Temporarily allow both matrix_map and keymap to be set and append the obsolete layout.keymap based layer configurations
-        // to the new [[layer]] based layer configurations in the resulting LayoutConfig
+        let layout = self.layout.clone().ok_or(ConfigError::MissingField {
+            field: "layout".to_string(),
+        })?;
 
         // Check alias keys for whitespace
         for key in aliases.keys() {
             if key.chars().any(char::is_whitespace) {
-                return Err(format!(
-                    "keyboard.toml: Alias key '{}' must not contain whitespace characters",
-                    key
-                ));
+                return Err(ConfigError::Validation {
+                    field: "aliases".to_string(),
+                    message: format!(
+                        "Alias key '{}' must not contain whitespace characters",
+                        key
+                    ),
+                });
             }
         }
 
@@ -37,6 +40,7 @@ impl KeyboardTomlConfig {
         let mut key_info: Vec<Vec<KeyInfo>> =
             vec![vec![KeyInfo::default(); layout.cols as usize]; layout.rows as usize];
         let mut sequence_to_grid: Option<Vec<(u8, u8)>> = None;
+
         if let Some(matrix_map) = &layout.matrix_map {
             // process matrix_map first to build mapping between the electronic grid and the configuration sequence of keys
             let mut sequence_number = 0u32;
@@ -47,19 +51,22 @@ impl KeyboardTomlConfig {
                     let mut coords = Vec::<(u8, u8)>::new();
                     for (row, col, hand) in &info {
                         if *row >= layout.rows || *col >= layout.cols {
-                            return Err(format!(
-                                "keyboard.toml: Coordinate ({},{}) in `layout.matrix_map` is out of bounds: ([0..{}], [0..{}]) is the expected range",
-                                row,
-                                col,
-                                layout.rows - 1,
-                                layout.cols - 1
-                            ));
+                            return Err(ConfigError::Validation {
+                                field: "layout.matrix_map".to_string(),
+                                message: format!(
+                                    "Coordinate ({},{}) is out of bounds: ([0..{}], [0..{}]) is the expected range",
+                                    row, col, layout.rows - 1, layout.cols - 1
+                                ),
+                            });
                         }
                         if grid_to_sequence[*row as usize][*col as usize].is_some() {
-                            return Err(format!(
-                                "keyboard.toml: Duplicate coordinate ({},{}) found in `layout.matrix_map`",
-                                row, col
-                            ));
+                            return Err(ConfigError::Validation {
+                                field: "layout.matrix_map".to_string(),
+                                message: format!(
+                                    "Duplicate coordinate ({},{}) found",
+                                    row, col
+                                ),
+                            });
                         } else {
                             // Separate coordinates from key info
                             coords.push((*row, *col));
@@ -71,104 +78,126 @@ impl KeyboardTomlConfig {
                     sequence_to_grid = Some(coords);
                 }
                 Err(parse_err) => {
-                    // Pest error already includes details about the invalid format
-                    return Err(format!("keyboard.toml: Error in `layout.matrix_map`: {}", parse_err));
+                    return Err(ConfigError::Validation {
+                        field: "layout.matrix_map".to_string(),
+                        message: parse_err,
+                    });
                 }
             }
         } else if !layers.is_empty() {
-            return Err("layout.matrix_map is need to be defined to process [[layer]] based key maps".to_string());
+            return Err(ConfigError::Validation {
+                field: "layout.matrix_map".to_string(),
+                message: "layout.matrix_map is required when using [[layer]] sections".to_string(),
+            });
         }
+
         if let Some(sequence_to_grid) = &sequence_to_grid {
             // collect layer names first
             let mut layer_names = HashMap::<String, u32>::new();
             for (layer_number, layer) in layers.iter().enumerate() {
                 if let Some(name) = &layer.name {
                     if layer_names.contains_key(name) {
-                        return Err(format!(
-                            "keyboard.toml: Duplicate layer name '{}' found in `layout.keymap`",
-                            name
-                        ));
+                        return Err(ConfigError::Validation {
+                            field: "layer".to_string(),
+                            message: format!("Duplicate layer name '{}' found", name),
+                        });
                     }
                     layer_names.insert(name.clone(), layer_number as u32);
                 }
             }
             if layers.len() > layout.layers as usize {
-                return Err("keyboard.toml: Number of [[layer]] entries is larger than layout.layers".to_string());
+                return Err(ConfigError::Validation {
+                    field: "layout.layers".to_string(),
+                    message: format!(
+                        "Number of [[layer]] entries ({}) exceeds layout.layers ({})",
+                        layers.len(),
+                        layout.layers
+                    ),
+                });
             }
             // Parse each explicitly defined [[layer]] with pest into the final_layers vector
-            // using the previously defined sequence_to_grid mapping to fill in the
-            // grid shaped classic keymaps
             let layer_names = layer_names;
             for (layer_number, layer) in layers.iter().enumerate() {
-                // each layer should contain a sequence of keymap entries
-                // their number and order should match the number and order of the above parsed matrix map
                 match Self::keymap_parser(&layer.keys, &aliases, &layer_names) {
                     Ok(key_action_sequence) => {
-                        let mut legacy_keymap =
+                        let mut keymap =
                             vec![vec!["No".to_string(); layout.cols as usize]; layout.rows as usize];
                         for (sequence_number, key_action) in key_action_sequence.into_iter().enumerate() {
                             if sequence_number >= sequence_to_grid.len() {
-                                return Err(format!(
-                                    "keyboard.toml: {} layer #{} contains too many entries (must match layout.matrix_map)",
-                                    &layer.name.clone().unwrap_or_default(),
-                                    layer_number
-                                ));
+                                return Err(ConfigError::Validation {
+                                    field: format!("layer[{}]", layer_number),
+                                    message: format!(
+                                        "{} layer #{} contains too many entries (must match layout.matrix_map)",
+                                        layer.name.clone().unwrap_or_default(),
+                                        layer_number
+                                    ),
+                                });
                             }
                             let (row, col) = sequence_to_grid[sequence_number];
-                            legacy_keymap[row as usize][col as usize] = key_action.clone();
+                            keymap[row as usize][col as usize] = key_action.clone();
                         }
-                        final_layers.push(legacy_keymap);
+                        final_layers.push(keymap);
                     }
                     Err(parse_err) => {
-                        return Err(format!("keyboard.toml: Error in `layout.keymap`: {}", parse_err));
+                        return Err(ConfigError::Validation {
+                            field: format!("layer[{}].keys", layer_number),
+                            message: parse_err,
+                        });
                     }
                 }
             }
         }
-        // Handle the deprecated `keymap` field if present
-        if let Some(keymap) = &mut layout.keymap {
-            final_layers.append(keymap);
-        }
-        // The required number of layers is less than what's set in keymap
-        // Fill the rest with empty keys
+
+        // Fill remaining layers with empty keys
         if final_layers.len() <= layout.layers as usize {
             for _ in final_layers.len()..layout.layers as usize {
-                // Add 2D vector of empty keys
                 final_layers.push(vec![vec!["_".to_string(); layout.cols as usize]; layout.rows as usize]);
             }
         } else {
-            return Err(format!(
-                "keyboard.toml: The actual number of layers is larger than {} [layout.layers]: {} [[Layer]] entries + {} layers in layout.keymap",
-                layout.layers,
-                layers.len(),
-                layout.keymap.as_ref().map(|keymap| keymap.len()).unwrap_or_default()
-            ));
+            return Err(ConfigError::Validation {
+                field: "layout.layers".to_string(),
+                message: format!(
+                    "The actual number of layers ({}) exceeds layout.layers ({})",
+                    final_layers.len(),
+                    layout.layers
+                ),
+            });
         }
-        // Row
+
+        // Validate row count
         if final_layers.iter().any(|r| r.len() as u8 != layout.rows) {
-            return Err("keyboard.toml: Row number in keymap doesn't match with [layout.row]".to_string());
+            return Err(ConfigError::Validation {
+                field: "layout.rows".to_string(),
+                message: "Row number in keymap doesn't match with layout.rows".to_string(),
+            });
         }
-        // Col
+
+        // Validate col count
         if final_layers
             .iter()
             .any(|r| r.iter().any(|c| c.len() as u8 != layout.cols))
         {
-            return Err("keyboard.toml: Col number in keymap doesn't match with [layout.col]".to_string());
+            return Err(ConfigError::Validation {
+                field: "layout.cols".to_string(),
+                message: "Col number in keymap doesn't match with layout.cols".to_string(),
+            });
         }
 
-        // Process encoder map
+        // Process encoder map from [[layer]] sections
         let mut encoder_map: Vec<Vec<[String; 2]>> = vec![];
-        if let Some(deprecated_encoder_map) = &mut layout.encoder_map {
-            encoder_map.append(deprecated_encoder_map);
-        } else {
-            for layer in &layers {
-                let mut encoders = layer.encoders.clone().unwrap_or_default();
-                for [cw, ccw] in &mut encoders {
-                    *cw = Self::alias_resolver(cw, &aliases)?;
-                    *ccw = Self::alias_resolver(ccw, &aliases)?;
-                }
-                encoder_map.push(encoders);
+        for layer in &layers {
+            let mut encoders = layer.encoders.clone().unwrap_or_default();
+            for [cw, ccw] in &mut encoders {
+                *cw = Self::alias_resolver(cw, &aliases).map_err(|e| ConfigError::Validation {
+                    field: "layer.encoders".to_string(),
+                    message: e,
+                })?;
+                *ccw = Self::alias_resolver(ccw, &aliases).map_err(|e| ConfigError::Validation {
+                    field: "layer.encoders".to_string(),
+                    message: e,
+                })?;
             }
+            encoder_map.push(encoders);
         }
 
         Ok((
@@ -456,10 +485,10 @@ impl KeyboardTomlConfig {
                                 }
                                 _ => {
                                     // This case should not be reached
-                                    panic!(
-                                        "Unexpected rule encountered during layer.keys processing:{:?}",
+                                    return Err(format!(
+                                        "Unexpected rule encountered during layer.keys processing: {:?}",
                                         inner_pair.as_rule()
-                                    );
+                                    ));
                                 }
                             }
                         }
@@ -467,7 +496,7 @@ impl KeyboardTomlConfig {
                 }
             }
             Err(e) => {
-                panic!("Invalid keymap format: {}", e);
+                return Err(format!("Invalid keymap format: {}", e));
             }
         }
 

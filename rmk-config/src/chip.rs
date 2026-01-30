@@ -1,3 +1,4 @@
+use crate::error::{ConfigError, ConfigResult};
 use crate::{ChipConfig, KeyboardTomlConfig};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -17,7 +18,7 @@ pub struct ChipModel {
 }
 
 impl ChipModel {
-    pub fn get_default_config_str(&self) -> Result<&'static str, String> {
+    pub fn get_default_config_str(&self) -> ConfigResult<&'static str> {
         if let Some(board) = self.board.clone() {
             match board.as_str() {
                 "nice!nano_v2" | "nice!nano v2" => Ok(include_str!("default_config/nice_nano_v2.toml")),
@@ -36,7 +37,7 @@ impl ChipModel {
         }
     }
 
-    fn get_default_config_str_from_chip(&self, chip: &str) -> Result<&'static str, String> {
+    fn get_default_config_str_from_chip(&self, chip: &str) -> ConfigResult<&'static str> {
         match chip {
             "nrf52840" => Ok(include_str!("default_config/nrf52840.toml")),
             "nrf52833" => Ok(include_str!("default_config/nrf52833.toml")),
@@ -51,19 +52,28 @@ impl ChipModel {
                     Ok(include_str!("default_config/esp32.toml"))
                 }
             }
-            _ => Err(format!(
-                "No default chip config for {}, please report at https://github.com/HaoboGu/rmk/issues",
-                self.chip
-            )),
+            _ => Err(ConfigError::UnsupportedHardware {
+                kind: "chip".to_string(),
+                name: format!(
+                    "{}, please report at https://github.com/HaoboGu/rmk/issues",
+                    self.chip
+                ),
+            }),
         }
     }
 }
 
 impl KeyboardTomlConfig {
-    pub fn get_chip_model(&self) -> Result<ChipModel, String> {
-        let keyboard = self.keyboard.as_ref().unwrap();
+    pub fn get_chip_model(&self) -> ConfigResult<ChipModel> {
+        let keyboard = self.keyboard.as_ref().ok_or(ConfigError::MissingField {
+            field: "keyboard".to_string(),
+        })?;
+
         if keyboard.board.is_none() == keyboard.chip.is_none() {
-            return Err("Either \"board\" or \"chip\" should be set in keyboard.toml, but not both".to_string());
+            return Err(ConfigError::Validation {
+                field: "keyboard.board/chip".to_string(),
+                message: "Either 'board' or 'chip' should be set, but not both".to_string(),
+            });
         }
 
         // Check board type
@@ -80,7 +90,10 @@ impl KeyboardTomlConfig {
                     chip: "rp2040".to_string(),
                     board: Some(board),
                 }),
-                _ => Err(format!("Unsupported board: {}", board)),
+                _ => Err(ConfigError::UnsupportedHardware {
+                    kind: "board".to_string(),
+                    name: board,
+                }),
             }
         } else if let Some(chip) = keyboard.chip.clone() {
             if chip.to_lowercase().starts_with("stm32") {
@@ -108,18 +121,26 @@ impl KeyboardTomlConfig {
                     board: None,
                 })
             } else {
-                Err(format!("Unsupported chip: {}", chip))
+                Err(ConfigError::UnsupportedHardware {
+                    kind: "chip".to_string(),
+                    name: chip,
+                })
             }
         } else {
-            Err("Neither board nor chip is specified".to_string())
+            Err(ConfigError::MissingField {
+                field: "keyboard.board or keyboard.chip".to_string(),
+            })
         }
     }
 
     pub fn get_chip_config(&self) -> ChipConfig {
-        let chip_name = &self.get_chip_model().unwrap().chip;
+        let chip_name = match self.get_chip_model() {
+            Ok(model) => model.chip,
+            Err(_) => return ChipConfig::default(),
+        };
         self.chip
             .as_ref()
-            .and_then(|chip_configs| chip_configs.get(chip_name))
+            .and_then(|chip_configs| chip_configs.get(&chip_name))
             .cloned()
             .unwrap_or_default()
     }

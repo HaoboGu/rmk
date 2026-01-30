@@ -1,3 +1,4 @@
+use crate::error::{ConfigError, ConfigResult};
 use crate::{InputDeviceConfig, KeyboardTomlConfig, MatrixConfig, MatrixType, SplitConfig};
 
 #[derive(Clone, Debug)]
@@ -43,7 +44,7 @@ impl BoardConfig {
                         .clone()
                         .unwrap_or_default()
                         .encoder
-                        .unwrap_or(Vec::new())
+                        .unwrap_or_default()
                         .len(),
                 );
 
@@ -54,13 +55,20 @@ impl BoardConfig {
                             .clone()
                             .unwrap_or_default()
                             .encoder
-                            .unwrap_or(Vec::new())
+                            .unwrap_or_default()
                             .len(),
                     );
                 }
             }
             BoardConfig::UniBody(uni_body_config) => {
-                num_encoder.push(uni_body_config.input_device.encoder.clone().unwrap_or(Vec::new()).len());
+                num_encoder.push(
+                    uni_body_config
+                        .input_device
+                        .encoder
+                        .clone()
+                        .unwrap_or_default()
+                        .len(),
+                );
             }
         };
         num_encoder
@@ -68,32 +76,50 @@ impl BoardConfig {
 }
 
 impl KeyboardTomlConfig {
-    pub fn get_board_config(&self) -> Result<BoardConfig, String> {
+    pub fn get_board_config(&self) -> ConfigResult<BoardConfig> {
         let matrix = self.matrix.clone();
         let split = self.split.clone();
         let input_device = self.input_device.clone();
         match (matrix, split) {
-            (None, Some(s)) => {
-                Ok(BoardConfig::Split(s))
-            },
+            (None, Some(s)) => Ok(BoardConfig::Split(s)),
             (Some(m), None) => {
+                // Validation is now done in validation.rs
                 match m.matrix_type {
                     MatrixType::normal => {
                         if m.row_pins.is_none() || m.col_pins.is_none() {
-                            return Err("`row_pins` and `col_pins` is required for normal matrix".to_string());
+                            return Err(ConfigError::Validation {
+                                field: "matrix".to_string(),
+                                message: "`row_pins` and `col_pins` are required for normal matrix"
+                                    .to_string(),
+                            });
                         }
-                    },
+                    }
                     MatrixType::direct_pin => {
                         if m.direct_pins.is_none() {
-                            return Err("`direct_pins` is required for direct pin matrix".to_string());
+                            return Err(ConfigError::Validation {
+                                field: "matrix".to_string(),
+                                message: "`direct_pins` is required for direct pin matrix"
+                                    .to_string(),
+                            });
                         }
-                    },
+                    }
                 }
-                // FIXME: input device for split keyboard is not supported yet
-                Ok(BoardConfig::UniBody(UniBodyConfig{matrix: m, input_device: input_device.unwrap_or_default()}))
-            },
-            (None, None) => Err("[matrix] section in keyboard.toml is required for non-split keyboard".to_string()),
-            _ => Err("Use at most one of [matrix] or [split] in your keyboard.toml!\n-> [matrix] is used to define a normal matrix of non-split keyboard\n-> [split] is used to define a split keyboard\n".to_string()),
+                Ok(BoardConfig::UniBody(UniBodyConfig {
+                    matrix: m,
+                    input_device: input_device.unwrap_or_default(),
+                }))
+            }
+            (None, None) => Err(ConfigError::Validation {
+                field: "matrix/split".to_string(),
+                message: "[matrix] section is required for non-split keyboard".to_string(),
+            }),
+            _ => Err(ConfigError::Validation {
+                field: "matrix/split".to_string(),
+                message: "Use at most one of [matrix] or [split] in your keyboard.toml!\n\
+                    -> [matrix] is used to define a normal matrix of non-split keyboard\n\
+                    -> [split] is used to define a split keyboard"
+                    .to_string(),
+            }),
         }
     }
 }

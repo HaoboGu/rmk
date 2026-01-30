@@ -15,6 +15,7 @@ rmk = { path = "../../../rmk", features = [
     "split",
     "async_matrix",
     "adafruit_bl",
+    "battery-service"
 ] }
 nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "11d5c3c", features = [
     "defmt",

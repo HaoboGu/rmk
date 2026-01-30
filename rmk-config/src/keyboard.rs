@@ -1,11 +1,13 @@
+use crate::defaults;
+use crate::error::{ConfigError, ConfigResult};
 use crate::{DependencyConfig, KeyboardTomlConfig};
 
-/// Keyboard's basic info
+/// Device identification information
 #[derive(Clone, Debug)]
-pub struct Basic {
+pub struct DeviceInfo {
     /// Keyboard name
     pub name: String,
-    /// Vender id
+    /// Vendor id
     pub vendor_id: u16,
     /// Product id
     pub product_id: u16,
@@ -17,38 +19,45 @@ pub struct Basic {
     pub serial_number: String,
 }
 
-impl Default for Basic {
+impl Default for DeviceInfo {
     fn default() -> Self {
         Self {
-            name: "RMK Keyboard".to_string(),
-            vendor_id: 0xE118,
-            product_id: 0x0001,
-            manufacturer: "RMK".to_string(),
-            product_name: "RMK Keyboard".to_string(),
-            serial_number: "vial:f64c2b3c:000001".to_string(),
+            name: defaults::DEFAULT_PRODUCT_NAME.to_string(),
+            vendor_id: defaults::DEFAULT_VID,
+            product_id: defaults::DEFAULT_PID,
+            manufacturer: defaults::DEFAULT_MANUFACTURER.to_string(),
+            product_name: defaults::DEFAULT_PRODUCT_NAME.to_string(),
+            serial_number: defaults::DEFAULT_SERIAL_NUMBER.to_string(),
         }
     }
 }
 
 impl KeyboardTomlConfig {
-    pub fn get_device_config(&self) -> Basic {
-        let default = Basic::default();
-        let keyboard = self.keyboard.as_ref().unwrap();
-        Basic {
+    pub fn get_device_config(&self) -> ConfigResult<DeviceInfo> {
+        let default = DeviceInfo::default();
+        let keyboard = self.keyboard.as_ref().ok_or(ConfigError::MissingField {
+            field: "keyboard".to_string(),
+        })?;
+        Ok(DeviceInfo {
             name: keyboard.name.clone(),
             vendor_id: keyboard.vendor_id,
             product_id: keyboard.product_id,
-            manufacturer: keyboard.manufacturer.clone().unwrap_or(default.manufacturer),
-            product_name: keyboard.product_name.clone().unwrap_or(default.product_name),
-            serial_number: keyboard.serial_number.clone().unwrap_or(default.serial_number),
-        }
+            manufacturer: keyboard
+                .manufacturer
+                .clone()
+                .unwrap_or(default.manufacturer),
+            product_name: keyboard
+                .product_name
+                .clone()
+                .unwrap_or(default.product_name),
+            serial_number: keyboard
+                .serial_number
+                .clone()
+                .unwrap_or(default.serial_number),
+        })
     }
 
     pub fn get_dependency_config(&self) -> DependencyConfig {
-        if let Some(dependency) = &self.dependency {
-            dependency.clone()
-        } else {
-            DependencyConfig::default()
-        }
+        self.dependency.clone().unwrap_or_default()
     }
 }

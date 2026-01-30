@@ -2,27 +2,31 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use config::{Config, File, FileFormat};
-use serde::{Deserialize as SerdeDeserialize, de};
+use serde::de;
 use serde_derive::Deserialize;
 use serde_inline_default::serde_inline_default;
 
-pub mod chip;
-pub mod communication;
-pub mod keyboard;
-#[rustfmt::skip]
-pub mod usb_interrupt_map;
 pub mod behavior;
 pub mod board;
+pub mod chip;
+pub mod communication;
+pub mod defaults;
+pub mod error;
 pub mod host;
+pub mod keyboard;
 pub mod keycode_alias;
 pub mod layout;
 pub mod light;
 pub mod storage;
+#[rustfmt::skip]
+pub mod usb_interrupt_map;
+pub mod validation;
 
 pub use board::{BoardConfig, UniBodyConfig};
 pub use chip::{ChipModel, ChipSeries};
 pub use communication::{CommunicationConfig, UsbInfo};
-pub use keyboard::Basic;
+pub use error::{ConfigError, ConfigResult};
+pub use keyboard::DeviceInfo;
 pub use keycode_alias::KEYCODE_ALIAS;
 
 /// Configurations for RMK keyboard.
@@ -66,76 +70,130 @@ pub struct KeyboardTomlConfig {
 }
 
 impl KeyboardTomlConfig {
-    pub fn new_from_toml_path<P: AsRef<Path>>(config_toml_path: P) -> Self {
+    pub fn new_from_toml_path<P: AsRef<Path>>(config_toml_path: P) -> ConfigResult<Self> {
+        let path_str = config_toml_path.as_ref().to_string_lossy().to_string();
+
         // The first run, load chip model only
-        let user_config = match std::fs::read_to_string(config_toml_path.as_ref()) {
-            Ok(s) => match toml::from_str::<KeyboardTomlConfig>(&s) {
-                Ok(c) => c,
-                Err(e) => panic!("Parse {:?} error: {}", config_toml_path.as_ref(), e.message()),
-            },
-            Err(e) => panic!("Read keyboard config file {:?} error: {}", config_toml_path.as_ref(), e),
-        };
-        let default_config_str = user_config.get_chip_model().unwrap().get_default_config_str().unwrap();
+        let content = std::fs::read_to_string(config_toml_path.as_ref()).map_err(|e| {
+            ConfigError::FileRead {
+                path: path_str.clone(),
+                message: e.to_string(),
+            }
+        })?;
+
+        let user_config: KeyboardTomlConfig =
+            toml::from_str(&content).map_err(|e| ConfigError::TomlParse {
+                path: path_str.clone(),
+                message: e.message().to_string(),
+            })?;
+
+        let chip_model = user_config.get_chip_model()?;
+        let default_config_str = chip_model.get_default_config_str()?;
 
         // The second run, load the user config and merge with the default config
         let mut config: KeyboardTomlConfig = Config::builder()
             .add_source(File::from_str(default_config_str, FileFormat::Toml))
             .add_source(File::with_name(config_toml_path.as_ref().to_str().unwrap()))
             .build()
-            .unwrap()
+            .map_err(|e| ConfigError::TomlParse {
+                path: path_str.clone(),
+                message: e.to_string(),
+            })?
             .try_deserialize()
-            .unwrap();
+            .map_err(|e| ConfigError::TomlParse {
+                path: path_str.clone(),
+                message: e.to_string(),
+            })?;
+
+        // Run centralized validation
+        validation::validate_config(&config)?;
 
         config.auto_calculate_parameters();
 
-        config
+        Ok(config)
     }
 
     /// Auto calculate some parameters in toml:
     /// - Update morse_max_num to fit all configured morses
     /// - Update max_patterns_per_key to fit the max number of configured (pattern, action) pairs per morse key
     /// - Update peripheral number based on the number of split boards
-    /// - TODO: Update controller number based on the number of split boards
     pub fn auto_calculate_parameters(&mut self) {
         // Update the number of peripherals
-        if let Some(split) = &self.split
-            && split.peripheral.len() > self.rmk.split_peripherals_num
-        {
-            // eprintln!(
-            //     "The number of split peripherals is updated to {} from {}",
-            //     split.peripheral.len(),
-            //     self.rmk.split_peripherals_num
-            // );
-            self.rmk.split_peripherals_num = split.peripheral.len();
+        if let Some(split) = &self.split {
+            if split.peripheral.len() > self.rmk.split_peripherals_num {
+                self.rmk.split_peripherals_num = split.peripheral.len();
+            }
         }
 
         if let Some(behavior) = &self.behavior {
             // Update the max_patterns_per_key
-            if let Some(morse) = &behavior.morse
-                && let Some(morses) = &morse.morses
-            {
-                let mut max_required_patterns = self.rmk.max_patterns_per_key;
+            if let Some(morse) = &behavior.morse {
+                if let Some(morses) = &morse.morses {
+                    let mut max_required_patterns = self.rmk.max_patterns_per_key;
 
-                for morse in morses {
-                    let tap_actions_len = morse.tap_actions.as_ref().map(|v| v.len()).unwrap_or(0);
-                    let hold_actions_len = morse.hold_actions.as_ref().map(|v| v.len()).unwrap_or(0);
+                    for morse in morses {
+                        let tap_actions_len =
+                            morse.tap_actions.as_ref().map(|v| v.len()).unwrap_or(0);
+                        let hold_actions_len =
+                            morse.hold_actions.as_ref().map(|v| v.len()).unwrap_or(0);
+                        let morse_actions_len =
+                            morse.morse_actions.as_ref().map(|v| v.len()).unwrap_or(0);
 
-                    let n = tap_actions_len.max(hold_actions_len);
-                    if n > 15 {
-                        panic!("The number of taps per morse is too large, the max number of taps is 15, got {n}");
+                        max_required_patterns = max_required_patterns
+                            .max(tap_actions_len + hold_actions_len + morse_actions_len);
                     }
+                    self.rmk.max_patterns_per_key = max_required_patterns;
 
-                    let morse_actions_len = morse.morse_actions.as_ref().map(|v| v.len()).unwrap_or(0);
-
-                    max_required_patterns =
-                        max_required_patterns.max(tap_actions_len + hold_actions_len + morse_actions_len);
+                    // Update the morse_max_num
+                    self.rmk.morse_max_num = self.rmk.morse_max_num.max(morses.len());
                 }
-                self.rmk.max_patterns_per_key = max_required_patterns;
-
-                // Update the morse_max_num
-                self.rmk.morse_max_num = self.rmk.morse_max_num.max(morses.len());
             }
         }
+    }
+
+    // Reference getters for cleaner API
+    pub fn keyboard(&self) -> Option<&KeyboardInfo> {
+        self.keyboard.as_ref()
+    }
+
+    pub fn layout(&self) -> Option<&LayoutTomlConfig> {
+        self.layout.as_ref()
+    }
+
+    pub fn behavior(&self) -> Option<&BehaviorConfig> {
+        self.behavior.as_ref()
+    }
+
+    pub fn matrix(&self) -> Option<&MatrixConfig> {
+        self.matrix.as_ref()
+    }
+
+    pub fn split(&self) -> Option<&SplitConfig> {
+        self.split.as_ref()
+    }
+
+    pub fn ble(&self) -> Option<&BleConfig> {
+        self.ble.as_ref()
+    }
+
+    pub fn storage(&self) -> Option<&StorageConfig> {
+        self.storage.as_ref()
+    }
+
+    pub fn light(&self) -> Option<&LightConfig> {
+        self.light.as_ref()
+    }
+
+    pub fn input_device(&self) -> Option<&InputDeviceConfig> {
+        self.input_device.as_ref()
+    }
+
+    pub fn aliases(&self) -> Option<&HashMap<String, String>> {
+        self.aliases.as_ref()
+    }
+
+    pub fn layer(&self) -> Option<&Vec<LayerTomlConfig>> {
+        self.layer.as_ref()
     }
 }
 
@@ -145,123 +203,75 @@ impl KeyboardTomlConfig {
 #[serde(deny_unknown_fields)]
 pub struct RmkConstantsConfig {
     /// Mouse key interval (ms) - controls mouse movement speed
-    #[serde_inline_default(20)]
+    #[serde_inline_default(defaults::MOUSE_KEY_INTERVAL_MS)]
     pub mouse_key_interval: u32,
     /// Mouse wheel interval (ms) - controls scrolling speed
-    #[serde_inline_default(80)]
+    #[serde_inline_default(defaults::MOUSE_WHEEL_INTERVAL_MS)]
     pub mouse_wheel_interval: u32,
     /// Maximum number of combos keyboard can store
-    #[serde_inline_default(8)]
-    #[serde(deserialize_with = "check_combo_max_num")]
+    #[serde_inline_default(defaults::COMBO_MAX_NUM)]
     pub combo_max_num: usize,
     /// Maximum number of keys pressed simultaneously in a combo
-    #[serde_inline_default(4)]
+    #[serde_inline_default(defaults::COMBO_MAX_LENGTH)]
     pub combo_max_length: usize,
     /// Maximum number of forks for conditional key actions
-    #[serde_inline_default(8)]
-    #[serde(deserialize_with = "check_fork_max_num")]
+    #[serde_inline_default(defaults::FORK_MAX_NUM)]
     pub fork_max_num: usize,
     /// Maximum number of morses keyboard can store
-    #[serde_inline_default(8)]
-    #[serde(deserialize_with = "check_morse_max_num")]
+    #[serde_inline_default(defaults::MORSE_MAX_NUM)]
     pub morse_max_num: usize,
     /// Maximum number of patterns a morse key can handle
-    #[serde_inline_default(8)]
-    #[serde(deserialize_with = "check_max_patterns_per_key")]
+    #[serde_inline_default(defaults::MAX_PATTERNS_PER_KEY)]
     pub max_patterns_per_key: usize,
     /// Macro space size in bytes for storing sequences
-    #[serde_inline_default(256)]
+    #[serde_inline_default(defaults::MACRO_SPACE_SIZE)]
     pub macro_space_size: usize,
     /// Default debounce time in ms
-    #[serde_inline_default(20)]
+    #[serde_inline_default(defaults::DEBOUNCE_TIME_MS)]
     pub debounce_time: u16,
     /// Event channel size
-    #[serde_inline_default(16)]
+    #[serde_inline_default(defaults::EVENT_CHANNEL_SIZE)]
     pub event_channel_size: usize,
     /// Report channel size
-    #[serde_inline_default(16)]
+    #[serde_inline_default(defaults::REPORT_CHANNEL_SIZE)]
     pub report_channel_size: usize,
     /// Vial channel size
-    #[serde_inline_default(4)]
+    #[serde_inline_default(defaults::VIAL_CHANNEL_SIZE)]
     pub vial_channel_size: usize,
     /// Flash channel size
-    #[serde_inline_default(4)]
+    #[serde_inline_default(defaults::FLASH_CHANNEL_SIZE)]
     pub flash_channel_size: usize,
     /// The number of the split peripherals
-    #[serde_inline_default(1)]
+    #[serde_inline_default(defaults::SPLIT_PERIPHERALS_NUM)]
     pub split_peripherals_num: usize,
     /// The number of available BLE profiles
-    #[serde_inline_default(3)]
+    #[serde_inline_default(defaults::BLE_PROFILES_NUM)]
     pub ble_profiles_num: usize,
-    /// BLE Split Central sleep timeout in minutes (0 = disabled)
-    #[serde_inline_default(0)]
+    /// BLE Split Central sleep timeout in seconds (0 = disabled)
+    #[serde_inline_default(defaults::SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS)]
     pub split_central_sleep_timeout_seconds: u32,
-}
-
-fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
-where
-    D: de::Deserializer<'de>,
-{
-    let value = SerdeDeserialize::deserialize(deserializer)?;
-    if value > 256 {
-        panic!("❌ Parse `keyboard.toml` error: combo_max_num must be between 0 and 256, got {value}");
-    }
-    Ok(value)
-}
-
-fn check_morse_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
-where
-    D: de::Deserializer<'de>,
-{
-    let value = SerdeDeserialize::deserialize(deserializer)?;
-    if value > 256 {
-        panic!("❌ Parse `keyboard.toml` error: morse_max_num must be between 0 and 256, got {value}");
-    }
-    Ok(value)
-}
-
-fn check_max_patterns_per_key<'de, D>(deserializer: D) -> Result<usize, D::Error>
-where
-    D: de::Deserializer<'de>,
-{
-    let value = SerdeDeserialize::deserialize(deserializer)?;
-    if !(4..=65536).contains(&value) {
-        panic!("❌ Parse `keyboard.toml` error: max_patterns_per_key must be between 4 and 65566, got {value}");
-    }
-    Ok(value)
-}
-
-fn check_fork_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
-where
-    D: de::Deserializer<'de>,
-{
-    let value = SerdeDeserialize::deserialize(deserializer)?;
-    if value > 256 {
-        panic!("❌ Parse `keyboard.toml` error: fork_max_num must be between 0 and 256, got {value}");
-    }
-    Ok(value)
 }
 
 /// This separate Default impl is needed when `[rmk]` section is not set in keyboard.toml
 impl Default for RmkConstantsConfig {
     fn default() -> Self {
         Self {
-            mouse_key_interval: 20,
-            mouse_wheel_interval: 80,
-            combo_max_num: 8,
-            combo_max_length: 4,
-            fork_max_num: 8,
-            morse_max_num: 8,
-            max_patterns_per_key: 8,
-            macro_space_size: 256,
-            debounce_time: 20,
-            event_channel_size: 16,
-            report_channel_size: 16,
-            vial_channel_size: 4,
-            flash_channel_size: 4,
-            split_peripherals_num: 0,
-            ble_profiles_num: 3,
-            split_central_sleep_timeout_seconds: 0,
+            mouse_key_interval: defaults::MOUSE_KEY_INTERVAL_MS,
+            mouse_wheel_interval: defaults::MOUSE_WHEEL_INTERVAL_MS,
+            combo_max_num: defaults::COMBO_MAX_NUM,
+            combo_max_length: defaults::COMBO_MAX_LENGTH,
+            fork_max_num: defaults::FORK_MAX_NUM,
+            morse_max_num: defaults::MORSE_MAX_NUM,
+            max_patterns_per_key: defaults::MAX_PATTERNS_PER_KEY,
+            macro_space_size: defaults::MACRO_SPACE_SIZE,
+            debounce_time: defaults::DEBOUNCE_TIME_MS,
+            event_channel_size: defaults::EVENT_CHANNEL_SIZE,
+            report_channel_size: defaults::REPORT_CHANNEL_SIZE,
+            vial_channel_size: defaults::VIAL_CHANNEL_SIZE,
+            flash_channel_size: defaults::FLASH_CHANNEL_SIZE,
+            split_peripherals_num: defaults::SPLIT_PERIPHERALS_NUM,
+            ble_profiles_num: defaults::BLE_PROFILES_NUM,
+            split_central_sleep_timeout_seconds: defaults::SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS,
         }
     }
 }
@@ -273,9 +283,7 @@ pub struct LayoutTomlConfig {
     pub rows: u8,
     pub cols: u8,
     pub layers: u8,
-    pub keymap: Option<Vec<Vec<Vec<String>>>>, // Will be deprecated in the future
-    pub matrix_map: Option<String>,            // Temporarily allow both matrix_map and keymap to be set
-    pub encoder_map: Option<Vec<Vec<[String; 2]>>>, // Will be deprecated together with keymap
+    pub matrix_map: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -317,6 +325,7 @@ pub enum MatrixType {
     direct_pin,
 }
 
+#[serde_inline_default]
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct MatrixConfig {
     #[serde(default)]
@@ -324,14 +333,15 @@ pub struct MatrixConfig {
     pub row_pins: Option<Vec<String>>,
     pub col_pins: Option<Vec<String>>,
     pub direct_pins: Option<Vec<Vec<String>>>,
-    #[serde(default = "default_true")]
+    #[serde_inline_default(true)]
     pub direct_pin_low_active: bool,
-    #[serde(default = "default_false")]
+    #[serde_inline_default(false)]
     pub row2col: bool,
     pub debouncer: Option<String>,
 }
 
 /// Config for storage
+#[serde_inline_default]
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StorageConfig {
@@ -340,7 +350,7 @@ pub struct StorageConfig {
     pub start_addr: Option<usize>,
     // Number of sectors used for storage, >= 2.
     pub num_sectors: Option<u8>,
-    #[serde(default = "default_true")]
+    #[serde_inline_default(true)]
     pub enabled: bool,
     // Clear on the storage at reboot, set this to true if you want to reset the keymap
     pub clear_storage: Option<bool>,
@@ -392,11 +402,12 @@ pub struct PinConfig {
 }
 
 /// Configurations for dependencies
+#[serde_inline_default]
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DependencyConfig {
     /// Enable defmt log or not
-    #[serde(default = "default_true")]
+    #[serde_inline_default(true)]
     pub defmt_log: bool,
 }
 
@@ -643,18 +654,6 @@ pub struct SerialConfig {
 #[derive(Clone, Debug, Deserialize)]
 pub struct DurationMillis(#[serde(deserialize_with = "parse_duration_millis")] pub u64);
 
-const fn default_true() -> bool {
-    true
-}
-
-const fn default_false() -> bool {
-    false
-}
-
-const fn default_pmw3610_report_hz() -> u16 {
-    125
-}
-
 fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
     let input: String = de::Deserialize::deserialize(deserializer)?;
     let num = input.trim_end_matches(|c: char| !c.is_numeric());
@@ -725,6 +724,7 @@ pub struct JoystickConfig {
 }
 
 /// PMW3610 optical mouse sensor configuration
+#[serde_inline_default]
 #[derive(Clone, Debug, Default, Deserialize)]
 #[allow(unused)]
 #[serde(deny_unknown_fields)]
@@ -754,10 +754,11 @@ pub struct Pmw3610Config {
     pub smart_mode: bool,
 
     /// Report rate (Hz). Motion will be accumulated and emitted at this rate.
-    #[serde(default = "default_pmw3610_report_hz")]
+    #[serde_inline_default(defaults::PMW3610_REPORT_HZ)]
     pub report_hz: u16,
 }
 
+#[serde_inline_default]
 #[derive(Clone, Debug, Default, Deserialize)]
 #[allow(unused)]
 #[serde(deny_unknown_fields)]
@@ -782,7 +783,7 @@ pub struct EncoderConfig {
     // Whether the direction of the rotary encoder is reversed.
     pub reverse: Option<bool>,
     // Use MCU's internal pull-up resistor or not, defaults to false, the external pull-up resistor is needed
-    #[serde(default = "default_false")]
+    #[serde_inline_default(false)]
     pub internal_pullup: bool,
 }
 
@@ -850,14 +851,170 @@ pub struct OutputConfig {
 }
 
 impl KeyboardTomlConfig {
-    pub fn get_output_config(&self) -> Result<Vec<OutputConfig>, String> {
+    pub fn get_output_config(&self) -> ConfigResult<Vec<OutputConfig>> {
         let output_config = self.output.clone();
         let split = self.split.clone();
         match (output_config, split) {
             (None, Some(s)) => Ok(s.central.output.unwrap_or_default()),
             (Some(c), None) => Ok(c),
             (None, None) => Ok(Default::default()),
-            _ => Err("Use [[split.output]] to define outputs for split in your keyboard.toml!".to_string()),
+            _ => Err(ConfigError::Validation {
+                field: "output".to_string(),
+                message: "Use [[split.output]] to define outputs for split in your keyboard.toml!"
+                    .to_string(),
+            }),
         }
+    }
+}
+
+/// A validated keyboard configuration with all required fields guaranteed present.
+///
+/// This wrapper provides a cleaner API for consumers (like rmk-macro) by:
+/// - Eliminating the need for `.unwrap()` calls on getters
+/// - Ensuring all validation has been performed upfront
+/// - Providing reference-based access to avoid unnecessary cloning
+#[derive(Clone, Debug)]
+pub struct ValidatedConfig {
+    raw: KeyboardTomlConfig,
+    chip_model: ChipModel,
+    board_config: BoardConfig,
+    layout_config: LayoutConfig,
+    key_info: Vec<Vec<KeyInfo>>,
+    communication_config: CommunicationConfig,
+    device_info: keyboard::DeviceInfo,
+    behavior_config: BehaviorConfig,
+}
+
+impl ValidatedConfig {
+    /// Create a validated config from a raw config.
+    /// This performs all validation and extracts commonly-used derived values.
+    pub fn new(raw: KeyboardTomlConfig) -> ConfigResult<Self> {
+        let chip_model = raw.get_chip_model()?;
+        let board_config = raw.get_board_config()?;
+        let (layout_config, key_info) = raw.get_layout_config()?;
+        let communication_config = raw.get_communication_config()?;
+        let device_info = raw.get_device_config()?;
+        let behavior_config = raw.get_behavior_config()?;
+
+        Ok(Self {
+            raw,
+            chip_model,
+            board_config,
+            layout_config,
+            key_info,
+            communication_config,
+            device_info,
+            behavior_config,
+        })
+    }
+
+    /// Load and validate config from a TOML file path
+    pub fn from_toml_path<P: AsRef<std::path::Path>>(path: P) -> ConfigResult<Self> {
+        let raw = KeyboardTomlConfig::new_from_toml_path(path)?;
+        Self::new(raw)
+    }
+
+    // Getters that return references (no Result needed, guaranteed valid)
+
+    /// Get chip model (guaranteed valid)
+    pub fn chip_model(&self) -> &ChipModel {
+        &self.chip_model
+    }
+
+    /// Get board config (guaranteed valid)
+    pub fn board_config(&self) -> &BoardConfig {
+        &self.board_config
+    }
+
+    /// Get layout config (guaranteed valid)
+    pub fn layout_config(&self) -> &LayoutConfig {
+        &self.layout_config
+    }
+
+    /// Get key info (guaranteed valid)
+    pub fn key_info(&self) -> &Vec<Vec<KeyInfo>> {
+        &self.key_info
+    }
+
+    /// Get communication config (guaranteed valid)
+    pub fn communication_config(&self) -> &CommunicationConfig {
+        &self.communication_config
+    }
+
+    /// Get device info (guaranteed valid)
+    pub fn device_info(&self) -> &keyboard::DeviceInfo {
+        &self.device_info
+    }
+
+    /// Get behavior config (guaranteed valid)
+    pub fn behavior_config(&self) -> &BehaviorConfig {
+        &self.behavior_config
+    }
+
+    /// Get RMK constants config
+    pub fn rmk_config(&self) -> &RmkConstantsConfig {
+        &self.raw.rmk
+    }
+
+    /// Get host config
+    pub fn host_config(&self) -> HostConfig {
+        self.raw.host.clone().unwrap_or_default()
+    }
+
+    /// Get storage config
+    pub fn storage_config(&self) -> StorageConfig {
+        self.raw.storage.unwrap_or_default()
+    }
+
+    /// Get chip-specific config
+    pub fn chip_config(&self) -> ChipConfig {
+        self.raw.get_chip_config()
+    }
+
+    /// Get dependency config
+    pub fn dependency_config(&self) -> DependencyConfig {
+        self.raw.get_dependency_config()
+    }
+
+    /// Get output config
+    pub fn output_config(&self) -> ConfigResult<Vec<OutputConfig>> {
+        self.raw.get_output_config()
+    }
+
+    /// Access the raw config for advanced use cases
+    pub fn raw(&self) -> &KeyboardTomlConfig {
+        &self.raw
+    }
+
+    // Convenience methods
+
+    /// Check if this is a split keyboard
+    pub fn is_split(&self) -> bool {
+        matches!(self.board_config, BoardConfig::Split(_))
+    }
+
+    /// Check if BLE is enabled
+    pub fn is_ble_enabled(&self) -> bool {
+        self.communication_config.ble_enabled()
+    }
+
+    /// Check if USB is enabled
+    pub fn is_usb_enabled(&self) -> bool {
+        self.communication_config.usb_enabled()
+    }
+
+    /// Get the number of encoders for each board
+    pub fn num_encoders(&self) -> Vec<usize> {
+        self.board_config.get_num_encoder()
+    }
+
+    /// Get matrix dimensions (rows, cols)
+    pub fn matrix_dimensions(&self) -> (u8, u8) {
+        (self.layout_config.rows, self.layout_config.cols)
+    }
+
+    /// Get number of layers
+    pub fn num_layers(&self) -> u8 {
+        self.layout_config.layers
     }
 }

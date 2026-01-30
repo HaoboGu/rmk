@@ -7,12 +7,13 @@ pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
         std::env::var("KEYBOARD_TOML_PATH").expect("[ERROR]: KEYBOARD_TOML_PATH should be set in `.cargo/config.toml`");
 
     KeyboardTomlConfig::new_from_toml_path(&config_toml_path)
+        .expect("[ERROR]: Failed to parse keyboard.toml")
 }
 
 pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
-    let basic = keyboard_config.get_device_config();
-    let (layout, _) = keyboard_config.get_layout_config().unwrap();
-    let board = keyboard_config.get_board_config().unwrap();
+    let basic = keyboard_config.get_device_config().expect("[ERROR]: Failed to get device config");
+    let (layout, _) = keyboard_config.get_layout_config().expect("[ERROR]: Failed to get layout config");
+    let board = keyboard_config.get_board_config().expect("[ERROR]: Failed to get board config");
     let pid = basic.product_id;
     let vid = basic.vendor_id;
     let product_name = basic.product_name.clone();
