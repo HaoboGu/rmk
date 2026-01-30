@@ -509,11 +509,11 @@ fn expand_forks(
 
 pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
     let profiles = &keyboard_config
-        .get_behavior_config()
+        .behavior()
         .unwrap()
         .morse
         .and_then(|m| m.profiles);
-    let behavior = keyboard_config.get_behavior_config().unwrap();
+    let behavior = keyboard_config.behavior().unwrap();
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
     let one_shot = expand_one_shot(&behavior.one_shot);
     let combos = expand_combos(&behavior.combo, profiles);

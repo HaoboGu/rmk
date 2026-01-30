@@ -56,9 +56,9 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
         }
     };
 
-    let chip = keyboard_config.get_chip_model().unwrap();
-    let board = keyboard_config.get_board_config().unwrap();
-    let communication = keyboard_config.get_communication_config().unwrap();
+    let chip = keyboard_config.chip().unwrap();
+    let board = keyboard_config.board().unwrap();
+    let communication = keyboard_config.communication().unwrap();
     match chip.series {
         rmk_config::ChipSeries::Stm32 => {
             // For stm32, bind only USB interrupt by default

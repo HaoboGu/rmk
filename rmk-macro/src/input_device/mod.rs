@@ -25,13 +25,13 @@ pub(crate) fn expand_input_device_config(
     let mut processors = Vec::new();
 
     // generate ADC configuration
-    let communication = keyboard_config.get_communication_config().unwrap();
+    let communication = keyboard_config.communication().unwrap();
     let ble_config = match &communication {
         CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => Some(ble_config.clone()),
         _ => None,
     };
-    let board = keyboard_config.get_board_config().unwrap();
-    let chip = keyboard_config.get_chip_model().unwrap();
+    let board = keyboard_config.board().unwrap();
+    let chip = keyboard_config.chip().unwrap();
     let (adc_initializers, adc_processors) = match &board {
         BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => expand_adc_device(
             input_device.clone().joystick.unwrap_or(Vec::new()),

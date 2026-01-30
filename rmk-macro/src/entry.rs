@@ -70,18 +70,18 @@ pub(crate) fn rmk_entry_select(
     };
 
     // Remove the storage argument if disabled in config. The feature also needs to be disabled.
-    let storage = if keyboard_config.get_storage_config().enabled {
+    let storage = if keyboard_config.storage().enabled {
         quote! {&mut storage,}
     } else {
         TokenStream2::new()
     };
-    let keymap = if keyboard_config.get_host_config().vial_enabled {
+    let keymap = if keyboard_config.host().vial_enabled {
         quote! { &keymap, }
     } else {
         quote! {}
     };
-    let board = keyboard_config.get_board_config().unwrap();
-    let communication = keyboard_config.get_communication_config().unwrap();
+    let board = keyboard_config.board().unwrap();
+    let communication = keyboard_config.communication().unwrap();
     let usb_driver_arg = match communication {
         CommunicationConfig::Usb(_) | CommunicationConfig::Both(_, _) => quote! { driver, },
         CommunicationConfig::Ble(_) => quote! {},
@@ -188,18 +188,18 @@ pub(crate) fn rmk_entry_unibody(
     }
     tasks.extend(controllers);
     // Remove the storage argument if disabled in config. The feature also needs to be disabled.
-    let storage = if keyboard_config.get_storage_config().enabled {
+    let storage = if keyboard_config.storage().enabled {
         quote! {&mut storage,}
     } else {
         TokenStream2::new()
     };
     // Remove the keymap argument if the vial is disabled
-    let keymap = if keyboard_config.get_host_config().vial_enabled {
+    let keymap = if keyboard_config.host().vial_enabled {
         quote! { &keymap, }
     } else {
         quote! {}
     };
-    let communication = keyboard_config.get_communication_config().unwrap();
+    let communication = keyboard_config.communication().unwrap();
     match communication {
         CommunicationConfig::Usb(_) => {
             let rmk_task = quote! {

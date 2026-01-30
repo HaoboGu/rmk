@@ -5,8 +5,8 @@ use quote::{format_ident, quote};
 use rmk_config::{BoardConfig, ChipModel, ChipSeries, KeyboardTomlConfig, SerialConfig, SplitConfig};
 
 pub(crate) fn expand_split_central_config(config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
-    if let BoardConfig::Split(split_config) = &config.get_board_config().unwrap() {
-        expand_split_communication_config(&config.get_chip_model().unwrap(), split_config)
+    if let BoardConfig::Split(split_config) = &config.board().unwrap() {
+        expand_split_communication_config(&config.chip().unwrap(), split_config)
     } else {
         quote! {}
     }

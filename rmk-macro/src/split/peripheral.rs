@@ -31,10 +31,10 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
     let toml_config = read_keyboard_toml_config();
 
     let main_function = expand_split_peripheral(id, &toml_config, item_mod, &rmk_features);
-    let chip = toml_config.get_chip_model().unwrap();
+    let chip = toml_config.chip().unwrap();
 
     let bind_interrupts =
-        expand_bind_interrupt_for_split_peripheral(&chip, &toml_config.get_communication_config().unwrap());
+        expand_bind_interrupt_for_split_peripheral(&chip, &toml_config.communication().unwrap());
 
     let main_function_sig = if chip.series == ChipSeries::Esp32 {
         quote! {
@@ -147,7 +147,7 @@ fn expand_split_peripheral(
     rmk_features: &Option<Vec<String>>,
 ) -> TokenStream2 {
     // Check whether keyboard.toml contains split section
-    let board_config = keyboard_config.get_board_config().unwrap();
+    let board_config = keyboard_config.board().unwrap();
     let split_config = match &board_config {
         BoardConfig::Split(split) => split,
         _ => {
@@ -174,7 +174,7 @@ fn expand_split_peripheral(
 
     // Matrix config
     let async_matrix = is_feature_enabled(rmk_features, "async_matrix");
-    let chip = keyboard_config.get_chip_model().unwrap();
+    let chip = keyboard_config.chip().unwrap();
     let mut matrix_config = proc_macro2::TokenStream::new();
     match &peripheral_config.matrix.matrix_type {
         MatrixType::normal => {
@@ -378,13 +378,13 @@ pub(crate) fn expand_peripheral_input_device_config(
     let mut devices = Vec::new();
     let mut processors = Vec::new();
 
-    let communication = keyboard_config.get_communication_config().unwrap();
+    let communication = keyboard_config.communication().unwrap();
     let ble_config = match &communication {
         CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => Some(ble_config.clone()),
         _ => None,
     };
-    let board = keyboard_config.get_board_config().unwrap();
-    let chip = keyboard_config.get_chip_model().unwrap();
+    let board = keyboard_config.board().unwrap();
+    let chip = keyboard_config.chip().unwrap();
 
     // Create peripheral-specific BLE config for battery
     // Only use peripheral's own battery config, do NOT fallback to top-level BLE config
@@ -435,7 +435,7 @@ pub(crate) fn expand_peripheral_input_device_config(
     }
 
     // generate encoder configuration, processors are ignored
-    let num_encoders = keyboard_config.get_board_config().unwrap().get_num_encoder();
+    let num_encoders = keyboard_config.board().unwrap().get_num_encoder();
     // The num_encoders[0] is always the number of encoders on the central, so the offset should be num_encoders[0..id + 1], where id is the index of the peripheral
     let encoder_id_offset = num_encoders[0..id + 1].iter().sum::<usize>();
     let (encoder_devices, _encoder_processors) = match &board {

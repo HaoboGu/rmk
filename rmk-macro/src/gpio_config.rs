@@ -227,8 +227,8 @@ fn get_pin_num_stm32(gpio_name: &str) -> Option<String> {
 }
 
 pub fn expand_output_config(keyboard_config: &KeyboardTomlConfig) -> TokenStream {
-    let chip = keyboard_config.get_chip_model().unwrap();
-    let outputs = keyboard_config.get_output_config().unwrap();
+    let chip = keyboard_config.chip().unwrap();
+    let outputs = keyboard_config.outputs().unwrap();
     expand_output_initialization(outputs, &chip)
 }
 

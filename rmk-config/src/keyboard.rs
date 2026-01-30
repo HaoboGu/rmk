@@ -30,25 +30,4 @@ impl Default for Basic {
     }
 }
 
-impl KeyboardTomlConfig {
-    pub fn get_device_config(&self) -> Basic {
-        let default = Basic::default();
-        let keyboard = self.keyboard.as_ref().unwrap();
-        Basic {
-            name: keyboard.name.clone(),
-            vendor_id: keyboard.vendor_id,
-            product_id: keyboard.product_id,
-            manufacturer: keyboard.manufacturer.clone().unwrap_or(default.manufacturer),
-            product_name: keyboard.product_name.clone().unwrap_or(default.product_name),
-            serial_number: keyboard.serial_number.clone().unwrap_or(default.serial_number),
-        }
-    }
-
-    pub fn get_dependency_config(&self) -> DependencyConfig {
-        if let Some(dependency) = &self.dependency {
-            dependency.clone()
-        } else {
-            DependencyConfig::default()
-        }
-    }
-}
+// Methods moved to api/keyboard.rs

@@ -12,18 +12,18 @@ use crate::behavior::expand_profile_name;
 /// Also add `get_default_encoder_map`
 pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
     let profiles = &keyboard_config
-        .get_behavior_config()
+        .behavior()
         .unwrap()
         .morse
         .and_then(|m| m.profiles);
     let num_encoder = keyboard_config
-        .get_board_config()
+        .board()
         .unwrap()
         .get_num_encoder()
         .iter()
         .sum();
 
-    let (layout, _) = keyboard_config.get_layout_config().unwrap();
+    let (layout, _) = keyboard_config.layout().unwrap();
 
     let mut layers = vec![];
     let mut encoder_map = vec![];

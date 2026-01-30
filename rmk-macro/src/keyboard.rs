@@ -37,8 +37,8 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
     let keyboard_config = read_keyboard_toml_config();
 
     // Check "storage" feature gate
-    if keyboard_config.get_storage_config().enabled != is_feature_enabled(&rmk_features, "storage") {
-        if keyboard_config.get_storage_config().enabled {
+    if keyboard_config.storage().enabled != is_feature_enabled(&rmk_features, "storage") {
+        if keyboard_config.storage().enabled {
             panic!(
                 "If the \"storage\" cargo feature is disabled, `storage.enabled` must be set to false in the keyboard.toml."
             )
@@ -50,7 +50,7 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
     }
 
     // Check "vial" feature gate
-    let host_config = keyboard_config.get_host_config();
+    let host_config = keyboard_config.host();
     if host_config.vial_enabled != is_feature_enabled(&rmk_features, "vial") {
         if host_config.vial_enabled {
             panic!(
@@ -85,14 +85,14 @@ pub(crate) fn expand_imports_and_constants(config: &KeyboardTomlConfig) -> Token
     let vial_static_var = expand_vial_config(config);
 
     // Generate extra imports, panic handler and logger
-    let imports = match config.get_chip_model().unwrap().series {
+    let imports = match config.chip().unwrap().series {
         ChipSeries::Esp32 => quote! {
             use {esp_alloc as _, esp_backtrace as _};
             ::esp_bootloader_esp_idf::esp_app_desc!();
         },
         _ => {
             // If defmt_log is disabled, add an empty defmt logger impl
-            if config.get_dependency_config().defmt_log {
+            if config.dependencies().defmt_log {
                 quote! {
                     use panic_probe as _;
                     use defmt_rtt as _;
@@ -146,13 +146,13 @@ fn expand_main(
     let (controller_initializers, controllers) = expand_controller_init(keyboard_config, &item_mod);
     let run_rmk = expand_rmk_entry(keyboard_config, &item_mod, devices, processors, controllers);
 
-    let vial_config = if keyboard_config.get_host_config().vial_enabled {
+    let vial_config = if keyboard_config.host().vial_enabled {
         quote! { vial_config: VIAL_CONFIG,}
     } else {
         quote! {}
     };
 
-    let rmk_config = if keyboard_config.get_storage_config().enabled {
+    let rmk_config = if keyboard_config.storage().enabled {
         quote! {
             #[allow(clippy::needless_update)]
             let rmk_config = ::rmk::config::RmkConfig {
@@ -175,7 +175,7 @@ fn expand_main(
         }
     };
 
-    let main_function_sig = if keyboard_config.get_chip_model().unwrap().series == ChipSeries::Esp32 {
+    let main_function_sig = if keyboard_config.chip().unwrap().series == ChipSeries::Esp32 {
         quote! {
             #[::esp_rtos::main]
             async fn main(_s: ::embassy_executor::Spawner)
@@ -240,7 +240,7 @@ fn expand_main(
 
 // TODO: move this function to a separate folder
 pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
-    let (layout, key_info) = keyboard_config.get_layout_config().unwrap();
+    let (layout, key_info) = keyboard_config.layout().unwrap();
     let row = layout.rows as usize;
     let col = layout.cols as usize;
 
@@ -258,8 +258,8 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
         quote! { let mut per_key_config = ::rmk::config::PositionalConfig::new(#key_info_config); }
     };
 
-    if keyboard_config.get_storage_config().enabled {
-        let num_encoders = keyboard_config.get_board_config().unwrap().get_num_encoder();
+    if keyboard_config.storage().enabled {
+        let num_encoders = keyboard_config.board().unwrap().get_num_encoder();
         let total_num_encoders = num_encoders.iter().sum::<usize>();
         let keymap_storage_init = if total_num_encoders == 0 {
             // No encoder
@@ -314,7 +314,7 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
 }
 
 pub(crate) fn expand_matrix_and_keyboard_init(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
-    let matrix = match keyboard_config.get_board_config().unwrap() {
+    let matrix = match keyboard_config.board().unwrap() {
         BoardConfig::UniBody(UniBodyConfig {
             matrix: matrix_config,
             input_device: _,

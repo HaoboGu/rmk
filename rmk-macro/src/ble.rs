@@ -6,11 +6,11 @@ use rmk_config::{ChipSeries, CommunicationConfig, KeyboardTomlConfig};
 // Because ble configuration in `config` is enabled by a feature gate, so this function returns two TokenStreams.
 // One for initialization ble config, another one for filling this field into `RmkConfig`.
 pub(crate) fn expand_ble_config(keyboard_config: &KeyboardTomlConfig) -> (TokenStream2, TokenStream2) {
-    let communication = keyboard_config.get_communication_config().unwrap();
+    let communication = keyboard_config.communication().unwrap();
     if !communication.ble_enabled() {
         return (quote! {}, quote! {});
     }
-    let chip = keyboard_config.get_chip_model().unwrap();
+    let chip = keyboard_config.chip().unwrap();
     // Advanced parameters are only supported for nrf52(for now)
     if chip.series != ChipSeries::Nrf52 {
         return (

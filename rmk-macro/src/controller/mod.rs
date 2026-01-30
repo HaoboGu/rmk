@@ -59,8 +59,8 @@ fn expand_light_controllers(
     keyboard_config: &KeyboardTomlConfig,
     controller_feature_enabled: bool,
 ) -> (TokenStream, Vec<TokenStream>) {
-    let chip = keyboard_config.get_chip_model().unwrap();
-    let light_config = keyboard_config.get_light_config();
+    let chip = keyboard_config.chip().unwrap();
+    let light_config = keyboard_config.light();
 
     let mut initializers = TokenStream::new();
     let mut executors = vec![];

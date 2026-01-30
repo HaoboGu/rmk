@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use pest::Parser;
 use pest_derive::Parser;
 
-use crate::{KeyInfo, KeyboardTomlConfig, LayoutConfig};
+use crate::{KeyInfo, KeyboardTomlConfig, Layout};
 
 // Pest parser using the grammar files
 #[derive(Parser)]
@@ -15,13 +15,13 @@ const MAX_ALIAS_RESOLUTION_DEPTH: usize = 10;
 
 impl KeyboardTomlConfig {
     /// Layout is a mandatory field in toml, so we mainly check the sizes
-    pub fn get_layout_config(&self) -> Result<(LayoutConfig, Vec<Vec<KeyInfo>>), String> {
+    pub fn get_layout_config(&self) -> Result<(Layout, Vec<Vec<KeyInfo>>), String> {
         let aliases = self.aliases.clone().unwrap_or_default();
         let layers = self.layer.clone().unwrap_or_default();
         let mut layout = self.layout.clone().expect("layout config is required");
 
         // Temporarily allow both matrix_map and keymap to be set and append the obsolete layout.keymap based layer configurations
-        // to the new [[layer]] based layer configurations in the resulting LayoutConfig
+        // to the new [[layer]] based layer configurations in the resulting Layout
 
         // Check alias keys for whitespace
         for key in aliases.keys() {
@@ -172,7 +172,7 @@ impl KeyboardTomlConfig {
         }
 
         Ok((
-            LayoutConfig {
+            Layout {
                 rows: layout.rows,
                 cols: layout.cols,
                 layers: layout.layers,

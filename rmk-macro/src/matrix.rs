@@ -15,11 +15,11 @@ pub(crate) fn expand_matrix_config(
 ) -> proc_macro2::TokenStream {
     let async_matrix = is_feature_enabled(rmk_features, "async_matrix");
     let mut matrix_config = proc_macro2::TokenStream::new();
-    match &keyboard_config.get_board_config().unwrap() {
+    match &keyboard_config.board().unwrap() {
         BoardConfig::UniBody(UniBodyConfig { matrix, .. }) => match matrix.matrix_type {
             MatrixType::normal => {
                 matrix_config.extend(expand_matrix_input_output_pins(
-                    &keyboard_config.get_chip_model().unwrap(),
+                    &keyboard_config.chip().unwrap(),
                     matrix.row_pins.clone().unwrap(),
                     matrix.col_pins.clone().unwrap(),
                     matrix.row2col,
@@ -28,14 +28,14 @@ pub(crate) fn expand_matrix_config(
             }
             MatrixType::direct_pin => {
                 matrix_config.extend(expand_matrix_direct_pins(
-                    &keyboard_config.get_chip_model().unwrap(),
+                    &keyboard_config.chip().unwrap(),
                     matrix.direct_pins.clone().unwrap(),
                     async_matrix,
                     matrix.direct_pin_low_active,
                 ));
                 // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
                 // So we need to declaring them in advance.
-                let (layout, _) = keyboard_config.get_layout_config().unwrap();
+                let (layout, _) = keyboard_config.layout().unwrap();
                 let rows = layout.rows as usize;
                 let cols = layout.cols as usize;
                 let size = layout.rows as usize * layout.cols as usize;
@@ -54,14 +54,14 @@ pub(crate) fn expand_matrix_config(
             // Matrix config for split central
             match split_config.central.matrix.matrix_type {
                 MatrixType::normal => matrix_config.extend(expand_matrix_input_output_pins(
-                    &keyboard_config.get_chip_model().unwrap(),
+                    &keyboard_config.chip().unwrap(),
                     split_config.central.matrix.row_pins.clone().unwrap(),
                     split_config.central.matrix.col_pins.clone().unwrap(),
                     split_config.central.matrix.row2col,
                     async_matrix,
                 )),
                 MatrixType::direct_pin => matrix_config.extend(expand_matrix_direct_pins(
-                    &keyboard_config.get_chip_model().unwrap(),
+                    &keyboard_config.chip().unwrap(),
                     split_config.central.matrix.direct_pins.clone().unwrap(),
                     async_matrix,
                     split_config.central.matrix.direct_pin_low_active,

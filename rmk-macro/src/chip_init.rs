@@ -26,7 +26,7 @@ pub(crate) fn expand_chip_init(
                     match Overwritten::from_meta(&item_fn.attrs[0].meta) {
                         Ok(Overwritten::ChipConfig) => {
                             return Some(override_chip_config(
-                                &keyboard_config.get_chip_model().unwrap(),
+                                &keyboard_config.chip().unwrap(),
                                 item_fn,
                             ));
                         }
@@ -48,16 +48,16 @@ pub(crate) fn expand_chip_init(
 
 // Default implementations of chip initialization
 pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral_id: Option<usize>) -> TokenStream2 {
-    let chip = keyboard_config.get_chip_model().unwrap();
-    let communication = keyboard_config.get_communication_config().unwrap();
-    let peri_num = keyboard_config.get_board_config().unwrap().get_num_periphreal();
+    let chip = keyboard_config.chip().unwrap();
+    let communication = keyboard_config.communication().unwrap();
+    let peri_num = keyboard_config.board().unwrap().get_num_periphreal();
     match chip.series {
         ChipSeries::Stm32 => quote! {
                 let config = ::embassy_stm32::Config::default();
                 let mut p = ::embassy_stm32::init(config);
         },
         ChipSeries::Nrf52 => {
-            let chip_cfg = keyboard_config.get_chip_config();
+            let chip_cfg = keyboard_config.chip_settings();
             let dcdc_config = if chip.chip == "nrf52840" {
                 let reg0_enabled = chip_cfg.dcdc_reg0.unwrap_or(true);
                 let reg1_enabled = chip_cfg.dcdc_reg1.unwrap_or(true);
@@ -252,7 +252,7 @@ fn override_chip_config(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
 }
 
 fn get_ble_addr(keyboard_config: &KeyboardTomlConfig, peripheral_id: Option<usize>) -> TokenStream2 {
-    let chip = keyboard_config.get_chip_model().unwrap();
+    let chip = keyboard_config.chip().unwrap();
     if chip.series == ChipSeries::Nrf52 {
         quote! {
             {
@@ -266,7 +266,7 @@ fn get_ble_addr(keyboard_config: &KeyboardTomlConfig, peripheral_id: Option<usiz
         }
     } else {
         // Check whether the address is set in the keyboard.toml, if not, use the default address
-        let board = keyboard_config.get_board_config().unwrap();
+        let board = keyboard_config.board().unwrap();
         let addr = match board {
             BoardConfig::Split(split) => {
                 match peripheral_id {

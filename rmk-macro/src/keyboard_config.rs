@@ -10,9 +10,9 @@ pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
 }
 
 pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
-    let basic = keyboard_config.get_device_config();
-    let (layout, _) = keyboard_config.get_layout_config().unwrap();
-    let board = keyboard_config.get_board_config().unwrap();
+    let basic = keyboard_config.keyboard_info();
+    let (layout, _) = keyboard_config.layout().unwrap();
+    let board = keyboard_config.board().unwrap();
     let pid = basic.product_id;
     let vid = basic.vendor_id;
     let product_name = basic.product_name.clone();
@@ -41,7 +41,7 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc
 
 pub(crate) fn expand_vial_config(config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
     // Check if vial is enabled (default: true)
-    let host_config = config.get_host_config();
+    let host_config = config.host();
     if !host_config.vial_enabled {
         return quote! {};
     }
