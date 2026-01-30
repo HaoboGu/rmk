@@ -14,12 +14,23 @@ use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
 pub(crate) const CCCD_TABLE_SIZE: usize = _CCCD_TABLE_SIZE;
 
 // GATT Server definition
+// NOTE: Keep separate structs so the gatt_server macro never sees host-only fields
+// when the `host` feature is disabled.
+#[cfg(feature = "host")]
 #[gatt_server]
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
     pub(crate) hid_service: HidService,
-    #[cfg(feature = "host")]
     pub(crate) host_service: HostService,
+    pub(crate) composite_service: CompositeService,
+    pub(crate) device_config_service: DeviceConfigrmationService,
+}
+
+#[cfg(not(feature = "host"))]
+#[gatt_server]
+pub(crate) struct Server {
+    pub(crate) battery_service: BatteryService,
+    pub(crate) hid_service: HidService,
     pub(crate) composite_service: CompositeService,
     pub(crate) device_config_service: DeviceConfigrmationService,
 }
