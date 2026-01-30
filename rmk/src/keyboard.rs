@@ -20,7 +20,7 @@ use crate::config::Hand;
 use crate::descriptor::KeyboardReport;
 #[cfg(all(feature = "split", feature = "_ble", feature = "controller"))]
 use crate::event::ClearPeerEvent;
-use crate::event::{Event, KeyPos, KeyboardEvent, KeyboardEventPos, publish_input_event_async};
+use crate::event::{InputEvent, KeyPos, KeyboardEvent, KeyboardEventPos, publish_input_event_async};
 #[cfg(feature = "controller")]
 use crate::event::{KeyEvent, ModifierEvent, publish_controller_event};
 use crate::fork::{ActiveFork, StateBits};
@@ -256,7 +256,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>) -> Self {
         Keyboard {
             keymap,
-            keyboard_event_subscriber: KeyboardEvent::subscriber(),
+            keyboard_event_subscriber: KeyboardEvent::input_subscriber(),
             timer: [[None; ROW]; COL],
             rotary_encoder_timer: [[None; 2]; NUM_ENCODER],
             last_press_time: Instant::now(),
@@ -1782,7 +1782,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // Schedule next movement after the delay
                 embassy_time::Timer::after_millis(delay as u64).await;
                 // Check if there's a release event in the channel, if there's no release event, re-send the event
-                let keyboard_event_sub = KeyboardEvent::subscriber();
+                let keyboard_event_sub = KeyboardEvent::input_subscriber();
                 let len = keyboard_event_sub.len();
                 let mut released = false;
                 for _ in 0..len {

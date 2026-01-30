@@ -14,7 +14,7 @@ use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
 use crate::{
     CONNECTION_STATE,
-    event::{Event, KeyboardEvent},
+    event::{InputEvent, KeyboardEvent},
 };
 
 /// Gatt service used in split peripheral to send split message to central
@@ -195,7 +195,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
                 Err(BleHostError::BleHost(Error::Timeout)) => {
                     // Timeout, wait new keys to continue
                     error!("Connect to central timeout");
-                    let sub = KeyboardEvent::subscriber();
+                    let sub = KeyboardEvent::input_subscriber();
                     sub.clear();
                     let _ = sub.receive().await;
                     continue;

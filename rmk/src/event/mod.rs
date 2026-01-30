@@ -36,18 +36,44 @@ pub trait EventSubscriber<T> {
     async fn next_event(&mut self) -> T;
 }
 
-pub trait Event: Clone + Send {
+/// Base trait for all events
+pub trait Event: Clone + Send {}
+impl<T: Clone + Send> Event for T {}
+
+/// Trait for input device events
+///
+/// Input events use `Channel` for simple buffered communication.
+pub trait InputEvent: Event {
     type Publisher: EventPublisher<Self>;
     type Subscriber: EventSubscriber<Self>;
 
-    fn publisher() -> Self::Publisher;
-    fn subscriber() -> Self::Subscriber;
+    fn input_publisher() -> Self::Publisher;
+    fn input_subscriber() -> Self::Subscriber;
 }
 
-pub trait AsyncEvent: Event {
+/// Async version of input event trait
+pub trait AsyncInputEvent: InputEvent {
     type AsyncPublisher: AsyncEventPublisher<Self>;
 
-    fn publisher_async() -> Self::AsyncPublisher;
+    fn input_publisher_async() -> Self::AsyncPublisher;
+}
+
+/// Trait for controller events
+///
+/// Controller events use `PubSubChannel` for broadcast communication (multiple subscribers).
+pub trait ControllerEvent: Event {
+    type Publisher: EventPublisher<Self>;
+    type Subscriber: EventSubscriber<Self>;
+
+    fn controller_publisher() -> Self::Publisher;
+    fn controller_subscriber() -> Self::Subscriber;
+}
+
+/// Async version of controller event trait
+pub trait AsyncControllerEvent: ControllerEvent {
+    type AsyncPublisher: AsyncEventPublisher<Self>;
+
+    fn controller_publisher_async() -> Self::AsyncPublisher;
 }
 
 // Implementations for embassy-sync PubSubChannel

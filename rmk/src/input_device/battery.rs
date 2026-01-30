@@ -5,10 +5,10 @@ use embedded_hal::digital::InputPin;
 use rmk_macro::input_processor;
 
 use super::InputDevice;
-use crate::event::{BatteryEvent, publish_input_event_async};
+use crate::event::{BatteryEvent, ChargingStateEvent, publish_input_event_async};
 #[cfg(all(feature = "controller", feature = "_ble"))]
-use crate::event::{BatteryLevelEvent, ChargingStateEvent, publish_controller_event};
-use crate::{KeyMap, event::InputChargingStateEvent};
+use crate::event::{BatteryLevelEvent, publish_controller_event};
+use crate::KeyMap;
 
 pub(crate) static BATTERY_UPDATE: Signal<crate::RawMutex, BatteryState> = Signal::new();
 
@@ -56,7 +56,7 @@ impl<I: InputPin> InputDevice for ChargingStateReader<I> {
             let charging_state = self.state_input.is_low().unwrap_or(false);
             self.current_charging_state = charging_state;
             self.first_read = true;
-            publish_input_event_async(InputChargingStateEvent { state: charging_state }).await;
+            publish_input_event_async(ChargingStateEvent { charging: charging_state }).await;
         }
 
         loop {
@@ -66,7 +66,7 @@ impl<I: InputPin> InputDevice for ChargingStateReader<I> {
             // Only send event when charging state changes
             if charging_state != self.current_charging_state {
                 self.current_charging_state = charging_state;
-                publish_input_event_async(InputChargingStateEvent { state: charging_state }).await;
+                publish_input_event_async(ChargingStateEvent { charging: charging_state }).await;
             }
 
             // Check charging state every 5 seconds
@@ -75,7 +75,7 @@ impl<I: InputPin> InputDevice for ChargingStateReader<I> {
     }
 }
 
-#[input_processor(subscribe = [BatteryEvent, InputChargingStateEvent])]
+#[input_processor(subscribe = [BatteryEvent, ChargingStateEvent])]
 pub struct BatteryProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     adc_divider_measured: u32,
@@ -162,8 +162,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    async fn on_input_charging_state_event(&mut self, event: InputChargingStateEvent) {
-        let charging = event.state;
+    async fn on_charging_state_event(&mut self, event: ChargingStateEvent) {
+        let charging = event.charging;
         info!("Charging state changed: {:?}", charging);
 
         #[cfg(feature = "_ble")]

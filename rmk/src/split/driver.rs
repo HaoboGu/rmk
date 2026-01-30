@@ -8,13 +8,13 @@ use embassy_time::Instant;
 use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::storage::FlashOperationMessage};
 
 use super::SplitMessage;
-use crate::event::{Event, KeyboardEvent, KeyboardEventPos};
+use crate::event::{ChargingStateEvent, ControllerEvent, KeyboardEvent, KeyboardEventPos};
 #[cfg(feature = "controller")]
 use crate::event::{PeripheralBatteryEvent, publish_controller_event};
 use crate::input_device::InputDevice;
 use crate::{
     CONNECTION_STATE,
-    event::{InputChargingStateEvent, publish_input_event_async},
+    event::publish_input_event_async,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -82,10 +82,10 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
         }
 
         let mut last_sync_time = Instant::now();
-        let mut keyboard_indicator_sub = crate::event::LedIndicatorEvent::subscriber();
-        let mut layer_sub = crate::event::LayerChangeEvent::subscriber();
+        let mut keyboard_indicator_sub = crate::event::LedIndicatorEvent::controller_subscriber();
+        let mut layer_sub = crate::event::LayerChangeEvent::controller_subscriber();
         #[cfg(feature = "_ble")]
-        let mut clear_peer_sub = crate::event::ClearPeerEvent::subscriber();
+        let mut clear_peer_sub = crate::event::ClearPeerEvent::controller_subscriber();
 
         loop {
             // Calculate the time until the next 3000ms sync
@@ -203,8 +203,8 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                             SplitMessage::BatteryLevel(level) => {
                                 publish_controller_event(PeripheralBatteryEvent { id: self.id, level })
                             }
-                            SplitMessage::ChargingState(state) => {
-                                publish_input_event_async(InputChargingStateEvent { state }).await
+                            SplitMessage::ChargingState(charging) => {
+                                publish_input_event_async(ChargingStateEvent { charging }).await
                             }
                             _ => warn!("{:?} should not come from peripheral", split_message),
                         }

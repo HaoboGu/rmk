@@ -2,7 +2,7 @@ use embassy_time::{Instant, Timer};
 
 use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::driver::flex_pin::FlexPin;
-use crate::event::{KeyboardEvent, publish_controller_event_async};
+use crate::event::{KeyboardEvent, publish_input_event_async};
 use crate::input_device::InputDevice;
 use crate::matrix::{KeyState, MatrixTrait};
 
@@ -79,7 +79,7 @@ impl<Pin: FlexPin, D: DebouncerTrait<ROW, COL>, const PIN_NUM: usize, const ROW:
                         if let DebounceState::Debounced = debounce_state {
                             self.key_state[scan_y_idx][scan_x_idx].toggle_pressed();
                             self.scan_pos = (scan_y_idx, scan_x_idx);
-                            publish_controller_event_async(KeyboardEvent::key(
+                            publish_input_event_async(KeyboardEvent::key(
                                 scan_y_idx as u8,
                                 scan_x_idx as u8,
                                 self.key_state[scan_y_idx][scan_x_idx].pressed,

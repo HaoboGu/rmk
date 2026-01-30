@@ -7,10 +7,10 @@ use futures::FutureExt;
 #[cfg(all(feature = "_ble", feature = "storage"))]
 use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 
-use crate::event::Event;
+use crate::event::InputEvent;
 #[cfg(feature = "_ble")]
 use {
-    crate::event::{BatteryLevelEvent, EventSubscriber},
+    crate::event::{BatteryLevelEvent, ControllerEvent, EventSubscriber},
     crate::storage::Storage,
     embedded_storage_async::nor_flash::NorFlash,
     trouble_host::prelude::*,
@@ -24,9 +24,9 @@ use crate::event::{LayerChangeEvent, LedIndicatorEvent, publish_controller_event
 use crate::split::serial::SerialSplitDriver;
 use crate::{
     CONNECTION_STATE,
-    event::{KeyboardEvent, PointingEvent, TouchpadEvent},
+    event::{ChargingStateEvent, KeyboardEvent, PointingEvent, TouchpadEvent},
 };
-use crate::{event::InputChargingStateEvent, state::ConnectionState};
+use crate::state::ConnectionState;
 
 /// Run the split peripheral service.
 ///
@@ -80,18 +80,18 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     pub(crate) async fn run(&mut self) {
         CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
 
-        let key_sub = KeyboardEvent::subscriber();
-        let charging_state_sub = InputChargingStateEvent::subscriber();
-        let touch_sub = TouchpadEvent::subscriber();
-        let pointing_sub = PointingEvent::subscriber();
+        let key_sub = KeyboardEvent::input_subscriber();
+        let charging_state_sub = ChargingStateEvent::input_subscriber();
+        let touch_sub = TouchpadEvent::input_subscriber();
+        let pointing_sub = PointingEvent::input_subscriber();
         #[cfg(feature = "_ble")]
-        let mut battery_sub = BatteryLevelEvent::subscriber();
+        let mut battery_sub = BatteryLevelEvent::controller_subscriber();
 
         loop {
             let read_message_to_send = async {
                 let message = crate::select_biased_with_feature! {
                     e = key_sub.receive().fuse() => SplitMessage::Key(e),
-                    e = charging_state_sub.receive().fuse() => SplitMessage::ChargingState(e.state),
+                    e = charging_state_sub.receive().fuse() => SplitMessage::ChargingState(e.charging),
                     e = touch_sub.receive().fuse() => SplitMessage::Touchpad(e),
                     e = pointing_sub.receive().fuse() => SplitMessage::Pointing(e),
                     with_feature("_ble"): e = battery_sub.next_event().fuse() => SplitMessage::BatteryLevel(e.level),

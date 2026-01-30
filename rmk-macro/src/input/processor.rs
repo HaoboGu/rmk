@@ -75,7 +75,7 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
         .enumerate()
         .map(|(idx, event_type)| {
             let sub_name = format_ident!("sub{}", idx);
-            quote! { let mut #sub_name = #event_type::subscriber(); }
+            quote! { let mut #sub_name = <#event_type as ::rmk::event::InputEvent>::input_subscriber(); }
         })
         .collect();
 
@@ -118,7 +118,7 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
         impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
             async fn run(&mut self) -> ! {
                 use ::rmk::input_device::InputProcessor;
-                use ::rmk::event::Event;
+                use ::rmk::event::InputEvent;
                 use ::rmk::event::EventSubscriber;
                 use ::futures::FutureExt;
                 #(#enum_subs_defs)*
