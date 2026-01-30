@@ -7,9 +7,6 @@ use embassy_futures::join::join;
 use embassy_futures::select::{Either, Either3, select, select3};
 #[cfg(feature = "_no_usb")]
 use embassy_futures::select::{Either3, select, select3};
-#[cfg(all(feature = "_no_usb", feature = "battery-service"))]
-#[allow(unused_imports)]
-use embassy_futures::select::Either;
 use embassy_time::{Duration, Timer, with_timeout};
 use rand_core::{CryptoRng, RngCore};
 use rmk_types::led_indicator::LedIndicator;
@@ -38,7 +35,6 @@ use {
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
 };
 
-#[cfg(feature = "battery-service")]
 use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
 use crate::ble::device_info::{PnPID, VidSource};
@@ -859,7 +855,6 @@ async fn run_ble_keyboard<
     #[cfg(feature = "host")]
     let ble_host_server = BleHostServer::new(server, conn);
     let ble_led_reader = BleLedReader {};
-    #[cfg(feature = "battery-service")]
     let mut ble_battery_server = BleBatteryServer::new(server, conn);
 
     // Load CCCD table from storage
@@ -877,28 +872,14 @@ async fn run_ble_keyboard<
     update_ble_phy(stack, conn.raw()).await;
 
     let communication_task = async {
-        #[cfg(feature = "battery-service")]
+        if let Either3::First(e) = select3(
+            gatt_events_task(server, conn),
+            set_conn_params(stack, conn),
+            ble_battery_server.run(),
+        )
+        .await
         {
-            if let Either3::First(e) = select3(
-                gatt_events_task(server, conn),
-                set_conn_params(stack, conn),
-                ble_battery_server.run(),
-            )
-            .await
-            {
-                error!("[gatt_events_task] end: {:?}", e)
-            }
-        }
-        #[cfg(not(feature = "battery-service"))]
-        {
-            if let Either::First(e) = select(
-                gatt_events_task(server, conn),
-                set_conn_params(stack, conn),
-            )
-            .await
-            {
-                error!("[gatt_events_task] end: {:?}", e)
-            }
+            error!("[gatt_events_task] end: {:?}", e)
         }
     };
 

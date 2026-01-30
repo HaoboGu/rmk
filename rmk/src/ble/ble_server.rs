@@ -14,12 +14,8 @@ use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
 pub(crate) const CCCD_TABLE_SIZE: usize = _CCCD_TABLE_SIZE;
 
 // GATT Server definition
-// NOTE: We use field-level #[cfg] attributes to conditionally include services.
-// This works correctly with the #[gatt_server] macro - the macro respects
-// cfg attributes on struct fields during code generation.
 #[gatt_server]
 pub(crate) struct Server {
-    #[cfg(feature = "battery-service")]
     pub(crate) battery_service: BatteryService,
     pub(crate) hid_service: HidService,
     #[cfg(feature = "host")]
