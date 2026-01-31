@@ -17,7 +17,6 @@ use esp_radio::Controller;
 use esp_radio::ble::controller::BleConnector;
 use esp_storage::FlashStorage;
 use rmk::ble::build_ble_stack;
-use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
@@ -25,7 +24,7 @@ use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
-use rmk::{HostResources, initialize_keymap_and_storage, run_devices, run_rmk};
+use rmk::{HostResources, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
 use {esp_alloc as _, esp_backtrace as _};
 
@@ -100,9 +99,7 @@ async fn main(_s: Spawner) {
     let mut keyboard = Keyboard::new(&keymap); // Initialize the light controller
 
     join3(
-        run_devices! (
-            (matrix) => EVENT_CHANNEL,
-        ),
+        run_all!(matrix),
         keyboard.run(), // Keyboard is special
         run_rmk(&keymap, &stack, &mut storage, rmk_config),
     )

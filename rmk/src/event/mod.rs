@@ -1,23 +1,19 @@
 //! Event system for RMK
 //!
 //! This module provides:
+//! - Event infrastructure (traits, publish/subscribe patterns, implementations)
 //! - Built-in controller events (battery, connection, input, etc.)
-//! - Input device events (keyboard, touchpad, joystick, etc.)
-//! - Controller event infrastructure (publish/subscribe patterns)
+//! - Built-in input device events (keyboard, touchpad, joystick, etc.)
 
 use embassy_sync::blocking_mutex::raw::RawMutex;
 use embassy_sync::pubsub::{ImmediatePublisher, Publisher, Subscriber};
-use embassy_sync::watch;
+use embassy_sync::{channel, watch};
 
-mod builtin;
 mod controller;
-mod input_device;
+mod input;
 
-pub use builtin::*;
-pub use controller::{
-    AwaitableControllerEventTrait, ControllerEventTrait, publish_controller_event, publish_controller_event_async,
-};
-pub use input_device::*;
+pub use controller::*;
+pub use input::*;
 
 /// Trait for event publishers
 ///
@@ -29,7 +25,7 @@ pub trait EventPublisher<T> {
 
 /// Async version of event publisher trait
 pub trait AsyncEventPublisher<T> {
-    async fn async_publish(&self, message: T);
+    async fn publish_async(&self, message: T);
 }
 
 /// Trait for event subscribers
@@ -38,6 +34,46 @@ pub trait AsyncEventPublisher<T> {
 /// It's used by both controller events and potentially other event systems.
 pub trait EventSubscriber<T> {
     async fn next_event(&mut self) -> T;
+}
+
+/// Base trait for all events
+pub trait Event: Clone + Send {}
+impl<T: Clone + Send> Event for T {}
+
+/// Trait for input device events
+///
+/// Input events use `Channel` for simple buffered communication.
+pub trait InputEvent: Event {
+    type Publisher: EventPublisher<Self>;
+    type Subscriber: EventSubscriber<Self>;
+
+    fn input_publisher() -> Self::Publisher;
+    fn input_subscriber() -> Self::Subscriber;
+}
+
+/// Async version of input event trait
+pub trait AsyncInputEvent: InputEvent {
+    type AsyncPublisher: AsyncEventPublisher<Self>;
+
+    fn input_publisher_async() -> Self::AsyncPublisher;
+}
+
+/// Trait for controller events
+///
+/// Controller events use `PubSubChannel` for broadcast communication (multiple subscribers).
+pub trait ControllerEvent: Event {
+    type Publisher: EventPublisher<Self>;
+    type Subscriber: EventSubscriber<Self>;
+
+    fn controller_publisher() -> Self::Publisher;
+    fn controller_subscriber() -> Self::Subscriber;
+}
+
+/// Async version of controller event trait
+pub trait AsyncControllerEvent: ControllerEvent {
+    type AsyncPublisher: AsyncEventPublisher<Self>;
+
+    fn controller_publisher_async() -> Self::AsyncPublisher;
 }
 
 // Implementations for embassy-sync PubSubChannel
@@ -52,7 +88,7 @@ impl<'a, M: RawMutex, T: Clone, const CAP: usize, const SUBS: usize, const PUBS:
 impl<'a, M: RawMutex, T: Clone, const CAP: usize, const SUBS: usize, const PUBS: usize> AsyncEventPublisher<T>
     for Publisher<'a, M, T, CAP, SUBS, PUBS>
 {
-    async fn async_publish(&self, message: T) {
+    async fn publish_async(&self, message: T) {
         self.publish(message).await
     }
 }
@@ -78,5 +114,26 @@ impl<'a, M: RawMutex, T: Clone, const N: usize> EventSubscriber<T> for watch::Re
     // A possible solution is to call `changed()` twice in `next_event()`, but it looks ugly.
     async fn next_event(&mut self) -> T {
         self.changed().await
+    }
+}
+
+// Implementation for embassy-sync Channel
+impl<'a, M: RawMutex, T: Clone, const N: usize> EventPublisher<T> for channel::Sender<'a, M, T, N> {
+    fn publish(&self, message: T) {
+        if let Err(_) = self.try_send(message) {
+            error!("Send event to Channel error, channel is full");
+        }
+    }
+}
+
+impl<'a, M: RawMutex, T: Clone, const N: usize> AsyncEventPublisher<T> for channel::Sender<'a, M, T, N> {
+    async fn publish_async(&self, message: T) {
+        self.send(message).await
+    }
+}
+
+impl<'a, M: RawMutex, T: Clone, const N: usize> EventSubscriber<T> for channel::Receiver<'a, M, T, N> {
+    async fn next_event(&mut self) -> T {
+        self.receive().await
     }
 }

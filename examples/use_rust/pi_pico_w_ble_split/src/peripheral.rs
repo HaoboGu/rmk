@@ -15,14 +15,13 @@ use embassy_rp::peripherals::{DMA_CH0, PIO0};
 use embassy_rp::pio::{self, Pio};
 use rand::SeedableRng;
 use rmk::ble::build_ble_stack;
-use rmk::channel::EVENT_CHANNEL;
 use rmk::config::StorageConfig;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join;
 use rmk::matrix::Matrix;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
-use rmk::{HostResources, run_devices};
+use rmk::{HostResources, run_all};
 use static_cell::StaticCell;
 use {defmt_rtt as _, embassy_time as _, panic_probe as _};
 
@@ -101,11 +100,5 @@ async fn main(spawner: Spawner) {
 
     let stack = build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
     // Start
-    join(
-        run_devices! (
-            (matrix) => EVENT_CHANNEL, // Peripheral uses EVENT_CHANNEL to send events to central
-        ),
-        run_rmk_split_peripheral(0, &stack, &mut storage),
-    )
-    .await;
+    join(run_all!(matrix), run_rmk_split_peripheral(0, &stack, &mut storage)).await;
 }

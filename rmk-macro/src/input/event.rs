@@ -3,31 +3,31 @@ use quote::{ToTokens, quote};
 use syn::parse::Parser;
 use syn::{Attribute, DeriveInput, Meta, parse_macro_input};
 
-/// Generates controller event infrastructure.
+/// Generates input event infrastructure using embassy_sync::channel::Channel.
 ///
-/// This macro can be combined with `#[input_event]` on the same struct to create
+/// This macro can be combined with `#[controller_event]` on the same struct to create
 /// a dual-channel event type that supports both input and controller event patterns.
 /// The order of the two macros does not matter.
 ///
-/// See `rmk::event::ControllerEvent` for usage.
-pub fn controller_event_impl(
+/// See `rmk::event::InputEvent` for usage.
+pub fn input_event_impl(
     attr: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
-    // Parse attributes
-    let (channel_size, subs, pubs) = if attr.is_empty() {
-        (None, None, None)
+    // Parse attributes - only channel_size is used for Channel
+    let channel_size = if attr.is_empty() {
+        None
     } else {
-        parse_controller_event_attributes(attr)
+        parse_input_event_attributes(attr)
     };
 
     // Validate input is a struct or enum
     if !matches!(input.data, syn::Data::Struct(_) | syn::Data::Enum(_)) {
         return syn::Error::new_spanned(
             input,
-            "#[controller_event] can only be applied to structs or enums",
+            "#[input_event] can only be applied to structs or enums",
         )
         .to_compile_error()
         .into();
@@ -37,88 +37,78 @@ pub fn controller_event_impl(
     if !has_derive(&input.attrs, "Clone") || !has_derive(&input.attrs, "Copy") {
         return syn::Error::new_spanned(
             input,
-            "#[controller_event] requires the struct to derive Clone and Copy",
+            "#[input_event] requires the struct to derive Clone and Copy",
         )
         .to_compile_error()
         .into();
     }
 
-    // Check if input_event macro is also present and extract its parameters
-    let input_event_attr = input
+    // Check if controller_event macro is also present and extract its parameters
+    let controller_event_attr = input
         .attrs
         .iter()
-        .find(|attr| attr.path().is_ident("input_event"));
+        .find(|attr| attr.path().is_ident("controller_event"));
 
     let type_name = &input.ident;
     let vis = &input.vis;
     let generics = &input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    // Generate ControllerEvent channel and trait implementations
-    let controller_channel_name = syn::Ident::new(
+    // Generate InputEvent channel and trait implementations
+    let input_channel_name = syn::Ident::new(
         &format!(
-            "{}_CONTROLLER_CHANNEL",
+            "{}_INPUT_CHANNEL",
             to_upper_snake_case(&type_name.to_string())
         ),
         type_name.span(),
     );
 
-    let cap = channel_size.unwrap_or_else(|| quote::quote! { 1 });
-    let subs_val = subs.unwrap_or_else(|| quote::quote! { 4 });
-    let pubs_val = pubs.unwrap_or_else(|| quote::quote! { 1 });
+    let cap = channel_size.unwrap_or_else(|| quote::quote! { 8 });
 
-    let controller_channel_static = quote! {
-        static #controller_channel_name: ::embassy_sync::pubsub::PubSubChannel<
+    let input_channel_static = quote! {
+        static #input_channel_name: ::embassy_sync::channel::Channel<
             ::rmk::RawMutex,
             #type_name #ty_generics,
-            { #cap },
-            { #subs_val },
-            { #pubs_val }
-        > = ::embassy_sync::pubsub::PubSubChannel::new();
+            { #cap }
+        > = ::embassy_sync::channel::Channel::new();
     };
 
-    let controller_event_impl = quote! {
-        impl #impl_generics ::rmk::event::ControllerEvent for #type_name #ty_generics #where_clause {
-            type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
+    let input_event_impl = quote! {
+        impl #impl_generics ::rmk::event::InputEvent for #type_name #ty_generics #where_clause {
+            type Publisher = ::embassy_sync::channel::Sender<
                 'static,
                 ::rmk::RawMutex,
                 #type_name #ty_generics,
-                { #cap },
-                { #subs_val },
-                { #pubs_val }
+                { #cap }
             >;
-            type Subscriber = ::embassy_sync::pubsub::Subscriber<
+            type Subscriber = ::embassy_sync::channel::Receiver<
                 'static,
                 ::rmk::RawMutex,
                 #type_name #ty_generics,
-                { #cap },
-                { #subs_val },
-                { #pubs_val }
+                { #cap }
             >;
 
-            fn controller_publisher() -> Self::Publisher {
-                #controller_channel_name.immediate_publisher()
+            fn input_publisher() -> Self::Publisher {
+                #input_channel_name.sender()
             }
 
-            fn controller_subscriber() -> Self::Subscriber {
-                #controller_channel_name.subscriber().unwrap()
+            fn input_subscriber() -> Self::Subscriber {
+                #input_channel_name.receiver()
             }
         }
     };
 
-    let async_controller_event_impl = quote! {
-        impl #impl_generics ::rmk::event::AsyncControllerEvent for #type_name #ty_generics #where_clause {
-            type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
+    let async_input_event_impl = quote! {
+        impl #impl_generics ::rmk::event::AsyncInputEvent for #type_name #ty_generics #where_clause {
+            type AsyncPublisher = ::embassy_sync::channel::Sender<
                 'static,
                 ::rmk::RawMutex,
                 #type_name #ty_generics,
-                { #cap },
-                { #subs_val },
-                { #pubs_val }
+                { #cap }
             >;
 
-            fn controller_publisher_async() -> Self::AsyncPublisher {
-                #controller_channel_name.publisher().unwrap()
+            fn input_publisher_async() -> Self::AsyncPublisher {
+                #input_channel_name.sender()
             }
         }
     };
@@ -153,64 +143,75 @@ pub fn controller_event_impl(
         _ => unreachable!(),
     };
 
-    let expanded = if let Some(input_attr) = input_event_attr {
-        // input_event is also present, generate both sets of implementations
-        let input_channel_size = parse_input_event_attr_from_attribute(input_attr);
+    let expanded = if let Some(ctrl_attr) = controller_event_attr {
+        // controller_event is also present, generate both sets of implementations
+        let (ctrl_channel_size, ctrl_subs, ctrl_pubs) =
+            parse_controller_event_attr_from_attribute(ctrl_attr);
 
-        let input_channel_name = syn::Ident::new(
+        let controller_channel_name = syn::Ident::new(
             &format!(
-                "{}_INPUT_CHANNEL",
+                "{}_CONTROLLER_CHANNEL",
                 to_upper_snake_case(&type_name.to_string())
             ),
             type_name.span(),
         );
 
-        let input_cap = input_channel_size.unwrap_or_else(|| quote::quote! { 8 });
+        let ctrl_cap = ctrl_channel_size.unwrap_or_else(|| quote::quote! { 1 });
+        let ctrl_subs_val = ctrl_subs.unwrap_or_else(|| quote::quote! { 4 });
+        let ctrl_pubs_val = ctrl_pubs.unwrap_or_else(|| quote::quote! { 1 });
 
-        let input_channel_static = quote! {
-            static #input_channel_name: ::embassy_sync::channel::Channel<
+        let controller_channel_static = quote! {
+            static #controller_channel_name: ::embassy_sync::pubsub::PubSubChannel<
                 ::rmk::RawMutex,
                 #type_name #ty_generics,
-                { #input_cap }
-            > = ::embassy_sync::channel::Channel::new();
+                { #ctrl_cap },
+                { #ctrl_subs_val },
+                { #ctrl_pubs_val }
+            > = ::embassy_sync::pubsub::PubSubChannel::new();
         };
 
-        let input_event_impl = quote! {
-            impl #impl_generics ::rmk::event::InputEvent for #type_name #ty_generics #where_clause {
-                type Publisher = ::embassy_sync::channel::Sender<
+        let controller_event_impl = quote! {
+            impl #impl_generics ::rmk::event::ControllerEvent for #type_name #ty_generics #where_clause {
+                type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
                     'static,
                     ::rmk::RawMutex,
                     #type_name #ty_generics,
-                    { #input_cap }
+                    { #ctrl_cap },
+                    { #ctrl_subs_val },
+                    { #ctrl_pubs_val }
                 >;
-                type Subscriber = ::embassy_sync::channel::Receiver<
+                type Subscriber = ::embassy_sync::pubsub::Subscriber<
                     'static,
                     ::rmk::RawMutex,
                     #type_name #ty_generics,
-                    { #input_cap }
+                    { #ctrl_cap },
+                    { #ctrl_subs_val },
+                    { #ctrl_pubs_val }
                 >;
 
-                fn input_publisher() -> Self::Publisher {
-                    #input_channel_name.sender()
+                fn controller_publisher() -> Self::Publisher {
+                    #controller_channel_name.immediate_publisher()
                 }
 
-                fn input_subscriber() -> Self::Subscriber {
-                    #input_channel_name.receiver()
+                fn controller_subscriber() -> Self::Subscriber {
+                    #controller_channel_name.subscriber().unwrap()
                 }
             }
         };
 
-        let async_input_event_impl = quote! {
-            impl #impl_generics ::rmk::event::AsyncInputEvent for #type_name #ty_generics #where_clause {
-                type AsyncPublisher = ::embassy_sync::channel::Sender<
+        let async_controller_event_impl = quote! {
+            impl #impl_generics ::rmk::event::AsyncControllerEvent for #type_name #ty_generics #where_clause {
+                type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
                     'static,
                     ::rmk::RawMutex,
                     #type_name #ty_generics,
-                    { #input_cap }
+                    { #ctrl_cap },
+                    { #ctrl_subs_val },
+                    { #ctrl_pubs_val }
                 >;
 
-                fn input_publisher_async() -> Self::AsyncPublisher {
-                    #input_channel_name.sender()
+                fn controller_publisher_async() -> Self::AsyncPublisher {
+                    #controller_channel_name.publisher().unwrap()
                 }
             }
         };
@@ -219,11 +220,23 @@ pub fn controller_event_impl(
             #(#filtered_attrs)*
             #vis #type_def
 
+            #input_channel_static
+
+            #input_event_impl
+
+            #async_input_event_impl
+
             #controller_channel_static
 
             #controller_event_impl
 
             #async_controller_event_impl
+        }
+    } else {
+        // Only input_event
+        quote! {
+            #(#filtered_attrs)*
+            #vis #type_def
 
             #input_channel_static
 
@@ -231,26 +244,43 @@ pub fn controller_event_impl(
 
             #async_input_event_impl
         }
-    } else {
-        // Only controller_event
-        quote! {
-            #(#filtered_attrs)*
-            #vis #type_def
-
-            #controller_channel_static
-
-            #controller_event_impl
-
-            #async_controller_event_impl
-        }
     };
 
     expanded.into()
 }
 
-/// Parse controller_event macro attributes: (channel_size, subs, pubs)
-fn parse_controller_event_attributes(
-    attr: proc_macro::TokenStream,
+/// Parse input_event macro attributes: only channel_size is needed for Channel
+fn parse_input_event_attributes(attr: proc_macro::TokenStream) -> Option<proc_macro2::TokenStream> {
+    use syn::Token;
+    use syn::punctuated::Punctuated;
+
+    let mut channel_size = None;
+
+    let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
+    let attr2: proc_macro2::TokenStream = attr.into();
+
+    match parser.parse2(attr2) {
+        Ok(parsed) => {
+            for meta in parsed {
+                if let Meta::NameValue(nv) = meta {
+                    if nv.path.is_ident("channel_size") {
+                        let expr = &nv.value;
+                        channel_size = Some(quote::quote! { #expr });
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            panic!("Failed to parse input_event attributes: {}", e);
+        }
+    }
+
+    channel_size
+}
+
+/// Parse controller_event parameters from an Attribute
+fn parse_controller_event_attr_from_attribute(
+    attr: &Attribute,
 ) -> (
     Option<proc_macro2::TokenStream>,
     Option<proc_macro2::TokenStream>,
@@ -263,11 +293,9 @@ fn parse_controller_event_attributes(
     let mut subs = None;
     let mut pubs = None;
 
-    let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
-    let attr2: proc_macro2::TokenStream = attr.into();
-
-    match parser.parse2(attr2) {
-        Ok(parsed) => {
+    if let Meta::List(meta_list) = &attr.meta {
+        let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
+        if let Ok(parsed) = parser.parse2(meta_list.tokens.clone()) {
             for meta in parsed {
                 if let Meta::NameValue(nv) = meta {
                     if nv.path.is_ident("channel_size") {
@@ -283,36 +311,9 @@ fn parse_controller_event_attributes(
                 }
             }
         }
-        Err(e) => {
-            panic!("Failed to parse controller_event attributes: {}", e);
-        }
     }
 
     (channel_size, subs, pubs)
-}
-
-/// Parse input_event parameters from an Attribute
-fn parse_input_event_attr_from_attribute(attr: &Attribute) -> Option<proc_macro2::TokenStream> {
-    use syn::Token;
-    use syn::punctuated::Punctuated;
-
-    let mut channel_size = None;
-
-    if let Meta::List(meta_list) = &attr.meta {
-        let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
-        if let Ok(parsed) = parser.parse2(meta_list.tokens.clone()) {
-            for meta in parsed {
-                if let Meta::NameValue(nv) = meta {
-                    if nv.path.is_ident("channel_size") {
-                        let expr = &nv.value;
-                        channel_size = Some(quote::quote! { #expr });
-                    }
-                }
-            }
-        }
-    }
-
-    channel_size
 }
 
 /// Check if a type has a specific derive attribute
@@ -359,20 +360,15 @@ mod tests {
     #[test]
     fn test_to_upper_snake_case() {
         // Basic cases
-        assert_eq!(to_upper_snake_case("BatteryEvent"), "BATTERY_EVENT");
         assert_eq!(to_upper_snake_case("KeyEvent"), "KEY_EVENT");
+        assert_eq!(to_upper_snake_case("ModifierEvent"), "MODIFIER_EVENT");
         assert_eq!(
-            to_upper_snake_case("SplitPeripheralBatteryEvent"),
-            "SPLIT_PERIPHERAL_BATTERY_EVENT"
+            to_upper_snake_case("TouchpadEvent"),
+            "TOUCHPAD_EVENT"
         );
 
         // Acronyms should stay together
-        assert_eq!(to_upper_snake_case("WPMEvent"), "WPM_EVENT");
-        assert_eq!(to_upper_snake_case("BLEState"), "BLE_STATE");
-        assert_eq!(to_upper_snake_case("USBConnection"), "USB_CONNECTION");
-
-        // Mixed acronyms and words
-        assert_eq!(to_upper_snake_case("HTMLParser"), "HTML_PARSER");
-        assert_eq!(to_upper_snake_case("parseHTMLString"), "PARSE_HTML_STRING");
+        assert_eq!(to_upper_snake_case("USBEvent"), "USB_EVENT");
+        assert_eq!(to_upper_snake_case("HIDDevice"), "HID_DEVICE");
     }
 }

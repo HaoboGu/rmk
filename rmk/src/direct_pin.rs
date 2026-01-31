@@ -5,10 +5,13 @@ use embedded_hal::digital::InputPin;
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
 use crate::MatrixTrait;
-use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::event::{Event, KeyboardEvent};
+use crate::event::KeyboardEvent;
 use crate::input_device::InputDevice;
 use crate::matrix::KeyState;
+use crate::{
+    debounce::{DebounceState, DebouncerTrait},
+    event::publish_input_event_async,
+};
 
 /// DirectPinMartex only has input pins.
 pub struct DirectPinMatrix<
@@ -18,6 +21,8 @@ pub struct DirectPinMatrix<
     const ROW: usize,
     const COL: usize,
     const SIZE: usize,
+    const ROW_OFFSET: usize = 0,
+    const COL_OFFSET: usize = 0,
 > {
     /// Input pins of the pcb matrix
     direct_pins: [[Option<In>; COL]; ROW],
@@ -40,7 +45,9 @@ impl<
     const ROW: usize,
     const COL: usize,
     const SIZE: usize,
-> DirectPinMatrix<In, D, ROW, COL, SIZE>
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+> DirectPinMatrix<In, D, ROW, COL, SIZE, ROW_OFFSET, COL_OFFSET>
 {
     /// Create a matrix from input and output pins.
     pub fn new(direct_pins: [[Option<In>; COL]; ROW], debouncer: D, low_active: bool) -> Self {
@@ -62,9 +69,11 @@ impl<
     const ROW: usize,
     const COL: usize,
     const SIZE: usize,
-> InputDevice for DirectPinMatrix<In, D, ROW, COL, SIZE>
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+> InputDevice for DirectPinMatrix<In, D, ROW, COL, SIZE, ROW_OFFSET, COL_OFFSET>
 {
-    async fn read_event(&mut self) -> crate::event::Event {
+    async fn read_event(&mut self) -> ! {
         loop {
             let (row_idx_start, col_idx_start) = self.scan_pos;
 
@@ -96,7 +105,12 @@ impl<
                             let key_state = self.key_states[row_idx][col_idx];
 
                             self.scan_pos = (row_idx, col_idx);
-                            return Event::Key(KeyboardEvent::key(row_idx as u8, col_idx as u8, key_state.pressed));
+                            publish_input_event_async(KeyboardEvent::key(
+                                (row_idx + ROW_OFFSET) as u8,
+                                (col_idx + COL_OFFSET) as u8,
+                                key_state.pressed,
+                            ))
+                            .await;
                         }
 
                         // If there's key still pressed, always refresh the self.scan_start
@@ -122,7 +136,9 @@ impl<
     const ROW: usize,
     const COL: usize,
     const SIZE: usize,
-> MatrixTrait<ROW, COL> for DirectPinMatrix<In, D, ROW, COL, SIZE>
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+> MatrixTrait<ROW, COL> for DirectPinMatrix<In, D, ROW, COL, SIZE, ROW_OFFSET, COL_OFFSET>
 {
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {

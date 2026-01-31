@@ -11,10 +11,9 @@ mod my_keyboard {
     use embassy_stm32::Config;
     use embassy_stm32::time::Hertz;
     use embassy_stm32::usb::Driver;
-    use rmk::channel::EVENT_CHANNEL;
     use rmk::futures::future::join3;
     use rmk::input_device::Runnable;
-    use rmk::{run_devices, run_rmk};
+    use rmk::{run_all, run_rmk};
     use static_cell::StaticCell;
 
     // If you want customize interrupte binding , use `#[Override(bind_interrupt)]` to override default interrupt binding
@@ -84,7 +83,7 @@ mod my_keyboard {
     fn run() {
         // Start
         join3(
-            run_devices!((matrix) => EVENT_CHANNEL),
+            run_all!(matrix),
             keyboard.run(),
             // run_rmk(&keymap, driver, &mut storage, rmk_config),
             run_rmk(&keymap, driver, rmk_config),
