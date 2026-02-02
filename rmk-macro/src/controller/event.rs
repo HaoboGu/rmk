@@ -3,6 +3,8 @@ use quote::{ToTokens, quote};
 use syn::parse::Parser;
 use syn::{Attribute, DeriveInput, Meta, parse_macro_input};
 
+use crate::input::runnable::{has_derive, reconstruct_type_def, to_upper_snake_case};
+
 /// Generates controller event infrastructure.
 ///
 /// This macro can be combined with `#[input_event]` on the same struct to create
@@ -134,24 +136,7 @@ pub fn controller_event_impl(
         .collect();
 
     // Reconstruct the type definition (struct or enum)
-    let type_def = match &input.data {
-        syn::Data::Struct(data_struct) => match &data_struct.fields {
-            syn::Fields::Named(fields) => {
-                quote! { struct #type_name #generics #fields #where_clause }
-            }
-            syn::Fields::Unnamed(fields) => {
-                quote! { struct #type_name #generics #fields #where_clause ; }
-            }
-            syn::Fields::Unit => {
-                quote! { struct #type_name #generics #where_clause ; }
-            }
-        },
-        syn::Data::Enum(data_enum) => {
-            let variants = &data_enum.variants;
-            quote! { enum #type_name #generics #where_clause { #variants } }
-        }
-        _ => unreachable!(),
-    };
+    let type_def = reconstruct_type_def(&input);
 
     let expanded = if let Some(input_attr) = input_event_attr {
         // input_event is also present, generate both sets of implementations
@@ -313,66 +298,4 @@ fn parse_input_event_attr_from_attribute(attr: &Attribute) -> Option<proc_macro2
     }
 
     channel_size
-}
-
-/// Check if a type has a specific derive attribute
-fn has_derive(attrs: &[Attribute], derive_name: &str) -> bool {
-    attrs.iter().any(|attr| {
-        if attr.path().is_ident("derive")
-            && let Meta::List(meta_list) = &attr.meta
-        {
-            return meta_list.tokens.to_string().contains(derive_name);
-        }
-        false
-    })
-}
-
-/// Convert CamelCase to UPPER_SNAKE_CASE for channel names
-fn to_upper_snake_case(s: &str) -> String {
-    let mut result = String::new();
-    let chars: Vec<char> = s.chars().collect();
-
-    for i in 0..chars.len() {
-        let c = chars[i];
-
-        if c.is_uppercase() {
-            let add_underscore = i > 0
-                && (chars[i - 1].is_lowercase()
-                    || (i + 1 < chars.len() && chars[i + 1].is_lowercase()));
-
-            if add_underscore {
-                result.push('_');
-            }
-            result.push(c);
-        } else {
-            result.push(c.to_ascii_uppercase());
-        }
-    }
-
-    result
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_to_upper_snake_case() {
-        // Basic cases
-        assert_eq!(to_upper_snake_case("BatteryEvent"), "BATTERY_EVENT");
-        assert_eq!(to_upper_snake_case("KeyEvent"), "KEY_EVENT");
-        assert_eq!(
-            to_upper_snake_case("SplitPeripheralBatteryEvent"),
-            "SPLIT_PERIPHERAL_BATTERY_EVENT"
-        );
-
-        // Acronyms should stay together
-        assert_eq!(to_upper_snake_case("WPMEvent"), "WPM_EVENT");
-        assert_eq!(to_upper_snake_case("BLEState"), "BLE_STATE");
-        assert_eq!(to_upper_snake_case("USBConnection"), "USB_CONNECTION");
-
-        // Mixed acronyms and words
-        assert_eq!(to_upper_snake_case("HTMLParser"), "HTML_PARSER");
-        assert_eq!(to_upper_snake_case("parseHTMLString"), "PARSE_HTML_STRING");
-    }
 }

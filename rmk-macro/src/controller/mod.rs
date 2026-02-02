@@ -8,6 +8,11 @@ use syn::{DeriveInput, ItemMod, Meta, Path, parse_macro_input};
 
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::gpio_config::convert_gpio_str_to_output_pin;
+use crate::input::runnable::{
+    deduplicate_type_generics, generate_runnable, has_runnable_marker, parse_input_device_config,
+    parse_input_processor_config, reconstruct_type_def, to_snake_case, ControllerConfig as SharedControllerConfig,
+    InputDeviceConfig, InputProcessorConfig,
+};
 
 /// Expands the controller initialization code based on the keyboard configuration.
 /// Returns a tuple containing: (controller_initialization, controller_execution)
@@ -170,22 +175,53 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     }
 
     // Check for runnable_generated marker
-    let has_runnable_marker = input.attrs.iter().any(|attr| {
-        let path = attr.path();
-        path.is_ident("runnable_generated")
-            || (path.segments.len() == 2
-                && path.segments[0].ident == "rmk"
-                && path.segments[1].ident == "runnable_generated")
-    });
+    let has_marker = has_runnable_marker(&input.attrs);
 
     // Check for input_device or input_processor attributes (for combined Runnable generation)
     let has_input_device = input.attrs.iter().any(|attr| attr.path().is_ident("input_device"));
     let has_input_processor = input.attrs.iter().any(|attr| attr.path().is_ident("input_processor"));
 
+    // Parse input_device config if present (for combined Runnable)
+    let input_device_config: Option<InputDeviceConfig> = if has_input_device {
+        input
+            .attrs
+            .iter()
+            .find(|attr| attr.path().is_ident("input_device"))
+            .and_then(|attr| {
+                if let Meta::List(meta_list) = &attr.meta {
+                    parse_input_device_config(meta_list.tokens.clone())
+                } else {
+                    None
+                }
+            })
+    } else {
+        None
+    };
+
+    // Parse input_processor config if present (for combined Runnable)
+    let input_processor_config: Option<InputProcessorConfig> = if has_input_processor {
+        input
+            .attrs
+            .iter()
+            .find(|attr| attr.path().is_ident("input_processor"))
+            .map(|attr| {
+                if let Meta::List(meta_list) = &attr.meta {
+                    parse_input_processor_config(meta_list.tokens.clone())
+                } else {
+                    InputProcessorConfig { event_types: vec![] }
+                }
+            })
+    } else {
+        None
+    };
+
     let struct_name = &input.ident;
     let vis = &input.vis;
     let generics = &input.generics;
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    let (impl_generics, _ty_generics, where_clause) = generics.split_for_impl();
+
+    // Use deduplicated type generics to handle cfg-conditional generic parameters
+    let deduped_ty_generics = deduplicate_type_generics(generics);
 
     // Filter out controller attribute and runnable_generated marker from output
     let attrs: Vec<_> = input
@@ -202,20 +238,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         .collect();
 
     // Reconstruct the struct definition
-    let struct_def = match &input.data {
-        syn::Data::Struct(data_struct) => match &data_struct.fields {
-            syn::Fields::Named(fields) => {
-                quote! { struct #struct_name #generics #fields #where_clause }
-            }
-            syn::Fields::Unnamed(fields) => {
-                quote! { struct #struct_name #generics #fields #where_clause ; }
-            }
-            syn::Fields::Unit => {
-                quote! { struct #struct_name #generics #where_clause ; }
-            }
-        },
-        _ => unreachable!(),
-    };
+    let struct_def = reconstruct_type_def(&input);
 
     // Generate internal enum name
     let enum_name = format_ident!("{}EventEnum", struct_name);
@@ -269,7 +292,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     // Generate PollingController implementation if poll_interval is specified
     let polling_controller_impl = if let Some(interval_ms) = config.poll_interval_ms {
         quote! {
-            impl #impl_generics ::rmk::controller::PollingController for #struct_name #ty_generics #where_clause {
+            impl #impl_generics ::rmk::controller::PollingController for #struct_name #deduped_ty_generics #where_clause {
                 fn interval(&self) -> ::embassy_time::Duration {
                     ::embassy_time::Duration::from_millis(#interval_ms)
                 }
@@ -284,36 +307,27 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     };
 
     // Generate Runnable implementation
-    let runnable_impl = if has_runnable_marker || has_input_device || has_input_processor {
-        // Skip Runnable generation if marker is present or other macros will generate it
+    let runnable_impl = if has_marker {
+        // Skip Runnable generation if marker is present (another macro already generated it)
         quote! {}
     } else {
-        // Generate standalone Runnable for controller only
-        if config.poll_interval_ms.is_some() {
-            // Controller with polling
-            quote! {
-                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
-                    async fn run(&mut self) -> ! {
-                        use ::rmk::controller::PollingController;
-                        self.polling_loop().await
-                    }
-                }
-            }
-        } else {
-            // Controller without polling (event-driven only)
-            quote! {
-                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
-                    async fn run(&mut self) -> ! {
-                        use ::rmk::controller::EventController;
-                        self.event_loop().await
-                    }
-                }
-            }
-        }
+        let controller_cfg = SharedControllerConfig {
+            event_types: config.event_types.clone(),
+            poll_interval_ms: config.poll_interval_ms,
+        };
+
+        generate_runnable(
+            struct_name,
+            generics,
+            where_clause,
+            input_device_config.as_ref(),
+            input_processor_config.as_ref(),
+            Some(&controller_cfg),
+        )
     };
 
-    // Add marker attribute if we generated Runnable and there are other macros
-    let marker_attr = if !has_runnable_marker && (has_input_device || has_input_processor) {
+    // Add marker attribute if we generated Runnable and there are other macros that need to skip
+    let marker_attr = if !has_marker && (has_input_device || has_input_processor) {
         quote! { #[::rmk::runnable_generated] }
     } else {
         quote! {}
@@ -333,7 +347,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         // From impls for convenient event conversion
         #(#from_impls)*
 
-        impl #impl_generics ::rmk::controller::Controller for #struct_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::controller::Controller for #struct_name #deduped_ty_generics #where_clause {
             type Event = #enum_name;
 
             async fn process_event(&mut self, event: Self::Event) {
@@ -428,34 +442,6 @@ fn event_type_to_method_name(path: &Path) -> syn::Ident {
     format_ident!("on_{}_event", snake_case)
 }
 
-/// Convert CamelCase to snake_case
-fn to_snake_case(s: &str) -> String {
-    let mut result = String::new();
-    let chars: Vec<char> = s.chars().collect();
-
-    for i in 0..chars.len() {
-        let c = chars[i];
-
-        if c.is_uppercase() {
-            // Add underscore before uppercase letter if:
-            // 1. Not at start (i > 0)
-            // 2. Previous char is lowercase OR
-            // 3. Next char exists and is lowercase (end of acronym: "HTMLParser" -> "html_parser")
-            let add_underscore =
-                i > 0 && (chars[i - 1].is_lowercase() || (i + 1 < chars.len() && chars[i + 1].is_lowercase()));
-
-            if add_underscore {
-                result.push('_');
-            }
-            result.push(c.to_ascii_lowercase());
-        } else {
-            result.push(c);
-        }
-    }
-
-    result
-}
-
 /// Generate next_message using select_biased for concurrent event polling
 fn generate_next_message(event_types: &[Path], enum_name: &syn::Ident) -> proc_macro2::TokenStream {
     let num_events = event_types.len();
@@ -496,28 +482,5 @@ fn generate_next_message(event_types: &[Path], enum_name: &syn::Ident) -> proc_m
                 #(#select_arms)*
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_to_snake_case() {
-        // Basic cases
-        assert_eq!(to_snake_case("Battery"), "battery");
-        assert_eq!(to_snake_case("ChargingState"), "charging_state");
-        assert_eq!(to_snake_case("KeyboardIndicator"), "keyboard_indicator");
-
-        // Acronyms should stay together
-        assert_eq!(to_snake_case("BLE"), "ble");
-        assert_eq!(to_snake_case("WPM"), "wpm");
-        assert_eq!(to_snake_case("USB"), "usb");
-
-        // Mixed acronyms and words
-        assert_eq!(to_snake_case("HTMLParser"), "html_parser");
-        assert_eq!(to_snake_case("BLEConnection"), "ble_connection");
-        assert_eq!(to_snake_case("parseHTMLString"), "parse_html_string");
     }
 }
