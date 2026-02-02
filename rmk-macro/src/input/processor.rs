@@ -3,8 +3,9 @@ use syn::parse::Parser;
 use syn::{DeriveInput, Meta, Path, parse_macro_input};
 
 use super::runnable::{
-    deduplicate_type_generics, generate_runnable, has_runnable_marker, parse_controller_config,
-    reconstruct_type_def, to_snake_case, ControllerConfig, InputProcessorConfig,
+    ControllerConfig, InputProcessorConfig, deduplicate_type_generics,
+    event_type_to_handler_method_name, generate_runnable, has_runnable_marker,
+    is_runnable_generated_attr, parse_controller_config, reconstruct_type_def,
 };
 
 /// Generates InputProcessor trait implementation with automatic event routing.
@@ -12,7 +13,7 @@ use super::runnable::{
 /// See `rmk::input_device::InputProcessor` trait documentation for usage.
 ///
 /// This macro is used to define InputProcessor structs:
-/// ```rust
+/// ```rust,ignore
 /// #[input_processor(subscribe = [BatteryEvent, ChargingStateEvent])]
 /// pub struct BatteryProcessor { ... }
 /// ```
@@ -88,12 +89,7 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
         .attrs
         .iter()
         .filter(|attr| {
-            let path = attr.path();
-            !path.is_ident("input_processor")
-                && !path.is_ident("runnable_generated")
-                && !(path.segments.len() == 2
-                    && path.segments[0].ident == "rmk"
-                    && path.segments[1].ident == "runnable_generated")
+            !attr.path().is_ident("input_processor") && !is_runnable_generated_attr(attr)
         })
         .collect();
 
@@ -121,7 +117,7 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
         .enumerate()
         .map(|(idx, event_type)| {
             let variant_name = format_ident!("Event{}", idx);
-            let method_name = event_type_to_method_name(event_type);
+            let method_name = event_type_to_handler_method_name(event_type);
             quote! {
                 #enum_name::#variant_name(event) => self.#method_name(event).await
             }
@@ -223,18 +219,4 @@ fn parse_processor_attributes(attr: proc_macro::TokenStream) -> ProcessorConfig 
     }
 
     ProcessorConfig { event_types }
-}
-
-/// Convert event type to handler method name: BatteryEvent -> on_battery_event
-fn event_type_to_method_name(path: &Path) -> syn::Ident {
-    let type_name = path.segments.last().unwrap().ident.to_string();
-
-    // Remove "Event" suffix if present
-    let base_name = type_name.strip_suffix("Event").unwrap_or(&type_name);
-
-    // Convert CamelCase to snake_case
-    let snake_case = to_snake_case(base_name);
-
-    // Add "on_" prefix and "_event" suffix
-    format_ident!("on_{}_event", snake_case)
 }

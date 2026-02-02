@@ -70,7 +70,7 @@ pub fn rmk_peripheral(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```rust,ignore
 /// #[controller_event(subs = 1)]
 /// #[derive(Clone, Copy, Debug)]
 /// pub struct BatteryEvent(pub u8);
@@ -93,7 +93,7 @@ pub fn controller_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```rust,ignore
 /// #[controller(subscribe = [BatteryEvent, ChargingStateEvent])]
 /// pub struct BatteryLedController<P> {
 ///     pin: OutputController<P>,
@@ -120,7 +120,7 @@ pub fn controller(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```rust,ignore
 /// #[input_event(channel_size = 8)]
 /// #[derive(Clone, Copy, Debug)]
 /// pub struct KeyEvent {
@@ -144,7 +144,7 @@ pub fn input_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```rust,ignore
 /// #[input_processor(subscribe = [KeyEvent, ModifierEvent])]
 /// pub struct MyInputProcessor {
 ///     // processor state
@@ -180,7 +180,7 @@ pub fn runnable_generated(_attr: TokenStream, item: TokenStream) -> TokenStream 
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```rust,ignore
 /// #[derive(InputEvent)]
 /// pub enum MultiSensorEvent {
 ///     Battery(BatteryEvent),
@@ -207,7 +207,7 @@ pub fn input_event_derive(item: TokenStream) -> TokenStream {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```rust,ignore
 /// #[input_device(publish = BatteryEvent)]
 /// pub struct BatteryReader { ... }
 ///

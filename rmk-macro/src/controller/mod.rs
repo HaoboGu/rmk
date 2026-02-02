@@ -9,9 +9,10 @@ use syn::{DeriveInput, ItemMod, Meta, Path, parse_macro_input};
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::gpio_config::convert_gpio_str_to_output_pin;
 use crate::input::runnable::{
-    deduplicate_type_generics, generate_runnable, has_runnable_marker, parse_input_device_config,
-    parse_input_processor_config, reconstruct_type_def, to_snake_case, ControllerConfig as SharedControllerConfig,
-    InputDeviceConfig, InputProcessorConfig,
+    ControllerConfig as SharedControllerConfig, InputDeviceConfig, InputProcessorConfig,
+    deduplicate_type_generics, event_type_to_handler_method_name, generate_runnable,
+    has_runnable_marker, is_runnable_generated_attr, parse_input_device_config,
+    parse_input_processor_config, reconstruct_type_def,
 };
 
 /// Expands the controller initialization code based on the keyboard configuration.
@@ -148,7 +149,7 @@ fn expand_custom_controller(fn_item: &syn::ItemFn) -> (TokenStream, &syn::Ident)
 /// See `rmk::controller::Controller` trait documentation for usage.
 ///
 /// This macro is used to define Controller structs:
-/// ```rust
+/// ```rust,ignore
 /// #[controller(subscribe = [BatteryEvent, ChargingStateEvent])]
 /// pub struct BatteryLedController { ... }
 /// ```
@@ -228,12 +229,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         .attrs
         .iter()
         .filter(|attr| {
-            let path = attr.path();
-            !path.is_ident("controller")
-                && !path.is_ident("runnable_generated")
-                && !(path.segments.len() == 2
-                    && path.segments[0].ident == "rmk"
-                    && path.segments[1].ident == "runnable_generated")
+            !attr.path().is_ident("controller") && !is_runnable_generated_attr(attr)
         })
         .collect();
 
@@ -279,7 +275,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         .enumerate()
         .map(|(idx, event_type)| {
             let variant_name = format_ident!("Event{}", idx);
-            let method_name = event_type_to_method_name(event_type);
+            let method_name = event_type_to_handler_method_name(event_type);
             quote! {
                 #enum_name::#variant_name(event) => self.#method_name(event).await
             }
@@ -428,20 +424,6 @@ fn parse_controller_attributes(attr: proc_macro::TokenStream) -> ControllerConfi
     }
 }
 
-/// Convert event type to handler method name: BatteryLevelEvent -> on_battery_level_event
-fn event_type_to_method_name(path: &Path) -> syn::Ident {
-    let type_name = path.segments.last().unwrap().ident.to_string();
-
-    // Remove "Event" suffix if present
-    let base_name = type_name.strip_suffix("Event").unwrap_or(&type_name);
-
-    // Convert CamelCase to snake_case
-    let snake_case = to_snake_case(base_name);
-
-    // Add "on_" prefix and "_event" suffix
-    format_ident!("on_{}_event", snake_case)
-}
-
 /// Generate next_message using select_biased for concurrent event polling
 fn generate_next_message(event_types: &[Path], enum_name: &syn::Ident) -> proc_macro2::TokenStream {
     let num_events = event_types.len();
@@ -475,10 +457,10 @@ fn generate_next_message(event_types: &[Path], enum_name: &syn::Ident) -> proc_m
     quote! {
         async fn next_message(&mut self) -> Self::Event {
             use ::rmk::event::EventSubscriber;
-            use ::rmk::futures::FutureExt;
+            use ::futures::FutureExt;
             #(#sub_inits)*
 
-            ::rmk::futures::select_biased! {
+            ::futures::select_biased! {
                 #(#select_arms)*
             }
         }

@@ -1,17 +1,18 @@
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 use syn::parse::Parser;
 use syn::{DeriveInput, Meta, Path, parse_macro_input};
 
 use super::runnable::{
-    generate_runnable, event_type_to_read_method_name, deduplicate_type_generics,
-    has_runnable_marker, parse_controller_config, reconstruct_type_def, ControllerConfig, InputDeviceConfig,
+    ControllerConfig, InputDeviceConfig, deduplicate_type_generics,
+    event_type_to_read_method_name, generate_runnable, has_runnable_marker,
+    is_runnable_generated_attr, parse_controller_config, reconstruct_type_def,
 };
 
 /// Generates InputDevice and Runnable trait implementations for single-event devices.
 ///
 /// This macro is used to define InputDevice structs that publish a single event type:
-/// ```rust
+/// ```rust,ignore
 /// #[input_device(publish = BatteryEvent)]
 /// pub struct BatteryReader { ... }
 ///
@@ -96,20 +97,12 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         .attrs
         .iter()
         .filter(|attr| {
-            let path = attr.path();
-            !path.is_ident("input_device")
-                && !path.is_ident("runnable_generated")
-                && !(path.segments.len() == 2
-                    && path.segments[0].ident == "rmk"
-                    && path.segments[1].ident == "runnable_generated")
+            !attr.path().is_ident("input_device") && !is_runnable_generated_attr(attr)
         })
         .collect();
 
     // Reconstruct the struct definition
     let struct_def = reconstruct_type_def(&input);
-
-    // Generate internal enum name
-    let enum_name = format_ident!("{}InputEventEnum", struct_name);
 
     // Generate method name from event type
     let method_name = event_type_to_read_method_name(&event_type);
@@ -145,16 +138,11 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         #marker_attr
         #vis #struct_def
 
-        // Internal enum for InputDevice trait (single variant)
-        #vis enum #enum_name {
-            Event0(#event_type),
-        }
-
         impl #impl_generics ::rmk::input_device::InputDevice for #struct_name #deduped_ty_generics #where_clause {
-            type Event = #enum_name;
+            type Event = #event_type;
 
             async fn read_event(&mut self) -> Self::Event {
-                #enum_name::Event0(self.#method_name().await)
+                self.#method_name().await
             }
         }
 
@@ -172,7 +160,7 @@ struct DeviceConfig {
 /// Parse #[input_device] publish attribute
 fn parse_device_attributes(attr: TokenStream) -> DeviceConfig {
     use syn::punctuated::Punctuated;
-    use syn::{ExprArray, Token};
+    use syn::Token;
 
     let mut event_type = None;
 
@@ -185,11 +173,6 @@ fn parse_device_attributes(attr: TokenStream) -> DeviceConfig {
             for meta in parsed {
                 if let Meta::NameValue(nv) = meta {
                     if nv.path.is_ident("publish") {
-                        // Check if it's an array (not allowed for input_device)
-                        if let syn::Expr::Array(ExprArray { .. }) = &nv.value {
-                            // Will be caught by validation later
-                            return DeviceConfig { event_type: None };
-                        }
                         // Parse single event type
                         if let syn::Expr::Path(expr_path) = nv.value {
                             event_type = Some(expr_path.path);

@@ -172,13 +172,17 @@ pub fn reconstruct_type_def(input: &syn::DeriveInput) -> TokenStream {
 /// This marker is used to prevent multiple Runnable implementations when
 /// multiple macros (input_device, input_processor, controller) are combined.
 pub fn has_runnable_marker(attrs: &[Attribute]) -> bool {
-    attrs.iter().any(|attr| {
-        let path = attr.path();
-        path.is_ident("runnable_generated")
-            || (path.segments.len() == 2
-                && path.segments[0].ident == "rmk"
-                && path.segments[1].ident == "runnable_generated")
-    })
+    attrs.iter().any(|attr| is_runnable_generated_attr(attr))
+}
+
+/// Check if an attribute is the runnable_generated marker.
+/// Returns true for both `#[runnable_generated]` and `#[rmk::runnable_generated]`.
+pub fn is_runnable_generated_attr(attr: &Attribute) -> bool {
+    let path = attr.path();
+    path.is_ident("runnable_generated")
+        || (path.segments.len() == 2
+            && path.segments[0].ident == "rmk"
+            && path.segments[1].ident == "runnable_generated")
 }
 
 /// Convert event type to read method name: BatteryEvent -> read_battery_event
@@ -193,6 +197,20 @@ pub fn event_type_to_read_method_name(path: &Path) -> syn::Ident {
 
     // Add "read_" prefix and "_event" suffix
     format_ident!("read_{}_event", snake_case)
+}
+
+/// Convert event type to handler method name: BatteryEvent -> on_battery_event
+pub fn event_type_to_handler_method_name(path: &Path) -> syn::Ident {
+    let type_name = path.segments.last().unwrap().ident.to_string();
+
+    // Remove "Event" suffix if present
+    let base_name = type_name.strip_suffix("Event").unwrap_or(&type_name);
+
+    // Convert CamelCase to snake_case
+    let snake_case = to_snake_case(base_name);
+
+    // Add "on_" prefix and "_event" suffix
+    format_ident!("on_{}_event", snake_case)
 }
 
 /// Generate unified Runnable implementation for any combination of input_device, input_processor, and controller.
@@ -215,6 +233,15 @@ pub fn generate_runnable(
 ) -> TokenStream {
     let (impl_generics, _, _) = generics.split_for_impl();
     let ty_generics = deduplicate_type_generics(generics);
+    let runnable_impl = |body: TokenStream| {
+        quote! {
+            impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
+                async fn run(&mut self) -> ! {
+                    #body
+                }
+            }
+        }
+    };
 
     // Validate mutual exclusivity
     if input_device_config.is_some() && input_processor_config.is_some() {
@@ -224,17 +251,40 @@ pub fn generate_runnable(
     // Collect all select arms and subscriber definitions
     let mut sub_defs: Vec<TokenStream> = Vec::new();
     let mut select_arms: Vec<TokenStream> = Vec::new();
+    let mut select_match_arms: Vec<TokenStream> = Vec::new();
     let mut use_statements: Vec<TokenStream> = Vec::new();
+
+    let needs_split_select = input_device_config.is_some() && controller_config.is_some();
+    let select_enum_name = if needs_split_select {
+        Some(format_ident!("__RmkSelectEvent{}", struct_name))
+    } else {
+        None
+    };
+    let mut input_event_type: Option<syn::Path> = None;
+    let mut ctrl_enum_name: Option<syn::Ident> = None;
 
     // Handle input_device
     if let Some(device_config) = input_device_config {
+        input_event_type = Some(device_config.event_type.clone());
         let read_method = event_type_to_read_method_name(&device_config.event_type);
         use_statements.push(quote! { use ::rmk::event::publish_input_event_async; });
-        select_arms.push(quote! {
-            event = self.#read_method().fuse() => {
-                publish_input_event_async(event).await;
-            }
-        });
+        if needs_split_select {
+            let select_enum_name = select_enum_name.as_ref().unwrap();
+            select_arms.push(quote! {
+                event = self.#read_method().fuse() => #select_enum_name::Input(event)
+            });
+            select_match_arms.push(quote! {
+                #select_enum_name::Input(event) => {
+                    publish_input_event_async(event).await;
+                }
+            });
+        } else {
+            select_arms.push(quote! {
+                event = self.#read_method().fuse() => {
+                    publish_input_event_async(event).await;
+                }
+            });
+        }
     }
 
     // Handle input_processor
@@ -264,7 +314,8 @@ pub fn generate_runnable(
         .is_some();
 
     if let Some(ctrl_config) = controller_config {
-        let ctrl_enum_name = format_ident!("{}EventEnum", struct_name);
+        let ctrl_enum = format_ident!("{}EventEnum", struct_name);
+        ctrl_enum_name = Some(ctrl_enum.clone());
         use_statements.push(quote! { use ::rmk::event::ControllerEvent; });
         use_statements.push(quote! { use ::rmk::controller::Controller; });
 
@@ -274,9 +325,25 @@ pub fn generate_runnable(
             sub_defs.push(quote! {
                 let mut #sub_name = <#ctrl_event_type as ::rmk::event::ControllerEvent>::controller_subscriber();
             });
-            select_arms.push(quote! {
-                ctrl_event = #sub_name.next_event().fuse() => {
-                    <Self as ::rmk::controller::Controller>::process_event(self, #ctrl_enum_name::#variant_name(ctrl_event)).await;
+            if needs_split_select {
+                let select_enum_name = select_enum_name.as_ref().unwrap();
+                select_arms.push(quote! {
+                    ctrl_event = #sub_name.next_event().fuse() => #select_enum_name::Controller(#ctrl_enum::#variant_name(ctrl_event))
+                });
+            } else {
+                select_arms.push(quote! {
+                    ctrl_event = #sub_name.next_event().fuse() => {
+                        <Self as ::rmk::controller::Controller>::process_event(self, #ctrl_enum::#variant_name(ctrl_event)).await;
+                    }
+                });
+            }
+        }
+
+        if needs_split_select {
+            let select_enum_name = select_enum_name.as_ref().unwrap();
+            select_match_arms.push(quote! {
+                #select_enum_name::Controller(event) => {
+                    <Self as ::rmk::controller::Controller>::process_event(self, event).await;
                 }
             });
         }
@@ -286,29 +353,60 @@ pub fn generate_runnable(
     if input_device_config.is_none() && input_processor_config.is_none() && controller_config.is_some() {
         // Use the simpler event_loop/polling_loop approach for standalone controller
         if has_polling {
-            return quote! {
-                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
-                    async fn run(&mut self) -> ! {
-                        use ::rmk::controller::PollingController;
-                        self.polling_loop().await
-                    }
-                }
-            };
+            return runnable_impl(quote! {
+                use ::rmk::controller::PollingController;
+                self.polling_loop().await
+            });
         } else {
-            return quote! {
-                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
-                    async fn run(&mut self) -> ! {
-                        use ::rmk::controller::EventController;
-                        self.event_loop().await
-                    }
+            return runnable_impl(quote! {
+                use ::rmk::controller::EventController;
+                self.event_loop().await
+            });
+        }
+    }
+
+    // Handle standalone input_device case (no controller or input_processor)
+    if input_device_config.is_some() && input_processor_config.is_none() && controller_config.is_none() {
+        let device_config = input_device_config.unwrap();
+        let event_type = &device_config.event_type;
+        let read_method = event_type_to_read_method_name(event_type);
+        return runnable_impl(quote! {
+            use ::rmk::event::publish_input_event_async;
+            loop {
+                let event = self.#read_method().await;
+                publish_input_event_async(event).await;
+            }
+        });
+    }
+
+    // Handle standalone input_processor case (no controller or input_device)
+    if input_device_config.is_none() && input_processor_config.is_some() && controller_config.is_none() {
+        let processor_config = input_processor_config.unwrap();
+        let proc_enum_name = format_ident!("{}EventEnum", struct_name);
+
+        // Special case: single event type - use simple loop without select_biased
+        if processor_config.event_types.len() == 1 {
+            let event_type = &processor_config.event_types[0];
+            return runnable_impl(quote! {
+                use ::rmk::event::InputEvent;
+                use ::rmk::event::EventSubscriber;
+                use ::rmk::input_device::InputProcessor;
+
+                let mut sub = <#event_type as ::rmk::event::InputEvent>::input_subscriber();
+
+                loop {
+                    let event = sub.next_event().await;
+                    self.process(#proc_enum_name::Event0(event)).await;
                 }
-            };
+            });
         }
     }
 
     // Common use statements
-    use_statements.push(quote! { use ::rmk::event::EventSubscriber; });
-    use_statements.push(quote! { use ::rmk::futures::FutureExt; });
+    if !sub_defs.is_empty() {
+        use_statements.push(quote! { use ::rmk::event::EventSubscriber; });
+    }
+    use_statements.push(quote! { use ::futures::FutureExt; });
 
     // Generate polling-related code if needed
     if has_polling {
@@ -319,47 +417,137 @@ pub fn generate_runnable(
             let mut last = ::embassy_time::Instant::now();
         };
 
-        let timer_arm = quote! {
-            _ = timer.fuse() => {
-                <Self as PollingController>::update(self).await;
-                last = ::embassy_time::Instant::now();
+        if needs_split_select {
+            let select_enum_name = select_enum_name.as_ref().unwrap();
+            let input_event_type = input_event_type.as_ref().unwrap();
+            let ctrl_enum_name = ctrl_enum_name.as_ref().unwrap();
+            let select_enum_def = quote! {
+                enum #select_enum_name {
+                    Input(#input_event_type),
+                    Controller(#ctrl_enum_name),
+                    Timer,
+                }
+            };
+
+            let timer_arm = quote! {
+                _ = timer.fuse() => #select_enum_name::Timer
+            };
+
+            select_match_arms.push(quote! {
+                #select_enum_name::Timer => {
+                    <Self as PollingController>::update(self).await;
+                    last = ::embassy_time::Instant::now();
+                }
+            });
+
+            quote! {
+                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
+                    async fn run(&mut self) -> ! {
+                        #(#use_statements)*
+                        #select_enum_def
+
+                        #(#sub_defs)*
+                        #timer_init
+
+                        loop {
+                            let elapsed = last.elapsed();
+                            let interval = ::embassy_time::Duration::from_millis(#interval_ms);
+                            let timer = ::embassy_time::Timer::after(
+                                interval.checked_sub(elapsed).unwrap_or(::embassy_time::Duration::MIN)
+                            );
+
+                            let select_result = {
+                                ::futures::select_biased! {
+                                    #(#select_arms)*
+                                    #timer_arm
+                                }
+                            };
+
+                            match select_result {
+                                #(#select_match_arms)*
+                            }
+                        }
+                    }
+                }
             }
-        };
+        } else {
+            let timer_arm = quote! {
+                _ = timer.fuse() => {
+                    <Self as PollingController>::update(self).await;
+                    last = ::embassy_time::Instant::now();
+                }
+            };
 
-        quote! {
-            impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
-                async fn run(&mut self) -> ! {
-                    #(#use_statements)*
+            quote! {
+                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
+                    async fn run(&mut self) -> ! {
+                        #(#use_statements)*
 
-                    #(#sub_defs)*
-                    #timer_init
+                        #(#sub_defs)*
+                        #timer_init
 
-                    loop {
-                        let elapsed = last.elapsed();
-                        let interval = ::embassy_time::Duration::from_millis(#interval_ms);
-                        let timer = ::embassy_time::Timer::after(
-                            interval.checked_sub(elapsed).unwrap_or(::embassy_time::Duration::MIN)
-                        );
+                        loop {
+                            let elapsed = last.elapsed();
+                            let interval = ::embassy_time::Duration::from_millis(#interval_ms);
+                            let timer = ::embassy_time::Timer::after(
+                                interval.checked_sub(elapsed).unwrap_or(::embassy_time::Duration::MIN)
+                            );
 
-                        ::rmk::futures::select_biased! {
-                            #(#select_arms)*
-                            #timer_arm
+                            ::futures::select_biased! {
+                                #(#select_arms)*
+                                #timer_arm
+                            }
                         }
                     }
                 }
             }
         }
     } else {
-        quote! {
-            impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
-                async fn run(&mut self) -> ! {
-                    #(#use_statements)*
+        if needs_split_select {
+            let select_enum_name = select_enum_name.as_ref().unwrap();
+            let input_event_type = input_event_type.as_ref().unwrap();
+            let ctrl_enum_name = ctrl_enum_name.as_ref().unwrap();
+            let select_enum_def = quote! {
+                enum #select_enum_name {
+                    Input(#input_event_type),
+                    Controller(#ctrl_enum_name),
+                }
+            };
 
-                    #(#sub_defs)*
+            quote! {
+                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
+                    async fn run(&mut self) -> ! {
+                        #(#use_statements)*
+                        #select_enum_def
 
-                    loop {
-                        ::rmk::futures::select_biased! {
-                            #(#select_arms)*
+                        #(#sub_defs)*
+
+                        loop {
+                            let select_result = {
+                                ::futures::select_biased! {
+                                    #(#select_arms)*
+                                }
+                            };
+
+                            match select_result {
+                                #(#select_match_arms)*
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            quote! {
+                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
+                    async fn run(&mut self) -> ! {
+                        #(#use_statements)*
+
+                        #(#sub_defs)*
+
+                        loop {
+                            ::futures::select_biased! {
+                                #(#select_arms)*
+                            }
                         }
                     }
                 }

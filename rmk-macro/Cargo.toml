@@ -28,3 +28,8 @@ strum = { version = "0.27", default-features = false, features = ["derive"] }
 
 [lib]
 proc-macro = true
+doctest = false
+
+[dev-dependencies]
+macrotest = "1.0"
+futures = { version = "0.3", default-features = false, features = ["async-await"] }

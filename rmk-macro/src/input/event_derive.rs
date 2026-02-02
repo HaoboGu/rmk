@@ -10,7 +10,7 @@ use syn::{DeriveInput, parse_macro_input};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```rust,ignore
 /// #[derive(InputEvent)]
 /// pub enum MultiSensorEvent {
 ///     Battery(BatteryEvent),
@@ -26,7 +26,7 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
         _ => {
             return syn::Error::new_spanned(input, "#[derive(InputEvent)] can only be applied to enums")
                 .to_compile_error()
-                .into()
+                .into();
         }
     };
 
@@ -52,7 +52,7 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
                     "Each variant must be a tuple variant with exactly one field, e.g., `Battery(BatteryEvent)`",
                 )
                 .to_compile_error()
-                .into()
+                .into();
             }
         };
 
