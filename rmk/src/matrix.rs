@@ -11,7 +11,8 @@ use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::event::KeyboardEvent;
 use crate::input_device::InputDevice;
 use crate::state::ConnectionState;
-use crate::{CONNECTION_STATE, event::publish_input_event_async};
+use crate::CONNECTION_STATE;
+use rmk_macro::input_device;
 pub mod bidirectional_matrix;
 
 /// Recording the matrix pressed state
@@ -150,6 +151,7 @@ pub trait MatrixInputPins<In: InputPin> {
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.
+#[input_device(publish = KeyboardEvent)]
 pub struct Matrix<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
@@ -381,14 +383,14 @@ impl<
     const COL2ROW: bool,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-> InputDevice for Matrix<In, Out, D, ROW, COL, COL2ROW, ROW_OFFSET, COL_OFFSET>
+> Matrix<In, Out, D, ROW, COL, COL2ROW, ROW_OFFSET, COL_OFFSET>
 where
     Self: RowPins<COL2ROW>,
     Self: ColPins<COL2ROW>,
     Self: MatrixOutputPins<Out>,
     Self: MatrixInputPins<In>,
 {
-    async fn read_event(&mut self) -> ! {
+    async fn read_keyboard_event(&mut self) -> KeyboardEvent {
         loop {
             let (out_idx_start, in_idx_start) = self.scan_pos;
 
@@ -426,12 +428,17 @@ where
                         {
                             self.rescan_needed = true;
                         }
-                        publish_input_event_async(KeyboardEvent::key(
+
+                        // Pull it back to low before returning
+                        if let Some(out_pin) = self.get_output_pins_mut().get_mut(out_idx) {
+                            out_pin.set_low().ok();
+                        }
+
+                        return KeyboardEvent::key(
                             (row_idx + ROW_OFFSET) as u8,
                             (col_idx + COL_OFFSET) as u8,
                             self.key_states[col_idx][row_idx].pressed,
-                        ))
-                        .await;
+                        );
                     }
 
                     // If there's key still pressed, always refresh the self.scan_start
@@ -493,6 +500,7 @@ where
     }
 }
 
+#[input_device(publish = KeyboardEvent)]
 pub struct TestMatrix<const ROW: usize, const COL: usize> {
     last: bool,
 }
@@ -513,8 +521,8 @@ impl<const ROW: usize, const COL: usize> MatrixTrait<ROW, COL> for TestMatrix<RO
     async fn wait_for_key(&mut self) {}
 }
 
-impl<const ROW: usize, const COL: usize> InputDevice for TestMatrix<ROW, COL> {
-    async fn read_event(&mut self) -> ! {
+impl<const ROW: usize, const COL: usize> TestMatrix<ROW, COL> {
+    async fn read_keyboard_event(&mut self) -> KeyboardEvent {
         loop {
             if self.last {
                 embassy_time::Timer::after_millis(100).await;
@@ -523,7 +531,7 @@ impl<const ROW: usize, const COL: usize> InputDevice for TestMatrix<ROW, COL> {
             }
             self.last = !self.last;
             // info!("Read event: {:?}", self.last);
-            publish_input_event_async(KeyboardEvent::key(0, 0, self.last)).await;
+            return KeyboardEvent::key(0, 0, self.last);
         }
     }
 }

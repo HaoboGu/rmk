@@ -14,7 +14,6 @@ use py32_hal::bind_interrupts;
 use py32_hal::gpio::{Input, Output};
 use py32_hal::rcc::{HsiFs, Pll, PllMul, PllSource, Sysclk};
 use py32_hal::usb::{Driver, InterruptHandler};
-use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
@@ -22,8 +21,8 @@ use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 // use rmk::storage::async_flash_wrapper;
-// use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
-use rmk::{run_devices, run_rmk};
+// use rmk::{initialize_keymap_and_storage, run_rmk};
+use rmk::run_rmk;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
 
@@ -91,7 +90,7 @@ async fn main(_spawner: Spawner) {
 
     // Start
     join3(
-        run_devices!((matrix) => EVENT_CHANNEL),
+        matrix.run(),
         keyboard.run(),
         // run_rmk(driver, &mut storage, rmk_config),
         run_rmk(driver, rmk_config),

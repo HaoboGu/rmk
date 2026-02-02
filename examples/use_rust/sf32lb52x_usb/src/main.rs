@@ -10,7 +10,6 @@ mod vial;
 use defmt::info;
 use embassy_executor::Spawner;
 use keymap::{COL, ROW};
-use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
@@ -18,8 +17,8 @@ use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 // use rmk::storage::async_flash_wrapper;
-// use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
-use rmk::{run_devices, run_rmk};
+// use rmk::{initialize_keymap_and_storage, run_rmk};
+use rmk::run_rmk;
 use sifli_hal::bind_interrupts;
 use sifli_hal::gpio::{Input, Output};
 use sifli_hal::rcc::{ClkSysSel, ConfigOption, DllConfig, UsbConfig, UsbSel};
@@ -96,7 +95,7 @@ async fn main(_spawner: Spawner) {
 
     // Start
     join3(
-        run_devices!((matrix) => EVENT_CHANNEL),
+        matrix.run(),
         keyboard.run(),
         // run_rmk(driver, &mut storage, rmk_config),
         run_rmk(driver, rmk_config),

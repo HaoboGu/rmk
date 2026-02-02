@@ -1,41 +1,24 @@
+use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::parse::Parser;
 use syn::{parse_macro_input, Attribute, DeriveInput, Meta, Path};
 
-/// Generates InputProcessor trait implementation with automatic event routing.
-///
-/// See `rmk::input_device::InputProcessor` trait documentation for usage.
-///
-/// This macro is used to define InputProcessor structs:
-/// ```rust
-/// #[input_processor(subscribe = [BatteryEvent, ChargingStateEvent])]
-/// pub struct BatteryProcessor { ... }
-/// ```
-pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
-    let config = match parse_processor_attributes(attr) {
-        Ok(config) => config,
+    let event_type = match parse_input_device_attributes(attr) {
+        Ok(event_type) => event_type,
         Err(err) => return err.to_compile_error().into(),
     };
 
-    if config.event_types.is_empty() {
-        return syn::Error::new_spanned(
-            input,
-            "#[input_processor] requires `subscribe` attribute with at least one event type. Use `#[input_processor(subscribe = [EventType1, EventType2])]`",
-        )
-        .to_compile_error()
-        .into();
-    }
-
     if !matches!(input.data, syn::Data::Struct(_)) {
-        return syn::Error::new_spanned(input, "#[input_processor] can only be applied to structs")
+        return syn::Error::new_spanned(input, "#[input_device] can only be applied to structs")
             .to_compile_error()
             .into();
     }
 
-    if let Some(attr) = find_attr(&input.attrs, "input_device") {
-        return syn::Error::new_spanned(attr, "#[input_processor] cannot be combined with #[input_device]")
+    if let Some(attr) = find_attr(&input.attrs, "input_processor") {
+        return syn::Error::new_spanned(attr, "#[input_device] cannot be combined with #[input_processor]")
             .to_compile_error()
             .into();
     }
@@ -78,59 +61,12 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
     };
 
     let enum_name = format_ident!("{}InputEventEnum", struct_name);
-
-    let enum_variants: Vec<_> = config
-        .event_types
-        .iter()
-        .enumerate()
-        .map(|(idx, event_type)| {
-            let variant_name = format_ident!("Event{}", idx);
-            quote! { #variant_name(#event_type) }
-        })
-        .collect();
-
-    let enum_subs_defs: Vec<_> = config
-        .event_types
-        .iter()
-        .enumerate()
-        .map(|(idx, event_type)| {
-            let sub_name = format_ident!("sub{}", idx);
-            quote! { let mut #sub_name = <#event_type as ::rmk::event::InputEvent>::input_subscriber(); }
-        })
-        .collect();
-
-    let enum_subs_arms: Vec<_> = config
-        .event_types
-        .iter()
-        .enumerate()
-        .map(|(idx, _event_type)| {
-            let sub_name = format_ident!("sub{}", idx);
-            let variant_name = format_ident!("Event{}", idx);
-            quote! {
-                event = #sub_name.next_event().fuse() => {
-                    self.process(#enum_name::#variant_name(event)).await;
-                },
-            }
-        })
-        .collect();
-
-    let process_event_arms: Vec<_> = config
-        .event_types
-        .iter()
-        .enumerate()
-        .map(|(idx, event_type)| {
-            let variant_name = format_ident!("Event{}", idx);
-            let method_name = event_type_to_method_name(event_type);
-            quote! {
-                #enum_name::#variant_name(event) => self.#method_name(event).await
-            }
-        })
-        .collect();
+    let read_method = event_type_to_read_method_name(&event_type);
 
     let runnable_impl = if has_marker {
         quote! {}
-    } else if let Some(ctrl_config) = controller_config {
-        let ctrl_subs_defs: Vec<_> = ctrl_config
+    } else if let Some(config) = controller_config {
+        let ctrl_subs_defs: Vec<_> = config
             .event_types
             .iter()
             .enumerate()
@@ -140,7 +76,7 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
             })
             .collect();
 
-        let ctrl_subs_arms: Vec<_> = ctrl_config
+        let ctrl_subs_arms: Vec<_> = config
             .event_types
             .iter()
             .enumerate()
@@ -154,13 +90,7 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
             })
             .collect();
 
-        let polling_setup = if ctrl_config.poll_interval_ms.is_some() {
-            quote! { let mut last = ::embassy_time::Instant::now(); }
-        } else {
-            quote! {}
-        };
-
-        let timer_setup = if ctrl_config.poll_interval_ms.is_some() {
+        let timer_setup = if config.poll_interval_ms.is_some() {
             quote! {
                 let elapsed = last.elapsed();
                 let interval = <Self as ::rmk::controller::PollingController>::interval(self);
@@ -174,7 +104,7 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
             quote! {}
         };
 
-        let timer_arm = if ctrl_config.poll_interval_ms.is_some() {
+        let timer_arm = if config.poll_interval_ms.is_some() {
             quote! {
                 _ = timer.fuse() => {
                     <Self as ::rmk::controller::PollingController>::update(self).await;
@@ -185,20 +115,26 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
             quote! {}
         };
 
+        let polling_setup = if config.poll_interval_ms.is_some() {
+            quote! { let mut last = ::embassy_time::Instant::now(); }
+        } else {
+            quote! {}
+        };
+
         quote! {
             impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
                 async fn run(&mut self) -> ! {
                     use ::futures::FutureExt;
-                    use ::rmk::event::{ControllerEvent, EventSubscriber, InputEvent};
-                    use ::rmk::input_device::InputProcessor;
+                    use ::rmk::event::{ControllerEvent, EventSubscriber, publish_input_event_async};
                     #polling_setup
-                    #(#enum_subs_defs)*
                     #(#ctrl_subs_defs)*
 
                     loop {
                         #timer_setup
                         ::futures::select_biased! {
-                            #(#enum_subs_arms)*
+                            event = self.#read_method().fuse() => {
+                                publish_input_event_async(event).await;
+                            },
                             #(#ctrl_subs_arms)*
                             #timer_arm
                         }
@@ -210,15 +146,10 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
         quote! {
             impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
                 async fn run(&mut self) -> ! {
-                    use ::rmk::event::EventSubscriber;
-                    use ::rmk::event::InputEvent;
-                    use ::rmk::input_device::InputProcessor;
-                    use ::futures::FutureExt;
-                    #(#enum_subs_defs)*
+                    use ::rmk::event::publish_input_event_async;
                     loop {
-                        ::futures::select_biased! {
-                            #(#enum_subs_arms)*
-                        }
+                        let event = self.#read_method().await;
+                        publish_input_event_async(event).await;
                     }
                 }
             }
@@ -232,21 +163,15 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
         #marker_attr
         #vis #struct_def
 
-        #vis enum #enum_name {
-            #(#enum_variants),*
+        enum #enum_name {
+            Event0(#event_type),
         }
 
-        impl #impl_generics ::rmk::input_device::InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER> for #struct_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::input_device::InputDevice for #struct_name #ty_generics #where_clause {
             type Event = #enum_name;
 
-            async fn process(&mut self, event: Self::Event) {
-                match event {
-                    #(#process_event_arms),*
-                }
-            }
-
-            fn get_keymap(&self) -> &::core::cell::RefCell<::rmk::KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
-                self.keymap
+            async fn read_event(&mut self) -> Self::Event {
+                #enum_name::Event0(self.#read_method().await)
             }
         }
 
@@ -256,47 +181,44 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
     expanded.into()
 }
 
-struct ProcessorConfig {
-    event_types: Vec<Path>,
-}
-
 struct ControllerConfig {
     event_types: Vec<Path>,
     poll_interval_ms: Option<u64>,
 }
 
-fn parse_processor_attributes(attr: proc_macro::TokenStream) -> Result<ProcessorConfig, syn::Error> {
+fn parse_input_device_attributes(attr: TokenStream) -> Result<Path, syn::Error> {
     use syn::punctuated::Punctuated;
-    use syn::{Expr, ExprArray, Token};
-
-    let mut event_types = Vec::new();
+    use syn::Expr;
+    use syn::Token;
 
     let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
     let attr2: proc_macro2::TokenStream = attr.into();
     let parsed = parser
         .parse2(attr2)
-        .map_err(|e| syn::Error::new(proc_macro2::Span::call_site(), format!("Failed to parse input_processor attributes: {e}")))?;
+        .map_err(|e| syn::Error::new(proc_macro2::Span::call_site(), format!("Failed to parse input_device attributes: {e}")))?;
+
+    let mut event_type: Option<Path> = None;
 
     for meta in parsed {
         if let Meta::NameValue(nv) = meta {
-            if nv.path.is_ident("subscribe") {
+            if nv.path.is_ident("publish") {
+                if event_type.is_some() {
+                    return Err(syn::Error::new_spanned(nv, "#[input_device] supports only one publish event type"));
+                }
                 match nv.value {
-                    Expr::Array(ExprArray { elems, .. }) => {
-                        for elem in elems {
-                            if let Expr::Path(expr_path) = elem {
-                                event_types.push(expr_path.path);
-                            } else {
-                                return Err(syn::Error::new_spanned(
-                                    elem,
-                                    "#[input_processor] subscribe must contain event types",
-                                ));
-                            }
-                        }
+                    Expr::Path(expr_path) => {
+                        event_type = Some(expr_path.path);
+                    }
+                    Expr::Array(_) => {
+                        return Err(syn::Error::new_spanned(
+                            nv,
+                            "#[input_device] supports a single event type. For multi-event devices, use #[derive(InputEvent)]",
+                        ));
                     }
                     _ => {
                         return Err(syn::Error::new_spanned(
                             nv,
-                            "#[input_processor] subscribe must be an array: subscribe = [EventType1, EventType2]",
+                            "#[input_device] expects `publish = EventType`",
                         ));
                     }
                 }
@@ -304,7 +226,12 @@ fn parse_processor_attributes(attr: proc_macro::TokenStream) -> Result<Processor
         }
     }
 
-    Ok(ProcessorConfig { event_types })
+    event_type.ok_or_else(|| {
+        syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "#[input_device] requires `publish = EventType`",
+        )
+    })
 }
 
 fn parse_controller_attribute(attr: &Attribute) -> Result<ControllerConfig, syn::Error> {
@@ -387,15 +314,13 @@ fn find_attr<'a>(attrs: &'a [Attribute], name: &str) -> Option<&'a Attribute> {
     attrs.iter().find(|attr| attr.path().is_ident(name))
 }
 
-/// Convert event type to handler method name: BatteryEvent -> on_battery_event
-fn event_type_to_method_name(path: &Path) -> syn::Ident {
+fn event_type_to_read_method_name(path: &Path) -> syn::Ident {
     let type_name = path.segments.last().unwrap().ident.to_string();
     let base_name = type_name.strip_suffix("Event").unwrap_or(&type_name);
     let snake_case = to_snake_case(base_name);
-    format_ident!("on_{}_event", snake_case)
+    format_ident!("read_{}_event", snake_case)
 }
 
-/// Convert CamelCase to snake_case
 fn to_snake_case(s: &str) -> String {
     let mut result = String::new();
     let chars: Vec<char> = s.chars().collect();
@@ -417,27 +342,4 @@ fn to_snake_case(s: &str) -> String {
     }
 
     result
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_to_snake_case() {
-        // Basic cases
-        assert_eq!(to_snake_case("Battery"), "battery");
-        assert_eq!(to_snake_case("ChargingState"), "charging_state");
-        assert_eq!(to_snake_case("KeyboardIndicator"), "keyboard_indicator");
-
-        // Acronyms should stay together
-        assert_eq!(to_snake_case("BLE"), "ble");
-        assert_eq!(to_snake_case("WPM"), "wpm");
-        assert_eq!(to_snake_case("USB"), "usb");
-
-        // Mixed acronyms and words
-        assert_eq!(to_snake_case("HTMLParser"), "html_parser");
-        assert_eq!(to_snake_case("BLEConnection"), "ble_connection");
-        assert_eq!(to_snake_case("parseHTMLString"), "parse_html_string");
-    }
 }

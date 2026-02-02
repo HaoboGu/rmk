@@ -6,14 +6,14 @@ use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, h
 
 use crate::MatrixTrait;
 use crate::event::KeyboardEvent;
-use crate::input_device::InputDevice;
 use crate::matrix::KeyState;
 use crate::{
     debounce::{DebounceState, DebouncerTrait},
-    event::publish_input_event_async,
 };
+use rmk_macro::input_device;
 
 /// DirectPinMartex only has input pins.
+#[input_device(publish = KeyboardEvent)]
 pub struct DirectPinMatrix<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
@@ -71,9 +71,9 @@ impl<
     const SIZE: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-> InputDevice for DirectPinMatrix<In, D, ROW, COL, SIZE, ROW_OFFSET, COL_OFFSET>
+> DirectPinMatrix<In, D, ROW, COL, SIZE, ROW_OFFSET, COL_OFFSET>
 {
-    async fn read_event(&mut self) -> ! {
+    async fn read_keyboard_event(&mut self) -> KeyboardEvent {
         loop {
             let (row_idx_start, col_idx_start) = self.scan_pos;
 
@@ -83,7 +83,8 @@ impl<
             // Scan matrix and send report
             for row_idx in row_idx_start..self.direct_pins.len() {
                 let pins_row = self.direct_pins.get_mut(row_idx).unwrap();
-                for col_idx in col_idx_start..pins_row.len() {
+                let col_start = if row_idx == row_idx_start { col_idx_start } else { 0 };
+                for col_idx in col_start..pins_row.len() {
                     let direct_pin = pins_row.get_mut(col_idx).unwrap();
                     // for (col_idx, direct_pin) in pins_row.iter_mut().enumerate() {
                     if let Some(direct_pin) = direct_pin {
@@ -105,12 +106,11 @@ impl<
                             let key_state = self.key_states[row_idx][col_idx];
 
                             self.scan_pos = (row_idx, col_idx);
-                            publish_input_event_async(KeyboardEvent::key(
+                            return KeyboardEvent::key(
                                 (row_idx + ROW_OFFSET) as u8,
                                 (col_idx + COL_OFFSET) as u8,
                                 key_state.pressed,
-                            ))
-                            .await;
+                            );
                         }
 
                         // If there's key still pressed, always refresh the self.scan_start

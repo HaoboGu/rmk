@@ -2,10 +2,9 @@ use core::cell::RefCell;
 
 use embassy_sync::signal::Signal;
 use embedded_hal::digital::InputPin;
-use rmk_macro::input_processor;
+use rmk_macro::{input_device, input_processor};
 
-use super::InputDevice;
-use crate::event::{BatteryEvent, ChargingStateEvent, publish_input_event_async};
+use crate::event::{BatteryEvent, ChargingStateEvent};
 #[cfg(all(feature = "controller", feature = "_ble"))]
 use crate::event::{BatteryLevelEvent, publish_controller_event};
 use crate::KeyMap;
@@ -25,6 +24,7 @@ pub enum BatteryState {
     Charged,
 }
 
+#[input_device(publish = ChargingStateEvent)]
 pub struct ChargingStateReader<I: InputPin> {
     // Charging state pin or standby pin
     state_input: I,
@@ -45,10 +45,8 @@ impl<I: InputPin> ChargingStateReader<I> {
             first_read: false,
         }
     }
-}
 
-impl<I: InputPin> InputDevice for ChargingStateReader<I> {
-    async fn read_event(&mut self) -> ! {
+    async fn read_charging_state_event(&mut self) -> ChargingStateEvent {
         // For the first read, don't check whether the charging state is changed
         if !self.first_read {
             // Wait 2s before reading the first value
@@ -56,7 +54,7 @@ impl<I: InputPin> InputDevice for ChargingStateReader<I> {
             let charging_state = self.state_input.is_low().unwrap_or(false);
             self.current_charging_state = charging_state;
             self.first_read = true;
-            publish_input_event_async(ChargingStateEvent { charging: charging_state }).await;
+            return ChargingStateEvent { charging: charging_state };
         }
 
         loop {
@@ -66,7 +64,7 @@ impl<I: InputPin> InputDevice for ChargingStateReader<I> {
             // Only send event when charging state changes
             if charging_state != self.current_charging_state {
                 self.current_charging_state = charging_state;
-                publish_input_event_async(ChargingStateEvent { charging: charging_state }).await;
+                return ChargingStateEvent { charging: charging_state };
             }
 
             // Check charging state every 5 seconds

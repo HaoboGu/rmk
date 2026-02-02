@@ -2,9 +2,9 @@ use embassy_time::{Instant, Timer};
 
 use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::driver::flex_pin::FlexPin;
-use crate::event::{KeyboardEvent, publish_input_event_async};
-use crate::input_device::InputDevice;
+use crate::event::KeyboardEvent;
 use crate::matrix::{KeyState, MatrixTrait};
+use rmk_macro::input_device;
 
 pub enum ScanLocation {
     Pins(usize, usize),
@@ -12,6 +12,7 @@ pub enum ScanLocation {
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.
+#[input_device(publish = KeyboardEvent)]
 pub struct BidirectionalMatrix<
     Pin: FlexPin,
     D: DebouncerTrait<ROW, COL>,
@@ -49,10 +50,10 @@ impl<Pin: FlexPin, D: DebouncerTrait<ROW, COL>, const PIN_NUM: usize, const ROW:
     }
 }
 
-impl<Pin: FlexPin, D: DebouncerTrait<ROW, COL>, const PIN_NUM: usize, const ROW: usize, const COL: usize> InputDevice
-    for BidirectionalMatrix<Pin, D, PIN_NUM, ROW, COL>
+impl<Pin: FlexPin, D: DebouncerTrait<ROW, COL>, const PIN_NUM: usize, const ROW: usize, const COL: usize>
+    BidirectionalMatrix<Pin, D, PIN_NUM, ROW, COL>
 {
-    async fn read_event(&mut self) -> ! {
+    async fn read_keyboard_event(&mut self) -> KeyboardEvent {
         loop {
             let (scan_x_start, scan_y_start) = self.scan_pos;
 
@@ -79,12 +80,17 @@ impl<Pin: FlexPin, D: DebouncerTrait<ROW, COL>, const PIN_NUM: usize, const ROW:
                         if let DebounceState::Debounced = debounce_state {
                             self.key_state[scan_y_idx][scan_x_idx].toggle_pressed();
                             self.scan_pos = (scan_y_idx, scan_x_idx);
-                            publish_input_event_async(KeyboardEvent::key(
+                            let event = KeyboardEvent::key(
                                 scan_y_idx as u8,
                                 scan_x_idx as u8,
                                 self.key_state[scan_y_idx][scan_x_idx].pressed,
-                            ))
-                            .await;
+                            );
+
+                            // Pull output pin back to low before returning
+                            out_pin.set_low().ok();
+                            out_pin.set_as_input();
+                            Timer::after_micros(1).await;
+                            return event;
                         }
 
                         // Pull output pin back to low

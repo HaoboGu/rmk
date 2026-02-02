@@ -7,10 +7,12 @@ use embedded_hal_async::digital::Wait;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
-use super::InputDevice;
-use crate::event::{KeyboardEvent, publish_input_event_async};
+use rmk_macro::input_device;
+
+use crate::event::KeyboardEvent;
 
 /// Holds current/old state and both [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)
+#[input_device(publish = KeyboardEvent)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RotaryEncoder<A, B, P> {
@@ -230,14 +232,14 @@ impl<
     #[cfg(feature = "async_matrix")] B: InputPin + Wait,
     #[cfg(not(feature = "async_matrix"))] B: InputPin,
     P: Phase,
-> InputDevice for RotaryEncoder<A, B, P>
+> RotaryEncoder<A, B, P>
 {
-    async fn read_event(&mut self) -> ! {
+    async fn read_keyboard_event(&mut self) -> KeyboardEvent {
         // Read until a valid rotary encoder event is detected
         if let Some(last_action) = self.last_action {
             embassy_time::Timer::after_millis(5).await;
-            publish_input_event_async(KeyboardEvent::rotary_encoder(self.id, last_action, false)).await;
             self.last_action = None;
+            return KeyboardEvent::rotary_encoder(self.id, last_action, false);
         }
 
         loop {
@@ -251,7 +253,7 @@ impl<
 
             if direction != Direction::None {
                 self.last_action = Some(direction);
-                publish_input_event_async(KeyboardEvent::rotary_encoder(self.id, direction, true)).await;
+                return KeyboardEvent::rotary_encoder(self.id, direction, true);
             }
 
             #[cfg(not(feature = "async_matrix"))]

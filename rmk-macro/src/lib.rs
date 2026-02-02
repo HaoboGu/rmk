@@ -164,3 +164,23 @@ pub fn input_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn input_processor(attr: TokenStream, item: TokenStream) -> TokenStream {
     input::processor::input_processor_impl(attr, item)
 }
+
+/// Marker attribute for coordinating Runnable generation between macros.
+/// Do not use directly.
+#[doc(hidden)]
+#[proc_macro_attribute]
+pub fn runnable_generated(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    item
+}
+
+/// Macro for defining input devices that publish a single event type.
+#[proc_macro_attribute]
+pub fn input_device(attr: TokenStream, item: TokenStream) -> TokenStream {
+    input::device::input_device_impl(attr, item)
+}
+
+/// Derive macro for multi-event input enums that auto-dispatch to channels.
+#[proc_macro_derive(InputEvent)]
+pub fn input_event_derive(input: TokenStream) -> TokenStream {
+    input::event_derive::input_event_derive_impl(input)
+}
