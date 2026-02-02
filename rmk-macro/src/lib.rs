@@ -164,3 +164,61 @@ pub fn input_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn input_processor(attr: TokenStream, item: TokenStream) -> TokenStream {
     input::processor::input_processor_impl(attr, item)
 }
+
+/// Marker attribute for coordinating Runnable generation between macros.
+/// Do not use directly.
+#[doc(hidden)]
+#[proc_macro_attribute]
+pub fn runnable_generated(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    item // Pass through unchanged
+}
+
+/// Derive macro for multi-event enums that generates automatic event dispatch.
+///
+/// This macro generates a `publish()` method that dispatches events to the correct channel
+/// based on the enum variant, and `From<EventType>` impls for convenient construction.
+///
+/// # Example
+///
+/// ```ignore
+/// #[derive(InputEvent)]
+/// pub enum MultiSensorEvent {
+///     Battery(BatteryEvent),
+///     Pointing(PointingEvent),
+/// }
+///
+/// // Generated:
+/// // - `publish()` method that dispatches to correct channel
+/// // - `From<BatteryEvent>` and `From<PointingEvent>` impls
+/// ```
+#[proc_macro_derive(InputEvent)]
+pub fn input_event_derive(item: TokenStream) -> TokenStream {
+    input::event_derive::input_event_derive_impl(item)
+}
+
+/// Macro for defining input devices that publish events.
+///
+/// This macro generates `InputDevice` and `Runnable` implementations for single-event devices.
+/// For multi-event devices, use `#[derive(InputEvent)]` on a user-defined enum instead.
+///
+/// # Parameters
+///
+/// - `publish`: The event type to publish (single event type only)
+///
+/// # Example
+///
+/// ```ignore
+/// #[input_device(publish = BatteryEvent)]
+/// pub struct BatteryReader { ... }
+///
+/// impl BatteryReader {
+///     // User implements this inherent method
+///     async fn read_battery_event(&mut self) -> BatteryEvent {
+///         // Wait and return single event
+///     }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn input_device(attr: TokenStream, item: TokenStream) -> TokenStream {
+    input::device::input_device_impl(attr, item)
+}

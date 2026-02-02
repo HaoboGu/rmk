@@ -52,7 +52,7 @@ pub trait Controller: Runnable {
 /// ```
 pub trait EventController: Controller {
     /// Event loop
-    async fn event_loop(&mut self) {
+    async fn event_loop(&mut self) -> ! {
         loop {
             let event = self.next_message().await;
             self.process_event(event).await;
@@ -148,7 +148,7 @@ pub trait PollingController: Controller {
     async fn update(&mut self);
 
     /// Polling loop
-    async fn polling_loop(&mut self) {
+    async fn polling_loop(&mut self) -> ! {
         let mut last = embassy_time::Instant::now();
 
         loop {

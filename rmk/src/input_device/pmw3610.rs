@@ -1,8 +1,3 @@
-//! PMW3610 Low-Power Mouse Sensor Driver
-//!
-//! Ported from the Zephyr driver implementation:
-//! https://github.com/zephyrproject-rtos/zephyr/blob/d31c6e95033fd6b3763389edba6a655245ae1328/drivers/input/input_pmw3610.c
-
 use core::cell::RefCell;
 
 use embassy_time::{Duration, Instant, Timer};
@@ -14,9 +9,9 @@ use rmk_macro::input_processor;
 use usbd_hid::descriptor::MouseReport;
 
 pub use crate::driver::bitbang_spi::{BitBangError, BitBangSpiBus};
-use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent, publish_input_event_async};
+use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent};
 use crate::hid::Report;
-use crate::input_device::{InputDevice, InputProcessor};
+use crate::input_device::InputProcessor;
 use crate::keymap::KeyMap;
 
 // ============================================================================
@@ -437,6 +432,7 @@ enum InitState {
 /// PMW3610 as an InputDevice for RMK
 ///
 /// This device returns `Event::Joystick` events with relative X/Y movement.
+#[rmk_macro::input_device(publish = PointingEvent)]
 pub struct Pmw3610Device<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> {
     sensor: Pmw3610<SPI, CS, MOTION>,
     init_state: InitState,
@@ -597,10 +593,8 @@ impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> Pmw3610Device<SPI, CS,
 
         false
     }
-}
 
-impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> InputDevice for Pmw3610Device<SPI, CS, MOTION> {
-    async fn read_event(&mut self) -> ! {
+    async fn read_pointing_event(&mut self) -> PointingEvent {
         use embassy_futures::select::{Either, select};
 
         if self.last_poll == Instant::MIN {
@@ -646,7 +640,7 @@ impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> InputDevice for Pmw361
                 Either::Second(_) => {
                     if let Some(event) = self.take_report_event() {
                         self.last_report = Instant::now();
-                        publish_input_event_async(event).await;
+                        return event;
                     }
                 }
             }

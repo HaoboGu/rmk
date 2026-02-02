@@ -1,9 +1,17 @@
 use embassy_nrf::saadc::Saadc;
 use embassy_time::{Duration, Instant};
+use rmk_macro::InputEvent;
 
 use super::{AdcState, AnalogEventType};
-use crate::event::{Axis, AxisEvent, AxisValType, BatteryEvent, PointingEvent, publish_input_event_async};
-use crate::input_device::InputDevice;
+use crate::event::{Axis, AxisEvent, AxisValType, BatteryEvent, PointingEvent};
+use crate::input_device::{InputDevice, Runnable};
+
+/// Multi-event enum for NrfAdc device
+#[derive(InputEvent)]
+pub enum NrfAdcEvent {
+    Pointing(PointingEvent),
+    Battery(BatteryEvent),
+}
 
 pub struct NrfAdc<'a, const PIN_NUM: usize, const EVENT_NUM: usize> {
     saadc: Saadc<'a, PIN_NUM>,
@@ -43,7 +51,9 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT
 }
 
 impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice for NrfAdc<'a, PIN_NUM, EVENT_NUM> {
-    async fn read_event(&mut self) -> ! {
+    type Event = NrfAdcEvent;
+
+    async fn read_event(&mut self) -> Self::Event {
         loop {
             if self.active_instant == Instant::MIN {
                 // filling for the first polling
@@ -111,21 +121,33 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice for NrfAdc<'a
                     ];
                     if sz > 3 || sz == 0 {
                         error!("Joystick with more than 3 dimensions or empty is not supported. Skip this event");
+                        self.event_state += 1;
+                        continue;
                     } else {
                         for i in 0..core::cmp::min(sz, 2) {
                             e[i as usize].value = (buf[self.channel_state as usize] + i16::MIN / 2).saturating_mul(2);
                             self.channel_state += 1;
                         }
                     }
-                    publish_input_event_async(PointingEvent(e)).await;
+                    self.event_state += 1;
+                    return NrfAdcEvent::Pointing(PointingEvent(e));
                 }
                 AnalogEventType::Battery => {
                     let battery_adc_value = buf[self.channel_state as usize] as u16;
                     self.channel_state += 1;
-                    publish_input_event_async(BatteryEvent(battery_adc_value)).await
+                    self.event_state += 1;
+                    return NrfAdcEvent::Battery(BatteryEvent(battery_adc_value));
                 }
             };
-            self.event_state += 1;
+        }
+    }
+}
+
+impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> Runnable for NrfAdc<'a, PIN_NUM, EVENT_NUM> {
+    async fn run(&mut self) -> ! {
+        loop {
+            let event = self.read_event().await;
+            event.publish().await;
         }
     }
 }

@@ -11,7 +11,6 @@ use super::SplitMessage;
 use crate::event::{ChargingStateEvent, ControllerEvent, KeyboardEvent, KeyboardEventPos};
 #[cfg(feature = "controller")]
 use crate::event::{PeripheralBatteryEvent, publish_controller_event};
-use crate::input_device::InputDevice;
 use crate::{
     CONNECTION_STATE,
     event::publish_input_event_async,
@@ -157,8 +156,10 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
 }
 
 impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFSET: usize, R: SplitReader + SplitWriter>
-    InputDevice for PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
+    PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
 {
+    /// Read events from peripheral and publish them.
+    /// This method runs in an infinite loop and never returns.
     async fn read_event(&mut self) -> ! {
         loop {
             match self.transceiver.read().await {

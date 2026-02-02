@@ -3,7 +3,7 @@ use embassy_time::{Instant, Timer};
 use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::driver::flex_pin::FlexPin;
 use crate::event::{KeyboardEvent, publish_input_event_async};
-use crate::input_device::InputDevice;
+use crate::input_device::{InputDevice, Runnable};
 use crate::matrix::{KeyState, MatrixTrait};
 
 pub enum ScanLocation {
@@ -52,7 +52,9 @@ impl<Pin: FlexPin, D: DebouncerTrait<ROW, COL>, const PIN_NUM: usize, const ROW:
 impl<Pin: FlexPin, D: DebouncerTrait<ROW, COL>, const PIN_NUM: usize, const ROW: usize, const COL: usize> InputDevice
     for BidirectionalMatrix<Pin, D, PIN_NUM, ROW, COL>
 {
-    async fn read_event(&mut self) -> ! {
+    type Event = KeyboardEvent;
+
+    async fn read_event(&mut self) -> Self::Event {
         loop {
             let (scan_x_start, scan_y_start) = self.scan_pos;
 
@@ -79,12 +81,14 @@ impl<Pin: FlexPin, D: DebouncerTrait<ROW, COL>, const PIN_NUM: usize, const ROW:
                         if let DebounceState::Debounced = debounce_state {
                             self.key_state[scan_y_idx][scan_x_idx].toggle_pressed();
                             self.scan_pos = (scan_y_idx, scan_x_idx);
-                            publish_input_event_async(KeyboardEvent::key(
+                            // Pull output pin back to low before returning
+                            out_pin.set_low().ok();
+                            out_pin.set_as_input();
+                            return KeyboardEvent::key(
                                 scan_y_idx as u8,
                                 scan_x_idx as u8,
                                 self.key_state[scan_y_idx][scan_x_idx].pressed,
-                            ))
-                            .await;
+                            );
                         }
 
                         // Pull output pin back to low
@@ -95,6 +99,17 @@ impl<Pin: FlexPin, D: DebouncerTrait<ROW, COL>, const PIN_NUM: usize, const ROW:
                 }
             }
             self.scan_pos = (0, 0);
+        }
+    }
+}
+
+impl<Pin: FlexPin, D: DebouncerTrait<ROW, COL>, const PIN_NUM: usize, const ROW: usize, const COL: usize> Runnable
+    for BidirectionalMatrix<Pin, D, PIN_NUM, ROW, COL>
+{
+    async fn run(&mut self) -> ! {
+        loop {
+            let event = self.read_event().await;
+            publish_input_event_async(event).await;
         }
     }
 }

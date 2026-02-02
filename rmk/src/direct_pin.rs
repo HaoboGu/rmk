@@ -6,7 +6,7 @@ use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, h
 
 use crate::MatrixTrait;
 use crate::event::KeyboardEvent;
-use crate::input_device::InputDevice;
+use crate::input_device::{InputDevice, Runnable};
 use crate::matrix::KeyState;
 use crate::{
     debounce::{DebounceState, DebouncerTrait},
@@ -73,7 +73,9 @@ impl<
     const COL_OFFSET: usize,
 > InputDevice for DirectPinMatrix<In, D, ROW, COL, SIZE, ROW_OFFSET, COL_OFFSET>
 {
-    async fn read_event(&mut self) -> ! {
+    type Event = KeyboardEvent;
+
+    async fn read_event(&mut self) -> Self::Event {
         loop {
             let (row_idx_start, col_idx_start) = self.scan_pos;
 
@@ -105,12 +107,11 @@ impl<
                             let key_state = self.key_states[row_idx][col_idx];
 
                             self.scan_pos = (row_idx, col_idx);
-                            publish_input_event_async(KeyboardEvent::key(
+                            return KeyboardEvent::key(
                                 (row_idx + ROW_OFFSET) as u8,
                                 (col_idx + COL_OFFSET) as u8,
                                 key_state.pressed,
-                            ))
-                            .await;
+                            );
                         }
 
                         // If there's key still pressed, always refresh the self.scan_start
@@ -125,6 +126,25 @@ impl<
             self.scan_pos = (0, 0);
 
             Timer::after_micros(100).await;
+        }
+    }
+}
+
+impl<
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    D: DebouncerTrait<ROW, COL>,
+    const ROW: usize,
+    const COL: usize,
+    const SIZE: usize,
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+> Runnable for DirectPinMatrix<In, D, ROW, COL, SIZE, ROW_OFFSET, COL_OFFSET>
+{
+    async fn run(&mut self) -> ! {
+        loop {
+            let event = self.read_event().await;
+            publish_input_event_async(event).await;
         }
     }
 }

@@ -9,7 +9,7 @@ use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, h
 
 use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::event::KeyboardEvent;
-use crate::input_device::InputDevice;
+use crate::input_device::{InputDevice, Runnable};
 use crate::state::ConnectionState;
 use crate::{CONNECTION_STATE, event::publish_input_event_async};
 pub mod bidirectional_matrix;
@@ -388,7 +388,9 @@ where
     Self: MatrixOutputPins<Out>,
     Self: MatrixInputPins<In>,
 {
-    async fn read_event(&mut self) -> ! {
+    type Event = KeyboardEvent;
+
+    async fn read_event(&mut self) -> Self::Event {
         loop {
             let (out_idx_start, in_idx_start) = self.scan_pos;
 
@@ -426,12 +428,15 @@ where
                         {
                             self.rescan_needed = true;
                         }
-                        publish_input_event_async(KeyboardEvent::key(
+                        // Pull it back to low before returning
+                        if let Some(out_pin) = self.get_output_pins_mut().get_mut(out_idx) {
+                            out_pin.set_low().ok();
+                        }
+                        return KeyboardEvent::key(
                             (row_idx + ROW_OFFSET) as u8,
                             (col_idx + COL_OFFSET) as u8,
                             self.key_states[col_idx][row_idx].pressed,
-                        ))
-                        .await;
+                        );
                     }
 
                     // If there's key still pressed, always refresh the self.scan_start
@@ -455,6 +460,31 @@ where
                 self.rescan_needed = false;
             }
             self.scan_pos = (0, 0);
+        }
+    }
+}
+
+impl<
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait<ROW, COL>,
+    const ROW: usize,
+    const COL: usize,
+    const COL2ROW: bool,
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+> Runnable for Matrix<In, Out, D, ROW, COL, COL2ROW, ROW_OFFSET, COL_OFFSET>
+where
+    Self: RowPins<COL2ROW>,
+    Self: ColPins<COL2ROW>,
+    Self: MatrixOutputPins<Out>,
+    Self: MatrixInputPins<In>,
+{
+    async fn run(&mut self) -> ! {
+        loop {
+            let event = self.read_event().await;
+            publish_input_event_async(event).await;
         }
     }
 }
@@ -493,6 +523,7 @@ where
     }
 }
 
+#[rmk_macro::input_device(publish = KeyboardEvent)]
 pub struct TestMatrix<const ROW: usize, const COL: usize> {
     last: bool,
 }
@@ -506,24 +537,19 @@ impl<const ROW: usize, const COL: usize> TestMatrix<ROW, COL> {
     pub fn new() -> Self {
         Self { last: false }
     }
+
+    async fn read_keyboard_event(&mut self) -> KeyboardEvent {
+        if self.last {
+            embassy_time::Timer::after_millis(100).await;
+        } else {
+            embassy_time::Timer::after_secs(5).await;
+        }
+        self.last = !self.last;
+        KeyboardEvent::key(0, 0, self.last)
+    }
 }
 
 impl<const ROW: usize, const COL: usize> MatrixTrait<ROW, COL> for TestMatrix<ROW, COL> {
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {}
-}
-
-impl<const ROW: usize, const COL: usize> InputDevice for TestMatrix<ROW, COL> {
-    async fn read_event(&mut self) -> ! {
-        loop {
-            if self.last {
-                embassy_time::Timer::after_millis(100).await;
-            } else {
-                embassy_time::Timer::after_secs(5).await;
-            }
-            self.last = !self.last;
-            // info!("Read event: {:?}", self.last);
-            publish_input_event_async(KeyboardEvent::key(0, 0, self.last)).await;
-        }
-    }
 }

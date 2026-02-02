@@ -169,11 +169,37 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
             .into();
     }
 
+    // Check for runnable_generated marker
+    let has_runnable_marker = input.attrs.iter().any(|attr| {
+        let path = attr.path();
+        path.is_ident("runnable_generated")
+            || (path.segments.len() == 2
+                && path.segments[0].ident == "rmk"
+                && path.segments[1].ident == "runnable_generated")
+    });
+
+    // Check for input_device or input_processor attributes (for combined Runnable generation)
+    let has_input_device = input.attrs.iter().any(|attr| attr.path().is_ident("input_device"));
+    let has_input_processor = input.attrs.iter().any(|attr| attr.path().is_ident("input_processor"));
+
     let struct_name = &input.ident;
     let vis = &input.vis;
-    let attrs = &input.attrs;
     let generics = &input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    // Filter out controller attribute and runnable_generated marker from output
+    let attrs: Vec<_> = input
+        .attrs
+        .iter()
+        .filter(|attr| {
+            let path = attr.path();
+            !path.is_ident("controller")
+                && !path.is_ident("runnable_generated")
+                && !(path.segments.len() == 2
+                    && path.segments[0].ident == "rmk"
+                    && path.segments[1].ident == "runnable_generated")
+        })
+        .collect();
 
     // Reconstruct the struct definition
     let struct_def = match &input.data {
@@ -202,6 +228,24 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         .map(|(idx, event_type)| {
             let variant_name = format_ident!("Event{}", idx);
             quote! { #variant_name(#event_type) }
+        })
+        .collect();
+
+    // Generate From impls for each event type
+    // Note: The enum doesn't have generic parameters, so we don't use impl_generics here
+    let from_impls: Vec<_> = config
+        .event_types
+        .iter()
+        .enumerate()
+        .map(|(idx, event_type)| {
+            let variant_name = format_ident!("Event{}", idx);
+            quote! {
+                impl From<#event_type> for #enum_name {
+                    fn from(e: #event_type) -> Self {
+                        #enum_name::#variant_name(e)
+                    }
+                }
+            }
         })
         .collect();
 
@@ -239,15 +283,55 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         quote! {}
     };
 
+    // Generate Runnable implementation
+    let runnable_impl = if has_runnable_marker || has_input_device || has_input_processor {
+        // Skip Runnable generation if marker is present or other macros will generate it
+        quote! {}
+    } else {
+        // Generate standalone Runnable for controller only
+        if config.poll_interval_ms.is_some() {
+            // Controller with polling
+            quote! {
+                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
+                    async fn run(&mut self) -> ! {
+                        use ::rmk::controller::PollingController;
+                        self.polling_loop().await
+                    }
+                }
+            }
+        } else {
+            // Controller without polling (event-driven only)
+            quote! {
+                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
+                    async fn run(&mut self) -> ! {
+                        use ::rmk::controller::EventController;
+                        self.event_loop().await
+                    }
+                }
+            }
+        }
+    };
+
+    // Add marker attribute if we generated Runnable and there are other macros
+    let marker_attr = if !has_runnable_marker && (has_input_device || has_input_processor) {
+        quote! { #[::rmk::runnable_generated] }
+    } else {
+        quote! {}
+    };
+
     // Generate the complete output
     let expanded = quote! {
         #(#attrs)*
+        #marker_attr
         #vis #struct_def
 
         // Internal enum for event routing (needs same visibility as struct for public trait implementation)
         #vis enum #enum_name {
             #(#enum_variants),*
         }
+
+        // From impls for convenient event conversion
+        #(#from_impls)*
 
         impl #impl_generics ::rmk::controller::Controller for #struct_name #ty_generics #where_clause {
             type Event = #enum_name;
@@ -262,6 +346,8 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         }
 
         #polling_controller_impl
+
+        #runnable_impl
     };
 
     expanded.into()

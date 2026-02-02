@@ -2,10 +2,9 @@ use core::cell::RefCell;
 
 use embassy_sync::signal::Signal;
 use embedded_hal::digital::InputPin;
-use rmk_macro::input_processor;
+use rmk_macro::{input_device, input_processor};
 
-use super::InputDevice;
-use crate::event::{BatteryEvent, ChargingStateEvent, publish_input_event_async};
+use crate::event::{BatteryEvent, ChargingStateEvent};
 #[cfg(all(feature = "controller", feature = "_ble"))]
 use crate::event::{BatteryLevelEvent, publish_controller_event};
 use crate::KeyMap;
@@ -25,6 +24,11 @@ pub enum BatteryState {
     Charged,
 }
 
+/// Reads charging state from a GPIO pin and publishes ChargingStateEvent.
+///
+/// This input device monitors a charging state pin and publishes events when
+/// the charging state changes.
+#[input_device(publish = ChargingStateEvent)]
 pub struct ChargingStateReader<I: InputPin> {
     // Charging state pin or standby pin
     state_input: I,
@@ -45,32 +49,40 @@ impl<I: InputPin> ChargingStateReader<I> {
             first_read: false,
         }
     }
-}
 
-impl<I: InputPin> InputDevice for ChargingStateReader<I> {
-    async fn read_event(&mut self) -> ! {
+    /// Read the charging state and return an event.
+    /// This method waits until there's a state change to report.
+    async fn read_charging_state_event(&mut self) -> ChargingStateEvent {
         // For the first read, don't check whether the charging state is changed
         if !self.first_read {
             // Wait 2s before reading the first value
             embassy_time::Timer::after_secs(2).await;
-            let charging_state = self.state_input.is_low().unwrap_or(false);
+            let charging_state = if self.low_active {
+                self.state_input.is_low().unwrap_or(false)
+            } else {
+                self.state_input.is_high().unwrap_or(false)
+            };
             self.current_charging_state = charging_state;
             self.first_read = true;
-            publish_input_event_async(ChargingStateEvent { charging: charging_state }).await;
+            return ChargingStateEvent { charging: charging_state };
         }
 
         loop {
-            // Detect charging state
-            let charging_state = self.state_input.is_low().unwrap_or(false);
-
-            // Only send event when charging state changes
-            if charging_state != self.current_charging_state {
-                self.current_charging_state = charging_state;
-                publish_input_event_async(ChargingStateEvent { charging: charging_state }).await;
-            }
-
             // Check charging state every 5 seconds
             embassy_time::Timer::after_secs(5).await;
+
+            // Detect charging state
+            let charging_state = if self.low_active {
+                self.state_input.is_low().unwrap_or(false)
+            } else {
+                self.state_input.is_high().unwrap_or(false)
+            };
+
+            // Only return event when charging state changes
+            if charging_state != self.current_charging_state {
+                self.current_charging_state = charging_state;
+                return ChargingStateEvent { charging: charging_state };
+            }
         }
     }
 }
