@@ -1,7 +1,46 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::parse::Parser;
-use syn::{parse_macro_input, Attribute, DeriveInput, Meta, Path};
+use syn::{parse_macro_input, parse_quote, Attribute, DeriveInput, GenericParam, Meta, Path};
+
+/// Generate deduplicated type generics for use in impl blocks.
+/// When generic parameters have cfg attributes, syn parses both versions,
+/// resulting in duplicates like `Matrix<In, In, Out, ...>`.
+/// This function generates `<A, B, C>` style output with unique parameter names.
+fn generate_deduped_ty_generics(generics: &syn::Generics) -> proc_macro2::TokenStream {
+    use std::collections::HashSet;
+
+    let mut seen_names: HashSet<String> = HashSet::new();
+    let mut params: Vec<proc_macro2::TokenStream> = Vec::new();
+
+    for param in &generics.params {
+        let (name, token) = match param {
+            GenericParam::Type(tp) => {
+                let ident = &tp.ident;
+                (ident.to_string(), quote! { #ident })
+            }
+            GenericParam::Lifetime(lp) => {
+                let lt = &lp.lifetime;
+                (lt.to_string(), quote! { #lt })
+            }
+            GenericParam::Const(cp) => {
+                let ident = &cp.ident;
+                (ident.to_string(), quote! { #ident })
+            }
+        };
+
+        if !seen_names.contains(&name) {
+            seen_names.insert(name);
+            params.push(token);
+        }
+    }
+
+    if params.is_empty() {
+        quote! {}
+    } else {
+        quote! { < #(#params),* > }
+    }
+}
 
 pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
@@ -41,24 +80,10 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let struct_name = &input.ident;
     let vis = &input.vis;
-    let attrs = &input.attrs;
     let generics = &input.generics;
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
-    let struct_def = match &input.data {
-        syn::Data::Struct(data_struct) => match &data_struct.fields {
-            syn::Fields::Named(fields) => {
-                quote! { struct #struct_name #generics #fields #where_clause }
-            }
-            syn::Fields::Unnamed(fields) => {
-                quote! { struct #struct_name #generics #fields #where_clause ; }
-            }
-            syn::Fields::Unit => {
-                quote! { struct #struct_name #generics #where_clause ; }
-            }
-        },
-        _ => unreachable!(),
-    };
+    let (impl_generics, _ty_generics, where_clause) = generics.split_for_impl();
+    // Use deduplicated ty_generics to handle cfg attributes on generic parameters
+    let ty_generics = generate_deduped_ty_generics(generics);
 
     let enum_name = format_ident!("{}InputEventEnum", struct_name);
     let read_method = event_type_to_read_method_name(&event_type);
@@ -156,14 +181,15 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    let marker_attr = if has_marker { quote! {} } else { quote! { #[::rmk::runnable_generated] } };
+    let mut output_item = input.clone();
+    if !has_marker {
+        output_item.attrs.push(parse_quote!(#[::rmk::runnable_generated]));
+    }
 
     let expanded = quote! {
-        #(#attrs)*
-        #marker_attr
-        #vis #struct_def
+        #output_item
 
-        enum #enum_name {
+        #vis enum #enum_name {
             Event0(#event_type),
         }
 

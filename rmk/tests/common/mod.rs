@@ -13,8 +13,7 @@ use log::debug;
 use rmk::channel::KEYBOARD_REPORT_CHANNEL;
 use rmk::config::{BehaviorConfig, PositionalConfig};
 use rmk::descriptor::KeyboardReport;
-use rmk::event::AsyncEventPublisher;
-use rmk::event::{AsyncEvent, KeyboardEvent};
+use rmk::event::{AsyncEventPublisher, AsyncInputEvent, KeyboardEvent};
 use rmk::hid::Report;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
@@ -54,7 +53,7 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
     static REPORTS_DONE: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
     static SEQ_SEND_DONE: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 
-    let sender = KeyboardEvent::publisher_async();
+    let sender = KeyboardEvent::input_publisher_async();
     sender.clear();
     KEYBOARD_REPORT_CHANNEL.clear();
     static MAX_TEST_TIMEOUT: Duration = Duration::from_secs(5);

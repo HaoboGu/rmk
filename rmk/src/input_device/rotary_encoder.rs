@@ -15,7 +15,13 @@ use crate::event::KeyboardEvent;
 #[input_device(publish = KeyboardEvent)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct RotaryEncoder<A, B, P> {
+pub struct RotaryEncoder<
+    #[cfg(feature = "async_matrix")] A: InputPin + Wait,
+    #[cfg(not(feature = "async_matrix"))] A: InputPin,
+    #[cfg(feature = "async_matrix")] B: InputPin + Wait,
+    #[cfg(not(feature = "async_matrix"))] B: InputPin,
+    P: Phase,
+> {
     pin_a: A,
     pin_b: B,
     state: u8,
@@ -129,11 +135,12 @@ impl Phase for ResolutionPhase {
     }
 }
 
-impl<A, B> RotaryEncoder<A, B, DefaultPhase>
-where
-    A: InputPin,
-    B: InputPin,
-{
+impl<
+    #[cfg(feature = "async_matrix")] A: InputPin + Wait,
+    #[cfg(not(feature = "async_matrix"))] A: InputPin,
+    #[cfg(feature = "async_matrix")] B: InputPin + Wait,
+    #[cfg(not(feature = "async_matrix"))] B: InputPin,
+> RotaryEncoder<A, B, DefaultPhase> {
     /// Accepts two [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)s, these will be read on every `update()`.
     pub fn new(pin_a: A, pin_b: B, id: u8) -> Self {
         Self {
@@ -148,11 +155,12 @@ where
 }
 
 /// Create a resolution-based rotary encoder
-impl<A, B> RotaryEncoder<A, B, ResolutionPhase>
-where
-    A: InputPin,
-    B: InputPin,
-{
+impl<
+    #[cfg(feature = "async_matrix")] A: InputPin + Wait,
+    #[cfg(not(feature = "async_matrix"))] A: InputPin,
+    #[cfg(feature = "async_matrix")] B: InputPin + Wait,
+    #[cfg(not(feature = "async_matrix"))] B: InputPin,
+> RotaryEncoder<A, B, ResolutionPhase> {
     /// Creates a new encoder with the specified resolution
     pub fn with_resolution(pin_a: A, pin_b: B, resolution: u8, reverse: bool, id: u8) -> Self {
         Self {
@@ -166,7 +174,13 @@ where
     }
 }
 
-impl<A: InputPin, B: InputPin, P: Phase> RotaryEncoder<A, B, P> {
+impl<
+    #[cfg(feature = "async_matrix")] A: InputPin + Wait,
+    #[cfg(not(feature = "async_matrix"))] A: InputPin,
+    #[cfg(feature = "async_matrix")] B: InputPin + Wait,
+    #[cfg(not(feature = "async_matrix"))] B: InputPin,
+    P: Phase,
+> RotaryEncoder<A, B, P> {
     /// Accepts two [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)s, these will be read on every `update()`, while using `phase` to determine the direction.
     pub fn with_phase(pin_a: A, pin_b: B, phase: P, id: u8) -> Self {
         Self {
@@ -226,14 +240,8 @@ impl<A: InputPin, B: InputPin, P: Phase> RotaryEncoder<A, B, P> {
     }
 }
 
-impl<
-    #[cfg(feature = "async_matrix")] A: InputPin + Wait,
-    #[cfg(not(feature = "async_matrix"))] A: InputPin,
-    #[cfg(feature = "async_matrix")] B: InputPin + Wait,
-    #[cfg(not(feature = "async_matrix"))] B: InputPin,
-    P: Phase,
-> RotaryEncoder<A, B, P>
-{
+#[cfg(feature = "async_matrix")]
+impl<A: InputPin + Wait, B: InputPin + Wait, P: Phase> RotaryEncoder<A, B, P> {
     async fn read_keyboard_event(&mut self) -> KeyboardEvent {
         // Read until a valid rotary encoder event is detected
         if let Some(last_action) = self.last_action {
@@ -243,11 +251,8 @@ impl<
         }
 
         loop {
-            #[cfg(feature = "async_matrix")]
-            {
-                let (pin_a, pin_b) = self.pins();
-                embassy_futures::select::select(pin_a.wait_for_any_edge(), pin_b.wait_for_any_edge()).await;
-            }
+            let (pin_a, pin_b) = self.pins();
+            embassy_futures::select::select(pin_a.wait_for_any_edge(), pin_b.wait_for_any_edge()).await;
 
             let direction = self.update();
 
@@ -255,12 +260,30 @@ impl<
                 self.last_action = Some(direction);
                 return KeyboardEvent::rotary_encoder(self.id, direction, true);
             }
+        }
+    }
+}
 
-            #[cfg(not(feature = "async_matrix"))]
-            {
-                // Wait for 20ms to avoid busy loop
-                embassy_time::Timer::after_millis(20).await;
+#[cfg(not(feature = "async_matrix"))]
+impl<A: InputPin, B: InputPin, P: Phase> RotaryEncoder<A, B, P> {
+    async fn read_keyboard_event(&mut self) -> KeyboardEvent {
+        // Read until a valid rotary encoder event is detected
+        if let Some(last_action) = self.last_action {
+            embassy_time::Timer::after_millis(5).await;
+            self.last_action = None;
+            return KeyboardEvent::rotary_encoder(self.id, last_action, false);
+        }
+
+        loop {
+            let direction = self.update();
+
+            if direction != Direction::None {
+                self.last_action = Some(direction);
+                return KeyboardEvent::rotary_encoder(self.id, direction, true);
             }
+
+            // Wait for 20ms to avoid busy loop
+            embassy_time::Timer::after_millis(20).await;
         }
     }
 }

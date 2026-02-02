@@ -1782,11 +1782,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // Schedule next movement after the delay
                 embassy_time::Timer::after_millis(delay as u64).await;
                 // Check if there's a release event in the channel, if there's no release event, re-send the event
-                let keyboard_event_sub = KeyboardEvent::input_subscriber();
-                let len = keyboard_event_sub.len();
+                // let keyboard_event_sub = KeyboardEvent::input_subscriber();
+                let len = self.keyboard_event_subscriber.len();
                 let mut released = false;
                 for _ in 0..len {
-                    let queued_event = keyboard_event_sub.receive().await;
+                    let queued_event = self.keyboard_event_subscriber.receive().await;
                     if queued_event.pos != event.pos || !queued_event.pressed {
                         publish_input_event_async(queued_event).await;
                     }
@@ -1816,7 +1816,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     if event.pressed {
                         // Wait for 5s, if the key is still pressed, clear split peer info
                         // If there's any other key event received during this period, skip
-                        match select(embassy_time::Timer::after_millis(5000), self.keyboard_event_subscriber.receive()).await {
+                        match select(
+                            embassy_time::Timer::after_millis(5000),
+                            self.keyboard_event_subscriber.receive(),
+                        )
+                        .await
+                        {
                             Either::First(_) => {
                                 // Timeout reached, send clear peer message
                                 #[cfg(feature = "controller")]

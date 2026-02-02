@@ -213,7 +213,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     let struct_def = match &input.data {
         syn::Data::Struct(data_struct) => match &data_struct.fields {
             syn::Fields::Named(fields) => {
-                quote! { struct #struct_name #generics #fields #where_clause }
+                quote! { struct #struct_name #generics #where_clause #fields }
             }
             syn::Fields::Unnamed(fields) => {
                 quote! { struct #struct_name #generics #fields #where_clause ; }
@@ -280,7 +280,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         .map(|(idx, event_type)| {
             let variant_name = format_ident!("Event{}", idx);
             quote! {
-                impl #impl_generics From<#event_type> for #enum_name #ty_generics #where_clause {
+                impl From<#event_type> for #enum_name {
                     fn from(e: #event_type) -> Self {
                         #enum_name::#variant_name(e)
                     }

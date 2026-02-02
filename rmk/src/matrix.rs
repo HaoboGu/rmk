@@ -165,6 +165,8 @@ pub struct Matrix<
 > where
     Self: RowPins<COL2ROW>,
     Self: ColPins<COL2ROW>,
+    Self: MatrixOutputPins<Out>,
+    Self: MatrixInputPins<In>,
 {
     /// Row pins of the pcb matrix
     row_pins: <Self as RowPins<COL2ROW>>::RowPinsType,
@@ -351,6 +353,8 @@ impl<
 where
     Self: RowPins<COL2ROW>,
     Self: ColPins<COL2ROW>,
+    Self: MatrixOutputPins<Out>,
+    Self: MatrixInputPins<In>,
 {
     const OUTPUT_PIN_NUM: usize = const { if COL2ROW { COL } else { ROW } };
     const INPUT_PIN_NUM: usize = const { if COL2ROW { ROW } else { COL } };
