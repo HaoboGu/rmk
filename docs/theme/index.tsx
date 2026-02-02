@@ -1,5 +1,3 @@
-import Theme from 'rspress/theme'
-
 import branchs from '../versions.json' assert { type: 'json' }
 
 const NotFoundLayout = () => {
@@ -9,9 +7,10 @@ const NotFoundLayout = () => {
   window.location.href = versions.includes(version) ? `/${version}` : '/'
 }
 
-export default {
-  ...Theme,
+export {
   NotFoundLayout
 }
 
-export * from 'rspress/theme'
+export * from '@rspress/core/theme-original'
+export * from './components/LangBadge'
+export * from './components/LinkCard'

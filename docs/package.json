@@ -12,13 +12,13 @@
     "preview": "rspress preview"
   },
   "dependencies": {
-    "rspress": "^1.40.2"
+    "@rspress/core": "^2.0.0"
   },
   "devDependencies": {
     "@iconify/json": "^2.2.400",
     "@iconify/tailwind4": "^1.0.6",
     "@tailwindcss/postcss": "^4.1.16",
-    "@types/node": "^18.11.17",
+    "@types/node": "^24.10.9",
     "@types/react": "^19.2.2",
     "prettier": "3.6.2",
     "rspress-plugin-sitemap": "^1.2.1",
