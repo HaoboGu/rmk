@@ -106,7 +106,7 @@ RMK v0.7.x brings lots of exciting features, making configuration easier and mor
 
 1. BLE peripheral doesn't work
 
-   In the new version, RMK uses nRF chip's unique address as the device address. If BLE peripheral doesn't work after updating, it's likely that the old fixed device address is stored in the chip. You should [clear the storage](/docs/features/storage) for both central and peripheral:
+   In the new version, RMK uses nRF chip's unique address as the device address. If BLE peripheral doesn't work after updating, it's likely that the old fixed device address is stored in the chip. You should [clear the storage](./features/storage.md) for both central and peripheral:
    1. Set `clear_storage` to true for both peripheral & central
    2. Flash both central & peripheral firmware
    3. Set `clear_storage` back to false and compile
