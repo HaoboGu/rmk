@@ -163,7 +163,7 @@ let mut matrix = OffsetMatrixWrapper::<
 On the central, you should also run the peripheral manager for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
 
 
-import { Rust, Toml } from '../../components/LangBadge'
+import { Rust, Toml } from '@theme'
 import { Tab, Tabs } from '@theme'
 
 <Tabs>
