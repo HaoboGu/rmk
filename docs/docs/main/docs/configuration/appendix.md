@@ -314,12 +314,23 @@ serial = [
 # If the connection type is "ble", we can override the BLE static address used by setting `ble_addr`.
 # This address should be a valid BLE random static address, see: https://academy.nordicsemi.com/courses/bluetooth-low-energy-fundamentals/lessons/lesson-2-bluetooth-le-advertising/topic/bluetooth-address/
 ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]
+# Optional battery ADC config for the central (overrides [ble] battery settings)
+battery_adc_pin = "vddh"
+adc_divider_measured = 2000
+adc_divider_total = 2806
 
 [split.central.matrix]
 matrix_type = "normal"
 # Matrix IO definition on central board
 row_pins = ["PIN_9", "PIN_11"]
 col_pins = ["PIN_10", "PIN_12"]
+
+# Output configuration for split central (optional)
+[[split.central.output]]
+# Only the pin name is required, the rest of the fields are optional
+pin = "PIN_12"
+initial_state_active = false
+low_active = false
 
 # Configuration for the first split peripheral
 # Note the double brackets [[ ]], which indicate that multiple split peripherals can be defined.
@@ -337,6 +348,10 @@ col_offset = 2
 serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
 # Override the BLE random static address of the peripheral board
 ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3]
+# Optional battery ADC config for this peripheral
+battery_adc_pin = "P0_02"
+adc_divider_measured = 2000
+adc_divider_total = 2806
 
 [split.peripheral.matrix]
 matrix_type = "normal"
@@ -344,7 +359,7 @@ matrix_type = "normal"
 row_pins = ["PIN_9", "PIN_11"]
 col_pins = ["PIN_10"]
 
-# Output configuration, if you don't neet to set an output pin, just ignore this section.
+# Output configuration, if you don't need to set an output pin, just ignore this section.
 # Note the double brackets [[ ]], which indicate that multiple outputs can be defined.
 [[split.peripheral.output]]
 # Only the pin name is required, the rest of the fields are optional

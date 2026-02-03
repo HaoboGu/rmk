@@ -4,7 +4,7 @@
 
 To enable BLE, add `enabled = true` under the `[ble]` section.
 
-There are several more configs for reading battery level and charging state; they are now available for nRF52840 only.
+There are several more configs for reading battery level and charging state; they are currently available for nRF52 (SAADC) chips.
 
 ```toml
 # Ble configuration
@@ -12,7 +12,7 @@ There are several more configs for reading battery level and charging state; the
 [ble]
 # Whether to enable BLE feature
 enabled = true
-# nRF52840's saadc pin for reading battery level, you can use a pin number or "vddh"
+# nRF52 SAADC pin for reading battery level, you can use a pin number or "vddh"
 battery_adc_pin = "vddh"
 # The voltage divider setting for saadc. This setting should be ignored when using "vddh" as the adc pin.
 # For example, nice!nano has 806 + 2M resistors. The saadc measures voltage on the 2M resistor, so the two values should be set to 2000 and 2806
@@ -28,8 +28,22 @@ use_2m_phy = true
 # charge_led= { pin = "PIN_2", low_active = true }
 ```
 
-::: warning
+### Split battery ADC configuration
 
-In the current version, when using split, central and peripherals can only share the same ADC config. This issue will be fixed soon.
+For split keyboards, you can configure battery ADC separately for the central and each peripheral:
 
-:::
+```toml
+[split.central]
+battery_adc_pin = "P0_01"
+adc_divider_measured = 2000
+adc_divider_total = 2806
+
+[[split.peripheral]]
+battery_adc_pin = "P0_02"
+adc_divider_measured = 2000
+adc_divider_total = 2806
+```
+
+Notes:
+- If `[split.central]` provides battery ADC settings, they override the top-level `[ble]` battery settings for the central.
+- Peripherals do **not** fall back to `[ble]`; to enable peripheral battery reporting, set ADC values per peripheral.

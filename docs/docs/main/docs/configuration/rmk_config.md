@@ -77,7 +77,7 @@ In RMK there are several channels used for communication between tasks. The leng
 
 ### Split Keyboard Configuration
 
-- `split_peripherals_num`: The number of split peripherals, default value is 1. If multiple peripherals are specified in the toml, this field will be automatically set to the actual peripherals number.
+- `split_peripherals_num`: The number of split peripherals, default value is 1. If peripherals are specified in `keyboard.toml`, this value is automatically set to the actual count. If you're using the Rust API without `[[split.peripheral]]` entries, set this manually to match your peripheral count.
 
 ### Wireless Configuration
 

@@ -136,6 +136,17 @@ See [this section](../configuration/split_keyboard) for more details.
 
 ## Define central and peripherals via Rust
 
+::: info
+When using the Rust API without `[[split.peripheral]]` entries in `keyboard.toml`, you still need to set the peripheral count for build-time sizing:
+
+```toml
+[rmk]
+split_peripherals_num = 2
+```
+
+Make sure `KEYBOARD_TOML_PATH` points to this file.
+:::
+
 In RMK, split keyboard's matrix are defined with row/col number and their offsets in the whole matrix.
 
 ### Central

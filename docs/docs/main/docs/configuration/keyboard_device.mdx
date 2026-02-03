@@ -21,7 +21,7 @@ manufacturer = "YourName"         # (Optional) Manufacturer string
 product_name = "KeyboardName"     # (Optional) Keyboard name, if not set, it will be same as `name` field
 serial_number = "vial:f64c2b3c"   # (Optional) Serial number of the keyboard
 chip = "nrf52840"                 # Target microcontroller
-usb_enable = true                 # (Optional) Enable USB functionality, defaults to `true`
+usb_enable = true                 # (Optional) Enable USB functionality. If omitted, RMK uses the board/chip default.
 ```
 
 </Tab>
@@ -77,15 +77,23 @@ board = "nice!nano_v2"  # Pre-configured board
 
 - **Nordic nRF52 Series**: `nrf52840`, `nrf52833`, `nrf52832`, `nrf52811`, `nrf52810`
 - **Espressif ESP32 Series**: `esp32c3`, `esp32c6`, `esp32s3`
-- **Raspberry Pi**: `rp2040`, `rp2350`
+- **Raspberry Pi**: `rp2040`
 - **STM32 Series**: Any STM32 chip supported by [embassy-stm32](https://github.com/embassy-rs/embassy/blob/main/embassy-stm32/Cargo.toml) with USB capability
+
+::: info
+`rp2350` is currently supported via the Rust API examples, but `keyboard.toml` chip selection only recognizes `rp2040` for now.
+:::
 
 #### Supported Development Boards
 
 - `nice!nano` - nRF52840-based wireless board
 - `nice!nano_v2` - Updated version of nice!nano
 - `pi_pico_w` - Raspberry Pi Pico W with WiFi/BLE
-- `xiao_ble` - Seeed Studio XIAO nRF52840
+- `XIAO BLE` - Seeed Studio XIAO nRF52840
+
+::: tip
+Board names are case-sensitive.
+:::
 
 ## USB Configuration
 
