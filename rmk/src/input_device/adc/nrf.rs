@@ -1,10 +1,9 @@
 use embassy_nrf::saadc::Saadc;
 use embassy_time::{Duration, Instant};
-use rmk_macro::InputEvent;
+use rmk_macro::{InputEvent, input_device};
 
 use super::{AdcState, AnalogEventType};
-use crate::event::{Axis, AxisEvent, AxisValType, BatteryEvent, PointingEvent, publish_input_event_async};
-use crate::input_device::{InputDevice, Runnable};
+use crate::event::{Axis, AxisEvent, AxisValType, BatteryEvent, PointingEvent};
 
 /// Events produced by NrfAdc.
 #[derive(InputEvent, Clone, Debug)]
@@ -13,6 +12,7 @@ pub enum NrfAdcEvent {
     Battery(BatteryEvent),
 }
 
+#[input_device(publish = NrfAdcEvent)]
 pub struct NrfAdc<'a, const PIN_NUM: usize, const EVENT_NUM: usize> {
     saadc: Saadc<'a, PIN_NUM>,
     polling_interval: Duration,
@@ -48,10 +48,8 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT
     }
 }
 
-impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice for NrfAdc<'a, PIN_NUM, EVENT_NUM> {
-    type Event = NrfAdcEvent;
-
-    async fn read_event(&mut self) -> Self::Event {
+impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT_NUM> {
+    async fn read_nrf_adc_event(&mut self) -> NrfAdcEvent {
         loop {
             if self.active_instant == Instant::MIN {
                 self.saadc.sample(&mut self.buf[1]).await;
@@ -136,15 +134,6 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice for NrfAdc<'a
                     return NrfAdcEvent::Battery(BatteryEvent(battery_adc_value));
                 }
             };
-        }
-    }
-}
-
-impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> Runnable for NrfAdc<'a, PIN_NUM, EVENT_NUM> {
-    async fn run(&mut self) -> ! {
-        loop {
-            let event = self.read_event().await;
-            publish_input_event_async(event).await;
         }
     }
 }
