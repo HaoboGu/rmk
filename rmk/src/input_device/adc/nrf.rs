@@ -3,11 +3,11 @@ use embassy_time::{Duration, Instant};
 use rmk_macro::InputEvent;
 
 use super::{AdcState, AnalogEventType};
-use crate::event::{Axis, AxisEvent, AxisValType, BatteryEvent, PointingEvent};
+use crate::event::{Axis, AxisEvent, AxisValType, BatteryEvent, PointingEvent, publish_input_event_async};
 use crate::input_device::{InputDevice, Runnable};
 
-/// Multi-event enum for NrfAdc device
-#[derive(InputEvent)]
+/// Events produced by NrfAdc.
+#[derive(InputEvent, Clone, Debug)]
 pub enum NrfAdcEvent {
     Pointing(PointingEvent),
     Battery(BatteryEvent),
@@ -17,7 +17,7 @@ pub struct NrfAdc<'a, const PIN_NUM: usize, const EVENT_NUM: usize> {
     saadc: Saadc<'a, PIN_NUM>,
     polling_interval: Duration,
     light_sleep: Option<Duration>,
-    buf: [[i16; PIN_NUM]; 2], // double buffer for waking up
+    buf: [[i16; PIN_NUM]; 2],
     event_type: [AnalogEventType; EVENT_NUM],
     event_state: u8,
     channel_state: u8,
@@ -26,8 +26,6 @@ pub struct NrfAdc<'a, const PIN_NUM: usize, const EVENT_NUM: usize> {
     active_instant: Instant,
 }
 
-/// SCALE = (GAIN/REFERENCE) * 2(RESOLUTION)
-/// Single-ended or positive differential support
 impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT_NUM> {
     pub fn new(
         saadc: Saadc<'a, PIN_NUM>,
@@ -56,7 +54,6 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice for NrfAdc<'a
     async fn read_event(&mut self) -> Self::Event {
         loop {
             if self.active_instant == Instant::MIN {
-                // filling for the first polling
                 self.saadc.sample(&mut self.buf[1]).await;
                 self.active_instant = Instant::now();
             } else {
@@ -72,7 +69,7 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice for NrfAdc<'a
             }
 
             if self.active_instant.elapsed().as_millis() > 1200 {
-                self.adc_state = AdcState::LightSleep; // sleep :)
+                self.adc_state = AdcState::LightSleep;
             }
 
             if self.event_state == EVENT_NUM as u8 {
@@ -147,7 +144,7 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> Runnable for NrfAdc<'a, P
     async fn run(&mut self) -> ! {
         loop {
             let event = self.read_event().await;
-            event.publish().await;
+            publish_input_event_async(event).await;
         }
     }
 }

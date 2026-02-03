@@ -15,8 +15,8 @@ use crate::input::runnable::{
     parse_input_processor_config, reconstruct_type_def,
 };
 
-/// Expands the controller initialization code based on the keyboard configuration.
-/// Returns a tuple containing: (controller_initialization, controller_execution)
+/// Expand controller init/exec blocks from keyboard config.
+/// Returns (initializers, executors).
 pub(crate) fn expand_controller_init(
     keyboard_config: &KeyboardTomlConfig,
     item_mod: &ItemMod,
@@ -30,7 +30,7 @@ pub(crate) fn expand_controller_init(
     initializers.extend(i);
     executors.extend(e);
 
-    // external controller
+    // Custom controllers declared in the module.
     if let Some((_, items)) = &item_mod.content {
         items.iter().for_each(|item| {
             if let syn::Item::Fn(item_fn) = &item
@@ -144,11 +144,11 @@ fn expand_custom_controller(fn_item: &syn::ItemFn) -> (TokenStream, &syn::Ident)
     (initializer, task_name)
 }
 
-/// Generates Controller trait implementation with automatic event routing.
+/// Generate a `Controller` impl for a `#[controller(...)]` struct.
+/// Supports `subscribe = [...]` and optional `poll_interval = N`.
+/// See `rmk::controller::Controller` for details.
 ///
-/// See `rmk::controller::Controller` trait documentation for usage.
-///
-/// This macro is used to define Controller structs:
+/// Example:
 /// ```rust,ignore
 /// #[controller(subscribe = [BatteryEvent, ChargingStateEvent])]
 /// pub struct BatteryLedController { ... }
@@ -156,7 +156,7 @@ fn expand_custom_controller(fn_item: &syn::ItemFn) -> (TokenStream, &syn::Ident)
 pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
-    // Parse attributes to extract event types and polling configuration
+    // Parse subscribe/poll attributes.
     let config = parse_controller_attributes(attr);
 
     if config.event_types.is_empty() {
@@ -168,21 +168,21 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         .into();
     }
 
-    // Validate input is a struct
+    // Require a struct input.
     if !matches!(input.data, syn::Data::Struct(_)) {
         return syn::Error::new_spanned(input, "#[controller] can only be applied to structs")
             .to_compile_error()
             .into();
     }
 
-    // Check for runnable_generated marker
+    // Check runnable_generated marker.
     let has_marker = has_runnable_marker(&input.attrs);
 
-    // Check for input_device or input_processor attributes (for combined Runnable generation)
+    // Detect input_device/input_processor for combined Runnable generation.
     let has_input_device = input.attrs.iter().any(|attr| attr.path().is_ident("input_device"));
     let has_input_processor = input.attrs.iter().any(|attr| attr.path().is_ident("input_processor"));
 
-    // Parse input_device config if present (for combined Runnable)
+    // Parse input_device config if present.
     let input_device_config: Option<InputDeviceConfig> = if has_input_device {
         input
             .attrs
@@ -199,7 +199,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         None
     };
 
-    // Parse input_processor config if present (for combined Runnable)
+    // Parse input_processor config if present.
     let input_processor_config: Option<InputProcessorConfig> = if has_input_processor {
         input
             .attrs
@@ -221,10 +221,10 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     let generics = &input.generics;
     let (impl_generics, _ty_generics, where_clause) = generics.split_for_impl();
 
-    // Use deduplicated type generics to handle cfg-conditional generic parameters
+    // Dedup cfg-conditional generics for type position.
     let deduped_ty_generics = deduplicate_type_generics(generics);
 
-    // Filter out controller attribute and runnable_generated marker from output
+    // Drop controller/runnable marker attrs from output.
     let attrs: Vec<_> = input
         .attrs
         .iter()
@@ -233,13 +233,13 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         })
         .collect();
 
-    // Reconstruct the struct definition
+    // Rebuild struct definition.
     let struct_def = reconstruct_type_def(&input);
 
-    // Generate internal enum name
+    // Internal event enum name.
     let enum_name = format_ident!("{}EventEnum", struct_name);
 
-    // Generate enum variants and related code
+    // Build enum variants.
     let enum_variants: Vec<_> = config
         .event_types
         .iter()
@@ -250,8 +250,8 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         })
         .collect();
 
-    // Generate From impls for each event type
-    // Note: The enum doesn't have generic parameters, so we don't use impl_generics here
+    // From impls for each event type.
+    // Enum has no generics, so use plain impl.
     let from_impls: Vec<_> = config
         .event_types
         .iter()
@@ -268,7 +268,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         })
         .collect();
 
-    // Generate match arms for process_event
+    // process_event match arms.
     let process_event_arms: Vec<_> = config
         .event_types
         .iter()
@@ -282,10 +282,10 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         })
         .collect();
 
-    // Generate next_message implementation using embassy_futures::select
+    // next_message implementation via select_biased.
     let next_message_impl = generate_next_message(&config.event_types, &enum_name);
 
-    // Generate PollingController implementation if poll_interval is specified
+    // PollingController impl when poll_interval is set.
     let polling_controller_impl = if let Some(interval_ms) = config.poll_interval_ms {
         quote! {
             impl #impl_generics ::rmk::controller::PollingController for #struct_name #deduped_ty_generics #where_clause {
@@ -302,9 +302,9 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         quote! {}
     };
 
-    // Generate Runnable implementation
+    // Runnable impl (if not generated elsewhere).
     let runnable_impl = if has_marker {
-        // Skip Runnable generation if marker is present (another macro already generated it)
+        // Skip when another macro already generated it.
         quote! {}
     } else {
         let controller_cfg = SharedControllerConfig {
@@ -322,25 +322,25 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         )
     };
 
-    // Add marker attribute if we generated Runnable and there are other macros that need to skip
+    // Add runnable_generated marker for combined macros.
     let marker_attr = if !has_marker && (has_input_device || has_input_processor) {
         quote! { #[::rmk::runnable_generated] }
     } else {
         quote! {}
     };
 
-    // Generate the complete output
+    // Assemble output.
     let expanded = quote! {
         #(#attrs)*
         #marker_attr
         #vis #struct_def
 
-        // Internal enum for event routing (needs same visibility as struct for public trait implementation)
+        // Internal event enum for routing (match struct visibility).
         #vis enum #enum_name {
             #(#enum_variants),*
         }
 
-        // From impls for convenient event conversion
+        // From impls for event conversion.
         #(#from_impls)*
 
         impl #impl_generics ::rmk::controller::Controller for #struct_name #deduped_ty_generics #where_clause {
@@ -363,13 +363,13 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     expanded.into()
 }
 
-/// Controller attribute configuration
+/// Controller attribute config.
 struct ControllerConfig {
     event_types: Vec<Path>,
     poll_interval_ms: Option<u64>,
 }
 
-/// Parse #[controller] subscribe attribute
+/// Parse #[controller(...)] attribute.
 fn parse_controller_attributes(attr: proc_macro::TokenStream) -> ControllerConfig {
     use syn::punctuated::Punctuated;
     use syn::{ExprArray, Token};
@@ -377,7 +377,7 @@ fn parse_controller_attributes(attr: proc_macro::TokenStream) -> ControllerConfi
     let mut event_types = Vec::new();
     let mut poll_interval_ms = None;
 
-    // Parse as Meta::List containing name-value pairs
+    // Parse Meta::List name-value pairs.
     let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
     let attr2: proc_macro2::TokenStream = attr.into();
 
@@ -386,7 +386,7 @@ fn parse_controller_attributes(attr: proc_macro::TokenStream) -> ControllerConfi
             for meta in parsed {
                 if let Meta::NameValue(nv) = meta {
                     if nv.path.is_ident("subscribe") {
-                        // Parse the array of event types
+                        // Parse event type list.
                         if let syn::Expr::Array(ExprArray { elems, .. }) = nv.value {
                             for elem in elems {
                                 if let syn::Expr::Path(expr_path) = elem {
@@ -395,7 +395,7 @@ fn parse_controller_attributes(attr: proc_macro::TokenStream) -> ControllerConfi
                             }
                         }
                     } else if nv.path.is_ident("poll_interval") {
-                        // Parse poll_interval as integer (milliseconds)
+                        // Parse poll_interval as milliseconds.
                         if let syn::Expr::Lit(syn::ExprLit {
                             lit: syn::Lit::Int(lit_int),
                             ..
@@ -424,14 +424,14 @@ fn parse_controller_attributes(attr: proc_macro::TokenStream) -> ControllerConfi
     }
 }
 
-/// Generate next_message using select_biased for concurrent event polling
+/// Build next_message using select_biased.
 fn generate_next_message(event_types: &[Path], enum_name: &syn::Ident) -> proc_macro2::TokenStream {
     let num_events = event_types.len();
 
-    // Create subscriber variable names
+    // Subscriber variable names.
     let sub_vars: Vec<_> = (0..num_events).map(|i| format_ident!("sub{}", i)).collect();
 
-    // Create subscriber initializations
+    // Subscriber initializations.
     let sub_inits: Vec<_> = event_types
         .iter()
         .zip(&sub_vars)
@@ -442,7 +442,7 @@ fn generate_next_message(event_types: &[Path], enum_name: &syn::Ident) -> proc_m
         })
         .collect();
 
-    // Generate select_biased! arms for each event
+    // select_biased! arms for each event.
     let select_arms: Vec<_> = sub_vars
         .iter()
         .enumerate()
@@ -457,10 +457,10 @@ fn generate_next_message(event_types: &[Path], enum_name: &syn::Ident) -> proc_m
     quote! {
         async fn next_message(&mut self) -> Self::Event {
             use ::rmk::event::EventSubscriber;
-            use ::futures::FutureExt;
+            use ::rmk::futures::FutureExt;
             #(#sub_inits)*
 
-            ::futures::select_biased! {
+            ::rmk::futures::select_biased! {
                 #(#select_arms)*
             }
         }

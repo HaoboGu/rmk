@@ -119,7 +119,8 @@ macro_rules! run_all {
 
 /// Macro for binding input processor chain to event channel and running them.
 ///
-/// FIXME: For split keyboard, `EVENT_CHANNEL` is REQUIRED as it's the default channel for receiving events from peripherals.
+/// For split keyboards, ensure the chain listens to the input-event channel
+/// used by peripherals (e.g., `KeyboardEvent::input_subscriber()`).
 ///
 /// This macro creates tasks that receive events from channels and process them using specified processor chains.
 /// It calls processors in order and decides whether to continue the chain based on the result of each processor.
@@ -132,13 +133,17 @@ macro_rules! run_all {
 /// # Example
 ///
 /// ```rust
-/// use rmk::channel::{blocking_mutex::raw::NoopRawMutex, channel::Channel, EVENT_CHANNEL};
-/// // Create a local channel for processor chain
-/// let local_channel: Channel<NoopRawMutex, Event, 16> = Channel::new();
-/// // Two chains, one use local channel, the other use the built-in channel
+/// use rmk::channel::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
+/// use rmk::event::{InputEvent, KeyboardEvent};
+/// // Create a local channel for a processor chain
+/// let local_channel: Channel<NoopRawMutex, KeyboardEvent, 16> = Channel::new();
+/// let local_rx = local_channel.receiver();
+/// // Built-in input-event channel
+/// let keyboard_rx = KeyboardEvent::input_subscriber();
+/// // Two chains, one uses the local channel, the other uses the built-in channel
 /// let processor_future = run_processor_chain! {
-///     local_channel => [processor1, processor2, processor3]
-///     EVENT_CHANNEL => [processor4, processor5, processor6]
+///     local_rx => [processor1, processor2, processor3]
+///     keyboard_rx => [processor4, processor5, processor6]
 /// };
 /// ```
 #[macro_export]

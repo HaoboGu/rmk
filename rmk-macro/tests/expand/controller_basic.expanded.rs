@@ -78,7 +78,7 @@ impl ::rmk::controller::Controller for LedController {
     }
     async fn next_message(&mut self) -> Self::Event {
         use ::rmk::event::EventSubscriber;
-        use ::futures::FutureExt;
+        use ::rmk::futures::FutureExt;
         let mut sub0 = <LedStateEvent as ::rmk::event::ControllerEvent>::controller_subscriber();
         let mut sub1 = <BrightnessEvent as ::rmk::event::ControllerEvent>::controller_subscriber();
         {

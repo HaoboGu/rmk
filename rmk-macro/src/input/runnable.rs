@@ -1,7 +1,7 @@
-//! Shared logic for generating combined Runnable implementations.
+//! Helpers for generating combined Runnable implementations.
 //!
-//! This module provides a unified function for generating `Runnable` trait implementations
-//! that combine multiple macro functionalities (input_device, input_processor, controller).
+//! Provides a unified `Runnable` generator for input_device/input_processor/controller.
+//! Keeps combined macro output consistent.
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -9,34 +9,24 @@ use std::collections::HashSet;
 use syn::parse::Parser;
 use syn::{Attribute, ExprArray, GenericParam, Meta, Path};
 
-/// Configuration for controller subscription
+/// Controller subscription config.
 pub struct ControllerConfig {
     pub event_types: Vec<Path>,
     pub poll_interval_ms: Option<u64>,
 }
 
-/// Configuration for input device publishing
+/// Input device publishing config.
 pub struct InputDeviceConfig {
     pub event_type: Path,
 }
 
-/// Configuration for input processor subscription
+/// Input processor subscription config.
 pub struct InputProcessorConfig {
     pub event_types: Vec<Path>,
 }
 
 /// Deduplicate generic parameters by name.
-///
-/// When a struct has cfg-conditional generic bounds like:
-/// ```rust,ignore
-/// struct Foo<
-///     #[cfg(feature = "a")] T: Trait1,
-///     #[cfg(not(feature = "a"))] T: Trait2,
-/// >
-/// ```
-///
-/// syn parses this as two separate parameters with the same name.
-/// This function extracts unique parameter names for use in type position (e.g., `Foo<T>`).
+/// Handles cfg-conditional generics that repeat the same name.
 pub fn deduplicate_type_generics(generics: &syn::Generics) -> TokenStream {
     let mut seen = HashSet::new();
     let mut unique_params = Vec::new();
@@ -49,7 +39,7 @@ pub fn deduplicate_type_generics(generics: &syn::Generics) -> TokenStream {
         };
 
         if seen.insert(name) {
-            // First occurrence - add to unique params
+            // First occurrence.
             match param {
                 GenericParam::Type(t) => {
                     let ident = &t.ident;
@@ -74,7 +64,7 @@ pub fn deduplicate_type_generics(generics: &syn::Generics) -> TokenStream {
     }
 }
 
-/// Convert CamelCase to snake_case
+/// Convert CamelCase to snake_case.
 pub fn to_snake_case(s: &str) -> String {
     let mut result = String::new();
     let chars: Vec<char> = s.chars().collect();
@@ -83,10 +73,10 @@ pub fn to_snake_case(s: &str) -> String {
         let c = chars[i];
 
         if c.is_uppercase() {
-            // Add underscore before uppercase letter if:
-            // 1. Not at start (i > 0)
-            // 2. Previous char is lowercase OR
-            // 3. Next char exists and is lowercase (end of acronym: "HTMLParser" -> "html_parser")
+            // Add underscore before uppercase when:
+            // 1) not at start
+            // 2) previous is lowercase
+            // 3) next is lowercase (acronym end)
             let add_underscore =
                 i > 0 && (chars[i - 1].is_lowercase() || (i + 1 < chars.len() && chars[i + 1].is_lowercase()));
 
@@ -102,7 +92,7 @@ pub fn to_snake_case(s: &str) -> String {
     result
 }
 
-/// Convert CamelCase to UPPER_SNAKE_CASE for channel names
+/// Convert CamelCase to UPPER_SNAKE_CASE.
 pub fn to_upper_snake_case(s: &str) -> String {
     let mut result = String::new();
     let chars: Vec<char> = s.chars().collect();
@@ -127,7 +117,7 @@ pub fn to_upper_snake_case(s: &str) -> String {
     result
 }
 
-/// Check if a type has a specific derive attribute (e.g., Clone, Copy)
+/// Check if a type derives a trait (e.g., Clone, Copy).
 pub fn has_derive(attrs: &[Attribute], derive_name: &str) -> bool {
     attrs.iter().any(|attr| {
         if attr.path().is_ident("derive")
@@ -139,8 +129,8 @@ pub fn has_derive(attrs: &[Attribute], derive_name: &str) -> bool {
     })
 }
 
-/// Reconstruct type definition (struct or enum) from DeriveInput.
-/// Returns TokenStream for the type definition without attributes.
+/// Reconstruct a struct/enum definition.
+/// Returns a TokenStream without attributes.
 pub fn reconstruct_type_def(input: &syn::DeriveInput) -> TokenStream {
     let type_name = &input.ident;
     let generics = &input.generics;
@@ -168,15 +158,14 @@ pub fn reconstruct_type_def(input: &syn::DeriveInput) -> TokenStream {
     }
 }
 
-/// Check if a struct has the runnable_generated marker attribute.
-/// This marker is used to prevent multiple Runnable implementations when
-/// multiple macros (input_device, input_processor, controller) are combined.
+/// Check for the runnable_generated marker.
+/// Prevents duplicate Runnable impls when macros combine.
 pub fn has_runnable_marker(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| is_runnable_generated_attr(attr))
 }
 
-/// Check if an attribute is the runnable_generated marker.
-/// Returns true for both `#[runnable_generated]` and `#[rmk::runnable_generated]`.
+/// Check runnable_generated attribute.
+/// Accepts `#[runnable_generated]` and `#[rmk::runnable_generated]`.
 pub fn is_runnable_generated_attr(attr: &Attribute) -> bool {
     let path = attr.path();
     path.is_ident("runnable_generated")
@@ -185,44 +174,43 @@ pub fn is_runnable_generated_attr(attr: &Attribute) -> bool {
             && path.segments[1].ident == "runnable_generated")
 }
 
-/// Convert event type to read method name: BatteryEvent -> read_battery_event
+/// Convert event type to read method name (BatteryEvent -> read_battery_event).
 pub fn event_type_to_read_method_name(path: &Path) -> syn::Ident {
     let type_name = path.segments.last().unwrap().ident.to_string();
 
-    // Remove "Event" suffix if present
+    // Strip "Event" suffix if present.
     let base_name = type_name.strip_suffix("Event").unwrap_or(&type_name);
 
-    // Convert CamelCase to snake_case
+    // CamelCase -> snake_case.
     let snake_case = to_snake_case(base_name);
 
-    // Add "read_" prefix and "_event" suffix
+    // Add "read_" prefix and "_event" suffix.
     format_ident!("read_{}_event", snake_case)
 }
 
-/// Convert event type to handler method name: BatteryEvent -> on_battery_event
+/// Convert event type to handler method name (BatteryEvent -> on_battery_event).
 pub fn event_type_to_handler_method_name(path: &Path) -> syn::Ident {
     let type_name = path.segments.last().unwrap().ident.to_string();
 
-    // Remove "Event" suffix if present
+    // Strip "Event" suffix if present.
     let base_name = type_name.strip_suffix("Event").unwrap_or(&type_name);
 
-    // Convert CamelCase to snake_case
+    // CamelCase -> snake_case.
     let snake_case = to_snake_case(base_name);
 
-    // Add "on_" prefix and "_event" suffix
+    // Add "on_" prefix and "_event" suffix.
     format_ident!("on_{}_event", snake_case)
 }
 
-/// Generate unified Runnable implementation for any combination of input_device, input_processor, and controller.
+/// Generate a unified `Runnable` impl for input_device/input_processor/controller.
 ///
-/// This function generates a `Runnable::run()` implementation that handles:
-/// - InputDevice: reads events via `read_xxx_event()` method and publishes them
-/// - InputProcessor: subscribes to input events and processes them
-/// - Controller: subscribes to controller events and optionally handles polling
+/// Handles:
+/// - InputDevice: read_event + publish
+/// - InputProcessor: subscribe + process
+/// - Controller: subscribe + optional polling
 ///
-/// The generated code uses `select_biased!` to concurrently handle all event sources.
-///
-/// Note: `input_device_config` and `input_processor_config` are mutually exclusive.
+/// Uses select_biased! when multiplexing multiple sources.
+/// `input_device_config` and `input_processor_config` are mutually exclusive.
 pub fn generate_runnable(
     struct_name: &syn::Ident,
     generics: &syn::Generics,
@@ -243,12 +231,12 @@ pub fn generate_runnable(
         }
     };
 
-    // Validate mutual exclusivity
+    // Enforce mutual exclusivity.
     if input_device_config.is_some() && input_processor_config.is_some() {
         panic!("input_device and input_processor are mutually exclusive");
     }
 
-    // Collect all select arms and subscriber definitions
+    // Collect select arms and subscriber definitions.
     let mut sub_defs: Vec<TokenStream> = Vec::new();
     let mut select_arms: Vec<TokenStream> = Vec::new();
     let mut select_match_arms: Vec<TokenStream> = Vec::new();
@@ -263,15 +251,15 @@ pub fn generate_runnable(
     let mut input_event_type: Option<syn::Path> = None;
     let mut ctrl_enum_name: Option<syn::Ident> = None;
 
-    // Handle input_device
+    // Handle input_device.
     if let Some(device_config) = input_device_config {
         input_event_type = Some(device_config.event_type.clone());
-        let read_method = event_type_to_read_method_name(&device_config.event_type);
         use_statements.push(quote! { use ::rmk::event::publish_input_event_async; });
+        use_statements.push(quote! { use ::rmk::input_device::InputDevice; });
         if needs_split_select {
             let select_enum_name = select_enum_name.as_ref().unwrap();
             select_arms.push(quote! {
-                event = self.#read_method().fuse() => #select_enum_name::Input(event)
+                event = self.read_event().fuse() => #select_enum_name::Input(event)
             });
             select_match_arms.push(quote! {
                 #select_enum_name::Input(event) => {
@@ -280,14 +268,14 @@ pub fn generate_runnable(
             });
         } else {
             select_arms.push(quote! {
-                event = self.#read_method().fuse() => {
+                event = self.read_event().fuse() => {
                     publish_input_event_async(event).await;
                 }
             });
         }
     }
 
-    // Handle input_processor
+    // Handle input_processor.
     if let Some(processor_config) = input_processor_config {
         let proc_enum_name = format_ident!("{}EventEnum", struct_name);
         use_statements.push(quote! { use ::rmk::event::InputEvent; });
@@ -307,7 +295,7 @@ pub fn generate_runnable(
         }
     }
 
-    // Handle controller
+    // Handle controller.
     let has_polling = controller_config
         .as_ref()
         .and_then(|c| c.poll_interval_ms)
@@ -349,9 +337,9 @@ pub fn generate_runnable(
         }
     }
 
-    // Handle standalone controller case (no input_device or input_processor)
+    // Standalone controller (no input_device/input_processor).
     if input_device_config.is_none() && input_processor_config.is_none() && controller_config.is_some() {
-        // Use the simpler event_loop/polling_loop approach for standalone controller
+        // Use event_loop/polling_loop directly.
         if has_polling {
             return runnable_impl(quote! {
                 use ::rmk::controller::PollingController;
@@ -365,26 +353,24 @@ pub fn generate_runnable(
         }
     }
 
-    // Handle standalone input_device case (no controller or input_processor)
+    // Standalone input_device.
     if input_device_config.is_some() && input_processor_config.is_none() && controller_config.is_none() {
-        let device_config = input_device_config.unwrap();
-        let event_type = &device_config.event_type;
-        let read_method = event_type_to_read_method_name(event_type);
         return runnable_impl(quote! {
             use ::rmk::event::publish_input_event_async;
+            use ::rmk::input_device::InputDevice;
             loop {
-                let event = self.#read_method().await;
+                let event = self.read_event().await;
                 publish_input_event_async(event).await;
             }
         });
     }
 
-    // Handle standalone input_processor case (no controller or input_device)
+    // Standalone input_processor.
     if input_device_config.is_none() && input_processor_config.is_some() && controller_config.is_none() {
         let processor_config = input_processor_config.unwrap();
         let proc_enum_name = format_ident!("{}EventEnum", struct_name);
 
-        // Special case: single event type - use simple loop without select_biased
+        // Single event type: avoid select_biased.
         if processor_config.event_types.len() == 1 {
             let event_type = &processor_config.event_types[0];
             return runnable_impl(quote! {
@@ -402,13 +388,13 @@ pub fn generate_runnable(
         }
     }
 
-    // Common use statements
+    // Common use statements.
     if !sub_defs.is_empty() {
         use_statements.push(quote! { use ::rmk::event::EventSubscriber; });
     }
-    use_statements.push(quote! { use ::futures::FutureExt; });
+    use_statements.push(quote! { use ::rmk::futures::FutureExt; });
 
-    // Generate polling-related code if needed
+    // Generate polling-related code if needed.
     if has_polling {
         let interval_ms = controller_config.as_ref().unwrap().poll_interval_ms.unwrap();
         use_statements.push(quote! { use ::rmk::controller::PollingController; });
@@ -457,7 +443,7 @@ pub fn generate_runnable(
                             );
 
                             let select_result = {
-                                ::futures::select_biased! {
+                                ::rmk::futures::select_biased! {
                                     #(#select_arms)*
                                     #timer_arm
                                 }
@@ -493,7 +479,7 @@ pub fn generate_runnable(
                                 interval.checked_sub(elapsed).unwrap_or(::embassy_time::Duration::MIN)
                             );
 
-                            ::futures::select_biased! {
+                            ::rmk::futures::select_biased! {
                                 #(#select_arms)*
                                 #timer_arm
                             }
@@ -524,7 +510,7 @@ pub fn generate_runnable(
 
                         loop {
                             let select_result = {
-                                ::futures::select_biased! {
+                                ::rmk::futures::select_biased! {
                                     #(#select_arms)*
                                 }
                             };
@@ -545,7 +531,7 @@ pub fn generate_runnable(
                         #(#sub_defs)*
 
                         loop {
-                            ::futures::select_biased! {
+                            ::rmk::futures::select_biased! {
                                 #(#select_arms)*
                             }
                         }

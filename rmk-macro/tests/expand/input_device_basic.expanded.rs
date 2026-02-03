@@ -36,8 +36,9 @@ impl ::rmk::input_device::InputDevice for BatteryReader {
 impl ::rmk::input_device::Runnable for BatteryReader {
     async fn run(&mut self) -> ! {
         use ::rmk::event::publish_input_event_async;
+        use ::rmk::input_device::InputDevice;
         loop {
-            let event = self.read_battery_event().await;
+            let event = self.read_event().await;
             publish_input_event_async(event).await;
         }
     }

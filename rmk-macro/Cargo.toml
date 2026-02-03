@@ -32,4 +32,4 @@ doctest = false
 
 [dev-dependencies]
 macrotest = "1.0"
-futures = { version = "0.3", default-features = false, features = ["async-await"] }
+rmk = { path = "tests/rmk" }

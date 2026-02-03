@@ -27,20 +27,20 @@ impl ::core::fmt::Debug for TestEvent {
 static TEST_EVENT_INPUT_CHANNEL: ::embassy_sync::channel::Channel<
     ::rmk::RawMutex,
     TestEvent,
-    { 8 },
+    { 16 },
 > = ::embassy_sync::channel::Channel::new();
 impl ::rmk::event::InputEvent for TestEvent {
     type Publisher = ::embassy_sync::channel::Sender<
         'static,
         ::rmk::RawMutex,
         TestEvent,
-        { 8 },
+        { 16 },
     >;
     type Subscriber = ::embassy_sync::channel::Receiver<
         'static,
         ::rmk::RawMutex,
         TestEvent,
-        { 8 },
+        { 16 },
     >;
     fn input_publisher() -> Self::Publisher {
         TEST_EVENT_INPUT_CHANNEL.sender()
@@ -54,7 +54,7 @@ impl ::rmk::event::AsyncInputEvent for TestEvent {
         'static,
         ::rmk::RawMutex,
         TestEvent,
-        { 8 },
+        { 16 },
     >;
     fn input_publisher_async() -> Self::AsyncPublisher {
         TEST_EVENT_INPUT_CHANNEL.sender()

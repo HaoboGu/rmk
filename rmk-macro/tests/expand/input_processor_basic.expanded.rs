@@ -84,7 +84,7 @@ impl<
         use ::rmk::event::InputEvent;
         use ::rmk::input_device::InputProcessor;
         use ::rmk::event::EventSubscriber;
-        use ::futures::FutureExt;
+        use ::rmk::futures::FutureExt;
         let mut proc_sub0 = <KeyEvent as ::rmk::event::InputEvent>::input_subscriber();
         let mut proc_sub1 = <EncoderEvent as ::rmk::event::InputEvent>::input_subscriber();
         loop {

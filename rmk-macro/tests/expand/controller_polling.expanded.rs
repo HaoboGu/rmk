@@ -46,7 +46,7 @@ impl ::rmk::controller::Controller for PollingLedController {
     }
     async fn next_message(&mut self) -> Self::Event {
         use ::rmk::event::EventSubscriber;
-        use ::futures::FutureExt;
+        use ::rmk::futures::FutureExt;
         let mut sub0 = <LedStateEvent as ::rmk::event::ControllerEvent>::controller_subscriber();
         {
             use ::futures_util::__private as __futures_crate;
