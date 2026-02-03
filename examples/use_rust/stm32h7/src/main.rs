@@ -39,7 +39,7 @@ async fn main(_spawner: Spawner) {
     // RCC config
     let mut config = Config::default();
     {
-        use embassy_stm32::rcc::*;
+        use embassy_stm32::rcc::{mux, *};
         config.rcc.hsi = Some(HSIPrescaler::DIV1);
         config.rcc.csi = true;
         // Needed for USB
@@ -64,6 +64,9 @@ async fn main(_spawner: Spawner) {
         config.rcc.apb3_pre = APBPrescaler::DIV2;
         config.rcc.apb4_pre = APBPrescaler::DIV2;
         config.rcc.voltage_scale = VoltageScale::Scale0;
+        // Configure USB clock mux to use HSI48 (internal 48MHz oscillator)
+        // HSI48 is internal, no external crystal needed for USB - better compatibility
+        config.rcc.mux.usbsel = mux::Usbsel::HSI48;
     }
 
     // Initialize peripherals
