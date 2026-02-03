@@ -1,7 +1,7 @@
 import * as path from 'node:path'
-import { defineConfig } from 'rspress/config'
+import { defineConfig } from '@rspress/core'
 
-import versions from './versions.json' assert { type: 'json' }
+import versions from './versions.json' with { type: 'json' }
 
 export default defineConfig({
   root: path.join(__dirname, 'docs'),

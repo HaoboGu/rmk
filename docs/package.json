@@ -12,10 +12,10 @@
     "preview": "rspress preview"
   },
   "dependencies": {
-    "rspress": "^1.40.2"
+    "@rspress/core": "^2.0.0"
   },
   "devDependencies": {
-    "@types/node": "^18.11.17",
+    "@types/node": "^24.10.9",
     "prettier": "3.6.2"
   }
 }
