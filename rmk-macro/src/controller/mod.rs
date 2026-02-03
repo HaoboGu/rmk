@@ -9,10 +9,9 @@ use syn::{DeriveInput, ItemMod, Meta, Path, parse_macro_input};
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::gpio_config::convert_gpio_str_to_output_pin;
 use crate::input::runnable::{
-    ControllerConfig as SharedControllerConfig, InputDeviceConfig, InputProcessorConfig,
-    deduplicate_type_generics, event_type_to_handler_method_name, generate_runnable,
-    has_runnable_marker, is_runnable_generated_attr, parse_input_device_config,
-    parse_input_processor_config, reconstruct_type_def,
+    ControllerConfig as SharedControllerConfig, InputDeviceConfig, InputProcessorConfig, deduplicate_type_generics,
+    event_type_to_handler_method_name, generate_runnable, has_runnable_marker, is_runnable_generated_attr,
+    parse_input_device_config, parse_input_processor_config, reconstruct_type_def,
 };
 
 /// Expand controller init/exec blocks from keyboard config.
@@ -228,9 +227,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     let attrs: Vec<_> = input
         .attrs
         .iter()
-        .filter(|attr| {
-            !attr.path().is_ident("controller") && !is_runnable_generated_attr(attr)
-        })
+        .filter(|attr| !attr.path().is_ident("controller") && !is_runnable_generated_attr(attr))
         .collect();
 
     // Rebuild struct definition.

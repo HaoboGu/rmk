@@ -3,9 +3,10 @@
 //! Provides a unified `Runnable` generator for input_device/input_processor/controller.
 //! Keeps combined macro output consistent.
 
+use std::collections::HashSet;
+
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use std::collections::HashSet;
 use syn::parse::Parser;
 use syn::{Attribute, ExprArray, GenericParam, Meta, Path};
 
@@ -101,9 +102,8 @@ pub fn to_upper_snake_case(s: &str) -> String {
         let c = chars[i];
 
         if c.is_uppercase() {
-            let add_underscore = i > 0
-                && (chars[i - 1].is_lowercase()
-                    || (i + 1 < chars.len() && chars[i + 1].is_lowercase()));
+            let add_underscore =
+                i > 0 && (chars[i - 1].is_lowercase() || (i + 1 < chars.len() && chars[i + 1].is_lowercase()));
 
             if add_underscore {
                 result.push('_');
@@ -296,10 +296,7 @@ pub fn generate_runnable(
     }
 
     // Handle controller.
-    let has_polling = controller_config
-        .as_ref()
-        .and_then(|c| c.poll_interval_ms)
-        .is_some();
+    let has_polling = controller_config.as_ref().and_then(|c| c.poll_interval_ms).is_some();
 
     if let Some(ctrl_config) = controller_config {
         let ctrl_enum = format_ident!("{}EventEnum", struct_name);
@@ -545,8 +542,8 @@ pub fn generate_runnable(
 /// Parse controller config from attribute tokens.
 /// Extracts `subscribe = [...]` and optional `poll_interval = N`.
 pub fn parse_controller_config(tokens: impl Into<TokenStream>) -> ControllerConfig {
-    use syn::punctuated::Punctuated;
     use syn::Token;
+    use syn::punctuated::Punctuated;
 
     let mut event_types = Vec::new();
     let mut poll_interval_ms = None;
@@ -587,8 +584,8 @@ pub fn parse_controller_config(tokens: impl Into<TokenStream>) -> ControllerConf
 /// Parse input_device config from attribute tokens.
 /// Extracts `publish = EventType`.
 pub fn parse_input_device_config(tokens: impl Into<TokenStream>) -> Option<InputDeviceConfig> {
-    use syn::punctuated::Punctuated;
     use syn::Token;
+    use syn::punctuated::Punctuated;
 
     let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
     let tokens: TokenStream = tokens.into();
@@ -613,8 +610,8 @@ pub fn parse_input_device_config(tokens: impl Into<TokenStream>) -> Option<Input
 /// Parse input_processor config from attribute tokens.
 /// Extracts `subscribe = [...]`.
 pub fn parse_input_processor_config(tokens: impl Into<TokenStream>) -> InputProcessorConfig {
-    use syn::punctuated::Punctuated;
     use syn::Token;
+    use syn::punctuated::Punctuated;
 
     let mut event_types = Vec::new();
 

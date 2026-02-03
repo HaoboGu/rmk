@@ -3,9 +3,8 @@ use syn::parse::Parser;
 use syn::{DeriveInput, Meta, Path, parse_macro_input};
 
 use super::runnable::{
-    ControllerConfig, InputProcessorConfig, deduplicate_type_generics,
-    event_type_to_handler_method_name, generate_runnable, has_runnable_marker,
-    is_runnable_generated_attr, parse_controller_config, reconstruct_type_def,
+    ControllerConfig, InputProcessorConfig, deduplicate_type_generics, event_type_to_handler_method_name,
+    generate_runnable, has_runnable_marker, is_runnable_generated_attr, parse_controller_config, reconstruct_type_def,
 };
 
 /// Generates InputProcessor trait implementation with automatic event routing.
@@ -88,9 +87,7 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
     let attrs: Vec<_> = input
         .attrs
         .iter()
-        .filter(|attr| {
-            !attr.path().is_ident("input_processor") && !is_runnable_generated_attr(attr)
-        })
+        .filter(|attr| !attr.path().is_ident("input_processor") && !is_runnable_generated_attr(attr))
         .collect();
 
     // Reconstruct the struct definition

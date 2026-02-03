@@ -63,10 +63,5 @@ async fn main(_spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
 
     // Start
-    join3(
-        run_all!(matrix),
-        keyboard.run(),
-        run_rmk(driver, rmk_config),
-    )
-    .await;
+    join3(run_all!(matrix), keyboard.run(), run_rmk(driver, rmk_config)).await;
 }

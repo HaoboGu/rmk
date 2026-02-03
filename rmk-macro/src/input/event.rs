@@ -12,10 +12,7 @@ use super::runnable::{has_derive, reconstruct_type_def, to_upper_snake_case};
 /// The order of the two macros does not matter.
 ///
 /// See `rmk::event::InputEvent` for usage.
-pub fn input_event_impl(
-    attr: proc_macro::TokenStream,
-    item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
+pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
     // Parse attributes - only channel_size is used for Channel
@@ -27,29 +24,20 @@ pub fn input_event_impl(
 
     // Validate input is a struct or enum
     if !matches!(input.data, syn::Data::Struct(_) | syn::Data::Enum(_)) {
-        return syn::Error::new_spanned(
-            input,
-            "#[input_event] can only be applied to structs or enums",
-        )
-        .to_compile_error()
-        .into();
+        return syn::Error::new_spanned(input, "#[input_event] can only be applied to structs or enums")
+            .to_compile_error()
+            .into();
     }
 
     // Verify Clone + Copy derives
     if !has_derive(&input.attrs, "Clone") || !has_derive(&input.attrs, "Copy") {
-        return syn::Error::new_spanned(
-            input,
-            "#[input_event] requires the struct to derive Clone and Copy",
-        )
-        .to_compile_error()
-        .into();
+        return syn::Error::new_spanned(input, "#[input_event] requires the struct to derive Clone and Copy")
+            .to_compile_error()
+            .into();
     }
 
     // Check if controller_event macro is also present and extract its parameters
-    let controller_event_attr = input
-        .attrs
-        .iter()
-        .find(|attr| attr.path().is_ident("controller_event"));
+    let controller_event_attr = input.attrs.iter().find(|attr| attr.path().is_ident("controller_event"));
 
     let type_name = &input.ident;
     let vis = &input.vis;
@@ -58,10 +46,7 @@ pub fn input_event_impl(
 
     // Generate InputEvent channel and trait implementations
     let input_channel_name = syn::Ident::new(
-        &format!(
-            "{}_INPUT_CHANNEL",
-            to_upper_snake_case(&type_name.to_string())
-        ),
+        &format!("{}_INPUT_CHANNEL", to_upper_snake_case(&type_name.to_string())),
         type_name.span(),
     );
 
@@ -119,9 +104,7 @@ pub fn input_event_impl(
     let filtered_attrs: Vec<TokenStream> = input
         .attrs
         .iter()
-        .filter(|attr| {
-            !attr.path().is_ident("input_event") && !attr.path().is_ident("controller_event")
-        })
+        .filter(|attr| !attr.path().is_ident("input_event") && !attr.path().is_ident("controller_event"))
         .map(|attr| attr.to_token_stream())
         .collect();
 
@@ -130,14 +113,10 @@ pub fn input_event_impl(
 
     let expanded = if let Some(ctrl_attr) = controller_event_attr {
         // controller_event is also present, generate both sets of implementations
-        let (ctrl_channel_size, ctrl_subs, ctrl_pubs) =
-            parse_controller_event_attr_from_attribute(ctrl_attr);
+        let (ctrl_channel_size, ctrl_subs, ctrl_pubs) = parse_controller_event_attr_from_attribute(ctrl_attr);
 
         let controller_channel_name = syn::Ident::new(
-            &format!(
-                "{}_CONTROLLER_CHANNEL",
-                to_upper_snake_case(&type_name.to_string())
-            ),
+            &format!("{}_CONTROLLER_CHANNEL", to_upper_snake_case(&type_name.to_string())),
             type_name.span(),
         );
 

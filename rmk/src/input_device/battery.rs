@@ -4,10 +4,10 @@ use embassy_sync::signal::Signal;
 use embedded_hal::digital::InputPin;
 use rmk_macro::{input_device, input_processor};
 
+use crate::KeyMap;
 use crate::event::{BatteryEvent, ChargingStateEvent};
 #[cfg(all(feature = "controller", feature = "_ble"))]
 use crate::event::{BatteryLevelEvent, publish_controller_event};
-use crate::KeyMap;
 
 pub(crate) static BATTERY_UPDATE: Signal<crate::RawMutex, BatteryState> = Signal::new();
 
@@ -64,7 +64,9 @@ impl<I: InputPin> ChargingStateReader<I> {
             };
             self.current_charging_state = charging_state;
             self.first_read = true;
-            return ChargingStateEvent { charging: charging_state };
+            return ChargingStateEvent {
+                charging: charging_state,
+            };
         }
 
         loop {
@@ -81,7 +83,9 @@ impl<I: InputPin> ChargingStateReader<I> {
             // Only return event when charging state changes
             if charging_state != self.current_charging_state {
                 self.current_charging_state = charging_state;
-                return ChargingStateEvent { charging: charging_state };
+                return ChargingStateEvent {
+                    charging: charging_state,
+                };
             }
         }
     }

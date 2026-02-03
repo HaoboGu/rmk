@@ -6,8 +6,6 @@ use embedded_io_async::{Read, Write};
 use futures::FutureExt;
 #[cfg(all(feature = "_ble", feature = "storage"))]
 use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
-
-use crate::event::InputEvent;
 #[cfg(feature = "_ble")]
 use {
     crate::event::{BatteryLevelEvent, ControllerEvent, EventSubscriber},
@@ -18,14 +16,12 @@ use {
 
 use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
+use crate::CONNECTION_STATE;
+use crate::event::{ChargingStateEvent, InputEvent, KeyboardEvent, PointingEvent, TouchpadEvent};
 #[cfg(feature = "controller")]
 use crate::event::{LayerChangeEvent, LedIndicatorEvent, publish_controller_event};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
-use crate::{
-    CONNECTION_STATE,
-    event::{ChargingStateEvent, KeyboardEvent, PointingEvent, TouchpadEvent},
-};
 use crate::state::ConnectionState;
 
 /// Run the split peripheral service.

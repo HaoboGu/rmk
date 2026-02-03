@@ -8,13 +8,13 @@ use embassy_time::Instant;
 use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::storage::FlashOperationMessage};
 
 use super::SplitMessage;
-use crate::event::{ChargingStateEvent, ControllerEvent, KeyboardEvent, KeyboardEventPos};
+use crate::CONNECTION_STATE;
+use crate::event::{
+    ChargingStateEvent, ControllerEvent, KeyboardEvent, KeyboardEventPos, publish_input_event,
+    publish_input_event_async,
+};
 #[cfg(feature = "controller")]
 use crate::event::{PeripheralBatteryEvent, publish_controller_event};
-use crate::{
-    CONNECTION_STATE,
-    event::{publish_input_event, publish_input_event_async},
-};
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

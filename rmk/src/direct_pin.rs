@@ -5,9 +5,9 @@ use embedded_hal::digital::InputPin;
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
 use crate::MatrixTrait;
+use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::event::KeyboardEvent;
 use crate::matrix::KeyState;
-use crate::debounce::{DebounceState, DebouncerTrait};
 
 /// DirectPinMartex only has input pins.
 #[rmk_macro::input_device(publish = KeyboardEvent)]

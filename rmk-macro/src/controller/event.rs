@@ -12,10 +12,7 @@ use crate::input::runnable::{has_derive, reconstruct_type_def, to_upper_snake_ca
 /// The order of the two macros does not matter.
 ///
 /// See `rmk::event::ControllerEvent` for usage.
-pub fn controller_event_impl(
-    attr: proc_macro::TokenStream,
-    item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
+pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
     // Parse attributes
@@ -27,12 +24,9 @@ pub fn controller_event_impl(
 
     // Validate input is a struct or enum
     if !matches!(input.data, syn::Data::Struct(_) | syn::Data::Enum(_)) {
-        return syn::Error::new_spanned(
-            input,
-            "#[controller_event] can only be applied to structs or enums",
-        )
-        .to_compile_error()
-        .into();
+        return syn::Error::new_spanned(input, "#[controller_event] can only be applied to structs or enums")
+            .to_compile_error()
+            .into();
     }
 
     // Verify Clone + Copy derives
@@ -46,10 +40,7 @@ pub fn controller_event_impl(
     }
 
     // Check if input_event macro is also present and extract its parameters
-    let input_event_attr = input
-        .attrs
-        .iter()
-        .find(|attr| attr.path().is_ident("input_event"));
+    let input_event_attr = input.attrs.iter().find(|attr| attr.path().is_ident("input_event"));
 
     let type_name = &input.ident;
     let vis = &input.vis;
@@ -58,10 +49,7 @@ pub fn controller_event_impl(
 
     // Generate ControllerEvent channel and trait implementations
     let controller_channel_name = syn::Ident::new(
-        &format!(
-            "{}_CONTROLLER_CHANNEL",
-            to_upper_snake_case(&type_name.to_string())
-        ),
+        &format!("{}_CONTROLLER_CHANNEL", to_upper_snake_case(&type_name.to_string())),
         type_name.span(),
     );
 
@@ -129,9 +117,7 @@ pub fn controller_event_impl(
     let filtered_attrs: Vec<TokenStream> = input
         .attrs
         .iter()
-        .filter(|attr| {
-            !attr.path().is_ident("input_event") && !attr.path().is_ident("controller_event")
-        })
+        .filter(|attr| !attr.path().is_ident("input_event") && !attr.path().is_ident("controller_event"))
         .map(|attr| attr.to_token_stream())
         .collect();
 
@@ -143,10 +129,7 @@ pub fn controller_event_impl(
         let input_channel_size = parse_input_event_attr_from_attribute(input_attr);
 
         let input_channel_name = syn::Ident::new(
-            &format!(
-                "{}_INPUT_CHANNEL",
-                to_upper_snake_case(&type_name.to_string())
-            ),
+            &format!("{}_INPUT_CHANNEL", to_upper_snake_case(&type_name.to_string())),
             type_name.span(),
         );
 

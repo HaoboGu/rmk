@@ -45,6 +45,8 @@ use futures::FutureExt;
 use hid::{HidReaderTrait, RunnableHidWriter};
 use keymap::KeyMap;
 use matrix::MatrixTrait;
+// Re-export macros for use in user code
+pub use rmk_macro::{InputEvent, input_device, runnable_generated};
 use rmk_types::action::{EncoderAction, KeyAction};
 use rmk_types::led_indicator::LedIndicator;
 use state::CONNECTION_STATE;
@@ -58,9 +60,6 @@ use {
     crate::usb::{UsbKeyboardWriter, add_usb_reader_writer, add_usb_writer, new_usb_builder},
 };
 pub use {embassy_futures, futures, heapless, rmk_macro as macros, rmk_types as types};
-
-// Re-export macros for use in user code
-pub use rmk_macro::{InputEvent, input_device, runnable_generated};
 #[cfg(feature = "storage")]
 use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 

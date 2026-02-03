@@ -4,9 +4,8 @@ use syn::parse::Parser;
 use syn::{DeriveInput, Meta, Path, parse_macro_input};
 
 use super::runnable::{
-    ControllerConfig, InputDeviceConfig, deduplicate_type_generics,
-    event_type_to_read_method_name, generate_runnable, has_runnable_marker,
-    is_runnable_generated_attr, parse_controller_config, reconstruct_type_def,
+    ControllerConfig, InputDeviceConfig, deduplicate_type_generics, event_type_to_read_method_name, generate_runnable,
+    has_runnable_marker, is_runnable_generated_attr, parse_controller_config, reconstruct_type_def,
 };
 
 /// Generates InputDevice and Runnable trait implementations for single-event devices.
@@ -96,9 +95,7 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attrs: Vec<_> = input
         .attrs
         .iter()
-        .filter(|attr| {
-            !attr.path().is_ident("input_device") && !is_runnable_generated_attr(attr)
-        })
+        .filter(|attr| !attr.path().is_ident("input_device") && !is_runnable_generated_attr(attr))
         .collect();
 
     // Reconstruct the struct definition
@@ -159,8 +156,8 @@ struct DeviceConfig {
 
 /// Parse #[input_device] publish attribute
 fn parse_device_attributes(attr: TokenStream) -> DeviceConfig {
-    use syn::punctuated::Punctuated;
     use syn::Token;
+    use syn::punctuated::Punctuated;
 
     let mut event_type = None;
 

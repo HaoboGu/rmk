@@ -45,9 +45,5 @@ async fn main(_spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, 2, 2, true>::new(row_pins, col_pins, debouncer);
 
     // Start
-    join(
-        run_all!(matrix),
-        run_rmk_split_peripheral(uart_instance),
-    )
-    .await;
+    join(run_all!(matrix), run_rmk_split_peripheral(uart_instance)).await;
 }
