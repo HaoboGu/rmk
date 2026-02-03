@@ -363,8 +363,7 @@ pub fn generate_runnable(
     }
 
     // Standalone input_processor.
-    if input_device_config.is_none() && input_processor_config.is_some() && controller_config.is_none() {
-        let processor_config = input_processor_config.unwrap();
+    if input_device_config.is_none() && controller_config.is_none() && let Some(processor_config) = input_processor_config {
         let proc_enum_name = format_ident!("{}EventEnum", struct_name);
 
         // Single event type: avoid select_biased.

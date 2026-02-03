@@ -47,10 +47,12 @@ pub trait Runnable {
 ///     Pointing(PointingEvent),
 /// }
 ///
-/// impl InputDevice for MultiDevice {
-///     type Event = MultiDeviceEvent;
-///     async fn read_event(&mut self) -> Self::Event {
-///         // Implementation
+/// #[input_device(publish = MultiDeviceEvent)]
+/// struct MyInputDevice;
+/// 
+/// impl MyInputDevice {
+///     async fn read_multi_device_event(&mut self) -> MultiDeviceEvent {
+///         // Implementation for reading multiple events
 ///     }
 /// }
 /// ```
@@ -71,6 +73,7 @@ pub trait InputDevice: Runnable {
 pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0>:
     Runnable
 {
+    /// The event type processed by this input processor
     type Event;
 
     /// Process the incoming events, convert them to HID report [`Report`],

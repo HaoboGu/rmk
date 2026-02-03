@@ -120,7 +120,7 @@ impl<'a, M: RawMutex, T: Clone, const N: usize> EventSubscriber<T> for watch::Re
 // Implementation for embassy-sync Channel
 impl<'a, M: RawMutex, T: Clone, const N: usize> EventPublisher<T> for channel::Sender<'a, M, T, N> {
     fn publish(&self, message: T) {
-        if let Err(_) = self.try_send(message) {
+        if self.try_send(message).is_err() {
             error!("Send event to Channel error, channel is full");
         }
     }
