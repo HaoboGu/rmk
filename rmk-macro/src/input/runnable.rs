@@ -161,7 +161,7 @@ pub fn reconstruct_type_def(input: &syn::DeriveInput) -> TokenStream {
 /// Check for the runnable_generated marker.
 /// Prevents duplicate Runnable impls when macros combine.
 pub fn has_runnable_marker(attrs: &[Attribute]) -> bool {
-    attrs.iter().any(|attr| is_runnable_generated_attr(attr))
+    attrs.iter().any(is_runnable_generated_attr)
 }
 
 /// Check runnable_generated attribute.
@@ -485,52 +485,50 @@ pub fn generate_runnable(
                 }
             }
         }
-    } else {
-        if needs_split_select {
-            let select_enum_name = select_enum_name.as_ref().unwrap();
-            let input_event_type = input_event_type.as_ref().unwrap();
-            let ctrl_enum_name = ctrl_enum_name.as_ref().unwrap();
-            let select_enum_def = quote! {
-                enum #select_enum_name {
-                    Input(#input_event_type),
-                    Controller(#ctrl_enum_name),
-                }
-            };
+    } else if needs_split_select {
+        let select_enum_name = select_enum_name.as_ref().unwrap();
+        let input_event_type = input_event_type.as_ref().unwrap();
+        let ctrl_enum_name = ctrl_enum_name.as_ref().unwrap();
+        let select_enum_def = quote! {
+            enum #select_enum_name {
+                Input(#input_event_type),
+                Controller(#ctrl_enum_name),
+            }
+        };
 
-            quote! {
-                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
-                    async fn run(&mut self) -> ! {
-                        #(#use_statements)*
-                        #select_enum_def
+        quote! {
+            impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
+                async fn run(&mut self) -> ! {
+                    #(#use_statements)*
+                    #select_enum_def
 
-                        #(#sub_defs)*
+                    #(#sub_defs)*
 
-                        loop {
-                            let select_result = {
-                                ::rmk::futures::select_biased! {
-                                    #(#select_arms)*
-                                }
-                            };
-
-                            match select_result {
-                                #(#select_match_arms)*
+                    loop {
+                        let select_result = {
+                            ::rmk::futures::select_biased! {
+                                #(#select_arms)*
                             }
+                        };
+
+                        match select_result {
+                            #(#select_match_arms)*
                         }
                     }
                 }
             }
-        } else {
-            quote! {
-                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
-                    async fn run(&mut self) -> ! {
-                        #(#use_statements)*
+        }
+    } else {
+        quote! {
+            impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
+                async fn run(&mut self) -> ! {
+                    #(#use_statements)*
 
-                        #(#sub_defs)*
+                    #(#sub_defs)*
 
-                        loop {
-                            ::rmk::futures::select_biased! {
-                                #(#select_arms)*
-                            }
+                    loop {
+                        ::rmk::futures::select_biased! {
+                            #(#select_arms)*
                         }
                     }
                 }
@@ -562,14 +560,13 @@ pub fn parse_controller_config(tokens: impl Into<TokenStream>) -> ControllerConf
                             }
                         }
                     }
-                } else if nv.path.is_ident("poll_interval") {
-                    if let syn::Expr::Lit(syn::ExprLit {
+                } else if nv.path.is_ident("poll_interval")
+                    && let syn::Expr::Lit(syn::ExprLit {
                         lit: syn::Lit::Int(lit_int),
                         ..
                     }) = nv.value
-                    {
-                        poll_interval_ms = lit_int.base10_parse::<u64>().ok();
-                    }
+                {
+                    poll_interval_ms = lit_int.base10_parse::<u64>().ok();
                 }
             }
         }
@@ -592,14 +589,13 @@ pub fn parse_input_device_config(tokens: impl Into<TokenStream>) -> Option<Input
 
     if let Ok(parsed) = parser.parse2(tokens) {
         for meta in parsed {
-            if let Meta::NameValue(nv) = meta {
-                if nv.path.is_ident("publish") {
-                    if let syn::Expr::Path(expr_path) = nv.value {
-                        return Some(InputDeviceConfig {
-                            event_type: expr_path.path,
-                        });
-                    }
-                }
+            if let Meta::NameValue(nv) = meta
+                && nv.path.is_ident("publish")
+                && let syn::Expr::Path(expr_path) = nv.value
+            {
+                return Some(InputDeviceConfig {
+                    event_type: expr_path.path,
+                });
             }
         }
     }
@@ -620,14 +616,13 @@ pub fn parse_input_processor_config(tokens: impl Into<TokenStream>) -> InputProc
 
     if let Ok(parsed) = parser.parse2(tokens) {
         for meta in parsed {
-            if let Meta::NameValue(nv) = meta {
-                if nv.path.is_ident("subscribe") {
-                    if let syn::Expr::Array(ExprArray { elems, .. }) = nv.value {
-                        for elem in elems {
-                            if let syn::Expr::Path(expr_path) = elem {
-                                event_types.push(expr_path.path);
-                            }
-                        }
+            if let Meta::NameValue(nv) = meta
+                && nv.path.is_ident("subscribe")
+                && let syn::Expr::Array(ExprArray { elems, .. }) = nv.value
+            {
+                for elem in elems {
+                    if let syn::Expr::Path(expr_path) = elem {
+                        event_types.push(expr_path.path);
                     }
                 }
             }

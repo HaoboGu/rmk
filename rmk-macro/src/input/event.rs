@@ -226,11 +226,11 @@ fn parse_input_event_attributes(attr: proc_macro::TokenStream) -> Option<proc_ma
     match parser.parse2(attr2) {
         Ok(parsed) => {
             for meta in parsed {
-                if let Meta::NameValue(nv) = meta {
-                    if nv.path.is_ident("channel_size") {
-                        let expr = &nv.value;
-                        channel_size = Some(quote::quote! { #expr });
-                    }
+                if let Meta::NameValue(nv) = meta
+                    && nv.path.is_ident("channel_size")
+                {
+                    let expr = &nv.value;
+                    channel_size = Some(quote::quote! { #expr });
                 }
             }
         }

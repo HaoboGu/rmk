@@ -196,14 +196,14 @@ fn parse_processor_attributes(attr: proc_macro::TokenStream) -> ProcessorConfig 
     match parser.parse2(attr2) {
         Ok(parsed) => {
             for meta in parsed {
-                if let Meta::NameValue(nv) = meta {
-                    if nv.path.is_ident("subscribe") {
-                        // Parse the array of event types
-                        if let syn::Expr::Array(ExprArray { elems, .. }) = nv.value {
-                            for elem in elems {
-                                if let syn::Expr::Path(expr_path) = elem {
-                                    event_types.push(expr_path.path);
-                                }
+                if let Meta::NameValue(nv) = meta
+                    && nv.path.is_ident("subscribe")
+                {
+                    // Parse the array of event types
+                    if let syn::Expr::Array(ExprArray { elems, .. }) = nv.value {
+                        for elem in elems {
+                            if let syn::Expr::Path(expr_path) = elem {
+                                event_types.push(expr_path.path);
                             }
                         }
                     }

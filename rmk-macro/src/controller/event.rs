@@ -270,11 +270,11 @@ fn parse_input_event_attr_from_attribute(attr: &Attribute) -> Option<proc_macro2
         let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
         if let Ok(parsed) = parser.parse2(meta_list.tokens.clone()) {
             for meta in parsed {
-                if let Meta::NameValue(nv) = meta {
-                    if nv.path.is_ident("channel_size") {
-                        let expr = &nv.value;
-                        channel_size = Some(quote::quote! { #expr });
-                    }
+                if let Meta::NameValue(nv) = meta
+                    && nv.path.is_ident("channel_size")
+                {
+                    let expr = &nv.value;
+                    channel_size = Some(quote::quote! { #expr });
                 }
             }
         }

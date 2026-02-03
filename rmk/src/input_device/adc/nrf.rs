@@ -54,16 +54,12 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT
             if self.active_instant == Instant::MIN {
                 self.saadc.sample(&mut self.buf[1]).await;
                 self.active_instant = Instant::now();
+            } else if let Some(light_sleep) = self.light_sleep
+                && self.adc_state == AdcState::LightSleep
+            {
+                embassy_time::Timer::after(light_sleep).await;
             } else {
-                if let Some(light_sleep) = self.light_sleep {
-                    if self.adc_state == AdcState::LightSleep {
-                        embassy_time::Timer::after(light_sleep).await;
-                    } else {
-                        embassy_time::Timer::after(self.polling_interval).await;
-                    }
-                } else {
-                    embassy_time::Timer::after(self.polling_interval).await;
-                }
+                embassy_time::Timer::after(self.polling_interval).await;
             }
 
             if self.active_instant.elapsed().as_millis() > 1200 {

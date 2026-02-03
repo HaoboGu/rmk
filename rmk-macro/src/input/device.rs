@@ -168,12 +168,12 @@ fn parse_device_attributes(attr: TokenStream) -> DeviceConfig {
     match parser.parse2(attr2) {
         Ok(parsed) => {
             for meta in parsed {
-                if let Meta::NameValue(nv) = meta {
-                    if nv.path.is_ident("publish") {
-                        // Parse single event type
-                        if let syn::Expr::Path(expr_path) = nv.value {
-                            event_type = Some(expr_path.path);
-                        }
+                if let Meta::NameValue(nv) = meta
+                    && nv.path.is_ident("publish")
+                {
+                    // Parse single event type
+                    if let syn::Expr::Path(expr_path) = nv.value {
+                        event_type = Some(expr_path.path);
                     }
                 }
             }
