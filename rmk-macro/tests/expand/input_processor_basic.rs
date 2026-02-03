@@ -14,6 +14,4 @@ pub struct EncoderEvent {
 }
 
 #[input_processor(subscribe = [KeyEvent, EncoderEvent])]
-pub struct KeyProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
-    pub keymap: &'a core::cell::RefCell<()>,
-}
+pub struct KeyProcessor;

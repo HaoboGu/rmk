@@ -60,26 +60,12 @@ impl ::core::fmt::Debug for EncoderEvent {
         )
     }
 }
-pub struct KeyProcessor<
-    'a,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
-> {
-    pub keymap: &'a core::cell::RefCell<()>,
-}
+pub struct KeyProcessor;
 pub enum KeyProcessorEventEnum {
     Event0(KeyEvent),
     Event1(EncoderEvent),
 }
-impl<
-    'a,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
-> ::rmk::input_device::Runnable for KeyProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER> {
+impl ::rmk::input_device::Runnable for KeyProcessor {
     async fn run(&mut self) -> ! {
         use ::rmk::event::InputEvent;
         use ::rmk::input_device::InputProcessor;
@@ -195,24 +181,12 @@ impl<
         }
     }
 }
-impl<
-    'a,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
-> ::rmk::input_device::InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
-for KeyProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER> {
+impl ::rmk::input_device::InputProcessor for KeyProcessor {
     type Event = KeyProcessorEventEnum;
     async fn process(&mut self, event: Self::Event) {
         match event {
             KeyProcessorEventEnum::Event0(event) => self.on_key_event(event).await,
             KeyProcessorEventEnum::Event1(event) => self.on_encoder_event(event).await,
         }
-    }
-    fn get_keymap(
-        &self,
-    ) -> &::core::cell::RefCell<::rmk::KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
-        self.keymap
     }
 }

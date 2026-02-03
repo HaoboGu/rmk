@@ -1,10 +1,7 @@
-use core::cell::RefCell;
-
 use embassy_sync::signal::Signal;
 use embedded_hal::digital::InputPin;
 use rmk_macro::{input_device, input_processor};
 
-use crate::KeyMap;
 use crate::event::{BatteryEvent, ChargingStateEvent};
 #[cfg(all(feature = "controller", feature = "_ble"))]
 use crate::event::{BatteryLevelEvent, publish_controller_event};
@@ -92,24 +89,16 @@ impl<I: InputPin> ChargingStateReader<I> {
 }
 
 #[input_processor(subscribe = [BatteryEvent, ChargingStateEvent])]
-pub struct BatteryProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+pub struct BatteryProcessor {
     adc_divider_measured: u32,
     adc_divider_total: u32,
     /// Current battery state
     battery_state: BatteryState,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    BatteryProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
-{
-    pub fn new(
-        adc_divider_measured: u32,
-        adc_divider_total: u32,
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
-    ) -> Self {
+impl BatteryProcessor {
+    pub fn new(adc_divider_measured: u32, adc_divider_total: u32) -> Self {
         BatteryProcessor {
-            keymap,
             adc_divider_measured,
             adc_divider_total,
             battery_state: BatteryState::NotAvailable,
@@ -153,9 +142,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    BatteryProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
-{
+impl BatteryProcessor {
     async fn on_battery_event(&mut self, event: BatteryEvent) {
         let val = event.0;
         trace!("Detected battery ADC value: {:?}", val);

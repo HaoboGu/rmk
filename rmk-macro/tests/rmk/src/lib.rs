@@ -50,6 +50,10 @@ pub mod event {
     }
 }
 
+pub mod hid {
+    pub struct Report;
+}
+
 pub mod input_device {
     pub trait Runnable {
         async fn run(&mut self) -> !;
@@ -60,10 +64,10 @@ pub mod input_device {
         async fn read_event(&mut self) -> Self::Event;
     }
 
-    pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
+    pub trait InputProcessor: Runnable {
         type Event;
-        fn process(&mut self, event: Self::Event) -> impl core::future::Future<Output = ()>;
-        fn get_keymap(&self) -> &core::cell::RefCell<crate::KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>;
+        async fn process(&mut self, event: Self::Event);
+        async fn send_report(&self, _report: crate::hid::Report) {}
     }
 }
 

@@ -232,11 +232,22 @@ fn expand_split_peripheral(
     // Get peripheral device and processor configuration
     let (device_initialization, devices, processors) = expand_peripheral_input_device_config(id, keyboard_config);
 
-    // Generate minimal keymap if processors need it (e.g., BatteryProcessor)
-    let keymap_init = if !processors.is_empty() {
+    // FIXME: remove the keymap from input devices maybe?
+    // Move all keymaps to processors
+    let needs_keymap = peripheral_config
+        .input_device
+        .as_ref()
+        .map(|input| {
+            input.joystick.as_ref().is_some_and(|v| !v.is_empty())
+                || input.pmw3610.as_ref().is_some_and(|v| !v.is_empty())
+        })
+        .unwrap_or(false);
+
+    // Generate minimal keymap when processors may read from it.
+    let keymap_init = if needs_keymap {
         quote! {
-            // Create a minimal keymap for processors that require it
-            // Peripheral doesn't use keymap for key processing, only for processor API compatibility
+            // Create a minimal keymap for processors that may read from it.
+            // Peripheral doesn't use keymap for key processing.
             let mut default_keymap = [[[::rmk::types::action::KeyAction::No; 1]; 1]; 1];
             let mut behavior_config = ::rmk::config::BehaviorConfig::default();
             let mut per_key_config = ::rmk::config::PositionalConfig::default();

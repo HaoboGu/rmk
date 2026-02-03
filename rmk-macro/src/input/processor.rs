@@ -159,17 +159,13 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
 
         #runnable_impl
 
-        impl #impl_generics ::rmk::input_device::InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER> for #struct_name #deduped_ty_generics #where_clause {
+        impl #impl_generics ::rmk::input_device::InputProcessor for #struct_name #deduped_ty_generics #where_clause {
             type Event = #enum_name;
 
             async fn process(&mut self, event: Self::Event) {
                 match event {
                     #(#process_event_arms),*
                 }
-            }
-
-            fn get_keymap(&self) -> &::core::cell::RefCell<::rmk::KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
-                self.keymap
             }
         }
     };

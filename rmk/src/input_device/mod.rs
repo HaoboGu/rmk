@@ -2,11 +2,8 @@
 //!
 //! This module defines the `InputDevice` trait, `InputProcessor` trait, `Runnable` trait and several macros for running input devices and processors.
 //! The `InputDevice` trait provides the interface for individual input devices, and the macros facilitate their concurrent execution.
-use core::cell::RefCell;
-
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::hid::Report;
-use crate::keymap::KeyMap;
 
 pub mod adc;
 pub mod battery;
@@ -49,7 +46,7 @@ pub trait Runnable {
 ///
 /// #[input_device(publish = MultiDeviceEvent)]
 /// struct MyInputDevice;
-/// 
+///
 /// impl MyInputDevice {
 ///     async fn read_multi_device_event(&mut self) -> MultiDeviceEvent {
 ///         // Implementation for reading multiple events
@@ -70,9 +67,7 @@ pub trait InputDevice: Runnable {
 /// Take the normal keyboard as the example:
 ///
 /// The [`crate::matrix::Matrix`] is actually an input device and the [`crate::keyboard::Keyboard`] is actually an input processor.
-pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0>:
-    Runnable
-{
+pub trait InputProcessor: Runnable {
     /// The event type processed by this input processor
     type Event;
 
@@ -88,9 +83,6 @@ pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER
     async fn send_report(&self, report: Report) {
         KEYBOARD_REPORT_CHANNEL.send(report).await;
     }
-
-    /// Get the current keymap
-    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>;
 }
 
 /// Macro to run multiple Runnable instances concurrently.
