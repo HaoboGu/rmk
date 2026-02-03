@@ -82,36 +82,5 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // Send mouse report directly
         self.send_report(Report::MouseReport(mouse_report)).await;
-        // KEYBOARD_REPORT_CHANNEL.send(Report::MouseReport(mouse_report)).await;
     }
 }
-
-// impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize, const N: usize>
-//     InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
-//     for JoystickProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER, N>
-// {
-//     async fn process(&mut self, event: Event) -> ProcessResult {
-//         embassy_time::Timer::after_millis(5).await;
-//         match event {
-//             Event::Joystick(event) => {
-//                 for (rec, e) in self.record.iter_mut().zip(event.iter()) {
-//                     *rec = e.value;
-//                 }
-//                 debug!("Joystick info: {:#?}", self.record);
-//                 self.generate_report().await;
-//                 ProcessResult::Stop
-//             }
-//             _ => ProcessResult::Continue(event),
-//         }
-//     }
-
-//     /// Send the processed report.
-//     async fn send_report(&self, report: Report) {
-//         KEYBOARD_REPORT_CHANNEL.send(report).await;
-//     }
-
-//     /// Get the current keymap
-//     fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
-//         self.keymap
-//     }
-// }
