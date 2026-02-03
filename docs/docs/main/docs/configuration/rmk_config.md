@@ -33,7 +33,7 @@ vial_channel_size = 4
 # Flash channel size
 flash_channel_size = 4
 # The number of the split peripherals
-split_peripherals_num = 1
+split_peripherals_num = 0
 # The number of available BLE profiles
 ble_profiles_num = 3
 # BLE Split Central sleep timeout in seconds (0 = disabled)
@@ -77,7 +77,7 @@ In RMK there are several channels used for communication between tasks. The leng
 
 ### Split Keyboard Configuration
 
-- `split_peripherals_num`: The number of split peripherals, default value is 1. If peripherals are specified in `keyboard.toml`, this value is automatically set to the actual count. If you're using the Rust API without `[[split.peripheral]]` entries, set this manually to match your peripheral count.
+- `split_peripherals_num`: The number of split peripherals, default value is 0. If peripherals are specified in `keyboard.toml`, this value is automatically set to the actual count. If you're using the Rust API without `[[split.peripheral]]` entries, set this manually to match your peripheral count.
 
 ### Wireless Configuration
 

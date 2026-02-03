@@ -133,7 +133,7 @@ impl<
                                 #[cfg(not(feature = "vial_lock"))]
                                 {
                                     self.keymap.borrow().matrix_state.read_all(&mut report.input_data[2..]);
-                                    error!("It is not sercure to use matrix tester without vial lock");
+                                    error!("It is not secure to use matrix tester without vial lock");
                                 }
 
                                 #[cfg(feature = "vial_lock")]
@@ -220,7 +220,7 @@ impl<
                 warn!("Custom get value -- not supported")
             }
             ViaCommand::EepromReset => {
-                warn!("Reseting storage..");
+                warn!("Resetting storage..");
                 #[cfg(feature = "storage")]
                 FLASH_CHANNEL.send(FlashOperationMessage::Reset).await
                 // TODO: Reboot after a eeprom reset?
@@ -236,7 +236,6 @@ impl<
             ViaCommand::DynamicKeymapMacroGetBufferSize => {
                 report.input_data[1] = (MACRO_SPACE_SIZE as u16 >> 8) as u8;
                 report.input_data[2] = (MACRO_SPACE_SIZE & 0xFF) as u8;
-                warn!("Macro get buffer size -- to be implemented")
             }
             ViaCommand::DynamicKeymapMacroGetBuffer => {
                 let offset = BigEndian::read_u16(&report.output_data[1..3]) as usize;

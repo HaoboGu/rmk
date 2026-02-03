@@ -18,7 +18,7 @@ pub mod bidirectional_matrix;
 #[cfg(feature = "vial_lock")]
 pub struct MatrixState<const ROW: usize, const COL: usize> {
     // 30 bytes is the limited by Vial and 240 keys is enough for
-    // most keyborad
+    // most keyboard
     state: [u8; 30],
 }
 

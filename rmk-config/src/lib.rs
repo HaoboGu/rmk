@@ -229,7 +229,7 @@ where
 {
     let value = SerdeDeserialize::deserialize(deserializer)?;
     if !(4..=65536).contains(&value) {
-        panic!("❌ Parse `keyboard.toml` error: max_patterns_per_key must be between 4 and 65566, got {value}");
+        panic!("❌ Parse `keyboard.toml` error: max_patterns_per_key must be between 4 and 65536, got {value}");
     }
     Ok(value)
 }

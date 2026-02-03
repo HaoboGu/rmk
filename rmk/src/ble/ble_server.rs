@@ -3,7 +3,7 @@ use trouble_host::prelude::*;
 use usbd_hid::descriptor::SerializedDescriptor;
 
 use super::battery_service::BatteryService;
-use super::device_info::DeviceConfigrmationService;
+use super::device_info::DeviceConfigurationService;
 #[cfg(feature = "host")]
 use super::host_service::HostService;
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
@@ -26,7 +26,7 @@ pub(crate) struct Server {
     pub(crate) hid_service: HidService,
     pub(crate) host_service: HostService,
     pub(crate) composite_service: CompositeService,
-    pub(crate) device_config_service: DeviceConfigrmationService,
+    pub(crate) device_config_service: DeviceConfigurationService,
 }
 
 #[cfg(not(feature = "host"))]
@@ -35,7 +35,7 @@ pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
     pub(crate) hid_service: HidService,
     pub(crate) composite_service: CompositeService,
-    pub(crate) device_config_service: DeviceConfigrmationService,
+    pub(crate) device_config_service: DeviceConfigurationService,
 }
 
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]

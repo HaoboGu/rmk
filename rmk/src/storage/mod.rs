@@ -70,10 +70,10 @@ pub(crate) enum FlashOperationMessage {
     MorseDefaultProfile(MorseProfile),
 }
 
-/// StorageKeys is the prefix digit stored in the flash, it's used to identify the type of the stored data.
+/// StorageKeys is the prefix stored in the flash, it's used to identify the type of the stored data.
 ///
-/// This is because the whole storage item is an Rust enum due to the limitation of `sequential_storage`.
-/// When deserializing, we need to know the type of the stored data to know how to parse it, the first byte of the stored data is always the type, aka StorageKeys.
+/// This is because the whole storage item is a Rust enum due to the limitation of `sequential_storage`.
+/// When deserializing, we need to know the type of the stored data to know how to parse it, the first 4 bytes (u32) of the stored data is always the type, aka StorageKeys.
 #[repr(u32)]
 pub(crate) enum StorageKeys {
     StorageConfig = 0,
@@ -440,8 +440,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             "Number of used sector for storage must larger than 1"
         );
 
-        // If config.start_addr == 0, use last `num_sectors` sectors or sectors begin at 0x0006_0000 for nRF52
-        // Other wise, use storage config setting
+        // If config.start_addr == 0:
+        // - For nRF chips: use sectors starting at 0x0006_0000
+        // - For other chips: use the last `num_sectors` sectors
+        // Otherwise, use storage config setting
         #[cfg(feature = "_nrf_ble")]
         let start_addr = if storage_config.start_addr == 0 {
             0x0006_0000

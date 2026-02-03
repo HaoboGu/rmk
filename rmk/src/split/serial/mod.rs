@@ -4,7 +4,7 @@ use super::driver::SplitDriverError;
 use crate::split::driver::{PeripheralManager, SplitReader, SplitWriter};
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
 
-// Receive split message from peripheral via serial and process it
+/// Receive split message from peripheral via serial and process it
 ///
 /// Generic parameters:
 /// - `const ROW`: row number of the peripheral's matrix

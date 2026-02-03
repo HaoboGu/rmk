@@ -13,7 +13,7 @@ use crate::event::{ChargingStateEvent, ControllerEvent, KeyboardEvent, KeyboardE
 use crate::event::{PeripheralBatteryEvent, publish_controller_event};
 use crate::{
     CONNECTION_STATE,
-    event::publish_input_event_async,
+    event::{publish_input_event, publish_input_event_async},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -199,13 +199,14 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                     // Process other split messages which requires connection to host
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
                         match split_message {
-                            SplitMessage::Touchpad(e) => publish_input_event_async(e).await,
-                            SplitMessage::Pointing(e) => publish_input_event_async(e).await,
+                            // Non-key events are drop-on-full to keep the split read loop responsive.
+                            SplitMessage::Touchpad(e) => publish_input_event(e),
+                            SplitMessage::Pointing(e) => publish_input_event(e),
                             SplitMessage::BatteryLevel(level) => {
                                 publish_controller_event(PeripheralBatteryEvent { id: self.id, level })
                             }
                             SplitMessage::ChargingState(charging) => {
-                                publish_input_event_async(ChargingStateEvent { charging }).await
+                                publish_input_event(ChargingStateEvent { charging })
                             }
                             _ => warn!("{:?} should not come from peripheral", split_message),
                         }

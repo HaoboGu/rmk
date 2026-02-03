@@ -1,6 +1,6 @@
 //! Controller event system
 //!
-//! This module provides the infrastructure for type-safe controller events and built-in contrller events.
+//! This module provides the infrastructure for type-safe controller events and built-in controller events.
 //! Each event type has its own dedicated channel and can be subscribed to independently.
 #[cfg(feature = "_ble")]
 mod ble;

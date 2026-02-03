@@ -25,7 +25,7 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     pub(crate) encoders: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
     /// Current state of each layer
     layer_state: [bool; NUM_LAYER],
-    /// Default layer number, max: 32
+    /// Default layer number, max: NUM_LAYER - 1
     default_layer: u8,
     /// Layer cache
     layer_cache: [[u8; COL]; ROW],

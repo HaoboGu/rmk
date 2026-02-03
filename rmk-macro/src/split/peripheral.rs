@@ -436,7 +436,7 @@ pub(crate) fn expand_peripheral_input_device_config(
 
     // generate encoder configuration, processors are ignored
     let num_encoders = keyboard_config.get_board_config().unwrap().get_num_encoder();
-    // The num_encoders[0] is always the number of encoders on the central, so the offset should be num_encoders[0..id + 1], where id is the index of the peripheral
+    // The num_encoders[0] is always the number of encoders on the central, so the offset is the sum of num_encoders[0..id + 1], where id is the index of the peripheral
     let encoder_id_offset = num_encoders[0..id + 1].iter().sum::<usize>();
     let (encoder_devices, _encoder_processors) = match &board {
         BoardConfig::Split(split_config) => expand_encoder_device(

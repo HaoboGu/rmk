@@ -43,8 +43,8 @@ RMK's matrix system is built on a trait-based architecture. Any matrix or deboun
 The following is an example demonstrating how to use a customized matrix:
 
 ```rust
-struct YourOwnMatrix {}
-impl MatrixTrait for YourOwnMatrix {
+struct YourOwnMatrix<const ROW: usize, const COL: usize> {}
+impl<const ROW: usize, const COL: usize> MatrixTrait<ROW, COL> for YourOwnMatrix<ROW, COL> {
     // Implement the `MatrixTrait`
 }
 
