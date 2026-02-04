@@ -13,7 +13,7 @@ use crate::event::{
     ChargingStateEvent, ControllerEvent, KeyboardEvent, KeyboardEventPos, publish_input_event,
     publish_input_event_async,
 };
-#[cfg(feature = "controller")]
+#[cfg(feature = "_ble")]
 use crate::event::{PeripheralBatteryEvent, publish_controller_event};
 
 #[derive(Debug, Clone, Copy)]
