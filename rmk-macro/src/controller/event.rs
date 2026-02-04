@@ -1,9 +1,8 @@
-use proc_macro2::TokenStream;
-use quote::{ToTokens, quote};
+use quote::quote;
 use syn::parse::Parser;
 use syn::{Attribute, DeriveInput, Meta, parse_macro_input};
 
-use crate::input::runnable::{has_derive, reconstruct_type_def, to_upper_snake_case};
+use crate::input::runnable::{has_derive, to_upper_snake_case};
 
 /// Generates controller event infrastructure.
 ///
@@ -13,7 +12,7 @@ use crate::input::runnable::{has_derive, reconstruct_type_def, to_upper_snake_ca
 ///
 /// See `rmk::event::ControllerEvent` for usage.
 pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(item as DeriveInput);
+    let mut input = parse_macro_input!(item as DeriveInput);
 
     // Parse attributes
     let (channel_size, subs, pubs) = if attr.is_empty() {
@@ -40,10 +39,13 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
     }
 
     // Check if input_event macro is also present and extract its parameters
-    let input_event_attr = input.attrs.iter().find(|attr| attr.path().is_ident("input_event"));
+    let input_event_attr = input
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("input_event"))
+        .cloned();
 
     let type_name = &input.ident;
-    let vis = &input.vis;
     let generics = &input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
@@ -113,18 +115,12 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
         }
     };
 
-    // Filter out both macros from attributes for the final struct definition
-    let filtered_attrs: Vec<TokenStream> = input
+    // Remove both macros from attributes for the final struct definition.
+    input
         .attrs
-        .iter()
-        .filter(|attr| !attr.path().is_ident("input_event") && !attr.path().is_ident("controller_event"))
-        .map(|attr| attr.to_token_stream())
-        .collect();
+        .retain(|attr| !attr.path().is_ident("input_event") && !attr.path().is_ident("controller_event"));
 
-    // Reconstruct the type definition (struct or enum)
-    let type_def = reconstruct_type_def(&input);
-
-    let expanded = if let Some(input_attr) = input_event_attr {
+    let expanded = if let Some(input_attr) = input_event_attr.as_ref() {
         // input_event is also present, generate both sets of implementations
         let input_channel_size = parse_input_event_attr_from_attribute(input_attr);
 
@@ -184,8 +180,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
         };
 
         quote! {
-            #(#filtered_attrs)*
-            #vis #type_def
+            #input
 
             #controller_channel_static
 
@@ -202,8 +197,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
     } else {
         // Only controller_event
         quote! {
-            #(#filtered_attrs)*
-            #vis #type_def
+            #input
 
             #controller_channel_static
 
