@@ -6,6 +6,7 @@ use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::hid::Report;
 
 pub mod adc;
+#[cfg(feature = "_ble")]
 pub mod battery;
 pub mod joystick;
 pub mod pmw3610;

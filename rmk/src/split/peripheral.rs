@@ -8,7 +8,7 @@ use futures::FutureExt;
 use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 #[cfg(feature = "_ble")]
 use {
-    crate::event::{BatteryLevelEvent, ControllerEvent, EventSubscriber},
+    crate::event::{BatteryStateEvent, ControllerEvent, EventSubscriber},
     crate::storage::Storage,
     embedded_storage_async::nor_flash::NorFlash,
     trouble_host::prelude::*,
@@ -81,7 +81,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
         let touch_sub = TouchpadEvent::input_subscriber();
         let pointing_sub = PointingEvent::input_subscriber();
         #[cfg(feature = "_ble")]
-        let mut battery_sub = BatteryLevelEvent::controller_subscriber();
+        let mut battery_sub = BatteryStateEvent::controller_subscriber();
 
         loop {
             let read_message_to_send = async {
@@ -90,7 +90,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                     e = charging_state_sub.receive().fuse() => SplitMessage::ChargingState(e.charging),
                     e = touch_sub.receive().fuse() => SplitMessage::Touchpad(e),
                     e = pointing_sub.receive().fuse() => SplitMessage::Pointing(e),
-                    with_feature("_ble"): e = battery_sub.next_event().fuse() => SplitMessage::BatteryLevel(e.level),
+                    with_feature("_ble"): e = battery_sub.next_event().fuse() => SplitMessage::BatteryState(e),
                 };
                 message
             };

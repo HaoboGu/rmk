@@ -52,13 +52,12 @@ RMK provides a type-safe event system where each event type has its own dedicate
 - `BleProfileChangeEvent` - BLE profile switched
 
 **Power Events** (when BLE is enabled):
-- `BatteryLevelEvent` - Battery level changed
-- `ChargingStateEvent` - Charging state changed
+- `BatteryStateEvent` - Battery state changed (includes level and charging status)
 
 **Split Keyboard Events** (when split is enabled):
 - `PeripheralConnectedEvent` - Peripheral connection state changed
 - `CentralConnectedEvent` - Connected to central state changed
-- `PeripheralBatteryEvent` - Peripheral battery level changed
+- `PeripheralBatteryEvent` - Peripheral battery state changed (includes id and BatteryStateEvent)
 - `ClearPeerEvent` - Clear BLE peer information (BLE split only)
 
 ### Built-in Controllers
@@ -111,7 +110,7 @@ impl MyController {
 
 **How it works:**
 - `#[controller]` implements `Controller` trait automatically
-- Routes events to `on_<event_name>_event()` handler methods, where `<event_name>` is a snake case name converted from the subscribed event. For example, if your controller subscribes to `BatteryLevelEvent`, then `async fn on_battery_level_event(&mut self, event: BatteryLevelEvent)` should be implemented
+- Routes events to `on_<event_name>_event()` handler methods, where `<event_name>` is a snake case name converted from the subscribed event. For example, if your controller subscribes to `BatteryStateEvent`, then `async fn on_battery_state_event(&mut self, event: BatteryStateEvent)` should be implemented
 - If `poll_interval` is set, the controller operates in **polling mode**, a `poll()` method is required. `poll()` will be called at every `poll_interval`
 
 ### Registering Controllers
@@ -141,14 +140,14 @@ Inside the registration function:
 
 #### Event-based Controller
 
-Controllers can subscribe to one or multiple event types. This example monitors layer changes and battery level:
+Controllers can subscribe to one or multiple event types. This example monitors layer changes and battery state:
 
 ```rust
 use rmk_macro::controller;
-use rmk::event::{LayerChangeEvent, BatteryLevelEvent};
+use rmk::event::{LayerChangeEvent, BatteryStateEvent};
 
 // Subscribe to multiple events
-#[controller(subscribe = [LayerChangeEvent, BatteryLevelEvent])]
+#[controller(subscribe = [LayerChangeEvent, BatteryStateEvent])]
 pub struct StatusController {
     current_layer: u8,
     battery_level: u8,
@@ -168,10 +167,15 @@ impl StatusController {
         info!("Layer: {}", event.layer);
     }
 
-    // Handler for BatteryLevelEvent
-    async fn on_battery_level_event(&mut self, event: BatteryLevelEvent) {
-        self.battery_level = event.level;
-        info!("Battery: {}%", event.level);
+    // Handler for BatteryStateEvent
+    async fn on_battery_state_event(&mut self, event: BatteryStateEvent) {
+        match event {
+            BatteryStateEvent::Normal(l) => {
+                self.battery_level = level;
+            },
+            _ => return,
+        };
+        info!("Battery state: {:?}", event);
     }
 }
 ```

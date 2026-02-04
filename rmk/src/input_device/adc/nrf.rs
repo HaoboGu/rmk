@@ -3,13 +3,13 @@ use embassy_time::{Duration, Instant};
 use rmk_macro::{InputEvent, input_device};
 
 use super::{AdcState, AnalogEventType};
-use crate::event::{Axis, AxisEvent, AxisValType, BatteryEvent, PointingEvent};
+use crate::event::{Axis, AxisEvent, AxisValType, BatteryAdcEvent, PointingEvent};
 
 /// Events produced by NrfAdc.
 #[derive(InputEvent, Clone, Debug)]
 pub enum NrfAdcEvent {
     Pointing(PointingEvent),
-    Battery(BatteryEvent),
+    Battery(BatteryAdcEvent),
 }
 
 #[input_device(publish = NrfAdcEvent)]
@@ -127,7 +127,7 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT
                     let battery_adc_value = buf[self.channel_state as usize] as u16;
                     self.channel_state += 1;
                     self.event_state += 1;
-                    return NrfAdcEvent::Battery(BatteryEvent(battery_adc_value));
+                    return NrfAdcEvent::Battery(BatteryAdcEvent(battery_adc_value));
                 }
             };
         }

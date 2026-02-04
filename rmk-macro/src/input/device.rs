@@ -5,7 +5,7 @@ use syn::{DeriveInput, Meta, Path, parse_macro_input};
 
 use super::runnable::{
     ControllerConfig, InputDeviceConfig, deduplicate_type_generics, event_type_to_read_method_name, generate_runnable,
-    has_runnable_marker, is_runnable_generated_attr, parse_controller_config, reconstruct_type_def,
+    has_runnable_marker, is_runnable_generated_attr, parse_controller_config,
 };
 
 /// Generates InputDevice and Runnable trait implementations for single-event devices.
@@ -22,7 +22,7 @@ use super::runnable::{
 /// }
 /// ```
 pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(item as DeriveInput);
+    let mut input = parse_macro_input!(item as DeriveInput);
 
     // Parse attributes to extract event type
     let config = parse_device_attributes(attr);
@@ -84,22 +84,11 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let struct_name = &input.ident;
-    let vis = &input.vis;
     let generics = &input.generics;
     let (impl_generics, _ty_generics, where_clause) = generics.split_for_impl();
 
     // Use deduplicated type generics to handle cfg-conditional generic parameters
     let deduped_ty_generics = deduplicate_type_generics(generics);
-
-    // Filter out input_device attribute and runnable_generated marker from output
-    let attrs: Vec<_> = input
-        .attrs
-        .iter()
-        .filter(|attr| !attr.path().is_ident("input_device") && !is_runnable_generated_attr(attr))
-        .collect();
-
-    // Reconstruct the struct definition
-    let struct_def = reconstruct_type_def(&input);
 
     // Generate method name from event type
     let method_name = event_type_to_read_method_name(&event_type);
@@ -122,18 +111,19 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         )
     };
 
-    // Add marker attribute if we generated Runnable and there are other macros
-    let marker_attr = if !has_marker && has_controller {
-        quote! { #[::rmk::runnable_generated] }
-    } else {
-        quote! {}
-    };
+    // Remove attributes that would cause duplicate expansion or should not leak to output.
+    input.attrs.retain(|attr| {
+        !attr.path().is_ident("input_device") && !is_runnable_generated_attr(attr)
+    });
+
+    // Add marker attribute if we generated Runnable and there are other macros.
+    if !has_marker && has_controller {
+        input.attrs.push(syn::parse_quote!(#[::rmk::runnable_generated]));
+    }
 
     // Generate the complete output
     let expanded = quote! {
-        #(#attrs)*
-        #marker_attr
-        #vis #struct_def
+        #input
 
         impl #impl_generics ::rmk::input_device::InputDevice for #struct_name #deduped_ty_generics #where_clause {
             type Event = #event_type;

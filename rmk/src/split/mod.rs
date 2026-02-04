@@ -2,6 +2,8 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 use crate::event::{KeyboardEvent, PointingEvent, TouchpadEvent};
+#[cfg(feature = "_ble")]
+use crate::event::BatteryStateEvent;
 
 #[cfg(feature = "_ble")]
 pub mod ble;
@@ -41,8 +43,9 @@ pub(crate) enum SplitMessage {
     KeyboardIndicator(u8),
     /// Layer number from central to peripheral
     Layer(u8),
-    /// Battery level, bidirectional
-    BatteryLevel(u8),
-    /// Charging state, bidirectional
+    /// Battery state (level + charging), from peripheral to central
+    #[cfg(feature = "_ble")]
+    BatteryState(BatteryStateEvent),
+    /// Charging state input event, from peripheral to central
     ChargingState(bool),
 }

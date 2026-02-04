@@ -8,7 +8,7 @@ mod keyboard;
 mod pointing;
 mod touchpad;
 
-pub use battery::BatteryEvent;
+pub use battery::{BatteryAdcEvent, ChargingStateEvent};
 pub use keyboard::{KeyPos, KeyboardEvent, KeyboardEventPos, RotaryEncoderPos};
 pub use pointing::{Axis, AxisEvent, AxisValType, PointingEvent};
 pub use touchpad::TouchpadEvent;

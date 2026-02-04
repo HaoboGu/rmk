@@ -1,25 +1,11 @@
-use embassy_sync::signal::Signal;
 use embedded_hal::digital::InputPin;
 use rmk_macro::{input_device, input_processor};
 
-use crate::event::{BatteryEvent, ChargingStateEvent};
-#[cfg(all(feature = "controller", feature = "_ble"))]
-use crate::event::{BatteryLevelEvent, publish_controller_event};
-
-pub(crate) static BATTERY_UPDATE: Signal<crate::RawMutex, BatteryState> = Signal::new();
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum BatteryState {
-    // The battery state is not available
-    NotAvailable,
-    // The value range is 0~100
-    Normal(u8),
-    // Charging
-    Charging,
-    // Charging completed, ideally the battery level after charging completed is 100
-    Charged,
-}
+#[cfg(feature = "_ble")]
+use crate::event::BatteryStateEvent;
+#[cfg(feature = "controller")]
+use crate::event::publish_controller_event;
+use crate::event::{BatteryAdcEvent, ChargingStateEvent};
 
 /// Reads charging state from a GPIO pin and publishes ChargingStateEvent.
 ///
@@ -88,12 +74,12 @@ impl<I: InputPin> ChargingStateReader<I> {
     }
 }
 
-#[input_processor(subscribe = [BatteryEvent, ChargingStateEvent])]
+#[input_processor(subscribe = [BatteryAdcEvent, ChargingStateEvent])]
 pub struct BatteryProcessor {
     adc_divider_measured: u32,
     adc_divider_total: u32,
     /// Current battery state
-    battery_state: BatteryState,
+    battery_state: BatteryStateEvent,
 }
 
 impl BatteryProcessor {
@@ -101,7 +87,7 @@ impl BatteryProcessor {
         BatteryProcessor {
             adc_divider_measured,
             adc_divider_total,
-            battery_state: BatteryState::NotAvailable,
+            battery_state: BatteryStateEvent::NotAvailable,
         }
     }
 
@@ -143,23 +129,23 @@ impl BatteryProcessor {
 }
 
 impl BatteryProcessor {
-    async fn on_battery_event(&mut self, event: BatteryEvent) {
+    async fn on_battery_adc_event(&mut self, event: BatteryAdcEvent) {
         let val = event.0;
         trace!("Detected battery ADC value: {:?}", val);
 
         #[cfg(feature = "_ble")]
         {
-            if matches!(self.battery_state, BatteryState::Normal(_) | BatteryState::NotAvailable) {
+            if matches!(
+                self.battery_state,
+                BatteryStateEvent::Normal(_) | BatteryStateEvent::NotAvailable
+            ) {
                 let battery_percent = self.get_battery_percent(val);
+                if self.battery_state != BatteryStateEvent::Normal(battery_percent) {
+                    self.battery_state = BatteryStateEvent::Normal(battery_percent);
 
-                #[cfg(feature = "controller")]
-                publish_controller_event(BatteryLevelEvent { level: battery_percent });
-
-                // Update the battery state
-                if self.battery_state != BatteryState::Normal(battery_percent) {
-                    self.battery_state = BatteryState::Normal(battery_percent);
-                    // Send signal
-                    BATTERY_UPDATE.signal(self.battery_state);
+                    // Update the battery state
+                    #[cfg(feature = "controller")]
+                    publish_controller_event(self.battery_state);
                 }
             }
         }
@@ -171,16 +157,16 @@ impl BatteryProcessor {
 
         #[cfg(feature = "_ble")]
         {
-            #[cfg(feature = "controller")]
-            publish_controller_event(ChargingStateEvent { charging });
-
             if charging {
-                self.battery_state = BatteryState::Charging;
+                self.battery_state = BatteryStateEvent::Charging;
             } else {
                 // When discharging, the battery state is changed to not available
                 // Then wait for the `Event::Battery` to update the battery level to real value
-                self.battery_state = BatteryState::NotAvailable;
+                self.battery_state = BatteryStateEvent::NotAvailable;
             }
+
+            #[cfg(feature = "controller")]
+            publish_controller_event(self.battery_state);
         }
     }
 }

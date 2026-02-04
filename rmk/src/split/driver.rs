@@ -202,8 +202,10 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                             // Non-key events are drop-on-full to keep the split read loop responsive.
                             SplitMessage::Touchpad(e) => publish_input_event(e),
                             SplitMessage::Pointing(e) => publish_input_event(e),
-                            SplitMessage::BatteryLevel(level) => {
-                                publish_controller_event(PeripheralBatteryEvent { id: self.id, level })
+                            #[cfg(feature = "_ble")]
+                            SplitMessage::BatteryState(state) => {
+                                // Publish as PeripheralBatteryEvent with the full state
+                                publish_controller_event(PeripheralBatteryEvent { id: self.id, state })
                             }
                             SplitMessage::ChargingState(charging) => {
                                 publish_input_event(ChargingStateEvent { charging })

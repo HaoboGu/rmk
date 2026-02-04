@@ -17,8 +17,7 @@ pub use connection::{ConnectionChangeEvent, ConnectionType};
 pub use input::{KeyEvent, ModifierEvent};
 pub use keyboard_state::{LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent};
 #[cfg(feature = "_ble")]
-pub use power::BatteryLevelEvent;
-pub use power::ChargingStateEvent;
+pub use power::BatteryStateEvent;
 #[cfg(all(feature = "split", feature = "_ble"))]
 pub use split::ClearPeerEvent;
 #[cfg(feature = "split")]
@@ -28,7 +27,7 @@ use crate::event::{AsyncControllerEvent, AsyncEventPublisher as _, ControllerEve
 
 /// Publish a controller event (non-blocking, may drop if buffer full)
 ///
-/// Example: `publish_controller_event(BatteryLevelEvent { level: 80 })`
+/// Example: `publish_controller_event(KeyEvent { .. })`
 pub fn publish_controller_event<E: ControllerEvent>(e: E) {
     E::controller_publisher().publish(e);
 }

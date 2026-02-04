@@ -335,9 +335,7 @@ pub struct EventConfig {
 
     // Power events
     #[serde(default = "default_monitored_event")]
-    pub battery_level: EventChannelConfig,
-    #[serde(default = "default_monitored_event")]
-    pub charging_state: EventChannelConfig,
+    pub battery_state: EventChannelConfig,
 
     // Split events
     #[serde(default = "default_event")]
@@ -362,8 +360,7 @@ impl EventConfig {
         self.wpm_update = self.wpm_update.with_defaults(default_event());
         self.led_indicator = self.led_indicator.with_defaults(default_led_indicator_event());
         self.sleep_state = self.sleep_state.with_defaults(default_monitored_event());
-        self.battery_level = self.battery_level.with_defaults(default_monitored_event());
-        self.charging_state = self.charging_state.with_defaults(default_monitored_event());
+        self.battery_state = self.battery_state.with_defaults(default_monitored_event());
         self.peripheral_connected = self.peripheral_connected.with_defaults(default_event());
         self.central_connected = self.central_connected.with_defaults(default_event());
         self.peripheral_battery = self
@@ -447,8 +444,7 @@ impl Default for EventConfig {
             wpm_update: default_event(),
             led_indicator: default_led_indicator_event(),
             sleep_state: default_monitored_event(),
-            battery_level: default_monitored_event(),
-            charging_state: default_monitored_event(),
+            battery_state: default_monitored_event(),
             peripheral_connected: default_event(),
             central_connected: default_event(),
             peripheral_battery: default_peripheral_battery_event(),

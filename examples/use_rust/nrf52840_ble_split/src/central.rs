@@ -240,15 +240,15 @@ async fn main(spawner: Spawner) {
     use rmk::event::PeripheralBatteryEvent;
     use rmk::macros::controller;
 
-    #[controller(subscribe = [PeripheralBatteryEvent, BatteryLevelEvent, LayerChangeEvent])]
+    #[controller(subscribe = [PeripheralBatteryEvent, BatteryStateEvent, LayerChangeEvent])]
     struct PeripheralBatteryMonitor {}
 
     impl PeripheralBatteryMonitor {
         async fn on_peripheral_battery_event(&mut self, event: PeripheralBatteryEvent) {
-            info!("Peripheral {} battery level: {}%", event.id, event.level);
+            info!("Peripheral {} battery status: {:?}%", event.id, event);
         }
-        async fn on_battery_level_event(&mut self, event: BatteryLevelEvent) {
-            info!("Central battery level: {}%", event.level);
+        async fn on_battery_state_event(&mut self, event: BatteryStateEvent) {
+            info!("Central battery status: {:?}%", event);
         }
         async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
             info!("Layer changed to: {}", event.layer);
