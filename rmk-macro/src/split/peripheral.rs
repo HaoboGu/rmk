@@ -232,15 +232,10 @@ fn expand_split_peripheral(
     // Get peripheral device and processor configuration
     let (device_initialization, devices, processors) = expand_peripheral_input_device_config(id, keyboard_config);
 
-    // FIXME: remove the keymap from input devices maybe?
-    // Move all keymaps to processors
     let needs_keymap = peripheral_config
         .input_device
         .as_ref()
-        .map(|input| {
-            input.joystick.as_ref().is_some_and(|v| !v.is_empty())
-                || input.pmw3610.as_ref().is_some_and(|v| !v.is_empty())
-        })
+        .map(|input| input.joystick.as_ref().is_some_and(|v| !v.is_empty()))
         .unwrap_or(false);
 
     // Generate minimal keymap when processors may read from it.
