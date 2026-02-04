@@ -3,6 +3,9 @@ pub struct TestEvent {
     pub value: u8,
 }
 #[automatically_derived]
+#[doc(hidden)]
+unsafe impl ::core::clone::TrivialClone for TestEvent {}
+#[automatically_derived]
 impl ::core::clone::Clone for TestEvent {
     #[inline]
     fn clone(&self) -> TestEvent {

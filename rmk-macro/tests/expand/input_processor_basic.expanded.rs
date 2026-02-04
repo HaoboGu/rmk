@@ -5,6 +5,9 @@ pub struct KeyEvent {
     pub pressed: bool,
 }
 #[automatically_derived]
+#[doc(hidden)]
+unsafe impl ::core::clone::TrivialClone for KeyEvent {}
+#[automatically_derived]
 impl ::core::clone::Clone for KeyEvent {
     #[inline]
     fn clone(&self) -> KeyEvent {
@@ -35,6 +38,9 @@ pub struct EncoderEvent {
     pub index: u8,
     pub direction: i8,
 }
+#[automatically_derived]
+#[doc(hidden)]
+unsafe impl ::core::clone::TrivialClone for EncoderEvent {}
 #[automatically_derived]
 impl ::core::clone::Clone for EncoderEvent {
     #[inline]

@@ -3,6 +3,9 @@ pub struct DualChannelEvent {
     pub data: u16,
 }
 #[automatically_derived]
+#[doc(hidden)]
+unsafe impl ::core::clone::TrivialClone for DualChannelEvent {}
+#[automatically_derived]
 impl ::core::clone::Clone for DualChannelEvent {
     #[inline]
     fn clone(&self) -> DualChannelEvent {

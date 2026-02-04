@@ -2,6 +2,9 @@ use rmk_macro::{InputEvent, input_device};
 #[input_event]
 pub struct PointingEvent {}
 #[automatically_derived]
+#[doc(hidden)]
+unsafe impl ::core::clone::TrivialClone for PointingEvent {}
+#[automatically_derived]
 impl ::core::clone::Clone for PointingEvent {
     #[inline]
     fn clone(&self) -> PointingEvent {
@@ -21,6 +24,9 @@ impl ::core::fmt::Debug for PointingEvent {
 pub struct BatteryEvent {
     pub level: u8,
 }
+#[automatically_derived]
+#[doc(hidden)]
+unsafe impl ::core::clone::TrivialClone for BatteryEvent {}
 #[automatically_derived]
 impl ::core::clone::Clone for BatteryEvent {
     #[inline]

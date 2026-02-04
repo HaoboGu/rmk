@@ -3,6 +3,9 @@ pub struct LedStateEvent {
     pub on: bool,
 }
 #[automatically_derived]
+#[doc(hidden)]
+unsafe impl ::core::clone::TrivialClone for LedStateEvent {}
+#[automatically_derived]
 impl ::core::clone::Clone for LedStateEvent {
     #[inline]
     fn clone(&self) -> LedStateEvent {

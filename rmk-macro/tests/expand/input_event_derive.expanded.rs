@@ -4,6 +4,9 @@ pub struct BatteryEvent {
     pub level: u8,
 }
 #[automatically_derived]
+#[doc(hidden)]
+unsafe impl ::core::clone::TrivialClone for BatteryEvent {}
+#[automatically_derived]
 impl ::core::clone::Clone for BatteryEvent {
     #[inline]
     fn clone(&self) -> BatteryEvent {
@@ -30,6 +33,9 @@ pub struct PointingEvent {
     pub x: i16,
     pub y: i16,
 }
+#[automatically_derived]
+#[doc(hidden)]
+unsafe impl ::core::clone::TrivialClone for PointingEvent {}
 #[automatically_derived]
 impl ::core::clone::Clone for PointingEvent {
     #[inline]
