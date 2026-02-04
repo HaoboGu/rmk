@@ -103,9 +103,9 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
     };
 
     // Remove both macros from attributes for the final struct definition.
-    input.attrs.retain(|attr| {
-        !attr.path().is_ident("input_event") && !attr.path().is_ident("controller_event")
-    });
+    input
+        .attrs
+        .retain(|attr| !attr.path().is_ident("input_event") && !attr.path().is_ident("controller_event"));
 
     let expanded = if let Some(ctrl_attr) = controller_event_attr.as_ref() {
         // controller_event is also present, generate both sets of implementations

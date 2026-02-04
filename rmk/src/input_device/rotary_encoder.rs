@@ -5,6 +5,7 @@ use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
 use postcard::experimental::max_size::MaxSize;
+use rmk_macro::input_device;
 use serde::{Deserialize, Serialize};
 
 use crate::event::KeyboardEvent;
@@ -12,7 +13,7 @@ use crate::event::KeyboardEvent;
 /// Holds current/old state and both [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[rmk_macro::input_device(publish = KeyboardEvent)]
+#[input_device(publish = KeyboardEvent)]
 pub struct RotaryEncoder<
     #[cfg(feature = "async_matrix")] A: InputPin + Wait,
     #[cfg(not(feature = "async_matrix"))] A: InputPin,

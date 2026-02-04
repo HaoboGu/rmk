@@ -97,6 +97,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
 
             match select(self.split_driver.read(), read_message_to_send).await {
                 Either::First(m) => match m {
+                    // Process split messages from the central
                     // Currently only handle the central state message
                     Ok(split_message) => match split_message {
                         SplitMessage::ConnectionState(state) => {

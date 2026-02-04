@@ -4,6 +4,7 @@ use core::sync::atomic::Ordering;
 
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
+use rmk_macro::input_device;
 #[cfg(feature = "async_matrix")]
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
@@ -523,7 +524,7 @@ where
     }
 }
 
-#[rmk_macro::input_device(publish = KeyboardEvent)]
+#[input_device(publish = KeyboardEvent)]
 pub struct TestMatrix<const ROW: usize, const COL: usize> {
     last: bool,
 }

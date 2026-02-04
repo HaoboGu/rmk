@@ -1,6 +1,7 @@
 use embassy_time::{Instant, Timer};
 use embedded_hal;
 use embedded_hal::digital::InputPin;
+use rmk_macro::input_device;
 #[cfg(feature = "async_matrix")]
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
@@ -10,7 +11,7 @@ use crate::event::KeyboardEvent;
 use crate::matrix::KeyState;
 
 /// DirectPinMartex only has input pins.
-#[rmk_macro::input_device(publish = KeyboardEvent)]
+#[input_device(publish = KeyboardEvent)]
 pub struct DirectPinMatrix<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,

@@ -10,13 +10,9 @@ use crate::hid::Report;
 use crate::{FLASH_CHANNEL_SIZE, storage::FlashOperationMessage};
 use crate::{REPORT_CHANNEL_SIZE, RawMutex};
 
-/// Signal for control led indicator, it's used only in BLE keyboards, since BLE receiving is not async
+/// Signal for LED indicator, used in BLE keyboards only since BLE receiving is not async
 #[cfg(feature = "_ble")]
-pub static LED_SIGNAL: Signal<RawMutex, LedIndicator> = Signal::new();
-/// Channel for key events only
-// pub static KEY_EVENT_CHANNEL: Channel<RawMutex, KeyboardEvent, EVENT_CHANNEL_SIZE> = Channel::new();
-/// Channel for all other events
-// pub static EVENT_CHANNEL: Channel<RawMutex, Event, EVENT_CHANNEL_SIZE> = Channel::new();
+pub(crate) static LED_SIGNAL: Signal<RawMutex, LedIndicator> = Signal::new();
 /// Channel for keyboard report from input processors to hid writer/reader
 pub static KEYBOARD_REPORT_CHANNEL: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE> = Channel::new();
 

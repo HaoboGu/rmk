@@ -92,7 +92,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             let elapsed = last_sync_time.elapsed().as_millis();
             let wait_time = if elapsed >= 3000 { 1 } else { 3000 - elapsed };
             match select3(
-                self.read_event(),
+                self.read_peripheral_event(),
                 select3(
                     keyboard_indicator_sub.next_event(),
                     layer_sub.next_event(),
@@ -153,14 +153,10 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             }
         }
     }
-}
 
-impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFSET: usize, R: SplitReader + SplitWriter>
-    PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
-{
     /// Read events from peripheral and publish them.
     /// This method runs in an infinite loop and never returns.
-    async fn read_event(&mut self) -> ! {
+    async fn read_peripheral_event(&mut self) -> ! {
         loop {
             match self.transceiver.read().await {
                 Ok(SplitMessage::Key(e)) => {

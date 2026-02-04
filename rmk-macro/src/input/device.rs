@@ -112,9 +112,9 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     // Remove attributes that would cause duplicate expansion or should not leak to output.
-    input.attrs.retain(|attr| {
-        !attr.path().is_ident("input_device") && !is_runnable_generated_attr(attr)
-    });
+    input
+        .attrs
+        .retain(|attr| !attr.path().is_ident("input_device") && !is_runnable_generated_attr(attr));
 
     // Add marker attribute if we generated Runnable and there are other macros.
     if !has_marker && has_controller {

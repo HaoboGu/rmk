@@ -45,8 +45,7 @@ use futures::FutureExt;
 use hid::{HidReaderTrait, RunnableHidWriter};
 use keymap::KeyMap;
 use matrix::MatrixTrait;
-// Re-export macros for use in user code
-pub use rmk_macro::{InputEvent, input_device, runnable_generated};
+pub use rmk_macro::{InputEvent, controller, controller_event, input_device, input_event, input_processor};
 use rmk_types::action::{EncoderAction, KeyAction};
 use rmk_types::led_indicator::LedIndicator;
 use state::CONNECTION_STATE;
