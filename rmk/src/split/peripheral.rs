@@ -87,7 +87,13 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
             let read_message_to_send = async {
                 let message = crate::select_biased_with_feature! {
                     e = key_sub.receive().fuse() => SplitMessage::Key(e),
-                    e = charging_state_sub.receive().fuse() => SplitMessage::ChargingState(e.charging),
+                    e = charging_state_sub.receive().fuse() => {
+                        if e.charging {
+                            SplitMessage::BatteryState(BatteryStateEvent::Charging)
+                        } else {
+                            SplitMessage::BatteryState(BatteryStateEvent::NotAvailable)
+                        }
+                    },
                     e = touch_sub.receive().fuse() => SplitMessage::Touchpad(e),
                     e = pointing_sub.receive().fuse() => SplitMessage::Pointing(e),
                     with_feature("_ble"): e = battery_sub.next_event().fuse() => SplitMessage::BatteryState(e),

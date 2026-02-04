@@ -46,6 +46,4 @@ pub(crate) enum SplitMessage {
     /// Battery state, from peripheral to central
     #[cfg(feature = "_ble")]
     BatteryState(BatteryStateEvent),
-    /// Charging state input event, from peripheral to central
-    ChargingState(bool),
 }

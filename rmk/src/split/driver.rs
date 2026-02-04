@@ -9,10 +9,7 @@ use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::stora
 
 use super::SplitMessage;
 use crate::CONNECTION_STATE;
-use crate::event::{
-    ChargingStateEvent, ControllerEvent, KeyboardEvent, KeyboardEventPos, publish_input_event,
-    publish_input_event_async,
-};
+use crate::event::{ControllerEvent, KeyboardEvent, KeyboardEventPos, publish_input_event, publish_input_event_async};
 #[cfg(feature = "_ble")]
 use crate::event::{PeripheralBatteryEvent, publish_controller_event};
 
@@ -202,9 +199,6 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                             SplitMessage::BatteryState(state) => {
                                 // Publish as PeripheralBatteryEvent with the full state
                                 publish_controller_event(PeripheralBatteryEvent { id: self.id, state })
-                            }
-                            SplitMessage::ChargingState(charging) => {
-                                publish_input_event(ChargingStateEvent { charging })
                             }
                             _ => warn!("{:?} should not come from peripheral", split_message),
                         }
