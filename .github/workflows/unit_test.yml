@@ -6,7 +6,7 @@ on:
     paths: ["rmk/**", "rmk-macro/**"]
   pull_request:
     branches: ["main"]
-    paths: ["rmk/**", "rmk-macro/**""]
+    paths: ["rmk/**", "rmk-macro/**"]
   workflow_dispatch:
 
 # Cancel any currently running workflows from the same PR, branch, or

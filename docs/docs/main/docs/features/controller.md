@@ -170,7 +170,7 @@ impl StatusController {
     // Handler for BatteryStateEvent
     async fn on_battery_state_event(&mut self, event: BatteryStateEvent) {
         match event {
-            BatteryStateEvent::Normal(l) => {
+            BatteryStateEvent::Normal(level) => {
                 self.battery_level = level;
             },
             _ => return,
