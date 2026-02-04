@@ -50,6 +50,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install cargo-expand
+        run: cargo install cargo-expand && rustup component add rustfmt
       - name: Run rmk-macro tests
         working-directory: ./rmk-macro
         run: cargo test 

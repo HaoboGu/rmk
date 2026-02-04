@@ -1654,6 +1654,8 @@ checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
 [[package]]
 name = "rmk"
 version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a301e62e9d2d9f2e44922c121a605aa064f2ef96c5d6f3c4d5fb9e177205186"
 dependencies = [
  "bitfield-struct",
  "bt-hci",
@@ -1695,6 +1697,8 @@ dependencies = [
 [[package]]
 name = "rmk-config"
 version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f3166813f01b6d3a23260d67cc12e31e97affa89812a499872a33f86688629e"
 dependencies = [
  "cargo_toml",
  "config",
@@ -1711,6 +1715,8 @@ dependencies = [
 [[package]]
 name = "rmk-macro"
 version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17f1aa766e731010e185ec92f1e1db6b9a0a1b3c42ae712bdadb7c7976fa9539"
 dependencies = [
  "cargo_toml",
  "darling",
@@ -1748,6 +1754,8 @@ dependencies = [
 [[package]]
 name = "rmk-types"
 version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ec537c7aebb4079311d27b06ec5e82be34a4c0478642317113627d7c36145ff"
 dependencies = [
  "bitfield-struct",
  "defmt 1.0.1",
