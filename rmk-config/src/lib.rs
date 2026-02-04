@@ -178,9 +178,6 @@ pub struct RmkConstantsConfig {
     /// Default debounce time in ms
     #[serde_inline_default(20)]
     pub debounce_time: u16,
-    /// Event channel size
-    #[serde_inline_default(16)]
-    pub event_channel_size: usize,
     /// Report channel size
     #[serde_inline_default(16)]
     pub report_channel_size: usize,
@@ -258,7 +255,6 @@ impl Default for RmkConstantsConfig {
             max_patterns_per_key: 8,
             macro_space_size: 256,
             debounce_time: 20,
-            event_channel_size: 16,
             report_channel_size: 16,
             vial_channel_size: 4,
             flash_channel_size: 4,

@@ -267,8 +267,6 @@ max_patterns_per_key = 36
 macro_space_size = 256
 # Default debounce time in ms
 debounce_time = 20
-# Event channel size
-event_channel_size = 16
 # Report channel size
 report_channel_size = 16
 # Vial channel size
