@@ -349,15 +349,6 @@ pub struct EventConfig {
     #[serde(default = "default_monitored_event")]
     pub clear_peer: EventChannelConfig,
 
-    // Pointing control events
-    #[serde(default = "default_event")]
-    pub set_cpi: EventChannelConfig,
-    #[serde(default = "default_event")]
-    pub set_angle: EventChannelConfig,
-    #[serde(default = "default_event")]
-    pub set_lift_off: EventChannelConfig,
-    #[serde(default = "default_event")]
-    pub set_force_awake: EventChannelConfig,
 }
 
 impl EventConfig {
@@ -380,10 +371,6 @@ impl EventConfig {
             .peripheral_battery
             .with_defaults(default_peripheral_battery_event());
         self.clear_peer = self.clear_peer.with_defaults(default_monitored_event());
-        self.set_cpi =self.set_cpi.with_defaults(default_event());
-        self.set_angle =self.set_angle.with_defaults(default_event());
-        self.set_lift_off =self.set_lift_off.with_defaults(default_event());
-        self.set_force_awake =self.set_force_awake.with_defaults(default_event());
         self
     }
 }
@@ -467,10 +454,6 @@ impl Default for EventConfig {
             central_connected: default_event(),
             peripheral_battery: default_peripheral_battery_event(),
             clear_peer: default_monitored_event(),
-            set_cpi: default_event(),
-            set_angle: default_event(),
-            set_lift_off: default_event(),
-            set_force_awake: default_event(),
         }
     }
 }

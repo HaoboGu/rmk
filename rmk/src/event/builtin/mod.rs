@@ -5,7 +5,6 @@ mod ble;
 mod connection;
 mod input;
 mod keyboard_state;
-mod pointing;
 mod power;
 #[cfg(feature = "split")]
 mod split;
@@ -15,9 +14,6 @@ pub use ble::{BleProfileChangeEvent, BleStateChangeEvent};
 pub use connection::{ConnectionChangeEvent, ConnectionType};
 pub use input::{KeyEvent, ModifierEvent};
 pub use keyboard_state::{LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent};
-pub use pointing::{
-    PointingSetCpiEvent, PointingSetForceAwakeEvent, PointingSetLiftoffDistEvent, PointingSetRotTransAngleEvent,
-};
 #[cfg(feature = "_ble")]
 pub use power::{BatteryLevelEvent, ChargingStateEvent};
 #[cfg(all(feature = "split", feature = "_ble"))]
