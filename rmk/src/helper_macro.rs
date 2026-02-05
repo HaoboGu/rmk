@@ -83,7 +83,7 @@ macro_rules! __select_biased_with_feature_impl {
 
     // Done: no conditional arms
     ([$($n:tt)*] []) => {
-        ::futures::select_biased! { $($n)* }
+        $crate::futures::select_biased! { $($n)* }
     };
 
     // Done: has conditional arms - generate nested cfg
@@ -109,7 +109,7 @@ macro_rules! __select_biased_with_feature_gen {
 #[macro_export]
 macro_rules! __select_biased_with_feature_expand {
     ([$($all:tt)*] []) => {
-        ::futures::select_biased! { $($all)* }
+        $crate::futures::select_biased! { $($all)* }
     };
     ([$($collected:tt)*] [{$f:literal: $($arm:tt)*} $($rest:tt)*]) => {{
         #[cfg(feature = $f)]
