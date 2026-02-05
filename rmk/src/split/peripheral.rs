@@ -8,7 +8,7 @@ use futures::FutureExt;
 use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 #[cfg(feature = "_ble")]
 use {
-    crate::event::{BatteryStateEvent, ControllerEvent, EventSubscriber},
+    crate::event::{BatteryStateEvent, ChargingStateEvent, ControllerEvent, EventSubscriber},
     crate::storage::Storage,
     embedded_storage_async::nor_flash::NorFlash,
     trouble_host::prelude::*,
@@ -17,7 +17,7 @@ use {
 use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
 use crate::CONNECTION_STATE;
-use crate::event::{ChargingStateEvent, InputEvent, KeyboardEvent, PointingEvent, TouchpadEvent};
+use crate::event::{InputEvent, KeyboardEvent, PointingEvent, TouchpadEvent};
 #[cfg(feature = "controller")]
 use crate::event::{LayerChangeEvent, LedIndicatorEvent, publish_controller_event};
 #[cfg(not(feature = "_ble"))]
@@ -77,6 +77,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
         CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
 
         let key_sub = KeyboardEvent::input_subscriber();
+        #[cfg(feature = "_ble")]
         let charging_state_sub = ChargingStateEvent::input_subscriber();
         let touch_sub = TouchpadEvent::input_subscriber();
         let pointing_sub = PointingEvent::input_subscriber();
@@ -87,7 +88,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
             let read_message_to_send = async {
                 let message = crate::select_biased_with_feature! {
                     e = key_sub.receive().fuse() => SplitMessage::Key(e),
-                    e = charging_state_sub.receive().fuse() => {
+                    with_feature("_ble"): e = charging_state_sub.receive().fuse() => {
                         if e.charging {
                             SplitMessage::BatteryState(BatteryStateEvent::Charging)
                         } else {
