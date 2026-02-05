@@ -1,8 +1,9 @@
 use quote::quote;
-use syn::parse::Parser;
-use syn::{Attribute, DeriveInput, Meta, parse_macro_input};
+use syn::{DeriveInput, parse_macro_input};
 
-use crate::input::runnable::{has_derive, to_upper_snake_case};
+use crate::input::runnable::{
+    has_derive, parse_controller_event_channel_config, parse_input_event_channel_size_from_attr, to_upper_snake_case,
+};
 
 /// Generates controller event infrastructure.
 ///
@@ -10,22 +11,30 @@ use crate::input::runnable::{has_derive, to_upper_snake_case};
 /// a dual-channel event type that supports both input and controller event patterns.
 /// The order of the two macros does not matter.
 ///
+/// **Note**: Generic event types are not supported because static channels cannot be generic.
+///
 /// See `rmk::event::ControllerEvent` for usage.
 pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let mut input = parse_macro_input!(item as DeriveInput);
 
     // Parse attributes
-    let (channel_size, subs, pubs) = if attr.is_empty() {
-        (None, None, None)
-    } else {
-        parse_controller_event_attributes(attr)
-    };
+    let config = parse_controller_event_channel_config(proc_macro2::TokenStream::from(attr));
 
     // Validate input is a struct or enum
     if !matches!(input.data, syn::Data::Struct(_) | syn::Data::Enum(_)) {
         return syn::Error::new_spanned(input, "#[controller_event] can only be applied to structs or enums")
             .to_compile_error()
             .into();
+    }
+
+    // Reject generic types - static channels cannot be generic
+    if !input.generics.params.is_empty() {
+        return syn::Error::new_spanned(
+            &input.generics,
+            "#[controller_event] does not support generic types. Static channels cannot be generic.",
+        )
+        .to_compile_error()
+        .into();
     }
 
     // Verify Clone + Copy derives
@@ -55,9 +64,9 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
         type_name.span(),
     );
 
-    let cap = channel_size.unwrap_or_else(|| quote::quote! { 1 });
-    let subs_val = subs.unwrap_or_else(|| quote::quote! { 4 });
-    let pubs_val = pubs.unwrap_or_else(|| quote::quote! { 1 });
+    let cap = config.channel_size.unwrap_or_else(|| quote! { 1 });
+    let subs_val = config.subs.unwrap_or_else(|| quote! { 4 });
+    let pubs_val = config.pubs.unwrap_or_else(|| quote! { 1 });
 
     let controller_channel_static = quote! {
         static #controller_channel_name: ::embassy_sync::pubsub::PubSubChannel<
@@ -122,7 +131,7 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
 
     let expanded = if let Some(input_attr) = input_event_attr.as_ref() {
         // input_event is also present, generate both sets of implementations
-        let input_channel_size = parse_input_event_attr_from_attribute(input_attr);
+        let input_channel_size = parse_input_event_channel_size_from_attr(input_attr);
 
         let input_channel_name = syn::Ident::new(
             &format!("{}_INPUT_CHANNEL", to_upper_snake_case(&type_name.to_string())),
@@ -208,71 +217,4 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
     };
 
     expanded.into()
-}
-
-/// Parse controller_event macro attributes: (channel_size, subs, pubs)
-fn parse_controller_event_attributes(
-    attr: proc_macro::TokenStream,
-) -> (
-    Option<proc_macro2::TokenStream>,
-    Option<proc_macro2::TokenStream>,
-    Option<proc_macro2::TokenStream>,
-) {
-    use syn::Token;
-    use syn::punctuated::Punctuated;
-
-    let mut channel_size = None;
-    let mut subs = None;
-    let mut pubs = None;
-
-    let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
-    let attr2: proc_macro2::TokenStream = attr.into();
-
-    match parser.parse2(attr2) {
-        Ok(parsed) => {
-            for meta in parsed {
-                if let Meta::NameValue(nv) = meta {
-                    if nv.path.is_ident("channel_size") {
-                        let expr = &nv.value;
-                        channel_size = Some(quote::quote! { #expr });
-                    } else if nv.path.is_ident("subs") {
-                        let expr = &nv.value;
-                        subs = Some(quote::quote! { #expr });
-                    } else if nv.path.is_ident("pubs") {
-                        let expr = &nv.value;
-                        pubs = Some(quote::quote! { #expr });
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            panic!("Failed to parse controller_event attributes: {}", e);
-        }
-    }
-
-    (channel_size, subs, pubs)
-}
-
-/// Parse input_event parameters from an Attribute
-fn parse_input_event_attr_from_attribute(attr: &Attribute) -> Option<proc_macro2::TokenStream> {
-    use syn::Token;
-    use syn::punctuated::Punctuated;
-
-    let mut channel_size = None;
-
-    if let Meta::List(meta_list) = &attr.meta {
-        let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
-        if let Ok(parsed) = parser.parse2(meta_list.tokens.clone()) {
-            for meta in parsed {
-                if let Meta::NameValue(nv) = meta
-                    && nv.path.is_ident("channel_size")
-                {
-                    let expr = &nv.value;
-                    channel_size = Some(quote::quote! { #expr });
-                }
-            }
-        }
-    }
-
-    channel_size
 }

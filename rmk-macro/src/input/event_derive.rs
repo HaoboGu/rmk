@@ -107,14 +107,18 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
         }
 
         /// Placeholder subscriber for wrapper enums.
-        /// Wrapper enums have no channel.
-        /// Subscribe to concrete event types instead.
+        ///
+        /// **Note**: Wrapper enums route events to their concrete type channels.
+        /// You cannot subscribe to wrapper enums directly.
+        /// Subscribe to the individual event types (e.g., `BatteryEvent`, `PointingEvent`) instead.
         pub struct #subscriber_name;
 
         impl ::rmk::event::EventSubscriber<#enum_name #ty_generics> for #subscriber_name {
             async fn next_event(&mut self) -> #enum_name #ty_generics {
-                // Never returns; subscribe to concrete event types.
-                core::future::pending().await
+                unreachable!(
+                    "Cannot subscribe to wrapper enum `{}` directly. Subscribe to the concrete event types instead.",
+                    stringify!(#enum_name)
+                )
             }
         }
 

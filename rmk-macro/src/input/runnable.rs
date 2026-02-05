@@ -131,26 +131,30 @@ pub fn has_derive(attrs: &[Attribute], derive_name: &str) -> bool {
 
 /// Reconstruct a struct/enum definition.
 /// Returns a TokenStream without attributes.
+///
+/// Note: `#generics` from `syn::Generics` includes the where clause when used directly,
+/// so we use `impl_generics` (which excludes where clause) and add `where_clause` separately
+/// to avoid duplicating the where clause.
 pub fn reconstruct_type_def(input: &syn::DeriveInput) -> TokenStream {
     let type_name = &input.ident;
     let generics = &input.generics;
-    let (_, _, where_clause) = generics.split_for_impl();
+    let (impl_generics, _, where_clause) = generics.split_for_impl();
 
     match &input.data {
         syn::Data::Struct(data_struct) => match &data_struct.fields {
             syn::Fields::Named(fields) => {
-                quote! { struct #type_name #generics #fields #where_clause }
+                quote! { struct #type_name #impl_generics #where_clause #fields }
             }
             syn::Fields::Unnamed(fields) => {
-                quote! { struct #type_name #generics #fields #where_clause ; }
+                quote! { struct #type_name #impl_generics #fields #where_clause ; }
             }
             syn::Fields::Unit => {
-                quote! { struct #type_name #generics #where_clause ; }
+                quote! { struct #type_name #impl_generics #where_clause ; }
             }
         },
         syn::Data::Enum(data_enum) => {
             let variants = &data_enum.variants;
-            quote! { enum #type_name #generics #where_clause { #variants } }
+            quote! { enum #type_name #impl_generics #where_clause { #variants } }
         }
         syn::Data::Union(_) => {
             panic!("Unions are not supported")
@@ -443,8 +447,8 @@ pub fn generate_runnable(
 
                             let select_result = {
                                 ::rmk::futures::select_biased! {
-                                    #(#select_arms)*
-                                    #timer_arm
+                                    #timer_arm,
+                                    #(#select_arms),*
                                 }
                             };
 
@@ -479,8 +483,8 @@ pub fn generate_runnable(
                             );
 
                             ::rmk::futures::select_biased! {
-                                #(#select_arms)*
-                                #timer_arm
+                                #timer_arm,
+                                #(#select_arms),*
                             }
                         }
                     }
@@ -509,7 +513,7 @@ pub fn generate_runnable(
                     loop {
                         let select_result = {
                             ::rmk::futures::select_biased! {
-                                #(#select_arms)*
+                                #(#select_arms),*
                             }
                         };
 
@@ -530,7 +534,7 @@ pub fn generate_runnable(
 
                     loop {
                         ::rmk::futures::select_biased! {
-                            #(#select_arms)*
+                            #(#select_arms),*
                         }
                     }
                 }
@@ -632,6 +636,96 @@ pub fn parse_input_processor_config(tokens: impl Into<TokenStream>) -> InputProc
     }
 
     InputProcessorConfig { event_types }
+}
+
+/// Controller event channel config (channel_size, subs, pubs).
+pub struct ControllerEventChannelConfig {
+    pub channel_size: Option<TokenStream>,
+    pub subs: Option<TokenStream>,
+    pub pubs: Option<TokenStream>,
+}
+
+/// Parse controller_event parameters from a TokenStream.
+/// Extracts `channel_size`, `subs`, `pubs`.
+pub fn parse_controller_event_channel_config(tokens: impl Into<TokenStream>) -> ControllerEventChannelConfig {
+    use syn::Token;
+    use syn::punctuated::Punctuated;
+
+    let mut channel_size = None;
+    let mut subs = None;
+    let mut pubs = None;
+
+    let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
+    let tokens: TokenStream = tokens.into();
+
+    if let Ok(parsed) = parser.parse2(tokens) {
+        for meta in parsed {
+            if let Meta::NameValue(nv) = meta {
+                if nv.path.is_ident("channel_size") {
+                    let expr = &nv.value;
+                    channel_size = Some(quote! { #expr });
+                } else if nv.path.is_ident("subs") {
+                    let expr = &nv.value;
+                    subs = Some(quote! { #expr });
+                } else if nv.path.is_ident("pubs") {
+                    let expr = &nv.value;
+                    pubs = Some(quote! { #expr });
+                }
+            }
+        }
+    }
+
+    ControllerEventChannelConfig {
+        channel_size,
+        subs,
+        pubs,
+    }
+}
+
+/// Parse controller_event parameters from an Attribute.
+pub fn parse_controller_event_channel_config_from_attr(attr: &Attribute) -> ControllerEventChannelConfig {
+    if let Meta::List(meta_list) = &attr.meta {
+        parse_controller_event_channel_config(meta_list.tokens.clone())
+    } else {
+        ControllerEventChannelConfig {
+            channel_size: None,
+            subs: None,
+            pubs: None,
+        }
+    }
+}
+
+/// Parse input_event channel_size from a TokenStream.
+pub fn parse_input_event_channel_size(tokens: impl Into<TokenStream>) -> Option<TokenStream> {
+    use syn::Token;
+    use syn::punctuated::Punctuated;
+
+    let mut channel_size = None;
+
+    let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
+    let tokens: TokenStream = tokens.into();
+
+    if let Ok(parsed) = parser.parse2(tokens) {
+        for meta in parsed {
+            if let Meta::NameValue(nv) = meta
+                && nv.path.is_ident("channel_size")
+            {
+                let expr = &nv.value;
+                channel_size = Some(quote! { #expr });
+            }
+        }
+    }
+
+    channel_size
+}
+
+/// Parse input_event channel_size from an Attribute.
+pub fn parse_input_event_channel_size_from_attr(attr: &Attribute) -> Option<TokenStream> {
+    if let Meta::List(meta_list) = &attr.meta {
+        parse_input_event_channel_size(meta_list.tokens.clone())
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]

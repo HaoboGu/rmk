@@ -175,8 +175,16 @@ pub fn runnable_generated(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
 /// Derive macro for multi-event enums that generates automatic event dispatch.
 ///
-/// This macro generates a `publish()` method that dispatches events to the correct channel
-/// based on the enum variant, and `From<EventType>` impls for convenient construction.
+/// This macro generates:
+/// - `{EnumName}Publisher` struct implementing `AsyncEventPublisher` and `EventPublisher`
+/// - `{EnumName}Subscriber` placeholder (wrapper enums cannot be subscribed to directly)
+/// - `InputEvent` and `AsyncInputEvent` trait implementations
+/// - `From<VariantType>` impls for each variant
+///
+/// Each variant is forwarded to its underlying event channel when published.
+///
+/// **Note**: You cannot subscribe to wrapper enums directly. Subscribe to the individual
+/// concrete event types (e.g., `BatteryEvent`, `PointingEvent`) instead.
 ///
 /// # Example
 ///
@@ -187,9 +195,8 @@ pub fn runnable_generated(_attr: TokenStream, item: TokenStream) -> TokenStream 
 ///     Pointing(PointingEvent),
 /// }
 ///
-/// // Generated:
-/// // - `publish()` method that dispatches to correct channel
-/// // - `From<BatteryEvent>` and `From<PointingEvent>` impls
+/// // Publishing: events are routed to their concrete type channels
+/// publish_input_event_async(MultiSensorEvent::Battery(event)).await;
 /// ```
 #[proc_macro_derive(InputEvent)]
 pub fn input_event_derive(item: TokenStream) -> TokenStream {

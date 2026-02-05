@@ -73,12 +73,22 @@ impl ::rmk::event::EventPublisher<NrfAdcEvent> for NrfAdcEventPublisher {
     }
 }
 /// Placeholder subscriber for wrapper enums.
-/// Wrapper enums have no channel.
-/// Subscribe to concrete event types instead.
+///
+/// **Note**: Wrapper enums route events to their concrete type channels.
+/// You cannot subscribe to wrapper enums directly.
+/// Subscribe to the individual event types (e.g., `BatteryEvent`, `PointingEvent`) instead.
 pub struct NrfAdcEventSubscriber;
 impl ::rmk::event::EventSubscriber<NrfAdcEvent> for NrfAdcEventSubscriber {
     async fn next_event(&mut self) -> NrfAdcEvent {
-        core::future::pending().await
+        {
+            ::core::panicking::panic_fmt(
+                format_args!(
+                    "internal error: entered unreachable code: {0}",
+                    format_args!("Cannot subscribe to wrapper enum `{0}` directly. Subscribe to the concrete event types instead.",
+                    "NrfAdcEvent",),
+                ),
+            );
+        }
     }
 }
 impl ::rmk::event::InputEvent for NrfAdcEvent {

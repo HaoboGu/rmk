@@ -88,12 +88,22 @@ impl ::rmk::event::EventPublisher<MultiSensorEvent> for MultiSensorEventPublishe
     }
 }
 /// Placeholder subscriber for wrapper enums.
-/// Wrapper enums have no channel.
-/// Subscribe to concrete event types instead.
+///
+/// **Note**: Wrapper enums route events to their concrete type channels.
+/// You cannot subscribe to wrapper enums directly.
+/// Subscribe to the individual event types (e.g., `BatteryEvent`, `PointingEvent`) instead.
 pub struct MultiSensorEventSubscriber;
 impl ::rmk::event::EventSubscriber<MultiSensorEvent> for MultiSensorEventSubscriber {
     async fn next_event(&mut self) -> MultiSensorEvent {
-        core::future::pending().await
+        {
+            ::core::panicking::panic_fmt(
+                format_args!(
+                    "internal error: entered unreachable code: {0}",
+                    format_args!("Cannot subscribe to wrapper enum `{0}` directly. Subscribe to the concrete event types instead.",
+                    "MultiSensorEvent",),
+                ),
+            );
+        }
     }
 }
 impl ::rmk::event::InputEvent for MultiSensorEvent {

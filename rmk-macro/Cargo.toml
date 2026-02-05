@@ -32,4 +32,5 @@ doctest = false
 
 [dev-dependencies]
 macrotest = "1.0"
+trybuild = "1.0"
 rmk = { path = "tests/rmk" }
