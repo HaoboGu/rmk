@@ -118,7 +118,7 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Add marker attribute if we generated Runnable and there are other macros.
     if !has_marker && has_controller {
-        input.attrs.push(syn::parse_quote!(#[::rmk::runnable_generated]));
+        input.attrs.push(syn::parse_quote!(#[::rmk::macros::runnable_generated]));
     }
 
     // Generate the complete output

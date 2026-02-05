@@ -141,7 +141,7 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
 
     // Add marker attribute if we generated Runnable and there are other macros
     let marker_attr = if !has_marker && has_controller {
-        quote! { #[::rmk::runnable_generated] }
+        quote! { #[::rmk::macros::runnable_generated] }
     } else {
         quote! {}
     };

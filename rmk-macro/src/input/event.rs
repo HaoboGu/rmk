@@ -37,9 +37,9 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
         .into();
     }
 
-    // Verify Clone + Copy derives
-    if !has_derive(&input.attrs, "Clone") || !has_derive(&input.attrs, "Copy") {
-        return syn::Error::new_spanned(input, "#[input_event] requires the struct to derive Clone and Copy")
+    // Verify Clone derive (Send is an auto trait, checked by the compiler)
+    if !has_derive(&input.attrs, "Clone") {
+        return syn::Error::new_spanned(input, "#[input_event] requires the struct to derive Clone")
             .to_compile_error()
             .into();
     }

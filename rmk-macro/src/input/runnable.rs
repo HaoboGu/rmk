@@ -117,7 +117,7 @@ pub fn to_upper_snake_case(s: &str) -> String {
     result
 }
 
-/// Check if a type derives a trait (e.g., Clone, Copy).
+/// Check if a type derives a trait (e.g., Clone).
 pub fn has_derive(attrs: &[Attribute], derive_name: &str) -> bool {
     attrs.iter().any(|attr| {
         if attr.path().is_ident("derive")
@@ -169,13 +169,17 @@ pub fn has_runnable_marker(attrs: &[Attribute]) -> bool {
 }
 
 /// Check runnable_generated attribute.
-/// Accepts `#[runnable_generated]` and `#[rmk::runnable_generated]`.
+/// Accepts `#[runnable_generated]`, `#[rmk::runnable_generated]`, and `#[rmk::macros::runnable_generated]`.
 pub fn is_runnable_generated_attr(attr: &Attribute) -> bool {
     let path = attr.path();
     path.is_ident("runnable_generated")
         || (path.segments.len() == 2
             && path.segments[0].ident == "rmk"
             && path.segments[1].ident == "runnable_generated")
+        || (path.segments.len() == 3
+            && path.segments[0].ident == "rmk"
+            && path.segments[1].ident == "macros"
+            && path.segments[2].ident == "runnable_generated")
 }
 
 /// Convert event type to read method name (BatteryEvent -> read_battery_event).

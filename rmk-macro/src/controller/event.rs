@@ -37,11 +37,11 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
         .into();
     }
 
-    // Verify Clone + Copy derives
-    if !has_derive(&input.attrs, "Clone") || !has_derive(&input.attrs, "Copy") {
+    // Verify Clone derive (Send is an auto trait, checked by the compiler)
+    if !has_derive(&input.attrs, "Clone") {
         return syn::Error::new_spanned(
             input,
-            "#[controller_event] requires the struct to derive Clone and Copy",
+            "#[controller_event] requires the struct to derive Clone",
         )
         .to_compile_error()
         .into();

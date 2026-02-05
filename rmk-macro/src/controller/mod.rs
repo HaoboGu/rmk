@@ -321,7 +321,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
 
     // Add runnable_generated marker for combined macros.
     let marker_attr = if !has_marker && (has_input_device || has_input_processor) {
-        quote! { #[::rmk::runnable_generated] }
+        quote! { #[::rmk::macros::runnable_generated] }
     } else {
         quote! {}
     };

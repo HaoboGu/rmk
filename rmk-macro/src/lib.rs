@@ -66,7 +66,7 @@ pub fn rmk_peripheral(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Macro for defining controller events.
 ///
-/// This macro generates a static channel and implements the `ControllerEventTrait` trait.
+/// This macro generates a static channel and implements the `ControllerEvent` trait.
 ///
 /// # Examples
 ///
@@ -112,7 +112,7 @@ pub fn controller(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Macro for defining input events.
 ///
-/// This macro generates a static Channel and implements the `Event` trait.
+/// This macro generates a static Channel and implements the `InputEvent` trait.
 ///
 /// # Parameters
 ///
