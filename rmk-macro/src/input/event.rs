@@ -64,6 +64,7 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
     let cap = channel_size.unwrap_or_else(|| quote! { 8 });
 
     let input_channel_static = quote! {
+        #[doc(hidden)]
         static #input_channel_name: ::embassy_sync::channel::Channel<
             ::rmk::RawMutex,
             #type_name #ty_generics,
@@ -130,6 +131,7 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
         let ctrl_pubs_val = ctrl_config.pubs.unwrap_or_else(|| quote! { 1 });
 
         let controller_channel_static = quote! {
+            #[doc(hidden)]
             static #controller_channel_name: ::embassy_sync::pubsub::PubSubChannel<
                 ::rmk::RawMutex,
                 #type_name #ty_generics,
@@ -163,7 +165,13 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
                 }
 
                 fn controller_subscriber() -> Self::Subscriber {
-                    #controller_channel_name.subscriber().unwrap()
+                    #controller_channel_name.subscriber().expect(
+                        concat!(
+                            "Failed to create controller subscriber for ",
+                            stringify!(#type_name),
+                            ". The 'subs' limit has been exceeded. Increase the 'subs' parameter in #[controller_event(subs = N)]."
+                        )
+                    )
                 }
             }
         };
@@ -180,7 +188,13 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
                 >;
 
                 fn controller_publisher_async() -> Self::AsyncPublisher {
-                    #controller_channel_name.publisher().unwrap()
+                    #controller_channel_name.publisher().expect(
+                        concat!(
+                            "Failed to create async controller publisher for ",
+                            stringify!(#type_name),
+                            ". The 'pubs' limit has been exceeded. Increase the 'pubs' parameter in #[controller_event(pubs = N)]."
+                        )
+                    )
                 }
             }
         };

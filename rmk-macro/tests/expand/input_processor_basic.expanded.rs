@@ -68,8 +68,8 @@ impl ::core::fmt::Debug for EncoderEvent {
 }
 pub struct KeyProcessor;
 pub enum KeyProcessorEventEnum {
-    Event0(KeyEvent),
-    Event1(EncoderEvent),
+    Key(KeyEvent),
+    Encoder(EncoderEvent),
 }
 impl ::rmk::input_device::Runnable for KeyProcessor {
     async fn run(&mut self) -> ! {
@@ -174,11 +174,10 @@ impl ::rmk::input_device::Runnable for KeyProcessor {
                     };
                     match __select_result {
                         __PrivResult::_0(proc_event) => {
-                            self.process(KeyProcessorEventEnum::Event0(proc_event))
-                                .await;
+                            self.process(KeyProcessorEventEnum::Key(proc_event)).await;
                         }
                         __PrivResult::_1(proc_event) => {
-                            self.process(KeyProcessorEventEnum::Event1(proc_event))
+                            self.process(KeyProcessorEventEnum::Encoder(proc_event))
                                 .await;
                         }
                     }
@@ -191,8 +190,8 @@ impl ::rmk::input_device::InputProcessor for KeyProcessor {
     type Event = KeyProcessorEventEnum;
     async fn process(&mut self, event: Self::Event) {
         match event {
-            KeyProcessorEventEnum::Event0(event) => self.on_key_event(event).await,
-            KeyProcessorEventEnum::Event1(event) => self.on_encoder_event(event).await,
+            KeyProcessorEventEnum::Key(event) => self.on_key_event(event).await,
+            KeyProcessorEventEnum::Encoder(event) => self.on_encoder_event(event).await,
         }
     }
 }

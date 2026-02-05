@@ -61,18 +61,18 @@ pub struct SensorController {
     pub threshold: u16,
 }
 pub enum SensorControllerEventEnum {
-    Event0(ConfigEvent),
+    Config(ConfigEvent),
 }
 impl From<ConfigEvent> for SensorControllerEventEnum {
     fn from(e: ConfigEvent) -> Self {
-        SensorControllerEventEnum::Event0(e)
+        SensorControllerEventEnum::Config(e)
     }
 }
 impl ::rmk::controller::Controller for SensorController {
     type Event = SensorControllerEventEnum;
     async fn process_event(&mut self, event: Self::Event) {
         match event {
-            SensorControllerEventEnum::Event0(event) => self.on_config_event(event).await,
+            SensorControllerEventEnum::Config(event) => self.on_config_event(event).await,
         }
     }
     async fn next_message(&mut self) -> Self::Event {
@@ -141,7 +141,7 @@ impl ::rmk::controller::Controller for SensorController {
                     __futures_crate::future::poll_fn(__poll_fn).await
                 };
                 match __select_result {
-                    __PrivResult::_0(event) => SensorControllerEventEnum::Event0(event),
+                    __PrivResult::_0(event) => SensorControllerEventEnum::Config(event),
                 }
             }
         }
@@ -270,7 +270,7 @@ impl ::rmk::input_device::Runnable for SensorController {
                             }
                             __PrivResult::_1(ctrl_event) => {
                                 __RmkSelectEventSensorController::Controller(
-                                    SensorControllerEventEnum::Event0(ctrl_event),
+                                    SensorControllerEventEnum::Config(ctrl_event),
                                 )
                             }
                         }
@@ -296,18 +296,18 @@ pub struct PollingSensorController {
     pub last_value: u16,
 }
 pub enum PollingSensorControllerEventEnum {
-    Event0(ConfigEvent),
+    Config(ConfigEvent),
 }
 impl From<ConfigEvent> for PollingSensorControllerEventEnum {
     fn from(e: ConfigEvent) -> Self {
-        PollingSensorControllerEventEnum::Event0(e)
+        PollingSensorControllerEventEnum::Config(e)
     }
 }
 impl ::rmk::controller::Controller for PollingSensorController {
     type Event = PollingSensorControllerEventEnum;
     async fn process_event(&mut self, event: Self::Event) {
         match event {
-            PollingSensorControllerEventEnum::Event0(event) => {
+            PollingSensorControllerEventEnum::Config(event) => {
                 self.on_config_event(event).await
             }
         }
@@ -379,7 +379,7 @@ impl ::rmk::controller::Controller for PollingSensorController {
                 };
                 match __select_result {
                     __PrivResult::_0(event) => {
-                        PollingSensorControllerEventEnum::Event0(event)
+                        PollingSensorControllerEventEnum::Config(event)
                     }
                 }
             }
@@ -555,7 +555,7 @@ impl ::rmk::input_device::Runnable for PollingSensorController {
                             }
                             __PrivResult::_2(ctrl_event) => {
                                 __RmkSelectEventPollingSensorController::Controller(
-                                    PollingSensorControllerEventEnum::Event0(ctrl_event),
+                                    PollingSensorControllerEventEnum::Config(ctrl_event),
                                 )
                             }
                         }

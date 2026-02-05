@@ -10,8 +10,8 @@ use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::gpio_config::convert_gpio_str_to_output_pin;
 use crate::input::runnable::{
     ControllerConfig as SharedControllerConfig, InputDeviceConfig, InputProcessorConfig, deduplicate_type_generics,
-    event_type_to_handler_method_name, generate_runnable, has_runnable_marker, is_runnable_generated_attr,
-    parse_input_device_config, parse_input_processor_config, reconstruct_type_def,
+    event_type_to_handler_method_name, generate_runnable, generate_unique_variant_names, has_runnable_marker,
+    is_runnable_generated_attr, parse_input_device_config, parse_input_processor_config, reconstruct_type_def,
 };
 
 /// Expand controller init/exec blocks from keyboard config.
@@ -236,13 +236,15 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     // Internal event enum name.
     let enum_name = format_ident!("{}EventEnum", struct_name);
 
+    // Generate unique variant names from event types
+    let variant_names = generate_unique_variant_names(&config.event_types);
+
     // Build enum variants.
     let enum_variants: Vec<_> = config
         .event_types
         .iter()
-        .enumerate()
-        .map(|(idx, event_type)| {
-            let variant_name = format_ident!("Event{}", idx);
+        .zip(&variant_names)
+        .map(|(event_type, variant_name)| {
             quote! { #variant_name(#event_type) }
         })
         .collect();
@@ -252,9 +254,8 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     let from_impls: Vec<_> = config
         .event_types
         .iter()
-        .enumerate()
-        .map(|(idx, event_type)| {
-            let variant_name = format_ident!("Event{}", idx);
+        .zip(&variant_names)
+        .map(|(event_type, variant_name)| {
             quote! {
                 impl From<#event_type> for #enum_name {
                     fn from(e: #event_type) -> Self {
@@ -269,9 +270,8 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     let process_event_arms: Vec<_> = config
         .event_types
         .iter()
-        .enumerate()
-        .map(|(idx, event_type)| {
-            let variant_name = format_ident!("Event{}", idx);
+        .zip(&variant_names)
+        .map(|(event_type, variant_name)| {
             let method_name = event_type_to_handler_method_name(event_type);
             quote! {
                 #enum_name::#variant_name(event) => self.#method_name(event).await
@@ -280,7 +280,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         .collect();
 
     // next_message implementation via select_biased.
-    let next_message_impl = generate_next_message(&config.event_types, &enum_name);
+    let next_message_impl = generate_next_message(&config.event_types, &variant_names, &enum_name);
 
     // PollingController impl when poll_interval is set.
     let polling_controller_impl = if let Some(interval_ms) = config.poll_interval_ms {
@@ -422,7 +422,11 @@ fn parse_controller_attributes(attr: proc_macro::TokenStream) -> ControllerConfi
 }
 
 /// Build next_message using select_biased.
-fn generate_next_message(event_types: &[Path], enum_name: &syn::Ident) -> proc_macro2::TokenStream {
+fn generate_next_message(
+    event_types: &[Path],
+    variant_names: &[syn::Ident],
+    enum_name: &syn::Ident,
+) -> proc_macro2::TokenStream {
     let num_events = event_types.len();
 
     // Subscriber variable names.
@@ -442,9 +446,8 @@ fn generate_next_message(event_types: &[Path], enum_name: &syn::Ident) -> proc_m
     // select_biased! arms for each event.
     let select_arms: Vec<_> = sub_vars
         .iter()
-        .enumerate()
-        .map(|(idx, sub_var)| {
-            let variant_name = format_ident!("Event{}", idx);
+        .zip(variant_names)
+        .map(|(sub_var, variant_name)| {
             quote! {
                 event = #sub_var.next_event().fuse() => #enum_name::#variant_name(event),
             }

@@ -27,6 +27,7 @@ impl ::core::fmt::Debug for TestEvent {
         )
     }
 }
+#[doc(hidden)]
 static TEST_EVENT_INPUT_CHANNEL: ::embassy_sync::channel::Channel<
     ::rmk::RawMutex,
     TestEvent,

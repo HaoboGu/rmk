@@ -27,6 +27,7 @@ impl ::core::fmt::Debug for BatteryEvent {
         )
     }
 }
+#[doc(hidden)]
 static BATTERY_EVENT_CONTROLLER_CHANNEL: ::embassy_sync::pubsub::PubSubChannel<
     ::rmk::RawMutex,
     BatteryEvent,
@@ -55,7 +56,11 @@ impl ::rmk::event::ControllerEvent for BatteryEvent {
         BATTERY_EVENT_CONTROLLER_CHANNEL.immediate_publisher()
     }
     fn controller_subscriber() -> Self::Subscriber {
-        BATTERY_EVENT_CONTROLLER_CHANNEL.subscriber().unwrap()
+        BATTERY_EVENT_CONTROLLER_CHANNEL
+            .subscriber()
+            .expect(
+                "Failed to create controller subscriber for BatteryEvent. The \'subs\' limit has been exceeded. Increase the \'subs\' parameter in #[controller_event(subs = N)].",
+            )
     }
 }
 impl ::rmk::event::AsyncControllerEvent for BatteryEvent {
@@ -68,7 +73,11 @@ impl ::rmk::event::AsyncControllerEvent for BatteryEvent {
         { 1 },
     >;
     fn controller_publisher_async() -> Self::AsyncPublisher {
-        BATTERY_EVENT_CONTROLLER_CHANNEL.publisher().unwrap()
+        BATTERY_EVENT_CONTROLLER_CHANNEL
+            .publisher()
+            .expect(
+                "Failed to create async controller publisher for BatteryEvent. The \'pubs\' limit has been exceeded. Increase the \'pubs\' parameter in #[controller_event(pubs = N)].",
+            )
     }
 }
 /// Battery state changed event
@@ -111,6 +120,7 @@ impl ::core::fmt::Debug for BatteryState {
         }
     }
 }
+#[doc(hidden)]
 static BATTERY_STATE_CONTROLLER_CHANNEL: ::embassy_sync::pubsub::PubSubChannel<
     ::rmk::RawMutex,
     BatteryState,
@@ -139,7 +149,11 @@ impl ::rmk::event::ControllerEvent for BatteryState {
         BATTERY_STATE_CONTROLLER_CHANNEL.immediate_publisher()
     }
     fn controller_subscriber() -> Self::Subscriber {
-        BATTERY_STATE_CONTROLLER_CHANNEL.subscriber().unwrap()
+        BATTERY_STATE_CONTROLLER_CHANNEL
+            .subscriber()
+            .expect(
+                "Failed to create controller subscriber for BatteryState. The \'subs\' limit has been exceeded. Increase the \'subs\' parameter in #[controller_event(subs = N)].",
+            )
     }
 }
 impl ::rmk::event::AsyncControllerEvent for BatteryState {
@@ -152,6 +166,10 @@ impl ::rmk::event::AsyncControllerEvent for BatteryState {
         { 2 },
     >;
     fn controller_publisher_async() -> Self::AsyncPublisher {
-        BATTERY_STATE_CONTROLLER_CHANNEL.publisher().unwrap()
+        BATTERY_STATE_CONTROLLER_CHANNEL
+            .publisher()
+            .expect(
+                "Failed to create async controller publisher for BatteryState. The \'pubs\' limit has been exceeded. Increase the \'pubs\' parameter in #[controller_event(pubs = N)].",
+            )
     }
 }

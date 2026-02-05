@@ -4,7 +4,8 @@ use syn::{DeriveInput, Meta, Path, parse_macro_input};
 
 use super::runnable::{
     ControllerConfig, InputProcessorConfig, deduplicate_type_generics, event_type_to_handler_method_name,
-    generate_runnable, has_runnable_marker, is_runnable_generated_attr, parse_controller_config, reconstruct_type_def,
+    generate_runnable, generate_unique_variant_names, has_runnable_marker, is_runnable_generated_attr,
+    parse_controller_config, reconstruct_type_def,
 };
 
 /// Generates InputProcessor trait implementation with automatic event routing.
@@ -96,13 +97,15 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
     // Generate internal enum name
     let enum_name = format_ident!("{}EventEnum", struct_name);
 
+    // Generate unique variant names from event types
+    let variant_names = generate_unique_variant_names(&config.event_types);
+
     // Generate enum variants and related code
     let enum_variants: Vec<_> = config
         .event_types
         .iter()
-        .enumerate()
-        .map(|(idx, event_type)| {
-            let variant_name = format_ident!("Event{}", idx);
+        .zip(&variant_names)
+        .map(|(event_type, variant_name)| {
             quote! { #variant_name(#event_type) }
         })
         .collect();
@@ -111,9 +114,8 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
     let process_event_arms: Vec<_> = config
         .event_types
         .iter()
-        .enumerate()
-        .map(|(idx, event_type)| {
-            let variant_name = format_ident!("Event{}", idx);
+        .zip(&variant_names)
+        .map(|(event_type, variant_name)| {
             let method_name = event_type_to_handler_method_name(event_type);
             quote! {
                 #enum_name::#variant_name(event) => self.#method_name(event).await
