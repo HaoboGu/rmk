@@ -8,7 +8,7 @@ use trouble_host::prelude::*;
 
 use super::ble_server::Server;
 use crate::ble::SLEEPING_STATE;
-use crate::event::{BatteryStateEvent, ControllerEvent};
+use crate::event::{BatteryStateEvent, ControllerSubscribeEvent};
 use crate::keyboard::LAST_KEY_TIMESTAMP;
 
 /// Battery service

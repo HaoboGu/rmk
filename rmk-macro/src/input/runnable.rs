@@ -809,6 +809,206 @@ pub fn parse_input_event_channel_size_from_attr(attr: &Attribute) -> Option<Toke
     }
 }
 
+// ============================================================================
+// Unified Event Channel Generation
+// ============================================================================
+
+/// Generate input event channel (Channel) and trait implementations.
+///
+/// Returns (channel_static, trait_impls) TokenStreams.
+pub fn generate_input_event_channel(
+    type_name: &syn::Ident,
+    ty_generics: &syn::TypeGenerics,
+    impl_generics: &syn::ImplGenerics,
+    where_clause: Option<&syn::WhereClause>,
+    channel_size: Option<TokenStream>,
+) -> (TokenStream, TokenStream) {
+    let channel_name = syn::Ident::new(
+        &format!("{}_INPUT_CHANNEL", to_upper_snake_case(&type_name.to_string())),
+        type_name.span(),
+    );
+
+    let cap = channel_size.unwrap_or_else(|| quote! { 8 });
+
+    let channel_static = quote! {
+        #[doc(hidden)]
+        static #channel_name: ::embassy_sync::channel::Channel<
+            ::rmk::RawMutex,
+            #type_name #ty_generics,
+            { #cap }
+        > = ::embassy_sync::channel::Channel::new();
+    };
+
+    let trait_impls = quote! {
+        impl #impl_generics ::rmk::event::InputPublishEvent for #type_name #ty_generics #where_clause {
+            type Publisher = ::embassy_sync::channel::Sender<
+                'static,
+                ::rmk::RawMutex,
+                #type_name #ty_generics,
+                { #cap }
+            >;
+
+            fn input_publisher() -> Self::Publisher {
+                #channel_name.sender()
+            }
+        }
+
+        impl #impl_generics ::rmk::event::InputSubscribeEvent for #type_name #ty_generics #where_clause {
+            type Subscriber = ::embassy_sync::channel::Receiver<
+                'static,
+                ::rmk::RawMutex,
+                #type_name #ty_generics,
+                { #cap }
+            >;
+
+            fn input_subscriber() -> Self::Subscriber {
+                #channel_name.receiver()
+            }
+        }
+
+        impl #impl_generics ::rmk::event::AsyncInputPublishEvent for #type_name #ty_generics #where_clause {
+            type AsyncPublisher = ::embassy_sync::channel::Sender<
+                'static,
+                ::rmk::RawMutex,
+                #type_name #ty_generics,
+                { #cap }
+            >;
+
+            fn input_publisher_async() -> Self::AsyncPublisher {
+                #channel_name.sender()
+            }
+        }
+    };
+
+    (channel_static, trait_impls)
+}
+
+/// Generate controller event channel (PubSubChannel) and trait implementations.
+///
+/// Returns (channel_static, trait_impls) TokenStreams.
+pub fn generate_controller_event_channel(
+    type_name: &syn::Ident,
+    ty_generics: &syn::TypeGenerics,
+    impl_generics: &syn::ImplGenerics,
+    where_clause: Option<&syn::WhereClause>,
+    config: &ControllerEventChannelConfig,
+) -> (TokenStream, TokenStream) {
+    let channel_name = syn::Ident::new(
+        &format!("{}_CONTROLLER_CHANNEL", to_upper_snake_case(&type_name.to_string())),
+        type_name.span(),
+    );
+
+    let cap = config.channel_size.clone().unwrap_or_else(|| quote! { 1 });
+    let subs_val = config.subs.clone().unwrap_or_else(|| quote! { 4 });
+    let pubs_val = config.pubs.clone().unwrap_or_else(|| quote! { 1 });
+
+    let channel_static = quote! {
+        #[doc(hidden)]
+        static #channel_name: ::embassy_sync::pubsub::PubSubChannel<
+            ::rmk::RawMutex,
+            #type_name #ty_generics,
+            { #cap },
+            { #subs_val },
+            { #pubs_val }
+        > = ::embassy_sync::pubsub::PubSubChannel::new();
+    };
+
+    let trait_impls = quote! {
+        impl #impl_generics ::rmk::event::ControllerPublishEvent for #type_name #ty_generics #where_clause {
+            type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
+                'static,
+                ::rmk::RawMutex,
+                #type_name #ty_generics,
+                { #cap },
+                { #subs_val },
+                { #pubs_val }
+            >;
+
+            fn controller_publisher() -> Self::Publisher {
+                #channel_name.immediate_publisher()
+            }
+        }
+
+        impl #impl_generics ::rmk::event::ControllerSubscribeEvent for #type_name #ty_generics #where_clause {
+            type Subscriber = ::embassy_sync::pubsub::Subscriber<
+                'static,
+                ::rmk::RawMutex,
+                #type_name #ty_generics,
+                { #cap },
+                { #subs_val },
+                { #pubs_val }
+            >;
+
+            fn controller_subscriber() -> Self::Subscriber {
+                #channel_name.subscriber().expect(
+                    concat!(
+                        "Failed to create controller subscriber for ",
+                        stringify!(#type_name),
+                        ". The 'subs' limit has been exceeded. Increase the 'subs' parameter in #[controller_event(subs = N)]."
+                    )
+                )
+            }
+        }
+
+        impl #impl_generics ::rmk::event::AsyncControllerPublishEvent for #type_name #ty_generics #where_clause {
+            type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
+                'static,
+                ::rmk::RawMutex,
+                #type_name #ty_generics,
+                { #cap },
+                { #subs_val },
+                { #pubs_val }
+            >;
+
+            fn controller_publisher_async() -> Self::AsyncPublisher {
+                #channel_name.publisher().expect(
+                    concat!(
+                        "Failed to create async controller publisher for ",
+                        stringify!(#type_name),
+                        ". The 'pubs' limit has been exceeded. Increase the 'pubs' parameter in #[controller_event(pubs = N)]."
+                    )
+                )
+            }
+        }
+    };
+
+    (channel_static, trait_impls)
+}
+
+/// Validate event type for #[input_event] or #[controller_event] macro.
+///
+/// Returns an error TokenStream if validation fails, None if valid.
+pub fn validate_event_type(input: &syn::DeriveInput, macro_name: &str) -> Option<TokenStream> {
+    // Validate input is a struct or enum
+    if !matches!(input.data, syn::Data::Struct(_) | syn::Data::Enum(_)) {
+        return Some(
+            syn::Error::new_spanned(input, format!("#[{}] can only be applied to structs or enums", macro_name))
+                .to_compile_error(),
+        );
+    }
+
+    // Reject generic types - static channels cannot be generic
+    if !input.generics.params.is_empty() {
+        return Some(
+            syn::Error::new_spanned(
+                &input.generics,
+                format!("#[{}] does not support generic types. Static channels cannot be generic.", macro_name),
+            )
+            .to_compile_error(),
+        );
+    }
+
+    // Verify Clone derive
+    if !has_derive(&input.attrs, "Clone") {
+        return Some(
+            syn::Error::new_spanned(input, format!("#[{}] requires the struct to derive Clone", macro_name))
+                .to_compile_error(),
+        );
+    }
+
+    None
+}
+
 /// Event trait type for generating unified EventSubscriber code.
 #[derive(Clone, Copy)]
 pub enum EventTraitType {
