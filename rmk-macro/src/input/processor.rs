@@ -4,8 +4,8 @@ use syn::{DeriveInput, Meta, parse_macro_input};
 use crate::controller::config::ControllerConfig;
 use crate::controller::parser::parse_controller_config;
 use crate::runnable::{
-    EventTraitType, event_type_to_handler_method_name, generate_event_match_arms, generate_event_subscriber,
-    generate_runnable, generate_unique_variant_names,
+    event_type_to_handler_method_name, generate_event_match_arms, generate_event_subscriber, generate_runnable,
+    generate_unique_variant_names,
 };
 use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr, reconstruct_type_def};
 
@@ -138,7 +138,8 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
             &variant_names,
             &enum_name,
             vis,
-            EventTraitType::Input,
+            quote! { ::rmk::event::InputSubscribeEvent },
+            quote! { input_subscriber },
         );
 
         let enum_def = quote! {

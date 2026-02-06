@@ -13,8 +13,8 @@ use crate::gpio_config::convert_gpio_str_to_output_pin;
 use crate::input::config::{InputDeviceConfig, InputProcessorConfig};
 use crate::input::parser::{parse_input_device_config, parse_input_processor_config};
 use crate::runnable::{
-    EventTraitType, event_type_to_handler_method_name, generate_event_match_arms, generate_event_subscriber,
-    generate_runnable, generate_unique_variant_names,
+    event_type_to_handler_method_name, generate_event_match_arms, generate_event_subscriber, generate_runnable,
+    generate_unique_variant_names,
 };
 use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr, reconstruct_type_def};
 
@@ -280,7 +280,8 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
             &variant_names,
             &enum_name,
             vis,
-            EventTraitType::Controller,
+            quote! { ::rmk::event::ControllerSubscribeEvent },
+            quote! { controller_subscriber },
         );
 
         let enum_def = quote! {

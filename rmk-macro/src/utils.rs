@@ -153,8 +153,8 @@ pub fn deduplicate_type_generics(generics: &syn::Generics) -> TokenStream {
     }
 }
 
-/// Convert CamelCase to snake_case.
-pub fn to_snake_case(s: &str) -> String {
+/// Internal case conversion function.
+fn convert_case_internal(s: &str, to_upper: bool) -> String {
     let mut result = String::new();
     let chars: Vec<char> = s.chars().collect();
 
@@ -172,37 +172,23 @@ pub fn to_snake_case(s: &str) -> String {
             if add_underscore {
                 result.push('_');
             }
-            result.push(c.to_ascii_lowercase());
+            result.push(if to_upper { c } else { c.to_ascii_lowercase() });
         } else {
-            result.push(c);
+            result.push(if to_upper { c.to_ascii_uppercase() } else { c });
         }
     }
 
     result
 }
 
+/// Convert CamelCase to snake_case.
+pub fn to_snake_case(s: &str) -> String {
+    convert_case_internal(s, false)
+}
+
 /// Convert CamelCase to UPPER_SNAKE_CASE.
 pub fn to_upper_snake_case(s: &str) -> String {
-    let mut result = String::new();
-    let chars: Vec<char> = s.chars().collect();
-
-    for i in 0..chars.len() {
-        let c = chars[i];
-
-        if c.is_uppercase() {
-            let add_underscore =
-                i > 0 && (chars[i - 1].is_lowercase() || (i + 1 < chars.len() && chars[i + 1].is_lowercase()));
-
-            if add_underscore {
-                result.push('_');
-            }
-            result.push(c);
-        } else {
-            result.push(c.to_ascii_uppercase());
-        }
-    }
-
-    result
+    convert_case_internal(s, true)
 }
 
 /// Check if a type derives a trait (e.g., Clone).

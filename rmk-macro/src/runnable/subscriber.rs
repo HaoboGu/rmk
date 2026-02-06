@@ -8,15 +8,6 @@ use syn::Path;
 
 use super::naming::event_type_to_handler_method_name;
 
-/// Event trait type for generating unified EventSubscriber code.
-#[derive(Clone, Copy)]
-pub enum EventTraitType {
-    /// Controller events (use ControllerSubscribeEvent trait)
-    Controller,
-    /// Input events (use InputSubscribeEvent trait)
-    Input,
-}
-
 /// Generate EventSubscriber struct and its implementation.
 ///
 /// This is a unified generator for both Controller and InputProcessor macros.
@@ -24,31 +15,24 @@ pub enum EventTraitType {
 /// - A subscriber struct that holds individual event subscribers
 /// - `EventSubscriber` impl with `select_biased!` for event aggregation
 /// - The corresponding event trait impl (`ControllerSubscribeEvent` or `InputSubscribeEvent`)
+///
+/// # Parameters
+/// - `subscribe_trait_path`: The trait path (e.g., `::rmk::event::ControllerSubscribeEvent`)
+/// - `subscriber_method`: The method name to call (e.g., `controller_subscriber`)
 pub fn generate_event_subscriber(
     struct_name: &syn::Ident,
     event_types: &[Path],
     variant_names: &[syn::Ident],
     enum_name: &syn::Ident,
     vis: &syn::Visibility,
-    event_trait: EventTraitType,
+    subscribe_trait_path: TokenStream,
+    subscriber_method: TokenStream,
 ) -> TokenStream {
     let subscriber_name = format_ident!("{}EventSubscriber", struct_name);
     let num_events = event_types.len();
 
     // Subscriber field names
     let sub_fields: Vec<_> = (0..num_events).map(|i| format_ident!("sub{}", i)).collect();
-
-    // Generate trait-specific code
-    let (subscribe_trait_path, subscriber_method) = match event_trait {
-        EventTraitType::Controller => (
-            quote! { ::rmk::event::ControllerSubscribeEvent },
-            quote! { controller_subscriber },
-        ),
-        EventTraitType::Input => (
-            quote! { ::rmk::event::InputSubscribeEvent },
-            quote! { input_subscriber },
-        ),
-    };
 
     // Struct field definitions with types
     let field_defs: Vec<_> = event_types
