@@ -4,12 +4,7 @@
 //!
 //! # Usage
 //!
-//! There are two ways to implement a Controller:
-//!
-//! ## 1. Using the `#[controller]` macro (recommended)
-//!
-//! For most use cases, use the `#[controller]` macro which automatically generates
-//! the event types and all necessary boilerplate:
+//! Use the `#[controller]` macro to define a controller that subscribes to events:
 //!
 //! ```rust,ignore
 //! use rmk_macro::controller;
@@ -18,36 +13,44 @@
 //! #[controller(subscribe = [LedIndicatorEvent])]
 //! struct MyController { /* ... */ }
 //!
+//! impl MyController {
+//!     // You MUST implement this method - the name follows the pattern: on_{event_name}_event
+//!     // For LedIndicatorEvent, the method name is on_led_indicator_event
+//!     async fn on_led_indicator_event(&mut self, event: LedIndicatorEvent) {
+//!         // handle event
+//!     }
+//! }
+//!
 //! // Multiple event subscription
 //! #[controller(subscribe = [EventA, EventB])]
 //! struct MyMultiController { /* ... */ }
 //!
+//! impl MyMultiController {
+//!     // Each subscribed event type requires a corresponding handler method
+//!     async fn on_event_a_event(&mut self, event: EventA) { /* ... */ }
+//!     async fn on_event_b_event(&mut self, event: EventB) { /* ... */ }
+//! }
+//!
 //! // With polling support
 //! #[controller(subscribe = [EventA], poll_interval = 100)]
 //! struct MyPollingController { /* ... */ }
-//! ```
 //!
-//! ## 2. Manual implementation (for single event types)
+//! impl MyPollingController {
+//!     async fn on_event_a_event(&mut self, event: EventA) { /* ... */ }
 //!
-//! For simple controllers that subscribe to a single event type, you can manually
-//! implement the trait:
-//!
-//! ```rust,ignore
-//! use rmk::event::ControllerSubscribeEvent;
-//!
-//! impl Controller for MyController {
-//!     type Event = LedIndicatorEvent;
-//!
-//!     // subscriber() has a default implementation, no need to override
-//!
-//!     async fn process_event(&mut self, event: Self::Event) {
-//!         // handle event
+//!     // When poll_interval is set, you MUST also implement poll()
+//!     async fn poll(&mut self) {
+//!         // Called periodically at the specified interval (in ms)
 //!     }
 //! }
 //! ```
 //!
-//! **Note**: For multiple event subscriptions, you must use the `#[controller]` macro
-//! as it generates the necessary aggregated event type that implements `ControllerSubscribeEvent`.
+//! ## Handler Method Naming Convention
+//!
+//! For each event type in `subscribe = [...]`, you must implement a handler method:
+//! - Event type `FooEvent` → method `on_foo_event`
+//! - Event type `BatteryStateEvent` → method `on_battery_state_event`
+//! - Event type `USBEvent` → method `on_usb_event`
 
 #[cfg(feature = "_ble")]
 pub mod battery_led;

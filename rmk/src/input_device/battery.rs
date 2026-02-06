@@ -3,7 +3,6 @@ use rmk_macro::{input_device, input_processor};
 
 #[cfg(feature = "_ble")]
 use crate::event::BatteryStateEvent;
-#[cfg(feature = "controller")]
 use crate::event::publish_controller_event;
 use crate::event::{BatteryAdcEvent, ChargingStateEvent};
 
@@ -143,8 +142,7 @@ impl BatteryProcessor {
                 if self.battery_state != BatteryStateEvent::Normal(battery_percent) {
                     self.battery_state = BatteryStateEvent::Normal(battery_percent);
 
-                    // Update the battery state
-                    #[cfg(feature = "controller")]
+                    // Update he battery state
                     publish_controller_event(self.battery_state);
                 }
             }
@@ -165,7 +163,6 @@ impl BatteryProcessor {
                 self.battery_state = BatteryStateEvent::NotAvailable;
             }
 
-            #[cfg(feature = "controller")]
             publish_controller_event(self.battery_state);
         }
     }

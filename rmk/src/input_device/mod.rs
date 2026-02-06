@@ -71,12 +71,7 @@ pub trait InputDevice: Runnable {
 ///
 /// # Usage
 ///
-/// There are two ways to implement an InputProcessor:
-///
-/// ## 1. Using the `#[input_processor]` macro (recommended)
-///
-/// For most use cases, use the `#[input_processor]` macro which automatically generates
-/// the `EventSubscriber` type and all necessary boilerplate:
+/// Use the `#[input_processor]` macro to define a processor that subscribes to input events:
 ///
 /// ```rust,ignore
 /// use rmk_macro::input_processor;
@@ -86,6 +81,8 @@ pub trait InputDevice: Runnable {
 /// struct KeyProcessor;
 ///
 /// impl KeyProcessor {
+///     // You MUST implement handler methods for each subscribed event type
+///     // The method name follows the pattern: on_{event_name}_event
 ///     async fn on_key_event(&mut self, event: KeyEvent) {
 ///         // Process key event
 ///     }
@@ -96,27 +93,12 @@ pub trait InputDevice: Runnable {
 /// }
 /// ```
 ///
-/// ## 2. Manual implementation (for single event types)
+/// ## Handler Method Naming Convention
 ///
-/// For simple processors that subscribe to a single event type, you can manually
-/// implement the trait:
-///
-/// ```rust,ignore
-/// use rmk::event::InputSubscribeEvent;
-///
-/// impl InputProcessor for MyProcessor {
-///     type Event = KeyboardEvent;
-///
-///     // subscriber() has a default implementation, no need to override
-///
-///     async fn process(&mut self, event: Self::Event) {
-///         // Process the event
-///     }
-/// }
-/// ```
-///
-/// **Note**: For multiple event subscriptions, you must use the `#[input_processor]` macro
-/// as it generates the necessary aggregated event type that implements `InputSubscribeEvent`.
+/// For each event type in `subscribe = [...]`, you must implement a handler method:
+/// - Event type `FooEvent` → method `on_foo_event`
+/// - Event type `KeyboardEvent` → method `on_keyboard_event`
+/// - Event type `USBEvent` → method `on_usb_event`
 pub trait InputProcessor: Runnable {
     /// The event type processed by this input processor.
     ///

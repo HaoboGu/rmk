@@ -138,6 +138,7 @@ pub fn generate_runnable(
 
     // Handle input_processor.
     if let Some(processor_config) = input_processor_config {
+        let has_single_proc_event = processor_config.event_types.len() == 1;
         let proc_enum_name = format_ident!("{}EventEnum", struct_name);
         let proc_variant_names = generate_unique_variant_names(&processor_config.event_types);
         use_statements.push(quote! { use ::rmk::event::InputSubscribeEvent; });
@@ -153,9 +154,17 @@ pub fn generate_runnable(
             sub_defs.push(quote! {
                 let mut #sub_name = <#event_type as ::rmk::event::InputSubscribeEvent>::input_subscriber();
             });
+
+            // For single event, pass the event directly; for multiple events, wrap in enum
+            let process_call = if has_single_proc_event {
+                quote! { self.process(proc_event).await; }
+            } else {
+                quote! { self.process(#proc_enum_name::#variant_name(proc_event)).await; }
+            };
+
             select_arms.push(quote! {
                 proc_event = #sub_name.next_event().fuse() => {
-                    self.process(#proc_enum_name::#variant_name(proc_event)).await;
+                    #process_call
                 }
             });
         }
