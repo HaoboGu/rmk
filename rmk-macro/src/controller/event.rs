@@ -1,10 +1,11 @@
 use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
-use crate::input::runnable::{
-    generate_controller_event_channel, generate_input_event_channel, parse_controller_event_channel_config,
-    parse_input_event_channel_size_from_attr, validate_event_type,
-};
+use crate::input::channel::{generate_input_event_channel, validate_event_type};
+use crate::input::parser::parse_input_event_channel_size_from_attr;
+
+use super::channel::generate_controller_event_channel;
+use super::parser::parse_controller_event_channel_config;
 
 /// Generates controller event infrastructure.
 ///

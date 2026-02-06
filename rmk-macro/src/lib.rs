@@ -15,7 +15,9 @@ mod keyboard;
 mod keyboard_config;
 mod layout;
 mod matrix;
+mod runnable;
 mod split;
+mod utils;
 
 use darling::FromMeta;
 use darling::ast::NestedMeta;

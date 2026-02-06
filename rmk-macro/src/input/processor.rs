@@ -1,12 +1,16 @@
 use quote::{format_ident, quote};
 use syn::{DeriveInput, Meta, parse_macro_input};
 
-use super::runnable::{
-    ControllerConfig, EventTraitType, InputProcessorConfig, deduplicate_type_generics, event_type_to_handler_method_name,
-    generate_event_match_arms, generate_event_subscriber, generate_runnable, generate_unique_variant_names,
-    has_runnable_marker, is_runnable_generated_attr, parse_controller_config, parse_input_processor_config,
-    reconstruct_type_def,
+use crate::controller::config::ControllerConfig;
+use crate::controller::parser::parse_controller_config;
+use crate::runnable::{
+    EventTraitType, event_type_to_handler_method_name, generate_event_match_arms, generate_event_subscriber,
+    generate_runnable, generate_unique_variant_names,
 };
+use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr, reconstruct_type_def};
+
+use super::config::InputProcessorConfig;
+use super::parser::parse_input_processor_config;
 
 /// Generates InputProcessor trait implementation with automatic event routing.
 ///

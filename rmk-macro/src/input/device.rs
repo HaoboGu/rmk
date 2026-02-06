@@ -3,10 +3,12 @@ use quote::quote;
 use syn::parse::Parser;
 use syn::{DeriveInput, Meta, Path, parse_macro_input};
 
-use super::runnable::{
-    ControllerConfig, InputDeviceConfig, deduplicate_type_generics, event_type_to_read_method_name, generate_runnable,
-    has_runnable_marker, is_runnable_generated_attr, parse_controller_config,
-};
+use crate::controller::config::ControllerConfig;
+use crate::controller::parser::parse_controller_config;
+use crate::runnable::{event_type_to_read_method_name, generate_runnable};
+use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr};
+
+use super::config::InputDeviceConfig;
 
 /// Generates InputDevice and Runnable trait implementations for single-event devices.
 ///

@@ -82,7 +82,7 @@ impl ::rmk::input_device::Runnable for SensorController {
         use ::rmk::futures::FutureExt;
         enum __RmkSelectEventSensorController {
             Input(SensorEvent),
-            Controller(SensorControllerEventEnum),
+            Controller(ConfigEvent),
         }
         let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::ControllerSubscribeEvent>::controller_subscriber();
         loop {
@@ -188,9 +188,7 @@ impl ::rmk::input_device::Runnable for SensorController {
                                 __RmkSelectEventSensorController::Input(event)
                             }
                             __PrivResult::_1(ctrl_event) => {
-                                __RmkSelectEventSensorController::Controller(
-                                    SensorControllerEventEnum::Config(ctrl_event),
-                                )
+                                __RmkSelectEventSensorController::Controller(ctrl_event)
                             }
                         }
                     }
@@ -245,7 +243,7 @@ impl ::rmk::input_device::Runnable for PollingSensorController {
         use ::rmk::controller::PollingController;
         enum __RmkSelectEventPollingSensorController {
             Input(SensorEvent),
-            Controller(PollingSensorControllerEventEnum),
+            Controller(ConfigEvent),
             Timer,
         }
         let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::ControllerSubscribeEvent>::controller_subscriber();
@@ -389,7 +387,7 @@ impl ::rmk::input_device::Runnable for PollingSensorController {
                             }
                             __PrivResult::_2(ctrl_event) => {
                                 __RmkSelectEventPollingSensorController::Controller(
-                                    PollingSensorControllerEventEnum::Config(ctrl_event),
+                                    ctrl_event,
                                 )
                             }
                         }

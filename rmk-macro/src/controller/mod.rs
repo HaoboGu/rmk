@@ -1,4 +1,7 @@
+pub(crate) mod channel;
+pub(crate) mod config;
 pub(crate) mod event;
+pub(crate) mod parser;
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -7,12 +10,16 @@ use syn::{DeriveInput, ItemMod, Meta, parse_macro_input};
 
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::gpio_config::convert_gpio_str_to_output_pin;
-use crate::input::runnable::{
-    ControllerConfig as SharedControllerConfig, EventTraitType, InputDeviceConfig, InputProcessorConfig,
-    deduplicate_type_generics, event_type_to_handler_method_name, generate_event_match_arms, generate_event_subscriber,
-    generate_runnable, generate_unique_variant_names, has_runnable_marker, is_runnable_generated_attr,
-    parse_controller_config, parse_input_device_config, parse_input_processor_config, reconstruct_type_def,
+use crate::input::config::{InputDeviceConfig, InputProcessorConfig};
+use crate::input::parser::{parse_input_device_config, parse_input_processor_config};
+use crate::runnable::{
+    EventTraitType, event_type_to_handler_method_name, generate_event_match_arms, generate_event_subscriber,
+    generate_runnable, generate_unique_variant_names,
 };
+use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr, reconstruct_type_def};
+
+use self::config::ControllerConfig;
+use self::parser::parse_controller_config;
 
 /// Expand controller init/exec blocks from keyboard config.
 /// Returns (initializers, executors).
@@ -317,7 +324,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         // Skip when another macro already generated it.
         quote! {}
     } else {
-        let controller_cfg = SharedControllerConfig {
+        let controller_cfg = ControllerConfig {
             event_types: config.event_types.clone(),
             poll_interval_ms: config.poll_interval_ms,
         };
