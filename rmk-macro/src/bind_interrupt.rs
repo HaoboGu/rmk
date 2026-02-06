@@ -160,7 +160,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
                 let instance_ident = format_ident!("{}", &sensor.spi.instance);
 
                 pmw33xx_spi_interrupts.push(quote! {
-                    #instance_ident => spim::InterruptHandler<peripherals::#instance_ident>;
+                    #instance_ident => ::embassy_nrf::spim::InterruptHandler<::embassy_nrf::peripherals::#instance_ident>;
                 });
             }
 
@@ -171,18 +171,9 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
                     #(#pmw33xx_spi_interrupts)*
                 }
             };
-            let spim_import = if !pmw33xx_config.is_empty() {
-                quote! {
-                    use ::embassy_nrf::spim;
-                    use embassy_nrf::peripherals;
-                }
-            } else {
-                quote! {}
-            };
 
             quote! {
                 use ::embassy_nrf::bind_interrupts;
-                #spim_import
                 bind_interrupts!(struct Irqs {
                     #usb_and_clock_interrupt
                     RNG => ::embassy_nrf::rng::InterruptHandler<::embassy_nrf::peripherals::RNG>;
