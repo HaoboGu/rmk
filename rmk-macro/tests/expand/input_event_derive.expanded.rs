@@ -67,7 +67,8 @@ pub enum MultiSensorEvent {
 /// Publisher for the wrapper enum.
 /// Routes each variant to its event channel.
 pub struct MultiSensorEventPublisher;
-impl ::rmk::event::AsyncEventPublisher<MultiSensorEvent> for MultiSensorEventPublisher {
+impl ::rmk::event::AsyncEventPublisher for MultiSensorEventPublisher {
+    type Event = MultiSensorEvent;
     async fn publish_async(&self, event: MultiSensorEvent) {
         match event {
             MultiSensorEvent::Battery(e) => {
@@ -79,7 +80,8 @@ impl ::rmk::event::AsyncEventPublisher<MultiSensorEvent> for MultiSensorEventPub
         }
     }
 }
-impl ::rmk::event::EventPublisher<MultiSensorEvent> for MultiSensorEventPublisher {
+impl ::rmk::event::EventPublisher for MultiSensorEventPublisher {
+    type Event = MultiSensorEvent;
     fn publish(&self, event: MultiSensorEvent) {
         match event {
             MultiSensorEvent::Battery(e) => ::rmk::event::publish_input_event(e),
@@ -87,36 +89,13 @@ impl ::rmk::event::EventPublisher<MultiSensorEvent> for MultiSensorEventPublishe
         }
     }
 }
-/// Placeholder subscriber for wrapper enums.
-///
-/// **Note**: Wrapper enums route events to their concrete type channels.
-/// You cannot subscribe to wrapper enums directly.
-/// Subscribe to the individual event types (e.g., `BatteryEvent`, `PointingEvent`) instead.
-pub struct MultiSensorEventSubscriber;
-impl ::rmk::event::EventSubscriber<MultiSensorEvent> for MultiSensorEventSubscriber {
-    async fn next_event(&mut self) -> MultiSensorEvent {
-        {
-            ::core::panicking::panic_fmt(
-                format_args!(
-                    "internal error: entered unreachable code: {0}",
-                    format_args!("Cannot subscribe to wrapper enum `{0}` directly. Subscribe to the concrete event types instead.",
-                    "MultiSensorEvent",),
-                ),
-            );
-        }
-    }
-}
-impl ::rmk::event::InputEvent for MultiSensorEvent {
+impl ::rmk::event::InputPublishEvent for MultiSensorEvent {
     type Publisher = MultiSensorEventPublisher;
-    type Subscriber = MultiSensorEventSubscriber;
     fn input_publisher() -> Self::Publisher {
         MultiSensorEventPublisher
     }
-    fn input_subscriber() -> Self::Subscriber {
-        MultiSensorEventSubscriber
-    }
 }
-impl ::rmk::event::AsyncInputEvent for MultiSensorEvent {
+impl ::rmk::event::AsyncInputPublishEvent for MultiSensorEvent {
     type AsyncPublisher = MultiSensorEventPublisher;
     fn input_publisher_async() -> Self::AsyncPublisher {
         MultiSensorEventPublisher

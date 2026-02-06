@@ -35,16 +35,8 @@ static BATTERY_EVENT_CONTROLLER_CHANNEL: ::embassy_sync::pubsub::PubSubChannel<
     { 2 },
     { 1 },
 > = ::embassy_sync::pubsub::PubSubChannel::new();
-impl ::rmk::event::ControllerEvent for BatteryEvent {
+impl ::rmk::event::ControllerPublishEvent for BatteryEvent {
     type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
-        'static,
-        ::rmk::RawMutex,
-        BatteryEvent,
-        { 4 },
-        { 2 },
-        { 1 },
-    >;
-    type Subscriber = ::embassy_sync::pubsub::Subscriber<
         'static,
         ::rmk::RawMutex,
         BatteryEvent,
@@ -55,6 +47,16 @@ impl ::rmk::event::ControllerEvent for BatteryEvent {
     fn controller_publisher() -> Self::Publisher {
         BATTERY_EVENT_CONTROLLER_CHANNEL.immediate_publisher()
     }
+}
+impl ::rmk::event::ControllerSubscribeEvent for BatteryEvent {
+    type Subscriber = ::embassy_sync::pubsub::Subscriber<
+        'static,
+        ::rmk::RawMutex,
+        BatteryEvent,
+        { 4 },
+        { 2 },
+        { 1 },
+    >;
     fn controller_subscriber() -> Self::Subscriber {
         BATTERY_EVENT_CONTROLLER_CHANNEL
             .subscriber()
@@ -63,7 +65,7 @@ impl ::rmk::event::ControllerEvent for BatteryEvent {
             )
     }
 }
-impl ::rmk::event::AsyncControllerEvent for BatteryEvent {
+impl ::rmk::event::AsyncControllerPublishEvent for BatteryEvent {
     type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
         'static,
         ::rmk::RawMutex,
@@ -128,16 +130,8 @@ static BATTERY_STATE_CONTROLLER_CHANNEL: ::embassy_sync::pubsub::PubSubChannel<
     { 3 },
     { 2 },
 > = ::embassy_sync::pubsub::PubSubChannel::new();
-impl ::rmk::event::ControllerEvent for BatteryState {
+impl ::rmk::event::ControllerPublishEvent for BatteryState {
     type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
-        'static,
-        ::rmk::RawMutex,
-        BatteryState,
-        { 8 },
-        { 3 },
-        { 2 },
-    >;
-    type Subscriber = ::embassy_sync::pubsub::Subscriber<
         'static,
         ::rmk::RawMutex,
         BatteryState,
@@ -148,6 +142,16 @@ impl ::rmk::event::ControllerEvent for BatteryState {
     fn controller_publisher() -> Self::Publisher {
         BATTERY_STATE_CONTROLLER_CHANNEL.immediate_publisher()
     }
+}
+impl ::rmk::event::ControllerSubscribeEvent for BatteryState {
+    type Subscriber = ::embassy_sync::pubsub::Subscriber<
+        'static,
+        ::rmk::RawMutex,
+        BatteryState,
+        { 8 },
+        { 3 },
+        { 2 },
+    >;
     fn controller_subscriber() -> Self::Subscriber {
         BATTERY_STATE_CONTROLLER_CHANNEL
             .subscriber()
@@ -156,7 +160,7 @@ impl ::rmk::event::ControllerEvent for BatteryState {
             )
     }
 }
-impl ::rmk::event::AsyncControllerEvent for BatteryState {
+impl ::rmk::event::AsyncControllerPublishEvent for BatteryState {
     type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
         'static,
         ::rmk::RawMutex,

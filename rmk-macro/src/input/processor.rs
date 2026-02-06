@@ -1,11 +1,11 @@
 use quote::{format_ident, quote};
-use syn::parse::Parser;
-use syn::{DeriveInput, Meta, Path, parse_macro_input};
+use syn::{DeriveInput, Meta, parse_macro_input};
 
 use super::runnable::{
-    ControllerConfig, InputProcessorConfig, deduplicate_type_generics, event_type_to_handler_method_name,
-    generate_runnable, generate_unique_variant_names, has_runnable_marker, is_runnable_generated_attr,
-    parse_controller_config, reconstruct_type_def,
+    ControllerConfig, EventTraitType, InputProcessorConfig, deduplicate_type_generics, event_type_to_handler_method_name,
+    generate_event_match_arms, generate_event_subscriber, generate_runnable, generate_unique_variant_names,
+    has_runnable_marker, is_runnable_generated_attr, parse_controller_config, parse_input_processor_config,
+    reconstruct_type_def,
 };
 
 /// Generates InputProcessor trait implementation with automatic event routing.
@@ -20,8 +20,8 @@ use super::runnable::{
 pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
-    // Parse attributes to extract event types
-    let config = parse_processor_attributes(attr);
+    // Parse attributes to extract event types using shared parser.
+    let config = parse_input_processor_config(attr);
 
     if config.event_types.is_empty() {
         return syn::Error::new_spanned(
@@ -94,34 +94,67 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
     // Reconstruct the struct definition
     let struct_def = reconstruct_type_def(&input);
 
-    // Generate internal enum name
-    let enum_name = format_ident!("{}EventEnum", struct_name);
+    // Check if single event (no need for aggregated enum)
+    let is_single_event = config.event_types.len() == 1;
 
-    // Generate unique variant names from event types
-    let variant_names = generate_unique_variant_names(&config.event_types);
+    // Generate event-related code based on single vs multiple events
+    let (event_type_tokens, event_enum_def, event_subscriber_impl, process_body) = if is_single_event {
+        // Single event: use the event type directly, no enum needed
+        let event_type = &config.event_types[0];
+        let method_name = event_type_to_handler_method_name(event_type);
 
-    // Generate enum variants and related code
-    let enum_variants: Vec<_> = config
-        .event_types
-        .iter()
-        .zip(&variant_names)
-        .map(|(event_type, variant_name)| {
-            quote! { #variant_name(#event_type) }
-        })
-        .collect();
+        (
+            quote! { #event_type },
+            quote! {}, // No enum definition
+            quote! {}, // No custom EventSubscriber needed, use default
+            quote! { self.#method_name(event).await },
+        )
+    } else {
+        // Multiple events: generate aggregated enum
+        let enum_name = format_ident!("{}EventEnum", struct_name);
+        let variant_names = generate_unique_variant_names(&config.event_types);
 
-    // Generate match arms for process method
-    let process_event_arms: Vec<_> = config
-        .event_types
-        .iter()
-        .zip(&variant_names)
-        .map(|(event_type, variant_name)| {
-            let method_name = event_type_to_handler_method_name(event_type);
-            quote! {
-                #enum_name::#variant_name(event) => self.#method_name(event).await
+        // Build enum variants
+        let enum_variants: Vec<_> = config
+            .event_types
+            .iter()
+            .zip(&variant_names)
+            .map(|(event_type, variant_name)| {
+                quote! { #variant_name(#event_type) }
+            })
+            .collect();
+
+        // process match arms
+        let process_arms = generate_event_match_arms(&config.event_types, &variant_names, &enum_name);
+
+        // Generate EventSubscriber struct and impl
+        let subscriber_impl = generate_event_subscriber(
+            struct_name,
+            &config.event_types,
+            &variant_names,
+            &enum_name,
+            vis,
+            EventTraitType::Input,
+        );
+
+        let enum_def = quote! {
+            #[derive(Clone)]
+            #vis enum #enum_name {
+                #(#enum_variants),*
             }
-        })
-        .collect();
+        };
+
+        (
+            quote! { #enum_name },
+            enum_def,
+            subscriber_impl,
+            quote! {
+                match event {
+                    #(#process_arms),*
+                }
+            },
+        )
+    };
 
     // Generate Runnable implementation
     let runnable_impl = if has_marker {
@@ -154,64 +187,20 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
         #marker_attr
         #vis #struct_def
 
-        // Internal enum for event routing
-        #vis enum #enum_name {
-            #(#enum_variants),*
-        }
+        #event_enum_def
+
+        #event_subscriber_impl
 
         #runnable_impl
 
         impl #impl_generics ::rmk::input_device::InputProcessor for #struct_name #deduped_ty_generics #where_clause {
-            type Event = #enum_name;
+            type Event = #event_type_tokens;
 
             async fn process(&mut self, event: Self::Event) {
-                match event {
-                    #(#process_event_arms),*
-                }
+                #process_body
             }
         }
     };
 
     expanded.into()
-}
-
-/// InputProcessor attribute configuration
-struct ProcessorConfig {
-    event_types: Vec<Path>,
-}
-
-/// Parse #[input_processor] subscribe attribute
-fn parse_processor_attributes(attr: proc_macro::TokenStream) -> ProcessorConfig {
-    use syn::punctuated::Punctuated;
-    use syn::{ExprArray, Token};
-
-    let mut event_types = Vec::new();
-
-    // Parse as Meta::List containing name-value pairs
-    let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
-    let attr2: proc_macro2::TokenStream = attr.into();
-
-    match parser.parse2(attr2) {
-        Ok(parsed) => {
-            for meta in parsed {
-                if let Meta::NameValue(nv) = meta
-                    && nv.path.is_ident("subscribe")
-                {
-                    // Parse the array of event types
-                    if let syn::Expr::Array(ExprArray { elems, .. }) = nv.value {
-                        for elem in elems {
-                            if let syn::Expr::Path(expr_path) = elem {
-                                event_types.push(expr_path.path);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            panic!("Failed to parse input_processor attributes: {}", e);
-        }
-    }
-
-    ProcessorConfig { event_types }
 }

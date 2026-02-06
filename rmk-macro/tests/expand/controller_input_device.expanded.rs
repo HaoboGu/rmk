@@ -60,91 +60,10 @@ impl ::core::fmt::Debug for ConfigEvent {
 pub struct SensorController {
     pub threshold: u16,
 }
-pub enum SensorControllerEventEnum {
-    Config(ConfigEvent),
-}
-impl From<ConfigEvent> for SensorControllerEventEnum {
-    fn from(e: ConfigEvent) -> Self {
-        SensorControllerEventEnum::Config(e)
-    }
-}
 impl ::rmk::controller::Controller for SensorController {
-    type Event = SensorControllerEventEnum;
+    type Event = ConfigEvent;
     async fn process_event(&mut self, event: Self::Event) {
-        match event {
-            SensorControllerEventEnum::Config(event) => self.on_config_event(event).await,
-        }
-    }
-    async fn next_message(&mut self) -> Self::Event {
-        use ::rmk::event::EventSubscriber;
-        use ::rmk::futures::FutureExt;
-        let mut sub0 = <ConfigEvent as ::rmk::event::ControllerEvent>::controller_subscriber();
-        {
-            use ::futures_util::__private as __futures_crate;
-            {
-                enum __PrivResult<_0> {
-                    _0(_0),
-                }
-                let __select_result = {
-                    let mut _0 = sub0.next_event().fuse();
-                    let mut __poll_fn = |__cx: &mut __futures_crate::task::Context<'_>| {
-                        let mut __any_polled = false;
-                        let mut _0 = |__cx: &mut __futures_crate::task::Context<'_>| {
-                            let mut _0 = unsafe {
-                                __futures_crate::Pin::new_unchecked(&mut _0)
-                            };
-                            if __futures_crate::future::FusedFuture::is_terminated(&_0) {
-                                __futures_crate::None
-                            } else {
-                                __futures_crate::Some(
-                                    __futures_crate::future::FutureExt::poll_unpin(
-                                            &mut _0,
-                                            __cx,
-                                        )
-                                        .map(__PrivResult::_0),
-                                )
-                            }
-                        };
-                        let _0: &mut dyn FnMut(
-                            &mut __futures_crate::task::Context<'_>,
-                        ) -> __futures_crate::Option<__futures_crate::task::Poll<_>> = &mut _0;
-                        let mut __select_arr = [_0];
-                        for poller in &mut __select_arr {
-                            let poller: &mut &mut dyn FnMut(
-                                &mut __futures_crate::task::Context<'_>,
-                            ) -> __futures_crate::Option<
-                                    __futures_crate::task::Poll<_>,
-                                > = poller;
-                            match poller(__cx) {
-                                __futures_crate::Some(
-                                    x @ __futures_crate::task::Poll::Ready(_),
-                                ) => return x,
-                                __futures_crate::Some(
-                                    __futures_crate::task::Poll::Pending,
-                                ) => {
-                                    __any_polled = true;
-                                }
-                                __futures_crate::None => {}
-                            }
-                        }
-                        if !__any_polled {
-                            {
-                                ::std::rt::begin_panic(
-                                    "all futures in select! were completed,\
-                    but no `complete =>` handler was provided",
-                                );
-                            }
-                        } else {
-                            __futures_crate::task::Poll::Pending
-                        }
-                    };
-                    __futures_crate::future::poll_fn(__poll_fn).await
-                };
-                match __select_result {
-                    __PrivResult::_0(event) => SensorControllerEventEnum::Config(event),
-                }
-            }
-        }
+        self.on_config_event(event).await
     }
 }
 impl ::rmk::input_device::InputDevice for SensorController {
@@ -157,7 +76,7 @@ impl ::rmk::input_device::Runnable for SensorController {
     async fn run(&mut self) -> ! {
         use ::rmk::event::publish_input_event_async;
         use ::rmk::input_device::InputDevice;
-        use ::rmk::event::ControllerEvent;
+        use ::rmk::event::ControllerSubscribeEvent;
         use ::rmk::controller::Controller;
         use ::rmk::event::EventSubscriber;
         use ::rmk::futures::FutureExt;
@@ -165,7 +84,7 @@ impl ::rmk::input_device::Runnable for SensorController {
             Input(SensorEvent),
             Controller(SensorControllerEventEnum),
         }
-        let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::ControllerEvent>::controller_subscriber();
+        let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::ControllerSubscribeEvent>::controller_subscriber();
         loop {
             let select_result = {
                 {
@@ -295,95 +214,10 @@ pub struct PollingSensorController {
     pub threshold: u16,
     pub last_value: u16,
 }
-pub enum PollingSensorControllerEventEnum {
-    Config(ConfigEvent),
-}
-impl From<ConfigEvent> for PollingSensorControllerEventEnum {
-    fn from(e: ConfigEvent) -> Self {
-        PollingSensorControllerEventEnum::Config(e)
-    }
-}
 impl ::rmk::controller::Controller for PollingSensorController {
-    type Event = PollingSensorControllerEventEnum;
+    type Event = ConfigEvent;
     async fn process_event(&mut self, event: Self::Event) {
-        match event {
-            PollingSensorControllerEventEnum::Config(event) => {
-                self.on_config_event(event).await
-            }
-        }
-    }
-    async fn next_message(&mut self) -> Self::Event {
-        use ::rmk::event::EventSubscriber;
-        use ::rmk::futures::FutureExt;
-        let mut sub0 = <ConfigEvent as ::rmk::event::ControllerEvent>::controller_subscriber();
-        {
-            use ::futures_util::__private as __futures_crate;
-            {
-                enum __PrivResult<_0> {
-                    _0(_0),
-                }
-                let __select_result = {
-                    let mut _0 = sub0.next_event().fuse();
-                    let mut __poll_fn = |__cx: &mut __futures_crate::task::Context<'_>| {
-                        let mut __any_polled = false;
-                        let mut _0 = |__cx: &mut __futures_crate::task::Context<'_>| {
-                            let mut _0 = unsafe {
-                                __futures_crate::Pin::new_unchecked(&mut _0)
-                            };
-                            if __futures_crate::future::FusedFuture::is_terminated(&_0) {
-                                __futures_crate::None
-                            } else {
-                                __futures_crate::Some(
-                                    __futures_crate::future::FutureExt::poll_unpin(
-                                            &mut _0,
-                                            __cx,
-                                        )
-                                        .map(__PrivResult::_0),
-                                )
-                            }
-                        };
-                        let _0: &mut dyn FnMut(
-                            &mut __futures_crate::task::Context<'_>,
-                        ) -> __futures_crate::Option<__futures_crate::task::Poll<_>> = &mut _0;
-                        let mut __select_arr = [_0];
-                        for poller in &mut __select_arr {
-                            let poller: &mut &mut dyn FnMut(
-                                &mut __futures_crate::task::Context<'_>,
-                            ) -> __futures_crate::Option<
-                                    __futures_crate::task::Poll<_>,
-                                > = poller;
-                            match poller(__cx) {
-                                __futures_crate::Some(
-                                    x @ __futures_crate::task::Poll::Ready(_),
-                                ) => return x,
-                                __futures_crate::Some(
-                                    __futures_crate::task::Poll::Pending,
-                                ) => {
-                                    __any_polled = true;
-                                }
-                                __futures_crate::None => {}
-                            }
-                        }
-                        if !__any_polled {
-                            {
-                                ::std::rt::begin_panic(
-                                    "all futures in select! were completed,\
-                    but no `complete =>` handler was provided",
-                                );
-                            }
-                        } else {
-                            __futures_crate::task::Poll::Pending
-                        }
-                    };
-                    __futures_crate::future::poll_fn(__poll_fn).await
-                };
-                match __select_result {
-                    __PrivResult::_0(event) => {
-                        PollingSensorControllerEventEnum::Config(event)
-                    }
-                }
-            }
-        }
+        self.on_config_event(event).await
     }
 }
 impl ::rmk::controller::PollingController for PollingSensorController {
@@ -404,7 +238,7 @@ impl ::rmk::input_device::Runnable for PollingSensorController {
     async fn run(&mut self) -> ! {
         use ::rmk::event::publish_input_event_async;
         use ::rmk::input_device::InputDevice;
-        use ::rmk::event::ControllerEvent;
+        use ::rmk::event::ControllerSubscribeEvent;
         use ::rmk::controller::Controller;
         use ::rmk::event::EventSubscriber;
         use ::rmk::futures::FutureExt;
@@ -414,7 +248,7 @@ impl ::rmk::input_device::Runnable for PollingSensorController {
             Controller(PollingSensorControllerEventEnum),
             Timer,
         }
-        let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::ControllerEvent>::controller_subscriber();
+        let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::ControllerSubscribeEvent>::controller_subscriber();
         let mut last = ::embassy_time::Instant::now();
         loop {
             let elapsed = last.elapsed();

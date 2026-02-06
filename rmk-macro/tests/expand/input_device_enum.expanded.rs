@@ -56,7 +56,8 @@ pub enum NrfAdcEvent {
 /// Publisher for the wrapper enum.
 /// Routes each variant to its event channel.
 pub struct NrfAdcEventPublisher;
-impl ::rmk::event::AsyncEventPublisher<NrfAdcEvent> for NrfAdcEventPublisher {
+impl ::rmk::event::AsyncEventPublisher for NrfAdcEventPublisher {
+    type Event = NrfAdcEvent;
     async fn publish_async(&self, event: NrfAdcEvent) {
         match event {
             NrfAdcEvent::Pointing(e) => ::rmk::event::publish_input_event_async(e).await,
@@ -64,7 +65,8 @@ impl ::rmk::event::AsyncEventPublisher<NrfAdcEvent> for NrfAdcEventPublisher {
         }
     }
 }
-impl ::rmk::event::EventPublisher<NrfAdcEvent> for NrfAdcEventPublisher {
+impl ::rmk::event::EventPublisher for NrfAdcEventPublisher {
+    type Event = NrfAdcEvent;
     fn publish(&self, event: NrfAdcEvent) {
         match event {
             NrfAdcEvent::Pointing(e) => ::rmk::event::publish_input_event(e),
@@ -72,36 +74,13 @@ impl ::rmk::event::EventPublisher<NrfAdcEvent> for NrfAdcEventPublisher {
         }
     }
 }
-/// Placeholder subscriber for wrapper enums.
-///
-/// **Note**: Wrapper enums route events to their concrete type channels.
-/// You cannot subscribe to wrapper enums directly.
-/// Subscribe to the individual event types (e.g., `BatteryEvent`, `PointingEvent`) instead.
-pub struct NrfAdcEventSubscriber;
-impl ::rmk::event::EventSubscriber<NrfAdcEvent> for NrfAdcEventSubscriber {
-    async fn next_event(&mut self) -> NrfAdcEvent {
-        {
-            ::core::panicking::panic_fmt(
-                format_args!(
-                    "internal error: entered unreachable code: {0}",
-                    format_args!("Cannot subscribe to wrapper enum `{0}` directly. Subscribe to the concrete event types instead.",
-                    "NrfAdcEvent",),
-                ),
-            );
-        }
-    }
-}
-impl ::rmk::event::InputEvent for NrfAdcEvent {
+impl ::rmk::event::InputPublishEvent for NrfAdcEvent {
     type Publisher = NrfAdcEventPublisher;
-    type Subscriber = NrfAdcEventSubscriber;
     fn input_publisher() -> Self::Publisher {
         NrfAdcEventPublisher
     }
-    fn input_subscriber() -> Self::Subscriber {
-        NrfAdcEventSubscriber
-    }
 }
-impl ::rmk::event::AsyncInputEvent for NrfAdcEvent {
+impl ::rmk::event::AsyncInputPublishEvent for NrfAdcEvent {
     type AsyncPublisher = NrfAdcEventPublisher;
     fn input_publisher_async() -> Self::AsyncPublisher {
         NrfAdcEventPublisher

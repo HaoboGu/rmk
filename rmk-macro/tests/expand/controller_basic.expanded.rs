@@ -59,34 +59,42 @@ pub struct LedController {
     pub pin: u8,
 }
 pub enum LedControllerEventEnum {
-    Event0(LedStateEvent),
-    Event1(BrightnessEvent),
+    LedState(LedStateEvent),
+    Brightness(BrightnessEvent),
 }
-impl From<LedStateEvent> for LedControllerEventEnum {
-    fn from(e: LedStateEvent) -> Self {
-        LedControllerEventEnum::Event0(e)
-    }
-}
-impl From<BrightnessEvent> for LedControllerEventEnum {
-    fn from(e: BrightnessEvent) -> Self {
-        LedControllerEventEnum::Event1(e)
-    }
-}
-impl ::rmk::controller::Controller for LedController {
-    type Event = LedControllerEventEnum;
-    async fn process_event(&mut self, event: Self::Event) {
-        match event {
-            LedControllerEventEnum::Event0(event) => self.on_led_state_event(event).await,
-            LedControllerEventEnum::Event1(event) => {
-                self.on_brightness_event(event).await
+#[automatically_derived]
+impl ::core::clone::Clone for LedControllerEventEnum {
+    #[inline]
+    fn clone(&self) -> LedControllerEventEnum {
+        match self {
+            LedControllerEventEnum::LedState(__self_0) => {
+                LedControllerEventEnum::LedState(::core::clone::Clone::clone(__self_0))
+            }
+            LedControllerEventEnum::Brightness(__self_0) => {
+                LedControllerEventEnum::Brightness(::core::clone::Clone::clone(__self_0))
             }
         }
     }
-    async fn next_message(&mut self) -> Self::Event {
+}
+/// Event subscriber for aggregated events
+pub struct LedControllerEventSubscriber {
+    sub0: <LedStateEvent as ::rmk::event::ControllerSubscribeEvent>::Subscriber,
+    sub1: <BrightnessEvent as ::rmk::event::ControllerSubscribeEvent>::Subscriber,
+}
+impl LedControllerEventSubscriber {
+    /// Create a new event subscriber
+    pub fn new() -> Self {
+        Self {
+            sub0: <LedStateEvent as ::rmk::event::ControllerSubscribeEvent>::controller_subscriber(),
+            sub1: <BrightnessEvent as ::rmk::event::ControllerSubscribeEvent>::controller_subscriber(),
+        }
+    }
+}
+impl ::rmk::event::EventSubscriber for LedControllerEventSubscriber {
+    type Event = LedControllerEventEnum;
+    async fn next_event(&mut self) -> Self::Event {
         use ::rmk::event::EventSubscriber;
         use ::rmk::futures::FutureExt;
-        let mut sub0 = <LedStateEvent as ::rmk::event::ControllerEvent>::controller_subscriber();
-        let mut sub1 = <BrightnessEvent as ::rmk::event::ControllerEvent>::controller_subscriber();
         {
             use ::futures_util::__private as __futures_crate;
             {
@@ -95,8 +103,8 @@ impl ::rmk::controller::Controller for LedController {
                     _1(_1),
                 }
                 let __select_result = {
-                    let mut _0 = sub0.next_event().fuse();
-                    let mut _1 = sub1.next_event().fuse();
+                    let mut _0 = self.sub0.next_event().fuse();
+                    let mut _1 = self.sub1.next_event().fuse();
                     let mut __poll_fn = |__cx: &mut __futures_crate::task::Context<'_>| {
                         let mut __any_polled = false;
                         let mut _0 = |__cx: &mut __futures_crate::task::Context<'_>| {
@@ -170,9 +178,28 @@ impl ::rmk::controller::Controller for LedController {
                     __futures_crate::future::poll_fn(__poll_fn).await
                 };
                 match __select_result {
-                    __PrivResult::_0(event) => LedControllerEventEnum::Event0(event),
-                    __PrivResult::_1(event) => LedControllerEventEnum::Event1(event),
+                    __PrivResult::_0(event) => LedControllerEventEnum::LedState(event),
+                    __PrivResult::_1(event) => LedControllerEventEnum::Brightness(event),
                 }
+            }
+        }
+    }
+}
+impl ::rmk::event::ControllerSubscribeEvent for LedControllerEventEnum {
+    type Subscriber = LedControllerEventSubscriber;
+    fn controller_subscriber() -> Self::Subscriber {
+        LedControllerEventSubscriber::new()
+    }
+}
+impl ::rmk::controller::Controller for LedController {
+    type Event = LedControllerEventEnum;
+    async fn process_event(&mut self, event: Self::Event) {
+        match event {
+            LedControllerEventEnum::LedState(event) => {
+                self.on_led_state_event(event).await
+            }
+            LedControllerEventEnum::Brightness(event) => {
+                self.on_brightness_event(event).await
             }
         }
     }

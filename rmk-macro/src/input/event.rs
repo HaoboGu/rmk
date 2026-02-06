@@ -73,14 +73,8 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
     };
 
     let input_event_impl = quote! {
-        impl #impl_generics ::rmk::event::InputEvent for #type_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::event::InputPublishEvent for #type_name #ty_generics #where_clause {
             type Publisher = ::embassy_sync::channel::Sender<
-                'static,
-                ::rmk::RawMutex,
-                #type_name #ty_generics,
-                { #cap }
-            >;
-            type Subscriber = ::embassy_sync::channel::Receiver<
                 'static,
                 ::rmk::RawMutex,
                 #type_name #ty_generics,
@@ -90,6 +84,15 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
             fn input_publisher() -> Self::Publisher {
                 #input_channel_name.sender()
             }
+        }
+
+        impl #impl_generics ::rmk::event::InputSubscribeEvent for #type_name #ty_generics #where_clause {
+            type Subscriber = ::embassy_sync::channel::Receiver<
+                'static,
+                ::rmk::RawMutex,
+                #type_name #ty_generics,
+                { #cap }
+            >;
 
             fn input_subscriber() -> Self::Subscriber {
                 #input_channel_name.receiver()
@@ -98,7 +101,7 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
     };
 
     let async_input_event_impl = quote! {
-        impl #impl_generics ::rmk::event::AsyncInputEvent for #type_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::event::AsyncInputPublishEvent for #type_name #ty_generics #where_clause {
             type AsyncPublisher = ::embassy_sync::channel::Sender<
                 'static,
                 ::rmk::RawMutex,
@@ -142,16 +145,8 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
         };
 
         let controller_event_impl = quote! {
-            impl #impl_generics ::rmk::event::ControllerEvent for #type_name #ty_generics #where_clause {
+            impl #impl_generics ::rmk::event::ControllerPublishEvent for #type_name #ty_generics #where_clause {
                 type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
-                    'static,
-                    ::rmk::RawMutex,
-                    #type_name #ty_generics,
-                    { #ctrl_cap },
-                    { #ctrl_subs_val },
-                    { #ctrl_pubs_val }
-                >;
-                type Subscriber = ::embassy_sync::pubsub::Subscriber<
                     'static,
                     ::rmk::RawMutex,
                     #type_name #ty_generics,
@@ -163,6 +158,17 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
                 fn controller_publisher() -> Self::Publisher {
                     #controller_channel_name.immediate_publisher()
                 }
+            }
+
+            impl #impl_generics ::rmk::event::ControllerSubscribeEvent for #type_name #ty_generics #where_clause {
+                type Subscriber = ::embassy_sync::pubsub::Subscriber<
+                    'static,
+                    ::rmk::RawMutex,
+                    #type_name #ty_generics,
+                    { #ctrl_cap },
+                    { #ctrl_subs_val },
+                    { #ctrl_pubs_val }
+                >;
 
                 fn controller_subscriber() -> Self::Subscriber {
                     #controller_channel_name.subscriber().expect(
@@ -177,7 +183,7 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
         };
 
         let async_controller_event_impl = quote! {
-            impl #impl_generics ::rmk::event::AsyncControllerEvent for #type_name #ty_generics #where_clause {
+            impl #impl_generics ::rmk::event::AsyncControllerPublishEvent for #type_name #ty_generics #where_clause {
                 type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
                     'static,
                     ::rmk::RawMutex,

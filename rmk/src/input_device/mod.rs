@@ -3,6 +3,7 @@
 //! This module defines the `InputDevice` trait, `InputProcessor` trait, `Runnable` trait and several macros for running input devices and processors.
 //! The `InputDevice` trait provides the interface for individual input devices, and the macros facilitate their concurrent execution.
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::event::{EventSubscriber, InputSubscribeEvent};
 use crate::hid::Report;
 
 pub mod adc;
@@ -64,13 +65,71 @@ pub trait InputDevice: Runnable {
 
 /// The trait for input processors.
 ///
-/// The input processor processes the [`Event`] from the input devices and converts it to the final HID report.
-/// Take the normal keyboard as the example:
+/// The input processor processes events from input devices and converts them to HID reports.
+/// For example, the [`crate::matrix::Matrix`] is an input device and the [`crate::keyboard::Keyboard`]
+/// is an input processor.
 ///
-/// The [`crate::matrix::Matrix`] is actually an input device and the [`crate::keyboard::Keyboard`] is actually an input processor.
+/// # Usage
+///
+/// There are two ways to implement an InputProcessor:
+///
+/// ## 1. Using the `#[input_processor]` macro (recommended)
+///
+/// For most use cases, use the `#[input_processor]` macro which automatically generates
+/// the `EventSubscriber` type and all necessary boilerplate:
+///
+/// ```rust,ignore
+/// use rmk_macro::input_processor;
+///
+/// // Subscribe to multiple input events
+/// #[input_processor(subscribe = [KeyEvent, EncoderEvent])]
+/// struct KeyProcessor;
+///
+/// impl KeyProcessor {
+///     async fn on_key_event(&mut self, event: KeyEvent) {
+///         // Process key event
+///     }
+///
+///     async fn on_encoder_event(&mut self, event: EncoderEvent) {
+///         // Process encoder event
+///     }
+/// }
+/// ```
+///
+/// ## 2. Manual implementation (for single event types)
+///
+/// For simple processors that subscribe to a single event type, you can manually
+/// implement the trait:
+///
+/// ```rust,ignore
+/// use rmk::event::InputSubscribeEvent;
+///
+/// impl InputProcessor for MyProcessor {
+///     type Event = KeyboardEvent;
+///
+///     // subscriber() has a default implementation, no need to override
+///
+///     async fn process(&mut self, event: Self::Event) {
+///         // Process the event
+///     }
+/// }
+/// ```
+///
+/// **Note**: For multiple event subscriptions, you must use the `#[input_processor]` macro
+/// as it generates the necessary aggregated event type that implements `InputSubscribeEvent`.
 pub trait InputProcessor: Runnable {
-    /// The event type processed by this input processor
-    type Event;
+    /// The event type processed by this input processor.
+    ///
+    /// Must implement `InputSubscribeEvent`, which provides the `Subscriber` type
+    /// and the `input_subscriber()` method.
+    type Event: InputSubscribeEvent;
+
+    /// Create a new event subscriber.
+    ///
+    /// Default implementation uses the event's `input_subscriber()` method.
+    fn subscriber() -> <Self::Event as InputSubscribeEvent>::Subscriber {
+        Self::Event::input_subscriber()
+    }
 
     /// Process the incoming events, convert them to HID report [`Report`],
     /// then send the report to the USB/BLE.
@@ -83,6 +142,15 @@ pub trait InputProcessor: Runnable {
     /// Send the processed report.
     async fn send_report(&self, report: Report) {
         KEYBOARD_REPORT_CHANNEL.send(report).await;
+    }
+
+    /// Default processing loop that continuously receives and processes events
+    async fn process_loop(&mut self) -> ! {
+        let mut sub = Self::subscriber();
+        loop {
+            let event = sub.next_event().await;
+            self.process(event).await;
+        }
     }
 }
 

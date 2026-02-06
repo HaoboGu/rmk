@@ -3,15 +3,15 @@ pub(crate) mod event;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use rmk_config::{ChipModel, KeyboardTomlConfig, PinConfig};
-use syn::parse::Parser;
-use syn::{DeriveInput, ItemMod, Meta, Path, parse_macro_input};
+use syn::{DeriveInput, ItemMod, Meta, parse_macro_input};
 
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::gpio_config::convert_gpio_str_to_output_pin;
 use crate::input::runnable::{
-    ControllerConfig as SharedControllerConfig, InputDeviceConfig, InputProcessorConfig, deduplicate_type_generics,
-    event_type_to_handler_method_name, generate_runnable, generate_unique_variant_names, has_runnable_marker,
-    is_runnable_generated_attr, parse_input_device_config, parse_input_processor_config, reconstruct_type_def,
+    ControllerConfig as SharedControllerConfig, EventTraitType, InputDeviceConfig, InputProcessorConfig,
+    deduplicate_type_generics, event_type_to_handler_method_name, generate_event_match_arms, generate_event_subscriber,
+    generate_runnable, generate_unique_variant_names, has_runnable_marker, is_runnable_generated_attr,
+    parse_controller_config, parse_input_device_config, parse_input_processor_config, reconstruct_type_def,
 };
 
 /// Expand controller init/exec blocks from keyboard config.
@@ -155,8 +155,8 @@ fn expand_custom_controller(fn_item: &syn::ItemFn) -> (TokenStream, &syn::Ident)
 pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
-    // Parse subscribe/poll attributes.
-    let config = parse_controller_attributes(attr);
+    // Parse subscribe/poll attributes using shared parser.
+    let config = parse_controller_config(attr);
 
     if config.event_types.is_empty() {
         return syn::Error::new_spanned(
@@ -233,54 +233,67 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     // Rebuild struct definition.
     let struct_def = reconstruct_type_def(&input);
 
-    // Internal event enum name.
-    let enum_name = format_ident!("{}EventEnum", struct_name);
+    // Check if single event (no need for aggregated enum)
+    let is_single_event = config.event_types.len() == 1;
 
-    // Generate unique variant names from event types
-    let variant_names = generate_unique_variant_names(&config.event_types);
+    // Generate event-related code based on single vs multiple events
+    let (event_type_tokens, event_enum_def, event_subscriber_impl, process_event_body) = if is_single_event {
+        // Single event: use the event type directly, no enum needed
+        let event_type = &config.event_types[0];
+        let method_name = event_type_to_handler_method_name(event_type);
 
-    // Build enum variants.
-    let enum_variants: Vec<_> = config
-        .event_types
-        .iter()
-        .zip(&variant_names)
-        .map(|(event_type, variant_name)| {
-            quote! { #variant_name(#event_type) }
-        })
-        .collect();
+        (
+            quote! { #event_type },
+            quote! {}, // No enum definition
+            quote! {}, // No custom EventSubscriber needed, use default
+            quote! { self.#method_name(event).await },
+        )
+    } else {
+        // Multiple events: generate aggregated enum
+        let enum_name = format_ident!("{}EventEnum", struct_name);
+        let variant_names = generate_unique_variant_names(&config.event_types);
 
-    // From impls for each event type.
-    // Enum has no generics, so use plain impl.
-    let from_impls: Vec<_> = config
-        .event_types
-        .iter()
-        .zip(&variant_names)
-        .map(|(event_type, variant_name)| {
+        // Build enum variants
+        let enum_variants: Vec<_> = config
+            .event_types
+            .iter()
+            .zip(&variant_names)
+            .map(|(event_type, variant_name)| {
+                quote! { #variant_name(#event_type) }
+            })
+            .collect();
+
+        // process_event match arms
+        let process_event_arms = generate_event_match_arms(&config.event_types, &variant_names, &enum_name);
+
+        // Generate EventSubscriber struct and impl
+        let subscriber_impl = generate_event_subscriber(
+            struct_name,
+            &config.event_types,
+            &variant_names,
+            &enum_name,
+            vis,
+            EventTraitType::Controller,
+        );
+
+        let enum_def = quote! {
+            #[derive(Clone)]
+            #vis enum #enum_name {
+                #(#enum_variants),*
+            }
+        };
+
+        (
+            quote! { #enum_name },
+            enum_def,
+            subscriber_impl,
             quote! {
-                impl From<#event_type> for #enum_name {
-                    fn from(e: #event_type) -> Self {
-                        #enum_name::#variant_name(e)
-                    }
+                match event {
+                    #(#process_event_arms),*
                 }
-            }
-        })
-        .collect();
-
-    // process_event match arms.
-    let process_event_arms: Vec<_> = config
-        .event_types
-        .iter()
-        .zip(&variant_names)
-        .map(|(event_type, variant_name)| {
-            let method_name = event_type_to_handler_method_name(event_type);
-            quote! {
-                #enum_name::#variant_name(event) => self.#method_name(event).await
-            }
-        })
-        .collect();
-
-    // next_message implementation via select_biased.
-    let next_message_impl = generate_next_message(&config.event_types, &variant_names, &enum_name);
+            },
+        )
+    };
 
     // PollingController impl when poll_interval is set.
     let polling_controller_impl = if let Some(interval_ms) = config.poll_interval_ms {
@@ -332,24 +345,16 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         #marker_attr
         #vis #struct_def
 
-        // Internal event enum for routing (match struct visibility).
-        #vis enum #enum_name {
-            #(#enum_variants),*
-        }
+        #event_enum_def
 
-        // From impls for event conversion.
-        #(#from_impls)*
+        #event_subscriber_impl
 
         impl #impl_generics ::rmk::controller::Controller for #struct_name #deduped_ty_generics #where_clause {
-            type Event = #enum_name;
+            type Event = #event_type_tokens;
 
             async fn process_event(&mut self, event: Self::Event) {
-                match event {
-                    #(#process_event_arms),*
-                }
+                #process_event_body
             }
-
-            #next_message_impl
         }
 
         #polling_controller_impl
@@ -358,111 +363,4 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     };
 
     expanded.into()
-}
-
-/// Controller attribute config.
-struct ControllerConfig {
-    event_types: Vec<Path>,
-    poll_interval_ms: Option<u64>,
-}
-
-/// Parse #[controller(...)] attribute.
-fn parse_controller_attributes(attr: proc_macro::TokenStream) -> ControllerConfig {
-    use syn::punctuated::Punctuated;
-    use syn::{ExprArray, Token};
-
-    let mut event_types = Vec::new();
-    let mut poll_interval_ms = None;
-
-    // Parse Meta::List name-value pairs.
-    let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
-    let attr2: proc_macro2::TokenStream = attr.into();
-
-    match parser.parse2(attr2) {
-        Ok(parsed) => {
-            for meta in parsed {
-                if let Meta::NameValue(nv) = meta {
-                    if nv.path.is_ident("subscribe") {
-                        // Parse event type list.
-                        if let syn::Expr::Array(ExprArray { elems, .. }) = nv.value {
-                            for elem in elems {
-                                if let syn::Expr::Path(expr_path) = elem {
-                                    event_types.push(expr_path.path);
-                                }
-                            }
-                        }
-                    } else if nv.path.is_ident("poll_interval") {
-                        // Parse poll_interval as milliseconds.
-                        if let syn::Expr::Lit(syn::ExprLit {
-                            lit: syn::Lit::Int(lit_int),
-                            ..
-                        }) = nv.value
-                        {
-                            poll_interval_ms = Some(
-                                lit_int
-                                    .base10_parse::<u64>()
-                                    .expect("poll_interval must be a valid u64"),
-                            );
-                        } else {
-                            panic!("poll_interval must be an integer literal (milliseconds)");
-                        }
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            panic!("Failed to parse controller attributes: {}", e);
-        }
-    }
-
-    ControllerConfig {
-        event_types,
-        poll_interval_ms,
-    }
-}
-
-/// Build next_message using select_biased.
-fn generate_next_message(
-    event_types: &[Path],
-    variant_names: &[syn::Ident],
-    enum_name: &syn::Ident,
-) -> proc_macro2::TokenStream {
-    let num_events = event_types.len();
-
-    // Subscriber variable names.
-    let sub_vars: Vec<_> = (0..num_events).map(|i| format_ident!("sub{}", i)).collect();
-
-    // Subscriber initializations.
-    let sub_inits: Vec<_> = event_types
-        .iter()
-        .zip(&sub_vars)
-        .map(|(event_type, sub_var)| {
-            quote! {
-                let mut #sub_var = <#event_type as ::rmk::event::ControllerEvent>::controller_subscriber();
-            }
-        })
-        .collect();
-
-    // select_biased! arms for each event.
-    let select_arms: Vec<_> = sub_vars
-        .iter()
-        .zip(variant_names)
-        .map(|(sub_var, variant_name)| {
-            quote! {
-                event = #sub_var.next_event().fuse() => #enum_name::#variant_name(event),
-            }
-        })
-        .collect();
-
-    quote! {
-        async fn next_message(&mut self) -> Self::Event {
-            use ::rmk::event::EventSubscriber;
-            use ::rmk::futures::FutureExt;
-            #(#sub_inits)*
-
-            ::rmk::futures::select_biased! {
-                #(#select_arms)*
-            }
-        }
-    }
 }

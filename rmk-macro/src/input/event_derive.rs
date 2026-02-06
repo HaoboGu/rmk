@@ -2,15 +2,16 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{DeriveInput, parse_macro_input};
 
-/// Derive `InputEvent`/`AsyncInputEvent` for wrapper enums.
+/// Derive `InputPublishEvent`/`AsyncInputPublishEvent` for wrapper enums.
 ///
 /// Generates:
-/// - publisher/subscriber types for the enum
-/// - `InputEvent`/`AsyncInputEvent` impls
+/// - publisher type for the enum (routes to individual event channels)
+/// - `InputPublishEvent`/`AsyncInputPublishEvent` impls
 /// - `From<Variant>` impls for each variant
 ///
-/// Each variant is forwarded to its event channel.
-/// This keeps `publish_input_event_async(wrapper).await` working.
+/// **Note**: Wrapper enums only implement publish traits, not subscribe traits.
+/// This is because wrapper enums route events to their concrete type channels,
+/// and you should subscribe to the individual event types instead.
 ///
 /// # Example
 ///
@@ -39,7 +40,6 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
 
     let enum_name = &input.ident;
     let publisher_name = format_ident!("{}Publisher", enum_name);
-    let subscriber_name = format_ident!("{}Subscriber", enum_name);
 
     // Split generics for impl blocks.
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
@@ -90,7 +90,9 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
         /// Routes each variant to its event channel.
         pub struct #publisher_name;
 
-        impl ::rmk::event::AsyncEventPublisher<#enum_name #ty_generics> for #publisher_name {
+        impl ::rmk::event::AsyncEventPublisher for #publisher_name {
+            type Event = #enum_name #ty_generics;
+
             async fn publish_async(&self, event: #enum_name #ty_generics) {
                 match event {
                     #(#async_publish_arms),*
@@ -98,7 +100,9 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
             }
         }
 
-        impl ::rmk::event::EventPublisher<#enum_name #ty_generics> for #publisher_name {
+        impl ::rmk::event::EventPublisher for #publisher_name {
+            type Event = #enum_name #ty_generics;
+
             fn publish(&self, event: #enum_name #ty_generics) {
                 match event {
                     #(#publish_arms),*
@@ -106,36 +110,15 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
             }
         }
 
-        /// Placeholder subscriber for wrapper enums.
-        ///
-        /// **Note**: Wrapper enums route events to their concrete type channels.
-        /// You cannot subscribe to wrapper enums directly.
-        /// Subscribe to the individual event types (e.g., `BatteryEvent`, `PointingEvent`) instead.
-        pub struct #subscriber_name;
-
-        impl ::rmk::event::EventSubscriber<#enum_name #ty_generics> for #subscriber_name {
-            async fn next_event(&mut self) -> #enum_name #ty_generics {
-                unreachable!(
-                    "Cannot subscribe to wrapper enum `{}` directly. Subscribe to the concrete event types instead.",
-                    stringify!(#enum_name)
-                )
-            }
-        }
-
-        impl #impl_generics ::rmk::event::InputEvent for #enum_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::event::InputPublishEvent for #enum_name #ty_generics #where_clause {
             type Publisher = #publisher_name;
-            type Subscriber = #subscriber_name;
 
             fn input_publisher() -> Self::Publisher {
                 #publisher_name
             }
-
-            fn input_subscriber() -> Self::Subscriber {
-                #subscriber_name
-            }
         }
 
-        impl #impl_generics ::rmk::event::AsyncInputEvent for #enum_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::event::AsyncInputPublishEvent for #enum_name #ty_generics #where_clause {
             type AsyncPublisher = #publisher_name;
 
             fn input_publisher_async() -> Self::AsyncPublisher {

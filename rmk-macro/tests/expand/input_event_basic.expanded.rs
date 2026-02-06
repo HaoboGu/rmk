@@ -33,14 +33,8 @@ static TEST_EVENT_INPUT_CHANNEL: ::embassy_sync::channel::Channel<
     TestEvent,
     { 16 },
 > = ::embassy_sync::channel::Channel::new();
-impl ::rmk::event::InputEvent for TestEvent {
+impl ::rmk::event::InputPublishEvent for TestEvent {
     type Publisher = ::embassy_sync::channel::Sender<
-        'static,
-        ::rmk::RawMutex,
-        TestEvent,
-        { 16 },
-    >;
-    type Subscriber = ::embassy_sync::channel::Receiver<
         'static,
         ::rmk::RawMutex,
         TestEvent,
@@ -49,11 +43,19 @@ impl ::rmk::event::InputEvent for TestEvent {
     fn input_publisher() -> Self::Publisher {
         TEST_EVENT_INPUT_CHANNEL.sender()
     }
+}
+impl ::rmk::event::InputSubscribeEvent for TestEvent {
+    type Subscriber = ::embassy_sync::channel::Receiver<
+        'static,
+        ::rmk::RawMutex,
+        TestEvent,
+        { 16 },
+    >;
     fn input_subscriber() -> Self::Subscriber {
         TEST_EVENT_INPUT_CHANNEL.receiver()
     }
 }
-impl ::rmk::event::AsyncInputEvent for TestEvent {
+impl ::rmk::event::AsyncInputPublishEvent for TestEvent {
     type AsyncPublisher = ::embassy_sync::channel::Sender<
         'static,
         ::rmk::RawMutex,

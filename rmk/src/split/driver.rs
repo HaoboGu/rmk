@@ -89,7 +89,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             let elapsed = last_sync_time.elapsed().as_millis();
             let wait_time = if elapsed >= 3000 { 1 } else { 3000 - elapsed };
             match select3(
-                self.read_peripheral_event(),
+                self.transceiver.read(),
                 select3(
                     keyboard_indicator_sub.next_event(),
                     layer_sub.next_event(),
@@ -102,7 +102,57 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             )
             .await
             {
-                Either3::First(_) => (),
+                Either3::First(read_result) => match read_result {
+                    Ok(split_message) => {
+                        self.process_peripheral_message(split_message).await;
+
+                        if let Some(indicator_event) = keyboard_indicator_sub.try_next_message_pure() {
+                            let message_to_peri =
+                                SplitMessage::KeyboardIndicator(indicator_event.indicator.into_bits());
+                            debug!("Sending message to peripheral {}: {:?}", self.id, message_to_peri);
+                            if let Err(e) = self.transceiver.write(&message_to_peri).await {
+                                match e {
+                                    SplitDriverError::Disconnected => return,
+                                    _ => error!("SplitDriver write error: {:?}", e),
+                                }
+                            }
+                        } else if let Some(layer_event) = layer_sub.try_next_message_pure() {
+                            let message_to_peri = SplitMessage::Layer(layer_event.layer);
+                            debug!("Sending message to peripheral {}: {:?}", self.id, message_to_peri);
+                            if let Err(e) = self.transceiver.write(&message_to_peri).await {
+                                match e {
+                                    SplitDriverError::Disconnected => return,
+                                    _ => error!("SplitDriver write error: {:?}", e),
+                                }
+                            }
+                        }
+
+                        #[cfg(feature = "_ble")]
+                        if clear_peer_sub.try_next_message_pure().is_some() {
+                            #[cfg(feature = "storage")]
+                            // Clear the peer address in storage
+                            FLASH_CHANNEL
+                                .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
+                                    self.id as u8,
+                                    false,
+                                    [0; 6],
+                                )))
+                                .await;
+
+                            let message_to_peri = SplitMessage::ClearPeer;
+                            debug!("Sending message to peripheral {}: {:?}", self.id, message_to_peri);
+                            if let Err(e) = self.transceiver.write(&message_to_peri).await {
+                                match e {
+                                    SplitDriverError::Disconnected => return,
+                                    _ => error!("SplitDriver write error: {:?}", e),
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("Peripheral message read error: {:?}", e);
+                    }
+                },
                 Either3::Second(e) => {
                     let message_to_peri = match e {
                         Either3::First(indicator_event) => {
@@ -151,68 +201,53 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
         }
     }
 
-    /// Read events from peripheral and publish them.
-    /// This method runs in an infinite loop and never returns.
-    async fn read_peripheral_event(&mut self) -> ! {
-        loop {
-            match self.transceiver.read().await {
-                Ok(SplitMessage::Key(e)) => {
-                    match e.pos {
-                        KeyboardEventPos::Key(key_pos) => {
-                            // Verify the row/col
-                            if key_pos.row as usize > ROW || key_pos.col as usize > COL {
-                                error!("Invalid peripheral row/col: {} {}", key_pos.row, key_pos.col);
-                                continue;
-                            }
+    /// Process a single message from the peripheral.
+    async fn process_peripheral_message(&self, split_message: SplitMessage) {
+        match split_message {
+            SplitMessage::Key(e) => match e.pos {
+                KeyboardEventPos::Key(key_pos) => {
+                    // Verify the row/col
+                    if key_pos.row as usize > ROW || key_pos.col as usize > COL {
+                        error!("Invalid peripheral row/col: {} {}", key_pos.row, key_pos.col);
+                        return;
+                    }
 
-                            if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                                // Only when the connection is established, send the key event.
-                                let adjusted_key_event = KeyboardEvent::key(
-                                    key_pos.row + ROW_OFFSET as u8,
-                                    key_pos.col + COL_OFFSET as u8,
-                                    e.pressed,
-                                );
-                                publish_input_event_async(adjusted_key_event).await;
-                            } else {
-                                warn!(
-                                    "Key event from peripheral is ignored because the connection is not established."
-                                );
-                            }
-                        }
-                        _ => {
-                            // For rotary encoder
-                            if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                                // Only when the connection is established, send the key event.
-                                publish_input_event_async(e).await;
-                            }
-                        }
-                    }
-                }
-                Ok(split_message) => {
-                    // Process other split messages which requires connection to host
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                        match split_message {
-                            // Non-key events are drop-on-full to keep the split read loop responsive.
-                            SplitMessage::Touchpad(e) => publish_input_event(e),
-                            SplitMessage::Pointing(e) => publish_input_event(e),
-                            #[cfg(feature = "_ble")]
-                            SplitMessage::BatteryState(state) => {
-                                // Publish as PeripheralBatteryEvent with the full state
-                                publish_controller_event(PeripheralBatteryEvent { id: self.id, state })
-                            }
-                            _ => warn!("{:?} should not come from peripheral", split_message),
-                        }
-                    } else {
-                        warn!(
-                            "{:?} from peripheral is ignored because the connection is not established.",
-                            split_message
+                        // Only when the connection is established, send the key event.
+                        let adjusted_key_event = KeyboardEvent::key(
+                            key_pos.row + ROW_OFFSET as u8,
+                            key_pos.col + COL_OFFSET as u8,
+                            e.pressed,
                         );
+                        publish_input_event_async(adjusted_key_event).await;
+                    } else {
+                        warn!("Key event from peripheral is ignored because the connection is not established.");
                     }
                 }
-                Err(e) => {
-                    error!("Peripheral message read error: {:?}", e);
+                _ => {
+                    // For rotary encoder
+                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                        // Only when the connection is established, send the key event.
+                        publish_input_event_async(e).await;
+                    }
                 }
-            }
+            },
+            // Process other split messages which requires connection to host
+            _ if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) => match split_message {
+                // Non-key events are drop-on-full to keep the split read loop responsive.
+                SplitMessage::Touchpad(e) => publish_input_event(e),
+                SplitMessage::Pointing(e) => publish_input_event(e),
+                #[cfg(feature = "_ble")]
+                SplitMessage::BatteryState(state) => {
+                    // Publish as PeripheralBatteryEvent with the full state
+                    publish_controller_event(PeripheralBatteryEvent { id: self.id, state })
+                }
+                _ => warn!("{:?} should not come from peripheral", split_message),
+            },
+            _ => warn!(
+                "{:?} from peripheral is ignored because the connection is not established.",
+                split_message
+            ),
         }
     }
 }
