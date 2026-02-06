@@ -370,28 +370,6 @@ mod tests {
             Ok(self.motion)
         }
 
-        async fn set_resolution(&mut self, _cpi: u16) -> Result<(), PointingDriverError> {
-            Ok(())
-        }
-        async fn set_rot_trans_angle(&mut self, _angle: i8) -> Result<(), PointingDriverError> {
-            Ok(())
-        }
-        async fn set_liftoff_dist(&mut self, _dist: u8) -> Result<(), PointingDriverError> {
-            Ok(())
-        }
-        async fn force_awake(&mut self, _enable: bool) -> Result<(), PointingDriverError> {
-            Ok(())
-        }
-        async fn set_invert_x(&mut self, _onoff: bool) -> Result<(), PointingDriverError> {
-            Ok(())
-        }
-        async fn set_invert_y(&mut self, _onoff: bool) -> Result<(), PointingDriverError> {
-            Ok(())
-        }
-        async fn swap_xy(&mut self, _onoff: bool) -> Result<(), PointingDriverError> {
-            Ok(())
-        }
-
         fn motion_pending(&mut self) -> bool {
             self.motion_pending
         }
@@ -399,36 +377,6 @@ mod tests {
         fn motion_gpio(&mut self) -> Option<&mut Self::MOTION> {
             self.motion_gpio.as_mut()
         }
-    }
-
-    #[cfg(feature = "controller")]
-    use crate::channel::CONTROLLER_CHANNEL_FINAL_SIZE;
-    #[cfg(feature = "controller")]
-    use crate::event::ControllerEvent;
-    #[cfg(feature = "controller")]
-    use crate::{CONTROLLER_CHANNEL_PUBS, CONTROLLER_CHANNEL_SUBS};
-    #[cfg(feature = "controller")]
-    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-    #[cfg(feature = "controller")]
-    use embassy_sync::pubsub::{PubSubChannel, Subscriber};
-
-    #[cfg(feature = "controller")]
-    fn make_dummy_subscriber() -> Subscriber<
-        'static,
-        CriticalSectionRawMutex,
-        ControllerEvent,
-        CONTROLLER_CHANNEL_FINAL_SIZE,
-        CONTROLLER_CHANNEL_SUBS,
-        CONTROLLER_CHANNEL_PUBS,
-    > {
-        static CHANNEL: PubSubChannel<
-            CriticalSectionRawMutex,
-            ControllerEvent,
-            CONTROLLER_CHANNEL_FINAL_SIZE,
-            CONTROLLER_CHANNEL_SUBS,
-            CONTROLLER_CHANNEL_PUBS,
-        > = PubSubChannel::new();
-        CHANNEL.subscriber().unwrap()
     }
 
     #[derive(Debug)]
