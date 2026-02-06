@@ -15,7 +15,7 @@ pub(crate) fn expand_pmw33xx_device(
 
     // PMW33xx is only supported on nRF52, STM32 and RP2040
     match chip.series {
-        // NOTE:; Nonblocking SPI with DMA is still marked unstable in esp_hal.
+        // NOTE: Nonblocking SPI with DMA is still marked unstable in esp_hal.
         ChipSeries::Nrf52 | ChipSeries::Rp2040 | ChipSeries::Stm32 => {}
         _ => {
             panic!("PMW33xx is only supported on nRF52, STM32, RP2350 and RP2040 chips");
