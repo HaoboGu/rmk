@@ -35,7 +35,7 @@ static BATTERY_EVENT_CONTROLLER_CHANNEL: ::embassy_sync::pubsub::PubSubChannel<
     { 2 },
     { 1 },
 > = ::embassy_sync::pubsub::PubSubChannel::new();
-impl ::rmk::event::ControllerPublishEvent for BatteryEvent {
+impl ::rmk::event::PublishableControllerEvent for BatteryEvent {
     type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
         'static,
         ::rmk::RawMutex,
@@ -48,7 +48,7 @@ impl ::rmk::event::ControllerPublishEvent for BatteryEvent {
         BATTERY_EVENT_CONTROLLER_CHANNEL.immediate_publisher()
     }
 }
-impl ::rmk::event::ControllerSubscribeEvent for BatteryEvent {
+impl ::rmk::event::SubscribableControllerEvent for BatteryEvent {
     type Subscriber = ::embassy_sync::pubsub::Subscriber<
         'static,
         ::rmk::RawMutex,
@@ -65,7 +65,7 @@ impl ::rmk::event::ControllerSubscribeEvent for BatteryEvent {
             )
     }
 }
-impl ::rmk::event::AsyncControllerPublishEvent for BatteryEvent {
+impl ::rmk::event::AsyncPublishableControllerEvent for BatteryEvent {
     type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
         'static,
         ::rmk::RawMutex,
@@ -130,7 +130,7 @@ static BATTERY_STATE_CONTROLLER_CHANNEL: ::embassy_sync::pubsub::PubSubChannel<
     { 3 },
     { 2 },
 > = ::embassy_sync::pubsub::PubSubChannel::new();
-impl ::rmk::event::ControllerPublishEvent for BatteryState {
+impl ::rmk::event::PublishableControllerEvent for BatteryState {
     type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
         'static,
         ::rmk::RawMutex,
@@ -143,7 +143,7 @@ impl ::rmk::event::ControllerPublishEvent for BatteryState {
         BATTERY_STATE_CONTROLLER_CHANNEL.immediate_publisher()
     }
 }
-impl ::rmk::event::ControllerSubscribeEvent for BatteryState {
+impl ::rmk::event::SubscribableControllerEvent for BatteryState {
     type Subscriber = ::embassy_sync::pubsub::Subscriber<
         'static,
         ::rmk::RawMutex,
@@ -160,7 +160,7 @@ impl ::rmk::event::ControllerSubscribeEvent for BatteryState {
             )
     }
 }
-impl ::rmk::event::AsyncControllerPublishEvent for BatteryState {
+impl ::rmk::event::AsyncPublishableControllerEvent for BatteryState {
     type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
         'static,
         ::rmk::RawMutex,

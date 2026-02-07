@@ -2,11 +2,11 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{DeriveInput, parse_macro_input};
 
-/// Derive `InputPublishEvent`/`AsyncInputPublishEvent` for wrapper enums.
+/// Derive `PublishableInputEvent`/`AsyncPublishableInputEvent` for wrapper enums.
 ///
 /// Generates:
 /// - publisher type for the enum (routes to individual event channels)
-/// - `InputPublishEvent`/`AsyncInputPublishEvent` impls
+/// - `PublishableInputEvent`/`AsyncPublishableInputEvent` impls
 /// - `From<Variant>` impls for each variant
 ///
 /// **Note**: Wrapper enums only implement publish traits, not subscribe traits.
@@ -131,7 +131,7 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
             }
         }
 
-        impl #impl_generics ::rmk::event::InputPublishEvent for #enum_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::event::PublishableInputEvent for #enum_name #ty_generics #where_clause {
             type Publisher = #publisher_name #ty_generics;
 
             fn input_publisher() -> Self::Publisher {
@@ -139,7 +139,7 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
             }
         }
 
-        impl #impl_generics ::rmk::event::AsyncInputPublishEvent for #enum_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::event::AsyncPublishableInputEvent for #enum_name #ty_generics #where_clause {
             type AsyncPublisher = #publisher_name #ty_generics;
 
             fn input_publisher_async() -> Self::AsyncPublisher {

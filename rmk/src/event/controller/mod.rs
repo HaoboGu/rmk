@@ -24,19 +24,19 @@ pub use split::{CentralConnectedEvent, PeripheralConnectedEvent};
 pub use split::{ClearPeerEvent, PeripheralBatteryEvent};
 
 use crate::event::{
-    AsyncControllerPublishEvent, AsyncEventPublisher as _, ControllerPublishEvent, EventPublisher as _,
+    AsyncEventPublisher as _, AsyncPublishableControllerEvent, EventPublisher as _, PublishableControllerEvent,
 };
 
 /// Publish a controller event (non-blocking, may drop if buffer full)
 ///
 /// Example: `publish_controller_event(KeyEvent { .. })`
-pub fn publish_controller_event<E: ControllerPublishEvent>(e: E) {
+pub fn publish_controller_event<E: PublishableControllerEvent>(e: E) {
     E::controller_publisher().publish(e);
 }
 
 /// Publish event with backpressure (waits if buffer full, requires `channel_size`)
 ///
 /// Example: `publish_controller_event_async(KeyEvent { pressed: true }).await`
-pub async fn publish_controller_event_async<E: AsyncControllerPublishEvent>(e: E) {
+pub async fn publish_controller_event_async<E: AsyncPublishableControllerEvent>(e: E) {
     E::controller_publisher_async().publish_async(e).await;
 }

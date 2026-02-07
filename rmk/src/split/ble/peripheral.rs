@@ -10,7 +10,7 @@ use {super::PeerAddress, crate::storage::Storage, embedded_storage_async::nor_fl
 use crate::CONNECTION_STATE;
 #[cfg(feature = "controller")]
 use crate::event::{CentralConnectedEvent, publish_controller_event};
-use crate::event::{InputSubscribeEvent, KeyboardEvent};
+use crate::event::{SubscribableInputEvent, KeyboardEvent};
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};

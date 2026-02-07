@@ -82,15 +82,15 @@ impl ::core::clone::Clone for LedControllerControllerEventEnum {
 }
 /// Event subscriber for aggregated events
 pub struct LedControllerControllerEventSubscriber {
-    sub0: <LedStateEvent as ::rmk::event::ControllerSubscribeEvent>::Subscriber,
-    sub1: <BrightnessEvent as ::rmk::event::ControllerSubscribeEvent>::Subscriber,
+    sub0: <LedStateEvent as ::rmk::event::SubscribableControllerEvent>::Subscriber,
+    sub1: <BrightnessEvent as ::rmk::event::SubscribableControllerEvent>::Subscriber,
 }
 impl LedControllerControllerEventSubscriber {
     /// Create a new event subscriber
     pub fn new() -> Self {
         Self {
-            sub0: <LedStateEvent as ::rmk::event::ControllerSubscribeEvent>::controller_subscriber(),
-            sub1: <BrightnessEvent as ::rmk::event::ControllerSubscribeEvent>::controller_subscriber(),
+            sub0: <LedStateEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber(),
+            sub1: <BrightnessEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber(),
         }
     }
 }
@@ -193,7 +193,7 @@ impl ::rmk::event::EventSubscriber for LedControllerControllerEventSubscriber {
         }
     }
 }
-impl ::rmk::event::ControllerSubscribeEvent for LedControllerControllerEventEnum {
+impl ::rmk::event::SubscribableControllerEvent for LedControllerControllerEventEnum {
     type Subscriber = LedControllerControllerEventSubscriber;
     fn controller_subscriber() -> Self::Subscriber {
         LedControllerControllerEventSubscriber::new()

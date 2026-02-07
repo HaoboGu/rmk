@@ -1,9 +1,9 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::parse::Parser;
-use syn::{DeriveInput, Meta, Path, parse_macro_input};
+use syn::{DeriveInput, Meta, parse_macro_input};
 
 use super::config::InputDeviceConfig;
+use super::parser::parse_input_device_config;
 use crate::controller::config::ControllerConfig;
 use crate::controller::parser::parse_controller_config;
 use crate::runnable::generate_runnable;
@@ -25,11 +25,11 @@ use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_g
 pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as DeriveInput);
 
-    // Parse attributes to extract event type
-    let config = parse_device_attributes(attr);
+    // Parse attributes to extract event type using shared parser
+    let device_config = parse_input_device_config(proc_macro2::TokenStream::from(attr));
 
     // Validate single event type
-    if config.event_type.is_none() {
+    if device_config.is_none() {
         return syn::Error::new_spanned(
             &input,
             "#[input_device] requires `publish` attribute with a single event type. Use `#[input_device(publish = EventType)]`",
@@ -38,7 +38,7 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into();
     }
 
-    let event_type = config.event_type.unwrap();
+    let event_type = device_config.unwrap().event_type;
 
     // Validate input is a struct
     if !matches!(input.data, syn::Data::Struct(_)) {
@@ -142,41 +142,4 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     expanded.into()
-}
-
-/// InputDevice attribute configuration
-struct DeviceConfig {
-    event_type: Option<Path>,
-}
-
-/// Parse #[input_device] publish attribute
-fn parse_device_attributes(attr: TokenStream) -> DeviceConfig {
-    use syn::Token;
-    use syn::punctuated::Punctuated;
-
-    let mut event_type = None;
-
-    // Parse as Meta::List containing name-value pairs
-    let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
-    let attr2: proc_macro2::TokenStream = attr.into();
-
-    match parser.parse2(attr2) {
-        Ok(parsed) => {
-            for meta in parsed {
-                if let Meta::NameValue(nv) = meta
-                    && nv.path.is_ident("publish")
-                {
-                    // Parse single event type
-                    if let syn::Expr::Path(expr_path) = nv.value {
-                        event_type = Some(expr_path.path);
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            panic!("Failed to parse input_device attributes: {}", e);
-        }
-    }
-
-    DeviceConfig { event_type }
 }

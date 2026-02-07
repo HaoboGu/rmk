@@ -33,7 +33,7 @@ static DUAL_CHANNEL_EVENT_INPUT_CHANNEL: ::embassy_sync::channel::Channel<
     DualChannelEvent,
     { 8 },
 > = ::embassy_sync::channel::Channel::new();
-impl ::rmk::event::InputPublishEvent for DualChannelEvent {
+impl ::rmk::event::PublishableInputEvent for DualChannelEvent {
     type Publisher = ::embassy_sync::channel::Sender<
         'static,
         ::rmk::RawMutex,
@@ -44,7 +44,7 @@ impl ::rmk::event::InputPublishEvent for DualChannelEvent {
         DUAL_CHANNEL_EVENT_INPUT_CHANNEL.sender()
     }
 }
-impl ::rmk::event::InputSubscribeEvent for DualChannelEvent {
+impl ::rmk::event::SubscribableInputEvent for DualChannelEvent {
     type Subscriber = ::embassy_sync::channel::Receiver<
         'static,
         ::rmk::RawMutex,
@@ -55,7 +55,7 @@ impl ::rmk::event::InputSubscribeEvent for DualChannelEvent {
         DUAL_CHANNEL_EVENT_INPUT_CHANNEL.receiver()
     }
 }
-impl ::rmk::event::AsyncInputPublishEvent for DualChannelEvent {
+impl ::rmk::event::AsyncPublishableInputEvent for DualChannelEvent {
     type AsyncPublisher = ::embassy_sync::channel::Sender<
         'static,
         ::rmk::RawMutex,
@@ -74,7 +74,7 @@ static DUAL_CHANNEL_EVENT_CONTROLLER_CHANNEL: ::embassy_sync::pubsub::PubSubChan
     { 2 },
     { 1 },
 > = ::embassy_sync::pubsub::PubSubChannel::new();
-impl ::rmk::event::ControllerPublishEvent for DualChannelEvent {
+impl ::rmk::event::PublishableControllerEvent for DualChannelEvent {
     type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
         'static,
         ::rmk::RawMutex,
@@ -87,7 +87,7 @@ impl ::rmk::event::ControllerPublishEvent for DualChannelEvent {
         DUAL_CHANNEL_EVENT_CONTROLLER_CHANNEL.immediate_publisher()
     }
 }
-impl ::rmk::event::ControllerSubscribeEvent for DualChannelEvent {
+impl ::rmk::event::SubscribableControllerEvent for DualChannelEvent {
     type Subscriber = ::embassy_sync::pubsub::Subscriber<
         'static,
         ::rmk::RawMutex,
@@ -104,7 +104,7 @@ impl ::rmk::event::ControllerSubscribeEvent for DualChannelEvent {
             )
     }
 }
-impl ::rmk::event::AsyncControllerPublishEvent for DualChannelEvent {
+impl ::rmk::event::AsyncPublishableControllerEvent for DualChannelEvent {
     type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
         'static,
         ::rmk::RawMutex,

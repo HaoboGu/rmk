@@ -6,7 +6,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Path;
 
-use super::naming::event_type_to_handler_method_name;
+use super::naming::{event_type_to_handler_method_name, generate_unique_variant_names};
 
 /// Generate EventSubscriber struct and its implementation.
 ///
@@ -14,10 +14,10 @@ use super::naming::event_type_to_handler_method_name;
 /// It generates:
 /// - A subscriber struct that holds individual event subscribers
 /// - `EventSubscriber` impl with `select_biased!` for event aggregation
-/// - The corresponding event trait impl (`ControllerSubscribeEvent` or `InputSubscribeEvent`)
+/// - The corresponding event trait impl (`SubscribableControllerEvent` or `SubscribableInputEvent`)
 ///
 /// # Parameters
-/// - `subscribe_trait_path`: The trait path (e.g., `::rmk::event::ControllerSubscribeEvent`)
+/// - `subscribe_trait_path`: The trait path (e.g., `::rmk::event::SubscribableControllerEvent`)
 /// - `subscriber_method`: The method name to call (e.g., `controller_subscriber`)
 pub fn generate_event_subscriber(
     subscriber_name: &syn::Ident,
@@ -122,4 +122,82 @@ pub fn generate_event_match_arms(
             }
         })
         .collect()
+}
+
+/// Generate event enum, subscriber, and dispatch body for a subscriber-based macro.
+///
+/// This is the unified generator used by both `#[input_processor]` and `#[controller]`.
+/// For single-event subscriptions, no enum is generated and the event type is used directly.
+/// For multiple events, generates an aggregated enum, subscriber struct, and match-based dispatch.
+///
+/// # Parameters
+/// - `kind`: `"Input"` or `"Controller"` — used for naming the generated enum/subscriber
+/// - `subscribe_trait_path`: e.g. `::rmk::event::SubscribableInputEvent`
+/// - `subscriber_method`: e.g. `input_subscriber`
+///
+/// # Returns
+/// `(event_type_tokens, event_enum_def, event_subscriber_impl, dispatch_body)`
+pub fn generate_event_enum_and_dispatch(
+    struct_name: &syn::Ident,
+    vis: &syn::Visibility,
+    event_types: &[Path],
+    kind: &str,
+    subscribe_trait_path: TokenStream,
+    subscriber_method: TokenStream,
+) -> (TokenStream, TokenStream, TokenStream, TokenStream) {
+    if event_types.len() == 1 {
+        // Single event: use the event type directly, no enum needed
+        let event_type = &event_types[0];
+        let method_name = event_type_to_handler_method_name(event_type);
+
+        (
+            quote! { #event_type },
+            quote! {},
+            quote! {},
+            quote! { self.#method_name(event).await },
+        )
+    } else {
+        // Multiple events: generate aggregated enum
+        let enum_name = format_ident!("{}{}EventEnum", struct_name, kind);
+        let subscriber_name = format_ident!("{}{}EventSubscriber", struct_name, kind);
+        let variant_names = generate_unique_variant_names(event_types);
+
+        let enum_variants: Vec<TokenStream> = event_types
+            .iter()
+            .zip(&variant_names)
+            .map(|(event_type, variant_name)| {
+                quote! { #variant_name(#event_type) }
+            })
+            .collect();
+
+        let match_arms = generate_event_match_arms(event_types, &variant_names, &enum_name);
+
+        let subscriber_impl = generate_event_subscriber(
+            &subscriber_name,
+            event_types,
+            &variant_names,
+            &enum_name,
+            vis,
+            subscribe_trait_path,
+            subscriber_method,
+        );
+
+        let enum_def = quote! {
+            #[derive(Clone)]
+            #vis enum #enum_name {
+                #(#enum_variants),*
+            }
+        };
+
+        (
+            quote! { #enum_name },
+            enum_def,
+            subscriber_impl,
+            quote! {
+                match event {
+                    #(#match_arms),*
+                }
+            },
+        )
+    }
 }

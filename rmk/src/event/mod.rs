@@ -43,20 +43,6 @@ pub trait EventSubscriber {
 pub trait Event: Clone + Send {}
 impl<T: Clone + Send> Event for T {}
 
-/// A no-op publisher for aggregated events that should not be published directly.
-///
-/// This is used by macro-generated aggregated event enums. Individual events
-/// within the aggregation should be published using their own publishers.
-pub struct NoOpPublisher<T>(pub core::marker::PhantomData<T>);
-
-impl<T> EventPublisher for NoOpPublisher<T> {
-    type Event = T;
-    fn publish(&self, _message: T) {
-        // Aggregated events should not be published directly.
-        // Publish individual events instead.
-    }
-}
-
 // ============================================================================
 // Input Event Traits
 // ============================================================================
@@ -65,14 +51,14 @@ impl<T> EventPublisher for NoOpPublisher<T> {
 ///
 /// This is the "publish" side of input events. Types implementing this trait
 /// can send events to a channel.
-pub trait InputPublishEvent: Event {
+pub trait PublishableInputEvent: Event {
     type Publisher: EventPublisher<Event = Self>;
 
     fn input_publisher() -> Self::Publisher;
 }
 
 /// Async version of input publish event trait.
-pub trait AsyncInputPublishEvent: InputPublishEvent {
+pub trait AsyncPublishableInputEvent: PublishableInputEvent {
     type AsyncPublisher: AsyncEventPublisher<Event = Self>;
 
     fn input_publisher_async() -> Self::AsyncPublisher;
@@ -82,7 +68,7 @@ pub trait AsyncInputPublishEvent: InputPublishEvent {
 ///
 /// This is the "subscribe" side of input events. Types implementing this trait
 /// can receive events from a channel.
-pub trait InputSubscribeEvent: Event {
+pub trait SubscribableInputEvent: Event {
     type Subscriber: EventSubscriber<Event = Self>;
 
     fn input_subscriber() -> Self::Subscriber;
@@ -91,16 +77,16 @@ pub trait InputSubscribeEvent: Event {
 /// Combined trait for input events that support both publish and subscribe.
 ///
 /// Most concrete input event types implement this trait.
-/// Wrapper enums (for routing) only implement `InputPublishEvent`.
-pub trait InputEvent: InputPublishEvent + InputSubscribeEvent {}
+/// Wrapper enums (for routing) only implement `PublishableInputEvent`.
+pub trait InputEvent: PublishableInputEvent + SubscribableInputEvent {}
 
 // Auto-implement InputEvent for types that implement both publish and subscribe
-impl<T: InputPublishEvent + InputSubscribeEvent> InputEvent for T {}
+impl<T: PublishableInputEvent + SubscribableInputEvent> InputEvent for T {}
 
 /// Async version of input event trait (for backward compatibility)
-pub trait AsyncInputEvent: InputEvent + AsyncInputPublishEvent {}
+pub trait AsyncInputEvent: InputEvent + AsyncPublishableInputEvent {}
 
-impl<T: InputEvent + AsyncInputPublishEvent> AsyncInputEvent for T {}
+impl<T: InputEvent + AsyncPublishableInputEvent> AsyncInputEvent for T {}
 
 // ============================================================================
 // Controller Event Traits
@@ -109,14 +95,14 @@ impl<T: InputEvent + AsyncInputPublishEvent> AsyncInputEvent for T {}
 /// Trait for controller events that can be published.
 ///
 /// This is the "publish" side of controller events.
-pub trait ControllerPublishEvent: Event {
+pub trait PublishableControllerEvent: Event {
     type Publisher: EventPublisher<Event = Self>;
 
     fn controller_publisher() -> Self::Publisher;
 }
 
 /// Async version of controller publish event trait.
-pub trait AsyncControllerPublishEvent: ControllerPublishEvent {
+pub trait AsyncPublishableControllerEvent: PublishableControllerEvent {
     type AsyncPublisher: AsyncEventPublisher<Event = Self>;
 
     fn controller_publisher_async() -> Self::AsyncPublisher;
@@ -125,7 +111,7 @@ pub trait AsyncControllerPublishEvent: ControllerPublishEvent {
 /// Trait for controller events that can be subscribed to.
 ///
 /// This is the "subscribe" side of controller events.
-pub trait ControllerSubscribeEvent: Event {
+pub trait SubscribableControllerEvent: Event {
     type Subscriber: EventSubscriber<Event = Self>;
 
     fn controller_subscriber() -> Self::Subscriber;
@@ -135,15 +121,15 @@ pub trait ControllerSubscribeEvent: Event {
 ///
 /// Most concrete controller event types implement this trait.
 /// Aggregated event enums (for multi-event subscription) also implement this trait.
-pub trait ControllerEvent: ControllerPublishEvent + ControllerSubscribeEvent {}
+pub trait ControllerEvent: PublishableControllerEvent + SubscribableControllerEvent {}
 
 // Auto-implement ControllerEvent for types that implement both publish and subscribe
-impl<T: ControllerPublishEvent + ControllerSubscribeEvent> ControllerEvent for T {}
+impl<T: PublishableControllerEvent + SubscribableControllerEvent> ControllerEvent for T {}
 
 /// Async version of controller event trait (for backward compatibility)
-pub trait AsyncControllerEvent: ControllerEvent + AsyncControllerPublishEvent {}
+pub trait AsyncControllerEvent: ControllerEvent + AsyncPublishableControllerEvent {}
 
-impl<T: ControllerEvent + AsyncControllerPublishEvent> AsyncControllerEvent for T {}
+impl<T: ControllerEvent + AsyncPublishableControllerEvent> AsyncControllerEvent for T {}
 
 // Implementations for embassy-sync PubSubChannel
 impl<'a, M: RawMutex, T: Clone, const CAP: usize, const SUBS: usize, const PUBS: usize> EventPublisher

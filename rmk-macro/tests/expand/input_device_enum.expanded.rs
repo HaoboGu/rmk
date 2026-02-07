@@ -41,12 +41,7 @@ impl ::core::marker::Copy for BatteryEvent {}
 impl ::core::fmt::Debug for BatteryEvent {
     #[inline]
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        ::core::fmt::Formatter::debug_struct_field1_finish(
-            f,
-            "BatteryEvent",
-            "level",
-            &&self.level,
-        )
+        ::core::fmt::Formatter::debug_struct_field1_finish(f, "BatteryEvent", "level", &&self.level)
     }
 }
 pub enum NrfAdcEvent {
@@ -74,13 +69,13 @@ impl ::rmk::event::EventPublisher for NrfAdcEventPublisher {
         }
     }
 }
-impl ::rmk::event::InputPublishEvent for NrfAdcEvent {
+impl ::rmk::event::PublishableInputEvent for NrfAdcEvent {
     type Publisher = NrfAdcEventPublisher;
     fn input_publisher() -> Self::Publisher {
         NrfAdcEventPublisher
     }
 }
-impl ::rmk::event::AsyncInputPublishEvent for NrfAdcEvent {
+impl ::rmk::event::AsyncPublishableInputEvent for NrfAdcEvent {
     type AsyncPublisher = NrfAdcEventPublisher;
     fn input_publisher_async() -> Self::AsyncPublisher {
         NrfAdcEventPublisher
@@ -101,12 +96,8 @@ impl ::core::clone::Clone for NrfAdcEvent {
     #[inline]
     fn clone(&self) -> NrfAdcEvent {
         match self {
-            NrfAdcEvent::Pointing(__self_0) => {
-                NrfAdcEvent::Pointing(::core::clone::Clone::clone(__self_0))
-            }
-            NrfAdcEvent::Battery(__self_0) => {
-                NrfAdcEvent::Battery(::core::clone::Clone::clone(__self_0))
-            }
+            NrfAdcEvent::Pointing(__self_0) => NrfAdcEvent::Pointing(::core::clone::Clone::clone(__self_0)),
+            NrfAdcEvent::Battery(__self_0) => NrfAdcEvent::Battery(::core::clone::Clone::clone(__self_0)),
         }
     }
 }
@@ -116,18 +107,10 @@ impl ::core::fmt::Debug for NrfAdcEvent {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
             NrfAdcEvent::Pointing(__self_0) => {
-                ::core::fmt::Formatter::debug_tuple_field1_finish(
-                    f,
-                    "Pointing",
-                    &__self_0,
-                )
+                ::core::fmt::Formatter::debug_tuple_field1_finish(f, "Pointing", &__self_0)
             }
             NrfAdcEvent::Battery(__self_0) => {
-                ::core::fmt::Formatter::debug_tuple_field1_finish(
-                    f,
-                    "Battery",
-                    &__self_0,
-                )
+                ::core::fmt::Formatter::debug_tuple_field1_finish(f, "Battery", &__self_0)
             }
         }
     }
@@ -145,14 +128,16 @@ pub struct NrfAdc<'a, const PIN_NUM: usize, const EVENT_NUM: usize> {
     active_instant: Instant,
 }
 impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> ::rmk::input_device::InputDevice
-for NrfAdc<'a, PIN_NUM, EVENT_NUM> {
+    for NrfAdc<'a, PIN_NUM, EVENT_NUM>
+{
     type Event = NrfAdcEvent;
     async fn read_event(&mut self) -> Self::Event {
         self.read_nrf_adc_event().await
     }
 }
 impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> ::rmk::input_device::Runnable
-for NrfAdc<'a, PIN_NUM, EVENT_NUM> {
+    for NrfAdc<'a, PIN_NUM, EVENT_NUM>
+{
     async fn run(&mut self) -> ! {
         use ::rmk::event::publish_input_event_async;
         use ::rmk::input_device::InputDevice;

@@ -39,7 +39,7 @@ pub fn generate_controller_event_channel(
     };
 
     let trait_impls = quote! {
-        impl #impl_generics ::rmk::event::ControllerPublishEvent for #type_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::event::PublishableControllerEvent for #type_name #ty_generics #where_clause {
             type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
                 'static,
                 ::rmk::RawMutex,
@@ -54,7 +54,7 @@ pub fn generate_controller_event_channel(
             }
         }
 
-        impl #impl_generics ::rmk::event::ControllerSubscribeEvent for #type_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::event::SubscribableControllerEvent for #type_name #ty_generics #where_clause {
             type Subscriber = ::embassy_sync::pubsub::Subscriber<
                 'static,
                 ::rmk::RawMutex,
@@ -75,7 +75,7 @@ pub fn generate_controller_event_channel(
             }
         }
 
-        impl #impl_generics ::rmk::event::AsyncControllerPublishEvent for #type_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::event::AsyncPublishableControllerEvent for #type_name #ty_generics #where_clause {
             type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
                 'static,
                 ::rmk::RawMutex,

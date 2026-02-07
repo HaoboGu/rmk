@@ -37,7 +37,7 @@ static DUAL_CHANNEL_EVENT_REVERSED_CONTROLLER_CHANNEL: ::embassy_sync::pubsub::P
     { 2 },
     { 1 },
 > = ::embassy_sync::pubsub::PubSubChannel::new();
-impl ::rmk::event::ControllerPublishEvent for DualChannelEventReversed {
+impl ::rmk::event::PublishableControllerEvent for DualChannelEventReversed {
     type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
         'static,
         ::rmk::RawMutex,
@@ -50,7 +50,7 @@ impl ::rmk::event::ControllerPublishEvent for DualChannelEventReversed {
         DUAL_CHANNEL_EVENT_REVERSED_CONTROLLER_CHANNEL.immediate_publisher()
     }
 }
-impl ::rmk::event::ControllerSubscribeEvent for DualChannelEventReversed {
+impl ::rmk::event::SubscribableControllerEvent for DualChannelEventReversed {
     type Subscriber = ::embassy_sync::pubsub::Subscriber<
         'static,
         ::rmk::RawMutex,
@@ -67,7 +67,7 @@ impl ::rmk::event::ControllerSubscribeEvent for DualChannelEventReversed {
             )
     }
 }
-impl ::rmk::event::AsyncControllerPublishEvent for DualChannelEventReversed {
+impl ::rmk::event::AsyncPublishableControllerEvent for DualChannelEventReversed {
     type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
         'static,
         ::rmk::RawMutex,
@@ -90,7 +90,7 @@ static DUAL_CHANNEL_EVENT_REVERSED_INPUT_CHANNEL: ::embassy_sync::channel::Chann
     DualChannelEventReversed,
     { 8 },
 > = ::embassy_sync::channel::Channel::new();
-impl ::rmk::event::InputPublishEvent for DualChannelEventReversed {
+impl ::rmk::event::PublishableInputEvent for DualChannelEventReversed {
     type Publisher = ::embassy_sync::channel::Sender<
         'static,
         ::rmk::RawMutex,
@@ -101,7 +101,7 @@ impl ::rmk::event::InputPublishEvent for DualChannelEventReversed {
         DUAL_CHANNEL_EVENT_REVERSED_INPUT_CHANNEL.sender()
     }
 }
-impl ::rmk::event::InputSubscribeEvent for DualChannelEventReversed {
+impl ::rmk::event::SubscribableInputEvent for DualChannelEventReversed {
     type Subscriber = ::embassy_sync::channel::Receiver<
         'static,
         ::rmk::RawMutex,
@@ -112,7 +112,7 @@ impl ::rmk::event::InputSubscribeEvent for DualChannelEventReversed {
         DUAL_CHANNEL_EVENT_REVERSED_INPUT_CHANNEL.receiver()
     }
 }
-impl ::rmk::event::AsyncInputPublishEvent for DualChannelEventReversed {
+impl ::rmk::event::AsyncPublishableInputEvent for DualChannelEventReversed {
     type AsyncPublisher = ::embassy_sync::channel::Sender<
         'static,
         ::rmk::RawMutex,

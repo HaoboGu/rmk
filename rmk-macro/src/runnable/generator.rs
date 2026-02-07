@@ -140,7 +140,7 @@ pub fn generate_runnable(
         let has_single_proc_event = processor_config.event_types.len() == 1;
         let proc_enum_name = format_ident!("{}InputEventEnum", struct_name);
         let proc_variant_names = generate_unique_variant_names(&processor_config.event_types);
-        use_statements.push(quote! { use ::rmk::event::InputSubscribeEvent; });
+        use_statements.push(quote! { use ::rmk::event::SubscribableInputEvent; });
         use_statements.push(quote! { use ::rmk::input_device::InputProcessor; });
 
         for (idx, (event_type, variant_name)) in
@@ -148,7 +148,7 @@ pub fn generate_runnable(
         {
             let sub_name = format_ident!("proc_sub{}", idx);
             sub_defs.push(quote! {
-                let mut #sub_name = <#event_type as ::rmk::event::InputSubscribeEvent>::input_subscriber();
+                let mut #sub_name = <#event_type as ::rmk::event::SubscribableInputEvent>::input_subscriber();
             });
 
             // For single event, pass the event directly; for multiple events, wrap in enum
@@ -182,7 +182,7 @@ pub fn generate_runnable(
             quote! { #ctrl_enum }
         });
 
-        use_statements.push(quote! { use ::rmk::event::ControllerSubscribeEvent; });
+        use_statements.push(quote! { use ::rmk::event::SubscribableControllerEvent; });
         use_statements.push(quote! { use ::rmk::controller::Controller; });
 
         for (idx, (ctrl_event_type, variant_name)) in
@@ -190,7 +190,7 @@ pub fn generate_runnable(
         {
             let sub_name = format_ident!("ctrl_sub{}", idx);
             sub_defs.push(quote! {
-                let mut #sub_name = <#ctrl_event_type as ::rmk::event::ControllerSubscribeEvent>::controller_subscriber();
+                let mut #sub_name = <#ctrl_event_type as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
             });
 
             let wrapped_ctrl_event = if has_single_ctrl_event {

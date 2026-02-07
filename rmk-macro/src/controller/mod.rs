@@ -4,7 +4,7 @@ pub(crate) mod event;
 pub(crate) mod parser;
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 use rmk_config::{ChipModel, KeyboardTomlConfig, PinConfig};
 use syn::{DeriveInput, ItemMod, Meta, parse_macro_input};
 
@@ -14,10 +14,7 @@ use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::gpio_config::convert_gpio_str_to_output_pin;
 use crate::input::config::{InputDeviceConfig, InputProcessorConfig};
 use crate::input::parser::{parse_input_device_config, parse_input_processor_config};
-use crate::runnable::{
-    event_type_to_handler_method_name, generate_event_match_arms, generate_event_subscriber, generate_runnable,
-    generate_unique_variant_names,
-};
+use crate::runnable::{generate_event_enum_and_dispatch, generate_runnable};
 use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr, reconstruct_type_def};
 
 /// Expand controller init/exec blocks from keyboard config.
@@ -239,69 +236,16 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     // Rebuild struct definition.
     let struct_def = reconstruct_type_def(&input);
 
-    // Check if single event (no need for aggregated enum)
-    let is_single_event = config.event_types.len() == 1;
-
-    // Generate event-related code based on single vs multiple events
-    let (event_type_tokens, event_enum_def, event_subscriber_impl, process_event_body) = if is_single_event {
-        // Single event: use the event type directly, no enum needed
-        let event_type = &config.event_types[0];
-        let method_name = event_type_to_handler_method_name(event_type);
-
-        (
-            quote! { #event_type },
-            quote! {}, // No enum definition
-            quote! {}, // No custom EventSubscriber needed, use default
-            quote! { self.#method_name(event).await },
-        )
-    } else {
-        // Multiple events: generate aggregated enum
-        let enum_name = format_ident!("{}ControllerEventEnum", struct_name);
-        let subscriber_name = format_ident!("{}ControllerEventSubscriber", struct_name);
-        let variant_names = generate_unique_variant_names(&config.event_types);
-
-        // Build enum variants
-        let enum_variants: Vec<_> = config
-            .event_types
-            .iter()
-            .zip(&variant_names)
-            .map(|(event_type, variant_name)| {
-                quote! { #variant_name(#event_type) }
-            })
-            .collect();
-
-        // process_event match arms
-        let process_event_arms = generate_event_match_arms(&config.event_types, &variant_names, &enum_name);
-
-        // Generate EventSubscriber struct and impl
-        let subscriber_impl = generate_event_subscriber(
-            &subscriber_name,
-            &config.event_types,
-            &variant_names,
-            &enum_name,
+    // Generate event enum, subscriber, and dispatch body
+    let (event_type_tokens, event_enum_def, event_subscriber_impl, process_event_body) =
+        generate_event_enum_and_dispatch(
+            struct_name,
             vis,
-            quote! { ::rmk::event::ControllerSubscribeEvent },
+            &config.event_types,
+            "Controller",
+            quote! { ::rmk::event::SubscribableControllerEvent },
             quote! { controller_subscriber },
         );
-
-        let enum_def = quote! {
-            #[derive(Clone)]
-            #vis enum #enum_name {
-                #(#enum_variants),*
-            }
-        };
-
-        (
-            quote! { #enum_name },
-            enum_def,
-            subscriber_impl,
-            quote! {
-                match event {
-                    #(#process_event_arms),*
-                }
-            },
-        )
-    };
 
     // PollingController impl when poll_interval is set.
     let polling_controller_impl = if let Some(interval_ms) = config.poll_interval_ms {

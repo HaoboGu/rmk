@@ -13,7 +13,7 @@ use log::debug;
 use rmk::channel::KEYBOARD_REPORT_CHANNEL;
 use rmk::config::{BehaviorConfig, PositionalConfig};
 use rmk::descriptor::KeyboardReport;
-use rmk::event::{AsyncEventPublisher, AsyncInputPublishEvent, KeyboardEvent};
+use rmk::event::{AsyncEventPublisher, AsyncPublishableInputEvent, KeyboardEvent};
 use rmk::hid::Report;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;

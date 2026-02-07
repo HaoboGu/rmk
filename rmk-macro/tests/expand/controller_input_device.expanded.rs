@@ -76,7 +76,7 @@ impl ::rmk::input_device::Runnable for SensorController {
     async fn run(&mut self) -> ! {
         use ::rmk::event::publish_input_event_async;
         use ::rmk::input_device::InputDevice;
-        use ::rmk::event::ControllerSubscribeEvent;
+        use ::rmk::event::SubscribableControllerEvent;
         use ::rmk::controller::Controller;
         use ::rmk::event::EventSubscriber;
         use ::rmk::futures::FutureExt;
@@ -84,7 +84,7 @@ impl ::rmk::input_device::Runnable for SensorController {
             Input(SensorEvent),
             Controller(ConfigEvent),
         }
-        let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::ControllerSubscribeEvent>::controller_subscriber();
+        let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
         loop {
             let select_result = {
                 {
@@ -236,7 +236,7 @@ impl ::rmk::input_device::Runnable for PollingSensorController {
     async fn run(&mut self) -> ! {
         use ::rmk::event::publish_input_event_async;
         use ::rmk::input_device::InputDevice;
-        use ::rmk::event::ControllerSubscribeEvent;
+        use ::rmk::event::SubscribableControllerEvent;
         use ::rmk::controller::Controller;
         use ::rmk::event::EventSubscriber;
         use ::rmk::futures::FutureExt;
@@ -246,7 +246,7 @@ impl ::rmk::input_device::Runnable for PollingSensorController {
             Controller(ConfigEvent),
             Timer,
         }
-        let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::ControllerSubscribeEvent>::controller_subscriber();
+        let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
         let mut last = ::embassy_time::Instant::now();
         loop {
             let elapsed = last.elapsed();

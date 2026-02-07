@@ -89,15 +89,15 @@ impl ::core::clone::Clone for KeyProcessorInputEventEnum {
 }
 /// Event subscriber for aggregated events
 pub struct KeyProcessorInputEventSubscriber {
-    sub0: <KeyEvent as ::rmk::event::InputSubscribeEvent>::Subscriber,
-    sub1: <EncoderEvent as ::rmk::event::InputSubscribeEvent>::Subscriber,
+    sub0: <KeyEvent as ::rmk::event::SubscribableInputEvent>::Subscriber,
+    sub1: <EncoderEvent as ::rmk::event::SubscribableInputEvent>::Subscriber,
 }
 impl KeyProcessorInputEventSubscriber {
     /// Create a new event subscriber
     pub fn new() -> Self {
         Self {
-            sub0: <KeyEvent as ::rmk::event::InputSubscribeEvent>::input_subscriber(),
-            sub1: <EncoderEvent as ::rmk::event::InputSubscribeEvent>::input_subscriber(),
+            sub0: <KeyEvent as ::rmk::event::SubscribableInputEvent>::input_subscriber(),
+            sub1: <EncoderEvent as ::rmk::event::SubscribableInputEvent>::input_subscriber(),
         }
     }
 }
@@ -196,7 +196,7 @@ impl ::rmk::event::EventSubscriber for KeyProcessorInputEventSubscriber {
         }
     }
 }
-impl ::rmk::event::InputSubscribeEvent for KeyProcessorInputEventEnum {
+impl ::rmk::event::SubscribableInputEvent for KeyProcessorInputEventEnum {
     type Subscriber = KeyProcessorInputEventSubscriber;
     fn input_subscriber() -> Self::Subscriber {
         KeyProcessorInputEventSubscriber::new()

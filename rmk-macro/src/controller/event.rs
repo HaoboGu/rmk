@@ -1,10 +1,10 @@
-use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
 use super::channel::generate_controller_event_channel;
 use super::parser::parse_controller_event_channel_config;
 use crate::input::channel::{generate_input_event_channel, validate_event_type};
 use crate::input::parser::parse_input_event_channel_size_from_attr;
+use crate::utils::assemble_dual_event_output;
 
 /// Generates controller event infrastructure.
 ///
@@ -26,55 +26,25 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
         return error.into();
     }
 
-    // Check if input_event macro is also present
-    let input_event_attr = input
-        .attrs
-        .iter()
-        .find(|attr| attr.path().is_ident("input_event"))
-        .cloned();
-
-    let type_name = &input.ident;
-    let generics = &input.generics;
+    let type_name = input.ident.clone();
+    let generics = input.generics.clone();
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     // Generate controller event channel
-    let (controller_channel_static, controller_trait_impls) =
-        generate_controller_event_channel(type_name, &ty_generics, &impl_generics, where_clause, &config);
+    let primary_channel =
+        generate_controller_event_channel(&type_name, &ty_generics, &impl_generics, where_clause, &config);
 
-    // Remove both macros from attributes for the final struct definition
-    input
-        .attrs
-        .retain(|attr| !attr.path().is_ident("input_event") && !attr.path().is_ident("controller_event"));
-
-    let expanded = if let Some(input_attr) = input_event_attr.as_ref() {
-        // input_event is also present, generate both sets of implementations
-        let input_channel_size = parse_input_event_channel_size_from_attr(input_attr);
-        let (input_channel_static, input_trait_impls) = generate_input_event_channel(
-            type_name,
-            &ty_generics,
-            &impl_generics,
-            where_clause,
-            input_channel_size,
-        );
-
-        quote! {
-            #input
-
-            #controller_channel_static
-            #controller_trait_impls
-
-            #input_channel_static
-            #input_trait_impls
-        }
-    } else {
-        // Only controller_event
-        quote! {
-            #input
-
-            #controller_channel_static
-            #controller_trait_impls
-        }
-    };
+    // Assemble output, handling optional dual-macro with input_event
+    let expanded = assemble_dual_event_output(
+        &mut input,
+        "controller_event",
+        "input_event",
+        primary_channel,
+        |input_attr| {
+            let input_channel_size = parse_input_event_channel_size_from_attr(input_attr);
+            generate_input_event_channel(&type_name, &ty_generics, &impl_generics, where_clause, input_channel_size)
+        },
+    );
 
     expanded.into()
 }

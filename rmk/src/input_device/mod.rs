@@ -3,7 +3,7 @@
 //! This module defines the `InputDevice` trait, `InputProcessor` trait, `Runnable` trait and several macros for running input devices and processors.
 //! The `InputDevice` trait provides the interface for individual input devices, and the macros facilitate their concurrent execution.
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
-use crate::event::{EventSubscriber, InputSubscribeEvent};
+use crate::event::{EventSubscriber, SubscribableInputEvent};
 use crate::hid::Report;
 
 pub mod adc;
@@ -104,14 +104,14 @@ pub trait InputDevice: Runnable {
 pub trait InputProcessor: Runnable {
     /// The event type processed by this input processor.
     ///
-    /// Must implement `InputSubscribeEvent`, which provides the `Subscriber` type
+    /// Must implement `SubscribableInputEvent`, which provides the `Subscriber` type
     /// and the `input_subscriber()` method.
-    type Event: InputSubscribeEvent;
+    type Event: SubscribableInputEvent;
 
     /// Create a new event subscriber.
     ///
     /// Default implementation uses the event's `input_subscriber()` method.
-    fn subscriber() -> <Self::Event as InputSubscribeEvent>::Subscriber {
+    fn subscriber() -> <Self::Event as SubscribableInputEvent>::Subscriber {
         Self::Event::input_subscriber()
     }
 

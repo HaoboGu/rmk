@@ -44,13 +44,6 @@
 //!     }
 //! }
 //! ```
-//!
-//! ## Handler Method Naming Convention
-//!
-//! For each event type in `subscribe = [...]`, you must implement a handler method:
-//! - Event type `FooEvent` → method `on_foo_event`
-//! - Event type `BatteryStateEvent` → method `on_battery_state_event`
-//! - Event type `USBEvent` → method `on_usb_event`
 
 #[cfg(feature = "_ble")]
 pub mod battery_led;
@@ -59,7 +52,7 @@ pub(crate) mod wpm;
 
 use embassy_futures::select::{Either, select};
 
-use crate::event::{ControllerSubscribeEvent, EventSubscriber};
+use crate::event::{EventSubscriber, SubscribableControllerEvent};
 use crate::input_device::Runnable;
 
 /// This trait provides the interface for individual output device controllers.
@@ -68,14 +61,14 @@ use crate::input_device::Runnable;
 pub trait Controller: Runnable {
     /// Type of the received events.
     ///
-    /// Must implement `ControllerSubscribeEvent`, which provides the `Subscriber` type
+    /// Must implement `SubscribableControllerEvent`, which provides the `Subscriber` type
     /// and the `controller_subscriber()` method.
-    type Event: ControllerSubscribeEvent;
+    type Event: SubscribableControllerEvent;
 
     /// Create a new event subscriber.
     ///
     /// Default implementation uses the event's `controller_subscriber()` method.
-    fn subscriber() -> <Self::Event as ControllerSubscribeEvent>::Subscriber {
+    fn subscriber() -> <Self::Event as SubscribableControllerEvent>::Subscriber {
         Self::Event::controller_subscriber()
     }
 

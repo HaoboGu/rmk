@@ -1,10 +1,10 @@
-use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
 use super::channel::{generate_input_event_channel, validate_event_type};
 use super::parser::parse_input_event_channel_size;
 use crate::controller::channel::generate_controller_event_channel;
 use crate::controller::parser::parse_controller_event_channel_config_from_attr;
+use crate::utils::assemble_dual_event_output;
 
 /// Generates input event infrastructure using embassy_sync::channel::Channel.
 ///
@@ -26,50 +26,25 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
         return error.into();
     }
 
-    // Check if controller_event macro is also present
-    let controller_event_attr = input
-        .attrs
-        .iter()
-        .find(|attr| attr.path().is_ident("controller_event"))
-        .cloned();
-
-    let type_name = &input.ident;
-    let generics = &input.generics;
+    let type_name = input.ident.clone();
+    let generics = input.generics.clone();
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     // Generate input event channel
-    let (input_channel_static, input_trait_impls) =
-        generate_input_event_channel(type_name, &ty_generics, &impl_generics, where_clause, channel_size);
+    let primary_channel =
+        generate_input_event_channel(&type_name, &ty_generics, &impl_generics, where_clause, channel_size);
 
-    // Remove both macros from attributes for the final struct definition
-    input
-        .attrs
-        .retain(|attr| !attr.path().is_ident("input_event") && !attr.path().is_ident("controller_event"));
-
-    let expanded = if let Some(ctrl_attr) = controller_event_attr.as_ref() {
-        // controller_event is also present, generate both sets of implementations
-        let ctrl_config = parse_controller_event_channel_config_from_attr(ctrl_attr);
-        let (controller_channel_static, controller_trait_impls) =
-            generate_controller_event_channel(type_name, &ty_generics, &impl_generics, where_clause, &ctrl_config);
-
-        quote! {
-            #input
-
-            #input_channel_static
-            #input_trait_impls
-
-            #controller_channel_static
-            #controller_trait_impls
-        }
-    } else {
-        // Only input_event
-        quote! {
-            #input
-
-            #input_channel_static
-            #input_trait_impls
-        }
-    };
+    // Assemble output, handling optional dual-macro with controller_event
+    let expanded = assemble_dual_event_output(
+        &mut input,
+        "input_event",
+        "controller_event",
+        primary_channel,
+        |ctrl_attr| {
+            let ctrl_config = parse_controller_event_channel_config_from_attr(ctrl_attr);
+            generate_controller_event_channel(&type_name, &ty_generics, &impl_generics, where_clause, &ctrl_config)
+        },
+    );
 
     expanded.into()
 }

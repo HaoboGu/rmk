@@ -20,12 +20,7 @@ impl ::core::marker::Copy for BatteryEvent {}
 impl ::core::fmt::Debug for BatteryEvent {
     #[inline]
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        ::core::fmt::Formatter::debug_struct_field1_finish(
-            f,
-            "BatteryEvent",
-            "level",
-            &&self.level,
-        )
+        ::core::fmt::Formatter::debug_struct_field1_finish(f, "BatteryEvent", "level", &&self.level)
     }
 }
 #[input_event]
@@ -50,14 +45,7 @@ impl ::core::marker::Copy for PointingEvent {}
 impl ::core::fmt::Debug for PointingEvent {
     #[inline]
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        ::core::fmt::Formatter::debug_struct_field2_finish(
-            f,
-            "PointingEvent",
-            "x",
-            &self.x,
-            "y",
-            &&self.y,
-        )
+        ::core::fmt::Formatter::debug_struct_field2_finish(f, "PointingEvent", "x", &self.x, "y", &&self.y)
     }
 }
 pub enum MultiSensorEvent {
@@ -71,12 +59,8 @@ impl ::rmk::event::AsyncEventPublisher for MultiSensorEventPublisher {
     type Event = MultiSensorEvent;
     async fn publish_async(&self, event: MultiSensorEvent) {
         match event {
-            MultiSensorEvent::Battery(e) => {
-                ::rmk::event::publish_input_event_async(e).await
-            }
-            MultiSensorEvent::Pointing(e) => {
-                ::rmk::event::publish_input_event_async(e).await
-            }
+            MultiSensorEvent::Battery(e) => ::rmk::event::publish_input_event_async(e).await,
+            MultiSensorEvent::Pointing(e) => ::rmk::event::publish_input_event_async(e).await,
         }
     }
 }
@@ -89,13 +73,13 @@ impl ::rmk::event::EventPublisher for MultiSensorEventPublisher {
         }
     }
 }
-impl ::rmk::event::InputPublishEvent for MultiSensorEvent {
+impl ::rmk::event::PublishableInputEvent for MultiSensorEvent {
     type Publisher = MultiSensorEventPublisher;
     fn input_publisher() -> Self::Publisher {
         MultiSensorEventPublisher
     }
 }
-impl ::rmk::event::AsyncInputPublishEvent for MultiSensorEvent {
+impl ::rmk::event::AsyncPublishableInputEvent for MultiSensorEvent {
     type AsyncPublisher = MultiSensorEventPublisher;
     fn input_publisher_async() -> Self::AsyncPublisher {
         MultiSensorEventPublisher

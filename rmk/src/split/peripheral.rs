@@ -8,7 +8,7 @@ use futures::FutureExt;
 use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 #[cfg(feature = "_ble")]
 use {
-    crate::event::{BatteryStateEvent, ChargingStateEvent, ControllerSubscribeEvent, EventSubscriber},
+    crate::event::{BatteryStateEvent, ChargingStateEvent, EventSubscriber, SubscribableControllerEvent},
     crate::storage::Storage,
     embedded_storage_async::nor_flash::NorFlash,
     trouble_host::prelude::*,
@@ -17,7 +17,7 @@ use {
 use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
 use crate::CONNECTION_STATE;
-use crate::event::{InputSubscribeEvent, KeyboardEvent, PointingEvent, TouchpadEvent};
+use crate::event::{KeyboardEvent, PointingEvent, SubscribableInputEvent, TouchpadEvent};
 #[cfg(feature = "controller")]
 use crate::event::{LayerChangeEvent, LedIndicatorEvent, publish_controller_event};
 #[cfg(not(feature = "_ble"))]

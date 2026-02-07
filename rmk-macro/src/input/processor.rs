@@ -1,14 +1,11 @@
-use quote::{format_ident, quote};
+use quote::quote;
 use syn::{DeriveInput, Meta, parse_macro_input};
 
 use super::config::InputProcessorConfig;
 use super::parser::parse_input_processor_config;
 use crate::controller::config::ControllerConfig;
 use crate::controller::parser::parse_controller_config;
-use crate::runnable::{
-    event_type_to_handler_method_name, generate_event_match_arms, generate_event_subscriber, generate_runnable,
-    generate_unique_variant_names,
-};
+use crate::runnable::{generate_event_enum_and_dispatch, generate_runnable};
 use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr, reconstruct_type_def};
 
 /// Generates InputProcessor trait implementation with automatic event routing.
@@ -97,69 +94,16 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
     // Reconstruct the struct definition
     let struct_def = reconstruct_type_def(&input);
 
-    // Check if single event (no need for aggregated enum)
-    let is_single_event = config.event_types.len() == 1;
-
-    // Generate event-related code based on single vs multiple events
-    let (event_type_tokens, event_enum_def, event_subscriber_impl, process_body) = if is_single_event {
-        // Single event: use the event type directly, no enum needed
-        let event_type = &config.event_types[0];
-        let method_name = event_type_to_handler_method_name(event_type);
-
-        (
-            quote! { #event_type },
-            quote! {}, // No enum definition
-            quote! {}, // No custom EventSubscriber needed, use default
-            quote! { self.#method_name(event).await },
-        )
-    } else {
-        // Multiple events: generate aggregated enum
-        let enum_name = format_ident!("{}InputEventEnum", struct_name);
-        let subscriber_name = format_ident!("{}InputEventSubscriber", struct_name);
-        let variant_names = generate_unique_variant_names(&config.event_types);
-
-        // Build enum variants
-        let enum_variants: Vec<_> = config
-            .event_types
-            .iter()
-            .zip(&variant_names)
-            .map(|(event_type, variant_name)| {
-                quote! { #variant_name(#event_type) }
-            })
-            .collect();
-
-        // process match arms
-        let process_arms = generate_event_match_arms(&config.event_types, &variant_names, &enum_name);
-
-        // Generate EventSubscriber struct and impl
-        let subscriber_impl = generate_event_subscriber(
-            &subscriber_name,
-            &config.event_types,
-            &variant_names,
-            &enum_name,
+    // Generate event enum, subscriber, and dispatch body
+    let (event_type_tokens, event_enum_def, event_subscriber_impl, process_body) =
+        generate_event_enum_and_dispatch(
+            struct_name,
             vis,
-            quote! { ::rmk::event::InputSubscribeEvent },
+            &config.event_types,
+            "Input",
+            quote! { ::rmk::event::SubscribableInputEvent },
             quote! { input_subscriber },
         );
-
-        let enum_def = quote! {
-            #[derive(Clone)]
-            #vis enum #enum_name {
-                #(#enum_variants),*
-            }
-        };
-
-        (
-            quote! { #enum_name },
-            enum_def,
-            subscriber_impl,
-            quote! {
-                match event {
-                    #(#process_arms),*
-                }
-            },
-        )
-    };
 
     // Generate Runnable implementation
     let runnable_impl = if has_marker {

@@ -34,7 +34,7 @@ pub fn generate_input_event_channel(
     };
 
     let trait_impls = quote! {
-        impl #impl_generics ::rmk::event::InputPublishEvent for #type_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::event::PublishableInputEvent for #type_name #ty_generics #where_clause {
             type Publisher = ::embassy_sync::channel::Sender<
                 'static,
                 ::rmk::RawMutex,
@@ -47,7 +47,7 @@ pub fn generate_input_event_channel(
             }
         }
 
-        impl #impl_generics ::rmk::event::InputSubscribeEvent for #type_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::event::SubscribableInputEvent for #type_name #ty_generics #where_clause {
             type Subscriber = ::embassy_sync::channel::Receiver<
                 'static,
                 ::rmk::RawMutex,
@@ -60,7 +60,7 @@ pub fn generate_input_event_channel(
             }
         }
 
-        impl #impl_generics ::rmk::event::AsyncInputPublishEvent for #type_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::event::AsyncPublishableInputEvent for #type_name #ty_generics #where_clause {
             type AsyncPublisher = ::embassy_sync::channel::Sender<
                 'static,
                 ::rmk::RawMutex,
