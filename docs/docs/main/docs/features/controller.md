@@ -6,17 +6,7 @@ RMK's controller system provides a unified interface for managing output devices
 
 RMK uses an event-driven architecture where event producers (keyboard, BLE stack, etc.) are decoupled from event consumers (controllers). This allows controllers to independently react to specific events they care about.
 
-```
-                             ┌──────┐               ┌────────────┐
-                             │      │       ┌──────▶│controller a│
-                             │      │       │       └────────────┘
-┌───────────────┐            │      │       │       ┌────────────┐
-│event publisher│──publish──▶│events│──subscribe───▶│controller b│
-└───────────────┘            │      │       │       └────────────┘
-                             │      │       │       ┌────────────┐
-                             │      │       └──────▶│controller c│
-                             └──────┘               └────────────┘
-```
+The complete event chain can be found in the [Input Device](./input_device#event-driven-input-system) documentation. This page focuses on the bottom half of the chain (controller events → controller).
 
 **Key concepts:**
 - **Events** - Carry state changes and keyboard events through type-safe channels
@@ -135,6 +125,23 @@ mod keyboard {
 Inside the registration function:
 - `p` variable provides access to chip peripherals
 - Use `bind_interrupts!` macro if additional interrupts are needed
+
+### Running Controllers with Rust API
+
+When using the Rust API (without `#[register_controller]`), controllers implement the `Runnable` trait and can be run using the `run_all!` macro, just like input devices and processors:
+
+```rust
+use rmk::run_all;
+
+let mut my_controller = MyController::new();
+let mut another_controller = AnotherController::new();
+
+// Run controllers concurrently with other runnables
+join(
+    run_all!(matrix, encoder, batt_proc),
+    run_all!(my_controller, another_controller),
+).await;
+```
 
 ### Examples
 
@@ -301,6 +308,21 @@ pub struct BacklightEvent {
     pub brightness: u8,
 }
 ```
+
+::: tip Dual-channel events
+`#[controller_event]` can be combined with `#[input_event]` on the same struct/enum to create a dual-channel event type. The macro order does not matter.
+
+```rust
+use rmk_macro::{controller_event, input_event};
+
+#[controller_event(channel_size = 1, subs = 2)]
+#[input_event(channel_size = 4)]
+#[derive(Clone, Copy, Debug)]
+pub struct SensorEvent {
+    pub value: u16,
+}
+```
+:::
 
 **Macro parameters:**
 - `channel_size` (optional): Buffer size for `PubSubChannel`. Default is 1
