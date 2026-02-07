@@ -58,30 +58,34 @@ impl ::core::fmt::Debug for BrightnessEvent {
 pub struct LedController {
     pub pin: u8,
 }
-pub enum LedControllerEventEnum {
+pub enum LedControllerControllerEventEnum {
     LedState(LedStateEvent),
     Brightness(BrightnessEvent),
 }
 #[automatically_derived]
-impl ::core::clone::Clone for LedControllerEventEnum {
+impl ::core::clone::Clone for LedControllerControllerEventEnum {
     #[inline]
-    fn clone(&self) -> LedControllerEventEnum {
+    fn clone(&self) -> LedControllerControllerEventEnum {
         match self {
-            LedControllerEventEnum::LedState(__self_0) => {
-                LedControllerEventEnum::LedState(::core::clone::Clone::clone(__self_0))
+            LedControllerControllerEventEnum::LedState(__self_0) => {
+                LedControllerControllerEventEnum::LedState(
+                    ::core::clone::Clone::clone(__self_0),
+                )
             }
-            LedControllerEventEnum::Brightness(__self_0) => {
-                LedControllerEventEnum::Brightness(::core::clone::Clone::clone(__self_0))
+            LedControllerControllerEventEnum::Brightness(__self_0) => {
+                LedControllerControllerEventEnum::Brightness(
+                    ::core::clone::Clone::clone(__self_0),
+                )
             }
         }
     }
 }
 /// Event subscriber for aggregated events
-pub struct LedControllerEventSubscriber {
+pub struct LedControllerControllerEventSubscriber {
     sub0: <LedStateEvent as ::rmk::event::ControllerSubscribeEvent>::Subscriber,
     sub1: <BrightnessEvent as ::rmk::event::ControllerSubscribeEvent>::Subscriber,
 }
-impl LedControllerEventSubscriber {
+impl LedControllerControllerEventSubscriber {
     /// Create a new event subscriber
     pub fn new() -> Self {
         Self {
@@ -90,8 +94,8 @@ impl LedControllerEventSubscriber {
         }
     }
 }
-impl ::rmk::event::EventSubscriber for LedControllerEventSubscriber {
-    type Event = LedControllerEventEnum;
+impl ::rmk::event::EventSubscriber for LedControllerControllerEventSubscriber {
+    type Event = LedControllerControllerEventEnum;
     async fn next_event(&mut self) -> Self::Event {
         use ::rmk::event::EventSubscriber;
         use ::rmk::futures::FutureExt;
@@ -178,27 +182,31 @@ impl ::rmk::event::EventSubscriber for LedControllerEventSubscriber {
                     __futures_crate::future::poll_fn(__poll_fn).await
                 };
                 match __select_result {
-                    __PrivResult::_0(event) => LedControllerEventEnum::LedState(event),
-                    __PrivResult::_1(event) => LedControllerEventEnum::Brightness(event),
+                    __PrivResult::_0(event) => {
+                        LedControllerControllerEventEnum::LedState(event)
+                    }
+                    __PrivResult::_1(event) => {
+                        LedControllerControllerEventEnum::Brightness(event)
+                    }
                 }
             }
         }
     }
 }
-impl ::rmk::event::ControllerSubscribeEvent for LedControllerEventEnum {
-    type Subscriber = LedControllerEventSubscriber;
+impl ::rmk::event::ControllerSubscribeEvent for LedControllerControllerEventEnum {
+    type Subscriber = LedControllerControllerEventSubscriber;
     fn controller_subscriber() -> Self::Subscriber {
-        LedControllerEventSubscriber::new()
+        LedControllerControllerEventSubscriber::new()
     }
 }
 impl ::rmk::controller::Controller for LedController {
-    type Event = LedControllerEventEnum;
+    type Event = LedControllerControllerEventEnum;
     async fn process_event(&mut self, event: Self::Event) {
         match event {
-            LedControllerEventEnum::LedState(event) => {
+            LedControllerControllerEventEnum::LedState(event) => {
                 self.on_led_state_event(event).await
             }
-            LedControllerEventEnum::Brightness(event) => {
+            LedControllerControllerEventEnum::Brightness(event) => {
                 self.on_brightness_event(event).await
             }
         }

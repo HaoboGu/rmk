@@ -1,11 +1,10 @@
 use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
-use crate::controller::channel::generate_controller_event_channel;
-use crate::controller::parser::parse_controller_event_channel_config_from_attr;
-
 use super::channel::{generate_input_event_channel, validate_event_type};
 use super::parser::parse_input_event_channel_size;
+use crate::controller::channel::generate_controller_event_channel;
+use crate::controller::parser::parse_controller_event_channel_config_from_attr;
 
 /// Generates input event infrastructure using embassy_sync::channel::Channel.
 ///

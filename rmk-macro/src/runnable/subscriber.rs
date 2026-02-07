@@ -20,7 +20,7 @@ use super::naming::event_type_to_handler_method_name;
 /// - `subscribe_trait_path`: The trait path (e.g., `::rmk::event::ControllerSubscribeEvent`)
 /// - `subscriber_method`: The method name to call (e.g., `controller_subscriber`)
 pub fn generate_event_subscriber(
-    struct_name: &syn::Ident,
+    subscriber_name: &syn::Ident,
     event_types: &[Path],
     variant_names: &[syn::Ident],
     enum_name: &syn::Ident,
@@ -28,7 +28,6 @@ pub fn generate_event_subscriber(
     subscribe_trait_path: TokenStream,
     subscriber_method: TokenStream,
 ) -> TokenStream {
-    let subscriber_name = format_ident!("{}EventSubscriber", struct_name);
     let num_events = event_types.len();
 
     // Subscriber field names

@@ -5,9 +5,8 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::utils::to_upper_snake_case;
-
 use super::config::ControllerEventChannelConfig;
+use crate::utils::to_upper_snake_case;
 
 /// Generate controller event channel (PubSubChannel) and trait implementations.
 ///

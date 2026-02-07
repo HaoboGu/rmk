@@ -1,14 +1,13 @@
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::parse::Parser;
 use syn::{DeriveInput, Meta, Path, parse_macro_input};
 
+use super::config::InputDeviceConfig;
 use crate::controller::config::ControllerConfig;
 use crate::controller::parser::parse_controller_config;
-use crate::runnable::{event_type_to_read_method_name, generate_runnable};
-use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr};
-
-use super::config::InputDeviceConfig;
+use crate::runnable::generate_runnable;
+use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr, to_snake_case};
 
 /// Generates InputDevice and Runnable trait implementations for single-event devices.
 ///
@@ -93,7 +92,9 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let deduped_ty_generics = deduplicate_type_generics(generics);
 
     // Generate method name from event type
-    let method_name = event_type_to_read_method_name(&event_type);
+    let type_name = event_type.segments.last().unwrap().ident.to_string();
+    let base_name = type_name.strip_suffix("Event").unwrap_or(&type_name);
+    let method_name = format_ident!("read_{}_event", to_snake_case(base_name));
 
     // Generate Runnable implementation
     let runnable_impl = if has_marker {
@@ -120,7 +121,9 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Add marker attribute if we generated Runnable and there are other macros.
     if !has_marker && has_controller {
-        input.attrs.push(syn::parse_quote!(#[::rmk::macros::runnable_generated]));
+        input
+            .attrs
+            .push(syn::parse_quote!(#[::rmk::macros::runnable_generated]));
     }
 
     // Generate the complete output

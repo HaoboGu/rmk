@@ -3,15 +3,16 @@
 use proc_macro2::TokenStream;
 use syn::{Attribute, Meta};
 
-use crate::utils::AttributeParser;
-
 use super::config::{InputDeviceConfig, InputProcessorConfig};
+use crate::utils::AttributeParser;
 
 /// Parse input_device config from attribute tokens.
 /// Extracts `publish = EventType`.
 pub fn parse_input_device_config(tokens: impl Into<TokenStream>) -> Option<InputDeviceConfig> {
     let parser = AttributeParser::new(tokens).ok()?;
-    parser.get_path("publish").map(|event_type| InputDeviceConfig { event_type })
+    parser
+        .get_path("publish")
+        .map(|event_type| InputDeviceConfig { event_type })
 }
 
 /// Parse input_processor config from attribute tokens.

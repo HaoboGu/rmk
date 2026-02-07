@@ -6,11 +6,10 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
+use super::naming::generate_unique_variant_names;
 use crate::controller::config::ControllerConfig;
 use crate::input::config::{InputDeviceConfig, InputProcessorConfig};
 use crate::utils::deduplicate_type_generics;
-
-use super::naming::generate_unique_variant_names;
 
 /// Build the loop body for select with optional match.
 fn build_select_loop_body(select_arms: &[TokenStream], match_arms: Option<&[TokenStream]>) -> TokenStream {
@@ -139,16 +138,13 @@ pub fn generate_runnable(
     // Handle input_processor.
     if let Some(processor_config) = input_processor_config {
         let has_single_proc_event = processor_config.event_types.len() == 1;
-        let proc_enum_name = format_ident!("{}EventEnum", struct_name);
+        let proc_enum_name = format_ident!("{}InputEventEnum", struct_name);
         let proc_variant_names = generate_unique_variant_names(&processor_config.event_types);
         use_statements.push(quote! { use ::rmk::event::InputSubscribeEvent; });
         use_statements.push(quote! { use ::rmk::input_device::InputProcessor; });
 
-        for (idx, (event_type, variant_name)) in processor_config
-            .event_types
-            .iter()
-            .zip(&proc_variant_names)
-            .enumerate()
+        for (idx, (event_type, variant_name)) in
+            processor_config.event_types.iter().zip(&proc_variant_names).enumerate()
         {
             let sub_name = format_ident!("proc_sub{}", idx);
             sub_defs.push(quote! {
@@ -175,7 +171,7 @@ pub fn generate_runnable(
 
     if let Some(ctrl_config) = controller_config {
         let has_single_ctrl_event = ctrl_config.event_types.len() == 1;
-        let ctrl_enum = (!has_single_ctrl_event).then(|| format_ident!("{}EventEnum", struct_name));
+        let ctrl_enum = (!has_single_ctrl_event).then(|| format_ident!("{}ControllerEventEnum", struct_name));
         let ctrl_variant_names = generate_unique_variant_names(&ctrl_config.event_types);
 
         ctrl_select_event_type = Some(if has_single_ctrl_event {
@@ -189,11 +185,8 @@ pub fn generate_runnable(
         use_statements.push(quote! { use ::rmk::event::ControllerSubscribeEvent; });
         use_statements.push(quote! { use ::rmk::controller::Controller; });
 
-        for (idx, (ctrl_event_type, variant_name)) in ctrl_config
-            .event_types
-            .iter()
-            .zip(&ctrl_variant_names)
-            .enumerate()
+        for (idx, (ctrl_event_type, variant_name)) in
+            ctrl_config.event_types.iter().zip(&ctrl_variant_names).enumerate()
         {
             let sub_name = format_ident!("ctrl_sub{}", idx);
             sub_defs.push(quote! {
@@ -326,7 +319,7 @@ pub fn generate_runnable(
 
         build_polling_loop_body(interval_ms, timer_arm, &select_arms, match_arms)
     } else {
-        let match_arms = needs_split_select.then(|| select_match_arms.as_slice());
+        let match_arms = needs_split_select.then_some(select_match_arms.as_slice());
         build_select_loop_body(&select_arms, match_arms)
     };
 

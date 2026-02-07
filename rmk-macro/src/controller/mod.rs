@@ -8,6 +8,8 @@ use quote::{format_ident, quote};
 use rmk_config::{ChipModel, KeyboardTomlConfig, PinConfig};
 use syn::{DeriveInput, ItemMod, Meta, parse_macro_input};
 
+use self::config::ControllerConfig;
+use self::parser::parse_controller_config;
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::gpio_config::convert_gpio_str_to_output_pin;
 use crate::input::config::{InputDeviceConfig, InputProcessorConfig};
@@ -17,9 +19,6 @@ use crate::runnable::{
     generate_unique_variant_names,
 };
 use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr, reconstruct_type_def};
-
-use self::config::ControllerConfig;
-use self::parser::parse_controller_config;
 
 /// Expand controller init/exec blocks from keyboard config.
 /// Returns (initializers, executors).
@@ -257,7 +256,8 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         )
     } else {
         // Multiple events: generate aggregated enum
-        let enum_name = format_ident!("{}EventEnum", struct_name);
+        let enum_name = format_ident!("{}ControllerEventEnum", struct_name);
+        let subscriber_name = format_ident!("{}ControllerEventSubscriber", struct_name);
         let variant_names = generate_unique_variant_names(&config.event_types);
 
         // Build enum variants
@@ -275,7 +275,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
 
         // Generate EventSubscriber struct and impl
         let subscriber_impl = generate_event_subscriber(
-            struct_name,
+            &subscriber_name,
             &config.event_types,
             &variant_names,
             &enum_name,
@@ -351,7 +351,7 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     let expanded = quote! {
         #(#attrs)*
         #marker_attr
-        #vis #struct_def
+        #struct_def
 
         #event_enum_def
 

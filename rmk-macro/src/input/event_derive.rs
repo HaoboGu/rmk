@@ -40,6 +40,7 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
 
     let enum_name = &input.ident;
     let publisher_name = format_ident!("{}Publisher", enum_name);
+    let vis = &input.vis;
 
     // Split generics for impl blocks.
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
@@ -85,12 +86,32 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
         });
     }
 
+    let has_generics = !input.generics.params.is_empty();
+
+    let publisher_def = if has_generics {
+        quote! {
+            #vis struct #publisher_name #impl_generics
+                (::core::marker::PhantomData<#enum_name #ty_generics>)
+                #where_clause;
+        }
+    } else {
+        quote! {
+            #vis struct #publisher_name;
+        }
+    };
+
+    let publisher_ctor = if has_generics {
+        quote! { #publisher_name(::core::marker::PhantomData) }
+    } else {
+        quote! { #publisher_name }
+    };
+
     let expanded = quote! {
         /// Publisher for the wrapper enum.
         /// Routes each variant to its event channel.
-        pub struct #publisher_name;
+        #publisher_def
 
-        impl ::rmk::event::AsyncEventPublisher for #publisher_name {
+        impl #impl_generics ::rmk::event::AsyncEventPublisher for #publisher_name #ty_generics #where_clause {
             type Event = #enum_name #ty_generics;
 
             async fn publish_async(&self, event: #enum_name #ty_generics) {
@@ -100,7 +121,7 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
             }
         }
 
-        impl ::rmk::event::EventPublisher for #publisher_name {
+        impl #impl_generics ::rmk::event::EventPublisher for #publisher_name #ty_generics #where_clause {
             type Event = #enum_name #ty_generics;
 
             fn publish(&self, event: #enum_name #ty_generics) {
@@ -111,18 +132,18 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
         }
 
         impl #impl_generics ::rmk::event::InputPublishEvent for #enum_name #ty_generics #where_clause {
-            type Publisher = #publisher_name;
+            type Publisher = #publisher_name #ty_generics;
 
             fn input_publisher() -> Self::Publisher {
-                #publisher_name
+                #publisher_ctor
             }
         }
 
         impl #impl_generics ::rmk::event::AsyncInputPublishEvent for #enum_name #ty_generics #where_clause {
-            type AsyncPublisher = #publisher_name;
+            type AsyncPublisher = #publisher_name #ty_generics;
 
             fn input_publisher_async() -> Self::AsyncPublisher {
-                #publisher_name
+                #publisher_ctor
             }
         }
 

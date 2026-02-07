@@ -1,6 +1,8 @@
 use quote::{format_ident, quote};
 use syn::{DeriveInput, Meta, parse_macro_input};
 
+use super::config::InputProcessorConfig;
+use super::parser::parse_input_processor_config;
 use crate::controller::config::ControllerConfig;
 use crate::controller::parser::parse_controller_config;
 use crate::runnable::{
@@ -8,9 +10,6 @@ use crate::runnable::{
     generate_unique_variant_names,
 };
 use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr, reconstruct_type_def};
-
-use super::config::InputProcessorConfig;
-use super::parser::parse_input_processor_config;
 
 /// Generates InputProcessor trait implementation with automatic event routing.
 ///
@@ -115,7 +114,8 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
         )
     } else {
         // Multiple events: generate aggregated enum
-        let enum_name = format_ident!("{}EventEnum", struct_name);
+        let enum_name = format_ident!("{}InputEventEnum", struct_name);
+        let subscriber_name = format_ident!("{}InputEventSubscriber", struct_name);
         let variant_names = generate_unique_variant_names(&config.event_types);
 
         // Build enum variants
@@ -133,7 +133,7 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
 
         // Generate EventSubscriber struct and impl
         let subscriber_impl = generate_event_subscriber(
-            struct_name,
+            &subscriber_name,
             &config.event_types,
             &variant_names,
             &enum_name,
@@ -190,7 +190,7 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
     let expanded = quote! {
         #(#attrs)*
         #marker_attr
-        #vis #struct_def
+        #struct_def
 
         #event_enum_def
 

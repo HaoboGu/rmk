@@ -67,30 +67,32 @@ impl ::core::fmt::Debug for EncoderEvent {
     }
 }
 pub struct KeyProcessor;
-pub enum KeyProcessorEventEnum {
+pub enum KeyProcessorInputEventEnum {
     Key(KeyEvent),
     Encoder(EncoderEvent),
 }
 #[automatically_derived]
-impl ::core::clone::Clone for KeyProcessorEventEnum {
+impl ::core::clone::Clone for KeyProcessorInputEventEnum {
     #[inline]
-    fn clone(&self) -> KeyProcessorEventEnum {
+    fn clone(&self) -> KeyProcessorInputEventEnum {
         match self {
-            KeyProcessorEventEnum::Key(__self_0) => {
-                KeyProcessorEventEnum::Key(::core::clone::Clone::clone(__self_0))
+            KeyProcessorInputEventEnum::Key(__self_0) => {
+                KeyProcessorInputEventEnum::Key(::core::clone::Clone::clone(__self_0))
             }
-            KeyProcessorEventEnum::Encoder(__self_0) => {
-                KeyProcessorEventEnum::Encoder(::core::clone::Clone::clone(__self_0))
+            KeyProcessorInputEventEnum::Encoder(__self_0) => {
+                KeyProcessorInputEventEnum::Encoder(
+                    ::core::clone::Clone::clone(__self_0),
+                )
             }
         }
     }
 }
 /// Event subscriber for aggregated events
-pub struct KeyProcessorEventSubscriber {
+pub struct KeyProcessorInputEventSubscriber {
     sub0: <KeyEvent as ::rmk::event::InputSubscribeEvent>::Subscriber,
     sub1: <EncoderEvent as ::rmk::event::InputSubscribeEvent>::Subscriber,
 }
-impl KeyProcessorEventSubscriber {
+impl KeyProcessorInputEventSubscriber {
     /// Create a new event subscriber
     pub fn new() -> Self {
         Self {
@@ -99,8 +101,8 @@ impl KeyProcessorEventSubscriber {
         }
     }
 }
-impl ::rmk::event::EventSubscriber for KeyProcessorEventSubscriber {
-    type Event = KeyProcessorEventEnum;
+impl ::rmk::event::EventSubscriber for KeyProcessorInputEventSubscriber {
+    type Event = KeyProcessorInputEventEnum;
     async fn next_event(&mut self) -> Self::Event {
         use ::rmk::event::EventSubscriber;
         use ::rmk::futures::FutureExt;
@@ -187,17 +189,17 @@ impl ::rmk::event::EventSubscriber for KeyProcessorEventSubscriber {
                     __futures_crate::future::poll_fn(__poll_fn).await
                 };
                 match __select_result {
-                    __PrivResult::_0(event) => KeyProcessorEventEnum::Key(event),
-                    __PrivResult::_1(event) => KeyProcessorEventEnum::Encoder(event),
+                    __PrivResult::_0(event) => KeyProcessorInputEventEnum::Key(event),
+                    __PrivResult::_1(event) => KeyProcessorInputEventEnum::Encoder(event),
                 }
             }
         }
     }
 }
-impl ::rmk::event::InputSubscribeEvent for KeyProcessorEventEnum {
-    type Subscriber = KeyProcessorEventSubscriber;
+impl ::rmk::event::InputSubscribeEvent for KeyProcessorInputEventEnum {
+    type Subscriber = KeyProcessorInputEventSubscriber;
     fn input_subscriber() -> Self::Subscriber {
-        KeyProcessorEventSubscriber::new()
+        KeyProcessorInputEventSubscriber::new()
     }
 }
 impl ::rmk::input_device::Runnable for KeyProcessor {
@@ -207,11 +209,13 @@ impl ::rmk::input_device::Runnable for KeyProcessor {
     }
 }
 impl ::rmk::input_device::InputProcessor for KeyProcessor {
-    type Event = KeyProcessorEventEnum;
+    type Event = KeyProcessorInputEventEnum;
     async fn process(&mut self, event: Self::Event) {
         match event {
-            KeyProcessorEventEnum::Key(event) => self.on_key_event(event).await,
-            KeyProcessorEventEnum::Encoder(event) => self.on_encoder_event(event).await,
+            KeyProcessorInputEventEnum::Key(event) => self.on_key_event(event).await,
+            KeyProcessorInputEventEnum::Encoder(event) => {
+                self.on_encoder_event(event).await
+            }
         }
     }
 }

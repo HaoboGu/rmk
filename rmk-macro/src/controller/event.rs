@@ -1,11 +1,10 @@
 use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
-use crate::input::channel::{generate_input_event_channel, validate_event_type};
-use crate::input::parser::parse_input_event_channel_size_from_attr;
-
 use super::channel::generate_controller_event_channel;
 use super::parser::parse_controller_event_channel_config;
+use crate::input::channel::{generate_input_event_channel, validate_event_type};
+use crate::input::parser::parse_input_event_channel_size_from_attr;
 
 /// Generates controller event infrastructure.
 ///
@@ -50,8 +49,13 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
     let expanded = if let Some(input_attr) = input_event_attr.as_ref() {
         // input_event is also present, generate both sets of implementations
         let input_channel_size = parse_input_event_channel_size_from_attr(input_attr);
-        let (input_channel_static, input_trait_impls) =
-            generate_input_event_channel(type_name, &ty_generics, &impl_generics, where_clause, input_channel_size);
+        let (input_channel_static, input_trait_impls) = generate_input_event_channel(
+            type_name,
+            &ty_generics,
+            &impl_generics,
+            where_clause,
+            input_channel_size,
+        );
 
         quote! {
             #input

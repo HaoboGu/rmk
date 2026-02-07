@@ -3,9 +3,8 @@
 use proc_macro2::TokenStream;
 use syn::{Attribute, Meta};
 
-use crate::utils::AttributeParser;
-
 use super::config::{ControllerConfig, ControllerEventChannelConfig};
+use crate::utils::AttributeParser;
 
 /// Parse controller config from attribute tokens.
 /// Extracts `subscribe = [...]` and optional `poll_interval = N`.

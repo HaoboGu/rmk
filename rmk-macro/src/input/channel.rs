@@ -84,8 +84,11 @@ pub fn validate_event_type(input: &syn::DeriveInput, macro_name: &str) -> Option
     // Validate input is a struct or enum
     if !matches!(input.data, syn::Data::Struct(_) | syn::Data::Enum(_)) {
         return Some(
-            syn::Error::new_spanned(input, format!("#[{}] can only be applied to structs or enums", macro_name))
-                .to_compile_error(),
+            syn::Error::new_spanned(
+                input,
+                format!("#[{}] can only be applied to structs or enums", macro_name),
+            )
+            .to_compile_error(),
         );
     }
 
@@ -94,7 +97,10 @@ pub fn validate_event_type(input: &syn::DeriveInput, macro_name: &str) -> Option
         return Some(
             syn::Error::new_spanned(
                 &input.generics,
-                format!("#[{}] does not support generic types. Static channels cannot be generic.", macro_name),
+                format!(
+                    "#[{}] does not support generic types. Static channels cannot be generic.",
+                    macro_name
+                ),
             )
             .to_compile_error(),
         );

@@ -23,7 +23,9 @@ pub use split::{CentralConnectedEvent, PeripheralConnectedEvent};
 #[cfg(all(feature = "split", feature = "_ble"))]
 pub use split::{ClearPeerEvent, PeripheralBatteryEvent};
 
-use crate::event::{AsyncControllerPublishEvent, AsyncEventPublisher as _, ControllerPublishEvent, EventPublisher as _};
+use crate::event::{
+    AsyncControllerPublishEvent, AsyncEventPublisher as _, ControllerPublishEvent, EventPublisher as _,
+};
 
 /// Publish a controller event (non-blocking, may drop if buffer full)
 ///

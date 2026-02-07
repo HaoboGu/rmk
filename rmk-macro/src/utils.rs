@@ -19,8 +19,8 @@ pub struct AttributeParser {
 impl AttributeParser {
     /// Create a new parser from attribute tokens.
     pub fn new(tokens: impl Into<TokenStream>) -> Result<Self, syn::Error> {
-        use syn::punctuated::Punctuated;
         use syn::Token;
+        use syn::punctuated::Punctuated;
 
         let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
         let tokens: TokenStream = tokens.into();
@@ -252,6 +252,7 @@ fn should_preserve_attr(attr: &Attribute) -> bool {
 /// to avoid duplicating the where clause.
 pub fn reconstruct_type_def(input: &syn::DeriveInput) -> TokenStream {
     let type_name = &input.ident;
+    let vis = &input.vis;
     let generics = &input.generics;
     let (impl_generics, _, where_clause) = generics.split_for_impl();
 
@@ -261,18 +262,18 @@ pub fn reconstruct_type_def(input: &syn::DeriveInput) -> TokenStream {
     match &input.data {
         syn::Data::Struct(data_struct) => match &data_struct.fields {
             syn::Fields::Named(fields) => {
-                quote! { #(#preserved_attrs)* struct #type_name #impl_generics #where_clause #fields }
+                quote! { #(#preserved_attrs)* #vis struct #type_name #impl_generics #where_clause #fields }
             }
             syn::Fields::Unnamed(fields) => {
-                quote! { #(#preserved_attrs)* struct #type_name #impl_generics #fields #where_clause ; }
+                quote! { #(#preserved_attrs)* #vis struct #type_name #impl_generics #fields #where_clause ; }
             }
             syn::Fields::Unit => {
-                quote! { #(#preserved_attrs)* struct #type_name #impl_generics #where_clause ; }
+                quote! { #(#preserved_attrs)* #vis struct #type_name #impl_generics #where_clause ; }
             }
         },
         syn::Data::Enum(data_enum) => {
             let variants = &data_enum.variants;
-            quote! { #(#preserved_attrs)* enum #type_name #impl_generics #where_clause { #variants } }
+            quote! { #(#preserved_attrs)* #vis enum #type_name #impl_generics #where_clause { #variants } }
         }
         syn::Data::Union(_) => {
             panic!("Unions are not supported")
