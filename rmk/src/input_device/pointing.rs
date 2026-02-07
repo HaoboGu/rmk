@@ -3,12 +3,12 @@
 use core::cell::RefCell;
 
 use embassy_time::{Duration, Instant, Timer};
+use rmk_macro::input_processor;
 use usbd_hid::descriptor::MouseReport;
 
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
-use crate::event::{Axis, AxisEvent, AxisValType, Event};
+use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent};
 use crate::hid::Report;
-use crate::input_device::{InputDevice, InputProcessor, ProcessResult};
+use crate::input_device::{InputDevice, InputProcessor};
 use crate::keymap::KeyMap;
 use embedded_hal::digital::InputPin;
 use embedded_hal_async::digital::Wait;
@@ -140,7 +140,7 @@ where
         }
     }
 
-    fn take_report_event(&mut self) -> Option<Event> {
+    fn take_report_event(&mut self) -> Option<PointingEvent> {
         if self.accumulated_x == 0 && self.accumulated_y == 0 {
             return None;
         }
@@ -151,7 +151,7 @@ where
         self.accumulated_x = 0;
         self.accumulated_y = 0;
 
-        Some(Event::Joystick([
+        Some(PointingEvent([
             AxisEvent {
                 typ: AxisValType::Rel,
                 axis: Axis::X,
@@ -171,10 +171,26 @@ where
     }
 }
 
+impl<S> crate::input_device::Runnable for PointingDevice<S>
+where
+    S: PointingDriver,
+{
+    async fn run(&mut self) -> ! {
+        use crate::event::publish_input_event_async;
+        use crate::input_device::InputDevice;
+        loop {
+            let event = self.read_event().await;
+            publish_input_event_async(event).await;
+        }
+    }
+}
+
 impl<S> InputDevice for PointingDevice<S>
 where
     S: PointingDriver,
 {
+    type Event = PointingEvent;
+
     /*
     +--------------- loop ---------------+
     ¦ poll_wait   report_wait            ¦
@@ -186,7 +202,7 @@ where
     ¦                 >- Event returned  ¦
     +------------------------------------+
     */
-    async fn read_event(&mut self) -> Event {
+    async fn read_event(&mut self) -> PointingEvent {
         {
             use embassy_futures::select::{Either, select};
 
@@ -253,6 +269,7 @@ pub struct PointingProcessorConfig {
 }
 
 /// PointingProcessor that converts motion events to mouse reports
+#[input_processor(subscribe = [PointingEvent])]
 pub struct PointingProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
     /// Reference to the keymap
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
@@ -270,58 +287,37 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         Self { keymap, config }
     }
 
-    async fn generate_report(&self, x: i16, y: i16) {
+    async fn on_pointing_event(&mut self, event: PointingEvent) {
+        let mut x = 0i16;
+        let mut y = 0i16;
+
+        for axis_event in event.0.iter() {
+            match axis_event.axis {
+                Axis::X => x = axis_event.value,
+                Axis::Y => y = axis_event.value,
+                _ => {}
+            }
+        }
+
+        if self.config.invert_x {
+            x = -x;
+        }
+        if self.config.invert_y {
+            y = -y;
+        }
+        if self.config.swap_xy {
+            (x, y) = (y, x);
+        }
+
+        let buttons = self.keymap.borrow().mouse_buttons;
         let mouse_report = MouseReport {
-            buttons: 0,
+            buttons,
             x: x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
             y: y.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
             wheel: 0,
             pan: 0,
         };
         self.send_report(Report::MouseReport(mouse_report)).await;
-    }
-}
-
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER> for PointingProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
-{
-    async fn process(&mut self, event: Event) -> ProcessResult {
-        match event {
-            Event::Joystick(axis_events) => {
-                let mut x = 0i16;
-                let mut y = 0i16;
-
-                for axis_event in axis_events.iter() {
-                    match axis_event.axis {
-                        Axis::X => x = axis_event.value,
-                        Axis::Y => y = axis_event.value,
-                        _ => {}
-                    }
-                }
-
-                if self.config.invert_x {
-                    x = -x;
-                }
-                if self.config.invert_y {
-                    y = -y;
-                }
-                if self.config.swap_xy {
-                    (x, y) = (y, x);
-                }
-
-                self.generate_report(x, y).await;
-                ProcessResult::Stop
-            }
-            _ => ProcessResult::Continue(event),
-        }
-    }
-
-    async fn send_report(&self, report: Report) {
-        KEYBOARD_REPORT_CHANNEL.send(report).await;
-    }
-
-    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
-        self.keymap
     }
 }
 
@@ -577,13 +573,9 @@ mod tests {
 
         let event = block_on(device.read_event());
 
-        match event {
-            Event::Joystick(axes) => {
-                assert_eq!(axes[0].value, 3);
-                assert_eq!(axes[1].value, -2);
-            }
-            _ => panic!("expected joystick event"),
-        }
+        let axes = &event.0;
+        assert_eq!(axes[0].value, 3);
+        assert_eq!(axes[1].value, -2);
 
         assert!(device.sensor.read_called);
     }
@@ -619,13 +611,9 @@ mod tests {
         let event = block_on(device.read_event());
         let duration = start.elapsed();
 
-        match event {
-            Event::Joystick(axes) => {
-                assert_eq!(axes[0].value, 10);
-                assert_eq!(axes[1].value, -5);
-            }
-            _ => panic!("expected joystick event"),
-        }
+        let axes = &event.0;
+        assert_eq!(axes[0].value, 10);
+        assert_eq!(axes[1].value, -5);
         // poll intervall is 10000 here, so if read_event took less than that, motion pin wait worked and we did not get the report form polling
         assert!(
             duration.as_millis() <= 1000,

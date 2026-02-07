@@ -9,15 +9,6 @@ use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
 use embedded_hal_async::spi::SpiBus;
-use futures::future::pending;
-use rmk_macro::{input_device, input_processor};
-use usbd_hid::descriptor::MouseReport;
-
-pub use crate::driver::bitbang_spi::{BitBangError, BitBangSpiBus};
-use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent};
-use crate::hid::Report;
-use crate::input_device::InputProcessor;
-use crate::keymap::KeyMap;
 
 // ============================================================================
 // Page 0 registers

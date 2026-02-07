@@ -511,7 +511,7 @@ where
             self.upload_firmware(firmware).await?;
         }
 
-        self.set_resolution(self.config.res_cpi as u16)
+        self.set_resolution(self.config.res_cpi)
             .await
             .map_err(|_| Pmw33xxError::Spi)?;
         self.write_reg(Register::Config2, 0x00)

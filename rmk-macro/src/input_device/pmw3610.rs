@@ -153,14 +153,14 @@ pub(crate) fn expand_pmw3610_device(
         // Generate processor initialization
         let processor_init = quote! {
 
-            let #processor_ident_config =::rmk::input_device::pointing::PointingProcessorConfig {
-                invert_x: #proc_invert_x
+            let #processor_ident_config = ::rmk::input_device::pointing::PointingProcessorConfig {
+                invert_x: #proc_invert_x,
                 invert_y: #proc_invert_y,
                 swap_xy: #proc_swap_xy,
                 ..Default::default()
             };
 
-            let mut #processor_ident = ::rmk::input_device::pointing::PointingProcessor::new(&keymap);
+            let mut #processor_ident = ::rmk::input_device::pointing::PointingProcessor::new(&keymap, #processor_ident_config);
         };
 
         processor_initializers.push(Initializer {
