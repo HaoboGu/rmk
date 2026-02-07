@@ -38,9 +38,6 @@ pub trait Event: Clone + Send {}
 impl<T: Clone + Send> Event for T {}
 
 /// Trait for input events that can be published.
-///
-/// This is the "publish" side of input events. Types implementing this trait
-/// can send events to a channel.
 pub trait PublishableInputEvent: Event {
     type Publisher: EventPublisher<Event = Self>;
 
@@ -55,9 +52,6 @@ pub trait AsyncPublishableInputEvent: PublishableInputEvent {
 }
 
 /// Trait for input events that can be subscribed to.
-///
-/// This is the "subscribe" side of input events. Types implementing this trait
-/// can receive events from a channel.
 pub trait SubscribableInputEvent: Event {
     type Subscriber: EventSubscriber<Event = Self>;
 
@@ -67,7 +61,6 @@ pub trait SubscribableInputEvent: Event {
 /// Combined trait for input events that support both publish and subscribe.
 ///
 /// Most concrete input event types implement this trait.
-/// Wrapper enums (for routing) only implement `PublishableInputEvent`.
 pub trait InputEvent: PublishableInputEvent + SubscribableInputEvent {}
 
 // Auto-implement InputEvent for types that implement both publish and subscribe
@@ -78,13 +71,7 @@ pub trait AsyncInputEvent: InputEvent + AsyncPublishableInputEvent {}
 
 impl<T: InputEvent + AsyncPublishableInputEvent> AsyncInputEvent for T {}
 
-// ============================================================================
-// Controller Event Traits
-// ============================================================================
-
 /// Trait for controller events that can be published.
-///
-/// This is the "publish" side of controller events.
 pub trait PublishableControllerEvent: Event {
     type Publisher: EventPublisher<Event = Self>;
 
@@ -99,8 +86,6 @@ pub trait AsyncPublishableControllerEvent: PublishableControllerEvent {
 }
 
 /// Trait for controller events that can be subscribed to.
-///
-/// This is the "subscribe" side of controller events.
 pub trait SubscribableControllerEvent: Event {
     type Subscriber: EventSubscriber<Event = Self>;
 
@@ -110,7 +95,6 @@ pub trait SubscribableControllerEvent: Event {
 /// Combined trait for controller events that support both publish and subscribe.
 ///
 /// Most concrete controller event types implement this trait.
-/// Aggregated event enums (for multi-event subscription) also implement this trait.
 pub trait ControllerEvent: PublishableControllerEvent + SubscribableControllerEvent {}
 
 // Auto-implement ControllerEvent for types that implement both publish and subscribe

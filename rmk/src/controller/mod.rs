@@ -1,49 +1,6 @@
 //! Controller module for RMK
 //!
 //! This module defines the `Controller` trait and its variations for different modes of execution.
-//!
-//! # Usage
-//!
-//! Use the `#[controller]` macro to define a controller that subscribes to events:
-//!
-//! ```rust,ignore
-//! use rmk_macro::controller;
-//!
-//! // Single event subscription
-//! #[controller(subscribe = [LedIndicatorEvent])]
-//! struct MyController { /* ... */ }
-//!
-//! impl MyController {
-//!     // You MUST implement this method - the name follows the pattern: on_{event_name}_event
-//!     // For LedIndicatorEvent, the method name is on_led_indicator_event
-//!     async fn on_led_indicator_event(&mut self, event: LedIndicatorEvent) {
-//!         // handle event
-//!     }
-//! }
-//!
-//! // Multiple event subscription
-//! #[controller(subscribe = [EventA, EventB])]
-//! struct MyMultiController { /* ... */ }
-//!
-//! impl MyMultiController {
-//!     // Each subscribed event type requires a corresponding handler method
-//!     async fn on_event_a_event(&mut self, event: EventA) { /* ... */ }
-//!     async fn on_event_b_event(&mut self, event: EventB) { /* ... */ }
-//! }
-//!
-//! // With polling support
-//! #[controller(subscribe = [EventA], poll_interval = 100)]
-//! struct MyPollingController { /* ... */ }
-//!
-//! impl MyPollingController {
-//!     async fn on_event_a_event(&mut self, event: EventA) { /* ... */ }
-//!
-//!     // When poll_interval is set, you MUST also implement poll()
-//!     async fn poll(&mut self) {
-//!         // Called periodically at the specified interval (in ms)
-//!     }
-//! }
-//! ```
 
 #[cfg(feature = "_ble")]
 pub mod battery_led;
@@ -55,19 +12,55 @@ use embassy_futures::select::{Either, select};
 use crate::event::{EventSubscriber, SubscribableControllerEvent};
 use crate::input_device::Runnable;
 
-/// This trait provides the interface for individual output device controllers.
+/// The trait for controllers.
 ///
-/// See the [module-level documentation](self) for usage examples.
+/// This trait provides the interface for individual output device controllers.
+/// Use the `#[controller]` to define a controller struct.
+/// This trait will be automatically implemented by using `#[controller]` macro.
+///
+/// ```rust,ignore
+/// use rmk_macro::controller;
+///
+/// // Single event subscription
+/// #[controller(subscribe = [LedIndicatorEvent])]
+/// struct MyController { /* ... */ }
+///
+/// impl MyController {
+///     // You MUST implement on_{event_name}_event handler method for each event type in `subscribe = [..]`
+///     // For example, the method name is on_led_indicator_event for LedIndicatorEvent.
+///     async fn on_led_indicator_event(&mut self, event: LedIndicatorEvent) {
+///         // handle event
+///     }
+/// }
+///
+/// // Multiple event subscription
+/// #[controller(subscribe = [EventA, EventB])]
+/// struct MyMultiController { /* ... */ }
+///
+/// impl MyMultiController {
+///     // Each subscribed event type requires a corresponding handler method
+///     async fn on_event_a_event(&mut self, event: EventA) { /* ... */ }
+///     async fn on_event_b_event(&mut self, event: EventB) { /* ... */ }
+/// }
+///
+/// // With polling support
+/// #[controller(subscribe = [EventA], poll_interval = 100)]
+/// struct MyPollingController { /* ... */ }
+///
+/// impl MyPollingController {
+///     async fn on_event_a_event(&mut self, event: EventA) { /* ... */ }
+///
+///     // When poll_interval is set, you MUST also implement poll()
+///     async fn poll(&mut self) {
+///         // Called periodically at the specified interval (in ms)
+///     }
+/// }
+/// ```
 pub trait Controller: Runnable {
     /// Type of the received events.
-    ///
-    /// Must implement `SubscribableControllerEvent`, which provides the `Subscriber` type
-    /// and the `controller_subscriber()` method.
     type Event: SubscribableControllerEvent;
 
     /// Create a new event subscriber.
-    ///
-    /// Default implementation uses the event's `controller_subscriber()` method.
     fn subscriber() -> <Self::Event as SubscribableControllerEvent>::Subscriber {
         Self::Event::controller_subscriber()
     }
@@ -97,9 +90,11 @@ pub trait Controller: Runnable {
 ///     }
 /// }
 ///
-/// // Run the controller
+/// // Run the controller using `event_loop`
 /// let mut c = MyController;
 /// c.event_loop().await;
+/// // Or you can just use `run` from `Runnable` trait
+/// c.run().await;
 /// ```
 pub trait EventController: Controller {
     /// Event loop that continuously processes incoming events
@@ -147,6 +142,9 @@ impl<T: Controller> EventController for T {}
 /// // Run the controller with polling
 /// let mut c = BatteryLedController { led_on: false };
 /// c.polling_loop().await;
+/// // Or you can just use `run` from `Runnable` trait.
+/// // The controller macro generates polling mode `run` for polling controllers.
+/// c.run().await;
 /// ```
 pub trait PollingController: Controller {
     /// Returns the interval between `update` calls.

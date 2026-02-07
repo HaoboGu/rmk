@@ -36,12 +36,14 @@ pub trait Runnable {
 /// struct MyInputDevice;
 ///
 /// impl MyInputDevice {
+///     // You MUST implement this read method for the published event.
+///     // The method name follows the pattern: read_{event_name}_event
 ///     async fn read_battery_event(&mut self) -> BatteryEvent {
 ///         // Implementation for reading an event
 ///     }
 /// }
 ///
-/// // For multi-event devices, implement manually:
+/// // For multi-event devices, a derived enum should be used.
 /// #[derive(InputEvent)]
 /// enum MultiDeviceEvent {
 ///     Battery(BatteryEvent),
@@ -52,8 +54,9 @@ pub trait Runnable {
 /// struct MyInputDevice;
 ///
 /// impl MyInputDevice {
+///     // Returns the `MultiDeviceEvent`
 ///     async fn read_multi_device_event(&mut self) -> MultiDeviceEvent {
-///         // Implementation for reading multiple events
+///         // Implementation for reading multiple types of events
 ///     }
 /// }
 /// ```
@@ -83,8 +86,8 @@ pub trait InputDevice: Runnable {
 /// struct KeyProcessor;
 ///
 /// impl KeyProcessor {
-///     // You MUST implement handler methods for each subscribed event type
-///     // The method name follows the pattern: on_{event_name}_event
+///     // You MUST implement handler methods for each subscribed event type.
+///     // The method name follows the pattern: on_{event_name}_event.
 ///     async fn on_key_event(&mut self, event: KeyEvent) {
 ///         // Process key event
 ///     }
@@ -95,12 +98,6 @@ pub trait InputDevice: Runnable {
 /// }
 /// ```
 ///
-/// ## Handler Method Naming Convention
-///
-/// For each event type in `subscribe = [...]`, you must implement a handler method:
-/// - Event type `FooEvent` → method `on_foo_event`
-/// - Event type `KeyboardEvent` → method `on_keyboard_event`
-/// - Event type `USBEvent` → method `on_usb_event`
 pub trait InputProcessor: Runnable {
     /// The event type processed by this input processor.
     ///

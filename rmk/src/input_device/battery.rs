@@ -72,6 +72,8 @@ impl<I: InputPin> ChargingStateReader<I> {
     }
 }
 
+/// BatteryProcessor processes battery adc value and charging state,
+/// emits `BatteryStateEvent` when battery state chages.
 #[input_processor(subscribe = [BatteryAdcEvent, ChargingStateEvent])]
 pub struct BatteryProcessor {
     adc_divider_measured: u32,
