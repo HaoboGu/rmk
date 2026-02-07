@@ -5,7 +5,9 @@ use rmk_config::{ChipSeries, CommunicationConfig, KeyboardTomlConfig};
 // Default implementations of ble configuration.
 // Because ble configuration in `config` is enabled by a feature gate, so this function returns two TokenStreams.
 // One for initialization ble config, another one for filling this field into `RmkConfig`.
-pub(crate) fn expand_ble_config(keyboard_config: &KeyboardTomlConfig) -> (TokenStream2, TokenStream2) {
+pub(crate) fn expand_ble_config(
+    keyboard_config: &KeyboardTomlConfig,
+) -> (TokenStream2, TokenStream2) {
     let communication = keyboard_config.get_communication_config().unwrap();
     if !communication.ble_enabled() {
         return (quote! {}, quote! {});

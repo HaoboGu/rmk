@@ -32,9 +32,12 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
     let data_enum = match &input.data {
         syn::Data::Enum(e) => e,
         _ => {
-            return syn::Error::new_spanned(input, "#[derive(InputEvent)] can only be applied to enums")
-                .to_compile_error()
-                .into();
+            return syn::Error::new_spanned(
+                input,
+                "#[derive(InputEvent)] can only be applied to enums",
+            )
+            .to_compile_error()
+            .into();
         }
     };
 
@@ -55,7 +58,9 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
 
         // Require a single-field tuple variant.
         let inner_type = match &variant.fields {
-            syn::Fields::Unnamed(fields) if fields.unnamed.len() == 1 => &fields.unnamed.first().unwrap().ty,
+            syn::Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
+                &fields.unnamed.first().unwrap().ty
+            }
             _ => {
                 return syn::Error::new_spanned(
                     variant,

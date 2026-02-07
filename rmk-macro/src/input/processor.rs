@@ -6,7 +6,10 @@ use super::parser::parse_input_processor_config;
 use crate::controller::config::ControllerConfig;
 use crate::controller::parser::parse_controller_config;
 use crate::runnable::{generate_event_enum_and_dispatch, generate_runnable};
-use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr, reconstruct_type_def};
+use crate::utils::{
+    deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr,
+    reconstruct_type_def,
+};
 
 /// Generates InputProcessor trait implementation with automatic event routing.
 ///
@@ -17,7 +20,10 @@ use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_g
 /// #[input_processor(subscribe = [BatteryEvent, ChargingStateEvent])]
 /// pub struct BatteryProcessor { ... }
 /// ```
-pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn input_processor_impl(
+    attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
     // Parse attributes to extract event types using shared parser.
@@ -40,7 +46,10 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
     }
 
     // Check for mutually exclusive attributes
-    let has_input_device = input.attrs.iter().any(|attr| attr.path().is_ident("input_device"));
+    let has_input_device = input
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("input_device"));
     if has_input_device {
         return syn::Error::new_spanned(
             &input,
@@ -54,7 +63,10 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
     let has_marker = has_runnable_marker(&input.attrs);
 
     // Check for controller attribute (for combined Runnable generation)
-    let has_controller = input.attrs.iter().any(|attr| attr.path().is_ident("controller"));
+    let has_controller = input
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("controller"));
 
     // Parse controller config if present (for combined Runnable)
     let controller_config: Option<ControllerConfig> = if has_controller {
@@ -88,21 +100,24 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
     let attrs: Vec<_> = input
         .attrs
         .iter()
-        .filter(|attr| !attr.path().is_ident("input_processor") && !is_runnable_generated_attr(attr))
+        .filter(|attr| {
+            !attr.path().is_ident("input_processor") && !is_runnable_generated_attr(attr)
+        })
         .collect();
 
     // Reconstruct the struct definition
     let struct_def = reconstruct_type_def(&input);
 
     // Generate event enum, subscriber, and dispatch body
-    let (event_type_tokens, event_enum_def, event_subscriber_impl, process_body) = generate_event_enum_and_dispatch(
-        struct_name,
-        vis,
-        &config.event_types,
-        "Input",
-        quote! { ::rmk::event::SubscribableInputEvent },
-        quote! { input_subscriber },
-    );
+    let (event_type_tokens, event_enum_def, event_subscriber_impl, process_body) =
+        generate_event_enum_and_dispatch(
+            struct_name,
+            vis,
+            &config.event_types,
+            "Input",
+            quote! { ::rmk::event::SubscribableInputEvent },
+            quote! { input_subscriber },
+        );
 
     // Generate Runnable implementation
     let runnable_impl = if has_marker {

@@ -19,7 +19,9 @@ pub fn parse_controller_config(tokens: impl Into<TokenStream>) -> ControllerConf
 
 /// Parse controller_event parameters from a TokenStream.
 /// Extracts `channel_size`, `subs`, `pubs`.
-pub fn parse_controller_event_channel_config(tokens: impl Into<TokenStream>) -> ControllerEventChannelConfig {
+pub fn parse_controller_event_channel_config(
+    tokens: impl Into<TokenStream>,
+) -> ControllerEventChannelConfig {
     let parser = AttributeParser::new(tokens).unwrap_or_else(|_| AttributeParser::empty());
 
     ControllerEventChannelConfig {
@@ -30,7 +32,9 @@ pub fn parse_controller_event_channel_config(tokens: impl Into<TokenStream>) -> 
 }
 
 /// Parse controller_event parameters from an Attribute.
-pub fn parse_controller_event_channel_config_from_attr(attr: &Attribute) -> ControllerEventChannelConfig {
+pub fn parse_controller_event_channel_config_from_attr(
+    attr: &Attribute,
+) -> ControllerEventChannelConfig {
     if let Meta::List(meta_list) = &attr.meta {
         parse_controller_event_channel_config(meta_list.tokens.clone())
     } else {

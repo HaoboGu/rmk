@@ -166,8 +166,9 @@ fn convert_case_internal(s: &str, to_upper: bool) -> String {
             // 1) not at start
             // 2) previous is lowercase
             // 3) next is lowercase (acronym end)
-            let add_underscore =
-                i > 0 && (chars[i - 1].is_lowercase() || (i + 1 < chars.len() && chars[i + 1].is_lowercase()));
+            let add_underscore = i > 0
+                && (chars[i - 1].is_lowercase()
+                    || (i + 1 < chars.len() && chars[i + 1].is_lowercase()));
 
             if add_underscore {
                 result.push('_');
@@ -257,7 +258,11 @@ pub fn reconstruct_type_def(input: &syn::DeriveInput) -> TokenStream {
     let (impl_generics, _, where_clause) = generics.split_for_impl();
 
     // Preserve important attributes
-    let preserved_attrs: Vec<_> = input.attrs.iter().filter(|a| should_preserve_attr(a)).collect();
+    let preserved_attrs: Vec<_> = input
+        .attrs
+        .iter()
+        .filter(|a| should_preserve_attr(a))
+        .collect();
 
     match &input.data {
         syn::Data::Struct(data_struct) => match &data_struct.fields {
@@ -330,9 +335,9 @@ pub fn assemble_dual_event_output(
     let (primary_static, primary_impls) = primary_channel;
 
     // Remove both macros from attributes for the final struct definition
-    input
-        .attrs
-        .retain(|attr| !attr.path().is_ident(primary_macro_name) && !attr.path().is_ident(sibling_macro_name));
+    input.attrs.retain(|attr| {
+        !attr.path().is_ident(primary_macro_name) && !attr.path().is_ident(sibling_macro_name)
+    });
 
     if let Some(sibling_attr) = sibling_attr.as_ref() {
         let (sibling_static, sibling_impls) = generate_sibling_channel(sibling_attr);

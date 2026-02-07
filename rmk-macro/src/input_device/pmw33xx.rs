@@ -51,7 +51,12 @@ pub(crate) fn expand_pmw33xx_device(
         let sck_ident = format_ident!("{}", spi.sck);
         let mosi_ident = format_ident!("{}", spi.mosi);
         let miso_ident = format_ident!("{}", spi.miso);
-        let cs_ident = format_ident!("{}", spi.cs.as_ref().expect("pmw33xx requires `cs` in spi config"));
+        let cs_ident = format_ident!(
+            "{}",
+            spi.cs
+                .as_ref()
+                .expect("pmw33xx requires `cs` in spi config")
+        );
         let instance_ident = format_ident!("{}", spi.instance);
 
         let rx_dma_ident = match chip.series {

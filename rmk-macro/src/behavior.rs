@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 use quote::quote;
 use rmk_config::{
-    CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, MorseActionPair, MorseConfig, MorseProfile,
-    MorsesConfig, OneShotConfig, TriLayerConfig,
+    CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, MorseActionPair, MorseConfig,
+    MorseProfile, MorsesConfig, OneShotConfig, TriLayerConfig,
 };
 
 use crate::layout::{get_key_with_alias, parse_key};
@@ -268,7 +268,10 @@ fn expand_macros(macros: &Option<MacrosConfig>) -> proc_macro2::TokenStream {
     }
 }
 
-fn expand_morses(morses: &[MorseConfig], profiles: &Option<HashMap<String, MorseProfile>>) -> proc_macro2::TokenStream {
+fn expand_morses(
+    morses: &[MorseConfig],
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> proc_macro2::TokenStream {
     let morses_def = morses.iter().map(|morse| {
         let profile = if let Some(profile_name) = &morse.profile {
             let morse_profile = expand_profile_name(profile_name, profiles);
@@ -507,7 +510,9 @@ fn expand_forks(
     }
 }
 
-pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
+pub(crate) fn expand_behavior_config(
+    keyboard_config: &KeyboardTomlConfig,
+) -> proc_macro2::TokenStream {
     let profiles = &keyboard_config
         .get_behavior_config()
         .unwrap()

@@ -7,7 +7,9 @@ use super::parser::parse_input_device_config;
 use crate::controller::config::ControllerConfig;
 use crate::controller::parser::parse_controller_config;
 use crate::runnable::generate_runnable;
-use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr, to_snake_case};
+use crate::utils::{
+    deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr, to_snake_case,
+};
 
 /// Generates InputDevice and Runnable trait implementations for single-event devices.
 ///
@@ -48,7 +50,10 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     // Check for mutually exclusive attributes
-    let has_input_processor = input.attrs.iter().any(|attr| attr.path().is_ident("input_processor"));
+    let has_input_processor = input
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("input_processor"));
     if has_input_processor {
         return syn::Error::new_spanned(
             &input,
@@ -62,7 +67,10 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let has_marker = has_runnable_marker(&input.attrs);
 
     // Check for controller attribute (for combined Runnable generation)
-    let has_controller = input.attrs.iter().any(|attr| attr.path().is_ident("controller"));
+    let has_controller = input
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("controller"));
 
     // Parse controller config if present (for combined Runnable)
     let controller_config: Option<ControllerConfig> = if has_controller {

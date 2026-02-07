@@ -15,7 +15,10 @@ use crate::gpio_config::convert_gpio_str_to_output_pin;
 use crate::input::config::{InputDeviceConfig, InputProcessorConfig};
 use crate::input::parser::{parse_input_device_config, parse_input_processor_config};
 use crate::runnable::{generate_event_enum_and_dispatch, generate_runnable};
-use crate::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr, reconstruct_type_def};
+use crate::utils::{
+    deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr,
+    reconstruct_type_def,
+};
 
 /// Expand controller init/exec blocks from keyboard config.
 /// Returns (initializers, executors).
@@ -155,7 +158,10 @@ fn expand_custom_controller(fn_item: &syn::ItemFn) -> (TokenStream, &syn::Ident)
 /// #[controller(subscribe = [BatteryEvent, ChargingStateEvent])]
 /// pub struct BatteryLedController { ... }
 /// ```
-pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn controller_impl(
+    attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
     // Parse subscribe/poll attributes using shared parser.
@@ -181,8 +187,14 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
     let has_marker = has_runnable_marker(&input.attrs);
 
     // Detect input_device/input_processor for combined Runnable generation.
-    let has_input_device = input.attrs.iter().any(|attr| attr.path().is_ident("input_device"));
-    let has_input_processor = input.attrs.iter().any(|attr| attr.path().is_ident("input_processor"));
+    let has_input_device = input
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("input_device"));
+    let has_input_processor = input
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("input_processor"));
 
     // Parse input_device config if present.
     let input_device_config: Option<InputDeviceConfig> = if has_input_device {
@@ -211,7 +223,9 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
                 if let Meta::List(meta_list) = &attr.meta {
                     parse_input_processor_config(meta_list.tokens.clone())
                 } else {
-                    InputProcessorConfig { event_types: vec![] }
+                    InputProcessorConfig {
+                        event_types: vec![],
+                    }
                 }
             })
     } else {

@@ -15,7 +15,10 @@ use crate::utils::assemble_dual_event_output;
 /// **Note**: Generic event types are not supported because static channels cannot be generic.
 ///
 /// See `rmk::event::InputEvent` for usage.
-pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn input_event_impl(
+    attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     let mut input = parse_macro_input!(item as DeriveInput);
 
     // Parse attributes - only channel_size is used for Channel
@@ -31,8 +34,13 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     // Generate input event channel
-    let primary_channel =
-        generate_input_event_channel(&type_name, &ty_generics, &impl_generics, where_clause, channel_size);
+    let primary_channel = generate_input_event_channel(
+        &type_name,
+        &ty_generics,
+        &impl_generics,
+        where_clause,
+        channel_size,
+    );
 
     // Assemble output, handling optional dual-macro with controller_event
     let expanded = assemble_dual_event_output(
@@ -42,7 +50,13 @@ pub fn input_event_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenSt
         primary_channel,
         |ctrl_attr| {
             let ctrl_config = parse_controller_event_channel_config_from_attr(ctrl_attr);
-            generate_controller_event_channel(&type_name, &ty_generics, &impl_generics, where_clause, &ctrl_config)
+            generate_controller_event_channel(
+                &type_name,
+                &ty_generics,
+                &impl_generics,
+                where_clause,
+                &ctrl_config,
+            )
         },
     );
 

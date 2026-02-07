@@ -48,11 +48,20 @@ pub(crate) fn expand_pmw3610_device(
             panic!("pmw3610 requires spi.mosi == spi.miso, or one of them empty");
         }
 
-        let sdio_pin = if mosi_pin.is_empty() { miso_pin } else { mosi_pin };
+        let sdio_pin = if mosi_pin.is_empty() {
+            miso_pin
+        } else {
+            mosi_pin
+        };
 
         let sck_ident = format_ident!("{}", spi.sck);
         let sdio_ident = format_ident!("{}", sdio_pin);
-        let cs_ident = format_ident!("{}", spi.cs.as_ref().expect("pmw3610 requires `cs` in spi config"));
+        let cs_ident = format_ident!(
+            "{}",
+            spi.cs
+                .as_ref()
+                .expect("pmw3610 requires `cs` in spi config")
+        );
 
         // Generate config values
         let res_cpi: i16 = sensor.cpi.map(|c| c as i16).unwrap_or(-1);

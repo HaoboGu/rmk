@@ -3,13 +3,15 @@ use rmk_config::KeyboardTomlConfig;
 
 pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
     // Get the path of the keyboard config file from the environment variable
-    let config_toml_path =
-        std::env::var("KEYBOARD_TOML_PATH").expect("[ERROR]: KEYBOARD_TOML_PATH should be set in `.cargo/config.toml`");
+    let config_toml_path = std::env::var("KEYBOARD_TOML_PATH")
+        .expect("[ERROR]: KEYBOARD_TOML_PATH should be set in `.cargo/config.toml`");
 
     KeyboardTomlConfig::new_from_toml_path(&config_toml_path)
 }
 
-pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
+pub(crate) fn expand_keyboard_info(
+    keyboard_config: &KeyboardTomlConfig,
+) -> proc_macro2::TokenStream {
     let basic = keyboard_config.get_device_config();
     let (layout, _) = keyboard_config.get_layout_config().unwrap();
     let board = keyboard_config.get_board_config().unwrap();

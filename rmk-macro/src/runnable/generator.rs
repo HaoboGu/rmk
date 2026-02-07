@@ -12,7 +12,10 @@ use crate::input::config::{InputDeviceConfig, InputProcessorConfig};
 use crate::utils::deduplicate_type_generics;
 
 /// Build the loop body for select with optional match.
-fn build_select_loop_body(select_arms: &[TokenStream], match_arms: Option<&[TokenStream]>) -> TokenStream {
+fn build_select_loop_body(
+    select_arms: &[TokenStream],
+    match_arms: Option<&[TokenStream]>,
+) -> TokenStream {
     let select_block = quote! {
         ::rmk::futures::select_biased! {
             #(#select_arms),*
@@ -107,7 +110,8 @@ pub fn generate_runnable(
     let mut use_statements: Vec<TokenStream> = Vec::new();
 
     let needs_split_select = input_device_config.is_some() && controller_config.is_some();
-    let select_enum_name = needs_split_select.then(|| format_ident!("__RmkSelectEvent{}", struct_name));
+    let select_enum_name =
+        needs_split_select.then(|| format_ident!("__RmkSelectEvent{}", struct_name));
     let mut input_event_type: Option<syn::Path> = None;
     let mut ctrl_select_event_type: Option<TokenStream> = None;
 
@@ -143,8 +147,11 @@ pub fn generate_runnable(
         use_statements.push(quote! { use ::rmk::event::SubscribableInputEvent; });
         use_statements.push(quote! { use ::rmk::input_device::InputProcessor; });
 
-        for (idx, (event_type, variant_name)) in
-            processor_config.event_types.iter().zip(&proc_variant_names).enumerate()
+        for (idx, (event_type, variant_name)) in processor_config
+            .event_types
+            .iter()
+            .zip(&proc_variant_names)
+            .enumerate()
         {
             let sub_name = format_ident!("proc_sub{}", idx);
             sub_defs.push(quote! {
@@ -167,11 +174,15 @@ pub fn generate_runnable(
     }
 
     // Handle controller.
-    let has_polling = controller_config.as_ref().and_then(|c| c.poll_interval_ms).is_some();
+    let has_polling = controller_config
+        .as_ref()
+        .and_then(|c| c.poll_interval_ms)
+        .is_some();
 
     if let Some(ctrl_config) = controller_config {
         let has_single_ctrl_event = ctrl_config.event_types.len() == 1;
-        let ctrl_enum = (!has_single_ctrl_event).then(|| format_ident!("{}ControllerEventEnum", struct_name));
+        let ctrl_enum =
+            (!has_single_ctrl_event).then(|| format_ident!("{}ControllerEventEnum", struct_name));
         let ctrl_variant_names = generate_unique_variant_names(&ctrl_config.event_types);
 
         ctrl_select_event_type = Some(if has_single_ctrl_event {
@@ -185,8 +196,11 @@ pub fn generate_runnable(
         use_statements.push(quote! { use ::rmk::event::SubscribableControllerEvent; });
         use_statements.push(quote! { use ::rmk::controller::Controller; });
 
-        for (idx, (ctrl_event_type, variant_name)) in
-            ctrl_config.event_types.iter().zip(&ctrl_variant_names).enumerate()
+        for (idx, (ctrl_event_type, variant_name)) in ctrl_config
+            .event_types
+            .iter()
+            .zip(&ctrl_variant_names)
+            .enumerate()
         {
             let sub_name = format_ident!("ctrl_sub{}", idx);
             sub_defs.push(quote! {
@@ -225,7 +239,10 @@ pub fn generate_runnable(
     // === Standalone cases (early returns) ===
 
     // Standalone controller
-    if input_device_config.is_none() && input_processor_config.is_none() && controller_config.is_some() {
+    if input_device_config.is_none()
+        && input_processor_config.is_none()
+        && controller_config.is_some()
+    {
         return wrap_runnable(if has_polling {
             quote! {
                 use ::rmk::controller::PollingController;
@@ -240,7 +257,10 @@ pub fn generate_runnable(
     }
 
     // Standalone input_device
-    if input_device_config.is_some() && input_processor_config.is_none() && controller_config.is_none() {
+    if input_device_config.is_some()
+        && input_processor_config.is_none()
+        && controller_config.is_none()
+    {
         return wrap_runnable(quote! {
             use ::rmk::event::publish_input_event_async;
             use ::rmk::input_device::InputDevice;
@@ -252,7 +272,10 @@ pub fn generate_runnable(
     }
 
     // Standalone input_processor
-    if input_device_config.is_none() && controller_config.is_none() && input_processor_config.is_some() {
+    if input_device_config.is_none()
+        && controller_config.is_none()
+        && input_processor_config.is_some()
+    {
         return wrap_runnable(quote! {
             use ::rmk::input_device::InputProcessor;
             self.process_loop().await
@@ -291,7 +314,11 @@ pub fn generate_runnable(
 
     // Build loop body
     let loop_body = if has_polling {
-        let interval_ms = controller_config.as_ref().unwrap().poll_interval_ms.unwrap();
+        let interval_ms = controller_config
+            .as_ref()
+            .unwrap()
+            .poll_interval_ms
+            .unwrap();
         use_statements.push(quote! { use ::rmk::controller::PollingController; });
 
         let (timer_arm, match_arms) = if let Some(ref enum_name) = select_enum_name {

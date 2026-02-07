@@ -18,7 +18,10 @@ pub fn generate_input_event_channel(
     channel_size: Option<TokenStream>,
 ) -> (TokenStream, TokenStream) {
     let channel_name = syn::Ident::new(
-        &format!("{}_INPUT_CHANNEL", to_upper_snake_case(&type_name.to_string())),
+        &format!(
+            "{}_INPUT_CHANNEL",
+            to_upper_snake_case(&type_name.to_string())
+        ),
         type_name.span(),
     );
 
@@ -109,8 +112,11 @@ pub fn validate_event_type(input: &syn::DeriveInput, macro_name: &str) -> Option
     // Verify Clone derive
     if !has_derive(&input.attrs, "Clone") {
         return Some(
-            syn::Error::new_spanned(input, format!("#[{}] requires the struct to derive Clone", macro_name))
-                .to_compile_error(),
+            syn::Error::new_spanned(
+                input,
+                format!("#[{}] requires the struct to derive Clone", macro_name),
+            )
+            .to_compile_error(),
         );
     }
 

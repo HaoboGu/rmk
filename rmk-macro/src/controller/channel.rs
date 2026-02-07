@@ -19,7 +19,10 @@ pub fn generate_controller_event_channel(
     config: &ControllerEventChannelConfig,
 ) -> (TokenStream, TokenStream) {
     let channel_name = syn::Ident::new(
-        &format!("{}_CONTROLLER_CHANNEL", to_upper_snake_case(&type_name.to_string())),
+        &format!(
+            "{}_CONTROLLER_CHANNEL",
+            to_upper_snake_case(&type_name.to_string())
+        ),
         type_name.span(),
     );
 

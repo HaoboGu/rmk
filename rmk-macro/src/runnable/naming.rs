@@ -20,7 +20,10 @@ pub fn generate_unique_variant_names(event_types: &[Path]) -> Vec<syn::Ident> {
         .iter()
         .map(|path| {
             let type_name = path.segments.last().unwrap().ident.to_string();
-            type_name.strip_suffix("Event").unwrap_or(&type_name).to_string()
+            type_name
+                .strip_suffix("Event")
+                .unwrap_or(&type_name)
+                .to_string()
         })
         .collect();
 
@@ -54,7 +57,10 @@ mod tests {
     #[test]
     fn test_event_type_to_handler_method_name() {
         let path: Path = parse_quote!(BatteryEvent);
-        assert_eq!(event_type_to_handler_method_name(&path).to_string(), "on_battery_event");
+        assert_eq!(
+            event_type_to_handler_method_name(&path).to_string(),
+            "on_battery_event"
+        );
 
         let path: Path = parse_quote!(ChargingStateEvent);
         assert_eq!(
