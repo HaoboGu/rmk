@@ -2,7 +2,9 @@ use core::panic;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::{BoardConfig, ChipModel, ChipSeries, KeyboardTomlConfig, SerialConfig, SplitConfig};
+use rmk_config::{
+    BoardConfig, ChipModel, ChipSeries, KeyboardTomlConfig, SerialConfig, SplitConfig,
+};
 
 pub(crate) fn expand_split_central_config(config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
     if let BoardConfig::Split(split_config) = &config.get_board_config().unwrap() {
@@ -24,8 +26,11 @@ fn expand_split_communication_config(chip: &ChipModel, split_config: &SplitConfi
         }
         "serial" => {
             // We need to initialize serial instance for serial
-            let serial_config: Vec<SerialConfig> =
-                split_config.central.serial.clone().expect("central.serial is required");
+            let serial_config: Vec<SerialConfig> = split_config
+                .central
+                .serial
+                .clone()
+                .expect("central.serial is required");
             expand_serial_init(chip, serial_config)
         }
         _ => panic!("Invalid connection type for split"),

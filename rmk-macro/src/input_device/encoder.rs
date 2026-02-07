@@ -22,7 +22,11 @@ pub(crate) fn expand_encoder_device(
     for (idx, encoder) in encoder_config.iter().enumerate() {
         let encoder_id = idx as u8 + id_offset as u8;
 
-        let pull = if encoder.internal_pullup { Some(true) } else { None };
+        let pull = if encoder.internal_pullup {
+            Some(true)
+        } else {
+            None
+        };
 
         // Initialize pins
         let pin_a = convert_gpio_str_to_input_pin(chip, encoder.pin_a.clone(), false, pull);
@@ -45,11 +49,9 @@ pub(crate) fn expand_encoder_device(
             }
             Some("resolution") => {
                 // When phase is "resolution", ensure resolution and reverse are set
-                let resolution = match encoder
-                    .resolution
-                    .clone()
-                    .expect("`resolution` field needs to be set when the encoder's mode is 'resolution'")
-                {
+                let resolution = match encoder.resolution.clone().expect(
+                    "`resolution` field needs to be set when the encoder's mode is 'resolution'",
+                ) {
                     EncoderResolution::Value(r) => r,
                     EncoderResolution::Derived { detent, pulse } => pulse * 4 / detent,
                 };

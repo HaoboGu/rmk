@@ -4,7 +4,10 @@ use pmw33xx::expand_pmw33xx_device;
 use pmw3610::expand_pmw3610_device;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use rmk_config::{BleConfig, BoardConfig, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig, UniBodyConfig};
+use rmk_config::{
+    BleConfig, BoardConfig, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig,
+    UniBodyConfig,
+};
 
 pub(crate) mod adc;
 pub(crate) mod encoder;
@@ -29,7 +32,9 @@ pub(crate) fn expand_input_device_config(
     // generate ADC configuration
     let communication = keyboard_config.get_communication_config().unwrap();
     let ble_config = match &communication {
-        CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => Some(ble_config.clone()),
+        CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => {
+            Some(ble_config.clone())
+        }
         _ => None,
     };
     let board = keyboard_config.get_board_config().unwrap();
@@ -48,8 +53,10 @@ pub(crate) fn expand_input_device_config(
                 if let Some(ref ble_cfg) = ble_config
                     && ble_cfg.battery_adc_pin.is_some()
                 {
-                    let ble_matches = ble_cfg.battery_adc_pin == split_config.central.battery_adc_pin
-                        && ble_cfg.adc_divider_measured == split_config.central.adc_divider_measured
+                    let ble_matches = ble_cfg.battery_adc_pin
+                        == split_config.central.battery_adc_pin
+                        && ble_cfg.adc_divider_measured
+                            == split_config.central.adc_divider_measured
                         && ble_cfg.adc_divider_total == split_config.central.adc_divider_total;
 
                     if !ble_matches {
@@ -171,7 +178,8 @@ pub(crate) fn expand_input_device_config(
                 .unwrap_or(Vec::new());
 
             // Only generate processors (not devices) for peripheral PMW3610
-            let (_, peripheral_pmw3610_processors) = expand_pmw3610_device(peripheral_pmw3610_config, &chip);
+            let (_, peripheral_pmw3610_processors) =
+                expand_pmw3610_device(peripheral_pmw3610_config, &chip);
 
             for initializer in peripheral_pmw3610_processors {
                 initialization.extend(initializer.initializer);
@@ -222,7 +230,8 @@ pub(crate) fn expand_input_device_config(
                 .unwrap_or(Vec::new());
 
             // Only generate processors (not devices) for peripheral PMW33xx
-            let (_, peripheral_pmw33xx_processors) = expand_pmw33xx_device(peripheral_pmw33xx_config, &chip);
+            let (_, peripheral_pmw33xx_processors) =
+                expand_pmw33xx_device(peripheral_pmw33xx_config, &chip);
 
             for initializer in peripheral_pmw33xx_processors {
                 initialization.extend(initializer.initializer);

@@ -1,16 +1,27 @@
+pub(crate) mod channel;
+pub(crate) mod config;
 pub(crate) mod event;
+pub(crate) mod parser;
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 use rmk_config::{ChipModel, KeyboardTomlConfig, PinConfig};
-use syn::parse::Parser;
-use syn::{DeriveInput, ItemMod, Meta, Path, parse_macro_input};
+use syn::{DeriveInput, ItemMod, Meta, parse_macro_input};
 
+use self::config::ControllerConfig;
+use self::parser::parse_controller_config;
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::gpio_config::convert_gpio_str_to_output_pin;
+use crate::input::config::{InputDeviceConfig, InputProcessorConfig};
+use crate::input::parser::{parse_input_device_config, parse_input_processor_config};
+use crate::runnable::{generate_event_enum_and_dispatch, generate_runnable};
+use crate::utils::{
+    deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr,
+    reconstruct_type_def,
+};
 
-/// Expands the controller initialization code based on the keyboard configuration.
-/// Returns a tuple containing: (controller_initialization, controller_execution)
+/// Expand controller init/exec blocks from keyboard config.
+/// Returns (initializers, executors).
 pub(crate) fn expand_controller_init(
     keyboard_config: &KeyboardTomlConfig,
     item_mod: &ItemMod,
@@ -24,7 +35,7 @@ pub(crate) fn expand_controller_init(
     initializers.extend(i);
     executors.extend(e);
 
-    // external controller
+    // Custom controllers declared in the module.
     if let Some((_, items)) = &item_mod.content {
         items.iter().for_each(|item| {
             if let syn::Item::Fn(item_fn) = &item
@@ -138,20 +149,23 @@ fn expand_custom_controller(fn_item: &syn::ItemFn) -> (TokenStream, &syn::Ident)
     (initializer, task_name)
 }
 
-/// Generates Controller trait implementation with automatic event routing.
+/// Generate a `Controller` impl for a `#[controller(...)]` struct.
+/// Supports `subscribe = [...]` and optional `poll_interval = N`.
+/// See `rmk::controller::Controller` for details.
 ///
-/// See `rmk::controller::Controller` trait documentation for usage.
-///
-/// This macro is used to define Controller structs:
-/// ```rust
+/// Example:
+/// ```rust,ignore
 /// #[controller(subscribe = [BatteryEvent, ChargingStateEvent])]
 /// pub struct BatteryLedController { ... }
 /// ```
-pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn controller_impl(
+    attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
 
-    // Parse attributes to extract event types and polling configuration
-    let config = parse_controller_attributes(attr);
+    // Parse subscribe/poll attributes using shared parser.
+    let config = parse_controller_config(attr);
 
     if config.event_types.is_empty() {
         return syn::Error::new_spanned(
@@ -162,68 +176,95 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         .into();
     }
 
-    // Validate input is a struct
+    // Require a struct input.
     if !matches!(input.data, syn::Data::Struct(_)) {
         return syn::Error::new_spanned(input, "#[controller] can only be applied to structs")
             .to_compile_error()
             .into();
     }
 
-    let struct_name = &input.ident;
-    let vis = &input.vis;
-    let attrs = &input.attrs;
-    let generics = &input.generics;
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    // Check runnable_generated marker.
+    let has_marker = has_runnable_marker(&input.attrs);
 
-    // Reconstruct the struct definition
-    let struct_def = match &input.data {
-        syn::Data::Struct(data_struct) => match &data_struct.fields {
-            syn::Fields::Named(fields) => {
-                quote! { struct #struct_name #generics #fields #where_clause }
-            }
-            syn::Fields::Unnamed(fields) => {
-                quote! { struct #struct_name #generics #fields #where_clause ; }
-            }
-            syn::Fields::Unit => {
-                quote! { struct #struct_name #generics #where_clause ; }
-            }
-        },
-        _ => unreachable!(),
+    // Detect input_device/input_processor for combined Runnable generation.
+    let has_input_device = input
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("input_device"));
+    let has_input_processor = input
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("input_processor"));
+
+    // Parse input_device config if present.
+    let input_device_config: Option<InputDeviceConfig> = if has_input_device {
+        input
+            .attrs
+            .iter()
+            .find(|attr| attr.path().is_ident("input_device"))
+            .and_then(|attr| {
+                if let Meta::List(meta_list) = &attr.meta {
+                    parse_input_device_config(meta_list.tokens.clone())
+                } else {
+                    None
+                }
+            })
+    } else {
+        None
     };
 
-    // Generate internal enum name
-    let enum_name = format_ident!("{}EventEnum", struct_name);
+    // Parse input_processor config if present.
+    let input_processor_config: Option<InputProcessorConfig> = if has_input_processor {
+        input
+            .attrs
+            .iter()
+            .find(|attr| attr.path().is_ident("input_processor"))
+            .map(|attr| {
+                if let Meta::List(meta_list) = &attr.meta {
+                    parse_input_processor_config(meta_list.tokens.clone())
+                } else {
+                    InputProcessorConfig {
+                        event_types: vec![],
+                    }
+                }
+            })
+    } else {
+        None
+    };
 
-    // Generate enum variants and related code
-    let enum_variants: Vec<_> = config.event_types
+    let struct_name = &input.ident;
+    let vis = &input.vis;
+    let generics = &input.generics;
+    let (impl_generics, _ty_generics, where_clause) = generics.split_for_impl();
+
+    // Dedup cfg-conditional generics for type position.
+    let deduped_ty_generics = deduplicate_type_generics(generics);
+
+    // Drop controller/runnable marker attrs from output.
+    let attrs: Vec<_> = input
+        .attrs
         .iter()
-        .enumerate()
-        .map(|(idx, event_type)| {
-            let variant_name = format_ident!("Event{}", idx);
-            quote! { #variant_name(#event_type) }
-        })
+        .filter(|attr| !attr.path().is_ident("controller") && !is_runnable_generated_attr(attr))
         .collect();
 
-    // Generate match arms for process_event
-    let process_event_arms: Vec<_> = config.event_types
-        .iter()
-        .enumerate()
-        .map(|(idx, event_type)| {
-            let variant_name = format_ident!("Event{}", idx);
-            let method_name = event_type_to_method_name(event_type);
-            quote! {
-                #enum_name::#variant_name(event) => self.#method_name(event).await
-            }
-        })
-        .collect();
+    // Rebuild struct definition.
+    let struct_def = reconstruct_type_def(&input);
 
-    // Generate next_message implementation using embassy_futures::select
-    let next_message_impl = generate_next_message(&config.event_types, &enum_name);
+    // Generate event enum, subscriber, and dispatch body
+    let (event_type_tokens, event_enum_def, event_subscriber_impl, process_event_body) =
+        generate_event_enum_and_dispatch(
+            struct_name,
+            vis,
+            &config.event_types,
+            "Controller",
+            quote! { ::rmk::event::SubscribableControllerEvent },
+            quote! { controller_subscriber },
+        );
 
-    // Generate PollingController implementation if poll_interval is specified
+    // PollingController impl when poll_interval is set.
     let polling_controller_impl = if let Some(interval_ms) = config.poll_interval_ms {
         quote! {
-            impl #impl_generics ::rmk::controller::PollingController for #struct_name #ty_generics #where_clause {
+            impl #impl_generics ::rmk::controller::PollingController for #struct_name #deduped_ty_generics #where_clause {
                 fn interval(&self) -> ::embassy_time::Duration {
                     ::embassy_time::Duration::from_millis(#interval_ms)
                 }
@@ -237,193 +278,55 @@ pub fn controller_impl(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
         quote! {}
     };
 
-    // Generate the complete output
+    // Runnable impl (if not generated elsewhere).
+    let runnable_impl = if has_marker {
+        // Skip when another macro already generated it.
+        quote! {}
+    } else {
+        let controller_cfg = ControllerConfig {
+            event_types: config.event_types.clone(),
+            poll_interval_ms: config.poll_interval_ms,
+        };
+
+        generate_runnable(
+            struct_name,
+            generics,
+            where_clause,
+            input_device_config.as_ref(),
+            input_processor_config.as_ref(),
+            Some(&controller_cfg),
+        )
+    };
+
+    // Add runnable_generated marker for combined macros.
+    let marker_attr = if !has_marker && (has_input_device || has_input_processor) {
+        quote! { #[::rmk::macros::runnable_generated] }
+    } else {
+        quote! {}
+    };
+
+    // Assemble output.
     let expanded = quote! {
         #(#attrs)*
-        #vis #struct_def
+        #marker_attr
+        #struct_def
 
-        // Internal enum for event routing (needs same visibility as struct for public trait implementation)
-        #vis enum #enum_name {
-            #(#enum_variants),*
-        }
+        #event_enum_def
 
-        impl #impl_generics ::rmk::controller::Controller for #struct_name #ty_generics #where_clause {
-            type Event = #enum_name;
+        #event_subscriber_impl
+
+        impl #impl_generics ::rmk::controller::Controller for #struct_name #deduped_ty_generics #where_clause {
+            type Event = #event_type_tokens;
 
             async fn process_event(&mut self, event: Self::Event) {
-                match event {
-                    #(#process_event_arms),*
-                }
+                #process_event_body
             }
-
-            #next_message_impl
         }
 
         #polling_controller_impl
+
+        #runnable_impl
     };
 
     expanded.into()
-}
-
-/// Controller attribute configuration
-struct ControllerConfig {
-    event_types: Vec<Path>,
-    poll_interval_ms: Option<u64>,
-}
-
-/// Parse #[controller] subscribe attribute
-fn parse_controller_attributes(attr: proc_macro::TokenStream) -> ControllerConfig {
-    use syn::punctuated::Punctuated;
-    use syn::{ExprArray, Token};
-
-    let mut event_types = Vec::new();
-    let mut poll_interval_ms = None;
-
-    // Parse as Meta::List containing name-value pairs
-    let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
-    let attr2: proc_macro2::TokenStream = attr.into();
-
-    match parser.parse2(attr2) {
-        Ok(parsed) => {
-            for meta in parsed {
-                if let Meta::NameValue(nv) = meta {
-                    if nv.path.is_ident("subscribe") {
-                        // Parse the array of event types
-                        if let syn::Expr::Array(ExprArray { elems, .. }) = nv.value {
-                            for elem in elems {
-                                if let syn::Expr::Path(expr_path) = elem {
-                                    event_types.push(expr_path.path);
-                                }
-                            }
-                        }
-                    } else if nv.path.is_ident("poll_interval") {
-                        // Parse poll_interval as integer (milliseconds)
-                        if let syn::Expr::Lit(syn::ExprLit { 
-                            lit: syn::Lit::Int(lit_int), .. 
-                        }) = nv.value {
-                            poll_interval_ms = Some(lit_int.base10_parse::<u64>().expect("poll_interval must be a valid u64"));
-                        } else {
-                            panic!("poll_interval must be an integer literal (milliseconds)");
-                        }
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            panic!("Failed to parse controller attributes: {}", e);
-        }
-    }
-
-    ControllerConfig {
-        event_types,
-        poll_interval_ms,
-    }
-}
-
-/// Convert event type to handler method name: BatteryLevelEvent -> on_battery_level_event
-fn event_type_to_method_name(path: &Path) -> syn::Ident {
-    let type_name = path.segments.last().unwrap().ident.to_string();
-
-    // Remove "Event" suffix if present
-    let base_name = type_name.strip_suffix("Event").unwrap_or(&type_name);
-
-    // Convert CamelCase to snake_case
-    let snake_case = to_snake_case(base_name);
-
-    // Add "on_" prefix and "_event" suffix
-    format_ident!("on_{}_event", snake_case)
-}
-
-/// Convert CamelCase to snake_case
-fn to_snake_case(s: &str) -> String {
-    let mut result = String::new();
-    let chars: Vec<char> = s.chars().collect();
-
-    for i in 0..chars.len() {
-        let c = chars[i];
-
-        if c.is_uppercase() {
-            // Add underscore before uppercase letter if:
-            // 1. Not at start (i > 0)
-            // 2. Previous char is lowercase OR
-            // 3. Next char exists and is lowercase (end of acronym: "HTMLParser" -> "html_parser")
-            let add_underscore =
-                i > 0 && (chars[i - 1].is_lowercase() || (i + 1 < chars.len() && chars[i + 1].is_lowercase()));
-
-            if add_underscore {
-                result.push('_');
-            }
-            result.push(c.to_ascii_lowercase());
-        } else {
-            result.push(c);
-        }
-    }
-
-    result
-}
-
-/// Generate next_message using select_biased for concurrent event polling
-fn generate_next_message(event_types: &[Path], enum_name: &syn::Ident) -> proc_macro2::TokenStream {
-    let num_events = event_types.len();
-
-    // Create subscriber variable names
-    let sub_vars: Vec<_> = (0..num_events).map(|i| format_ident!("sub{}", i)).collect();
-
-    // Create subscriber initializations
-    let sub_inits: Vec<_> = event_types
-        .iter()
-        .zip(&sub_vars)
-        .map(|(event_type, sub_var)| {
-            quote! {
-                let mut #sub_var = <#event_type as ::rmk::event::ControllerEventTrait>::subscriber();
-            }
-        })
-        .collect();
-
-    // Generate select_biased! arms for each event
-    let select_arms: Vec<_> = sub_vars
-        .iter()
-        .enumerate()
-        .map(|(idx, sub_var)| {
-            let variant_name = format_ident!("Event{}", idx);
-            quote! {
-                event = #sub_var.next_event().fuse() => #enum_name::#variant_name(event),
-            }
-        })
-        .collect();
-
-    quote! {
-        async fn next_message(&mut self) -> Self::Event {
-            use ::rmk::event::EventSubscriber;
-            use ::rmk::futures::FutureExt;
-            #(#sub_inits)*
-
-            ::rmk::futures::select_biased! {
-                #(#select_arms)*
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_to_snake_case() {
-        // Basic cases
-        assert_eq!(to_snake_case("Battery"), "battery");
-        assert_eq!(to_snake_case("ChargingState"), "charging_state");
-        assert_eq!(to_snake_case("KeyboardIndicator"), "keyboard_indicator");
-
-        // Acronyms should stay together
-        assert_eq!(to_snake_case("BLE"), "ble");
-        assert_eq!(to_snake_case("WPM"), "wpm");
-        assert_eq!(to_snake_case("USB"), "usb");
-
-        // Mixed acronyms and words
-        assert_eq!(to_snake_case("HTMLParser"), "html_parser");
-        assert_eq!(to_snake_case("BLEConnection"), "ble_connection");
-        assert_eq!(to_snake_case("parseHTMLString"), "parse_html_string");
-    }
 }

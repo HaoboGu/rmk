@@ -43,8 +43,8 @@ RMK's matrix system is built on a trait-based architecture. Any matrix or deboun
 The following is an example demonstrating how to use a customized matrix:
 
 ```rust
-struct YourOwnMatrix {}
-impl MatrixTrait for YourOwnMatrix {
+struct YourOwnMatrix<const ROW: usize, const COL: usize> {}
+impl<const ROW: usize, const COL: usize> MatrixTrait<ROW, COL> for YourOwnMatrix<ROW, COL> {
     // Implement the `MatrixTrait`
 }
 
@@ -54,9 +54,7 @@ let my_matrix = YourOwnMatrix::new(); // Create the matrix struct
 
 // Run the main process
 join3(
-    run_devices! (
-        (my_matrix) => EVENT_CHANNEL,
-    ),
+    run_all!(my_matrix),
     keyboard.run(),
     run_rmk(&keymap, driver, &mut storage, rmk_config),
 )

@@ -63,7 +63,7 @@ name = ...
 
 ## Rust configuration
 
-Define a `PointingDevice` and add it to `run_devices!` macro.
+Define a `PointingDevice` and add it to `run_all!` macro.
 For a split keyboard this must be added to the file (`central.rs` or `peripheral.rs`) corresponding to the side the sensor is connected to.
 
 ::: Warning
@@ -134,7 +134,7 @@ bind_interrupts!(struct Irqs {
 // );
 ```
 
-And define a `PointingProcessor` and add it to the `run_processor_chain!` macro to process the events.
+And define a `PointingProcessor` and add it to the `run_all!` macro to process the events.
 
 ::: warning
 
@@ -154,8 +154,6 @@ This should be added to the `central.rs`-File even if the sensor is on split per
 
     let mut pmw3360_processor = PointingProcessor::new(&keymap, pmw3360_proc_config);
 
-    run_processor_chain! {
-        EVENT_CHANNEL => [pmw3360_processor],
-    },
+    run_all!(pmw3360_processor, /* other processors and devices */)
 ```
 

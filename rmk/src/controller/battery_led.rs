@@ -3,46 +3,24 @@ use rmk_macro::controller;
 
 use crate::controller::PollingController;
 use crate::driver::gpio::OutputController;
-use crate::event::{BatteryLevelEvent, ChargingStateEvent};
+use crate::event::BatteryStateEvent;
 
-/// Battery state
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum BatteryState {
-    Low,
-    Normal,
-    Charging,
-}
-
-#[controller(subscribe = [BatteryLevelEvent, ChargingStateEvent])]
+#[controller(subscribe = [BatteryStateEvent])]
 pub struct BatteryLedController<P: StatefulOutputPin> {
     pin: OutputController<P>,
-    state: BatteryState,
+    state: BatteryStateEvent,
 }
 
 impl<P: StatefulOutputPin> BatteryLedController<P> {
     pub fn new(pin: P, low_active: bool) -> Self {
         Self {
             pin: OutputController::new(pin, low_active),
-            state: BatteryState::Normal,
+            state: BatteryStateEvent::NotAvailable,
         }
     }
 
-    async fn on_battery_level_event(&mut self, event: BatteryLevelEvent) {
-        if self.state != BatteryState::Charging {
-            if event.level < 10 {
-                self.state = BatteryState::Low;
-            } else {
-                self.state = BatteryState::Normal;
-            }
-        }
-    }
-
-    async fn on_charging_state_event(&mut self, event: ChargingStateEvent) {
-        if event.charging {
-            self.state = BatteryState::Charging;
-        } else {
-            self.state = BatteryState::Normal;
-        }
+    async fn on_battery_state_event(&mut self, event: BatteryStateEvent) {
+        self.state = event;
     }
 }
 
@@ -53,9 +31,17 @@ impl<P: StatefulOutputPin> PollingController for BatteryLedController<P> {
 
     async fn update(&mut self) {
         match self.state {
-            BatteryState::Low => self.pin.toggle(),
-            BatteryState::Normal => self.pin.deactivate(),
-            BatteryState::Charging => self.pin.activate(),
+            BatteryStateEvent::Normal(level) => {
+                if level < 10 {
+                    // Battery low, blinking the LED
+                    self.pin.toggle();
+                } else {
+                    self.pin.deactivate();
+                }
+            }
+            BatteryStateEvent::Charging => self.pin.activate(),
+            BatteryStateEvent::Charged => self.pin.activate(), // LED stays on when fully charged
+            BatteryStateEvent::NotAvailable => self.pin.deactivate(),
         }
     }
 }

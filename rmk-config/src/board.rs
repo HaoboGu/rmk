@@ -89,7 +89,7 @@ impl KeyboardTomlConfig {
                         }
                     },
                 }
-                // FIXME: input device for split keyboard is not supported yet
+                // Top-level input_device applies only to unibody configs.
                 Ok(BoardConfig::UniBody(UniBodyConfig{matrix: m, input_device: input_device.unwrap_or_default()}))
             },
             (None, None) => Err("[matrix] section in keyboard.toml is required for non-split keyboard".to_string()),

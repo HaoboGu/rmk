@@ -7,7 +7,10 @@ use rmk_config::{BoardConfig, InputDeviceConfig, KeyboardTomlConfig, UniBodyConf
 use syn::ItemMod;
 
 /// Expand `bind_interrupt!` stuffs, and other code before `main` function
-pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
+pub(crate) fn expand_bind_interrupt(
+    keyboard_config: &KeyboardTomlConfig,
+    item_mod: &ItemMod,
+) -> TokenStream2 {
     // If there is a function with `#[Overwritten(bind_interrupt)]`, override it
     if let Some((_, items)) = &item_mod.content {
         items
@@ -46,7 +49,10 @@ pub(crate) fn find_extern_irqs(item_mod: &ItemMod) -> Vec<TokenStream2> {
 }
 
 /// Expand default `bind_interrupt!` for different chips and nrf-sdc config for nRF52
-pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
+pub(crate) fn bind_interrupt_default(
+    keyboard_config: &KeyboardTomlConfig,
+    item_mod: &ItemMod,
+) -> TokenStream2 {
     let extern_irqs_vec = find_extern_irqs(item_mod);
     let extern_irqs = if extern_irqs_vec.is_empty() {
         quote! {}
@@ -208,7 +214,9 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
             }
         }
         rmk_config::ChipSeries::Rp2040 => {
-            let usb_info = communication.get_usb_info().expect("no usb info for the chip");
+            let usb_info = communication
+                .get_usb_info()
+                .expect("no usb info for the chip");
             let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
             let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
             // For Pico W, enabled PIO0_IRQ_0 interrupt

@@ -3,10 +3,10 @@ name: Unit Test
 on:
   push:
     branches: ["main"]
-    paths: ["rmk/**"]
+    paths: ["rmk/**", "rmk-macro/**"]
   pull_request:
     branches: ["main"]
-    paths: ["rmk/**"]
+    paths: ["rmk/**", "rmk-macro/**"]
   workflow_dispatch:
 
 # Cancel any currently running workflows from the same PR, branch, or
@@ -45,3 +45,14 @@ jobs:
       - name: Run tests
         working-directory: ./rmk
         run: cargo test --no-default-features --features=${{ matrix.featuresets }} --verbose
+  rmk_macro_test:
+    name: Run tests for rmk-macro
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-expand
+        run: cargo install cargo-expand --locked && rustup component add rustfmt
+      - name: Run rmk-macro tests
+        working-directory: ./rmk-macro
+        run: cargo test 
+  

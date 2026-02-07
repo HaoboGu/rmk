@@ -1,8 +1,8 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::{
-    BleConfig, BoardConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig,
-    MatrixType, SplitBoardConfig, SplitConfig,
+    BleConfig, BoardConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig,
+    KeyboardTomlConfig, MatrixType, SplitBoardConfig, SplitConfig,
 };
 use syn::ItemMod;
 
@@ -15,15 +15,19 @@ use crate::gpio_config::expand_output_initialization;
 use crate::import::expand_custom_imports;
 use crate::input_device::adc::expand_adc_device;
 use crate::input_device::encoder::expand_encoder_device;
-use crate::input_device::pmw3610::expand_pmw3610_device;
 use crate::input_device::pmw33xx::expand_pmw33xx_device;
+use crate::input_device::pmw3610::expand_pmw3610_device;
 use crate::keyboard::get_debouncer_type;
 use crate::keyboard_config::read_keyboard_toml_config;
 use crate::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
 use crate::split::central::expand_serial_init;
 
 /// Parse split peripheral mod and generate a valid RMK main function with all needed code
-pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStream, item_mod: ItemMod) -> TokenStream2 {
+pub(crate) fn parse_split_peripheral_mod(
+    id: usize,
+    _attr: proc_macro::TokenStream,
+    item_mod: ItemMod,
+) -> TokenStream2 {
     let rmk_features = get_rmk_features();
     if !is_feature_enabled(&rmk_features, "split") {
         panic!("\"split\" feature of RMK should be enabled");
@@ -34,8 +38,7 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
     let main_function = expand_split_peripheral(id, &toml_config, item_mod, &rmk_features);
     let chip = toml_config.get_chip_model().unwrap();
 
-    let bind_interrupts =
-        expand_bind_interrupt_for_split_peripheral(&chip, &toml_config, id);
+    let bind_interrupts = expand_bind_interrupt_for_split_peripheral(&chip, &toml_config, id);
 
     let main_function_sig = if chip.series == ChipSeries::Esp32 {
         quote! {
@@ -66,7 +69,7 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
 fn expand_bind_interrupt_for_split_peripheral(
     chip: &ChipModel,
     keyboard_config: &KeyboardTomlConfig,
-    peripheral_id: usize
+    peripheral_id: usize,
 ) -> TokenStream2 {
     let communication = keyboard_config.get_communication_config().unwrap();
     match chip.series {
@@ -90,8 +93,7 @@ fn expand_bind_interrupt_for_split_peripheral(
                 _ => panic!("Expected split configuration"),
             };
 
-            let pmw33xx_config = split_config
-                .peripheral[peripheral_id]
+            let pmw33xx_config = split_config.peripheral[peripheral_id]
                 .input_device
                 .clone()
                 .unwrap_or(InputDeviceConfig::default())
@@ -206,7 +208,10 @@ fn expand_split_peripheral(
         }
     };
 
-    let peripheral_config = split_config.peripheral.get(id).expect("Missing peripheral config");
+    let peripheral_config = split_config
+        .peripheral
+        .get(id)
+        .expect("Missing peripheral config");
 
     let imports = expand_custom_imports(&item_mod);
     let mut chip_init = expand_chip_init(keyboard_config, Some(id), &item_mod);
@@ -278,16 +283,24 @@ fn expand_split_peripheral(
         }
     }
 
-    let output_config = expand_output_initialization(peripheral_config.output.clone().unwrap_or_default(), &chip);
+    let output_config =
+        expand_output_initialization(peripheral_config.output.clone().unwrap_or_default(), &chip);
 
     // Get peripheral device and processor configuration
-    let (device_initialization, devices, processors) = expand_peripheral_input_device_config(id, keyboard_config);
+    let (device_initialization, devices, processors) =
+        expand_peripheral_input_device_config(id, keyboard_config);
 
-    // Generate minimal keymap if processors need it (e.g., BatteryProcessor)
-    let keymap_init = if !processors.is_empty() {
+    let needs_keymap = peripheral_config
+        .input_device
+        .as_ref()
+        .map(|input| input.joystick.as_ref().is_some_and(|v| !v.is_empty()))
+        .unwrap_or(false);
+
+    // Generate minimal keymap when processors may read from it.
+    let keymap_init = if needs_keymap {
         quote! {
-            // Create a minimal keymap for processors that require it
-            // Peripheral doesn't use keymap for key processing, only for processor API compatibility
+            // Create a minimal keymap for processors that may read from it.
+            // Peripheral doesn't use keymap for key processing.
             let mut default_keymap = [[[::rmk::types::action::KeyAction::No; 1]; 1]; 1];
             let mut behavior_config = ::rmk::config::BehaviorConfig::default();
             let mut per_key_config = ::rmk::config::PositionalConfig::default();
@@ -349,17 +362,17 @@ fn expand_split_peripheral_entry(
     let mut devs = devices.clone();
     devs.push(quote! {matrix});
     let device_task = quote! {
-        ::rmk::run_devices! (
-            (#(#devs),*) => ::rmk::channel::EVENT_CHANNEL,
+        ::rmk::run_all! (
+            #(#devs),*
         )
     };
 
     // Create processor task if there are processors
     let processor_task = if !processors.is_empty() {
         quote! {
-            ::rmk::run_processor_chain! {
-                ::rmk::channel::EVENT_CHANNEL => [#(#processors),*],
-            }
+            ::rmk::run_all! (
+                #(#processors),*
+            )
         }
     } else {
         quote! {}
@@ -431,7 +444,9 @@ pub(crate) fn expand_peripheral_input_device_config(
 
     let communication = keyboard_config.get_communication_config().unwrap();
     let ble_config = match &communication {
-        CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => Some(ble_config.clone()),
+        CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => {
+            Some(ble_config.clone())
+        }
         _ => None,
     };
     let board = keyboard_config.get_board_config().unwrap();
@@ -486,8 +501,11 @@ pub(crate) fn expand_peripheral_input_device_config(
     }
 
     // generate encoder configuration, processors are ignored
-    let num_encoders = keyboard_config.get_board_config().unwrap().get_num_encoder();
-    // The num_encoders[0] is always the number of encoders on the central, so the offset should be num_encoders[0..id + 1], where id is the index of the peripheral
+    let num_encoders = keyboard_config
+        .get_board_config()
+        .unwrap()
+        .get_num_encoder();
+    // The num_encoders[0] is always the number of encoders on the central, so the offset is the sum of num_encoders[0..id + 1], where id is the index of the peripheral
     let encoder_id_offset = num_encoders[0..id + 1].iter().sum::<usize>();
     let (encoder_devices, _encoder_processors) = match &board {
         BoardConfig::Split(split_config) => expand_encoder_device(

@@ -9,7 +9,10 @@ use syn::{ItemFn, ItemMod};
 
 use crate::keyboard::Overwritten;
 
-pub(crate) fn expand_usb_init(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
+pub(crate) fn expand_usb_init(
+    keyboard_config: &KeyboardTomlConfig,
+    item_mod: &ItemMod,
+) -> TokenStream2 {
     // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
     if let Some((_, items)) = &item_mod.content {
         items
@@ -31,7 +34,11 @@ pub(crate) fn expand_usb_init(keyboard_config: &KeyboardTomlConfig, item_mod: &I
 
 /// Default implementation of usb initialization
 pub(crate) fn usb_config_default(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
-    if let Some(usb_info) = keyboard_config.get_communication_config().unwrap().get_usb_info() {
+    if let Some(usb_info) = keyboard_config
+        .get_communication_config()
+        .unwrap()
+        .get_usb_info()
+    {
         let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
         match keyboard_config.get_chip_model().unwrap().series {
             ChipSeries::Stm32 => {

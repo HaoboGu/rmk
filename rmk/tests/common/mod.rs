@@ -10,10 +10,10 @@ use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
 use futures::join;
 use log::debug;
-use rmk::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
+use rmk::channel::KEYBOARD_REPORT_CHANNEL;
 use rmk::config::{BehaviorConfig, PositionalConfig};
 use rmk::descriptor::KeyboardReport;
-use rmk::event::KeyboardEvent;
+use rmk::event::{AsyncEventPublisher, AsyncPublishableInputEvent, KeyboardEvent};
 use rmk::hid::Report;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
@@ -53,7 +53,8 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
     static REPORTS_DONE: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
     static SEQ_SEND_DONE: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 
-    KEY_EVENT_CHANNEL.clear();
+    let sender = KeyboardEvent::input_publisher_async();
+    sender.clear();
     KEYBOARD_REPORT_CHANNEL.clear();
     static MAX_TEST_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -79,8 +80,8 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
         async {
             for key in key_sequence {
                 Timer::after(Duration::from_millis(key.delay)).await;
-                KEY_EVENT_CHANNEL
-                    .send(KeyboardEvent::key(key.row, key.col, key.pressed))
+                sender
+                    .publish_async(KeyboardEvent::key(key.row, key.col, key.pressed))
                     .await;
             }
 

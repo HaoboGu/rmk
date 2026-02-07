@@ -47,10 +47,16 @@ pub(crate) fn expand_chip_init(
 }
 
 // Default implementations of chip initialization
-pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral_id: Option<usize>) -> TokenStream2 {
+pub(crate) fn chip_init_default(
+    keyboard_config: &KeyboardTomlConfig,
+    peripheral_id: Option<usize>,
+) -> TokenStream2 {
     let chip = keyboard_config.get_chip_model().unwrap();
     let communication = keyboard_config.get_communication_config().unwrap();
-    let peri_num = keyboard_config.get_board_config().unwrap().get_num_periphreal();
+    let peri_num = keyboard_config
+        .get_board_config()
+        .unwrap()
+        .get_num_periphreal();
     match chip.series {
         ChipSeries::Stm32 => quote! {
                 let config = ::embassy_stm32::Config::default();
@@ -251,7 +257,10 @@ fn override_chip_config(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
     initialization_tokens
 }
 
-fn get_ble_addr(keyboard_config: &KeyboardTomlConfig, peripheral_id: Option<usize>) -> TokenStream2 {
+fn get_ble_addr(
+    keyboard_config: &KeyboardTomlConfig,
+    peripheral_id: Option<usize>,
+) -> TokenStream2 {
     let chip = keyboard_config.get_chip_model().unwrap();
     if chip.series == ChipSeries::Nrf52 {
         quote! {

@@ -1730,8 +1730,10 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rmk-config",
+ "rmk-types",
  "serde",
  "serde_derive",
+ "strum",
  "syn 2.0.111",
  "toml",
 ]
@@ -1867,9 +1869,9 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "sequential-storage"
-version = "6.0.1"
+version = "7.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6f93d860af08a0079f1c596b65176d5ea2bca1f977ba6210d4547aa16865477"
+checksum = "d4580ee0fa08cd41bee9f5b50ed309877e18735370fd4eef5766cc82863ef772"
 dependencies = [
  "defmt 1.0.1",
  "embedded-storage-async",

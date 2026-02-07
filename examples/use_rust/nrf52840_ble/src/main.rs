@@ -23,7 +23,6 @@ use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
-use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{
     BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
@@ -35,7 +34,7 @@ use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::{DefaultPhase, RotaryEncoder};
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::{HostResources, initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk};
+use rmk::{HostResources, initialize_encoder_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -211,14 +210,12 @@ async fn main(spawner: Spawner) {
         embassy_time::Duration::from_secs(12),
         None,
     );
-    let mut batt_proc = BatteryProcessor::new(2000, 2806, &keymap);
+    let mut batt_proc = BatteryProcessor::new(2000, 2806);
 
     join4(
-        run_devices! (
-            (matrix, encoder, adc_device) => EVENT_CHANNEL,
-        ),
-        run_processor_chain! {
-            EVENT_CHANNEL => [batt_proc],
+        run_all!(matrix, encoder, adc_device),
+        run_all! {
+            batt_proc
         },
         keyboard.run(), // Keyboard is special
         run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),

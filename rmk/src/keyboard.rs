@@ -14,7 +14,7 @@ use rmk_types::modifier::ModifierCombination;
 use rmk_types::mouse_button::MouseButtons;
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 
-use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::combo::Combo;
 use crate::config::Hand;
 use crate::descriptor::KeyboardReport;
@@ -22,7 +22,7 @@ use crate::descriptor::KeyboardReport;
 use crate::event::ClearPeerEvent;
 #[cfg(feature = "controller")]
 use crate::event::{KeyEvent, ModifierEvent, publish_controller_event};
-use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
+use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos, SubscribableInputEvent, publish_input_event_async};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::input_device::Runnable;
@@ -153,7 +153,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
 {
     /// Main keyboard processing task, it receives input devices result, processes keys.
     /// The report is sent using `send_report`.
-    async fn run(&mut self) {
+    async fn run(&mut self) -> ! {
         loop {
             // TODO: Now the unprocessed_events is only used in one-shot keys and clear peer key.
             // Maybe it can be removed in the future?
@@ -167,7 +167,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
                 self.process_buffered_key(key).await
             } else {
                 // No buffered tap-hold event, wait for new key
-                let event = KEY_EVENT_CHANNEL.receive().await;
+                let event = self.keyboard_event_subscriber.receive().await;
                 // Process the key event
                 self.process_inner(event).await
             };
@@ -178,6 +178,9 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
 pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0> {
     /// Keymap
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+
+    /// Keyboard event subscriber - single instance to receive all keyboard events
+    keyboard_event_subscriber: embassy_sync::channel::Receiver<'static, crate::RawMutex, KeyboardEvent, 16>,
 
     /// Unprocessed events
     pub unprocessed_events: Vec<KeyboardEvent, 4>,
@@ -253,6 +256,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>) -> Self {
         Keyboard {
             keymap,
+            keyboard_event_subscriber: KeyboardEvent::input_subscriber(),
             timer: [[None; ROW]; COL],
             rotary_encoder_timer: [[None; 2]; NUM_ENCODER],
             last_press_time: Instant::now(),
@@ -332,7 +336,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     "[Combo] Waiting combo, timeout in: {:?}ms",
                     (key.timeout_time.saturating_duration_since(Instant::now())).as_millis()
                 );
-                match with_deadline(key.timeout_time, KEY_EVENT_CHANNEL.receive()).await {
+                match with_deadline(key.timeout_time, self.keyboard_event_subscriber.receive()).await {
                     Ok(event) => {
                         // Process new key event
                         debug!("[Combo] Interrupted by a new key event: {:?}", event);
@@ -349,7 +353,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if key.action.is_morse() {
                     // Wait for timeout or new key event
                     info!("Waiting morse key: {:?}", key.action);
-                    match with_deadline(key.timeout_time, KEY_EVENT_CHANNEL.receive()).await {
+                    match with_deadline(key.timeout_time, self.keyboard_event_subscriber.receive()).await {
                         Ok(event) => {
                             debug!("Buffered morse key interrupted by a new key event: {:?}", event);
                             self.process_inner(event).await;
@@ -1280,7 +1284,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 OneShotState::Initial(m) | OneShotState::Single(m) => {
                     self.osm_state = OneShotState::Single(m);
                     let timeout = Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
-                    match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
+                    match select(timeout, self.keyboard_event_subscriber.receive()).await {
                         Either::First(_) => {
                             // Timeout, release modifiers
                             self.update_osl(event);
@@ -1333,7 +1337,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     self.osl_state = OneShotState::Single(l);
 
                     let timeout = embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
-                    match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
+                    match select(timeout, self.keyboard_event_subscriber.receive()).await {
                         Either::First(_) => {
                             // Timeout, deactivate layer
                             self.keymap.borrow_mut().deactivate_layer(layer_num);
@@ -1778,12 +1782,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // Schedule next movement after the delay
                 embassy_time::Timer::after_millis(delay as u64).await;
                 // Check if there's a release event in the channel, if there's no release event, re-send the event
-                let len = KEY_EVENT_CHANNEL.len();
+                let len = self.keyboard_event_subscriber.len();
                 let mut released = false;
                 for _ in 0..len {
-                    let queued_event = KEY_EVENT_CHANNEL.receive().await;
+                    let queued_event = self.keyboard_event_subscriber.receive().await;
                     if queued_event.pos != event.pos || !queued_event.pressed {
-                        KEY_EVENT_CHANNEL.send(queued_event).await;
+                        publish_input_event_async(queued_event).await;
                     }
                     // If there's a release event in the channel
                     if queued_event.pos == event.pos && !queued_event.pressed {
@@ -1791,7 +1795,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                 }
                 if !released {
-                    KEY_EVENT_CHANNEL.send(event).await;
+                    publish_input_event_async(event).await;
                 }
             }
         }
@@ -1811,7 +1815,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     if event.pressed {
                         // Wait for 5s, if the key is still pressed, clear split peer info
                         // If there's any other key event received during this period, skip
-                        match select(embassy_time::Timer::after_millis(5000), KEY_EVENT_CHANNEL.receive()).await {
+                        match select(
+                            embassy_time::Timer::after_millis(5000),
+                            self.keyboard_event_subscriber.receive(),
+                        )
+                        .await
+                        {
                             Either::First(_) => {
                                 // Timeout reached, send clear peer message
                                 #[cfg(feature = "controller")]

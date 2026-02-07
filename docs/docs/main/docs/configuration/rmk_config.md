@@ -24,8 +24,6 @@ max_patterns_per_key = 8
 macro_space_size = 256
 # Default debounce time in ms
 debounce_time = 20
-# Event channel size
-event_channel_size = 16
 # Report channel size
 report_channel_size = 16
 # Vial channel size
@@ -33,7 +31,7 @@ vial_channel_size = 4
 # Flash channel size
 flash_channel_size = 4
 # The number of the split peripherals
-split_peripherals_num = 1
+split_peripherals_num = 0
 # The number of available BLE profiles
 ble_profiles_num = 3
 # BLE Split Central sleep timeout in seconds (0 = disabled)
@@ -70,14 +68,13 @@ Increasing the number of combos, forks, morses (tap dances), and macros will inc
 
 In RMK there are several channels used for communication between tasks. The length of the channel can be adjusted. Larger channel size means more events can be buffered, but it will increase memory usage.
 
-- `event_channel_size`: The length of event channel, default value is 16. Used for buffering keyboard matrix events.
 - `report_channel_size`: The length of report channel, default value is 16. Used for buffering HID reports to be sent to the host.
 - `vial_channel_size`: The length of vial channel, default value is 4. Used for communication with Vial protocol.
 - `flash_channel_size`: The length of flash channel, default value is 4. Used for buffering flash storage operations.
 
 ### Split Keyboard Configuration
 
-- `split_peripherals_num`: The number of split peripherals, default value is 1. If multiple peripherals are specified in the toml, this field will be automatically set to the actual peripherals number.
+- `split_peripherals_num`: The number of split peripherals, default value is 0. If peripherals are specified in `keyboard.toml`, this value is automatically set to the actual count. If you're using the Rust API without `[[split.peripheral]]` entries, set this manually to match your peripheral count.
 
 ### Wireless Configuration
 

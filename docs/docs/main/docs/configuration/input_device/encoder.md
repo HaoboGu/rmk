@@ -149,14 +149,12 @@ You can also use the resolution based phase:
     let mut encoder = RotaryEncoder::with_resolution(pin_a, pin_b, 2, false, encoder_id)
 ```
 
-Then add the encoder to the device list of `run_device`.
+Then add the encoder to `run_all!` macro.
 
 ```rust
     join3(
-        run_devices! (
-            (matrix, encoder) => EVENT_CHANNEL,
-        ),
-        keyboard.run(), // Keyboard is special
+        run_all!(matrix, encoder),
+        keyboard.run(),
         run_rmk(&keymap, driver, storage, rmk_config, sd),
     )
     .await;

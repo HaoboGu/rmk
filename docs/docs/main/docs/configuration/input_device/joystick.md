@@ -97,14 +97,12 @@ let adc = saadc::SAADC::new(p.SAADC, Irqs, saadc_config,
 );
 saadc.calibrate().await;
 let mut adc_dev = NrfAdc::new(adc, [AnalogEventType::Battery, AnalogEventType::Joystick(2)], 20 /* polling interval */, Some(350)/* light sleep interval */);
-let mut batt_proc = BatteryProcessor::new(1, 5, &keymap);
+let mut batt_proc = BatteryProcessor::new(1, 5);
 let mut joy_proc = JoystickProcessor::new([[80, 0], [0, 80]], [29130, 29365], 6, &keymap);
 ...
-run_devices! (
-    (matrix, adc_dev) => EVENT_CHANNEL,
-),
-run_processor_chain! {
-    EVENT_CHANNEL => [joy_proc, batt_proc],
+run_all!(matrix, adc_dev),
+run_all! {
+    joy_proc, batt_proc
 }
 ...
 ```

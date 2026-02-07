@@ -15,14 +15,13 @@ use embassy_rp::gpio::{Input, Output};
 use embassy_rp::peripherals::USB;
 use embassy_rp::usb::{Driver, InterruptHandler};
 use keymap::{COL, ROW};
-use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
+use rmk::{initialize_keymap_and_storage, run_all, run_rmk};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
 
@@ -87,9 +86,7 @@ async fn main(_spawner: Spawner) {
 
     // Start
     join3(
-        run_devices! (
-            (matrix) => EVENT_CHANNEL,
-        ),
+        run_all!(matrix),
         keyboard.run(),
         run_rmk(&keymap, driver, &mut storage, rmk_config),
     )

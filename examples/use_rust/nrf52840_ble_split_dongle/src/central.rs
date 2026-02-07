@@ -22,7 +22,6 @@ use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
-use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{
     BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
@@ -35,10 +34,10 @@ use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
-use rmk::matrix::{Matrix, OffsetMatrixWrapper};
+use rmk::matrix::Matrix;
 use rmk::split::ble::central::{read_peripheral_addresses, scan_peripherals};
 use rmk::split::central::run_peripheral_manager;
-use rmk::{HostResources, initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk};
+use rmk::{HostResources, initialize_encoder_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -208,8 +207,7 @@ async fn main(spawner: Spawner) {
 
     // Initialize the matrix and keyboard
     let debouncer = DefaultDebouncer::new();
-    let mut matrix =
-        OffsetMatrixWrapper::<_, _, _, 0, 0>(Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer));
+    let mut matrix = Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer);
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap);
 
@@ -223,7 +221,7 @@ async fn main(spawner: Spawner) {
         embassy_time::Duration::from_secs(12),
         None,
     );
-    let mut batt_proc = BatteryProcessor::new(2000, 2806, &keymap);
+    let mut batt_proc = BatteryProcessor::new(2000, 2806);
 
     // Initialize the controllers
     let mut capslock_led = KeyboardIndicatorController::new(
@@ -238,12 +236,8 @@ async fn main(spawner: Spawner) {
 
     // Start
     join4(
-        run_devices! (
-            (matrix, encoder, adc_device) => EVENT_CHANNEL,
-        ),
-        run_processor_chain! {
-            EVENT_CHANNEL => [batt_proc],
-        },
+        async {},
+        run_all!(matrix, encoder, adc_device, batt_proc),
         join(keyboard.run(), capslock_led.event_loop()),
         join4(
             scan_peripherals(&stack, &peripheral_addrs),

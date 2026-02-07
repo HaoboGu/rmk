@@ -9,12 +9,15 @@ mod feature;
 mod flash;
 mod gpio_config;
 mod import;
+mod input;
 mod input_device;
 mod keyboard;
 mod keyboard_config;
 mod layout;
 mod matrix;
+mod runnable;
 mod split;
+mod utils;
 
 use darling::FromMeta;
 use darling::ast::NestedMeta;
@@ -65,11 +68,11 @@ pub fn rmk_peripheral(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Macro for defining controller events.
 ///
-/// This macro generates a static channel and implements the `ControllerEventTrait` trait.
+/// This macro generates a static channel and implements the `ControllerEvent` trait.
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```rust,ignore
 /// #[controller_event(subs = 1)]
 /// #[derive(Clone, Copy, Debug)]
 /// pub struct BatteryEvent(pub u8);
@@ -92,7 +95,7 @@ pub fn controller_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```rust,ignore
 /// #[controller(subscribe = [BatteryEvent, ChargingStateEvent])]
 /// pub struct BatteryLedController<P> {
 ///     pin: OutputController<P>,
@@ -107,4 +110,124 @@ pub fn controller_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn controller(attr: TokenStream, item: TokenStream) -> TokenStream {
     controller::controller_impl(attr, item)
+}
+
+/// Macro for defining input events.
+///
+/// This macro generates a static Channel and implements the `InputEvent` trait.
+///
+/// # Parameters
+///
+/// - `channel_size`: Buffer size of the channel (default: 8)
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// #[input_event(channel_size = 8)]
+/// #[derive(Clone, Copy, Debug)]
+/// pub struct KeyEvent {
+///     pub row: u8,
+///     pub col: u8,
+///     pub pressed: bool,
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn input_event(attr: TokenStream, item: TokenStream) -> TokenStream {
+    input::event::input_event_impl(attr, item)
+}
+
+/// Macro for defining input processors that subscribe to multiple events.
+///
+/// This macro generates event routing infrastructure and implements the `InputProcessor` trait.
+///
+/// # Parameters
+///
+/// - `subscribe`: Array of event types to subscribe to (required)
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// #[input_processor(subscribe = [KeyEvent, ModifierEvent])]
+/// pub struct MyInputProcessor {
+///     // processor state
+/// }
+///
+/// impl MyInputProcessor {
+///     async fn on_key_event(&mut self, event: KeyEvent) {
+///         // Handle key event
+///     }
+///
+///     async fn on_modifier_event(&mut self, event: ModifierEvent) {
+///         // Handle modifier event
+///     }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn input_processor(attr: TokenStream, item: TokenStream) -> TokenStream {
+    input::processor::input_processor_impl(attr, item)
+}
+
+/// Marker attribute for coordinating Runnable generation between macros.
+/// Do not use directly.
+#[doc(hidden)]
+#[proc_macro_attribute]
+pub fn runnable_generated(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    item // Pass through unchanged
+}
+
+/// Derive macro for multi-event enums that generates automatic event dispatch.
+///
+/// This macro generates:
+/// - `{EnumName}Publisher` struct implementing `AsyncEventPublisher` and `EventPublisher`
+/// - `{EnumName}Subscriber` placeholder (wrapper enums cannot be subscribed to directly)
+/// - `InputEvent` and `AsyncInputEvent` trait implementations
+/// - `From<VariantType>` impls for each variant
+///
+/// Each variant is forwarded to its underlying event channel when published.
+///
+/// **Note**: You cannot subscribe to wrapper enums directly. Subscribe to the individual
+/// concrete event types (e.g., `BatteryEvent`, `PointingEvent`) instead.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// #[derive(InputEvent)]
+/// pub enum MultiSensorEvent {
+///     Battery(BatteryEvent),
+///     Pointing(PointingEvent),
+/// }
+///
+/// // Publishing: events are routed to their concrete type channels
+/// publish_input_event_async(MultiSensorEvent::Battery(event)).await;
+/// ```
+#[proc_macro_derive(InputEvent)]
+pub fn input_event_derive(item: TokenStream) -> TokenStream {
+    input::event_derive::input_event_derive_impl(item)
+}
+
+/// Macro for defining input devices that publish events.
+///
+/// This macro generates `InputDevice` and `Runnable` implementations for single-event devices.
+/// For multi-event devices, use `#[derive(InputEvent)]` on a user-defined enum instead.
+///
+/// # Parameters
+///
+/// - `publish`: The event type to publish (single event type only)
+///
+/// # Example
+///
+/// ```rust,ignore
+/// #[input_device(publish = BatteryEvent)]
+/// pub struct BatteryReader { ... }
+///
+/// impl BatteryReader {
+///     // User implements this inherent method
+///     async fn read_battery_event(&mut self) -> BatteryEvent {
+///         // Wait and return single event
+///     }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn input_device(attr: TokenStream, item: TokenStream) -> TokenStream {
+    input::device::input_device_impl(attr, item)
 }

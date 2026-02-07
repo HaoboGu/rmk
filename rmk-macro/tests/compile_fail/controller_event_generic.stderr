@@ -1,0 +1,5 @@
+error: #[controller_event] does not support generic types. Static channels cannot be generic.
+ --> tests/compile_fail/controller_event_generic.rs:8:34
+  |
+8 | pub struct GenericControllerEvent<T> {
+  |                                  ^^^

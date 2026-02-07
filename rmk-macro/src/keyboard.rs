@@ -1,7 +1,9 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::{BoardConfig, ChipSeries, KeyInfo, KeyboardTomlConfig, MatrixConfig, MatrixType, UniBodyConfig};
+use rmk_config::{
+    BoardConfig, ChipSeries, KeyInfo, KeyboardTomlConfig, MatrixConfig, MatrixType, UniBodyConfig,
+};
 use syn::ItemMod;
 
 use crate::behavior::expand_behavior_config;
@@ -37,7 +39,8 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
     let keyboard_config = read_keyboard_toml_config();
 
     // Check "storage" feature gate
-    if keyboard_config.get_storage_config().enabled != is_feature_enabled(&rmk_features, "storage") {
+    if keyboard_config.get_storage_config().enabled != is_feature_enabled(&rmk_features, "storage")
+    {
         if keyboard_config.get_storage_config().enabled {
             panic!(
                 "If the \"storage\" cargo feature is disabled, `storage.enabled` must be set to false in the keyboard.toml."
@@ -175,7 +178,8 @@ fn expand_main(
         }
     };
 
-    let main_function_sig = if keyboard_config.get_chip_model().unwrap().series == ChipSeries::Esp32 {
+    let main_function_sig = if keyboard_config.get_chip_model().unwrap().series == ChipSeries::Esp32
+    {
         quote! {
             #[::esp_rtos::main]
             async fn main(_s: ::embassy_executor::Spawner)
@@ -259,7 +263,10 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
     };
 
     if keyboard_config.get_storage_config().enabled {
-        let num_encoders = keyboard_config.get_board_config().unwrap().get_num_encoder();
+        let num_encoders = keyboard_config
+            .get_board_config()
+            .unwrap()
+            .get_num_encoder();
         let total_num_encoders = num_encoders.iter().sum::<usize>();
         let keymap_storage_init = if total_num_encoders == 0 {
             // No encoder
@@ -313,7 +320,9 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
     }
 }
 
-pub(crate) fn expand_matrix_and_keyboard_init(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
+pub(crate) fn expand_matrix_and_keyboard_init(
+    keyboard_config: &KeyboardTomlConfig,
+) -> TokenStream2 {
     let matrix = match keyboard_config.get_board_config().unwrap() {
         BoardConfig::UniBody(UniBodyConfig {
             matrix: matrix_config,
@@ -348,8 +357,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(keyboard_config: &KeyboardTomlConf
                     let debouncer_type = get_debouncer_type(&split_config.central.matrix);
                     quote! {
                         let debouncer = #debouncer_type::new();
-                        let matrix = ::rmk::matrix::Matrix::<_, _, _, #central_row, #central_col, #col2row>::new(row_pins, col_pins, debouncer);
-                        let mut matrix = ::rmk::matrix::OffsetMatrixWrapper::<_, _, _, #central_row_offset, #central_col_offset>(matrix);
+                        let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #central_row, #central_col, #col2row, #central_row_offset, #central_col_offset>::new(row_pins, col_pins, debouncer);
                     }
                 }
                 MatrixType::direct_pin => {
@@ -358,8 +366,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(keyboard_config: &KeyboardTomlConf
                     let debouncer_type = get_debouncer_type(&split_config.central.matrix);
                     quote! {
                         let debouncer = #debouncer_type::new();
-                        let matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #central_row, #central_col, #size>::new(direct_pins, debouncer, #low_active);
-                        let mut matrix = ::rmk::matrix::OffsetMatrixWrapper::<_, _, _, #central_row_offset, #central_col_offset>(matrix);
+                        let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #central_row, #central_col, #size, #central_row_offset, #central_col_offset>::new(direct_pins, debouncer, #low_active);
                     }
                 }
             }
@@ -396,7 +403,11 @@ fn expand_key_info_row(row: &Vec<KeyInfo>) -> proc_macro2::TokenStream {
 
 /// Get debouncer type
 pub(crate) fn get_debouncer_type(matrix_config: &MatrixConfig) -> TokenStream2 {
-    match matrix_config.debouncer.clone().unwrap_or("default".to_string()) {
+    match matrix_config
+        .debouncer
+        .clone()
+        .unwrap_or("default".to_string())
+    {
         s if s == "fast" => quote! { ::rmk::debounce::fast_debouncer::FastDebouncer },
         s if s == "default" => quote! { ::rmk::debounce::default_debouncer::DefaultDebouncer },
         _ => panic!("Invalid debouncer type, supported debouncer types are `default` and `fast`"),

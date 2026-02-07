@@ -2,270 +2,164 @@
 //!
 //! This module defines the `InputDevice` trait, `InputProcessor` trait, `Runnable` trait and several macros for running input devices and processors.
 //! The `InputDevice` trait provides the interface for individual input devices, and the macros facilitate their concurrent execution.
-use core::cell::RefCell;
-
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
-use crate::event::Event;
+use crate::event::{EventSubscriber, SubscribableInputEvent};
 use crate::hid::Report;
-use crate::keymap::KeyMap;
 
 pub mod adc;
+#[cfg(feature = "_ble")]
 pub mod battery;
 pub mod joystick;
-pub mod pmw3610;
 pub mod pmw33xx;
-pub mod rotary_encoder;
+pub mod pmw3610;
 pub mod pointing;
+pub mod rotary_encoder;
 
 /// The trait for runnable input devices and processors.
 ///
 /// For some input devices or processors, they should keep running in a separate task.
 /// This trait is used to run them in a separate task.
 pub trait Runnable {
-    async fn run(&mut self);
+    async fn run(&mut self) -> !;
 }
 
 /// The trait for input devices.
 ///
 /// This trait defines the interface for input devices in RMK.
-/// The `run_devices` macro is required to run tasks associated with input devices concurrently.
+/// Use the `#[input_device]` macro to automatically implement this trait.
 ///
 /// # Example
 /// ```rust
-/// // Define an input device
+/// // For single-event devices, use the macro:
+/// #[input_device(publish = BatteryEvent)]
 /// struct MyInputDevice;
 ///
-/// impl InputDevice for MyInputDevice {
-///     async fn read_event(&mut self) -> Event {
-///         // Input device implementation
+/// impl MyInputDevice {
+///     // You MUST implement this read method for the published event.
+///     // The method name follows the pattern: read_{event_name}_event
+///     async fn read_battery_event(&mut self) -> BatteryEvent {
+///         // Implementation for reading an event
 ///     }
 /// }
 ///
-/// // Use the input device
-/// let d1 = MyInputDevice{};
-/// let d2 = MyInputDevice{};
+/// // For multi-event devices, a derived enum should be used.
+/// // **Note**: Wrapper enums only implement publish traits, not subscribe traits.
+/// // This is because wrapper enums route events to their concrete type channels,
+/// // and you should subscribe to the individual event types instead.
+/// #[derive(InputEvent)]
+/// enum MultiDeviceEvent {
+///     Battery(BatteryEvent),
+///     Pointing(PointingEvent),
+/// }
 ///
-/// // Run all devices simultaneously with RMK
-/// embassy_futures::join::join(
-///     run_devices!((d1, d2) => EVENT_CHANNEL),
-///     run_rmk(
-///         // .. arguments
-///     ),
-/// )
-/// .await;
+/// #[input_device(publish = MultiDeviceEvent)]
+/// struct MyInputDevice;
+///
+/// impl MyInputDevice {
+///     // Returns the `MultiDeviceEvent`
+///     async fn read_multi_device_event(&mut self) -> MultiDeviceEvent {
+///         // Implementation for reading multiple types of events
+///     }
+/// }
 /// ```
-pub trait InputDevice {
-    /// Read the raw input event
-    async fn read_event(&mut self) -> Event;
-}
+pub trait InputDevice: Runnable {
+    /// The event type produced by this input device
+    type Event;
 
-/// Processing result of the processor chain
-pub enum ProcessResult {
-    /// Continue processing the event
-    Continue(Event),
-    /// Stop processing
-    Stop,
+    /// Read the raw input event
+    async fn read_event(&mut self) -> Self::Event;
 }
 
 /// The trait for input processors.
 ///
-/// The input processor processes the [`Event`] from the input devices and converts it to the final HID report.
-/// Take the normal keyboard as the example:
+/// The input processor processes events from input devices and converts them to HID reports.
+/// For example, the [`crate::matrix::Matrix`] is an input device and the [`crate::keyboard::Keyboard`]
+/// is an input processor.
 ///
-/// The [`crate::matrix::Matrix`] is actually an input device and the [`crate::keyboard::Keyboard`] is actually an input processor.
-pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0> {
+/// # Usage
+///
+/// Use the `#[input_processor]` macro to define a processor that subscribes to input events:
+///
+/// ```rust,ignore
+/// use rmk_macro::input_processor;
+///
+/// // Subscribe to multiple input events
+/// #[input_processor(subscribe = [KeyEvent, EncoderEvent])]
+/// struct KeyProcessor;
+///
+/// impl KeyProcessor {
+///     // You MUST implement handler methods for each subscribed event type.
+///     // The method name follows the pattern: on_{event_name}_event.
+///     async fn on_key_event(&mut self, event: KeyEvent) {
+///         // Process key event
+///     }
+///
+///     async fn on_encoder_event(&mut self, event: EncoderEvent) {
+///         // Process encoder event
+///     }
+/// }
+/// ```
+///
+pub trait InputProcessor: Runnable {
+    /// The event type processed by this input processor.
+    ///
+    /// Must implement `SubscribableInputEvent`, which provides the `Subscriber` type
+    /// and the `input_subscriber()` method.
+    type Event: SubscribableInputEvent;
+
+    /// Create a new event subscriber.
+    ///
+    /// Default implementation uses the event's `input_subscriber()` method.
+    fn subscriber() -> <Self::Event as SubscribableInputEvent>::Subscriber {
+        Self::Event::input_subscriber()
+    }
+
     /// Process the incoming events, convert them to HID report [`Report`],
     /// then send the report to the USB/BLE.
     ///
-    /// Note there might be mulitple HID reports are generated for one event,
+    /// Note there might be multiple HID reports generated for one event,
     /// so the "sending report" operation should be done in the `process` method.
     /// The input processor implementor should be aware of this.
-    async fn process(&mut self, event: Event) -> ProcessResult;
+    async fn process(&mut self, event: Self::Event);
 
     /// Send the processed report.
     async fn send_report(&self, report: Report) {
         KEYBOARD_REPORT_CHANNEL.send(report).await;
     }
 
-    /// Get the current keymap
-    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>;
-}
-
-/// Macro to bind input devices to event channels and run all of them.
-///
-/// This macro simplifies the creation of a task that reads events from multiple input devices
-/// and sends them to specified channels. It allows for efficient handling of
-/// input events in a concurrent manner.
-///
-/// # Arguments
-///
-/// * `dev`: A list of input devices grouped in parentheses.
-/// * `channel`: The channel that devices send the events to.
-///
-/// # Example
-/// ```rust
-/// use rmk::channel::{blocking_mutex::raw::NoopRawMutex, channel::Channel, EVENT_CHANNEL};
-/// // Initialize channel
-/// let local_channel: Channel<NoopRawMutex, Event, 16> = Channel::new();
-///
-/// // Define your input devices, both MyInputDevice and MyInputDevice2 should implement `InputDevice] trait
-/// struct MyInputDevice;
-/// struct MyInputDevice2;
-///
-/// let d1 = MyInputDevice{};
-/// let d2 = MyInputDevice2{};
-/// // Bind devices to channels and run, RMK also provides EVENT_CHANNEL for general use
-/// let device_future = run_devices! {
-///     (d1, d2) => local_channel,
-///     (matrix) => rmk::EVENT_CHANNEL,
-/// };
-///
-/// ```
-#[macro_export]
-macro_rules! run_devices {
-    ( $( ( $( $dev:ident ),* ) => $channel:expr),+ $(,)? ) => {{
-        use $crate::input_device::InputDevice;
-        $crate::join_all!(
-            $(
-                $crate::join_all!(
-                    $(
-                        async {
-                            loop {
-                                let e = $dev.read_event().await;
-                                // For KeyboardEvent, send it to KEY_EVENT_CHANNEL
-                                match e {
-                                    $crate::event::Event::Key(key_event) => {
-                                        $crate::channel::KEY_EVENT_CHANNEL.send(key_event).await;
-                                    }
-                                    _ => {
-                                        // Drop the oldest event if the channel is full
-                                        if $channel.is_full() {
-                                            let _ = $channel.receive().await;
-                                        }
-                                        $channel.send(e).await;
-                                    }
-                                }
-                            }
-                        }
-                    ),*
-                )
-            ),+
-        )
-    }};
-}
-
-/// Macro to bind input devices and an input processor directly.
-///
-/// This macro simplifies the creation of a task that reads events from multiple input devices
-/// and processes them using a specified input processor. It allows for efficient handling of
-/// input events in a concurrent manner.
-///
-/// # Arguments
-///
-/// * `dev`: A list of input devices grouped in parentheses.
-/// * `proc`: The input processor that will handle the events from the devices.
-///
-/// # Example
-/// ```rust
-/// // Define your input devices and processor
-/// struct MyInputDevice;
-/// struct MyInputDevice2;
-/// struct MyInputProcessor;
-///
-/// impl InputDevice for MyInputDevice {
-///     async fn read_event(&mut self) -> Event {
-///         // Implementation for reading an event
-///     }
-/// }
-///
-/// impl InputProcessor for MyInputProcessor {
-///     async fn process(&mut self, event: Event) {
-///         // Implementation for processing an event
-///     }
-/// }
-///
-/// // Bind devices and processor into a task, aka use `processor` to process input events from `device1` and `device2`
-/// let device_future = bind_device_and_processor_and_run!((device1, device2) => processor);
-///
-/// ```
-#[macro_export]
-macro_rules! bind_device_and_processor_and_run {
-    (($( $dev:ident),*) => $proc:ident) => {
-        async {
-            use $crate::futures::{self, FutureExt, select_biased};
-            use $crate::input_device::{InputDevice, InputProcessor};
-            loop {
-                let e = select_biased! {
-                    $(
-                        e = $dev.read_event().fuse() => e,
-                    )*
-                };
-                $proc.process(e).await;
-            }
+    /// Default processing loop that continuously receives and processes events
+    async fn process_loop(&mut self) -> ! {
+        let mut sub = Self::subscriber();
+        loop {
+            let event = sub.next_event().await;
+            self.process(event).await;
         }
-    };
+    }
 }
 
-/// Macro for binding input processor chain to event channel and running them.
+/// Macro to run multiple Runnable instances concurrently.
 ///
-/// FIXME: For split keyboard, `EVENT_CHANNEL` is REQUIRED as it's the default channel for receiving events from peripherals.
-///
-/// This macro creates tasks that receive events from channels and process them using specified processor chains.
-/// It calls processors in order and decides whether to continue the chain based on the result of each processor.
-///
-/// # Arguments
-///
-/// * `channel`: The channel to receive events from
-/// * `procs`: The processor list that will handle the events
+/// This macro simplifies running multiple input devices, processors, or controllers
+/// that implement the `Runnable` trait.
 ///
 /// # Example
-///
 /// ```rust
-/// use rmk::channel::{blocking_mutex::raw::NoopRawMutex, channel::Channel, EVENT_CHANNEL};
-/// // Create a local channel for processor chain
-/// let local_channel: Channel<NoopRawMutex, Event, 16> = Channel::new();
-/// // Two chains, one use local channel, the other use the built-in channel
-/// let processor_future = run_processor_chain! {
-///     local_channel => [processor1, processor2, processor3]
-///     EVENT_CHANNEL => [processor4, processor5, processor6]
-/// };
+/// // Define your runnables
+/// let mut device = MyInputDevice::new();
+/// let mut processor = MyProcessor::new();
+/// let mut controller = MyController::new();
+///
+/// // Run all runnables concurrently
+/// run_all!(device, processor, controller);
 /// ```
 #[macro_export]
-macro_rules! run_processor_chain {
-    ( $( $channel:expr => [ $first:expr $(, $rest:expr )* ] ),+ $(,)? ) => {{
-        use rmk::input_device::InputProcessor;
+macro_rules! run_all {
+    ($( $dev:ident ),*) => {{
+        use $crate::input_device::Runnable;
         $crate::join_all!(
             $(
-                async {
-                    loop {
-                        let event = $channel.receive().await;
-
-                        // Process the event with the first processor
-                        match $first.process(event).await {
-                            $crate::input_device::ProcessResult::Stop => {
-                                // If the first processor returns Stop, continue to wait for the next event
-                                continue;
-                            },
-                            $crate::input_device::ProcessResult::Continue(next_event) => {
-                                // Pass the result to the next processor in the chain
-                                let mut current_event = next_event;
-                                $(
-                                    match $rest.process(current_event).await {
-                                        $crate::input_device::ProcessResult::Stop => {
-                                            // If any processor returns Stop, continue to wait for the next event
-                                            continue;
-                                        },
-                                        $crate::input_device::ProcessResult::Continue(next_event) => {
-                                            // Update the current event and continue processing
-                                            current_event = next_event;
-                                        }
-                                    }
-                                )*
-                            }
-                        }
-                    }
-                }
-            ),+
+                $dev.run()
+            ),*
         )
     }};
 }

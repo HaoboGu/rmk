@@ -48,11 +48,20 @@ pub(crate) fn expand_pmw3610_device(
             panic!("pmw3610 requires spi.mosi == spi.miso, or one of them empty");
         }
 
-        let sdio_pin = if mosi_pin.is_empty() { miso_pin } else { mosi_pin };
+        let sdio_pin = if mosi_pin.is_empty() {
+            miso_pin
+        } else {
+            mosi_pin
+        };
 
         let sck_ident = format_ident!("{}", spi.sck);
         let sdio_ident = format_ident!("{}", sdio_pin);
-        let cs_ident = format_ident!("{}", spi.cs.as_ref().expect("pmw3610 requires `cs` in spi config"));
+        let cs_ident = format_ident!(
+            "{}",
+            spi.cs
+                .as_ref()
+                .expect("pmw3610 requires `cs` in spi config")
+        );
 
         // Generate config values
         let res_cpi: i16 = sensor.cpi.map(|c| c as i16).unwrap_or(-1);
@@ -153,14 +162,14 @@ pub(crate) fn expand_pmw3610_device(
         // Generate processor initialization
         let processor_init = quote! {
 
-            let #processor_ident_config =::rmk::input_device::pointing::PointingProcessorConfig {
-                invert_x: #proc_invert_x
+            let #processor_ident_config = ::rmk::input_device::pointing::PointingProcessorConfig {
+                invert_x: #proc_invert_x,
                 invert_y: #proc_invert_y,
                 swap_xy: #proc_swap_xy,
                 ..Default::default()
             };
 
-            let mut #processor_ident = ::rmk::input_device::pointing::PointingProcessor::new(&keymap);
+            let mut #processor_ident = ::rmk::input_device::pointing::PointingProcessor::new(&keymap, #processor_ident_config);
         };
 
         processor_initializers.push(Initializer {

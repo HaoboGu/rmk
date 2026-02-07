@@ -441,16 +441,12 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> Sp
         info!("Received split message: {:?}", message);
 
         // Update last activity time when receiving key events from peripheral
-        match &message {
-            SplitMessage::Key(_) => {
-                debug!("Key activity detected from peripheral");
-                update_activity_time();
-            }
-            SplitMessage::Event(_) => {
-                debug!("Event activity detected from peripheral");
-                update_activity_time();
-            }
-            _ => {}
+        if matches!(
+            message,
+            SplitMessage::Key(_) | SplitMessage::Touchpad(_) | SplitMessage::Pointing(_)
+        ) {
+            debug!("Activity {:?} detected from peripheral", &message);
+            update_activity_time();
         }
 
         Ok(message)

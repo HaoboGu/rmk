@@ -37,7 +37,7 @@ key.channel_size = 16
 layer_change.subs = 8
 
 # Reduce subscribers to save memory on constrained devices
-battery_level.subs = 2
+battery_state.subs = 2
 led_indicator.subs = 2
 
 # Configure multiple parameters for one event
@@ -67,13 +67,12 @@ All [built-in controller events](../features/controller.md#built-in-events) can 
 - `sleep_state` → [`SleepStateEvent`](../features/controller.md#built-in-events) - Sleep/wake state transitions
 
 ### Power Events
-- `battery_level` → [`BatteryLevelEvent`](../features/controller.md#built-in-events) - Battery level changes (default: subs=4 for multiple displays)
-- `charging_state` → [`ChargingStateEvent`](../features/controller.md#built-in-events) - Charging status changes
+- `battery_state` → [`BatteryStateEvent`](../features/controller.md#built-in-events) - Battery state changes (includes level and charging status, default: subs=4 for multiple displays)
 
 ### Split Keyboard Events
 - `peripheral_connected` → [`PeripheralConnectedEvent`](../features/controller.md#built-in-events) - Peripheral connection status
 - `central_connected` → [`CentralConnectedEvent`](../features/controller.md#built-in-events) - Central connection status
-- `peripheral_battery` → [`PeripheralBatteryEvent`](../features/controller.md#built-in-events) - Peripheral battery updates (default: channel_size=2, subs=2)
+- `peripheral_battery` → [`PeripheralBatteryEvent`](../features/controller.md#built-in-events) - Peripheral battery state updates (default: channel_size=2, subs=2)
 - `clear_peer` → [`ClearPeerEvent`](../features/controller.md#built-in-events) - BLE peer clearing events
 
 For detailed information about these event types and how to use them in custom controllers, see the [Controller Support](../features/controller.md) documentation.

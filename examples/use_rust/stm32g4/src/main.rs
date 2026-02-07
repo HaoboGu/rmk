@@ -12,14 +12,13 @@ use embassy_stm32::peripherals::USB;
 use embassy_stm32::usb::{Driver, InterruptHandler};
 use embassy_stm32::{Config, bind_interrupts};
 use keymap::{COL, ROW};
-use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, PositionalConfig, RmkConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::{initialize_keymap, run_devices, run_rmk};
+use rmk::{initialize_keymap, run_all, run_rmk};
 use {defmt_rtt as _, panic_halt as _};
 bind_interrupts!(struct Irqs {
     USB_LP => InterruptHandler<USB>;
@@ -57,12 +56,5 @@ async fn main(_spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
 
     // Start
-    join3(
-        keyboard.run(),
-        run_rmk(driver, rmk_config),
-        run_devices! (
-            (matrix) => EVENT_CHANNEL,
-        ),
-    )
-    .await;
+    join3(keyboard.run(), run_rmk(driver, rmk_config), run_all!(matrix)).await;
 }

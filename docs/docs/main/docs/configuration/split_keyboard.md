@@ -136,28 +136,35 @@ See [this section](../configuration/split_keyboard) for more details.
 
 ## Define central and peripherals via Rust
 
+::: info
+When using the Rust API without `[[split.peripheral]]` entries in `keyboard.toml`, you still need to set the peripheral count for build-time sizing:
+
+```toml
+[rmk]
+split_peripherals_num = 2
+```
+
+Make sure `KEYBOARD_TOML_PATH` points to this file.
+:::
+
 In RMK, split keyboard's matrix are defined with row/col number and their offsets in the whole matrix.
 
 ### Central
 
-Matrix configuration on the split central is quite similar with the general keyboard, the only difference is for split central, central matrix needs to be wrapped in an offset matrix:
+Matrix configuration on the split central is quite similar with the general keyboard, the only difference is for split central, if you have offset for your central matrix, you need to specify the row and column offsets in the Matrix constructor:
 
 ```rust
 // Suppose that the central matrix is col2row
-let mut matrix = OffsetMatrixWrapper::<
+let mut matrix = Matrix::<
     _,
     _,
     _,
-    0, // ROW OFFSET
-    0, // COL OFFSET
-    >(Matrix::<
-        _,
-        _,
-        _,
-        4, // ROW
-        7, // COL
-        true, // COL2ROW = true, set it to false to use ROW2COL matrix
-    >::new(row_pins, col_pins, debouncer));
+    4,    // ROW
+    7,    // COL
+    true, // COL2ROW = true, set it to false to use ROW2COL matrix
+    0,    // ROW_OFFSET
+    0,    // COL_OFFSET
+>::new(row_pins, col_pins, debouncer);
 ```
 
 On the central, you should also run the peripheral manager for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task

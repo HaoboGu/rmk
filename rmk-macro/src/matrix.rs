@@ -1,12 +1,14 @@
 //! Initialize matrix initialization boilerplate of RMK
 //!
 use quote::quote;
-use rmk_config::{BoardConfig, ChipModel, ChipSeries, KeyboardTomlConfig, MatrixType, UniBodyConfig};
+use rmk_config::{
+    BoardConfig, ChipModel, ChipSeries, KeyboardTomlConfig, MatrixType, UniBodyConfig,
+};
 
 use crate::feature::is_feature_enabled;
 use crate::gpio_config::{
-    convert_direct_pins_to_initializers, convert_input_pins_to_initializers, convert_output_pins_to_initializers,
-    get_input_pin_type, get_output_pin_type,
+    convert_direct_pins_to_initializers, convert_input_pins_to_initializers,
+    convert_output_pins_to_initializers, get_input_pin_type, get_output_pin_type,
 };
 
 pub(crate) fn expand_matrix_config(
@@ -133,7 +135,11 @@ pub(crate) fn expand_matrix_input_output_pins(
     let output_pin_type = get_output_pin_type(chip);
 
     // Initialize input pins
-    pin_initialization.extend(convert_input_pins_to_initializers(chip, input_pins, async_matrix));
+    pin_initialization.extend(convert_input_pins_to_initializers(
+        chip,
+        input_pins,
+        async_matrix,
+    ));
     // Initialize output pins
     pin_initialization.extend(convert_output_pins_to_initializers(chip, output_pins));
     let pin_names = if row2col {

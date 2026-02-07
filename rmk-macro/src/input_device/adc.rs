@@ -51,7 +51,7 @@ pub(crate) fn expand_adc_device(
                 let bat_ident = format_ident!("battery_processor");
                 let battery_processor = Initializer {
                     initializer: quote! {
-                        let mut #bat_ident = ::rmk::input_device::battery::BatteryProcessor::new(#adc_divider_measured, #adc_divider_total, &keymap);
+                        let mut #bat_ident = ::rmk::input_device::battery::BatteryProcessor::new(#adc_divider_measured, #adc_divider_total);
                     },
                     var_name: bat_ident,
                 };

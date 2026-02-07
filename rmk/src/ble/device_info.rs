@@ -7,7 +7,7 @@ pub(crate) enum VidSource {
     UsbIF = 2,
 }
 
-/// PnP ID characteristic is a set of values used to craete an unique device ID.
+/// PnP ID characteristic is a set of values used to create a unique device ID.
 /// These values are used to identify all devices of a given type/model/version using numbers.
 #[repr(C, packed)]
 #[derive(Clone, Copy)]
@@ -40,7 +40,7 @@ impl Default for PnPID {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct DeviceConfigrmation {
+pub(crate) struct DeviceConfiguration {
     pub(crate) manufacturer_name: Option<&'static str>,
     pub(crate) model_number: Option<&'static str>,
     pub(crate) serial_number: Option<&'static str>,
@@ -50,7 +50,7 @@ pub(crate) struct DeviceConfigrmation {
 }
 
 #[gatt_service(uuid = service::DEVICE_INFORMATION)]
-pub(crate) struct DeviceConfigrmationService {
+pub(crate) struct DeviceConfigurationService {
     #[characteristic(uuid = "2a50", read)]
     pub(crate) pnp_id: PnPID,
     #[characteristic(

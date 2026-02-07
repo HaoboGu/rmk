@@ -1,13 +1,14 @@
 use core::cell::RefCell;
 
+use rmk_macro::input_processor;
 use usbd_hid::descriptor::MouseReport;
 
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
-use crate::event::Event;
+use crate::event::PointingEvent;
 use crate::hid::Report;
-use crate::input_device::{InputProcessor, ProcessResult};
+use crate::input_device::InputProcessor;
 use crate::keymap::KeyMap;
 
+#[input_processor(subscribe = [PointingEvent])]
 pub struct JoystickProcessor<
     'a,
     const ROW: usize,
@@ -40,6 +41,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             record: [0; N],
         }
     }
+
+    async fn on_pointing_event(&mut self, event: PointingEvent) {
+        for (rec, e) in self.record.iter_mut().zip(event.0.iter()) {
+            *rec = e.value;
+        }
+        debug!("Joystick info: {:#?}", self.record);
+        self.generate_report().await;
+    }
+
     async fn generate_report(&mut self) {
         let mut report = [0i16; N];
 
@@ -69,36 +79,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             wheel: 0,
             pan: 0,
         };
+
+        // Send mouse report directly
         self.send_report(Report::MouseReport(mouse_report)).await;
-    }
-}
-
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize, const N: usize>
-    InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
-    for JoystickProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER, N>
-{
-    async fn process(&mut self, event: Event) -> ProcessResult {
-        embassy_time::Timer::after_millis(5).await;
-        match event {
-            Event::Joystick(event) => {
-                for (rec, e) in self.record.iter_mut().zip(event.iter()) {
-                    *rec = e.value;
-                }
-                debug!("Joystick info: {:#?}", self.record);
-                self.generate_report().await;
-                ProcessResult::Stop
-            }
-            _ => ProcessResult::Continue(event),
-        }
-    }
-
-    /// Send the processed report.
-    async fn send_report(&self, report: Report) {
-        KEYBOARD_REPORT_CHANNEL.send(report).await;
-    }
-
-    /// Get the current keymap
-    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
-        self.keymap
     }
 }

@@ -26,7 +26,12 @@ pub(crate) fn expand_rmk_entry(
                 }
                 None
             })
-            .unwrap_or(rmk_entry_select(keyboard_config, devices, processors, controllers))
+            .unwrap_or(rmk_entry_select(
+                keyboard_config,
+                devices,
+                processors,
+                controllers,
+            ))
     } else {
         rmk_entry_select(keyboard_config, devices, processors, controllers)
     }
@@ -49,8 +54,8 @@ pub(crate) fn rmk_entry_select(
         let mut devs = devices.clone();
         devs.push(quote! {matrix});
         quote! {
-            ::rmk::run_devices! (
-                (#(#devs),*) => ::rmk::channel::EVENT_CHANNEL,
+            ::rmk::run_all! (
+                #(#devs),*
             )
         }
     };
@@ -58,8 +63,8 @@ pub(crate) fn rmk_entry_select(
         quote! {}
     } else {
         quote! {
-            ::rmk::run_processor_chain! (
-                ::rmk::channel::EVENT_CHANNEL=> [#(#processors),*],
+            ::rmk::run_all! (
+                #(#processors),*
             )
         }
     };
@@ -162,7 +167,9 @@ pub(crate) fn rmk_entry_select(
                 );
             }
         }
-        BoardConfig::UniBody(_) => rmk_entry_unibody(keyboard_config, devices_task, processors_task, controllers),
+        BoardConfig::UniBody(_) => {
+            rmk_entry_unibody(keyboard_config, devices_task, processors_task, controllers)
+        }
     };
 
     quote! {

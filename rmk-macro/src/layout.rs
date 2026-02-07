@@ -33,7 +33,11 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> Tok
     }
 
     for encoder_layer in &layout.encoder_map {
-        encoder_map.push(expand_encoder_layer(encoder_layer.clone(), num_encoder, profiles));
+        encoder_map.push(expand_encoder_layer(
+            encoder_layer.clone(),
+            num_encoder,
+            profiles,
+        ));
     }
     encoder_map.resize(
         layout.keymap.len(),
@@ -52,7 +56,10 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> Tok
 }
 
 /// Expand a layer for keymap
-fn expand_layer(layer: Vec<Vec<String>>, profiles: &Option<HashMap<String, MorseProfile>>) -> TokenStream2 {
+fn expand_layer(
+    layer: Vec<Vec<String>>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> TokenStream2 {
     let mut rows = vec![];
     for row in layer {
         rows.push(expand_row(row, profiles));
@@ -84,7 +91,10 @@ fn expand_encoder_layer(
     }
 
     // Make sure it configures correct number of encoders
-    encoders.resize(num_encoder, quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)) });
+    encoders.resize(
+        num_encoder,
+        quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)) },
+    );
 
     quote! { [#(#encoders), *] }
 }
@@ -163,7 +173,10 @@ fn parse_modifiers(modifiers_str: &str) -> ModifierCombinationMacro {
 }
 
 /// Parse the key string at a single position
-pub(crate) fn parse_key(key: String, profiles: &Option<HashMap<String, MorseProfile>>) -> TokenStream2 {
+pub(crate) fn parse_key(
+    key: String,
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> TokenStream2 {
     if !key.is_empty() && (key.trim_start_matches("_").is_empty() || key.to_lowercase() == "trns") {
         return quote! { ::rmk::a!(Transparent) };
     } else if !key.is_empty() && key == "No" {
@@ -438,7 +451,12 @@ pub(crate) fn parse_key(key: String, profiles: &Option<HashMap<String, MorseProf
                 // User(X) format
                 s.trim_start_matches(|c: char| !c.is_ascii_digit())
                     .trim_end_matches(')')
-            } else if s[4..].chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+            } else if s[4..]
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+            {
                 // UserX format
                 &s[4..]
             } else {
@@ -459,7 +477,11 @@ pub(crate) fn parse_key(key: String, profiles: &Option<HashMap<String, MorseProf
             }
         }
         s if s.to_lowercase().starts_with("macro")
-            && s[5..].chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) =>
+            && s[5..]
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false) =>
         {
             // Support Macro0, Macro1, Macro2, etc.
             let index_str = &s[5..];

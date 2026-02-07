@@ -8,9 +8,9 @@ use trouble_host::prelude::*;
 use {super::PeerAddress, crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash};
 
 use crate::CONNECTION_STATE;
-use crate::channel::KEY_EVENT_CHANNEL;
 #[cfg(feature = "controller")]
 use crate::event::{CentralConnectedEvent, publish_controller_event};
+use crate::event::{KeyboardEvent, SubscribableInputEvent};
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
@@ -193,8 +193,9 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
                 Err(BleHostError::BleHost(Error::Timeout)) => {
                     // Timeout, wait new keys to continue
                     error!("Connect to central timeout");
-                    KEY_EVENT_CHANNEL.clear();
-                    let _ = KEY_EVENT_CHANNEL.receive().await;
+                    let sub = KeyboardEvent::input_subscriber();
+                    sub.clear();
+                    let _ = sub.receive().await;
                     continue;
                 }
                 Err(e) => {

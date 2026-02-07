@@ -2,7 +2,10 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use rmk_config::{ChipModel, ChipSeries, KeyboardTomlConfig, OutputConfig};
 
-pub(crate) fn convert_output_pins_to_initializers(chip: &ChipModel, pins: Vec<String>) -> proc_macro2::TokenStream {
+pub(crate) fn convert_output_pins_to_initializers(
+    chip: &ChipModel,
+    pins: Vec<String>,
+) -> proc_macro2::TokenStream {
     let mut initializers = proc_macro2::TokenStream::new();
     let mut idents = vec![];
     let pin_initializers = pins
@@ -235,6 +238,12 @@ pub fn expand_output_config(keyboard_config: &KeyboardTomlConfig) -> TokenStream
 pub fn expand_output_initialization(outputs: Vec<OutputConfig>, chip: &ChipModel) -> TokenStream {
     outputs
         .into_iter()
-        .map(|oc| convert_gpio_str_to_persisted_output_pin(chip, oc.pin, oc.initial_state_active ^ oc.low_active))
+        .map(|oc| {
+            convert_gpio_str_to_persisted_output_pin(
+                chip,
+                oc.pin,
+                oc.initial_state_active ^ oc.low_active,
+            )
+        })
         .collect()
 }
