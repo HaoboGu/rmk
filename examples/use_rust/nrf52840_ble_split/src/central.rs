@@ -246,7 +246,7 @@ async fn main(spawner: Spawner) {
     impl PeripheralBatteryMonitor {
         async fn on_peripheral_battery_event(&mut self, event: PeripheralBatteryEvent) {
             info!("Peripheral {} battery status: {:?}", event.id, event);
-        }k
+        }
         async fn on_battery_state_event(&mut self, event: BatteryStateEvent) {
             info!("Central battery status: {:?}", event);
         }
