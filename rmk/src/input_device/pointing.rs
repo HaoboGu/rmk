@@ -449,8 +449,7 @@ mod tests {
             init_state: InitState::Pending,
             poll_interval: Duration::from_millis(1),
             id: 1,
-            #[cfg(feature = "controller")]
-            controller_sub: make_dummy_subscriber(),
+
             report_interval: Duration::from_millis(1),
             last_poll: Instant::MIN,
             last_report: Instant::MIN,
@@ -492,8 +491,7 @@ mod tests {
             init_state: InitState::Pending,
             poll_interval: Duration::from_millis(1),
             id: 1,
-            #[cfg(feature = "controller")]
-            controller_sub: make_dummy_subscriber(),
+
             report_interval: Duration::from_millis(1),
             last_poll: Instant::MIN,
             last_report: Instant::MIN,
@@ -526,8 +524,7 @@ mod tests {
             init_state: InitState::Pending,
             poll_interval: Duration::from_millis(1),
             id: 1,
-            #[cfg(feature = "controller")]
-            controller_sub: make_dummy_subscriber(),
+
             report_interval: Duration::from_millis(1),
             last_poll: Instant::MIN,
             last_report: Instant::MIN,
@@ -567,8 +564,7 @@ mod tests {
             accumulated_x: 0,
             accumulated_y: 0,
             id: 1,
-            #[cfg(feature = "controller")]
-            controller_sub: make_dummy_subscriber(),
+
         };
 
         let event = block_on(device.read_event());
@@ -598,8 +594,7 @@ mod tests {
             init_state: InitState::Pending,
             poll_interval: Duration::from_millis(10000),
             id: 1,
-            #[cfg(feature = "controller")]
-            controller_sub: make_dummy_subscriber(),
+
             report_interval: Duration::from_millis(1),
             last_poll: Instant::MIN,
             last_report: Instant::MIN,
