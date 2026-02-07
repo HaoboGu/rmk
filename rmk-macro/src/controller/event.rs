@@ -42,7 +42,13 @@ pub fn controller_event_impl(attr: proc_macro::TokenStream, item: proc_macro::To
         primary_channel,
         |input_attr| {
             let input_channel_size = parse_input_event_channel_size_from_attr(input_attr);
-            generate_input_event_channel(&type_name, &ty_generics, &impl_generics, where_clause, input_channel_size)
+            generate_input_event_channel(
+                &type_name,
+                &ty_generics,
+                &impl_generics,
+                where_clause,
+                input_channel_size,
+            )
         },
     );
 

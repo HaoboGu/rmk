@@ -16,9 +16,6 @@ pub use controller::*;
 pub use input::*;
 
 /// Trait for event publishers
-///
-/// This is a trait that can be implemented by any type that publishes events.
-/// It's used by both controller events and potentially other event systems.
 pub trait EventPublisher {
     type Event;
     fn publish(&self, message: Self::Event);
@@ -30,10 +27,7 @@ pub trait AsyncEventPublisher {
     async fn publish_async(&self, message: Self::Event);
 }
 
-/// Trait for event subscribers
-///
-/// This is a generic trait that can be implemented by any type that subscribes to events.
-/// It's used by both controller events and potentially other event systems.
+/// Trait for event subscribers, event subscribers are always async
 pub trait EventSubscriber {
     type Event;
     async fn next_event(&mut self) -> Self::Event;
@@ -42,10 +36,6 @@ pub trait EventSubscriber {
 /// Base trait for all events
 pub trait Event: Clone + Send {}
 impl<T: Clone + Send> Event for T {}
-
-// ============================================================================
-// Input Event Traits
-// ============================================================================
 
 /// Trait for input events that can be published.
 ///

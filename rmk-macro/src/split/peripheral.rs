@@ -15,8 +15,8 @@ use crate::gpio_config::expand_output_initialization;
 use crate::import::expand_custom_imports;
 use crate::input_device::adc::expand_adc_device;
 use crate::input_device::encoder::expand_encoder_device;
-use crate::input_device::pmw3610::expand_pmw3610_device;
 use crate::input_device::pmw33xx::expand_pmw33xx_device;
+use crate::input_device::pmw3610::expand_pmw3610_device;
 use crate::keyboard::get_debouncer_type;
 use crate::keyboard_config::read_keyboard_toml_config;
 use crate::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
@@ -34,8 +34,7 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
     let main_function = expand_split_peripheral(id, &toml_config, item_mod, &rmk_features);
     let chip = toml_config.get_chip_model().unwrap();
 
-    let bind_interrupts =
-        expand_bind_interrupt_for_split_peripheral(&chip, &toml_config, id);
+    let bind_interrupts = expand_bind_interrupt_for_split_peripheral(&chip, &toml_config, id);
 
     let main_function_sig = if chip.series == ChipSeries::Esp32 {
         quote! {
@@ -66,7 +65,7 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
 fn expand_bind_interrupt_for_split_peripheral(
     chip: &ChipModel,
     keyboard_config: &KeyboardTomlConfig,
-    peripheral_id: usize
+    peripheral_id: usize,
 ) -> TokenStream2 {
     let communication = keyboard_config.get_communication_config().unwrap();
     match chip.series {
@@ -90,8 +89,7 @@ fn expand_bind_interrupt_for_split_peripheral(
                 _ => panic!("Expected split configuration"),
             };
 
-            let pmw33xx_config = split_config
-                .peripheral[peripheral_id]
+            let pmw33xx_config = split_config.peripheral[peripheral_id]
                 .input_device
                 .clone()
                 .unwrap_or(InputDeviceConfig::default())

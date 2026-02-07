@@ -95,15 +95,14 @@ pub fn input_processor_impl(attr: proc_macro::TokenStream, item: proc_macro::Tok
     let struct_def = reconstruct_type_def(&input);
 
     // Generate event enum, subscriber, and dispatch body
-    let (event_type_tokens, event_enum_def, event_subscriber_impl, process_body) =
-        generate_event_enum_and_dispatch(
-            struct_name,
-            vis,
-            &config.event_types,
-            "Input",
-            quote! { ::rmk::event::SubscribableInputEvent },
-            quote! { input_subscriber },
-        );
+    let (event_type_tokens, event_enum_def, event_subscriber_impl, process_body) = generate_event_enum_and_dispatch(
+        struct_name,
+        vis,
+        &config.event_types,
+        "Input",
+        quote! { ::rmk::event::SubscribableInputEvent },
+        quote! { input_subscriber },
+    );
 
     // Generate Runnable implementation
     let runnable_impl = if has_marker {

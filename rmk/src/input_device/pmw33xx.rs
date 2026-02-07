@@ -5,11 +5,12 @@
 // Which is ported from the Zephyr driver implementation:
 // https://github.com/zephyrproject-rtos/zephyr/blob/d31c6e95033fd6b3763389edba6a655245ae1328/drivers/input/input_pmw3610.c
 
-use crate::input_device::pointing::{InitState, MotionData, PointingDevice, PointingDriver, PointingDriverError};
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
 use embedded_hal_async::spi::SpiBus;
+
+use crate::input_device::pointing::{InitState, MotionData, PointingDevice, PointingDriver, PointingDriverError};
 
 // ============================================================================
 // Burst register offsets
@@ -778,10 +779,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use embassy_futures::block_on;
     use embedded_hal_mock::eh1::digital::{Mock as PinMock, State as PinState, Transaction as PinTrans};
     use embedded_hal_mock::eh1::spi::{Mock as SpiMock, Transaction as SpiTrans};
+
+    use super::*;
 
     // Init logger for tests
     #[ctor::ctor]
@@ -925,572 +927,573 @@ mod tests {
         device.cs.done();
     }
 
-        #[test]
-        fn test_set_valid_min_resolution_pmw3389() {
-            // (50 / 50) - 1 = 0 = 0x013F
-            let spi_expectations: Vec<SpiTrans<u8>> = vec![
-                SpiTrans::write_vec(vec![Register::Config1H.value() | SPI_WRITE, 0x00]),
-                SpiTrans::write_vec(vec![Register::Config1L.value() | SPI_WRITE, 0x00]),
-            ];
+    #[test]
+    fn test_set_valid_min_resolution_pmw3389() {
+        // (50 / 50) - 1 = 0 = 0x013F
+        let spi_expectations: Vec<SpiTrans<u8>> = vec![
+            SpiTrans::write_vec(vec![Register::Config1H.value() | SPI_WRITE, 0x00]),
+            SpiTrans::write_vec(vec![Register::Config1L.value() | SPI_WRITE, 0x00]),
+        ];
 
-            let spi = SpiMock::new(&spi_expectations);
-            let cs = PinMock::new(&[
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-            ]);
+        let spi = SpiMock::new(&spi_expectations);
+        let cs = PinMock::new(&[
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+        ]);
 
-            let mut device = Pmw33xx::<_, _, _, Pmw3389Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
+        let mut device = Pmw33xx::<_, _, _, Pmw3389Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
 
-            block_on(device.set_resolution(50)).unwrap();
+        block_on(device.set_resolution(50)).unwrap();
 
-            device.spi.done();
-            device.cs.done();
-        }
+        device.spi.done();
+        device.cs.done();
+    }
 
-        #[test]
-        fn test_set_valid_max_resolution_pmw3389() {
-            // (16000 / 50) - 1 = 319 = 0x013F
-            let spi_expectations: Vec<SpiTrans<u8>> = vec![
-                SpiTrans::write_vec(vec![Register::Config1H.value() | SPI_WRITE, 0x01]),
-                SpiTrans::write_vec(vec![Register::Config1L.value() | SPI_WRITE, 0x3F]),
-            ];
+    #[test]
+    fn test_set_valid_max_resolution_pmw3389() {
+        // (16000 / 50) - 1 = 319 = 0x013F
+        let spi_expectations: Vec<SpiTrans<u8>> = vec![
+            SpiTrans::write_vec(vec![Register::Config1H.value() | SPI_WRITE, 0x01]),
+            SpiTrans::write_vec(vec![Register::Config1L.value() | SPI_WRITE, 0x3F]),
+        ];
 
-            let spi = SpiMock::new(&spi_expectations);
-            let cs = PinMock::new(&[
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-            ]);
+        let spi = SpiMock::new(&spi_expectations);
+        let cs = PinMock::new(&[
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+        ]);
 
-            let mut device = Pmw33xx::<_, _, _, Pmw3389Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
+        let mut device = Pmw33xx::<_, _, _, Pmw3389Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
 
-            block_on(device.set_resolution(16000)).unwrap();
+        block_on(device.set_resolution(16000)).unwrap();
 
-            device.spi.done();
-            device.cs.done();
-        }
+        device.spi.done();
+        device.cs.done();
+    }
 
-        #[test]
-        fn test_set_invalid_low_resolution_pmw3389() {
-            let expectations: Vec<SpiTrans<u8>> = vec![];
+    #[test]
+    fn test_set_invalid_low_resolution_pmw3389() {
+        let expectations: Vec<SpiTrans<u8>> = vec![];
 
-            let spi = SpiMock::new(&expectations);
-            let cs = PinMock::new(&[]);
+        let spi = SpiMock::new(&expectations);
+        let cs = PinMock::new(&[]);
 
-            let mut device = Pmw33xx::<_, _, _, Pmw3389Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
+        let mut device = Pmw33xx::<_, _, _, Pmw3389Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
 
-            // 49 is illegal (below RES_MIN = 50 for PMW3389)
-            let result = block_on(device.set_resolution(49));
-            assert!(matches!(result, Err(PointingDriverError::InvalidCpi)));
-            device.spi.done();
-            device.cs.done();
-        }
+        // 49 is illegal (below RES_MIN = 50 for PMW3389)
+        let result = block_on(device.set_resolution(49));
+        assert!(matches!(result, Err(PointingDriverError::InvalidCpi)));
+        device.spi.done();
+        device.cs.done();
+    }
 
-        #[test]
-        fn test_set_invalid_high_resolution_pmw3389() {
-            let expectations: Vec<SpiTrans<u8>> = vec![];
+    #[test]
+    fn test_set_invalid_high_resolution_pmw3389() {
+        let expectations: Vec<SpiTrans<u8>> = vec![];
 
-            let spi = SpiMock::new(&expectations);
-            let cs = PinMock::new(&[]);
+        let spi = SpiMock::new(&expectations);
+        let cs = PinMock::new(&[]);
 
-            let mut device = Pmw33xx::<_, _, _, Pmw3389Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
+        let mut device = Pmw33xx::<_, _, _, Pmw3389Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
 
-            // 16001 is illegal (below RES_MAX = 16000 for PMW3389)
-            let result = block_on(device.set_resolution(16001));
-            assert!(matches!(result, Err(PointingDriverError::InvalidCpi)));
-            device.spi.done();
-            device.cs.done();
-        }
+        // 16001 is illegal (below RES_MAX = 16000 for PMW3389)
+        let result = block_on(device.set_resolution(16001));
+        assert!(matches!(result, Err(PointingDriverError::InvalidCpi)));
+        device.spi.done();
+        device.cs.done();
+    }
 
-        #[test]
-        fn test_set_rot_trans_angle_valid() {
-            let spi_expectations = vec![SpiTrans::write_vec(vec![Register::AngleTune.value() | SPI_WRITE, 15u8])];
+    #[test]
+    fn test_set_rot_trans_angle_valid() {
+        let spi_expectations = vec![SpiTrans::write_vec(vec![Register::AngleTune.value() | SPI_WRITE, 15u8])];
 
-            let spi = SpiMock::new(&spi_expectations);
+        let spi = SpiMock::new(&spi_expectations);
+        let cs = PinMock::new(&[PinTrans::set(PinState::Low), PinTrans::set(PinState::High)]);
+
+        let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
+
+        block_on(device.set_rot_trans_angle(15)).unwrap();
+
+        device.spi.done();
+        device.cs.done();
+    }
+
+    #[test]
+    fn test_set_rot_trans_angle_too_small() {
+        let spi = SpiMock::new(&[]);
+        let cs = PinMock::new(&[]);
+
+        let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
+
+        let err = block_on(device.set_rot_trans_angle(-128)).unwrap_err();
+
+        assert_eq!(err, PointingDriverError::InvalidRotTransAngle);
+
+        device.spi.done();
+        device.cs.done();
+    }
+
+    #[test]
+    fn test_set_rot_trans_angle_too_large() {
+        let spi = SpiMock::new(&[]);
+        let cs = PinMock::new(&[]);
+
+        let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
+
+        let err = block_on(device.set_rot_trans_angle(128i16 as i8)).unwrap_err();
+
+        assert_eq!(err, PointingDriverError::InvalidRotTransAngle);
+
+        device.spi.done();
+        device.cs.done();
+    }
+
+    #[test]
+    fn test_set_rot_trans_angle_values() {
+        let angles = [127, -127, 15];
+
+        for &angle in &angles {
+            let spi = SpiMock::new(&[SpiTrans::write_vec(vec![
+                Register::AngleTune.value() | SPI_WRITE,
+                angle as u8,
+            ])]);
             let cs = PinMock::new(&[PinTrans::set(PinState::Low), PinTrans::set(PinState::High)]);
 
-            let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
-
-            block_on(device.set_rot_trans_angle(15)).unwrap();
-
-            device.spi.done();
-            device.cs.done();
-        }
-
-        #[test]
-        fn test_set_rot_trans_angle_too_small() {
-            let spi = SpiMock::new(&[]);
-            let cs = PinMock::new(&[]);
-
-            let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
-
-            let err = block_on(device.set_rot_trans_angle(-128)).unwrap_err();
-
-            assert_eq!(err, PointingDriverError::InvalidRotTransAngle);
+            let mut device =
+                Pmw33xx::<_, _, _, Pmw3360Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
+            block_on(device.set_rot_trans_angle(angle)).unwrap();
 
             device.spi.done();
             device.cs.done();
         }
+    }
 
-        #[test]
-        fn test_set_rot_trans_angle_too_large() {
-            let spi = SpiMock::new(&[]);
-            let cs = PinMock::new(&[]);
+    #[test]
+    fn test_motion_pending_without_gpio() {
+        let spi = SpiMock::new(&[]);
+        let cs = PinMock::new(&[]);
 
-            let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
+        let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
 
-            let err = block_on(device.set_rot_trans_angle(128i16 as i8)).unwrap_err();
+        assert!(device.motion_pending());
 
-            assert_eq!(err, PointingDriverError::InvalidRotTransAngle);
+        device.spi.done();
+        device.cs.done();
+    }
 
-            device.spi.done();
-            device.cs.done();
-        }
+    #[test]
+    fn test_init_with_firmware() {
+        const TEST_FW: &[u8] = &[0x00, 0x2A, 0xAA, 0xBB, 0xCC, 0xDD]; // example firmware
 
-        #[test]
-        fn test_set_rot_trans_angle_values() {
-            let angles = [127, -127, 15];
+        let spi_expectations = vec![
+            // Power-up reset
+            SpiTrans::write_vec(vec![Register::PowerUpReset.value() | SPI_WRITE, POWER_UP_RESET_VAL]),
+            // Verify Product ID
+            SpiTrans::write_vec(vec![Register::ProductId.value() & 0x7F]),
+            SpiTrans::read(Pmw3360Spec::PRODUCT_ID), // single-byte read
+            // Clear motion registers
+            SpiTrans::write_vec(vec![Register::Motion.value() & 0x7F]),
+            SpiTrans::read(0), // return 0 for Motion
+            SpiTrans::write_vec(vec![Register::DeltaXL.value() & 0x7F]),
+            SpiTrans::read(0),
+            SpiTrans::write_vec(vec![Register::DeltaXH.value() & 0x7F]),
+            SpiTrans::read(0),
+            SpiTrans::write_vec(vec![Register::DeltaYL.value() & 0x7F]),
+            SpiTrans::read(0),
+            SpiTrans::write_vec(vec![Register::DeltaYH.value() & 0x7F]),
+            SpiTrans::read(0),
+            // Start SROM upload
+            SpiTrans::write_vec(vec![Register::Config2.value() | SPI_WRITE, 0x00]),
+            SpiTrans::write_vec(vec![Register::SromEnable.value() | SPI_WRITE, 0x1D]),
+            SpiTrans::write_vec(vec![Register::SromEnable.value() | SPI_WRITE, 0x18]),
+            // SROM Load Burst command
+            SpiTrans::write_vec(vec![Register::SromLoadBurst.value() | SPI_WRITE]),
+            // Upload firmware bytes
+            SpiTrans::write_vec(vec![TEST_FW[0]]),
+            SpiTrans::write_vec(vec![TEST_FW[1]]),
+            SpiTrans::write_vec(vec![TEST_FW[2]]),
+            SpiTrans::write_vec(vec![TEST_FW[3]]),
+            SpiTrans::write_vec(vec![TEST_FW[4]]),
+            SpiTrans::write_vec(vec![TEST_FW[5]]),
+            // Verify SROM ID
+            SpiTrans::write_vec(vec![Register::SromId.value() & 0x7F]),
+            SpiTrans::read(TEST_FW[1]),
+            // Config2 write after SROM upload
+            SpiTrans::write_vec(vec![Register::Config2.value() | SPI_WRITE, 0x00]),
+            // Example resolution write
+            SpiTrans::write_vec(vec![Register::Config1H.value() | SPI_WRITE, 15]),
+            // Config2 after set resolution
+            SpiTrans::write_vec(vec![Register::Config2.value() | SPI_WRITE, 0x00]),
+            // Example angle tune write
+            SpiTrans::write_vec(vec![Register::AngleTune.value() | SPI_WRITE, 0x00]),
+            // Example liftoff distance write
+            SpiTrans::write_vec(vec![Register::LiftConfig.value() | SPI_WRITE, 0x02]),
+            // Firmware signature check
+            SpiTrans::write_vec(vec![Register::ProductId.value() & 0x7F]),
+            SpiTrans::read(Pmw3360Spec::FW_SIG_PID),
+            SpiTrans::write_vec(vec![Register::InverseProductId.value() & 0x7F]),
+            SpiTrans::read(Pmw3360Spec::FW_SIG_INV_PID),
+        ];
 
-            for &angle in &angles {
-                let spi = SpiMock::new(&[SpiTrans::write_vec(vec![
-                    Register::AngleTune.value() | SPI_WRITE,
-                    angle as u8,
-                ])]);
-                let cs = PinMock::new(&[PinTrans::set(PinState::Low), PinTrans::set(PinState::High)]);
+        let spi = SpiMock::new(&spi_expectations);
 
-                let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
-                block_on(device.set_rot_trans_angle(angle)).unwrap();
+        // Chip Select (CS) Mock
+        let cs_expectations = vec![
+            // power up & reset
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // product id
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // motion
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // delta xl
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // delta xh
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High), // after fourth byte
+            // delta yl
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // delta yh
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // Config2 write
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // srom enable 0x1D
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // srom enable 0x18
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // srom load burst & firmware upload
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // read flashed
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // config2
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // Set resolution
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // Config 2
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // AngleTune write
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // LiftConfig write
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // Check firmware sig
+            // Read FW Signature
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // Read Inverse FW
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+        ];
 
-                device.spi.done();
-                device.cs.done();
-            }
-        }
+        let cs = PinMock::new(&cs_expectations);
 
-        #[test]
-        fn test_motion_pending_without_gpio() {
-            let spi = SpiMock::new(&[]);
-            let cs = PinMock::new(&[]);
+        let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new_with_firmware(
+            0,
+            spi,
+            cs,
+            None::<PinMock>,
+            Pmw33xxConfig::default(),
+            TEST_FW,
+        );
 
-            let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
+        block_on(device.configure()).unwrap();
 
-            assert!(device.motion_pending());
+        device.spi.done();
+        device.cs.done();
+    }
 
-            device.spi.done();
-            device.cs.done();
-        }
+    #[test]
+    fn test_read_motion() {
+        const TEST_FW: &[u8] = &[0x00, 0x2A, 0xAA, 0xBB, 0xCC, 0xDD]; // example firmware
 
-        #[test]
-        fn test_init_with_firmware() {
-            const TEST_FW: &[u8] = &[0x00, 0x2A, 0xAA, 0xBB, 0xCC, 0xDD]; // example firmware
+        let spi_expectations = vec![
+            // Power-up reset
+            SpiTrans::write_vec(vec![Register::PowerUpReset.value() | SPI_WRITE, POWER_UP_RESET_VAL]),
+            // Verify Product ID
+            SpiTrans::write_vec(vec![Register::ProductId.value() & 0x7F]),
+            SpiTrans::read(Pmw3360Spec::PRODUCT_ID), // single-byte read
+            // Clear motion registers
+            SpiTrans::write_vec(vec![Register::Motion.value() & 0x7F]),
+            SpiTrans::read(0), // return 0 for Motion
+            SpiTrans::write_vec(vec![Register::DeltaXL.value() & 0x7F]),
+            SpiTrans::read(0),
+            SpiTrans::write_vec(vec![Register::DeltaXH.value() & 0x7F]),
+            SpiTrans::read(0),
+            SpiTrans::write_vec(vec![Register::DeltaYL.value() & 0x7F]),
+            SpiTrans::read(0),
+            SpiTrans::write_vec(vec![Register::DeltaYH.value() & 0x7F]),
+            SpiTrans::read(0),
+            // Start SROM upload
+            SpiTrans::write_vec(vec![Register::Config2.value() | SPI_WRITE, 0x00]),
+            SpiTrans::write_vec(vec![Register::SromEnable.value() | SPI_WRITE, 0x1D]),
+            SpiTrans::write_vec(vec![Register::SromEnable.value() | SPI_WRITE, 0x18]),
+            // SROM Load Burst command
+            SpiTrans::write_vec(vec![Register::SromLoadBurst.value() | SPI_WRITE]),
+            // Upload firmware bytes
+            SpiTrans::write_vec(vec![TEST_FW[0]]),
+            SpiTrans::write_vec(vec![TEST_FW[1]]),
+            SpiTrans::write_vec(vec![TEST_FW[2]]),
+            SpiTrans::write_vec(vec![TEST_FW[3]]),
+            SpiTrans::write_vec(vec![TEST_FW[4]]),
+            SpiTrans::write_vec(vec![TEST_FW[5]]),
+            // Verify SROM ID
+            SpiTrans::write_vec(vec![Register::SromId.value() & 0x7F]),
+            SpiTrans::read(TEST_FW[1]),
+            // Config2 write after SROM upload
+            SpiTrans::write_vec(vec![Register::Config2.value() | SPI_WRITE, 0x00]),
+            // Example resolution write
+            SpiTrans::write_vec(vec![Register::Config1H.value() | SPI_WRITE, 15]),
+            // Config2 after set resolution
+            SpiTrans::write_vec(vec![Register::Config2.value() | SPI_WRITE, 0x00]),
+            // Example angle tune write
+            SpiTrans::write_vec(vec![Register::AngleTune.value() | SPI_WRITE, 0x00]),
+            // Example liftoff distance write
+            SpiTrans::write_vec(vec![Register::LiftConfig.value() | SPI_WRITE, 0x02]),
+            // Firmware signature check
+            SpiTrans::write_vec(vec![Register::ProductId.value() & 0x7F]),
+            SpiTrans::read(Pmw3360Spec::FW_SIG_PID),
+            SpiTrans::write_vec(vec![Register::InverseProductId.value() & 0x7F]),
+            SpiTrans::read(Pmw3360Spec::FW_SIG_INV_PID),
+            // request read motion
+            // at start were !in_burst, so write MotionBurst first
+            SpiTrans::write_vec(vec![Register::MotionBurst.value() | SPI_WRITE, 0x00]),
+            SpiTrans::write_vec(vec![Register::MotionBurst.value() & 0x7F]),
+            SpiTrans::read_vec(vec![
+                MOTION_STATUS_MOTION, // motion flags
+                0x00,                 // observation
+                0x00,                 // DELTA_X_L
+                0x10,                 // DELTA_X_H = 4096
+                0x00,                 // DELTA_Y_L
+                0x20,                 // DELTA_Y_H = 8192
+            ]),
+            // request read motion
+            SpiTrans::write_vec(vec![Register::MotionBurst.value() & 0x7F]),
+            SpiTrans::read_vec(vec![
+                MOTION_STATUS_MOTION | MOTION_STATUS_LIFTED, // motion flags
+                0x00,                                        // observation
+                0x00,                                        // DELTA_X_L
+                0x10,                                        // DELTA_X_H = 4096
+                0x00,                                        // DELTA_Y_L
+                0x20,                                        // DELTA_Y_H = 8192
+            ]),
+            // request read motion
+            SpiTrans::write_vec(vec![Register::MotionBurst.value() & 0x7F]),
+            SpiTrans::read_vec(vec![
+                0x00, // motion flags
+                0x00, // observation
+                0x00, // DELTA_X_L
+                0x10, // DELTA_X_H = 4096
+                0x00, // DELTA_Y_L
+                0x20, // DELTA_Y_H = 8192
+            ]),
+            // request read motion
+            SpiTrans::write_vec(vec![Register::MotionBurst.value() & 0x7F]),
+            SpiTrans::read_vec(vec![
+                MOTION_STATUS_MOTION | 0b111, // motion flags => sensor panic
+                0x00,                         // observation
+                0x00,                         // DELTA_X_L
+                0x10,                         // DELTA_X_H = 4096
+                0x00,                         // DELTA_Y_L
+                0x20,                         // DELTA_Y_H = 8192
+            ]),
+            // request read motion
+            // at start were !in_burst, so write MotionBurst first
+            SpiTrans::write_vec(vec![Register::MotionBurst.value() | SPI_WRITE, 0x00]),
+            SpiTrans::write_vec(vec![Register::MotionBurst.value() & 0x7F]),
+            SpiTrans::read_vec(vec![
+                MOTION_STATUS_MOTION, // motion flags
+                0x00,                 // observation
+                0x00,                 // DELTA_X_L
+                0x10,                 // DELTA_X_H = 4096
+                0x00,                 // DELTA_Y_L
+                0x20,                 // DELTA_Y_H = 8192
+            ]),
+            // send normal motion data again without need to write motionburst first
+            SpiTrans::write_vec(vec![Register::MotionBurst.value() & 0x7F]),
+            SpiTrans::read_vec(vec![
+                MOTION_STATUS_MOTION, // motion flags
+                0x00,                 // observation
+                0x00,                 // DELTA_X_L
+                0x10,                 // DELTA_X_H = 4096
+                0x00,                 // DELTA_Y_L
+                0x20,                 // DELTA_Y_H = 8192
+            ]),
+        ];
 
-            let spi_expectations = vec![
-                // Power-up reset
-                SpiTrans::write_vec(vec![Register::PowerUpReset.value() | SPI_WRITE, POWER_UP_RESET_VAL]),
-                // Verify Product ID
-                SpiTrans::write_vec(vec![Register::ProductId.value() & 0x7F]),
-                SpiTrans::read(Pmw3360Spec::PRODUCT_ID), // single-byte read
-                // Clear motion registers
-                SpiTrans::write_vec(vec![Register::Motion.value() & 0x7F]),
-                SpiTrans::read(0), // return 0 for Motion
-                SpiTrans::write_vec(vec![Register::DeltaXL.value() & 0x7F]),
-                SpiTrans::read(0),
-                SpiTrans::write_vec(vec![Register::DeltaXH.value() & 0x7F]),
-                SpiTrans::read(0),
-                SpiTrans::write_vec(vec![Register::DeltaYL.value() & 0x7F]),
-                SpiTrans::read(0),
-                SpiTrans::write_vec(vec![Register::DeltaYH.value() & 0x7F]),
-                SpiTrans::read(0),
-                // Start SROM upload
-                SpiTrans::write_vec(vec![Register::Config2.value() | SPI_WRITE, 0x00]),
-                SpiTrans::write_vec(vec![Register::SromEnable.value() | SPI_WRITE, 0x1D]),
-                SpiTrans::write_vec(vec![Register::SromEnable.value() | SPI_WRITE, 0x18]),
-                // SROM Load Burst command
-                SpiTrans::write_vec(vec![Register::SromLoadBurst.value() | SPI_WRITE]),
-                // Upload firmware bytes
-                SpiTrans::write_vec(vec![TEST_FW[0]]),
-                SpiTrans::write_vec(vec![TEST_FW[1]]),
-                SpiTrans::write_vec(vec![TEST_FW[2]]),
-                SpiTrans::write_vec(vec![TEST_FW[3]]),
-                SpiTrans::write_vec(vec![TEST_FW[4]]),
-                SpiTrans::write_vec(vec![TEST_FW[5]]),
-                // Verify SROM ID
-                SpiTrans::write_vec(vec![Register::SromId.value() & 0x7F]),
-                SpiTrans::read(TEST_FW[1]),
-                // Config2 write after SROM upload
-                SpiTrans::write_vec(vec![Register::Config2.value() | SPI_WRITE, 0x00]),
-                // Example resolution write
-                SpiTrans::write_vec(vec![Register::Config1H.value() | SPI_WRITE, 15]),
-                // Config2 after set resolution
-                SpiTrans::write_vec(vec![Register::Config2.value() | SPI_WRITE, 0x00]),
-                // Example angle tune write
-                SpiTrans::write_vec(vec![Register::AngleTune.value() | SPI_WRITE, 0x00]),
-                // Example liftoff distance write
-                SpiTrans::write_vec(vec![Register::LiftConfig.value() | SPI_WRITE, 0x02]),
-                // Firmware signature check
-                SpiTrans::write_vec(vec![Register::ProductId.value() & 0x7F]),
-                SpiTrans::read(Pmw3360Spec::FW_SIG_PID),
-                SpiTrans::write_vec(vec![Register::InverseProductId.value() & 0x7F]),
-                SpiTrans::read(Pmw3360Spec::FW_SIG_INV_PID),
-            ];
+        let spi = SpiMock::new(&spi_expectations);
 
-            let spi = SpiMock::new(&spi_expectations);
+        // Chip Select (CS) Mock
+        let cs_expectations = vec![
+            // power up & reset
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // product id
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // motion
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // delta xl
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // delta xh
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High), // after fourth byte
+            // delta yl
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // delta yh
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // Config2 write
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // srom enable 0x1D
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // srom enable 0x18
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // srom load burst & firmware upload
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // read flashed
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // config2
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // Set resolution
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // Config 2
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // AngleTune write
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // LiftConfig write
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // Check firmware sig
+            // Read FW Signature
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // Read Inverse FW
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // read burst, normal motion
+            // !inburst so 1x write motionburst
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // write register motionburst to read it
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // read burst, lifted
+            // write register motionburst to read it
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // read burst, ignore when no motion
+            // write register motionburst to read it
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // read burst, trigger panic recovery
+            // write register motionburst to read it
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // read burst, normal motion
+            // after panic !in_burst, so driver should write motionburst first
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // write register motionburst to read it
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+            // next read_burst without panic
+            // write register motionburst to read it
+            PinTrans::set(PinState::Low),
+            PinTrans::set(PinState::High),
+        ];
 
-            // Chip Select (CS) Mock
-            let cs_expectations = vec![
-                // power up & reset
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // product id
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // motion
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // delta xl
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // delta xh
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High), // after fourth byte
-                // delta yl
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // delta yh
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // Config2 write
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // srom enable 0x1D
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // srom enable 0x18
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // srom load burst & firmware upload
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // read flashed
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // config2
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // Set resolution
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // Config 2
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // AngleTune write
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // LiftConfig write
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // Check firmware sig
-                // Read FW Signature
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // Read Inverse FW
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-            ];
+        let cs = PinMock::new(&cs_expectations);
 
-            let cs = PinMock::new(&cs_expectations);
+        let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new_with_firmware(
+            0,
+            spi,
+            cs,
+            None::<PinMock>,
+            Pmw33xxConfig::default(),
+            TEST_FW,
+        );
 
-            let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new_with_firmware(
-                0,
-                spi,
-                cs,
-                None::<PinMock>,
-                Pmw33xxConfig::default(),
-                TEST_FW,
-            );
+        block_on(device.configure()).unwrap();
 
-            block_on(device.configure()).unwrap();
+        let motion = block_on(device.read_motion()).unwrap();
+        assert_eq!(motion.dx, 4096);
+        assert_eq!(motion.dy, 8192);
 
-            device.spi.done();
-            device.cs.done();
-        }
+        // second test is for ignore motion when sensor is lifted
+        let motion = block_on(device.read_motion()).unwrap();
+        assert_eq!(motion.dx, 0);
+        assert_eq!(motion.dy, 0);
 
-        #[test]
-        fn test_read_motion() {
-            const TEST_FW: &[u8] = &[0x00, 0x2A, 0xAA, 0xBB, 0xCC, 0xDD]; // example firmware
+        // third test is for no motion reported, should report 0 even if there is movement data
+        let motion = block_on(device.read_motion()).unwrap();
+        assert_eq!(motion.dx, 0);
+        assert_eq!(motion.dy, 0);
 
-            let spi_expectations = vec![
-                // Power-up reset
-                SpiTrans::write_vec(vec![Register::PowerUpReset.value() | SPI_WRITE, POWER_UP_RESET_VAL]),
-                // Verify Product ID
-                SpiTrans::write_vec(vec![Register::ProductId.value() & 0x7F]),
-                SpiTrans::read(Pmw3360Spec::PRODUCT_ID), // single-byte read
-                // Clear motion registers
-                SpiTrans::write_vec(vec![Register::Motion.value() & 0x7F]),
-                SpiTrans::read(0), // return 0 for Motion
-                SpiTrans::write_vec(vec![Register::DeltaXL.value() & 0x7F]),
-                SpiTrans::read(0),
-                SpiTrans::write_vec(vec![Register::DeltaXH.value() & 0x7F]),
-                SpiTrans::read(0),
-                SpiTrans::write_vec(vec![Register::DeltaYL.value() & 0x7F]),
-                SpiTrans::read(0),
-                SpiTrans::write_vec(vec![Register::DeltaYH.value() & 0x7F]),
-                SpiTrans::read(0),
-                // Start SROM upload
-                SpiTrans::write_vec(vec![Register::Config2.value() | SPI_WRITE, 0x00]),
-                SpiTrans::write_vec(vec![Register::SromEnable.value() | SPI_WRITE, 0x1D]),
-                SpiTrans::write_vec(vec![Register::SromEnable.value() | SPI_WRITE, 0x18]),
-                // SROM Load Burst command
-                SpiTrans::write_vec(vec![Register::SromLoadBurst.value() | SPI_WRITE]),
-                // Upload firmware bytes
-                SpiTrans::write_vec(vec![TEST_FW[0]]),
-                SpiTrans::write_vec(vec![TEST_FW[1]]),
-                SpiTrans::write_vec(vec![TEST_FW[2]]),
-                SpiTrans::write_vec(vec![TEST_FW[3]]),
-                SpiTrans::write_vec(vec![TEST_FW[4]]),
-                SpiTrans::write_vec(vec![TEST_FW[5]]),
-                // Verify SROM ID
-                SpiTrans::write_vec(vec![Register::SromId.value() & 0x7F]),
-                SpiTrans::read(TEST_FW[1]),
-                // Config2 write after SROM upload
-                SpiTrans::write_vec(vec![Register::Config2.value() | SPI_WRITE, 0x00]),
-                // Example resolution write
-                SpiTrans::write_vec(vec![Register::Config1H.value() | SPI_WRITE, 15]),
-                // Config2 after set resolution
-                SpiTrans::write_vec(vec![Register::Config2.value() | SPI_WRITE, 0x00]),
-                // Example angle tune write
-                SpiTrans::write_vec(vec![Register::AngleTune.value() | SPI_WRITE, 0x00]),
-                // Example liftoff distance write
-                SpiTrans::write_vec(vec![Register::LiftConfig.value() | SPI_WRITE, 0x02]),
-                // Firmware signature check
-                SpiTrans::write_vec(vec![Register::ProductId.value() & 0x7F]),
-                SpiTrans::read(Pmw3360Spec::FW_SIG_PID),
-                SpiTrans::write_vec(vec![Register::InverseProductId.value() & 0x7F]),
-                SpiTrans::read(Pmw3360Spec::FW_SIG_INV_PID),
-                // request read motion
-                // at start were !in_burst, so write MotionBurst first
-                SpiTrans::write_vec(vec![Register::MotionBurst.value() | SPI_WRITE, 0x00]),
-                SpiTrans::write_vec(vec![Register::MotionBurst.value() & 0x7F]),
-                SpiTrans::read_vec(vec![
-                    MOTION_STATUS_MOTION, // motion flags
-                    0x00,                 // observation
-                    0x00,                 // DELTA_X_L
-                    0x10,                 // DELTA_X_H = 4096
-                    0x00,                 // DELTA_Y_L
-                    0x20,                 // DELTA_Y_H = 8192
-                ]),
-                // request read motion
-                SpiTrans::write_vec(vec![Register::MotionBurst.value() & 0x7F]),
-                SpiTrans::read_vec(vec![
-                    MOTION_STATUS_MOTION | MOTION_STATUS_LIFTED, // motion flags
-                    0x00,                                        // observation
-                    0x00,                                        // DELTA_X_L
-                    0x10,                                        // DELTA_X_H = 4096
-                    0x00,                                        // DELTA_Y_L
-                    0x20,                                        // DELTA_Y_H = 8192
-                ]),
-                // request read motion
-                SpiTrans::write_vec(vec![Register::MotionBurst.value() & 0x7F]),
-                SpiTrans::read_vec(vec![
-                    0x00, // motion flags
-                    0x00, // observation
-                    0x00, // DELTA_X_L
-                    0x10, // DELTA_X_H = 4096
-                    0x00, // DELTA_Y_L
-                    0x20, // DELTA_Y_H = 8192
-                ]),
-                // request read motion
-                SpiTrans::write_vec(vec![Register::MotionBurst.value() & 0x7F]),
-                SpiTrans::read_vec(vec![
-                    MOTION_STATUS_MOTION | 0b111, // motion flags => sensor panic
-                    0x00,                         // observation
-                    0x00,                         // DELTA_X_L
-                    0x10,                         // DELTA_X_H = 4096
-                    0x00,                         // DELTA_Y_L
-                    0x20,                         // DELTA_Y_H = 8192
-                ]),
-                // request read motion
-                // at start were !in_burst, so write MotionBurst first
-                SpiTrans::write_vec(vec![Register::MotionBurst.value() | SPI_WRITE, 0x00]),
-                SpiTrans::write_vec(vec![Register::MotionBurst.value() & 0x7F]),
-                SpiTrans::read_vec(vec![
-                    MOTION_STATUS_MOTION, // motion flags
-                    0x00,                 // observation
-                    0x00,                 // DELTA_X_L
-                    0x10,                 // DELTA_X_H = 4096
-                    0x00,                 // DELTA_Y_L
-                    0x20,                 // DELTA_Y_H = 8192
-                ]),
-                // send normal motion data again without need to write motionburst first
-                SpiTrans::write_vec(vec![Register::MotionBurst.value() & 0x7F]),
-                SpiTrans::read_vec(vec![
-                    MOTION_STATUS_MOTION, // motion flags
-                    0x00,                 // observation
-                    0x00,                 // DELTA_X_L
-                    0x10,                 // DELTA_X_H = 4096
-                    0x00,                 // DELTA_Y_L
-                    0x20,                 // DELTA_Y_H = 8192
-                ]),
-            ];
+        // test panic recovery. This test is mostly about the order of
+        // expectations, see above.
+        let motion = block_on(device.read_motion()).unwrap();
+        // first read triggers panic recovery, motion data could still be valid
+        assert_eq!(motion.dx, 4096);
+        assert_eq!(motion.dy, 8192);
+        let motion = block_on(device.read_motion()).unwrap();
+        // second call normal motion data
+        assert_eq!(motion.dx, 4096);
+        assert_eq!(motion.dy, 8192);
+        let motion = block_on(device.read_motion()).unwrap();
+        // second call normal motion data
+        assert_eq!(motion.dx, 4096);
+        assert_eq!(motion.dy, 8192);
 
-            let spi = SpiMock::new(&spi_expectations);
+        device.spi.done();
+        device.cs.done();
+    }
 
-            // Chip Select (CS) Mock
-            let cs_expectations = vec![
-                // power up & reset
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // product id
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // motion
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // delta xl
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // delta xh
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High), // after fourth byte
-                // delta yl
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // delta yh
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // Config2 write
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // srom enable 0x1D
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // srom enable 0x18
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // srom load burst & firmware upload
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // read flashed
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // config2
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // Set resolution
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // Config 2
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // AngleTune write
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // LiftConfig write
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // Check firmware sig
-                // Read FW Signature
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // Read Inverse FW
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // read burst, normal motion
-                // !inburst so 1x write motionburst
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // write register motionburst to read it
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // read burst, lifted
-                // write register motionburst to read it
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // read burst, ignore when no motion
-                // write register motionburst to read it
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // read burst, trigger panic recovery
-                // write register motionburst to read it
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // read burst, normal motion
-                // after panic !in_burst, so driver should write motionburst first
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // write register motionburst to read it
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-                // next read_burst without panic
-                // write register motionburst to read it
-                PinTrans::set(PinState::Low),
-                PinTrans::set(PinState::High),
-            ];
+    #[test]
+    fn test_read_reg_timing() {
+        let spi_expectations = vec![
+            SpiTrans::write_vec(vec![Register::AngleTune.value() & 0x7f]),
+            SpiTrans::read(10),
+        ];
 
-            let cs = PinMock::new(&cs_expectations);
+        let spi = SpiMock::new(&spi_expectations);
+        let cs = PinMock::new(&[PinTrans::set(PinState::Low), PinTrans::set(PinState::High)]);
 
-            let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new_with_firmware(
-                0,
-                spi,
-                cs,
-                None::<PinMock>,
-                Pmw33xxConfig::default(),
-                TEST_FW,
-            );
+        let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
 
-            block_on(device.configure()).unwrap();
+        let read = block_on(device.read_reg(Register::AngleTune)).unwrap();
+        assert_eq!(read, 10);
 
-            let motion = block_on(device.read_motion()).unwrap();
-            assert_eq!(motion.dx, 4096);
-            assert_eq!(motion.dy, 8192);
-
-            // second test is for ignore motion when sensor is lifted
-            let motion = block_on(device.read_motion()).unwrap();
-            assert_eq!(motion.dx, 0);
-            assert_eq!(motion.dy, 0);
-
-            // third test is for no motion reported, should report 0 even if there is movement data
-            let motion = block_on(device.read_motion()).unwrap();
-            assert_eq!(motion.dx, 0);
-            assert_eq!(motion.dy, 0);
-
-            // test panic recovery. This test is mostly about the order of
-            // expectations, see above.
-            let motion = block_on(device.read_motion()).unwrap();
-            // first read triggers panic recovery, motion data could still be valid
-            assert_eq!(motion.dx, 4096);
-            assert_eq!(motion.dy, 8192);
-            let motion = block_on(device.read_motion()).unwrap();
-            // second call normal motion data
-            assert_eq!(motion.dx, 4096);
-            assert_eq!(motion.dy, 8192);
-            let motion = block_on(device.read_motion()).unwrap();
-            // second call normal motion data
-            assert_eq!(motion.dx, 4096);
-            assert_eq!(motion.dy, 8192);
-
-            device.spi.done();
-            device.cs.done();
-        }
-
-        #[test]
-        fn test_read_reg_timing() {
-            let spi_expectations = vec![
-                SpiTrans::write_vec(vec![Register::AngleTune.value() & 0x7f]),
-                SpiTrans::read(10),
-            ];
-
-            let spi = SpiMock::new(&spi_expectations);
-            let cs = PinMock::new(&[PinTrans::set(PinState::Low), PinTrans::set(PinState::High)]);
-
-            let mut device = Pmw33xx::<_, _, _, Pmw3360Spec>::new(0, spi, cs, None::<PinMock>, Pmw33xxConfig::default());
-
-            let read = block_on(device.read_reg(Register::AngleTune)).unwrap();
-            assert_eq!(read, 10);
-
-            device.spi.done();
-            device.cs.done();
-        }
+        device.spi.done();
+        device.cs.done();
+    }
 }

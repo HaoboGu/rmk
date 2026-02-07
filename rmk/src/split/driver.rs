@@ -10,7 +10,7 @@ use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::stora
 use super::SplitMessage;
 use crate::CONNECTION_STATE;
 use crate::event::{
-    SubscribableControllerEvent, KeyboardEvent, KeyboardEventPos, publish_input_event, publish_input_event_async,
+    KeyboardEvent, KeyboardEventPos, SubscribableControllerEvent, publish_input_event, publish_input_event_async,
 };
 #[cfg(feature = "_ble")]
 use crate::event::{PeripheralBatteryEvent, publish_controller_event};

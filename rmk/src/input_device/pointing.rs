@@ -3,6 +3,9 @@
 use core::cell::RefCell;
 
 use embassy_time::{Duration, Instant, Timer};
+use embedded_hal::digital::InputPin;
+use embedded_hal_async::digital::Wait;
+use futures::future::pending;
 use rmk_macro::input_processor;
 use usbd_hid::descriptor::MouseReport;
 
@@ -10,9 +13,6 @@ use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent};
 use crate::hid::Report;
 use crate::input_device::{InputDevice, InputProcessor};
 use crate::keymap::KeyMap;
-use embedded_hal::digital::InputPin;
-use embedded_hal_async::digital::Wait;
-use futures::future::pending;
 
 pub const ALL_POINTING_DEVICES: u8 = 255;
 
@@ -323,13 +323,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::cell::Cell;
+
     use embassy_futures::block_on;
     use embassy_time::Duration;
-    use embedded_hal::digital::ErrorType;
-    use embedded_hal::digital::InputPin;
+    use embedded_hal::digital::{ErrorType, InputPin};
     use embedded_hal_async::digital::Wait;
-    use std::cell::Cell;
+
+    use super::*;
 
     // Init logger for tests
     #[ctor::ctor]
@@ -564,7 +565,6 @@ mod tests {
             accumulated_x: 0,
             accumulated_y: 0,
             id: 1,
-
         };
 
         let event = block_on(device.read_event());

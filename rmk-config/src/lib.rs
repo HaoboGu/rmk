@@ -342,7 +342,6 @@ pub struct EventConfig {
     pub peripheral_battery: EventChannelConfig,
     #[serde(default = "default_monitored_event")]
     pub clear_peer: EventChannelConfig,
-
 }
 
 impl EventConfig {

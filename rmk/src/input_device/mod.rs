@@ -10,10 +10,10 @@ pub mod adc;
 #[cfg(feature = "_ble")]
 pub mod battery;
 pub mod joystick;
-pub mod pmw3610;
 pub mod pmw33xx;
-pub mod rotary_encoder;
+pub mod pmw3610;
 pub mod pointing;
+pub mod rotary_encoder;
 
 /// The trait for runnable input devices and processors.
 ///
