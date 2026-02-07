@@ -245,10 +245,10 @@ async fn main(spawner: Spawner) {
 
     impl PeripheralBatteryMonitor {
         async fn on_peripheral_battery_event(&mut self, event: PeripheralBatteryEvent) {
-            info!("Peripheral {} battery status: {:?}%", event.id, event);
-        }
+            info!("Peripheral {} battery status: {:?}", event.id, event);
+        }k
         async fn on_battery_state_event(&mut self, event: BatteryStateEvent) {
-            info!("Central battery status: {:?}%", event);
+            info!("Central battery status: {:?}", event);
         }
         async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
             info!("Layer changed to: {}", event.layer);

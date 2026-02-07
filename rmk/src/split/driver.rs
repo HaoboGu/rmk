@@ -205,6 +205,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
 
     /// Process a single message from the peripheral.
     async fn process_peripheral_message(&self, split_message: SplitMessage) {
+        trace!("Got message from peripheral: {:?}", split_message);
         match split_message {
             SplitMessage::Key(e) => match e.pos {
                 KeyboardEventPos::Key(key_pos) => {
