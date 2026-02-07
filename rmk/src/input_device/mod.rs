@@ -26,8 +26,7 @@ pub trait Runnable {
 /// The trait for input devices.
 ///
 /// This trait defines the interface for input devices in RMK.
-/// Use the `#[input_device]` macro to automatically implement this trait for single-event devices,
-/// or implement it manually for multi-event devices using `#[derive(InputEvent)]`.
+/// Use the `#[input_device]` macro to automatically implement this trait.
 ///
 /// # Example
 /// ```rust
@@ -44,6 +43,9 @@ pub trait Runnable {
 /// }
 ///
 /// // For multi-event devices, a derived enum should be used.
+/// // **Note**: Wrapper enums only implement publish traits, not subscribe traits.
+/// // This is because wrapper enums route events to their concrete type channels,
+/// // and you should subscribe to the individual event types instead.
 /// #[derive(InputEvent)]
 /// enum MultiDeviceEvent {
 ///     Battery(BatteryEvent),

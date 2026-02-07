@@ -54,9 +54,7 @@ let my_matrix = YourOwnMatrix::new(); // Create the matrix struct
 
 // Run the main process
 join3(
-    run_devices! (
-        (my_matrix) => EVENT_CHANNEL,
-    ),
+    run_all!(my_matrix),
     keyboard.run(),
     run_rmk(&keymap, driver, &mut storage, rmk_config),
 )

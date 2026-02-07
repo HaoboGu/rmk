@@ -37,7 +37,7 @@ key.channel_size = 16
 layer_change.subs = 8
 
 # Reduce subscribers to save memory on constrained devices
-battery_level.subs = 2
+battery_state.subs = 2
 led_indicator.subs = 2
 
 # Configure multiple parameters for one event
