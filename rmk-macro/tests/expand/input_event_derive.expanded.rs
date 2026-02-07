@@ -20,7 +20,12 @@ impl ::core::marker::Copy for BatteryEvent {}
 impl ::core::fmt::Debug for BatteryEvent {
     #[inline]
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        ::core::fmt::Formatter::debug_struct_field1_finish(f, "BatteryEvent", "level", &&self.level)
+        ::core::fmt::Formatter::debug_struct_field1_finish(
+            f,
+            "BatteryEvent",
+            "level",
+            &&self.level,
+        )
     }
 }
 #[input_event]
@@ -45,7 +50,14 @@ impl ::core::marker::Copy for PointingEvent {}
 impl ::core::fmt::Debug for PointingEvent {
     #[inline]
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        ::core::fmt::Formatter::debug_struct_field2_finish(f, "PointingEvent", "x", &self.x, "y", &&self.y)
+        ::core::fmt::Formatter::debug_struct_field2_finish(
+            f,
+            "PointingEvent",
+            "x",
+            &self.x,
+            "y",
+            &&self.y,
+        )
     }
 }
 pub enum MultiSensorEvent {
@@ -59,8 +71,12 @@ impl ::rmk::event::AsyncEventPublisher for MultiSensorEventPublisher {
     type Event = MultiSensorEvent;
     async fn publish_async(&self, event: MultiSensorEvent) {
         match event {
-            MultiSensorEvent::Battery(e) => ::rmk::event::publish_input_event_async(e).await,
-            MultiSensorEvent::Pointing(e) => ::rmk::event::publish_input_event_async(e).await,
+            MultiSensorEvent::Battery(e) => {
+                ::rmk::event::publish_input_event_async(e).await
+            }
+            MultiSensorEvent::Pointing(e) => {
+                ::rmk::event::publish_input_event_async(e).await
+            }
         }
     }
 }
