@@ -4,8 +4,19 @@ The `[behavior]` section contains configuration for how different keyboard actio
 
 ```toml
 [behavior]
-tri_layer = { upper = 1, lower = 2, adjust = 3 }
-one_shot = { timeout = "1s" }
+tri_layer = {
+  upper = 1,
+  lower = 2,
+  adjust = 3,
+}
+one_shot = {
+  timeout = "1s",
+}
+one_shot_modifiers = {
+  activate_on_keypress = false,
+  send_on_second_press = false,
+  release_modifier_keys = [],
+}
 ```
 
 ## Tri Layer
@@ -25,13 +36,44 @@ In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 
 
 Note that `"#layer_name"` could also be used in place of layer numbers.
 
-## One Shot
+## One-Shot
 
-The `one_shot` sub-table configures one-shot modifiers or one-shot layers (OSM/OSL). Use `timeout` to specify how long the modifier/layer remains active. The value is a string suffixed with `s` or `ms` (default: `1s`).
+The `one_shot` sub-table contains common one-shot configuration (for both OSM and OSL)
 
+Currently, there are only `timeout` field that specifies how long the one-shot modifier/layer remains active.
+When no key is pressed within this time, the one-shot modifier/layer will be canceled.
+`timeout` value is a string suffixed with `s` or `ms` (default: `1s`).
+
+## One-Shot Modifiers
+
+The `one_shot_modifiers` sub-table configures one-shot modifiers (OSM).
+
+By default, one-shot modifiers do not activate on keypress and will be sent only when other key is pressed.
+You can change this behavior by setting `activate_on_keypress` to `true`.
+This behavior is also known as One-Shot Sticky Modifiers (OSSM).
+
+Use `send_on_second_press` to determine whether the modifier should be sent on the second press of the same modifier.
+That second press will be treated as a normal modifier keypress, therefore, releasing all sticky modifiers.
+This options is useful if you want, for example, open Windows Start menu by pressing OSM twice.
+
+`release_modifier_keys` is a list of keys that will release all OSM modifiers when pressed.
+This option is useful if you want to cancel/release active modifiers
+before the timeout passes, without having to press an unnecessary keyboard shortcut.
+
+Default values:
 ```toml
-[behavior.one_shot]
-timeout = "5s"
+[behavior.one_shot_modifiers]
+activate_on_keypress = false
+send_on_second_press = false
+release_modifier_keys = []
+```
+
+OSSM example:
+```toml
+[behavior.one_shot_modifiers]
+activate_on_keypress = true
+send_on_second_press = true
+release_modifier_keys = ["MO(1)", "MO(2)"]
 ```
 
 ## Combo
