@@ -8,7 +8,7 @@ use trouble_host::prelude::*;
 
 use super::ble_server::Server;
 use crate::ble::SLEEPING_STATE;
-use crate::event::{BatteryStateEvent, SubscribableControllerEvent};
+use crate::event::{BatteryStateEvent, SubscribableEvent};
 use crate::keyboard::LAST_KEY_TIMESTAMP;
 
 /// Battery service
@@ -38,7 +38,7 @@ impl<'stack, 'server, 'conn, P: PacketPool> BleBatteryServer<'stack, 'server, 'c
         Self {
             battery_level: server.battery_service.level,
             conn,
-            sub: BatteryStateEvent::controller_subscriber(),
+            sub: BatteryStateEvent::subscriber(),
         }
     }
 }

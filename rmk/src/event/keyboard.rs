@@ -1,5 +1,5 @@
 use postcard::experimental::max_size::MaxSize;
-use rmk_macro::input_event;
+use rmk_macro::event;
 use serde::{Deserialize, Serialize};
 
 use crate::input_device::rotary_encoder::Direction;
@@ -9,7 +9,7 @@ use crate::input_device::rotary_encoder::Direction;
 /// `KeyboardEvent` is different from events from pointing devices,
 /// events from pointing devices are processed directly by the corresponding processors,
 /// while `KeyboardEvent` is processed by the keyboard with the keymap.
-#[input_event(channel_size = 16)]
+#[event(channel_size = 16)]
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyboardEvent {

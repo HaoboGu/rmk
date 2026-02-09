@@ -68,11 +68,7 @@ pub(crate) fn rmk_entry_select(
             )
         }
     };
-    let event_trait_import = if !controllers.is_empty() {
-        quote! { use ::rmk::controller::EventController; }
-    } else {
-        quote! {}
-    };
+    let event_trait_import = quote! {};
 
     // Remove the storage argument if disabled in config. The feature also needs to be disabled.
     let storage = if keyboard_config.get_storage_config().enabled {

@@ -8,7 +8,7 @@ use futures::FutureExt;
 use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 #[cfg(feature = "_ble")]
 use {
-    crate::event::{BatteryStateEvent, ChargingStateEvent, EventSubscriber, SubscribableControllerEvent},
+    crate::event::{BatteryStateEvent, ChargingStateEvent, EventSubscriber},
     crate::storage::Storage,
     embedded_storage_async::nor_flash::NorFlash,
     trouble_host::prelude::*,
@@ -17,9 +17,9 @@ use {
 use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
 use crate::CONNECTION_STATE;
-use crate::event::{KeyboardEvent, PointingEvent, SubscribableInputEvent, TouchpadEvent};
+use crate::event::{KeyboardEvent, PointingEvent, SubscribableEvent, TouchpadEvent};
 #[cfg(feature = "controller")]
-use crate::event::{LayerChangeEvent, LedIndicatorEvent, publish_controller_event};
+use crate::event::{LayerChangeEvent, LedIndicatorEvent, publish_event};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;
@@ -76,13 +76,13 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     pub(crate) async fn run(&mut self) {
         CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
 
-        let key_sub = KeyboardEvent::input_subscriber();
+        let key_sub = KeyboardEvent::subscriber();
         #[cfg(feature = "_ble")]
-        let charging_state_sub = ChargingStateEvent::input_subscriber();
-        let touch_sub = TouchpadEvent::input_subscriber();
-        let pointing_sub = PointingEvent::input_subscriber();
+        let charging_state_sub = ChargingStateEvent::subscriber();
+        let touch_sub = TouchpadEvent::subscriber();
+        let pointing_sub = PointingEvent::subscriber();
         #[cfg(feature = "_ble")]
-        let mut battery_sub = BatteryStateEvent::controller_subscriber();
+        let mut battery_sub = BatteryStateEvent::subscriber();
 
         loop {
             let read_message_to_send = async {
@@ -122,13 +122,13 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         }
                         SplitMessage::KeyboardIndicator(indicator) => {
                             // Publish KeyboardIndicator event
-                            publish_controller_event(LedIndicatorEvent {
+                            publish_event(LedIndicatorEvent {
                                 indicator: rmk_types::led_indicator::LedIndicator::from_bits(indicator),
                             });
                         }
                         SplitMessage::Layer(layer) => {
                             // Publish Layer event
-                            publish_controller_event(LayerChangeEvent { layer });
+                            publish_event(LayerChangeEvent { layer });
                         }
                         _ => (),
                     },

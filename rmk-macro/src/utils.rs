@@ -98,6 +98,23 @@ impl AttributeParser {
         })
     }
 
+    /// Get a string value for `name = "value"`.
+    pub fn get_str(&self, name: &str) -> Option<String> {
+        self.metas.iter().find_map(|meta| {
+            if let Meta::NameValue(nv) = meta
+                && nv.path.is_ident(name)
+                && let syn::Expr::Lit(syn::ExprLit {
+                    lit: syn::Lit::Str(lit),
+                    ..
+                }) = &nv.value
+            {
+                Some(lit.value())
+            } else {
+                None
+            }
+        })
+    }
+
     /// Get an expression as TokenStream for `name = expr`.
     /// Useful for values that need to be embedded as-is (like channel_size).
     pub fn get_expr_tokens(&self, name: &str) -> Option<TokenStream> {
@@ -111,6 +128,33 @@ impl AttributeParser {
                 None
             }
         })
+    }
+
+    /// Validate that all attribute keys are in the allowed set.
+    ///
+    /// Returns a compile error if any unknown key is found.
+    pub fn validate_keys(&self, allowed: &[&str]) -> Result<(), TokenStream> {
+        for meta in &self.metas {
+            let path = match meta {
+                Meta::NameValue(nv) => &nv.path,
+                Meta::Path(p) => p,
+                Meta::List(l) => &l.path,
+            };
+            let key = path.get_ident().map(|i| i.to_string());
+            if let Some(ref key) = key {
+                if !allowed.contains(&key.as_str()) {
+                    let allowed_list = allowed.join(", ");
+                    return Err(syn::Error::new_spanned(
+                        path,
+                        format!(
+                            "unknown attribute `{key}`. Expected one of: {allowed_list}"
+                        ),
+                    )
+                    .to_compile_error());
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -225,65 +269,20 @@ pub fn has_derive(attrs: &[Attribute], derive_name: &str) -> bool {
     })
 }
 
-/// Attributes that should be preserved when reconstructing type definitions.
-const PRESERVED_ATTR_NAMES: &[&str] = &[
-    "repr",
-    "cfg",
-    "cfg_attr",
-    "allow",
-    "warn",
-    "deny",
-    "forbid",
-    "must_use",
-    "non_exhaustive",
-];
-
-/// Check if an attribute should be preserved.
-fn should_preserve_attr(attr: &Attribute) -> bool {
-    let path = attr.path();
-    PRESERVED_ATTR_NAMES.iter().any(|name| path.is_ident(name))
-}
-
-/// Reconstruct a struct/enum definition.
-/// Returns a TokenStream without most attributes, but preserves important
-/// attributes like `#[repr]`, `#[cfg]`, etc.
+/// Check whether an attribute path matches a given RMK macro name.
 ///
-/// Note: `#generics` from `syn::Generics` includes the where clause when used directly,
-/// so we use `impl_generics` (which excludes where clause) and add `where_clause` separately
-/// to avoid duplicating the where clause.
-pub fn reconstruct_type_def(input: &syn::DeriveInput) -> TokenStream {
-    let type_name = &input.ident;
-    let vis = &input.vis;
-    let generics = &input.generics;
-    let (impl_generics, _, where_clause) = generics.split_for_impl();
-
-    // Preserve important attributes
-    let preserved_attrs: Vec<_> = input
-        .attrs
-        .iter()
-        .filter(|a| should_preserve_attr(a))
-        .collect();
-
-    match &input.data {
-        syn::Data::Struct(data_struct) => match &data_struct.fields {
-            syn::Fields::Named(fields) => {
-                quote! { #(#preserved_attrs)* #vis struct #type_name #impl_generics #where_clause #fields }
-            }
-            syn::Fields::Unnamed(fields) => {
-                quote! { #(#preserved_attrs)* #vis struct #type_name #impl_generics #fields #where_clause ; }
-            }
-            syn::Fields::Unit => {
-                quote! { #(#preserved_attrs)* #vis struct #type_name #impl_generics #where_clause ; }
-            }
-        },
-        syn::Data::Enum(data_enum) => {
-            let variants = &data_enum.variants;
-            quote! { #(#preserved_attrs)* #vis enum #type_name #impl_generics #where_clause { #variants } }
-        }
-        syn::Data::Union(_) => {
-            panic!("Unions are not supported")
-        }
-    }
+/// Matches bare `#[name]`, qualified `#[rmk::name]`, and fully qualified
+/// `#[rmk::macros::name]` / `#[::rmk::macros::name]` forms.
+pub fn is_rmk_attr(attr: &Attribute, name: &str) -> bool {
+    let path = attr.path();
+    path.is_ident(name)
+        || (path.segments.len() == 2
+            && path.segments[0].ident == "rmk"
+            && path.segments[1].ident == name)
+        || (path.segments.len() == 3
+            && path.segments[0].ident == "rmk"
+            && path.segments[1].ident == "macros"
+            && path.segments[2].ident == name)
 }
 
 /// Check for the runnable_generated marker.
@@ -295,69 +294,7 @@ pub fn has_runnable_marker(attrs: &[Attribute]) -> bool {
 /// Check runnable_generated attribute.
 /// Accepts `#[runnable_generated]`, `#[rmk::runnable_generated]`, and `#[rmk::macros::runnable_generated]`.
 pub fn is_runnable_generated_attr(attr: &Attribute) -> bool {
-    let path = attr.path();
-    path.is_ident("runnable_generated")
-        || (path.segments.len() == 2
-            && path.segments[0].ident == "rmk"
-            && path.segments[1].ident == "runnable_generated")
-        || (path.segments.len() == 3
-            && path.segments[0].ident == "rmk"
-            && path.segments[1].ident == "macros"
-            && path.segments[2].ident == "runnable_generated")
-}
-
-/// Assemble the output for a dual-event macro (`#[input_event]` / `#[controller_event]`).
-///
-/// Handles the common pattern where two event macros can coexist on the same struct.
-/// When the sibling macro is detected, both channels are generated by whichever macro
-/// runs first, and the sibling's attribute is consumed to prevent duplicate generation.
-///
-/// # Parameters
-/// - `input`: The parsed struct/enum (will have both macro attrs removed)
-/// - `primary_macro_name`: Name of the current macro (e.g., `"input_event"`)
-/// - `sibling_macro_name`: Name of the sibling macro (e.g., `"controller_event"`)
-/// - `primary_channel`: `(channel_static, trait_impls)` for the current macro
-/// - `generate_sibling_channel`: Closure that generates `(channel_static, trait_impls)` from the sibling's attribute
-pub fn assemble_dual_event_output(
-    input: &mut syn::DeriveInput,
-    primary_macro_name: &str,
-    sibling_macro_name: &str,
-    primary_channel: (TokenStream, TokenStream),
-    generate_sibling_channel: impl FnOnce(&Attribute) -> (TokenStream, TokenStream),
-) -> TokenStream {
-    // Check if sibling macro is also present (before removing attrs)
-    let sibling_attr = input
-        .attrs
-        .iter()
-        .find(|attr| attr.path().is_ident(sibling_macro_name))
-        .cloned();
-
-    let (primary_static, primary_impls) = primary_channel;
-
-    // Remove both macros from attributes for the final struct definition
-    input.attrs.retain(|attr| {
-        !attr.path().is_ident(primary_macro_name) && !attr.path().is_ident(sibling_macro_name)
-    });
-
-    if let Some(sibling_attr) = sibling_attr.as_ref() {
-        let (sibling_static, sibling_impls) = generate_sibling_channel(sibling_attr);
-        quote! {
-            #input
-
-            #primary_static
-            #primary_impls
-
-            #sibling_static
-            #sibling_impls
-        }
-    } else {
-        quote! {
-            #input
-
-            #primary_static
-            #primary_impls
-        }
-    }
+    is_rmk_attr(attr, "runnable_generated")
 }
 
 #[cfg(test)]

@@ -19,7 +19,7 @@ use crate::NUM_BLE_PROFILE;
 use crate::ble::ACTIVE_PROFILE;
 use crate::channel::BLE_PROFILE_CHANNEL;
 #[cfg(feature = "controller")]
-use crate::event::{BleProfileChangeEvent, ConnectionChangeEvent, publish_controller_event};
+use crate::event::{BleProfileChangeEvent, ConnectionChangeEvent, publish_event};
 use crate::state::CONNECTION_TYPE;
 
 pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal::new();
@@ -226,14 +226,14 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             ACTIVE_PROFILE.store(profile, Ordering::SeqCst);
 
             #[cfg(feature = "controller")]
-            publish_controller_event(BleProfileChangeEvent { profile });
+            publish_event(BleProfileChangeEvent { profile });
         } else {
             // If no saved active profile, use 0 as default
             debug!("Loaded default active profile",);
             ACTIVE_PROFILE.store(0, Ordering::SeqCst);
 
             #[cfg(feature = "controller")]
-            publish_controller_event(BleProfileChangeEvent { profile: 0 });
+            publish_event(BleProfileChangeEvent { profile: 0 });
         };
     }
 
@@ -370,7 +370,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
         info!("Switched to BLE profile: {}", profile);
 
         #[cfg(feature = "controller")]
-        publish_controller_event(BleProfileChangeEvent { profile });
+        publish_event(BleProfileChangeEvent { profile });
 
         true
     }
@@ -426,7 +426,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             info!("Switching connection type to: {}", updated);
 
                             #[cfg(feature = "controller")]
-                            publish_controller_event(ConnectionChangeEvent {
+                            publish_event(ConnectionChangeEvent {
                                 connection_type: updated.into(),
                             });
 

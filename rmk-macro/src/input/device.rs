@@ -4,11 +4,11 @@ use syn::{DeriveInput, Meta, parse_macro_input};
 
 use super::config::InputDeviceConfig;
 use super::parser::parse_input_device_config;
-use crate::controller::config::ControllerConfig;
-use crate::controller::parser::parse_controller_config;
+use crate::processor::ProcessorConfig;
 use crate::runnable::generate_runnable;
 use crate::utils::{
-    deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr, to_snake_case,
+    AttributeParser, deduplicate_type_generics, has_runnable_marker, is_rmk_attr,
+    is_runnable_generated_attr, to_snake_case,
 };
 
 /// Generates InputDevice and Runnable trait implementations for single-event devices.
@@ -28,7 +28,10 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as DeriveInput);
 
     // Parse attributes to extract event type using shared parser
-    let device_config = parse_input_device_config(proc_macro2::TokenStream::from(attr));
+    let device_config = match parse_input_device_config(proc_macro2::TokenStream::from(attr)) {
+        Ok(config) => config,
+        Err(err) => return err.into(),
+    };
 
     // Validate single event type
     if device_config.is_none() {
@@ -49,43 +52,59 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
             .into();
     }
 
-    // Check for mutually exclusive attributes
-    let has_input_processor = input
-        .attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("input_processor"));
-    if has_input_processor {
-        return syn::Error::new_spanned(
-            &input,
-            "#[input_device] and #[input_processor] are mutually exclusive. A struct cannot be both an input device and an input processor.",
-        )
-        .to_compile_error()
-        .into();
-    }
-
-    // Check for runnable_generated marker
+    // Check for runnable_generated marker (set by #[processor] when it expands first)
     let has_marker = has_runnable_marker(&input.attrs);
 
-    // Check for controller attribute (for combined Runnable generation)
-    let has_controller = input
+    // Check for processor attribute (for combined Runnable generation)
+    let has_processor = input
         .attrs
         .iter()
-        .any(|attr| attr.path().is_ident("controller"));
+        .any(|attr| is_rmk_attr(attr, "processor"));
 
-    // Parse controller config if present (for combined Runnable)
-    let controller_config: Option<ControllerConfig> = if has_controller {
+    // Parse processor config: either from a sibling #[processor] attribute,
+    // or from the #[runnable_generated(...)] marker that #[processor] left behind.
+    let processor_config: Option<ProcessorConfig> = if has_processor {
+        // #[input_device] expanded first — read config from sibling #[processor]
         input
             .attrs
             .iter()
-            .find(|attr| attr.path().is_ident("controller"))
+            .find(|attr| is_rmk_attr(attr, "processor"))
             .map(|attr| {
                 if let Meta::List(meta_list) = &attr.meta {
-                    parse_controller_config(meta_list.tokens.clone())
+                    let parser = AttributeParser::new(meta_list.tokens.clone())
+                        .unwrap_or_else(|_| AttributeParser::empty());
+                    ProcessorConfig {
+                        event_types: parser.get_path_array("subscribe"),
+                        poll_interval_ms: parser.get_int("poll_interval"),
+                    }
                 } else {
-                    ControllerConfig {
+                    ProcessorConfig {
                         event_types: vec![],
                         poll_interval_ms: None,
                     }
+                }
+            })
+    } else if has_marker {
+        // #[processor] expanded first — extract config from the marker's args
+        input
+            .attrs
+            .iter()
+            .find(|attr| is_runnable_generated_attr(attr))
+            .and_then(|attr| {
+                if let Meta::List(meta_list) = &attr.meta {
+                    let parser = AttributeParser::new(meta_list.tokens.clone()).ok()?;
+                    let event_types = parser.get_path_array("subscribe");
+                    if event_types.is_empty() {
+                        None
+                    } else {
+                        Some(ProcessorConfig {
+                            event_types,
+                            poll_interval_ms: parser.get_int("poll_interval"),
+                        })
+                    }
+                } else {
+                    // Bare #[runnable_generated] with no args — no processor config
+                    None
                 }
             })
     } else {
@@ -105,9 +124,23 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let method_name = format_ident!("read_{}_event", to_snake_case(base_name));
 
     // Generate Runnable implementation
-    let runnable_impl = if has_marker {
-        // Skip Runnable generation if marker is present
+    // When the marker is present but carries processor config (processor expanded first),
+    // we still need to generate the combined Runnable here.
+    let runnable_impl = if has_marker && processor_config.is_none() {
+        // Bare marker with no processor config — another macro already generated Runnable
         quote! {}
+    } else if has_marker && processor_config.is_some() {
+        // Marker with processor config — processor expanded first, we generate combined Runnable
+        let input_device_cfg = InputDeviceConfig {
+            event_type: event_type.clone(),
+        };
+        generate_runnable(
+            struct_name,
+            generics,
+            where_clause,
+            Some(&input_device_cfg),
+            processor_config.as_ref(),
+        )
     } else {
         let input_device_cfg = InputDeviceConfig {
             event_type: event_type.clone(),
@@ -117,18 +150,17 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
             generics,
             where_clause,
             Some(&input_device_cfg),
-            None, // no input_processor
-            controller_config.as_ref(),
+            processor_config.as_ref(),
         )
     };
 
     // Remove attributes that would cause duplicate expansion or should not leak to output.
     input
         .attrs
-        .retain(|attr| !attr.path().is_ident("input_device") && !is_runnable_generated_attr(attr));
+        .retain(|attr| !is_rmk_attr(attr, "input_device") && !is_runnable_generated_attr(attr));
 
     // Add marker attribute if we generated Runnable and there are other macros.
-    if !has_marker && has_controller {
+    if !has_marker && has_processor {
         input
             .attrs
             .push(syn::parse_quote!(#[::rmk::macros::runnable_generated]));

@@ -10,15 +10,15 @@ use super::naming::{event_type_to_handler_method_name, generate_unique_variant_n
 
 /// Generate EventSubscriber struct and its implementation.
 ///
-/// This is a unified generator for both Controller and InputProcessor macros.
+/// This is a unified generator for the Processor macro.
 /// It generates:
 /// - A subscriber struct that holds individual event subscribers
 /// - `EventSubscriber` impl with `select_biased!` for event aggregation
-/// - The corresponding event trait impl (`SubscribableControllerEvent` or `SubscribableInputEvent`)
+/// - The corresponding event trait impl (`SubscribableEvent`)
 ///
 /// # Parameters
-/// - `subscribe_trait_path`: The trait path (e.g., `::rmk::event::SubscribableControllerEvent`)
-/// - `subscriber_method`: The method name to call (e.g., `controller_subscriber`)
+/// - `subscribe_trait_path`: The trait path (e.g., `::rmk::event::SubscribableEvent`)
+/// - `subscriber_method`: The method name to call (e.g., `subscriber`)
 pub fn generate_event_subscriber(
     subscriber_name: &syn::Ident,
     event_types: &[Path],
@@ -126,14 +126,14 @@ pub fn generate_event_match_arms(
 
 /// Generate event enum, subscriber, and dispatch body for a subscriber-based macro.
 ///
-/// This is the unified generator used by both `#[input_processor]` and `#[controller]`.
+/// This is the unified generator used by the `#[processor]` macro.
 /// For single-event subscriptions, no enum is generated and the event type is used directly.
 /// For multiple events, generates an aggregated enum, subscriber struct, and match-based dispatch.
 ///
 /// # Parameters
-/// - `kind`: `"Input"` or `"Controller"` — used for naming the generated enum/subscriber
-/// - `subscribe_trait_path`: e.g. `::rmk::event::SubscribableInputEvent`
-/// - `subscriber_method`: e.g. `input_subscriber`
+/// - `kind`: `"Processor"` — used for naming the generated enum/subscriber
+/// - `subscribe_trait_path`: e.g. `::rmk::event::SubscribableEvent`
+/// - `subscriber_method`: e.g. `subscriber`
 ///
 /// # Returns
 /// `(event_type_tokens, event_enum_def, event_subscriber_impl, dispatch_body)`

@@ -25,7 +25,6 @@ use rmk::ble::build_ble_stack;
 use rmk::config::{
     BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
-use rmk::controller::EventController as _;
 use rmk::controller::led_indicator::KeyboardIndicatorController;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::{join, join4};
@@ -238,7 +237,7 @@ async fn main(spawner: Spawner) {
     join4(
         async {},
         run_all!(matrix, encoder, adc_device, batt_proc),
-        join(keyboard.run(), capslock_led.event_loop()),
+        join(keyboard.run(), capslock_led.run()),
         join4(
             scan_peripherals(&stack, &peripheral_addrs),
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),

@@ -1,10 +1,7 @@
 //! Input device module for RMK
 //!
-//! This module defines the `InputDevice` trait, `InputProcessor` trait, `Runnable` trait and several macros for running input devices and processors.
+//! This module defines the `InputDevice` trait, `Runnable` trait and several macros for running input devices and processors.
 //! The `InputDevice` trait provides the interface for individual input devices, and the macros facilitate their concurrent execution.
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
-use crate::event::{EventSubscriber, SubscribableInputEvent};
-use crate::hid::Report;
 
 pub mod adc;
 #[cfg(feature = "_ble")]
@@ -70,73 +67,6 @@ pub trait InputDevice: Runnable {
     async fn read_event(&mut self) -> Self::Event;
 }
 
-/// The trait for input processors.
-///
-/// The input processor processes events from input devices and converts them to HID reports.
-/// For example, the [`crate::matrix::Matrix`] is an input device and the [`crate::keyboard::Keyboard`]
-/// is an input processor.
-///
-/// # Usage
-///
-/// Use the `#[input_processor]` macro to define a processor that subscribes to input events:
-///
-/// ```rust,ignore
-/// use rmk_macro::input_processor;
-///
-/// // Subscribe to multiple input events
-/// #[input_processor(subscribe = [KeyEvent, EncoderEvent])]
-/// struct KeyProcessor;
-///
-/// impl KeyProcessor {
-///     // You MUST implement handler methods for each subscribed event type.
-///     // The method name follows the pattern: on_{event_name}_event.
-///     async fn on_key_event(&mut self, event: KeyEvent) {
-///         // Process key event
-///     }
-///
-///     async fn on_encoder_event(&mut self, event: EncoderEvent) {
-///         // Process encoder event
-///     }
-/// }
-/// ```
-///
-pub trait InputProcessor: Runnable {
-    /// The event type processed by this input processor.
-    ///
-    /// Must implement `SubscribableInputEvent`, which provides the `Subscriber` type
-    /// and the `input_subscriber()` method.
-    type Event: SubscribableInputEvent;
-
-    /// Create a new event subscriber.
-    ///
-    /// Default implementation uses the event's `input_subscriber()` method.
-    fn subscriber() -> <Self::Event as SubscribableInputEvent>::Subscriber {
-        Self::Event::input_subscriber()
-    }
-
-    /// Process the incoming events, convert them to HID report [`Report`],
-    /// then send the report to the USB/BLE.
-    ///
-    /// Note there might be multiple HID reports generated for one event,
-    /// so the "sending report" operation should be done in the `process` method.
-    /// The input processor implementor should be aware of this.
-    async fn process(&mut self, event: Self::Event);
-
-    /// Send the processed report.
-    async fn send_report(&self, report: Report) {
-        KEYBOARD_REPORT_CHANNEL.send(report).await;
-    }
-
-    /// Default processing loop that continuously receives and processes events
-    async fn process_loop(&mut self) -> ! {
-        let mut sub = Self::subscriber();
-        loop {
-            let event = sub.next_event().await;
-            self.process(event).await;
-        }
-    }
-}
-
 /// Macro to run multiple Runnable instances concurrently.
 ///
 /// This macro simplifies running multiple input devices, processors, or controllers
@@ -147,10 +77,9 @@ pub trait InputProcessor: Runnable {
 /// // Define your runnables
 /// let mut device = MyInputDevice::new();
 /// let mut processor = MyProcessor::new();
-/// let mut controller = MyController::new();
 ///
 /// // Run all runnables concurrently
-/// run_all!(device, processor, controller);
+/// run_all!(device, processor);
 /// ```
 #[macro_export]
 macro_rules! run_all {

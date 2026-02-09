@@ -5,6 +5,7 @@ mod chip_init;
 mod comm;
 mod controller;
 mod entry;
+mod event;
 mod feature;
 mod flash;
 mod gpio_config;
@@ -15,6 +16,7 @@ mod keyboard;
 mod keyboard_config;
 mod layout;
 mod matrix;
+mod processor;
 mod runnable;
 mod split;
 mod utils;
@@ -66,107 +68,6 @@ pub fn rmk_peripheral(attr: TokenStream, item: TokenStream) -> TokenStream {
     parse_split_peripheral_mod(peripheral_id, attr, item_mod).into()
 }
 
-/// Macro for defining controller events.
-///
-/// This macro generates a static channel and implements the `ControllerEvent` trait.
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// #[controller_event(subs = 1)]
-/// #[derive(Clone, Copy, Debug)]
-/// pub struct BatteryEvent(pub u8);
-///
-/// #[controller_event(channel_size = 8, subs = 4)]
-/// #[derive(Clone, Copy, Debug)]
-/// pub struct KeyEvent {
-///     pub keyboard_event: KeyboardEvent,
-///     pub key_action: KeyAction,
-/// }
-/// ```
-#[proc_macro_attribute]
-pub fn controller_event(attr: TokenStream, item: TokenStream) -> TokenStream {
-    controller::event::controller_event_impl(attr, item)
-}
-
-/// Macro for defining controllers that subscribe to multiple events.
-///
-/// This macro generates event routing infrastructure and implements the `Controller` trait.
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// #[controller(subscribe = [BatteryEvent, ChargingStateEvent])]
-/// pub struct BatteryLedController<P> {
-///     pin: OutputController<P>,
-///     state: BatteryState,
-/// }
-///
-/// impl<P> BatteryLedController<P> {
-///     async fn on_battery_event(&mut self, event: BatteryEvent) { /* ... */ }
-///     async fn on_charging_state_event(&mut self, event: ChargingStateEvent) { /* ... */ }
-/// }
-/// ```
-#[proc_macro_attribute]
-pub fn controller(attr: TokenStream, item: TokenStream) -> TokenStream {
-    controller::controller_impl(attr, item)
-}
-
-/// Macro for defining input events.
-///
-/// This macro generates a static Channel and implements the `InputEvent` trait.
-///
-/// # Parameters
-///
-/// - `channel_size`: Buffer size of the channel (default: 8)
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// #[input_event(channel_size = 8)]
-/// #[derive(Clone, Copy, Debug)]
-/// pub struct KeyEvent {
-///     pub row: u8,
-///     pub col: u8,
-///     pub pressed: bool,
-/// }
-/// ```
-#[proc_macro_attribute]
-pub fn input_event(attr: TokenStream, item: TokenStream) -> TokenStream {
-    input::event::input_event_impl(attr, item)
-}
-
-/// Macro for defining input processors that subscribe to multiple events.
-///
-/// This macro generates event routing infrastructure and implements the `InputProcessor` trait.
-///
-/// # Parameters
-///
-/// - `subscribe`: Array of event types to subscribe to (required)
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// #[input_processor(subscribe = [KeyEvent, ModifierEvent])]
-/// pub struct MyInputProcessor {
-///     // processor state
-/// }
-///
-/// impl MyInputProcessor {
-///     async fn on_key_event(&mut self, event: KeyEvent) {
-///         // Handle key event
-///     }
-///
-///     async fn on_modifier_event(&mut self, event: ModifierEvent) {
-///         // Handle modifier event
-///     }
-/// }
-/// ```
-#[proc_macro_attribute]
-pub fn input_processor(attr: TokenStream, item: TokenStream) -> TokenStream {
-    input::processor::input_processor_impl(attr, item)
-}
-
 /// Marker attribute for coordinating Runnable generation between macros.
 /// Do not use directly.
 #[doc(hidden)]
@@ -179,8 +80,7 @@ pub fn runnable_generated(_attr: TokenStream, item: TokenStream) -> TokenStream 
 ///
 /// This macro generates:
 /// - `{EnumName}Publisher` struct implementing `AsyncEventPublisher` and `EventPublisher`
-/// - `{EnumName}Subscriber` placeholder (wrapper enums cannot be subscribed to directly)
-/// - `InputEvent` and `AsyncInputEvent` trait implementations
+/// - `PublishableEvent` and `AsyncPublishableEvent` trait implementations
 /// - `From<VariantType>` impls for each variant
 ///
 /// Each variant is forwarded to its underlying event channel when published.
@@ -198,7 +98,7 @@ pub fn runnable_generated(_attr: TokenStream, item: TokenStream) -> TokenStream 
 /// }
 ///
 /// // Publishing: events are routed to their concrete type channels
-/// publish_input_event_async(MultiSensorEvent::Battery(event)).await;
+/// publish_event_async(MultiSensorEvent::Battery(event)).await;
 /// ```
 #[proc_macro_derive(InputEvent)]
 pub fn input_event_derive(item: TokenStream) -> TokenStream {
@@ -230,4 +130,71 @@ pub fn input_event_derive(item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn input_device(attr: TokenStream, item: TokenStream) -> TokenStream {
     input::device::input_device_impl(attr, item)
+}
+
+/// Unified macro for defining events with static channels.
+///
+/// Generates `PublishableEvent`, `SubscribableEvent`, and `AsyncPublishableEvent` trait implementations.
+///
+/// # Parameters
+///
+/// - `channel_size`: Buffer size of the channel (default: 8 for mpsc, 1 for pubsub)
+/// - `subs`: Max subscribers. If specified, a PubSub channel is used (default: 4)
+/// - `pubs`: Max publishers. If specified, a PubSub channel is used (default: 1)
+///
+/// Channel type is automatically inferred: if `subs` or `pubs` is specified, a PubSub channel
+/// (broadcast, multiple consumers) is used; otherwise an MPSC channel (single consumer) is used.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// // MPSC channel (default) - single consumer
+/// #[event(channel_size = 16)]
+/// #[derive(Clone, Copy, Debug)]
+/// pub struct KeyboardEvent { ... }
+///
+/// // PubSub channel - broadcast to multiple consumers
+/// #[event(channel_size = 8, pubs = 1, subs = 4)]
+/// #[derive(Clone, Copy, Debug)]
+/// pub struct LayerChangeEvent { ... }
+/// ```
+#[proc_macro_attribute]
+pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
+    event::event_impl(attr, item)
+}
+
+/// Unified macro for defining event processors.
+///
+/// Generates `Processor` trait implementation and event routing infrastructure.
+/// Replaces both `#[input_processor]` and `#[controller]`.
+///
+/// # Parameters
+///
+/// - `subscribe`: Array of event types to subscribe to (required)
+/// - `poll_interval`: Optional polling interval in milliseconds
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// // Event-driven processor
+/// #[processor(subscribe = [KeyboardEvent, PointingEvent])]
+/// pub struct MyProcessor { ... }
+///
+/// impl MyProcessor {
+///     async fn on_keyboard_event(&mut self, event: KeyboardEvent) { /* ... */ }
+///     async fn on_pointing_event(&mut self, event: PointingEvent) { /* ... */ }
+/// }
+///
+/// // Polling processor
+/// #[processor(subscribe = [BatteryStateEvent], poll_interval = 1000)]
+/// pub struct MyPollingProcessor { ... }
+///
+/// impl MyPollingProcessor {
+///     async fn on_battery_state_event(&mut self, event: BatteryStateEvent) { /* ... */ }
+///     async fn poll(&mut self) { /* called every 1000ms */ }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn processor(attr: TokenStream, item: TokenStream) -> TokenStream {
+    processor::processor_impl(attr, item)
 }

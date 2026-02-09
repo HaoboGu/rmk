@@ -1,9 +1,9 @@
 use embedded_hal::digital::InputPin;
-use rmk_macro::{input_device, input_processor};
+use rmk_macro::{input_device, processor};
 
 #[cfg(feature = "_ble")]
 use crate::event::BatteryStateEvent;
-use crate::event::{BatteryAdcEvent, ChargingStateEvent, publish_controller_event};
+use crate::event::{BatteryAdcEvent, ChargingStateEvent, publish_event};
 
 /// Reads charging state from a GPIO pin and publishes ChargingStateEvent.
 ///
@@ -74,7 +74,7 @@ impl<I: InputPin> ChargingStateReader<I> {
 
 /// BatteryProcessor processes battery adc value and charging state,
 /// emits `BatteryStateEvent` when battery state chages.
-#[input_processor(subscribe = [BatteryAdcEvent, ChargingStateEvent])]
+#[processor(subscribe = [BatteryAdcEvent, ChargingStateEvent])]
 pub struct BatteryProcessor {
     adc_divider_measured: u32,
     adc_divider_total: u32,
@@ -144,7 +144,7 @@ impl BatteryProcessor {
                     self.battery_state = BatteryStateEvent::Normal(battery_percent);
 
                     // Update he battery state
-                    publish_controller_event(self.battery_state);
+                    publish_event(self.battery_state);
                 }
             }
         }
@@ -164,7 +164,7 @@ impl BatteryProcessor {
                 self.battery_state = BatteryStateEvent::NotAvailable;
             }
 
-            publish_controller_event(self.battery_state);
+            publish_event(self.battery_state);
         }
     }
 }

@@ -6,12 +6,13 @@ use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::InputPin;
 use embedded_hal_async::digital::Wait;
 use futures::future::pending;
-use rmk_macro::input_processor;
+use rmk_macro::processor;
 use usbd_hid::descriptor::MouseReport;
 
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent};
 use crate::hid::Report;
-use crate::input_device::{InputDevice, InputProcessor};
+use crate::input_device::InputDevice;
 use crate::keymap::KeyMap;
 
 pub const ALL_POINTING_DEVICES: u8 = 255;
@@ -176,11 +177,11 @@ where
     S: PointingDriver,
 {
     async fn run(&mut self) -> ! {
-        use crate::event::publish_input_event_async;
+        use crate::event::publish_event_async;
         use crate::input_device::InputDevice;
         loop {
             let event = self.read_event().await;
-            publish_input_event_async(event).await;
+            publish_event_async(event).await;
         }
     }
 }
@@ -269,7 +270,7 @@ pub struct PointingProcessorConfig {
 }
 
 /// PointingProcessor that converts motion events to mouse reports
-#[input_processor(subscribe = [PointingEvent])]
+#[processor(subscribe = [PointingEvent])]
 pub struct PointingProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
     /// Reference to the keymap
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
@@ -317,7 +318,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             wheel: 0,
             pan: 0,
         };
-        self.send_report(Report::MouseReport(mouse_report)).await;
+        KEYBOARD_REPORT_CHANNEL.send(Report::MouseReport(mouse_report)).await;
     }
 }
 

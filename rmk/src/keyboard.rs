@@ -21,8 +21,8 @@ use crate::descriptor::KeyboardReport;
 #[cfg(all(feature = "split", feature = "_ble", feature = "controller"))]
 use crate::event::ClearPeerEvent;
 #[cfg(feature = "controller")]
-use crate::event::{KeyEvent, ModifierEvent, publish_controller_event};
-use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos, SubscribableInputEvent, publish_input_event_async};
+use crate::event::{KeyEvent, ModifierEvent, publish_event};
+use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos, SubscribableEvent, publish_event_async};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::input_device::Runnable;
@@ -256,7 +256,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>) -> Self {
         Keyboard {
             keymap,
-            keyboard_event_subscriber: KeyboardEvent::input_subscriber(),
+            keyboard_event_subscriber: KeyboardEvent::subscriber(),
             timer: [[None; ROW]; COL],
             rotary_encoder_timer: [[None; 2]; NUM_ENCODER],
             last_press_time: Instant::now(),
@@ -786,7 +786,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         LAST_KEY_TIMESTAMP.signal(Instant::now().as_secs() as u32);
 
         #[cfg(feature = "controller")]
-        publish_controller_event(KeyEvent {
+        publish_event(KeyEvent {
             keyboard_event: event,
             key_action,
         });
@@ -1787,7 +1787,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 for _ in 0..len {
                     let queued_event = self.keyboard_event_subscriber.receive().await;
                     if queued_event.pos != event.pos || !queued_event.pressed {
-                        publish_input_event_async(queued_event).await;
+                        publish_event_async(queued_event).await;
                     }
                     // If there's a release event in the channel
                     if queued_event.pos == event.pos && !queued_event.pressed {
@@ -1795,7 +1795,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                 }
                 if !released {
-                    publish_input_event_async(event).await;
+                    publish_event_async(event).await;
                 }
             }
         }
@@ -1824,7 +1824,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             Either::First(_) => {
                                 // Timeout reached, send clear peer message
                                 #[cfg(feature = "controller")]
-                                publish_controller_event(ClearPeerEvent);
+                                publish_event(ClearPeerEvent);
                                 info!("Clear peer");
                             }
                             Either::Second(e) => {
@@ -2103,7 +2103,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers |= key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        publish_controller_event(ModifierEvent {
+        publish_event(ModifierEvent {
             modifier: self.held_modifiers,
         });
 
@@ -2116,7 +2116,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers &= !key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        publish_controller_event(ModifierEvent {
+        publish_event(ModifierEvent {
             modifier: self.held_modifiers,
         });
     }
@@ -2126,7 +2126,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers |= modifiers;
 
         #[cfg(feature = "controller")]
-        publish_controller_event(ModifierEvent {
+        publish_event(ModifierEvent {
             modifier: self.held_modifiers,
         });
 
@@ -2139,7 +2139,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers &= !modifiers;
 
         #[cfg(feature = "controller")]
-        publish_controller_event(ModifierEvent {
+        publish_event(ModifierEvent {
             modifier: self.held_modifiers,
         });
     }

@@ -317,13 +317,11 @@ fn expand_split_peripheral(
     // Add controller support for peripherals
     let (controller_initializers, controllers) = expand_controller_init(keyboard_config, &item_mod);
 
-    // Import EventController for controller support
-    let controller_import = if controllers.is_empty() {
-        quote! {}
+    // Import Runnable trait so controller.run() calls compile
+    let controller_import = if !controllers.is_empty() {
+        quote! { use ::rmk::input_device::Runnable; }
     } else {
-        quote! {
-            use ::rmk::controller::EventController;
-        }
+        quote! {}
     };
 
     let run_rmk_peripheral = expand_split_peripheral_entry(

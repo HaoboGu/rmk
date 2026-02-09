@@ -11,11 +11,34 @@ use embassy_sync::blocking_mutex::raw::RawMutex;
 use embassy_sync::pubsub::{ImmediatePublisher, Publisher, Subscriber};
 use embassy_sync::{channel, watch};
 
-mod controller;
-mod input;
+#[cfg(feature = "_ble")]
+mod ble;
+mod battery;
+mod connection;
+mod key;
+mod keyboard;
+mod keyboard_state;
+mod pointing;
+mod power;
+#[cfg(feature = "split")]
+mod split;
+mod touchpad;
 
-pub use controller::*;
-pub use input::*;
+#[cfg(feature = "_ble")]
+pub use ble::{BleProfileChangeEvent, BleStateChangeEvent};
+pub use battery::{BatteryAdcEvent, ChargingStateEvent};
+pub use connection::{ConnectionChangeEvent, ConnectionType};
+pub use key::{KeyEvent, ModifierEvent};
+pub use keyboard::{KeyPos, KeyboardEvent, KeyboardEventPos, RotaryEncoderPos};
+pub use keyboard_state::{LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent};
+pub use pointing::{Axis, AxisEvent, AxisValType, PointingEvent};
+#[cfg(feature = "_ble")]
+pub use power::BatteryStateEvent;
+#[cfg(feature = "split")]
+pub use split::{CentralConnectedEvent, PeripheralConnectedEvent};
+#[cfg(all(feature = "split", feature = "_ble"))]
+pub use split::{ClearPeerEvent, PeripheralBatteryEvent};
+pub use touchpad::TouchpadEvent;
 
 /// Trait for event publishers
 pub trait EventPublisher {

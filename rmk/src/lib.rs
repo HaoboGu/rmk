@@ -32,7 +32,9 @@ use bt_hci::{
 };
 use config::RmkConfig;
 #[cfg(feature = "controller")]
-use controller::{PollingController, wpm::WpmController};
+use controller::wpm::WpmController;
+#[cfg(feature = "controller")]
+use processor::PollingProcessor;
 #[cfg(not(feature = "_ble"))]
 use descriptor::{CompositeReport, KeyboardReport};
 #[cfg(not(any(cortex_m)))]
@@ -65,7 +67,7 @@ use crate::config::PositionalConfig;
 #[cfg(feature = "vial")]
 use crate::config::VialConfig;
 #[cfg(feature = "controller")]
-use crate::event::{LedIndicatorEvent, publish_controller_event};
+use crate::event::{LedIndicatorEvent, publish_event};
 use crate::keyboard::LOCK_LED_STATES;
 use crate::state::ConnectionState;
 
@@ -95,6 +97,7 @@ pub mod layout_macro;
 pub mod light;
 pub mod matrix;
 pub mod morse;
+pub mod processor;
 #[cfg(feature = "split")]
 pub mod split;
 pub mod state;
@@ -366,7 +369,7 @@ pub(crate) async fn run_keyboard<
                     info!("Got led indicator");
                     LOCK_LED_STATES.store(led_indicator.into_bits(), core::sync::atomic::Ordering::Relaxed);
                     #[cfg(feature = "controller")]
-                    publish_controller_event(LedIndicatorEvent {
+                    publish_event(LedIndicatorEvent {
                         indicator: led_indicator,
                     });
                 }

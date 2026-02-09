@@ -17,41 +17,45 @@ macro_rules! select_biased {
 }
 
 pub mod event {
-    pub trait EventSubscriber<T> {
-        fn next_event(&mut self) -> impl core::future::Future<Output = T>;
+    pub trait EventPublisher {
+        type Event;
+        fn publish(&self, event: Self::Event);
     }
 
-    pub trait AsyncEventPublisher<T> {
-        fn publish_async(&self, event: T) -> impl core::future::Future<Output = ()>;
+    pub trait AsyncEventPublisher {
+        type Event;
+        fn publish_async(&self, event: Self::Event)
+            -> impl core::future::Future<Output = ()>;
     }
 
-    pub trait InputEvent {
+    pub trait EventSubscriber {
+        type Event;
+        fn next_event(&mut self)
+            -> impl core::future::Future<Output = Self::Event>;
+    }
+
+    pub trait PublishableEvent: Clone + Send {
         type Publisher;
+        fn publisher() -> Self::Publisher;
+    }
+
+    pub trait SubscribableEvent: Clone + Send {
         type Subscriber;
-
-        fn input_publisher() -> Self::Publisher;
-        fn input_subscriber() -> Self::Subscriber;
+        fn subscriber() -> Self::Subscriber;
     }
 
-    pub trait AsyncInputEvent: InputEvent {
+    pub trait AsyncPublishableEvent: PublishableEvent {
         type AsyncPublisher;
-
-        fn input_publisher_async() -> Self::AsyncPublisher;
+        fn publisher_async() -> Self::AsyncPublisher;
     }
 
-    pub trait ControllerEvent {
-        fn controller_subscriber() -> impl EventSubscriber<Self>
-        where
-            Self: Sized;
-    }
-
-    pub async fn publish_input_event_async<E: AsyncInputEvent>(_e: E) {
+    pub fn publish_event<E: PublishableEvent>(_e: E) {
         // No-op mock.
     }
-}
 
-pub mod hid {
-    pub struct Report;
+    pub async fn publish_event_async<E: AsyncPublishableEvent>(_e: E) {
+        // No-op mock.
+    }
 }
 
 pub mod input_device {
@@ -62,24 +66,6 @@ pub mod input_device {
     pub trait InputDevice: Runnable {
         type Event;
         async fn read_event(&mut self) -> Self::Event;
-    }
-
-    pub trait InputProcessor: Runnable {
-        type Event;
-        async fn process(&mut self, event: Self::Event);
-        async fn send_report(&self, _report: crate::hid::Report) {}
-    }
-}
-
-pub mod controller {
-    pub trait Controller {
-        type Event;
-        fn process_event(&mut self, event: Self::Event) -> impl core::future::Future<Output = ()>;
-        fn next_message(&mut self) -> impl core::future::Future<Output = Self::Event>;
-    }
-
-    pub trait PollingController: Controller {
-        fn update(&mut self) -> impl core::future::Future<Output = ()>;
     }
 }
 

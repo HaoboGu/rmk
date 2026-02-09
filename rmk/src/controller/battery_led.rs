@@ -1,11 +1,10 @@
 use embedded_hal::digital::StatefulOutputPin;
-use rmk_macro::controller;
+use rmk_macro::processor;
 
-use crate::controller::PollingController;
 use crate::driver::gpio::OutputController;
 use crate::event::BatteryStateEvent;
 
-#[controller(subscribe = [BatteryStateEvent])]
+#[processor(subscribe = [BatteryStateEvent], poll_interval = 1000)]
 pub struct BatteryLedController<P: StatefulOutputPin> {
     pin: OutputController<P>,
     state: BatteryStateEvent,
@@ -22,14 +21,8 @@ impl<P: StatefulOutputPin> BatteryLedController<P> {
     async fn on_battery_state_event(&mut self, event: BatteryStateEvent) {
         self.state = event;
     }
-}
 
-impl<P: StatefulOutputPin> PollingController for BatteryLedController<P> {
-    fn interval(&self) -> embassy_time::Duration {
-        embassy_time::Duration::from_secs(1)
-    }
-
-    async fn update(&mut self) {
+    async fn poll(&mut self) {
         match self.state {
             BatteryStateEvent::Normal(level) => {
                 if level < 10 {
@@ -40,7 +33,7 @@ impl<P: StatefulOutputPin> PollingController for BatteryLedController<P> {
                 }
             }
             BatteryStateEvent::Charging => self.pin.activate(),
-            BatteryStateEvent::Charged => self.pin.activate(), // LED stays on when fully charged
+            BatteryStateEvent::Charged => self.pin.activate(),
             BatteryStateEvent::NotAvailable => self.pin.deactivate(),
         }
     }

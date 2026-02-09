@@ -10,7 +10,7 @@ use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, h
 
 use crate::CONNECTION_STATE;
 use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::event::{KeyboardEvent, publish_input_event_async};
+use crate::event::{KeyboardEvent, publish_event_async};
 use crate::input_device::{InputDevice, Runnable};
 use crate::state::ConnectionState;
 pub mod bidirectional_matrix;
@@ -485,7 +485,7 @@ where
     async fn run(&mut self) -> ! {
         loop {
             let event = self.read_event().await;
-            publish_input_event_async(event).await;
+            publish_event_async(event).await;
         }
     }
 }

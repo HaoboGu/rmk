@@ -1,5 +1,4 @@
 use rmk_macro::InputEvent;
-#[input_event]
 pub struct BatteryEvent {
     pub level: u8,
 }
@@ -28,7 +27,6 @@ impl ::core::fmt::Debug for BatteryEvent {
         )
     }
 }
-#[input_event]
 pub struct PointingEvent {
     pub x: i16,
     pub y: i16,
@@ -71,12 +69,8 @@ impl ::rmk::event::AsyncEventPublisher for MultiSensorEventPublisher {
     type Event = MultiSensorEvent;
     async fn publish_async(&self, event: MultiSensorEvent) {
         match event {
-            MultiSensorEvent::Battery(e) => {
-                ::rmk::event::publish_input_event_async(e).await
-            }
-            MultiSensorEvent::Pointing(e) => {
-                ::rmk::event::publish_input_event_async(e).await
-            }
+            MultiSensorEvent::Battery(e) => ::rmk::event::publish_event_async(e).await,
+            MultiSensorEvent::Pointing(e) => ::rmk::event::publish_event_async(e).await,
         }
     }
 }
@@ -84,20 +78,20 @@ impl ::rmk::event::EventPublisher for MultiSensorEventPublisher {
     type Event = MultiSensorEvent;
     fn publish(&self, event: MultiSensorEvent) {
         match event {
-            MultiSensorEvent::Battery(e) => ::rmk::event::publish_input_event(e),
-            MultiSensorEvent::Pointing(e) => ::rmk::event::publish_input_event(e),
+            MultiSensorEvent::Battery(e) => ::rmk::event::publish_event(e),
+            MultiSensorEvent::Pointing(e) => ::rmk::event::publish_event(e),
         }
     }
 }
-impl ::rmk::event::PublishableInputEvent for MultiSensorEvent {
+impl ::rmk::event::PublishableEvent for MultiSensorEvent {
     type Publisher = MultiSensorEventPublisher;
-    fn input_publisher() -> Self::Publisher {
+    fn publisher() -> Self::Publisher {
         MultiSensorEventPublisher
     }
 }
-impl ::rmk::event::AsyncPublishableInputEvent for MultiSensorEvent {
+impl ::rmk::event::AsyncPublishableEvent for MultiSensorEvent {
     type AsyncPublisher = MultiSensorEventPublisher;
-    fn input_publisher_async() -> Self::AsyncPublisher {
+    fn publisher_async() -> Self::AsyncPublisher {
         MultiSensorEventPublisher
     }
 }
