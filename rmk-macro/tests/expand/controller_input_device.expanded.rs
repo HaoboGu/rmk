@@ -110,9 +110,9 @@ mod basic {
             use ::rmk::futures::FutureExt;
             enum __RmkSelectEventSensorController {
                 Input(SensorEvent),
-                Controller(ConfigEvent),
+                Controller(<Self as ::rmk::controller::Controller>::Event),
             }
-            let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
+            let mut ctrl_sub = <<Self as ::rmk::controller::Controller>::Event as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
             loop {
                 let select_result = {
                     {
@@ -124,7 +124,7 @@ mod basic {
                             }
                             let __select_result = {
                                 let mut _0 = self.read_event().fuse();
-                                let mut _1 = ctrl_sub0.next_event().fuse();
+                                let mut _1 = ctrl_sub.next_event().fuse();
                                 let mut __poll_fn = |
                                     __cx: &mut __futures_crate::task::Context<'_>|
                                 {
@@ -275,10 +275,10 @@ mod polling {
             use ::rmk::controller::PollingController;
             enum __RmkSelectEventPollingSensorController {
                 Input(SensorEvent),
-                Controller(ConfigEvent),
+                Controller(<Self as ::rmk::controller::Controller>::Event),
                 Timer,
             }
-            let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
+            let mut ctrl_sub = <<Self as ::rmk::controller::Controller>::Event as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
             let mut last = ::embassy_time::Instant::now();
             loop {
                 let elapsed = last.elapsed();
@@ -300,7 +300,7 @@ mod polling {
                             let __select_result = {
                                 let mut _0 = timer.fuse();
                                 let mut _1 = self.read_event().fuse();
-                                let mut _2 = ctrl_sub0.next_event().fuse();
+                                let mut _2 = ctrl_sub.next_event().fuse();
                                 let mut __poll_fn = |
                                     __cx: &mut __futures_crate::task::Context<'_>|
                                 {
@@ -475,9 +475,9 @@ mod reversed {
             use ::rmk::futures::FutureExt;
             enum __RmkSelectEventReversedSensorController {
                 Input(SensorEvent),
-                Controller(ConfigEvent),
+                Controller(<Self as ::rmk::controller::Controller>::Event),
             }
-            let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
+            let mut ctrl_sub = <<Self as ::rmk::controller::Controller>::Event as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
             loop {
                 let select_result = {
                     {
@@ -489,7 +489,7 @@ mod reversed {
                             }
                             let __select_result = {
                                 let mut _0 = self.read_event().fuse();
-                                let mut _1 = ctrl_sub0.next_event().fuse();
+                                let mut _1 = ctrl_sub.next_event().fuse();
                                 let mut __poll_fn = |
                                     __cx: &mut __futures_crate::task::Context<'_>|
                                 {
@@ -642,10 +642,10 @@ mod reversed_polling {
             use ::rmk::controller::PollingController;
             enum __RmkSelectEventReversedPollingSensorController {
                 Input(SensorEvent),
-                Controller(ConfigEvent),
+                Controller(<Self as ::rmk::controller::Controller>::Event),
                 Timer,
             }
-            let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
+            let mut ctrl_sub = <<Self as ::rmk::controller::Controller>::Event as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
             let mut last = ::embassy_time::Instant::now();
             loop {
                 let elapsed = last.elapsed();
@@ -667,7 +667,7 @@ mod reversed_polling {
                             let __select_result = {
                                 let mut _0 = timer.fuse();
                                 let mut _1 = self.read_event().fuse();
-                                let mut _2 = ctrl_sub0.next_event().fuse();
+                                let mut _2 = ctrl_sub.next_event().fuse();
                                 let mut __poll_fn = |
                                     __cx: &mut __futures_crate::task::Context<'_>|
                                 {
@@ -819,7 +819,7 @@ mod reversed_polling {
         }
     }
 }
-mod multi_ctrl {
+mod multi_event {
     use super::{ConfigEvent, ModeEvent, SensorEvent, controller, input_device};
     pub struct MultiEventSensorController {
         pub threshold: u16,
@@ -1007,24 +1007,21 @@ mod multi_ctrl {
             use ::rmk::futures::FutureExt;
             enum __RmkSelectEventMultiEventSensorController {
                 Input(SensorEvent),
-                Controller(MultiEventSensorControllerControllerEventEnum),
+                Controller(<Self as ::rmk::controller::Controller>::Event),
             }
-            let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
-            let mut ctrl_sub1 = <ModeEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
+            let mut ctrl_sub = <<Self as ::rmk::controller::Controller>::Event as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
             loop {
                 let select_result = {
                     {
                         use ::futures_util::__private as __futures_crate;
                         {
-                            enum __PrivResult<_0, _1, _2> {
+                            enum __PrivResult<_0, _1> {
                                 _0(_0),
                                 _1(_1),
-                                _2(_2),
                             }
                             let __select_result = {
                                 let mut _0 = self.read_event().fuse();
-                                let mut _1 = ctrl_sub0.next_event().fuse();
-                                let mut _2 = ctrl_sub1.next_event().fuse();
+                                let mut _1 = ctrl_sub.next_event().fuse();
                                 let mut __poll_fn = |
                                     __cx: &mut __futures_crate::task::Context<'_>|
                                 {
@@ -1079,32 +1076,7 @@ mod multi_ctrl {
                                     ) -> __futures_crate::Option<
                                             __futures_crate::task::Poll<_>,
                                         > = &mut _1;
-                                    let mut _2 = |
-                                        __cx: &mut __futures_crate::task::Context<'_>|
-                                    {
-                                        let mut _2 = unsafe {
-                                            __futures_crate::Pin::new_unchecked(&mut _2)
-                                        };
-                                        if __futures_crate::future::FusedFuture::is_terminated(
-                                            &_2,
-                                        ) {
-                                            __futures_crate::None
-                                        } else {
-                                            __futures_crate::Some(
-                                                __futures_crate::future::FutureExt::poll_unpin(
-                                                        &mut _2,
-                                                        __cx,
-                                                    )
-                                                    .map(__PrivResult::_2),
-                                            )
-                                        }
-                                    };
-                                    let _2: &mut dyn FnMut(
-                                        &mut __futures_crate::task::Context<'_>,
-                                    ) -> __futures_crate::Option<
-                                            __futures_crate::task::Poll<_>,
-                                        > = &mut _2;
-                                    let mut __select_arr = [_0, _1, _2];
+                                    let mut __select_arr = [_0, _1];
                                     for poller in &mut __select_arr {
                                         let poller: &mut &mut dyn FnMut(
                                             &mut __futures_crate::task::Context<'_>,
@@ -1142,16 +1114,7 @@ mod multi_ctrl {
                                 }
                                 __PrivResult::_1(ctrl_event) => {
                                     __RmkSelectEventMultiEventSensorController::Controller(
-                                        MultiEventSensorControllerControllerEventEnum::Config(
-                                            ctrl_event,
-                                        ),
-                                    )
-                                }
-                                __PrivResult::_2(ctrl_event) => {
-                                    __RmkSelectEventMultiEventSensorController::Controller(
-                                        MultiEventSensorControllerControllerEventEnum::Mode(
-                                            ctrl_event,
-                                        ),
+                                        ctrl_event,
                                     )
                                 }
                             }
@@ -1174,7 +1137,7 @@ mod multi_ctrl {
         }
     }
 }
-mod multi_ctrl_polling {
+mod multi_event_polling {
     use super::{ConfigEvent, ModeEvent, SensorEvent, controller, input_device};
     pub struct PollingMultiEventSensorController {
         pub threshold: u16,
@@ -1378,11 +1341,10 @@ mod multi_ctrl_polling {
             use ::rmk::controller::PollingController;
             enum __RmkSelectEventPollingMultiEventSensorController {
                 Input(SensorEvent),
-                Controller(PollingMultiEventSensorControllerControllerEventEnum),
+                Controller(<Self as ::rmk::controller::Controller>::Event),
                 Timer,
             }
-            let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
-            let mut ctrl_sub1 = <ModeEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
+            let mut ctrl_sub = <<Self as ::rmk::controller::Controller>::Event as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
             let mut last = ::embassy_time::Instant::now();
             loop {
                 let elapsed = last.elapsed();
@@ -1396,17 +1358,15 @@ mod multi_ctrl_polling {
                     {
                         use ::futures_util::__private as __futures_crate;
                         {
-                            enum __PrivResult<_0, _1, _2, _3> {
+                            enum __PrivResult<_0, _1, _2> {
                                 _0(_0),
                                 _1(_1),
                                 _2(_2),
-                                _3(_3),
                             }
                             let __select_result = {
                                 let mut _0 = timer.fuse();
                                 let mut _1 = self.read_event().fuse();
-                                let mut _2 = ctrl_sub0.next_event().fuse();
-                                let mut _3 = ctrl_sub1.next_event().fuse();
+                                let mut _2 = ctrl_sub.next_event().fuse();
                                 let mut __poll_fn = |
                                     __cx: &mut __futures_crate::task::Context<'_>|
                                 {
@@ -1486,32 +1446,7 @@ mod multi_ctrl_polling {
                                     ) -> __futures_crate::Option<
                                             __futures_crate::task::Poll<_>,
                                         > = &mut _2;
-                                    let mut _3 = |
-                                        __cx: &mut __futures_crate::task::Context<'_>|
-                                    {
-                                        let mut _3 = unsafe {
-                                            __futures_crate::Pin::new_unchecked(&mut _3)
-                                        };
-                                        if __futures_crate::future::FusedFuture::is_terminated(
-                                            &_3,
-                                        ) {
-                                            __futures_crate::None
-                                        } else {
-                                            __futures_crate::Some(
-                                                __futures_crate::future::FutureExt::poll_unpin(
-                                                        &mut _3,
-                                                        __cx,
-                                                    )
-                                                    .map(__PrivResult::_3),
-                                            )
-                                        }
-                                    };
-                                    let _3: &mut dyn FnMut(
-                                        &mut __futures_crate::task::Context<'_>,
-                                    ) -> __futures_crate::Option<
-                                            __futures_crate::task::Poll<_>,
-                                        > = &mut _3;
-                                    let mut __select_arr = [_0, _1, _2, _3];
+                                    let mut __select_arr = [_0, _1, _2];
                                     for poller in &mut __select_arr {
                                         let poller: &mut &mut dyn FnMut(
                                             &mut __futures_crate::task::Context<'_>,
@@ -1554,16 +1489,7 @@ mod multi_ctrl_polling {
                                 }
                                 __PrivResult::_2(ctrl_event) => {
                                     __RmkSelectEventPollingMultiEventSensorController::Controller(
-                                        PollingMultiEventSensorControllerControllerEventEnum::Config(
-                                            ctrl_event,
-                                        ),
-                                    )
-                                }
-                                __PrivResult::_3(ctrl_event) => {
-                                    __RmkSelectEventPollingMultiEventSensorController::Controller(
-                                        PollingMultiEventSensorControllerControllerEventEnum::Mode(
-                                            ctrl_event,
-                                        ),
+                                        ctrl_event,
                                     )
                                 }
                             }
@@ -1592,7 +1518,7 @@ mod multi_ctrl_polling {
         }
     }
 }
-mod multi_ctrl_reversed {
+mod multi_event_reversed {
     use super::{ConfigEvent, ModeEvent, SensorEvent, controller, input_device};
     pub struct ReversedMultiEventSensorController {
         pub threshold: u16,
@@ -1786,24 +1712,21 @@ mod multi_ctrl_reversed {
             use ::rmk::futures::FutureExt;
             enum __RmkSelectEventReversedMultiEventSensorController {
                 Input(SensorEvent),
-                Controller(ReversedMultiEventSensorControllerControllerEventEnum),
+                Controller(<Self as ::rmk::controller::Controller>::Event),
             }
-            let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
-            let mut ctrl_sub1 = <ModeEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
+            let mut ctrl_sub = <<Self as ::rmk::controller::Controller>::Event as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
             loop {
                 let select_result = {
                     {
                         use ::futures_util::__private as __futures_crate;
                         {
-                            enum __PrivResult<_0, _1, _2> {
+                            enum __PrivResult<_0, _1> {
                                 _0(_0),
                                 _1(_1),
-                                _2(_2),
                             }
                             let __select_result = {
                                 let mut _0 = self.read_event().fuse();
-                                let mut _1 = ctrl_sub0.next_event().fuse();
-                                let mut _2 = ctrl_sub1.next_event().fuse();
+                                let mut _1 = ctrl_sub.next_event().fuse();
                                 let mut __poll_fn = |
                                     __cx: &mut __futures_crate::task::Context<'_>|
                                 {
@@ -1858,32 +1781,7 @@ mod multi_ctrl_reversed {
                                     ) -> __futures_crate::Option<
                                             __futures_crate::task::Poll<_>,
                                         > = &mut _1;
-                                    let mut _2 = |
-                                        __cx: &mut __futures_crate::task::Context<'_>|
-                                    {
-                                        let mut _2 = unsafe {
-                                            __futures_crate::Pin::new_unchecked(&mut _2)
-                                        };
-                                        if __futures_crate::future::FusedFuture::is_terminated(
-                                            &_2,
-                                        ) {
-                                            __futures_crate::None
-                                        } else {
-                                            __futures_crate::Some(
-                                                __futures_crate::future::FutureExt::poll_unpin(
-                                                        &mut _2,
-                                                        __cx,
-                                                    )
-                                                    .map(__PrivResult::_2),
-                                            )
-                                        }
-                                    };
-                                    let _2: &mut dyn FnMut(
-                                        &mut __futures_crate::task::Context<'_>,
-                                    ) -> __futures_crate::Option<
-                                            __futures_crate::task::Poll<_>,
-                                        > = &mut _2;
-                                    let mut __select_arr = [_0, _1, _2];
+                                    let mut __select_arr = [_0, _1];
                                     for poller in &mut __select_arr {
                                         let poller: &mut &mut dyn FnMut(
                                             &mut __futures_crate::task::Context<'_>,
@@ -1923,16 +1821,7 @@ mod multi_ctrl_reversed {
                                 }
                                 __PrivResult::_1(ctrl_event) => {
                                     __RmkSelectEventReversedMultiEventSensorController::Controller(
-                                        ReversedMultiEventSensorControllerControllerEventEnum::Config(
-                                            ctrl_event,
-                                        ),
-                                    )
-                                }
-                                __PrivResult::_2(ctrl_event) => {
-                                    __RmkSelectEventReversedMultiEventSensorController::Controller(
-                                        ReversedMultiEventSensorControllerControllerEventEnum::Mode(
-                                            ctrl_event,
-                                        ),
+                                        ctrl_event,
                                     )
                                 }
                             }
@@ -1957,7 +1846,7 @@ mod multi_ctrl_reversed {
         }
     }
 }
-mod multi_ctrl_reversed_polling {
+mod multi_event_reversed_polling {
     use super::{ConfigEvent, ModeEvent, SensorEvent, controller, input_device};
     pub struct ReversedPollingMultiEventSensorController {
         pub threshold: u16,
@@ -2165,11 +2054,10 @@ mod multi_ctrl_reversed_polling {
             use ::rmk::controller::PollingController;
             enum __RmkSelectEventReversedPollingMultiEventSensorController {
                 Input(SensorEvent),
-                Controller(ReversedPollingMultiEventSensorControllerControllerEventEnum),
+                Controller(<Self as ::rmk::controller::Controller>::Event),
                 Timer,
             }
-            let mut ctrl_sub0 = <ConfigEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
-            let mut ctrl_sub1 = <ModeEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
+            let mut ctrl_sub = <<Self as ::rmk::controller::Controller>::Event as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
             let mut last = ::embassy_time::Instant::now();
             loop {
                 let elapsed = last.elapsed();
@@ -2183,17 +2071,15 @@ mod multi_ctrl_reversed_polling {
                     {
                         use ::futures_util::__private as __futures_crate;
                         {
-                            enum __PrivResult<_0, _1, _2, _3> {
+                            enum __PrivResult<_0, _1, _2> {
                                 _0(_0),
                                 _1(_1),
                                 _2(_2),
-                                _3(_3),
                             }
                             let __select_result = {
                                 let mut _0 = timer.fuse();
                                 let mut _1 = self.read_event().fuse();
-                                let mut _2 = ctrl_sub0.next_event().fuse();
-                                let mut _3 = ctrl_sub1.next_event().fuse();
+                                let mut _2 = ctrl_sub.next_event().fuse();
                                 let mut __poll_fn = |
                                     __cx: &mut __futures_crate::task::Context<'_>|
                                 {
@@ -2273,32 +2159,7 @@ mod multi_ctrl_reversed_polling {
                                     ) -> __futures_crate::Option<
                                             __futures_crate::task::Poll<_>,
                                         > = &mut _2;
-                                    let mut _3 = |
-                                        __cx: &mut __futures_crate::task::Context<'_>|
-                                    {
-                                        let mut _3 = unsafe {
-                                            __futures_crate::Pin::new_unchecked(&mut _3)
-                                        };
-                                        if __futures_crate::future::FusedFuture::is_terminated(
-                                            &_3,
-                                        ) {
-                                            __futures_crate::None
-                                        } else {
-                                            __futures_crate::Some(
-                                                __futures_crate::future::FutureExt::poll_unpin(
-                                                        &mut _3,
-                                                        __cx,
-                                                    )
-                                                    .map(__PrivResult::_3),
-                                            )
-                                        }
-                                    };
-                                    let _3: &mut dyn FnMut(
-                                        &mut __futures_crate::task::Context<'_>,
-                                    ) -> __futures_crate::Option<
-                                            __futures_crate::task::Poll<_>,
-                                        > = &mut _3;
-                                    let mut __select_arr = [_0, _1, _2, _3];
+                                    let mut __select_arr = [_0, _1, _2];
                                     for poller in &mut __select_arr {
                                         let poller: &mut &mut dyn FnMut(
                                             &mut __futures_crate::task::Context<'_>,
@@ -2341,16 +2202,7 @@ mod multi_ctrl_reversed_polling {
                                 }
                                 __PrivResult::_2(ctrl_event) => {
                                     __RmkSelectEventReversedPollingMultiEventSensorController::Controller(
-                                        ReversedPollingMultiEventSensorControllerControllerEventEnum::Config(
-                                            ctrl_event,
-                                        ),
-                                    )
-                                }
-                                __PrivResult::_3(ctrl_event) => {
-                                    __RmkSelectEventReversedPollingMultiEventSensorController::Controller(
-                                        ReversedPollingMultiEventSensorControllerControllerEventEnum::Mode(
-                                            ctrl_event,
-                                        ),
+                                        ctrl_event,
                                     )
                                 }
                             }

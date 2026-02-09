@@ -1,5 +1,4 @@
 use rmk_macro::{InputEvent, input_device};
-#[input_event]
 pub struct PointingEvent {}
 #[automatically_derived]
 #[doc(hidden)]
@@ -20,7 +19,6 @@ impl ::core::fmt::Debug for PointingEvent {
         ::core::fmt::Formatter::write_str(f, "PointingEvent")
     }
 }
-#[input_event]
 pub struct BatteryEvent {
     pub level: u8,
 }
@@ -132,33 +130,61 @@ impl ::core::fmt::Debug for NrfAdcEvent {
         }
     }
 }
-pub struct NrfAdc<'a, const PIN_NUM: usize, const EVENT_NUM: usize> {
-    saadc: Saadc<'a, PIN_NUM>,
-    polling_interval: Duration,
-    light_sleep: Option<Duration>,
-    buf: [[i16; PIN_NUM]; 2],
-    event_type: [AnalogEventType; EVENT_NUM],
-    event_state: u8,
-    channel_state: u8,
-    buf_state: bool,
-    adc_state: AdcState,
-    active_instant: Instant,
-}
-impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> ::rmk::input_device::InputDevice
-for NrfAdc<'a, PIN_NUM, EVENT_NUM> {
-    type Event = NrfAdcEvent;
-    async fn read_event(&mut self) -> Self::Event {
-        self.read_nrf_adc_event().await
+mod basic {
+    use super::{BatteryEvent, input_device};
+    pub struct BatteryReader {
+        pub pin: u8,
+    }
+    impl ::rmk::input_device::InputDevice for BatteryReader {
+        type Event = BatteryEvent;
+        async fn read_event(&mut self) -> Self::Event {
+            self.read_battery_event().await
+        }
+    }
+    impl ::rmk::input_device::Runnable for BatteryReader {
+        async fn run(&mut self) -> ! {
+            use ::rmk::event::publish_input_event_async;
+            use ::rmk::input_device::InputDevice;
+            loop {
+                let event = self.read_event().await;
+                publish_input_event_async(event).await;
+            }
+        }
     }
 }
-impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> ::rmk::input_device::Runnable
-for NrfAdc<'a, PIN_NUM, EVENT_NUM> {
-    async fn run(&mut self) -> ! {
-        use ::rmk::event::publish_input_event_async;
-        use ::rmk::input_device::InputDevice;
-        loop {
-            let event = self.read_event().await;
-            publish_input_event_async(event).await;
+mod multi_event {
+    use super::{NrfAdcEvent, input_device};
+    pub struct NrfAdc<'a, const PIN_NUM: usize, const EVENT_NUM: usize> {
+        saadc: Saadc<'a, PIN_NUM>,
+        polling_interval: Duration,
+        light_sleep: Option<Duration>,
+        buf: [[i16; PIN_NUM]; 2],
+        event_type: [AnalogEventType; EVENT_NUM],
+        event_state: u8,
+        channel_state: u8,
+        buf_state: bool,
+        adc_state: AdcState,
+        active_instant: Instant,
+    }
+    impl<
+        'a,
+        const PIN_NUM: usize,
+        const EVENT_NUM: usize,
+    > ::rmk::input_device::InputDevice for NrfAdc<'a, PIN_NUM, EVENT_NUM> {
+        type Event = NrfAdcEvent;
+        async fn read_event(&mut self) -> Self::Event {
+            self.read_nrf_adc_event().await
+        }
+    }
+    impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> ::rmk::input_device::Runnable
+    for NrfAdc<'a, PIN_NUM, EVENT_NUM> {
+        async fn run(&mut self) -> ! {
+            use ::rmk::event::publish_input_event_async;
+            use ::rmk::input_device::InputDevice;
+            loop {
+                let event = self.read_event().await;
+                publish_input_event_async(event).await;
+            }
         }
     }
 }

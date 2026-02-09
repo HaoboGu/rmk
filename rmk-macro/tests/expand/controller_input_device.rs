@@ -57,7 +57,7 @@ mod reversed_polling {
     }
 }
 
-mod multi_ctrl {
+mod multi_event {
     use super::{ConfigEvent, ModeEvent, SensorEvent, controller, input_device};
 
     #[input_device(publish = SensorEvent)]
@@ -68,7 +68,7 @@ mod multi_ctrl {
     }
 }
 
-mod multi_ctrl_polling {
+mod multi_event_polling {
     use super::{ConfigEvent, ModeEvent, SensorEvent, controller, input_device};
 
     #[input_device(publish = SensorEvent)]
@@ -80,7 +80,7 @@ mod multi_ctrl_polling {
     }
 }
 
-mod multi_ctrl_reversed {
+mod multi_event_reversed {
     use super::{ConfigEvent, ModeEvent, SensorEvent, controller, input_device};
 
     #[controller(subscribe = [ConfigEvent, ModeEvent])]
@@ -91,7 +91,7 @@ mod multi_ctrl_reversed {
     }
 }
 
-mod multi_ctrl_reversed_polling {
+mod multi_event_reversed_polling {
     use super::{ConfigEvent, ModeEvent, SensorEvent, controller, input_device};
 
     #[controller(subscribe = [ConfigEvent, ModeEvent], poll_interval = 40)]

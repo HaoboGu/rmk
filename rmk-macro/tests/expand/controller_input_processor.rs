@@ -55,7 +55,7 @@ mod reversed_polling {
     pub struct ReversedPollingHybridProcessorController;
 }
 
-mod multi_ctrl {
+mod multi_event {
     use super::{ConfigEvent, EncoderEvent, KeyEvent, ModeEvent, controller, input_processor};
 
     #[input_processor(subscribe = [KeyEvent, EncoderEvent])]
@@ -63,7 +63,7 @@ mod multi_ctrl {
     pub struct MultiControllerHybridProcessor;
 }
 
-mod multi_ctrl_polling {
+mod multi_event_polling {
     use super::{ConfigEvent, EncoderEvent, KeyEvent, ModeEvent, controller, input_processor};
 
     #[input_processor(subscribe = [KeyEvent, EncoderEvent])]
@@ -71,7 +71,7 @@ mod multi_ctrl_polling {
     pub struct PollingMultiControllerHybridProcessor;
 }
 
-mod multi_ctrl_reversed {
+mod multi_event_reversed {
     use super::{ConfigEvent, EncoderEvent, KeyEvent, ModeEvent, controller, input_processor};
 
     #[controller(subscribe = [ConfigEvent, ModeEvent])]
@@ -79,7 +79,7 @@ mod multi_ctrl_reversed {
     pub struct ReversedMultiControllerHybridProcessor;
 }
 
-mod multi_ctrl_reversed_polling {
+mod multi_event_reversed_polling {
     use super::{ConfigEvent, EncoderEvent, KeyEvent, ModeEvent, controller, input_processor};
 
     #[controller(subscribe = [ConfigEvent, ModeEvent], poll_interval = 20)]
