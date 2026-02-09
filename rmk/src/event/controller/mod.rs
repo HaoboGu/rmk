@@ -1,7 +1,8 @@
-//! Controller event system
+//! Controller events
 //!
-//! This module provides the infrastructure for type-safe controller events and built-in controller events.
-//! Each event type has its own dedicated channel and can be subscribed to independently.
+//! This module contains event types for keyboard state changes, LED indicators,
+//! connection status, and other system-level events.
+
 #[cfg(feature = "_ble")]
 mod ble;
 mod connection;
@@ -22,21 +23,3 @@ pub use power::BatteryStateEvent;
 pub use split::{CentralConnectedEvent, PeripheralConnectedEvent};
 #[cfg(all(feature = "split", feature = "_ble"))]
 pub use split::{ClearPeerEvent, PeripheralBatteryEvent};
-
-use crate::event::{
-    AsyncEventPublisher as _, AsyncPublishableControllerEvent, EventPublisher as _, PublishableControllerEvent,
-};
-
-/// Publish a controller event (non-blocking, may drop if buffer full)
-///
-/// Example: `publish_controller_event(KeyEvent { .. })`
-pub fn publish_controller_event<E: PublishableControllerEvent>(e: E) {
-    E::controller_publisher().publish(e);
-}
-
-/// Publish event with backpressure (waits if buffer full, requires `channel_size`)
-///
-/// Example: `publish_controller_event_async(KeyEvent { pressed: true }).await`
-pub async fn publish_controller_event_async<E: AsyncPublishableControllerEvent>(e: E) {
-    E::controller_publisher_async().publish_async(e).await;
-}
