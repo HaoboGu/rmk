@@ -218,3 +218,41 @@ impl ::rmk::input_device::Runnable for LedController {
         self.event_loop().await
     }
 }
+pub struct SingleEventController {
+    pub pin: u8,
+}
+impl ::rmk::controller::Controller for SingleEventController {
+    type Event = LedStateEvent;
+    async fn process_event(&mut self, event: Self::Event) {
+        self.on_led_state_event(event).await
+    }
+}
+impl ::rmk::input_device::Runnable for SingleEventController {
+    async fn run(&mut self) -> ! {
+        use ::rmk::controller::EventController;
+        self.event_loop().await
+    }
+}
+pub struct PollingLedController {
+    pub pin: u8,
+}
+impl ::rmk::controller::Controller for PollingLedController {
+    type Event = LedStateEvent;
+    async fn process_event(&mut self, event: Self::Event) {
+        self.on_led_state_event(event).await
+    }
+}
+impl ::rmk::controller::PollingController for PollingLedController {
+    fn interval(&self) -> ::embassy_time::Duration {
+        ::embassy_time::Duration::from_millis(100u64)
+    }
+    async fn update(&mut self) {
+        self.poll().await
+    }
+}
+impl ::rmk::input_device::Runnable for PollingLedController {
+    async fn run(&mut self) -> ! {
+        use ::rmk::controller::PollingController;
+        self.polling_loop().await
+    }
+}
