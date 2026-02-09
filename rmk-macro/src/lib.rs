@@ -1,31 +1,14 @@
-mod behavior;
-mod bind_interrupt;
-mod ble;
-mod chip_init;
-mod comm;
-mod controller;
-mod entry;
-mod feature;
-mod flash;
-mod gpio_config;
-mod import;
-mod input;
-mod input_device;
-mod keyboard;
-mod keyboard_config;
-mod layout;
-mod matrix;
-mod runnable;
-mod split;
+mod codegen;
+mod event_macros;
 mod utils;
 
 use darling::FromMeta;
 use darling::ast::NestedMeta;
 use proc_macro::TokenStream;
-use split::peripheral::parse_split_peripheral_mod;
+use codegen::split::peripheral::parse_split_peripheral_mod;
 use syn::parse_macro_input;
 
-use crate::keyboard::parse_keyboard_mod;
+use crate::codegen::parse_keyboard_mod;
 
 #[proc_macro_attribute]
 pub fn rmk_keyboard(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -86,7 +69,7 @@ pub fn rmk_peripheral(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn controller_event(attr: TokenStream, item: TokenStream) -> TokenStream {
-    controller::event::controller_event_impl(attr, item)
+    event_macros::controller_event::controller_event_impl(attr, item)
 }
 
 /// Macro for defining controllers that subscribe to multiple events.
@@ -109,7 +92,7 @@ pub fn controller_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn controller(attr: TokenStream, item: TokenStream) -> TokenStream {
-    controller::controller_impl(attr, item)
+    event_macros::controller::controller_impl(attr, item)
 }
 
 /// Macro for defining input events.
@@ -133,7 +116,7 @@ pub fn controller(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn input_event(attr: TokenStream, item: TokenStream) -> TokenStream {
-    input::event::input_event_impl(attr, item)
+    event_macros::input_event::input_event_impl(attr, item)
 }
 
 /// Macro for defining input processors that subscribe to multiple events.
@@ -164,7 +147,7 @@ pub fn input_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn input_processor(attr: TokenStream, item: TokenStream) -> TokenStream {
-    input::processor::input_processor_impl(attr, item)
+    event_macros::input_processor::input_processor_impl(attr, item)
 }
 
 /// Marker attribute for coordinating Runnable generation between macros.
@@ -202,7 +185,7 @@ pub fn runnable_generated(_attr: TokenStream, item: TokenStream) -> TokenStream 
 /// ```
 #[proc_macro_derive(InputEvent)]
 pub fn input_event_derive(item: TokenStream) -> TokenStream {
-    input::event_derive::input_event_derive_impl(item)
+    event_macros::input_event_derive::input_event_derive_impl(item)
 }
 
 /// Macro for defining input devices that publish events.
@@ -229,5 +212,5 @@ pub fn input_event_derive(item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn input_device(attr: TokenStream, item: TokenStream) -> TokenStream {
-    input::device::input_device_impl(attr, item)
+    event_macros::input_device::input_device_impl(attr, item)
 }
