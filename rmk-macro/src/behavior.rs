@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use quote::quote;
 use rmk_config::{
     CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, MorseActionPair, MorseConfig,
-    MorseProfile, MorsesConfig, OneShotConfig, TriLayerConfig,
+    MorseProfile, MorsesConfig, OneShotConfig, OneShotModifiersConfig, TriLayerConfig,
 };
 
 use crate::layout::{get_key_with_alias, parse_key};
@@ -40,6 +40,45 @@ fn expand_one_shot(one_shot: &Option<OneShotConfig>) -> proc_macro2::TokenStream
             }
         }
         None => default,
+    }
+}
+
+fn expand_one_shot_modifiers(
+    one_shot_modifiers: &Option<OneShotModifiersConfig>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> proc_macro2::TokenStream {
+    match one_shot_modifiers {
+        Some(one_shot_modifier) => {
+            let activate_on_keypress = match one_shot_modifier.activate_on_keypress {
+                Some(value) => quote! { activate_on_keypress: #value, },
+                None => quote! {},
+            };
+
+            let send_on_second_press = match one_shot_modifier.send_on_second_press {
+                Some(value) => quote! { send_on_second_press: #value, },
+                None => quote! {},
+            };
+
+            let release_modifier_keys = match &one_shot_modifier.release_modifier_keys {
+                Some(keys) => {
+                    let parsed_keys = keys
+                        .iter()
+                        .map(|key_str| parse_key(key_str.clone(), profiles));
+                    quote! { release_modifier_keys: ::rmk::heapless::Vec::from_iter([#(#parsed_keys),*]), }
+                }
+                None => quote! {},
+            };
+
+            quote! {
+                ::rmk::config::OneShotModifiersConfig {
+                    #activate_on_keypress
+                    #send_on_second_press
+                    #release_modifier_keys
+                    ..Default::default()
+                }
+            }
+        }
+        None => quote! { ::rmk::config::OneShotModifiersConfig::default() },
     }
 }
 
@@ -521,6 +560,7 @@ pub(crate) fn expand_behavior_config(
     let behavior = keyboard_config.get_behavior_config().unwrap();
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
     let one_shot = expand_one_shot(&behavior.one_shot);
+    let one_shot_modifiers = expand_one_shot_modifiers(&behavior.one_shot_modifiers, profiles);
     let combos = expand_combos(&behavior.combo, profiles);
     let macros = expand_macros(&behavior.macros);
     let forks = expand_forks(&behavior.fork, profiles);
@@ -531,6 +571,7 @@ pub(crate) fn expand_behavior_config(
         let mut behavior_config = ::rmk::config::BehaviorConfig {
             tri_layer: #tri_layer,
             one_shot: #one_shot,
+            one_shot_modifiers: #one_shot_modifiers,
             combo: #combos,
             fork: #forks,
             morse: #morse,
