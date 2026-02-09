@@ -6,21 +6,21 @@ use rmk_config::{
 };
 use syn::ItemMod;
 
+use super::central::expand_serial_init;
 use crate::codegen::chip::chip_init::expand_chip_init;
-use crate::codegen::hw_controller::expand_controller_init;
-use crate::codegen::entry::join_all_tasks;
-use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
 use crate::codegen::chip::flash::expand_flash_init;
 use crate::codegen::chip::gpio::expand_output_initialization;
+use crate::codegen::controller::expand_controller_init;
+use crate::codegen::entry::join_all_tasks;
+use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
 use crate::codegen::import::expand_custom_imports;
-use crate::codegen::hw_device::adc::expand_adc_device;
-use crate::codegen::hw_device::encoder::expand_encoder_device;
-use crate::codegen::hw_device::pmw33xx::expand_pmw33xx_device;
-use crate::codegen::hw_device::pmw3610::expand_pmw3610_device;
-use crate::codegen::orchestrator::get_debouncer_type;
+use crate::codegen::input_device::adc::expand_adc_device;
+use crate::codegen::input_device::encoder::expand_encoder_device;
+use crate::codegen::input_device::pmw33xx::expand_pmw33xx_device;
+use crate::codegen::input_device::pmw3610::expand_pmw3610_device;
 use crate::codegen::keyboard_config::read_keyboard_toml_config;
 use crate::codegen::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
-use super::central::expand_serial_init;
+use crate::codegen::orchestrator::get_debouncer_type;
 
 /// Parse split peripheral mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_split_peripheral_mod(
