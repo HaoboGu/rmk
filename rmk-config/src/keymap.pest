@@ -4,7 +4,7 @@
 WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
 
 // Optional comments
-COMMENT = _{ "//" ~ (!"\n" ~ ANY)* } 
+COMMENT = _{ "//" ~ (!"\n" ~ ANY)* }
 
 // --- Helper Rules ---
 
@@ -23,7 +23,7 @@ number = @{ ASCII_DIGIT+ }
 layer_number = @{ number }
 layer_name = @{ loose_identifier }
 
-// The order is important here, as we want to match the number first 
+// The order is important here, as we want to match the number first
 layer_reference = _{ layer_number | layer_name }
 
 // Modifier Names
@@ -46,7 +46,7 @@ no_action = @{ ^"No" ~ !(ASCII_ALPHANUMERIC) } // Case-insensitive "No" not foll
 
 
 // Rule 3: Transparent Key
-transparent_action = @{ ("_")+ | (^"Trns" ~ !ASCII_ALPHANUMERIC) } // One or more underscores or "Trns" followed by non-alphanumeric 
+transparent_action = @{ ("_")+ | (^"Trns" ~ !ASCII_ALPHANUMERIC) } // One or more underscores or "Trns" followed by non-alphanumeric
 
 // Rule 1: WM(key, modifier) - Key with Modifier
 wm_action = { ^"WM" ~ "(" ~ keycode_name ~ "," ~ modifier_combination ~ ")" }
@@ -99,12 +99,15 @@ morse_action = { (^"TD" | ^"MORSE") ~ "(" ~ number ~ ")" }
 // Rule 9: Macro(n) - Trigger Macro
 trigger_macro_action = { ^"MACRO" ~ "(" ~ number ~ ")" }
 
+// Rule 10: TABBER(modifier) - Tabber Action (holds modifier, taps tab)
+tabber_action = { ^"TABBER" ~ "(" ~ modifier_combination ~ ")" }
+
 // --- Top Level Rules ---
 
 // A single key action entry in the map
 // Order is important: more specific function-like rules first, then aliases/specials, then simple keycodes.
 key_action = _{ // Consume surrounding whitespace/comments implicitly
-    wm_action | osm_action | layer_action | mt_action | th_action | shifted_action | morse_action | trigger_macro_action | no_action | transparent_action | simple_keycode
+    wm_action | osm_action | layer_action | mt_action | th_action | shifted_action | morse_action | trigger_macro_action | tabber_action | no_action | transparent_action | simple_keycode
 }
 
 // The entire key map string: Start, zero or more key actions, End.

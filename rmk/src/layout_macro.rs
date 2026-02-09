@@ -351,6 +351,33 @@ macro_rules! osm {
     };
 }
 
+/// Create a Tabber action for Alt+Tab-like tab/window switching.
+///
+/// This macro creates a key that holds a modifier and presses Tab.
+/// Subsequent presses of Tabber action send only Tab key while the modifier keeps being held.
+///
+/// **Important**: Tabber cannot be used in base layer (layer 0). It requires a
+/// higher layer to provide a cleanup mechanism when returning to layer 0.
+///
+/// # Parameters
+/// - `$m`: `ModifierCombination` to hold while tapping Tab
+///
+/// # Example
+/// ```ignore
+/// // Alt+Tab window switcher
+/// tabber!(ModifierCombination::LALT)
+/// // Gui+Tab (macOS application switcher)
+/// tabber!(ModifierCombination::LGUI)
+/// // Ctrl+Tab (browser tab switcher)
+/// tabber!(ModifierCombination::LCTRL)
+/// ```
+#[macro_export]
+macro_rules! tabber {
+    ($m: expr) => {
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::Tabber($m))
+    };
+}
+
 /// Create a layer toggle action.
 ///
 /// This macro creates a key that toggles a layer on/off with each press.

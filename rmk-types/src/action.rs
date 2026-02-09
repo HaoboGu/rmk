@@ -328,6 +328,10 @@ pub enum Action {
     Special(SpecialKey),
     /// User Keys
     User(u8),
+    /// Tabber action for Alt+Tab-like behavior
+    /// Holds the specified modifier while repeatedly tapping Tab
+    /// Cannot be used in base layer (layer 0) - requires higher layer for cleanup mechanism
+    Tabber(ModifierCombination),
 }
 
 /// Actions for controlling the keyboard or changing the keyboard's state, for example, enable/disable a particular function

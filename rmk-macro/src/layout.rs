@@ -247,6 +247,25 @@ pub(crate) fn parse_key(
                 );
             }
         }
+        s if s.to_lowercase().starts_with("tabber(") => {
+            let prefix = s.get(0..7).unwrap();
+            if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
+                let modifiers = parse_modifiers(internal);
+
+                if modifiers.is_empty() {
+                    panic!(
+                        "\n❌ keyboard.toml: modifier in Tabber(modifier) is not valid! Please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
+                    );
+                }
+                quote! {
+                    ::rmk::tabber!(#modifiers)
+                }
+            } else {
+                panic!(
+                    "\n❌ keyboard.toml: Tabber(modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
+                );
+            }
+        }
         s if s.to_lowercase().starts_with("lm(") => {
             let prefix = s.get(0..3).unwrap();
             if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
