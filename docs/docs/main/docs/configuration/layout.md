@@ -139,7 +139,9 @@ The definitions of these operations are the same as QMK's; you can find them [he
 
 8. For Morse/Tap Dance, use `TD(n)` or `Morse(n)`, they are same
 
-9. For keyboard macros, use `Macro(n)`
+9. For [keyboard macros](./keymap_configuration/keyboard_macros.md), use `Macro(n)`
+
+10. For [Tabber](./keymap_configuration/tabber.md), use `TABBER(modifier)`
 
 ## Aliases
 

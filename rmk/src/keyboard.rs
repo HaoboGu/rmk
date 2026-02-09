@@ -28,6 +28,7 @@ use crate::hid::Report;
 use crate::input_device::Runnable;
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
+use crate::keyboard::tabber::TabberState;
 use crate::keyboard_macros::MacroOperation;
 use crate::keymap::KeyMap;
 use crate::morse::{MorsePattern, TAP};
@@ -40,6 +41,7 @@ pub(crate) mod held_buffer;
 pub(crate) mod morse;
 pub(crate) mod mouse;
 pub(crate) mod oneshot;
+pub(crate) mod tabber;
 
 const HOLD_BUFFER_SIZE: usize = 16;
 
@@ -211,6 +213,9 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// Caps Word state machine
     caps_word: CapsWordState,
 
+    /// Tabber state tracking
+    tabber_state: TabberState<ModifierCombination>,
+
     /// The modifiers coming from (last) Action::KeyWithModifier
     with_modifiers: ModifierCombination,
 
@@ -263,6 +268,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
             caps_word: CapsWordState::default(),
+            tabber_state: TabberState::default(),
             with_modifiers: ModifierCombination::default(),
             macro_texting: false,
             macro_caps: false,
@@ -1148,18 +1154,22 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         match action {
             Action::No => {}
             Action::Key(key) => self.process_action_key(key, event).await,
-            Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, event),
+            Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, event).await,
             Action::LayerOff(layer_num) => {
                 // Turn off a layer temporarily when the key is pressed
                 // Reactivate the layer after the key is released
                 if event.pressed {
                     self.keymap.borrow_mut().deactivate_layer(layer_num);
+                    // Clean up Tabber state when layer changes
+                    self.cleanup_tabber_on_layer_change().await;
                 }
             }
             Action::LayerToggle(layer_num) => {
                 // Toggle a layer when the key is release
                 if !event.pressed {
                     self.keymap.borrow_mut().toggle_layer(layer_num);
+                    // Clean up Tabber state when layer changes
+                    self.cleanup_tabber_on_layer_change().await;
                 }
             }
             Action::LayerToggleOnly(layer_num) => {
@@ -1174,11 +1184,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                     // Activate the target layer
                     self.keymap.borrow_mut().activate_layer(layer_num);
+                    // Clean up Tabber state when layers change
+                    self.cleanup_tabber_on_layer_change().await;
                 }
             }
             Action::DefaultLayer(layer_num) => {
                 // Set the default layer
                 self.keymap.borrow_mut().set_default_layer(layer_num);
+                // Clean up Tabber state when default layer changes
+                self.cleanup_tabber_on_layer_change().await;
             }
             Action::Modifier(modifiers) => {
                 if event.pressed {
@@ -1213,7 +1227,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     // they will be "released" the same time as the key (in same hid report)
                     self.held_modifiers &= !(modifiers);
                 }
-                self.process_action_layer_switch(layer_num, event);
+                self.process_action_layer_switch(layer_num, event).await;
                 self.send_keyboard_report_with_resolved_modifiers(event.pressed).await
             }
             Action::OneShotLayer(l) => {
@@ -1231,14 +1245,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             Action::KeyboardControl(c) => self.process_action_keyboard_control(c, event).await,
             Action::Special(special_key) => self.process_action_special(special_key, event).await,
             Action::User(id) => self.process_user(id, event).await,
+            Action::Tabber(modifiers) => {
+                self.process_action_tabber(modifiers, event).await;
+            }
             Action::TriLayerLower => {
                 // Tri-layer lower, turn layer 1 on and update layer state
-                self.process_action_layer_switch(1, event);
+                self.process_action_layer_switch(1, event).await;
                 self.keymap.borrow_mut().update_fn_layer_state();
             }
             Action::TriLayerUpper => {
                 // Tri-layer upper, turn layer 2 on and update layer state
-                self.process_action_layer_switch(2, event);
+                self.process_action_layer_switch(2, event).await;
                 self.keymap.borrow_mut().update_fn_layer_state();
             }
         }
@@ -1363,6 +1380,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Calculates the combined effect of "explicit modifiers":
     /// - registered modifiers
     /// - one-shot modifiers
+    /// - tabber modifiers (when active)
     pub fn resolve_explicit_modifiers(&self, pressed: bool) -> ModifierCombination {
         // if a one-shot modifier is active, decorate the hid report of keypress with those modifiers
         let mut result = self.held_modifiers;
@@ -1379,6 +1397,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // the "modifier released" change in a separate hid report
             result |= osm;
         };
+
+        // Add tabber modifiers if tabber is active
+        if let Some(tabber_mods) = self.tabber_state.value() {
+            result |= *tabber_mods;
+        }
 
         result
     }
@@ -1542,12 +1565,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Process layer switch action.
-    fn process_action_layer_switch(&mut self, layer_num: u8, event: KeyboardEvent) {
+    async fn process_action_layer_switch(&mut self, layer_num: u8, event: KeyboardEvent) {
         // Change layer state only when the key's state is changed
         if event.pressed {
             self.keymap.borrow_mut().activate_layer(layer_num);
         } else {
             self.keymap.borrow_mut().deactivate_layer(layer_num);
+            // Clean up Tabber state when layer changes
+            self.cleanup_tabber_on_layer_change().await;
         }
     }
 
@@ -2582,7 +2607,7 @@ mod test {
                 let mut keyboard = create_test_keyboard();
 
                 // Activate layer 1
-                keyboard.process_action_layer_switch(1, KeyboardEvent::key(0, 0, true));
+                keyboard.process_action_layer_switch(1, KeyboardEvent::key(0, 0, true)).await;
 
                 // Press Transparent key (Q on lower layer)
                 keyboard.process_inner(KeyboardEvent::key(1, 1, true)).await;
