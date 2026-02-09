@@ -14,3 +14,13 @@ pub struct BrightnessEvent {
 pub struct LedController {
     pub pin: u8,
 }
+
+#[controller(subscribe = [LedStateEvent])]
+pub struct SingleEventController {
+    pub pin: u8,
+}
+
+#[controller(subscribe = [LedStateEvent], poll_interval = 100)]
+pub struct PollingLedController {
+    pub pin: u8,
+}

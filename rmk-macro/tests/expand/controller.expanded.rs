@@ -1,86 +1,79 @@
-use rmk_macro::input_processor;
-pub struct KeyEvent {
-    pub row: u8,
-    pub col: u8,
-    pub pressed: bool,
+use rmk_macro::controller;
+pub struct LedStateEvent {
+    pub on: bool,
 }
 #[automatically_derived]
 #[doc(hidden)]
-unsafe impl ::core::clone::TrivialClone for KeyEvent {}
+unsafe impl ::core::clone::TrivialClone for LedStateEvent {}
 #[automatically_derived]
-impl ::core::clone::Clone for KeyEvent {
+impl ::core::clone::Clone for LedStateEvent {
     #[inline]
-    fn clone(&self) -> KeyEvent {
-        let _: ::core::clone::AssertParamIsClone<u8>;
+    fn clone(&self) -> LedStateEvent {
         let _: ::core::clone::AssertParamIsClone<bool>;
         *self
     }
 }
 #[automatically_derived]
-impl ::core::marker::Copy for KeyEvent {}
+impl ::core::marker::Copy for LedStateEvent {}
 #[automatically_derived]
-impl ::core::fmt::Debug for KeyEvent {
+impl ::core::fmt::Debug for LedStateEvent {
     #[inline]
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        ::core::fmt::Formatter::debug_struct_field3_finish(
+        ::core::fmt::Formatter::debug_struct_field1_finish(
             f,
-            "KeyEvent",
-            "row",
-            &self.row,
-            "col",
-            &self.col,
-            "pressed",
-            &&self.pressed,
+            "LedStateEvent",
+            "on",
+            &&self.on,
         )
     }
 }
-pub struct EncoderEvent {
-    pub index: u8,
-    pub direction: i8,
+pub struct BrightnessEvent {
+    pub level: u8,
 }
 #[automatically_derived]
 #[doc(hidden)]
-unsafe impl ::core::clone::TrivialClone for EncoderEvent {}
+unsafe impl ::core::clone::TrivialClone for BrightnessEvent {}
 #[automatically_derived]
-impl ::core::clone::Clone for EncoderEvent {
+impl ::core::clone::Clone for BrightnessEvent {
     #[inline]
-    fn clone(&self) -> EncoderEvent {
+    fn clone(&self) -> BrightnessEvent {
         let _: ::core::clone::AssertParamIsClone<u8>;
-        let _: ::core::clone::AssertParamIsClone<i8>;
         *self
     }
 }
 #[automatically_derived]
-impl ::core::marker::Copy for EncoderEvent {}
+impl ::core::marker::Copy for BrightnessEvent {}
 #[automatically_derived]
-impl ::core::fmt::Debug for EncoderEvent {
+impl ::core::fmt::Debug for BrightnessEvent {
     #[inline]
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        ::core::fmt::Formatter::debug_struct_field2_finish(
+        ::core::fmt::Formatter::debug_struct_field1_finish(
             f,
-            "EncoderEvent",
-            "index",
-            &self.index,
-            "direction",
-            &&self.direction,
+            "BrightnessEvent",
+            "level",
+            &&self.level,
         )
     }
 }
-pub struct KeyProcessor;
-pub enum KeyProcessorInputEventEnum {
-    Key(KeyEvent),
-    Encoder(EncoderEvent),
+pub struct LedController {
+    pub pin: u8,
+}
+pub enum LedControllerControllerEventEnum {
+    LedState(LedStateEvent),
+    Brightness(BrightnessEvent),
 }
 #[automatically_derived]
-impl ::core::clone::Clone for KeyProcessorInputEventEnum {
+impl ::core::clone::Clone for LedControllerControllerEventEnum {
     #[inline]
-    fn clone(&self) -> KeyProcessorInputEventEnum {
+    fn clone(&self) -> LedControllerControllerEventEnum {
         match self {
-            KeyProcessorInputEventEnum::Key(__self_0) => {
-                KeyProcessorInputEventEnum::Key(::core::clone::Clone::clone(__self_0))
+            LedControllerControllerEventEnum::LedState(__self_0) => {
+                LedControllerControllerEventEnum::LedState(
+                    ::core::clone::Clone::clone(__self_0),
+                )
             }
-            KeyProcessorInputEventEnum::Encoder(__self_0) => {
-                KeyProcessorInputEventEnum::Encoder(
+            LedControllerControllerEventEnum::Brightness(__self_0) => {
+                LedControllerControllerEventEnum::Brightness(
                     ::core::clone::Clone::clone(__self_0),
                 )
             }
@@ -88,21 +81,21 @@ impl ::core::clone::Clone for KeyProcessorInputEventEnum {
     }
 }
 /// Event subscriber for aggregated events
-pub struct KeyProcessorInputEventSubscriber {
-    sub0: <KeyEvent as ::rmk::event::SubscribableInputEvent>::Subscriber,
-    sub1: <EncoderEvent as ::rmk::event::SubscribableInputEvent>::Subscriber,
+pub struct LedControllerControllerEventSubscriber {
+    sub0: <LedStateEvent as ::rmk::event::SubscribableControllerEvent>::Subscriber,
+    sub1: <BrightnessEvent as ::rmk::event::SubscribableControllerEvent>::Subscriber,
 }
-impl KeyProcessorInputEventSubscriber {
+impl LedControllerControllerEventSubscriber {
     /// Create a new event subscriber
     pub fn new() -> Self {
         Self {
-            sub0: <KeyEvent as ::rmk::event::SubscribableInputEvent>::input_subscriber(),
-            sub1: <EncoderEvent as ::rmk::event::SubscribableInputEvent>::input_subscriber(),
+            sub0: <LedStateEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber(),
+            sub1: <BrightnessEvent as ::rmk::event::SubscribableControllerEvent>::controller_subscriber(),
         }
     }
 }
-impl ::rmk::event::EventSubscriber for KeyProcessorInputEventSubscriber {
-    type Event = KeyProcessorInputEventEnum;
+impl ::rmk::event::EventSubscriber for LedControllerControllerEventSubscriber {
+    type Event = LedControllerControllerEventEnum;
     async fn next_event(&mut self) -> Self::Event {
         use ::rmk::event::EventSubscriber;
         use ::rmk::futures::FutureExt;
@@ -189,33 +182,77 @@ impl ::rmk::event::EventSubscriber for KeyProcessorInputEventSubscriber {
                     __futures_crate::future::poll_fn(__poll_fn).await
                 };
                 match __select_result {
-                    __PrivResult::_0(event) => KeyProcessorInputEventEnum::Key(event),
-                    __PrivResult::_1(event) => KeyProcessorInputEventEnum::Encoder(event),
+                    __PrivResult::_0(event) => {
+                        LedControllerControllerEventEnum::LedState(event)
+                    }
+                    __PrivResult::_1(event) => {
+                        LedControllerControllerEventEnum::Brightness(event)
+                    }
                 }
             }
         }
     }
 }
-impl ::rmk::event::SubscribableInputEvent for KeyProcessorInputEventEnum {
-    type Subscriber = KeyProcessorInputEventSubscriber;
-    fn input_subscriber() -> Self::Subscriber {
-        KeyProcessorInputEventSubscriber::new()
+impl ::rmk::event::SubscribableControllerEvent for LedControllerControllerEventEnum {
+    type Subscriber = LedControllerControllerEventSubscriber;
+    fn controller_subscriber() -> Self::Subscriber {
+        LedControllerControllerEventSubscriber::new()
     }
 }
-impl ::rmk::input_device::Runnable for KeyProcessor {
-    async fn run(&mut self) -> ! {
-        use ::rmk::input_device::InputProcessor;
-        self.process_loop().await
-    }
-}
-impl ::rmk::input_device::InputProcessor for KeyProcessor {
-    type Event = KeyProcessorInputEventEnum;
-    async fn process(&mut self, event: Self::Event) {
+impl ::rmk::controller::Controller for LedController {
+    type Event = LedControllerControllerEventEnum;
+    async fn process_event(&mut self, event: Self::Event) {
         match event {
-            KeyProcessorInputEventEnum::Key(event) => self.on_key_event(event).await,
-            KeyProcessorInputEventEnum::Encoder(event) => {
-                self.on_encoder_event(event).await
+            LedControllerControllerEventEnum::LedState(event) => {
+                self.on_led_state_event(event).await
+            }
+            LedControllerControllerEventEnum::Brightness(event) => {
+                self.on_brightness_event(event).await
             }
         }
+    }
+}
+impl ::rmk::input_device::Runnable for LedController {
+    async fn run(&mut self) -> ! {
+        use ::rmk::controller::EventController;
+        self.event_loop().await
+    }
+}
+pub struct SingleEventController {
+    pub pin: u8,
+}
+impl ::rmk::controller::Controller for SingleEventController {
+    type Event = LedStateEvent;
+    async fn process_event(&mut self, event: Self::Event) {
+        self.on_led_state_event(event).await
+    }
+}
+impl ::rmk::input_device::Runnable for SingleEventController {
+    async fn run(&mut self) -> ! {
+        use ::rmk::controller::EventController;
+        self.event_loop().await
+    }
+}
+pub struct PollingLedController {
+    pub pin: u8,
+}
+impl ::rmk::controller::Controller for PollingLedController {
+    type Event = LedStateEvent;
+    async fn process_event(&mut self, event: Self::Event) {
+        self.on_led_state_event(event).await
+    }
+}
+impl ::rmk::controller::PollingController for PollingLedController {
+    fn interval(&self) -> ::embassy_time::Duration {
+        ::embassy_time::Duration::from_millis(100u64)
+    }
+    async fn update(&mut self) {
+        self.poll().await
+    }
+}
+impl ::rmk::input_device::Runnable for PollingLedController {
+    async fn run(&mut self) -> ! {
+        use ::rmk::controller::PollingController;
+        self.polling_loop().await
     }
 }

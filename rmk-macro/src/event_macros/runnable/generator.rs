@@ -6,7 +6,6 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-use super::naming::generate_unique_variant_names;
 use crate::event_macros::config::{ControllerConfig, InputDeviceConfig, InputProcessorConfig};
 use crate::event_macros::utils::deduplicate_type_generics;
 
@@ -139,37 +138,19 @@ pub fn generate_runnable(
     }
 
     // Handle input_processor.
-    if let Some(processor_config) = input_processor_config {
-        let has_single_proc_event = processor_config.event_types.len() == 1;
-        let proc_enum_name = format_ident!("{}InputEventEnum", struct_name);
-        let proc_variant_names = generate_unique_variant_names(&processor_config.event_types);
+    if input_processor_config.is_some() {
         use_statements.push(quote! { use ::rmk::event::SubscribableInputEvent; });
         use_statements.push(quote! { use ::rmk::input_device::InputProcessor; });
 
-        for (idx, (event_type, variant_name)) in processor_config
-            .event_types
-            .iter()
-            .zip(&proc_variant_names)
-            .enumerate()
-        {
-            let sub_name = format_ident!("proc_sub{}", idx);
-            sub_defs.push(quote! {
-                let mut #sub_name = <#event_type as ::rmk::event::SubscribableInputEvent>::input_subscriber();
-            });
+        sub_defs.push(quote! {
+            let mut proc_sub = <<Self as ::rmk::input_device::InputProcessor>::Event as ::rmk::event::SubscribableInputEvent>::input_subscriber();
+        });
 
-            // For single event, pass the event directly; for multiple events, wrap in enum
-            let process_call = if has_single_proc_event {
-                quote! { self.process(proc_event).await; }
-            } else {
-                quote! { self.process(#proc_enum_name::#variant_name(proc_event)).await; }
-            };
-
-            select_arms.push(quote! {
-                proc_event = #sub_name.next_event().fuse() => {
-                    #process_call
-                }
-            });
-        }
+        select_arms.push(quote! {
+            proc_event = proc_sub.next_event().fuse() => {
+                self.process(proc_event).await;
+            }
+        });
     }
 
     // Handle controller.
@@ -178,52 +159,26 @@ pub fn generate_runnable(
         .and_then(|c| c.poll_interval_ms)
         .is_some();
 
-    if let Some(ctrl_config) = controller_config {
-        let has_single_ctrl_event = ctrl_config.event_types.len() == 1;
-        let ctrl_enum =
-            (!has_single_ctrl_event).then(|| format_ident!("{}ControllerEventEnum", struct_name));
-        let ctrl_variant_names = generate_unique_variant_names(&ctrl_config.event_types);
-
-        ctrl_select_event_type = Some(if has_single_ctrl_event {
-            let ctrl_event_type = &ctrl_config.event_types[0];
-            quote! { #ctrl_event_type }
-        } else {
-            let ctrl_enum = ctrl_enum.as_ref().unwrap();
-            quote! { #ctrl_enum }
-        });
+    if controller_config.is_some() {
+        ctrl_select_event_type = Some(quote! { <Self as ::rmk::controller::Controller>::Event });
 
         use_statements.push(quote! { use ::rmk::event::SubscribableControllerEvent; });
         use_statements.push(quote! { use ::rmk::controller::Controller; });
 
-        for (idx, (ctrl_event_type, variant_name)) in ctrl_config
-            .event_types
-            .iter()
-            .zip(&ctrl_variant_names)
-            .enumerate()
-        {
-            let sub_name = format_ident!("ctrl_sub{}", idx);
-            sub_defs.push(quote! {
-                let mut #sub_name = <#ctrl_event_type as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
+        sub_defs.push(quote! {
+            let mut ctrl_sub = <<Self as ::rmk::controller::Controller>::Event as ::rmk::event::SubscribableControllerEvent>::controller_subscriber();
+        });
+
+        if let Some(ref enum_name) = select_enum_name {
+            select_arms.push(quote! {
+                ctrl_event = ctrl_sub.next_event().fuse() => #enum_name::Controller(ctrl_event)
             });
-
-            let wrapped_ctrl_event = if has_single_ctrl_event {
-                quote! { ctrl_event }
-            } else {
-                let ctrl_enum = ctrl_enum.as_ref().unwrap();
-                quote! { #ctrl_enum::#variant_name(ctrl_event) }
-            };
-
-            if let Some(ref enum_name) = select_enum_name {
-                select_arms.push(quote! {
-                    ctrl_event = #sub_name.next_event().fuse() => #enum_name::Controller(#wrapped_ctrl_event)
-                });
-            } else {
-                select_arms.push(quote! {
-                    ctrl_event = #sub_name.next_event().fuse() => {
-                        <Self as ::rmk::controller::Controller>::process_event(self, #wrapped_ctrl_event).await;
-                    }
-                });
-            }
+        } else {
+            select_arms.push(quote! {
+                ctrl_event = ctrl_sub.next_event().fuse() => {
+                    <Self as ::rmk::controller::Controller>::process_event(self, ctrl_event).await;
+                }
+            });
         }
 
         if let Some(ref enum_name) = select_enum_name {
