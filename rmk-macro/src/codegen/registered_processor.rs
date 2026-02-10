@@ -20,23 +20,40 @@ pub(crate) fn expand_registered_processor_init(
 
     // Custom processors declared in the module.
     if let Some((_, items)) = &item_mod.content {
-        items.iter().for_each(|item| {
-            if let syn::Item::Fn(item_fn) = &item
-                && let Some(attr) = item_fn.attrs.iter().find(|attr| attr.path().is_ident("register_processor")) {
-                    let _ = attr.parse_nested_meta(|meta| {
-                        let (custom_init, custom_exec) = expand_custom_processor(item_fn);
-                        initializers.extend(custom_init);
+        for item in items {
+            let syn::Item::Fn(item_fn) = item else { continue };
+            let Some(attr) = item_fn.attrs.iter().find(|a| a.path().is_ident("register_processor")) else { continue };
 
-                        if meta.path.is_ident("event") || meta.path.is_ident("poll") {
-                            // Processor runnables are executed through `run()`.
-                            executors.push(quote! { #custom_exec.run() });
-                            return Ok(());
-                        }
+            let (custom_init, custom_exec) = expand_custom_processor(item_fn);
+            let mut mode: Option<bool> = None; // Some(true) = event, Some(false) = poll
 
-                        panic!("#[register_processor] must specify execution mode with `event` or `poll`. Use `#[register_processor(event)]` or `#[register_processor(poll)]`")
-                    });
+            attr.parse_nested_meta(|meta| {
+                let is_event = meta.path.is_ident("event");
+                let is_poll = meta.path.is_ident("poll");
+
+                if !is_event && !is_poll {
+                    return Err(meta.error("expected `event` or `poll`"));
                 }
-        });
+                if mode.is_some() {
+                    return Err(meta.error("cannot specify multiple modes"));
+                }
+                mode = Some(is_event);
+                Ok(())
+            }).unwrap_or_else(|e| panic!("#[register_processor] {e}"));
+
+            let executor = match mode {
+                Some(true) => quote! {
+                    async { use ::rmk::processor::Processor; #custom_exec.process_loop().await }
+                },
+                Some(false) => quote! {
+                    async { use ::rmk::processor::PollingProcessor; #custom_exec.polling_loop().await }
+                },
+                None => panic!("#[register_processor] requires `event` or `poll` argument"),
+            };
+
+            initializers.extend(custom_init);
+            executors.push(executor);
+        }
     }
 
     (initializers, executors)
