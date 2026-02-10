@@ -164,6 +164,8 @@ pub fn generate_runnable(
         use_statements.push(quote! { use ::rmk::event::SubscribableEvent; });
         use_statements.push(quote! { use ::rmk::processor::Processor; });
 
+        // Use the Processor trait's subscriber method
+        // The processor macro has already generated the event enum and Processor trait impl
         sub_defs.push(quote! {
             let mut proc_sub = <Self as ::rmk::processor::Processor>::subscriber();
         });
@@ -227,11 +229,25 @@ pub fn generate_runnable(
     use_statements.push(quote! { use ::rmk::futures::FutureExt; });
 
     // Build select enum definition if needed
-    let select_enum_def = select_enum_name.as_ref().map(|enum_name| {
-        let input_type = input_event_type.as_ref().unwrap();
-        // Use the Processor trait's associated Event type
-        let proc_type = quote! { <Self as ::rmk::processor::Processor>::Event };
-        if has_polling {
+    let select_enum_def = select_enum_name.as_ref().and_then(|enum_name| {
+        let input_type = input_event_type.as_ref()?;
+        // Determine the processor event type
+        // If processor has only one event type, use it directly (no enum generated)
+        // Otherwise, use the generated enum name {StructName}ProcessorEventEnum
+        let proc_type = if let Some(proc_cfg) = processor_config {
+            if proc_cfg.event_types.len() == 1 {
+                let event_type = &proc_cfg.event_types[0];
+                quote! { #event_type }
+            } else {
+                let proc_enum_name = format_ident!("{}ProcessorEventEnum", struct_name);
+                quote! { #proc_enum_name }
+            }
+        } else {
+            // This shouldn't happen in combined mode, but provide a fallback
+            quote! { () }
+        };
+
+        Some(if has_polling {
             quote! {
                 enum #enum_name {
                     Input(#input_type),
@@ -246,7 +262,7 @@ pub fn generate_runnable(
                     Processor(#proc_type),
                 }
             }
-        }
+        })
     });
 
     // Build loop body

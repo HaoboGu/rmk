@@ -120,7 +120,7 @@ mod basic {
             use ::rmk::futures::FutureExt;
             enum __RmkSelectEventSensorController {
                 Input(SensorEvent),
-                Processor(<Self as ::rmk::processor::Processor>::Event),
+                Processor(ConfigEvent),
             }
             let mut proc_sub = <Self as ::rmk::processor::Processor>::subscriber();
             loop {
@@ -248,6 +248,7 @@ mod basic {
 /// Reversed order: processor + input_device
 mod reversed {
     use super::{ConfigEvent, SensorEvent, input_device, processor};
+    #[::rmk::macros::runnable_generated]
     pub struct ReversedSensorController {
         pub threshold: u16,
     }
@@ -255,6 +256,15 @@ mod reversed {
         type Event = SensorEvent;
         async fn read_event(&mut self) -> Self::Event {
             self.read_sensor_event().await
+        }
+    }
+    impl ::rmk::processor::Processor for ReversedSensorController {
+        type Event = ConfigEvent;
+        fn subscriber() -> impl ::rmk::event::EventSubscriber<Event = Self::Event> {
+            <ConfigEvent as ::rmk::event::SubscribableEvent>::subscriber()
+        }
+        async fn process(&mut self, event: Self::Event) {
+            self.on_config_event(event).await
         }
     }
     impl ::rmk::input_device::Runnable for ReversedSensorController {
@@ -267,7 +277,7 @@ mod reversed {
             use ::rmk::futures::FutureExt;
             enum __RmkSelectEventReversedSensorController {
                 Input(SensorEvent),
-                Processor(<Self as ::rmk::processor::Processor>::Event),
+                Processor(ConfigEvent),
             }
             let mut proc_sub = <Self as ::rmk::processor::Processor>::subscriber();
             loop {
@@ -393,15 +403,6 @@ mod reversed {
             }
         }
     }
-    impl ::rmk::processor::Processor for ReversedSensorController {
-        type Event = ConfigEvent;
-        fn subscriber() -> impl ::rmk::event::EventSubscriber<Event = Self::Event> {
-            <ConfigEvent as ::rmk::event::SubscribableEvent>::subscriber()
-        }
-        async fn process(&mut self, event: Self::Event) {
-            self.on_config_event(event).await
-        }
-    }
 }
 /// Polling combined: input_device + polling processor
 mod polling {
@@ -444,7 +445,7 @@ mod polling {
             use ::rmk::processor::PollingProcessor;
             enum __RmkSelectEventPollingSensorController {
                 Input(SensorEvent),
-                Processor(<Self as ::rmk::processor::Processor>::Event),
+                Processor(ConfigEvent),
                 Timer,
             }
             let mut proc_sub = <Self as ::rmk::processor::Processor>::subscriber();
@@ -807,7 +808,7 @@ mod multi_event {
             use ::rmk::futures::FutureExt;
             enum __RmkSelectEventMultiEventSensorController {
                 Input(SensorEvent),
-                Processor(<Self as ::rmk::processor::Processor>::Event),
+                Processor(MultiEventSensorControllerProcessorEventEnum),
             }
             let mut proc_sub = <Self as ::rmk::processor::Processor>::subscriber();
             loop {
@@ -1141,7 +1142,7 @@ mod multi_event_polling {
             use ::rmk::processor::PollingProcessor;
             enum __RmkSelectEventMultiEventPollingSensorController {
                 Input(SensorEvent),
-                Processor(<Self as ::rmk::processor::Processor>::Event),
+                Processor(MultiEventPollingSensorControllerProcessorEventEnum),
                 Timer,
             }
             let mut proc_sub = <Self as ::rmk::processor::Processor>::subscriber();

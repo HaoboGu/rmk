@@ -77,7 +77,8 @@ impl AttributeParser {
         };
 
         lit.base10_parse().map(Some).map_err(|err| {
-            syn::Error::new_spanned(lit, format!("invalid `{name}` value: {err}")).to_compile_error()
+            syn::Error::new_spanned(lit, format!("invalid `{name}` value: {err}"))
+                .to_compile_error()
         })
     }
 
@@ -278,32 +279,16 @@ pub fn is_runnable_generated_attr(attr: &Attribute) -> bool {
             && path.segments[2].ident == "runnable_generated")
 }
 
-/// Extract processor config from runnable_generated marker attribute.
+/// Check if an attribute matches a given name, supporting both simple and qualified paths.
 ///
-/// When `#[processor]` runs before `#[input_device]`, it embeds the processor config
-/// in a marker like: `#[::rmk::macros::runnable_generated(subscribe = [...], poll_interval = N)]`
-///
-/// This function extracts that embedded config so `#[input_device]` can generate
-/// the combined Runnable implementation.
-pub fn extract_processor_config_from_marker(
-    attrs: &[Attribute],
-) -> Option<crate::processor::ProcessorConfig> {
-    for attr in attrs {
-        if !is_runnable_generated_attr(attr) {
-            continue;
-        }
-
-        // Check if this marker has embedded config
-        if let Meta::List(meta_list) = &attr.meta
-            && !meta_list.tokens.is_empty()
-        {
-            // Try to parse as processor config
-            if let Ok(config) = crate::processor::parse_processor_config(meta_list.tokens.clone())
-                && !config.event_types.is_empty()
-            {
-                return Some(config);
-            }
-        }
-    }
-    None
+/// Examples:
+/// - `#[processor]` matches "processor"
+/// - `#[rmk_macro::processor]` matches "processor"
+/// - `#[some::other::path]` does not match "processor"
+pub fn attr_matches_name(attr: &Attribute, name: &str) -> bool {
+    attr.path()
+        .segments
+        .last()
+        .map(|seg| seg.ident == name)
+        .unwrap_or(false)
 }
