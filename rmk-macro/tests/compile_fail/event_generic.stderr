@@ -1,5 +1,0 @@
-error: #[event] does not support generic types. Static channels cannot be generic.
- --> tests/compile_fail/event_generic.rs:5:24
-  |
-5 | pub struct GenericEvent<T> {
-  |                        ^^^

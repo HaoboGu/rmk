@@ -1,0 +1,11 @@
+error: invalid `subscribe` element: expected a type path
+ --> tests/compile_fail/controller_invalid_subscribe_element.rs:5:39
+  |
+5 | #[controller(subscribe = [InputEvent, 123])]
+  |                                       ^^^
+
+error: `poll_interval` must be an integer literal
+ --> tests/compile_fail/controller_invalid_subscribe_element.rs:8:56
+  |
+8 | #[controller(subscribe = [InputEvent], poll_interval = "fast")]
+  |                                                        ^^^^^^

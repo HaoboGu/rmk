@@ -1,0 +1,5 @@
+error: invalid `subscribe` element: expected a type path
+ --> tests/compile_fail/input_processor_invalid_subscribe_element.rs:5:44
+  |
+5 | #[input_processor(subscribe = [InputEvent, 123])]
+  |                                            ^^^

@@ -58,8 +58,8 @@ impl ::rmk::event::AsyncEventPublisher for NrfAdcEventPublisher {
     type Event = NrfAdcEvent;
     async fn publish_async(&self, event: NrfAdcEvent) {
         match event {
-            NrfAdcEvent::Pointing(e) => ::rmk::event::publish_event_async(e).await,
-            NrfAdcEvent::Battery(e) => ::rmk::event::publish_event_async(e).await,
+            NrfAdcEvent::Pointing(e) => ::rmk::event::publish_input_event_async(e).await,
+            NrfAdcEvent::Battery(e) => ::rmk::event::publish_input_event_async(e).await,
         }
     }
 }
@@ -67,20 +67,20 @@ impl ::rmk::event::EventPublisher for NrfAdcEventPublisher {
     type Event = NrfAdcEvent;
     fn publish(&self, event: NrfAdcEvent) {
         match event {
-            NrfAdcEvent::Pointing(e) => ::rmk::event::publish_event(e),
-            NrfAdcEvent::Battery(e) => ::rmk::event::publish_event(e),
+            NrfAdcEvent::Pointing(e) => ::rmk::event::publish_input_event(e),
+            NrfAdcEvent::Battery(e) => ::rmk::event::publish_input_event(e),
         }
     }
 }
-impl ::rmk::event::PublishableEvent for NrfAdcEvent {
+impl ::rmk::event::PublishableInputEvent for NrfAdcEvent {
     type Publisher = NrfAdcEventPublisher;
-    fn publisher() -> Self::Publisher {
+    fn input_publisher() -> Self::Publisher {
         NrfAdcEventPublisher
     }
 }
-impl ::rmk::event::AsyncPublishableEvent for NrfAdcEvent {
+impl ::rmk::event::AsyncPublishableInputEvent for NrfAdcEvent {
     type AsyncPublisher = NrfAdcEventPublisher;
-    fn publisher_async() -> Self::AsyncPublisher {
+    fn input_publisher_async() -> Self::AsyncPublisher {
         NrfAdcEventPublisher
     }
 }
@@ -143,11 +143,11 @@ mod basic {
     }
     impl ::rmk::input_device::Runnable for BatteryReader {
         async fn run(&mut self) -> ! {
-            use ::rmk::event::publish_event_async;
+            use ::rmk::event::publish_input_event_async;
             use ::rmk::input_device::InputDevice;
             loop {
                 let event = self.read_event().await;
-                publish_event_async(event).await;
+                publish_input_event_async(event).await;
             }
         }
     }
@@ -179,11 +179,11 @@ mod multi_event {
     impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> ::rmk::input_device::Runnable
     for NrfAdc<'a, PIN_NUM, EVENT_NUM> {
         async fn run(&mut self) -> ! {
-            use ::rmk::event::publish_event_async;
+            use ::rmk::event::publish_input_event_async;
             use ::rmk::input_device::InputDevice;
             loop {
                 let event = self.read_event().await;
-                publish_event_async(event).await;
+                publish_input_event_async(event).await;
             }
         }
     }
