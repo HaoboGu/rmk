@@ -66,6 +66,14 @@ fn build_polling_loop_body(
     }
 }
 
+/// Check if a path matches any path in a list (by last segment ident).
+fn path_in_list(needle: &syn::Path, haystack: &[syn::Path]) -> bool {
+    let needle_ident = needle.segments.last().map(|s| &s.ident);
+    haystack
+        .iter()
+        .any(|p| p.segments.last().map(|s| &s.ident) == needle_ident)
+}
+
 /// Generate a unified `Runnable` impl for input_device and/or processor.
 ///
 /// Handles:
@@ -73,6 +81,10 @@ fn build_polling_loop_body(
 /// - Processor: subscribe + process + optional polling
 ///
 /// Uses select_biased! when multiplexing multiple sources.
+///
+/// # Panics
+/// Panics at compile time if the same event type is both published and subscribed,
+/// which would cause a self-deadlock.
 pub fn generate_runnable(
     struct_name: &syn::Ident,
     generics: &syn::Generics,
@@ -80,6 +92,19 @@ pub fn generate_runnable(
     input_device_config: Option<&InputDeviceConfig>,
     processor_config: Option<&ProcessorConfig>,
 ) -> TokenStream {
+    // Check for self-deadlock: published event type must not be in subscribe list of the same struct
+    if let (Some(input_cfg), Some(proc_cfg)) = (input_device_config, processor_config) {
+        let publish_type = &input_cfg.event_type;
+        if path_in_list(publish_type, &proc_cfg.event_types) {
+            panic!(
+                "Self-deadlock detected on `{}`: cannot publish and subscribe the same event type `{}`. \
+                The task would block on publish_event_async() while the only consumer is in the same blocked task.",
+                struct_name,
+                quote! { #publish_type }
+            );
+        }
+    }
+
     let (impl_generics, _, _) = generics.split_for_impl();
     let ty_generics = deduplicate_type_generics(generics);
 
@@ -136,7 +161,6 @@ pub fn generate_runnable(
         .is_some();
 
     if processor_config.is_some() {
-
         use_statements.push(quote! { use ::rmk::event::SubscribableEvent; });
         use_statements.push(quote! { use ::rmk::processor::Processor; });
 
