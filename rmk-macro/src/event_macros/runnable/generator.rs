@@ -104,7 +104,6 @@ pub fn generate_runnable(
     let select_enum_name =
         needs_split_select.then(|| format_ident!("__RmkSelectEvent{}", struct_name));
     let mut input_event_type: Option<syn::Path> = None;
-    let mut processor_select_event_type: Option<TokenStream> = None;
 
     // Handle input_device.
     if let Some(device_config) = input_device_config {
@@ -137,7 +136,6 @@ pub fn generate_runnable(
         .is_some();
 
     if processor_config.is_some() {
-        processor_select_event_type = Some(quote! { <Self as ::rmk::processor::Processor>::Event });
 
         use_statements.push(quote! { use ::rmk::event::SubscribableEvent; });
         use_statements.push(quote! { use ::rmk::processor::Processor; });
@@ -207,7 +205,8 @@ pub fn generate_runnable(
     // Build select enum definition if needed
     let select_enum_def = select_enum_name.as_ref().map(|enum_name| {
         let input_type = input_event_type.as_ref().unwrap();
-        let proc_type = processor_select_event_type.as_ref().unwrap();
+        // Use the Processor trait's associated Event type
+        let proc_type = quote! { <Self as ::rmk::processor::Processor>::Event };
         if has_polling {
             quote! {
                 enum #enum_name {

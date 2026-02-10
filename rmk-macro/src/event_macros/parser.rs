@@ -10,8 +10,7 @@ use super::utils::AttributeParser;
 pub fn parse_input_device_config(
     tokens: impl Into<TokenStream>,
 ) -> Result<Option<InputDeviceConfig>, TokenStream> {
-    let parser = AttributeParser::new(tokens).map_err(|e| e.to_compile_error())?;
-    parser.validate_keys(&["publish"])?;
+    let parser = AttributeParser::new_validated(tokens, &["publish"])?;
     Ok(parser
         .get_path("publish")
         .map(|event_type| InputDeviceConfig { event_type }))

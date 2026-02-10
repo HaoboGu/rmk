@@ -17,10 +17,7 @@ pub struct ProcessorConfig {
 
 /// Parse processor config from attribute tokens.
 pub fn parse_processor_config(tokens: impl Into<TokenStream>) -> Result<ProcessorConfig, TokenStream> {
-    let parser = AttributeParser::new(tokens)
-        .map_err(|e| e.to_compile_error())?;
-
-    parser.validate_keys(&["subscribe", "poll_interval"])?;
+    let parser = AttributeParser::new_validated(tokens, &["subscribe", "poll_interval"])?;
 
     Ok(ProcessorConfig {
         event_types: parser.get_path_array("subscribe")?,

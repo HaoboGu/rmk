@@ -31,6 +31,18 @@ impl AttributeParser {
         })
     }
 
+    /// Create a new parser and validate keys in one step.
+    ///
+    /// This is more ergonomic than calling `new()` followed by `validate_keys()`.
+    pub fn new_validated(
+        tokens: impl Into<TokenStream>,
+        allowed_keys: &[&str],
+    ) -> Result<Self, TokenStream> {
+        let parser = Self::new(tokens).map_err(|e| e.to_compile_error())?;
+        parser.validate_keys(allowed_keys)?;
+        Ok(parser)
+    }
+
     /// Get an integer value for `name = N`.
     ///
     /// Returns an error when the key exists but is not an integer literal,
@@ -264,4 +276,34 @@ pub fn is_runnable_generated_attr(attr: &Attribute) -> bool {
             && path.segments[0].ident == "rmk"
             && path.segments[1].ident == "macros"
             && path.segments[2].ident == "runnable_generated")
+}
+
+/// Extract processor config from runnable_generated marker attribute.
+///
+/// When `#[processor]` runs before `#[input_device]`, it embeds the processor config
+/// in a marker like: `#[::rmk::macros::runnable_generated(subscribe = [...], poll_interval = N)]`
+///
+/// This function extracts that embedded config so `#[input_device]` can generate
+/// the combined Runnable implementation.
+pub fn extract_processor_config_from_marker(
+    attrs: &[Attribute],
+) -> Option<crate::processor::ProcessorConfig> {
+    for attr in attrs {
+        if !is_runnable_generated_attr(attr) {
+            continue;
+        }
+
+        // Check if this marker has embedded config
+        if let Meta::List(meta_list) = &attr.meta
+            && !meta_list.tokens.is_empty()
+        {
+            // Try to parse as processor config
+            if let Ok(config) = crate::processor::parse_processor_config(meta_list.tokens.clone())
+                && !config.event_types.is_empty()
+            {
+                return Some(config);
+            }
+        }
+    }
+    None
 }

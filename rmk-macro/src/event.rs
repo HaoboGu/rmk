@@ -36,10 +36,7 @@ enum ChannelType {
 ///
 /// Returns an error if unknown attribute keys are found.
 pub fn parse_event_config(tokens: impl Into<TokenStream>) -> Result<EventConfig, TokenStream> {
-    let parser = AttributeParser::new(tokens)
-        .map_err(|e| e.to_compile_error())?;
-
-    parser.validate_keys(&["channel_size", "subs", "pubs"])?;
+    let parser = AttributeParser::new_validated(tokens, &["channel_size", "subs", "pubs"])?;
 
     Ok(EventConfig {
         channel_size: parser.get_expr_tokens("channel_size"),

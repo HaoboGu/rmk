@@ -1,36 +1,16 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Attribute, DeriveInput, Meta, parse_macro_input};
+use syn::{DeriveInput, Meta, parse_macro_input};
 
 use super::config::InputDeviceConfig;
 use super::parser::parse_input_device_config;
 use super::runnable::generate_runnable;
-use super::utils::{deduplicate_type_generics, has_runnable_marker, is_runnable_generated_attr};
+use super::utils::{
+    deduplicate_type_generics, extract_processor_config_from_marker, has_runnable_marker,
+    is_runnable_generated_attr,
+};
 use crate::processor::{ProcessorConfig, parse_processor_config};
 use crate::utils::to_snake_case;
-
-/// Extract processor config from runnable_generated marker attribute.
-///
-/// When `#[processor]` runs before `#[input_device]`, it embeds the processor config
-/// in a marker like: `#[::rmk::macros::runnable_generated(subscribe = [...], poll_interval = N)]`
-fn extract_processor_config_from_marker(attrs: &[Attribute]) -> Option<ProcessorConfig> {
-    for attr in attrs {
-        if !is_runnable_generated_attr(attr) {
-            continue;
-        }
-
-        // Check if this marker has embedded config
-        if let Meta::List(meta_list) = &attr.meta
-            && !meta_list.tokens.is_empty() {
-                // Try to parse as processor config
-                if let Ok(config) = parse_processor_config(meta_list.tokens.clone())
-                    && !config.event_types.is_empty() {
-                        return Some(config);
-                    }
-            }
-    }
-    None
-}
 
 /// Generates InputDevice and Runnable trait implementations for single-event devices.
 ///
