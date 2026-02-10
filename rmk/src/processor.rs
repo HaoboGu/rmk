@@ -41,11 +41,8 @@ pub trait Processor: Runnable {
     /// Type of the received events.
     type Event;
 
-    /// Type of the event subscriber.
-    type Subscriber: EventSubscriber<Event = Self::Event>;
-
     /// Create a new event subscriber.
-    fn subscriber() -> Self::Subscriber;
+    fn subscriber() -> impl EventSubscriber<Event = Self::Event>;
 
     /// Process the received event.
     async fn process(&mut self, event: Self::Event);

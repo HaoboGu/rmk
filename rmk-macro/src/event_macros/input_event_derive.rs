@@ -2,12 +2,12 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{DeriveInput, parse_macro_input};
 
-/// Derive `PublishableInputEvent`/`AsyncPublishableInputEvent` for wrapper enums.
+/// Derive `PublishableEvent`/`AsyncPublishableEvent` for wrapper enums.
 ///
 /// Generates:
 /// - publisher type for the enum (routes to individual event channels)
-/// - `PublishableInputEvent`/`AsyncPublishableInputEvent` impls
-/// - `From<Variant>` impls for each variant
+/// - `PublishableEvent`/`AsyncPublishableEvent` impls
+/// - `From<VariantType>` impls for each variant
 ///
 /// **Note**: Wrapper enums only implement publish traits, not subscribe traits.
 /// This is because wrapper enums route events to their concrete type channels,
@@ -16,16 +16,16 @@ use syn::{DeriveInput, parse_macro_input};
 /// # Example
 ///
 /// ```rust,ignore
-/// #[derive(InputEvent)]
+/// #[derive(Event)]
 /// pub enum MultiSensorEvent {
 ///     Battery(BatteryEvent),
 ///     Pointing(PointingEvent),
 /// }
 ///
 /// // Usage:
-/// publish_input_event_async(MultiSensorEvent::Battery(event)).await;
+/// publish_event_async(MultiSensorEvent::Battery(event)).await;
 /// ```
-pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
+pub fn event_derive_impl(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     // Ensure input is an enum.
@@ -34,7 +34,7 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
         _ => {
             return syn::Error::new_spanned(
                 input,
-                "#[derive(InputEvent)] can only be applied to enums",
+                "#[derive(Event)] can only be applied to enums",
             )
             .to_compile_error()
             .into();
@@ -73,12 +73,12 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
 
         // Sync publish arm.
         publish_arms.push(quote! {
-            #enum_name::#variant_name(e) => ::rmk::event::publish_input_event(e)
+            #enum_name::#variant_name(e) => ::rmk::event::publish_event(e)
         });
 
         // Async publish arm.
         async_publish_arms.push(quote! {
-            #enum_name::#variant_name(e) => ::rmk::event::publish_input_event_async(e).await
+            #enum_name::#variant_name(e) => ::rmk::event::publish_event_async(e).await
         });
 
         // From impls (with generics).
@@ -136,18 +136,18 @@ pub fn input_event_derive_impl(input: TokenStream) -> TokenStream {
             }
         }
 
-        impl #impl_generics ::rmk::event::PublishableInputEvent for #enum_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::event::PublishableEvent for #enum_name #ty_generics #where_clause {
             type Publisher = #publisher_name #ty_generics;
 
-            fn input_publisher() -> Self::Publisher {
+            fn publisher() -> Self::Publisher {
                 #publisher_ctor
             }
         }
 
-        impl #impl_generics ::rmk::event::AsyncPublishableInputEvent for #enum_name #ty_generics #where_clause {
+        impl #impl_generics ::rmk::event::AsyncPublishableEvent for #enum_name #ty_generics #where_clause {
             type AsyncPublisher = #publisher_name #ty_generics;
 
-            fn input_publisher_async() -> Self::AsyncPublisher {
+            fn publisher_async() -> Self::AsyncPublisher {
                 #publisher_ctor
             }
         }

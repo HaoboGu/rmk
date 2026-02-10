@@ -1,14 +1,13 @@
 //! Unified processor macro implementation.
 //!
 //! Generates `Processor` trait implementations for event-driven processors.
-//! Replaces both `#[input_processor]` and `#[controller]`.
 
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
-use crate::runnable::{generate_event_enum_and_dispatch, generate_runnable};
-use crate::utils::{AttributeParser, has_runnable_marker, is_rmk_attr};
+use crate::event_macros::runnable::generate_event_enum_and_dispatch;
+use crate::event_macros::utils::{AttributeParser, has_runnable_marker};
 
 /// Processor subscription config.
 pub struct ProcessorConfig {
@@ -55,7 +54,7 @@ pub fn processor_impl(
     let vis = &input.vis;
     let generics = &input.generics;
     let (impl_generics, _, where_clause) = generics.split_for_impl();
-    let deduped_ty_generics = crate::utils::deduplicate_type_generics(generics);
+    let deduped_ty_generics = crate::event_macros::utils::deduplicate_type_generics(generics);
 
     let has_marker = has_runnable_marker(&input.attrs);
 
@@ -64,7 +63,7 @@ pub fn processor_impl(
     let has_input_device = input
         .attrs
         .iter()
-        .any(|attr| is_rmk_attr(attr, "input_device"));
+        .any(|attr| attr.path().is_ident("input_device"));
 
     // When a sibling #[input_device] exists and no marker yet, add a marker that
     // carries the processor config so input_device_impl can generate the combined Runnable.
@@ -111,17 +110,25 @@ pub fn processor_impl(
     let runnable_impl = if has_marker || has_input_device {
         quote! {}
     } else {
-        let processor_config = ProcessorConfig {
-            event_types: config.event_types.clone(),
-            poll_interval_ms: config.poll_interval_ms,
-        };
-        generate_runnable(
-            struct_name,
-            generics,
-            where_clause,
-            None,
-            Some(&processor_config),
-        )
+        if config.poll_interval_ms.is_some() {
+            quote! {
+                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #deduped_ty_generics #where_clause {
+                    async fn run(&mut self) -> ! {
+                        use ::rmk::processor::PollingProcessor;
+                        self.polling_loop().await
+                    }
+                }
+            }
+        } else {
+            quote! {
+                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #deduped_ty_generics #where_clause {
+                    async fn run(&mut self) -> ! {
+                        use ::rmk::processor::Processor;
+                        self.process_loop().await
+                    }
+                }
+            }
+        }
     };
 
     let expanded = quote! {
@@ -132,9 +139,8 @@ pub fn processor_impl(
 
         impl #impl_generics ::rmk::processor::Processor for #struct_name #deduped_ty_generics #where_clause {
             type Event = #event_type_tokens;
-            type Subscriber = <#event_type_tokens as ::rmk::event::SubscribableEvent>::Subscriber;
 
-            fn subscriber() -> Self::Subscriber {
+            fn subscriber() -> impl ::rmk::event::EventSubscriber<Event = Self::Event> {
                 <#event_type_tokens as ::rmk::event::SubscribableEvent>::subscriber()
             }
 

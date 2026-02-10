@@ -8,7 +8,7 @@ Input devices are hardware components that provide input to the keyboard firmwar
 
 ## Event-driven input system
 
-RMK uses an event-driven architecture for input handling. Input devices produce events, and input processors consume and process those events. Events flow through type-safe channels, decoupling producers from consumers.
+RMK uses an event-driven architecture for input handling. Input devices produce events, and processors consume and process those events. Events flow through type-safe channels, decoupling producers from consumers.
 
 The complete event chain in RMK is:
 
@@ -19,48 +19,40 @@ The complete event chain in RMK is:
       │ publish
       ▼
 ┌────────────┐
-│input events│
+│   events   │
 └─────┬──────┘
       │ subscribe
       ▼
 ┌───────────────┐
-│input processor│
-└─────┬─────────┘
-      │ publish
-      ▼
-┌─────────────────┐
-│controller events│
-└─────┬───────────┘
-      │ subscribe
-      ▼
-┌────────────┐
-│ controller │
-└────────────┘
+│   processor   │
+└───────────────┘
 ```
 
 **Key concepts:**
 
-- **Input Event** — A type-safe message carrying data from an input device (e.g., `KeyboardEvent`, `PointingEvent`, `BatteryAdcEvent`). Defined with the `#[input_event]` macro.
-- **Input Device** — A hardware driver that reads from a peripheral and publishes input events. Defined with the `#[input_device]` macro.
-- **Input Processor** — A component that subscribes to input events and processes them (e.g., converting raw ADC values to battery percentage). Defined with the `#[input_processor]` macro.
+- **Event** — A type-safe message carrying data from an input device (e.g., `KeyboardEvent`, `PointingEvent`, `BatteryAdcEvent`). Defined with the `#[event]` macro.
+- **Input Device** — A hardware driver that reads from a peripheral and publishes events. Defined with the `#[input_device]` macro.
+- **Processor** — A component that subscribes to events and processes them (e.g., converting raw ADC values to battery percentage). Defined with the `#[processor]` macro.
 - **Runnable** — All input devices and processors implement the `Runnable` trait. Since this implementation is macro-generated, these components can be easily run concurrently using the `run_all!` macro.
 
-## Input Event
+## Event
 
-Input events are the messages that flow from input devices to input processors. Each event type has its own dedicated channel, where it is published by an `InputDevice` and subscribed to by an `InputProcessor`.
+Events are the messages that flow from input devices to processors. Each event type has its own dedicated channel, where it is published by an `InputDevice` and subscribed to by a `Processor`.
 
-### Defining input events
+### Defining events
 
-Use the `#[input_event]` macro to define a custom input event:
+Use the `#[event]` macro to define a custom event:
 
 ```rust
-use rmk_macro::input_event;
+use rmk_macro::event;
 
-#[input_event(channel_size = 2)]
+// MPSC channel (single consumer) - default
+#[event(channel_size = 2)]
 #[derive(Clone, Copy, Debug)]
 pub struct BatteryAdcEvent(pub u16);
 
-#[input_event(channel_size = 2)]
+// PubSub channel (multiple subscribers)
+#[event(channel_size = 2, subs = 4, pubs = 1)]
 #[derive(Clone, Copy, Debug)]
 pub struct ChargingStateEvent {
     pub charging: bool,
@@ -68,37 +60,25 @@ pub struct ChargingStateEvent {
 ```
 
 **Parameters:**
-- `channel_size` (optional): Buffer size of the event channel. Default is 8.
+- `channel_size` (optional): Buffer size of the event channel. Default is 8 for MPSC, 1 for PubSub.
+- `subs` (optional): Max subscribers. If specified, uses PubSub channel. Default is 4.
+- `pubs` (optional): Max publishers. If specified, uses PubSub channel. Default is 1.
 
-The `#[input_event]` macro generates a static channel and implements the `InputEvent` trait, enabling the event to be published and subscribed to.
+The `#[event]` macro generates a static channel and implements the `PublishableEvent`, `SubscribableEvent`, and `AsyncPublishableEvent` traits.
 
-::: tip Dual-channel events
-`#[input_event]` can be combined with `#[controller_event]` on the same struct/enum to create a dual-channel event type. The macro order does not matter.
-
-```rust
-use rmk_macro::{controller_event, input_event};
-
-#[input_event(channel_size = 4)]
-#[controller_event(channel_size = 1, subs = 2)]
-#[derive(Clone, Copy, Debug)]
-pub struct SensorEvent {
-    pub value: u16,
-}
-```
-:::
-
-::: note
-Input event channels are single-consumer (`Channel`), meaning each input event type can only have **one** `InputProcessor` subscribing to it. This is different from controller events which use multi-subscriber `PubSubChannel`. If you need multiple consumers for the same event, consider using controller events instead.
+::: note Channel types
+- **MPSC (default)**: Single-consumer channel. Use when only one processor subscribes to the event.
+- **PubSub**: Multi-subscriber channel. Use when multiple processors need to receive the same event. Specify `subs` or `pubs` to enable.
 :::
 
 ### Multi-event enums
 
-When an input device produces multiple types of events, use `#[derive(InputEvent)]` on an enum to create a wrapper event type:
+When an input device produces multiple types of events, use `#[derive(Event)]` on an enum to create a wrapper event type:
 
 ```rust
-use rmk_macro::InputEvent;
+use rmk_macro::Event;
 
-#[derive(InputEvent, Clone, Debug)]
+#[derive(Event, Clone, Debug)]
 pub enum NrfAdcEvent {
     Pointing(PointingEvent),
     Battery(BatteryAdcEvent),
@@ -107,15 +87,15 @@ pub enum NrfAdcEvent {
 
 When a multi-event enum is published, each variant is automatically routed to its underlying concrete event channel. This means processors subscribe to the individual event types (e.g., `PointingEvent`, `BatteryAdcEvent`), not the wrapper enum.
 
-### Built-in input events
+### Built-in events
 
-RMK provides several built-in input event types:
+RMK provides several built-in event types:
 
 - `KeyboardEvent` — Key press/release events from the matrix or encoders
 - `PointingEvent` — Pointing device axis events (mouse movement, scroll)
-- `BatteryAdcEvent` — Raw battery ADC readings
-- `ChargingStateEvent` — Charging state changes
-- `TouchpadEvent` — Touchpad input events
+- `BatteryEvent` — Battery level events
+- `LedIndicatorEvent` — LED indicator state changes
+- `LayerChangeEvent` — Active layer changes
 
 ## InputDevice trait
 
@@ -200,10 +180,10 @@ impl<I: InputPin> ChargingStateReader<I> {
 A device that produces multiple event types using a wrapper enum:
 
 ```rust
-use rmk_macro::{InputEvent, input_device};
+use rmk_macro::{Event, input_device};
 
 // Define a wrapper enum for multiple event types
-#[derive(InputEvent, Clone, Debug)]
+#[derive(Event, Clone, Debug)]
 pub enum NrfAdcEvent {
     Pointing(PointingEvent),
     Battery(BatteryAdcEvent),
@@ -224,25 +204,26 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT
 }
 ```
 
-## InputProcessor trait
+## Processor trait
 
-The `InputProcessor` trait defines the interface for components that consume and process input events:
+The `Processor` trait defines the interface for components that consume and process events:
 
 ```rust
-pub trait InputProcessor: Runnable {
-    type Event: SubscribableInputEvent;
+pub trait Processor: Runnable {
+    type Event;
+    fn subscriber() -> impl EventSubscriber<Event = Self::Event>;
     async fn process(&mut self, event: Self::Event);
 }
 ```
 
-### Defining an input processor
+### Defining a processor
 
-Use the `#[input_processor]` macro to define a processor that subscribes to input events:
+Use the `#[processor]` macro to define a processor that subscribes to events:
 
 ```rust
-use rmk_macro::input_processor;
+use rmk_macro::processor;
 
-#[input_processor(subscribe = [BatteryAdcEvent, ChargingStateEvent])]
+#[processor(subscribe = [BatteryAdcEvent, ChargingStateEvent])]
 pub struct BatteryProcessor {
     battery_level: u8,
     charging: bool,
@@ -267,16 +248,42 @@ impl BatteryProcessor {
 
 **Parameters:**
 - `subscribe = [Event1, Event2, ...]` (required): Event types to subscribe to.
+- `poll_interval = N` (optional): Polling interval in milliseconds. When set, the processor will also call a `poll()` method periodically.
 
 **How it works:**
-- `#[input_processor]` implements both `InputProcessor` and `Runnable` traits automatically. The macro will automatically subscribe to the specified event types and route incoming events to the corresponding handler methods.
+- `#[processor]` implements `Processor` and `Runnable` traits automatically. The macro will automatically subscribe to the specified event types and route incoming events to the corresponding handler methods.
 - You only need to implement `on_<event_name>_event()` handler methods for each subscribed event type. The method name follows the same snake_case conversion as input devices. For example:
   - `subscribe = [BatteryAdcEvent]` → `async fn on_battery_adc_event(&mut self, event: BatteryAdcEvent)`
   - `subscribe = [ChargingStateEvent]` → `async fn on_charging_state_event(&mut self, event: ChargingStateEvent)`
 
-::: warning
-A struct can only be either an input device (`#[input_device]`) or an input processor (`#[input_processor]`), not both.
-:::
+### Polling processor example
+
+A processor that both handles events and performs periodic updates:
+
+```rust
+use rmk_macro::processor;
+
+#[processor(subscribe = [LedIndicatorEvent], poll_interval = 500)]
+pub struct BlinkingLedController {
+    led_on: bool,
+    blink_enabled: bool,
+}
+
+impl BlinkingLedController {
+    // Handler for LedIndicatorEvent
+    async fn on_led_indicator_event(&mut self, event: LedIndicatorEvent) {
+        self.blink_enabled = event.caps_lock;
+    }
+
+    // Called every 500ms
+    async fn poll(&mut self) {
+        if self.blink_enabled {
+            self.led_on = !self.led_on;
+            // Toggle LED
+        }
+    }
+}
+```
 
 ## Running input devices and processors
 
@@ -302,15 +309,15 @@ join(
 
 RMK provides `keyboard.toml` configuration support for some built-in input devices (such as rotary encoders, joysticks, and PMW3610 sensors), so you can use them without writing any Rust code. See the [Input Device Configuration](../configuration/input_device) documentation for details.
 
-## Advanced: Combining with `#[controller]`
+## Advanced: Combining `#[input_device]` with `#[processor]`
 
-Both `#[input_device]` and `#[input_processor]` can be combined with `#[controller]` on the same struct. This allows a single struct to both produce/process input events and subscribe to controller events. The macros will generate a unified `run` method that combines the logic of both — reading/processing input events and handling controller events concurrently.
+`#[input_device]` can be combined with `#[processor]` on the same struct. This allows a single struct to both produce events and subscribe to other events. The macros will generate a unified `run` method that combines the logic of both — reading input events and handling subscribed events concurrently.
 
 ```rust
-use rmk_macro::{input_device, controller};
+use rmk_macro::{input_device, processor};
 
 #[input_device(publish = SensorEvent)]
-#[controller(subscribe = [ConfigEvent])]
+#[processor(subscribe = [ConfigEvent])]
 pub struct InputSensor {
     pub threshold: u16,
 }
@@ -321,11 +328,9 @@ impl InputSensor {
         // Read sensor data
     }
 
-    // Required by #[controller]: handle subscribed controller events
+    // Required by #[processor]: handle subscribed events
     async fn on_config_event(&mut self, event: ConfigEvent) {
         self.threshold = event.threshold;
     }
 }
 ```
-
-See the [Controller](./controller) documentation for more details on the `#[controller]` macro.

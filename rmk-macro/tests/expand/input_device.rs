@@ -1,4 +1,10 @@
-use rmk_macro::{InputEvent, input_device};
+//! Expand tests for #[input_device] macro.
+//!
+//! Tests:
+//! - Basic single-event device
+//! - Multi-event device using #[derive(Event)] wrapper enum
+
+use rmk_macro::{Event, input_device};
 
 #[derive(Clone, Copy, Debug)]
 pub struct PointingEvent {}
@@ -8,12 +14,13 @@ pub struct BatteryEvent {
     pub level: u8,
 }
 
-#[derive(InputEvent, Clone, Debug)]
+#[derive(Event, Clone, Debug)]
 pub enum NrfAdcEvent {
     Pointing(PointingEvent),
     Battery(BatteryEvent),
 }
 
+/// Basic single-event device
 mod basic {
     use super::{BatteryEvent, input_device};
 
@@ -23,6 +30,7 @@ mod basic {
     }
 }
 
+/// Multi-event device using wrapper enum
 mod multi_event {
     use super::{NrfAdcEvent, input_device};
 

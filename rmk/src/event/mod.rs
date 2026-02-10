@@ -11,9 +11,9 @@ use embassy_sync::blocking_mutex::raw::RawMutex;
 use embassy_sync::pubsub::{ImmediatePublisher, Publisher, Subscriber};
 use embassy_sync::{channel, watch};
 
+mod battery;
 #[cfg(feature = "_ble")]
 mod ble;
-mod battery;
 mod connection;
 mod key;
 mod keyboard;
@@ -24,9 +24,9 @@ mod power;
 mod split;
 mod touchpad;
 
+pub use battery::{BatteryAdcEvent, ChargingStateEvent};
 #[cfg(feature = "_ble")]
 pub use ble::{BleProfileChangeEvent, BleStateChangeEvent};
-pub use battery::{BatteryAdcEvent, ChargingStateEvent};
 pub use connection::{ConnectionChangeEvent, ConnectionType};
 pub use key::{KeyEvent, ModifierEvent};
 pub use keyboard::{KeyPos, KeyboardEvent, KeyboardEventPos, RotaryEncoderPos};

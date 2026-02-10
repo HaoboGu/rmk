@@ -33,13 +33,9 @@ pub(crate) fn expand_controller_init(
                         let (custom_init, custom_exec) = expand_custom_controller(item_fn);
                         initializers.extend(custom_init);
 
-                        if meta.path.is_ident("event") {
-                            // #[register_controller(event)]
-                            executors.push(quote! { #custom_exec.event_loop() });
-                            return Ok(());
-                        } else if meta.path.is_ident("poll") {
-                            // #[register_controller(poll)]
-                            executors.push(quote! { #custom_exec.polling_loop() });
+                        if meta.path.is_ident("event") || meta.path.is_ident("poll") {
+                            // Processor/controller runnables are executed through `run()`.
+                            executors.push(quote! { #custom_exec.run() });
                             return Ok(());
                         }
 
@@ -118,7 +114,7 @@ fn create_keyboard_indicator_controller(
             );
         };
         initializers.extend(controller_init);
-        executors.push(quote! { #controller_ident.event_loop() });
+        executors.push(quote! { #controller_ident.run() });
     }
 }
 

@@ -7,7 +7,8 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
-use crate::utils::{AttributeParser, has_derive, to_upper_snake_case};
+use crate::event_macros::utils::{AttributeParser, has_derive};
+use crate::utils::to_upper_snake_case;
 
 /// Configuration for the unified `#[event]` macro.
 pub struct EventConfig {

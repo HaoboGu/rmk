@@ -68,7 +68,6 @@ pub(crate) fn rmk_entry_select(
             )
         }
     };
-    let event_trait_import = quote! {};
 
     // Remove the storage argument if disabled in config. The feature also needs to be disabled.
     let storage = if keyboard_config.get_storage_config().enabled {
@@ -170,7 +169,6 @@ pub(crate) fn rmk_entry_select(
 
     quote! {
         use ::rmk::input_device::Runnable;
-        #event_trait_import
         #entry
     }
 }

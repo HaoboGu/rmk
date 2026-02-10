@@ -43,7 +43,7 @@ pub trait Runnable {
 /// // **Note**: Wrapper enums only implement publish traits, not subscribe traits.
 /// // This is because wrapper enums route events to their concrete type channels,
 /// // and you should subscribe to the individual event types instead.
-/// #[derive(InputEvent)]
+/// #[derive(Event)]
 /// enum MultiDeviceEvent {
 ///     Battery(BatteryEvent),
 ///     Pointing(PointingEvent),

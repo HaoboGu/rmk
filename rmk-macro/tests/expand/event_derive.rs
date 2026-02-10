@@ -1,19 +1,19 @@
-use rmk_macro::InputEvent;
+use rmk_macro::{Event, event};
 
-#[input_event]
+#[event(channel_size = 8)]
 #[derive(Clone, Copy, Debug)]
 pub struct BatteryEvent {
     pub level: u8,
 }
 
-#[input_event]
+#[event(channel_size = 8)]
 #[derive(Clone, Copy, Debug)]
 pub struct PointingEvent {
     pub x: i16,
     pub y: i16,
 }
 
-#[derive(InputEvent)]
+#[derive(Event)]
 pub enum MultiSensorEvent {
     Battery(BatteryEvent),
     Pointing(PointingEvent),
