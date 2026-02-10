@@ -1,0 +1,11 @@
+error: invalid attribute syntax. Expected `key = value`
+ --> tests/compile_fail/event_invalid_syntax.rs:3:9
+  |
+3 | #[event(subs)]
+  |         ^^^^
+
+error: expected `,`
+ --> tests/compile_fail/event_invalid_syntax.rs:7:26
+  |
+7 | #[event(channel_size = 8 subs = 4)]
+  |                          ^^^^

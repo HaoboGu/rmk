@@ -65,48 +65,72 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     // or from the #[runnable_generated(...)] marker that #[processor] left behind.
     let processor_config: Option<ProcessorConfig> = if has_processor {
         // #[input_device] expanded first — read config from sibling #[processor]
-        input
-            .attrs
-            .iter()
-            .find(|attr| is_rmk_attr(attr, "processor"))
-            .map(|attr| {
+        match input.attrs.iter().find(|attr| is_rmk_attr(attr, "processor")) {
+            Some(attr) => {
                 if let Meta::List(meta_list) = &attr.meta {
-                    let parser = AttributeParser::new(meta_list.tokens.clone())
-                        .unwrap_or_else(|_| AttributeParser::empty());
-                    ProcessorConfig {
-                        event_types: parser.get_path_array("subscribe"),
-                        poll_interval_ms: parser.get_int("poll_interval"),
-                    }
+                    let parser = match AttributeParser::new(meta_list.tokens.clone()) {
+                        Ok(parser) => parser,
+                        Err(err) => return err.to_compile_error().into(),
+                    };
+
+                    let event_types = match parser.get_path_array("subscribe") {
+                        Ok(event_types) => event_types,
+                        Err(err) => return err.into(),
+                    };
+
+                    Some(ProcessorConfig {
+                        event_types,
+                        poll_interval_ms: match parser.get_int("poll_interval") {
+                            Ok(value) => value,
+                            Err(err) => return err.into(),
+                        },
+                    })
                 } else {
-                    ProcessorConfig {
+                    Some(ProcessorConfig {
                         event_types: vec![],
                         poll_interval_ms: None,
-                    }
+                    })
                 }
-            })
+            }
+            None => None,
+        }
     } else if has_marker {
         // #[processor] expanded first — extract config from the marker's args
-        input
+        match input
             .attrs
             .iter()
             .find(|attr| is_runnable_generated_attr(attr))
-            .and_then(|attr| {
+        {
+            Some(attr) => {
                 if let Meta::List(meta_list) = &attr.meta {
-                    let parser = AttributeParser::new(meta_list.tokens.clone()).ok()?;
-                    let event_types = parser.get_path_array("subscribe");
+                    let parser = match AttributeParser::new(meta_list.tokens.clone()) {
+                        Ok(parser) => parser,
+                        Err(err) => return err.to_compile_error().into(),
+                    };
+
+                    let event_types = match parser.get_path_array("subscribe") {
+                        Ok(event_types) => event_types,
+                        Err(err) => return err.into(),
+                    };
+
                     if event_types.is_empty() {
                         None
                     } else {
                         Some(ProcessorConfig {
                             event_types,
-                            poll_interval_ms: parser.get_int("poll_interval"),
+                            poll_interval_ms: match parser.get_int("poll_interval") {
+                                Ok(value) => value,
+                                Err(err) => return err.into(),
+                            },
                         })
                     }
                 } else {
                     // Bare #[runnable_generated] with no args — no processor config
                     None
                 }
-            })
+            }
+            None => None,
+        }
     } else {
         None
     };

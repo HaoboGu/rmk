@@ -4,31 +4,18 @@
 //! input_device and processor behaviors.
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 
 use crate::input::config::InputDeviceConfig;
 use crate::processor::ProcessorConfig;
 use crate::utils::deduplicate_type_generics;
 
-/// Build the loop body for select with optional match.
-fn build_select_loop_body(
-    select_arms: &[TokenStream],
-    match_arms: Option<&[TokenStream]>,
-) -> TokenStream {
-    let select_block = quote! {
+/// Build the loop body for select.
+fn build_select_loop_body(select_arms: &[TokenStream]) -> TokenStream {
+    quote! {
         ::rmk::futures::select_biased! {
             #(#select_arms),*
         }
-    };
-
-    match match_arms {
-        Some(arms) => quote! {
-            let select_result = { #select_block };
-            match select_result {
-                #(#arms)*
-            }
-        },
-        None => select_block,
     }
 }
 
@@ -37,32 +24,17 @@ fn build_polling_loop_body(
     interval_ms: u64,
     timer_arm: TokenStream,
     select_arms: &[TokenStream],
-    match_arms: Option<&[TokenStream]>,
 ) -> TokenStream {
-    let select_block = quote! {
-        ::rmk::futures::select_biased! {
-            #timer_arm,
-            #(#select_arms),*
-        }
-    };
-
-    let select_handling = match match_arms {
-        Some(arms) => quote! {
-            let select_result = { #select_block };
-            match select_result {
-                #(#arms)*
-            }
-        },
-        None => select_block,
-    };
-
     quote! {
         let elapsed = last.elapsed();
         let interval = ::embassy_time::Duration::from_millis(#interval_ms);
         let timer = ::embassy_time::Timer::after(
             interval.checked_sub(elapsed).unwrap_or(::embassy_time::Duration::MIN)
         );
-        #select_handling
+        ::rmk::futures::select_biased! {
+            #timer_arm,
+            #(#select_arms),*
+        }
     }
 }
 
@@ -102,43 +74,22 @@ pub fn generate_runnable(
     // Collect select arms and subscriber definitions.
     let mut sub_defs: Vec<TokenStream> = Vec::new();
     let mut select_arms: Vec<TokenStream> = Vec::new();
-    let mut select_match_arms: Vec<TokenStream> = Vec::new();
     let mut use_statements: Vec<TokenStream> = Vec::new();
 
-    let needs_split_select = input_device_config.is_some() && processor_config.is_some();
-    let select_enum_name =
-        needs_split_select.then(|| format_ident!("__RmkSelectEvent{}", struct_name));
-    let mut input_event_type: Option<syn::Path> = None;
-    let mut proc_select_event_type: Option<TokenStream> = None;
-
     // Handle input_device.
-    if let Some(device_config) = input_device_config {
-        input_event_type = Some(device_config.event_type.clone());
+    if input_device_config.is_some() {
         use_statements.push(quote! { use ::rmk::event::publish_event_async; });
         use_statements.push(quote! { use ::rmk::input_device::InputDevice; });
 
-        if let Some(ref enum_name) = select_enum_name {
-            select_arms.push(quote! {
-                event = self.read_event().fuse() => #enum_name::Input(event)
-            });
-            select_match_arms.push(quote! {
-                #enum_name::Input(event) => {
-                    publish_event_async(event).await;
-                }
-            });
-        } else {
-            select_arms.push(quote! {
-                event = self.read_event().fuse() => {
-                    publish_event_async(event).await;
-                }
-            });
-        }
+        select_arms.push(quote! {
+            event = self.read_event().fuse() => {
+                publish_event_async(event).await;
+            }
+        });
     }
 
     // Handle processor.
     if processor_config.is_some() {
-        proc_select_event_type = Some(quote! { <#struct_name #ty_generics as ::rmk::processor::Processor>::Event });
-
         use_statements.push(quote! { use ::rmk::event::SubscribableEvent; });
         use_statements.push(quote! { use ::rmk::processor::Processor; });
 
@@ -146,25 +97,11 @@ pub fn generate_runnable(
             let mut proc_sub = <Self as ::rmk::processor::Processor>::subscriber();
         });
 
-        if let Some(ref enum_name) = select_enum_name {
-            select_arms.push(quote! {
-                proc_event = proc_sub.next_event().fuse() => #enum_name::Processor(proc_event)
-            });
-        } else {
-            select_arms.push(quote! {
-                proc_event = proc_sub.next_event().fuse() => {
-                    <Self as ::rmk::processor::Processor>::process(self, proc_event).await;
-                }
-            });
-        }
-
-        if let Some(ref enum_name) = select_enum_name {
-            select_match_arms.push(quote! {
-                #enum_name::Processor(event) => {
-                    <Self as ::rmk::processor::Processor>::process(self, event).await;
-                }
-            });
-        }
+        select_arms.push(quote! {
+            proc_event = proc_sub.next_event().fuse() => {
+                <Self as ::rmk::processor::Processor>::process(self, proc_event).await;
+            }
+        });
     }
 
     // === Standalone cases (early returns) ===
@@ -204,28 +141,6 @@ pub fn generate_runnable(
     }
     use_statements.push(quote! { use ::rmk::futures::FutureExt; });
 
-    // Build select enum definition if needed
-    let select_enum_def = select_enum_name.as_ref().map(|enum_name| {
-        let input_type = input_event_type.as_ref().unwrap();
-        let proc_type = proc_select_event_type.as_ref().unwrap();
-        if has_polling {
-            quote! {
-                enum #enum_name {
-                    Input(#input_type),
-                    Processor(#proc_type),
-                    Timer,
-                }
-            }
-        } else {
-            quote! {
-                enum #enum_name {
-                    Input(#input_type),
-                    Processor(#proc_type),
-                }
-            }
-        }
-    });
-
     // Build loop body
     let loop_body = if has_polling {
         let interval_ms = processor_config
@@ -235,33 +150,16 @@ pub fn generate_runnable(
             .unwrap();
         use_statements.push(quote! { use ::rmk::processor::PollingProcessor; });
 
-        let (timer_arm, match_arms) = if let Some(ref enum_name) = select_enum_name {
-            select_match_arms.push(quote! {
-                #enum_name::Timer => {
-                    <Self as PollingProcessor>::update(self).await;
-                    last = ::embassy_time::Instant::now();
-                }
-            });
-            (
-                quote! { _ = timer.fuse() => #enum_name::Timer },
-                Some(select_match_arms.as_slice()),
-            )
-        } else {
-            (
-                quote! {
-                    _ = timer.fuse() => {
-                        <Self as PollingProcessor>::update(self).await;
-                        last = ::embassy_time::Instant::now();
-                    }
-                },
-                None,
-            )
+        let timer_arm = quote! {
+            _ = timer.fuse() => {
+                <Self as PollingProcessor>::update(self).await;
+                last = ::embassy_time::Instant::now();
+            }
         };
 
-        build_polling_loop_body(interval_ms, timer_arm, &select_arms, match_arms)
+        build_polling_loop_body(interval_ms, timer_arm, &select_arms)
     } else {
-        let match_arms = needs_split_select.then_some(select_match_arms.as_slice());
-        build_select_loop_body(&select_arms, match_arms)
+        build_select_loop_body(&select_arms)
     };
 
     // Build timer init if polling
@@ -270,7 +168,6 @@ pub fn generate_runnable(
     // Assemble final output
     wrap_runnable(quote! {
         #(#use_statements)*
-        #select_enum_def
         #(#sub_defs)*
         #timer_init
         loop {

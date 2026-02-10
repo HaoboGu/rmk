@@ -36,52 +36,82 @@ impl AttributeParser {
     }
 
     /// Get an integer value for `name = N`.
-    pub fn get_int<T>(&self, name: &str) -> Option<T>
+    ///
+    /// Returns an error when the key exists but is not an integer literal,
+    /// or cannot be parsed into the requested integer type.
+    pub fn get_int<T>(&self, name: &str) -> Result<Option<T>, TokenStream>
     where
         T: std::str::FromStr,
         T::Err: std::fmt::Display,
     {
-        self.metas.iter().find_map(|meta| {
-            if let Meta::NameValue(nv) = meta
-                && nv.path.is_ident(name)
-                && let syn::Expr::Lit(syn::ExprLit {
-                    lit: syn::Lit::Int(lit),
-                    ..
-                }) = &nv.value
-            {
-                lit.base10_parse().ok()
-            } else {
-                None
-            }
+        let Some(meta) = self
+            .metas
+            .iter()
+            .find(|meta| matches!(meta, Meta::NameValue(nv) if nv.path.is_ident(name)))
+        else {
+            return Ok(None);
+        };
+
+        let Meta::NameValue(nv) = meta else {
+            return Ok(None);
+        };
+
+        let syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Int(lit),
+            ..
+        }) = &nv.value
+        else {
+            return Err(syn::Error::new_spanned(
+                &nv.value,
+                format!("`{name}` must be an integer literal"),
+            )
+            .to_compile_error());
+        };
+
+        lit.base10_parse().map(Some).map_err(|err| {
+            syn::Error::new_spanned(lit, format!("invalid `{name}` value: {err}")).to_compile_error()
         })
     }
 
     /// Get an array of paths for `name = [Type1, Type2]`.
-    pub fn get_path_array(&self, name: &str) -> Vec<syn::Path> {
-        self.metas
+    ///
+    /// Returns an error when the key exists but the value is not an array,
+    /// or when any array element is not a path.
+    pub fn get_path_array(&self, name: &str) -> Result<Vec<syn::Path>, TokenStream> {
+        let Some(meta) = self
+            .metas
             .iter()
-            .find_map(|meta| {
-                if let Meta::NameValue(nv) = meta
-                    && nv.path.is_ident(name)
-                    && let syn::Expr::Array(arr) = &nv.value
-                {
-                    Some(
-                        arr.elems
-                            .iter()
-                            .filter_map(|e| {
-                                if let syn::Expr::Path(p) = e {
-                                    Some(p.path.clone())
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect(),
-                    )
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_default()
+            .find(|meta| matches!(meta, Meta::NameValue(nv) if nv.path.is_ident(name)))
+        else {
+            return Ok(vec![]);
+        };
+
+        let Meta::NameValue(nv) = meta else {
+            return Ok(vec![]);
+        };
+
+        let syn::Expr::Array(arr) = &nv.value else {
+            return Err(syn::Error::new_spanned(
+                &nv.value,
+                format!("`{name}` must be an array of type paths, e.g. `[EventA, EventB]`"),
+            )
+            .to_compile_error());
+        };
+
+        let mut result = Vec::with_capacity(arr.elems.len());
+        for elem in &arr.elems {
+            if let syn::Expr::Path(path_expr) = elem {
+                result.push(path_expr.path.clone());
+            } else {
+                return Err(syn::Error::new_spanned(
+                    elem,
+                    format!("invalid `{name}` element: expected a type path"),
+                )
+                .to_compile_error());
+            }
+        }
+
+        Ok(result)
     }
 
     /// Get a single path for `name = Type`.
@@ -130,28 +160,37 @@ impl AttributeParser {
         })
     }
 
-    /// Validate that all attribute keys are in the allowed set.
+    /// Validate attribute key/value pairs against the allowed set.
     ///
-    /// Returns a compile error if any unknown key is found.
+    /// Enforces `key = value` syntax and rejects unknown keys.
     pub fn validate_keys(&self, allowed: &[&str]) -> Result<(), TokenStream> {
         for meta in &self.metas {
-            let path = match meta {
-                Meta::NameValue(nv) => &nv.path,
-                Meta::Path(p) => p,
-                Meta::List(l) => &l.path,
+            let Meta::NameValue(nv) = meta else {
+                return Err(syn::Error::new_spanned(
+                    meta,
+                    "invalid attribute syntax. Expected `key = value`",
+                )
+                .to_compile_error());
             };
-            let key = path.get_ident().map(|i| i.to_string());
-            if let Some(ref key) = key {
-                if !allowed.contains(&key.as_str()) {
-                    let allowed_list = allowed.join(", ");
-                    return Err(syn::Error::new_spanned(
-                        path,
-                        format!(
-                            "unknown attribute `{key}`. Expected one of: {allowed_list}"
-                        ),
-                    )
-                    .to_compile_error());
-                }
+
+            let Some(key_ident) = nv.path.get_ident() else {
+                return Err(syn::Error::new_spanned(
+                    &nv.path,
+                    "invalid attribute key. Expected a simple identifier",
+                )
+                .to_compile_error());
+            };
+
+            let key = key_ident.to_string();
+            if !allowed.contains(&key.as_str()) {
+                let allowed_list = allowed.join(", ");
+                return Err(syn::Error::new_spanned(
+                    &nv.path,
+                    format!(
+                        "unknown attribute `{key}`. Expected one of: {allowed_list}"
+                    ),
+                )
+                .to_compile_error());
             }
         }
         Ok(())

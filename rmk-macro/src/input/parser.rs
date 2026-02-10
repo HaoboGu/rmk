@@ -8,10 +8,8 @@ use crate::utils::AttributeParser;
 /// Parse input_device config from attribute tokens.
 /// Extracts `publish = EventType`.
 pub fn parse_input_device_config(tokens: impl Into<TokenStream>) -> Result<Option<InputDeviceConfig>, TokenStream> {
-    let parser = match AttributeParser::new(tokens) {
-        Ok(p) => p,
-        Err(_) => return Ok(None),
-    };
+    let parser = AttributeParser::new(tokens)
+        .map_err(|e| e.to_compile_error())?;
     parser.validate_keys(&["publish"])?;
     Ok(parser
         .get_path("publish")
