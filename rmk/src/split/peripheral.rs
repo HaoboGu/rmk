@@ -18,7 +18,7 @@ use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
 use crate::CONNECTION_STATE;
 use crate::event::{KeyboardEvent, PointingEvent, SubscribableEvent, TouchpadEvent};
-#[cfg(feature = "controller")]
+
 use crate::event::{LayerChangeEvent, LedIndicatorEvent, publish_event};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;

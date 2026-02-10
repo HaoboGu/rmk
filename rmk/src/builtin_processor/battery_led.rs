@@ -1,3 +1,4 @@
+//! Battery LED processor for RMK
 use embedded_hal::digital::StatefulOutputPin;
 use rmk_macro::processor;
 
@@ -5,12 +6,12 @@ use crate::driver::gpio::OutputController;
 use crate::event::BatteryStateEvent;
 
 #[processor(subscribe = [BatteryStateEvent], poll_interval = 1000)]
-pub struct BatteryLedController<P: StatefulOutputPin> {
+pub struct BatteryLedProcessor<P: StatefulOutputPin> {
     pin: OutputController<P>,
     state: BatteryStateEvent,
 }
 
-impl<P: StatefulOutputPin> BatteryLedController<P> {
+impl<P: StatefulOutputPin> BatteryLedProcessor<P> {
     pub fn new(pin: P, low_active: bool) -> Self {
         Self {
             pin: OutputController::new(pin, low_active),

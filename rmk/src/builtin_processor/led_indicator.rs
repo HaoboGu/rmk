@@ -1,4 +1,4 @@
-/// The controller for handling LED indicators defined in HID spec, including NumLock, CapsLock, ScrollLock, Compose, and Kana.
+//! The processor for handling LED indicators defined in HID spec, including NumLock, CapsLock, ScrollLock, Compose, and Kana.
 use embedded_hal::digital::StatefulOutputPin;
 use rmk_macro::processor;
 use rmk_types::led_indicator::LedIndicatorType;
@@ -7,12 +7,12 @@ use crate::driver::gpio::OutputController;
 use crate::event::LedIndicatorEvent;
 
 #[processor(subscribe = [LedIndicatorEvent])]
-pub struct KeyboardIndicatorController<P: StatefulOutputPin> {
+pub struct KeyboardIndicatorProcessor<P: StatefulOutputPin> {
     pin: OutputController<P>,
     indicator: LedIndicatorType,
 }
 
-impl<P: StatefulOutputPin> KeyboardIndicatorController<P> {
+impl<P: StatefulOutputPin> KeyboardIndicatorProcessor<P> {
     pub fn new(pin: P, low_active: bool, lock_name: LedIndicatorType) -> Self {
         Self {
             pin: OutputController::new(pin, low_active),

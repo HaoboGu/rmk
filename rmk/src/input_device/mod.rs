@@ -69,7 +69,7 @@ pub trait InputDevice: Runnable {
 
 /// Macro to run multiple Runnable instances concurrently.
 ///
-/// This macro simplifies running multiple input devices, processors, or controllers
+/// This macro simplifies running multiple input devices and processors
 /// that implement the `Runnable` trait.
 ///
 /// # Example

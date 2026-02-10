@@ -1,3 +1,4 @@
+//! WPM (Words Per Minute) processor for RMK
 use rmk_macro::processor;
 
 use crate::event::{KeyEvent, KeyboardEvent, ModifierEvent, WpmUpdateEvent, publish_event};
@@ -5,15 +6,15 @@ use crate::event::{KeyEvent, KeyboardEvent, ModifierEvent, WpmUpdateEvent, publi
 const CHARS_PER_WORD: u8 = 5;
 const SAMPLES: u8 = 5;
 
-/// Controller to estimate typing speed in words per minute (WPM)
+/// Processor to estimate typing speed in words per minute (WPM)
 #[processor(subscribe = [KeyEvent, ModifierEvent], poll_interval = 1000)]
-pub(crate) struct WpmController {
+pub(crate) struct WpmProcessor {
     keys_pressed: u8,
     wpm: u16,
     update_count: u8,
 }
 
-impl WpmController {
+impl WpmProcessor {
     pub fn new() -> Self {
         Self {
             keys_pressed: 0,

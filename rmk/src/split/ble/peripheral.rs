@@ -8,7 +8,7 @@ use trouble_host::prelude::*;
 use {super::PeerAddress, crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash};
 
 use crate::CONNECTION_STATE;
-#[cfg(feature = "controller")]
+
 use crate::event::{CentralConnectedEvent, publish_event};
 use crate::event::{KeyboardEvent, SubscribableEvent};
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};

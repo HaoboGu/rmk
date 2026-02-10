@@ -109,23 +109,21 @@ pub fn processor_impl(
     // Skip if: marker was already present, OR a sibling #[input_device] will handle it
     let runnable_impl = if has_marker || has_input_device {
         quote! {}
-    } else {
-        if config.poll_interval_ms.is_some() {
-            quote! {
-                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #deduped_ty_generics #where_clause {
-                    async fn run(&mut self) -> ! {
-                        use ::rmk::processor::PollingProcessor;
-                        self.polling_loop().await
-                    }
+    } else if config.poll_interval_ms.is_some() {
+        quote! {
+            impl #impl_generics ::rmk::input_device::Runnable for #struct_name #deduped_ty_generics #where_clause {
+                async fn run(&mut self) -> ! {
+                    use ::rmk::processor::PollingProcessor;
+                    self.polling_loop().await
                 }
             }
-        } else {
-            quote! {
-                impl #impl_generics ::rmk::input_device::Runnable for #struct_name #deduped_ty_generics #where_clause {
-                    async fn run(&mut self) -> ! {
-                        use ::rmk::processor::Processor;
-                        self.process_loop().await
-                    }
+        }
+    } else {
+        quote! {
+            impl #impl_generics ::rmk::input_device::Runnable for #struct_name #deduped_ty_generics #where_clause {
+                async fn run(&mut self) -> ! {
+                    use ::rmk::processor::Processor;
+                    self.process_loop().await
                 }
             }
         }

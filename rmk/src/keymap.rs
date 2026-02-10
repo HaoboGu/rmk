@@ -7,7 +7,6 @@ use {
 
 use crate::config::{BehaviorConfig, PositionalConfig};
 use crate::event::{KeyboardEvent, KeyboardEventPos};
-#[cfg(feature = "controller")]
 use crate::event::{LayerChangeEvent, publish_event};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
@@ -329,7 +328,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     pub(crate) fn update_fn_layer_state(&mut self) {
         if NUM_LAYER > 3 {
             self.layer_state[3] = self.layer_state[1] && self.layer_state[2];
-            #[cfg(feature = "controller")]
             {
                 let layer = self.get_activated_layer();
                 publish_event(LayerChangeEvent { layer });
@@ -344,7 +342,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 self.layer_state[tri_layer[0] as usize] && self.layer_state[tri_layer[1] as usize];
         }
 
-        #[cfg(feature = "controller")]
         {
             let layer = self.get_activated_layer();
             publish_event(LayerChangeEvent { layer });
@@ -389,7 +386,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         self.layer_state[layer_num as usize] = !self.layer_state[layer_num as usize];
 
-        #[cfg(feature = "controller")]
         {
             let layer = self.get_activated_layer();
             publish_event(LayerChangeEvent { layer });

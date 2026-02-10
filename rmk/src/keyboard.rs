@@ -18,9 +18,8 @@ use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::combo::Combo;
 use crate::config::Hand;
 use crate::descriptor::KeyboardReport;
-#[cfg(all(feature = "split", feature = "_ble", feature = "controller"))]
+#[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::ClearPeerEvent;
-#[cfg(feature = "controller")]
 use crate::event::{KeyEvent, ModifierEvent, publish_event};
 use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos, SubscribableEvent, publish_event_async};
 use crate::fork::{ActiveFork, StateBits};
@@ -785,7 +784,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         #[cfg(feature = "_ble")]
         LAST_KEY_TIMESTAMP.signal(Instant::now().as_secs() as u32);
 
-        #[cfg(feature = "controller")]
         publish_event(KeyEvent {
             keyboard_event: event,
             key_action,
@@ -1823,7 +1821,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         {
                             Either::First(_) => {
                                 // Timeout reached, send clear peer message
-                                #[cfg(feature = "controller")]
+                                #[cfg(all(feature = "split", feature = "_ble"))]
                                 publish_event(ClearPeerEvent);
                                 info!("Clear peer");
                             }
@@ -2102,7 +2100,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn register_modifier_key(&mut self, key: HidKeyCode) {
         self.held_modifiers |= key.to_hid_modifiers();
 
-        #[cfg(feature = "controller")]
         publish_event(ModifierEvent {
             modifier: self.held_modifiers,
         });
@@ -2115,7 +2112,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn unregister_modifier_key(&mut self, key: HidKeyCode) {
         self.held_modifiers &= !key.to_hid_modifiers();
 
-        #[cfg(feature = "controller")]
         publish_event(ModifierEvent {
             modifier: self.held_modifiers,
         });
@@ -2125,7 +2121,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn register_modifiers(&mut self, modifiers: ModifierCombination) {
         self.held_modifiers |= modifiers;
 
-        #[cfg(feature = "controller")]
         publish_event(ModifierEvent {
             modifier: self.held_modifiers,
         });
@@ -2138,7 +2133,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn unregister_modifiers(&mut self, modifiers: ModifierCombination) {
         self.held_modifiers &= !modifiers;
 
-        #[cfg(feature = "controller")]
         publish_event(ModifierEvent {
             modifier: self.held_modifiers,
         });

@@ -1,10 +1,6 @@
-# Processor (Controller Support)
+# Processor
 
 RMK's processor system provides a unified interface for managing output devices like displays, LEDs, and other peripherals that respond to keyboard events.
-
-::: tip Unified API
-The `#[processor]` macro replaces the previous `#[controller]` and `#[input_processor]` macros, providing a unified way to define event-driven components.
-:::
 
 ## Overview
 
@@ -108,14 +104,14 @@ impl MyProcessor {
 
 ### Registering Processors
 
-Processors need to be registered in your `#[rmk_keyboard]` module using the `#[register_controller]` attribute:
+Processors need to be registered in your `#[rmk_keyboard]` module using the `#[register_processor]` attribute:
 
 ```rust
 #[rmk_keyboard]
 mod my_keyboard {
     use super::*;
 
-    #[register_controller(event)]  // Event-driven mode
+    #[register_processor(event)]  // Event-driven mode
     fn my_processor() -> MyProcessor {
         MyProcessor::new()
     }
@@ -123,8 +119,8 @@ mod my_keyboard {
 ```
 
 Available registration modes:
-- `#[register_controller(event)]`: Event-driven mode, reacts to subscribed events
-- `#[register_controller(poll)]`: Polling mode, requires `poll_interval` parameter in `#[processor]` macro
+- `#[register_processor(event)]`: Event-driven mode, reacts to subscribed events
+- `#[register_processor(poll)]`: Polling mode, requires `poll_interval` parameter in `#[processor]` macro
 
 ### Multi-event Subscription
 
@@ -274,11 +270,11 @@ Processors can subscribe to custom events the same way as built-in events:
 use rmk_macro::processor;
 
 #[processor(subscribe = [DisplayUpdateEvent])]
-pub struct DisplayController {
+pub struct DisplayProcessor {
     // ...
 }
 
-impl DisplayController {
+impl DisplayProcessor {
     async fn on_display_update_event(&mut self, event: DisplayUpdateEvent) {
         // Handle the custom event
     }

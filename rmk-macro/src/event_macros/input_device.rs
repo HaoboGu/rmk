@@ -20,16 +20,14 @@ fn extract_processor_config_from_marker(attrs: &[Attribute]) -> Option<Processor
         }
 
         // Check if this marker has embedded config
-        if let Meta::List(meta_list) = &attr.meta {
-            if !meta_list.tokens.is_empty() {
+        if let Meta::List(meta_list) = &attr.meta
+            && !meta_list.tokens.is_empty() {
                 // Try to parse as processor config
-                if let Ok(config) = parse_processor_config(meta_list.tokens.clone()) {
-                    if !config.event_types.is_empty() {
+                if let Ok(config) = parse_processor_config(meta_list.tokens.clone())
+                    && !config.event_types.is_empty() {
                         return Some(config);
                     }
-                }
             }
-        }
     }
     None
 }

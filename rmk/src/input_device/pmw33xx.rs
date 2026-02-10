@@ -60,7 +60,7 @@ enum Register {
     DeltaXH,
     DeltaYL,
     DeltaYH,
-    SQUAL,
+    Squal,
     RawDataSum,
     MaximumRawData,
     MinimumRawData,
@@ -121,7 +121,7 @@ impl Register {
             Register::DeltaXH => 0x04,
             Register::DeltaYL => 0x05,
             Register::DeltaYH => 0x06,
-            Register::SQUAL => 0x07,
+            Register::Squal => 0x07,
             Register::RawDataSum => 0x08,
             Register::MaximumRawData => 0x09,
             Register::MinimumRawData => 0x0a,
@@ -748,6 +748,7 @@ where
     /// Create a new PMW33xx device with SROM firmware and custom poll intervall and report rate
     ///
     /// Firmware is downloaded to the sensor on every startup
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_firmware_poll_interval_report_hertz(
         id: u8,
         spi: SPI,

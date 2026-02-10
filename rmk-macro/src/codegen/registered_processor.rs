@@ -3,43 +3,37 @@ use quote::quote;
 use rmk_config::{ChipModel, KeyboardTomlConfig, PinConfig};
 use syn::ItemMod;
 
-use super::feature::{get_rmk_features, is_feature_enabled};
 use super::chip::gpio::convert_gpio_str_to_output_pin;
 
-/// Expand controller init/exec blocks from keyboard config.
+/// Expand processor init/exec blocks from keyboard config.
 /// Returns (initializers, executors).
-pub(crate) fn expand_controller_init(
+pub(crate) fn expand_registered_processor_init(
     keyboard_config: &KeyboardTomlConfig,
     item_mod: &ItemMod,
 ) -> (TokenStream, Vec<TokenStream>) {
-    let controller_feature_enabled = is_feature_enabled(&get_rmk_features(), "controller");
-
     let mut initializers = TokenStream::new();
     let mut executors = vec![];
 
-    let (i, e) = expand_light_controllers(keyboard_config, controller_feature_enabled);
+    let (i, e) = expand_light_indicator_processors(keyboard_config);
     initializers.extend(i);
     executors.extend(e);
 
-    // Custom controllers declared in the module.
+    // Custom processors declared in the module.
     if let Some((_, items)) = &item_mod.content {
         items.iter().for_each(|item| {
             if let syn::Item::Fn(item_fn) = &item
-                && let Some(attr) = item_fn.attrs.iter().find(|attr| attr.path().is_ident("register_controller")) {
+                && let Some(attr) = item_fn.attrs.iter().find(|attr| attr.path().is_ident("register_processor")) {
                     let _ = attr.parse_nested_meta(|meta| {
-                        if !controller_feature_enabled {
-                            panic!("\"controller\" feature of RMK must be enabled to use the #[register_controller] attribute");
-                        }
-                        let (custom_init, custom_exec) = expand_custom_controller(item_fn);
+                        let (custom_init, custom_exec) = expand_custom_processor(item_fn);
                         initializers.extend(custom_init);
 
                         if meta.path.is_ident("event") || meta.path.is_ident("poll") {
-                            // Processor/controller runnables are executed through `run()`.
+                            // Processor runnables are executed through `run()`.
                             executors.push(quote! { #custom_exec.run() });
                             return Ok(());
                         }
 
-                        panic!("#[register_controller] must specify execution mode with `event` or `poll`. Use `#[register_controller(event)]` or `#[register_controller(poll)]`")
+                        panic!("#[register_processor] must specify execution mode with `event` or `poll`. Use `#[register_processor(event)]` or `#[register_processor(poll)]`")
                     });
                 }
         });
@@ -48,9 +42,8 @@ pub(crate) fn expand_controller_init(
     (initializers, executors)
 }
 
-fn expand_light_controllers(
+fn expand_light_indicator_processors(
     keyboard_config: &KeyboardTomlConfig,
-    controller_feature_enabled: bool,
 ) -> (TokenStream, Vec<TokenStream>) {
     let chip = keyboard_config.get_chip_model().unwrap();
     let light_config = keyboard_config.get_light_config();
@@ -58,32 +51,29 @@ fn expand_light_controllers(
     let mut initializers = TokenStream::new();
     let mut executors = vec![];
 
-    create_keyboard_indicator_controller(
+    create_keyboard_indicator_processor(
         &chip,
         &light_config.numslock,
-        quote! { numlock_controller },
+        quote! { numlock_processor },
         quote! { NumLock },
-        controller_feature_enabled,
         &mut initializers,
         &mut executors,
     );
 
-    create_keyboard_indicator_controller(
+    create_keyboard_indicator_processor(
         &chip,
         &light_config.scrolllock,
-        quote! { scrolllock_controller },
+        quote! { scrolllock_processor },
         quote! { ScrollLock },
-        controller_feature_enabled,
         &mut initializers,
         &mut executors,
     );
 
-    create_keyboard_indicator_controller(
+    create_keyboard_indicator_processor(
         &chip,
         &light_config.capslock,
-        quote! { capslock_controller },
+        quote! { capslock_processor },
         quote! { CapsLock },
-        controller_feature_enabled,
         &mut initializers,
         &mut executors,
     );
@@ -91,34 +81,30 @@ fn expand_light_controllers(
     (initializers, executors)
 }
 
-fn create_keyboard_indicator_controller(
+fn create_keyboard_indicator_processor(
     chip: &ChipModel,
     pin_config: &Option<PinConfig>,
-    controller_ident: TokenStream,
+    processor_ident: TokenStream,
     led_indicator_variant: TokenStream,
-    controller_feature_enabled: bool,
     initializers: &mut TokenStream,
     executors: &mut Vec<TokenStream>,
 ) {
     if let Some(c) = pin_config {
-        if !controller_feature_enabled {
-            panic!("\"controller\" feature of RMK must be enabled to use the [light] configuration")
-        }
         let p = convert_gpio_str_to_output_pin(chip, c.pin.clone(), c.low_active);
         let low_active = c.low_active;
-        let controller_init = quote! {
-            let mut #controller_ident = ::rmk::controller::led_indicator::KeyboardIndicatorController::new(
+        let processor_init = quote! {
+            let mut #processor_ident = ::rmk::builtin_processor::led_indicator::KeyboardIndicatorProcessor::new(
                 #p,
                 #low_active,
                 ::rmk::types::led_indicator::LedIndicatorType::#led_indicator_variant,
             );
         };
-        initializers.extend(controller_init);
-        executors.push(quote! { #controller_ident.run() });
+        initializers.extend(processor_init);
+        executors.push(quote! { #processor_ident.run() });
     }
 }
 
-fn expand_custom_controller(fn_item: &syn::ItemFn) -> (TokenStream, &syn::Ident) {
+fn expand_custom_processor(fn_item: &syn::ItemFn) -> (TokenStream, &syn::Ident) {
     let task_name = &fn_item.sig.ident;
 
     let content = &fn_item.block.stmts;

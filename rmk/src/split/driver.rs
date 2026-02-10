@@ -65,7 +65,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
 
     /// Run the manager.
     ///
-    /// The manager receives from the peripheral and publishes input/controller events.
+    /// The manager receives from the peripheral and publishes input events.
     /// It also sync the `ConnectionState` to the peripheral periodically.
     pub(crate) async fn run(mut self) {
         use crate::event::EventSubscriber;

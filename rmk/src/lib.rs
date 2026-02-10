@@ -30,11 +30,8 @@ use bt_hci::{
     cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy},
     controller::{ControllerCmdAsync, ControllerCmdSync},
 };
+use builtin_processor::wpm::WpmProcessor;
 use config::RmkConfig;
-#[cfg(feature = "controller")]
-use controller::wpm::WpmController;
-#[cfg(feature = "controller")]
-use processor::PollingProcessor;
 #[cfg(not(feature = "_ble"))]
 use descriptor::{CompositeReport, KeyboardReport};
 #[cfg(not(any(cortex_m)))]
@@ -47,6 +44,7 @@ use futures::FutureExt;
 use hid::{HidReaderTrait, RunnableHidWriter};
 use keymap::KeyMap;
 use matrix::MatrixTrait;
+use processor::PollingProcessor;
 use rmk_types::action::{EncoderAction, KeyAction};
 use rmk_types::led_indicator::LedIndicator;
 use state::CONNECTION_STATE;
@@ -66,7 +64,6 @@ use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Stor
 use crate::config::PositionalConfig;
 #[cfg(feature = "vial")]
 use crate::config::VialConfig;
-#[cfg(feature = "controller")]
 use crate::event::{LedIndicatorEvent, publish_event};
 use crate::keyboard::LOCK_LED_STATES;
 use crate::state::ConnectionState;
@@ -74,11 +71,10 @@ use crate::state::ConnectionState;
 #[cfg(feature = "_ble")]
 pub mod ble;
 mod boot;
+pub mod builtin_processor;
 pub mod channel;
 pub mod combo;
 pub mod config;
-#[cfg(feature = "controller")]
-pub mod controller;
 pub mod debounce;
 pub mod descriptor;
 pub mod direct_pin;
@@ -368,7 +364,6 @@ pub(crate) async fn run_keyboard<
                 Ok(led_indicator) => {
                     info!("Got led indicator");
                     LOCK_LED_STATES.store(led_indicator.into_bits(), core::sync::atomic::Ordering::Relaxed);
-                    #[cfg(feature = "controller")]
                     publish_event(LedIndicatorEvent {
                         indicator: led_indicator,
                     });
@@ -391,8 +386,7 @@ pub(crate) async fn run_keyboard<
     #[cfg(feature = "storage")]
     let storage_fut = storage.run();
 
-    #[cfg(feature = "controller")]
-    let mut wpm_controller = WpmController::new();
+    let mut wpm_processor = WpmProcessor::new();
 
     #[cfg(feature = "storage")]
     let storage_task = core::pin::pin!(storage_fut.fuse());
@@ -405,7 +399,7 @@ pub(crate) async fn run_keyboard<
     futures::select_biased! {
         _ = communication_task => error!("Communication task has ended"),
         _ = with_feature!("storage", storage_task) => error!("Storage task has ended"),
-        _ = with_feature!("controller", wpm_controller.polling_loop()) => error!("WPM Controller task ended"),
+        _ = wpm_processor.polling_loop().fuse() => error!("WPM Processor task ended"),
         _ = led_task => error!("Led task has ended"),
         _ = with_feature!("host", host_task) => error!("Host task ended"),
         _ = writer_task => error!("Writer task has ended"),

@@ -264,12 +264,12 @@ A processor that both handles events and performs periodic updates:
 use rmk_macro::processor;
 
 #[processor(subscribe = [LedIndicatorEvent], poll_interval = 500)]
-pub struct BlinkingLedController {
+pub struct BlinkingLedProcessor {
     led_on: bool,
     blink_enabled: bool,
 }
 
-impl BlinkingLedController {
+impl BlinkingLedProcessor {
     // Handler for LedIndicatorEvent
     async fn on_led_indicator_event(&mut self, event: LedIndicatorEvent) {
         self.blink_enabled = event.caps_lock;

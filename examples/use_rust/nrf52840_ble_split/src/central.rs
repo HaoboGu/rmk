@@ -22,10 +22,10 @@ use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
+use rmk::builtin_processor::led_indicator::KeyboardIndicatorProcessor;
 use rmk::config::{
     BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
-use rmk::controller::led_indicator::KeyboardIndicatorController;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::event::*;
 use rmk::futures::future::{join4, join5};
@@ -223,7 +223,7 @@ async fn main(spawner: Spawner) {
     let mut batt_proc = BatteryProcessor::new(2000, 2806);
 
     // Initialize the controllers
-    let mut capslock_led = KeyboardIndicatorController::new(
+    let mut capslock_led = KeyboardIndicatorProcessor::new(
         Output::new(
             p.P0_00,
             embassy_nrf::gpio::Level::Low,
