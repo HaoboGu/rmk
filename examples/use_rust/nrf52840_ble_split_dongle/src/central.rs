@@ -8,7 +8,7 @@ mod keymap;
 
 use defmt::{info, unwrap};
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{Input, Output};
+use embassy_nrf::gpio::{Flex, Input, Output};
 use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::mode::Async;
 use embassy_nrf::peripherals::{RNG, SAADC, USBD};
@@ -31,6 +31,8 @@ use rmk::futures::future::{join, join4};
 use rmk::input_device::Runnable;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
+use rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610, Pmw3610Config};
+use rmk::input_device::pointing::{PointingDevice, PointingProcessor, PointingProcessorConfig};
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
@@ -213,6 +215,34 @@ async fn main(spawner: Spawner) {
     // Read peripheral address from storage
     let peripheral_addrs = read_peripheral_addresses::<2, _, 8, 7, 4, 2>(&mut storage).await;
 
+    // Initialize pointing device
+    let pmw3610_config = Pmw3610Config {
+        res_cpi: 800,
+        smart_mode: true,
+        ..Default::default()
+    };
+    let pmw3610_sck = Output::new(
+        p.P1_15,
+        embassy_nrf::gpio::Level::High,
+        embassy_nrf::gpio::OutputDrive::Standard,
+    );
+    let pmw3610_sdio = Flex::new(p.P1_14);
+    let pmw3610_cs = Output::new(
+        p.P1_12,
+        embassy_nrf::gpio::Level::High,
+        embassy_nrf::gpio::OutputDrive::Standard,
+    );
+    let pmw3610_motion = Some(Input::new(p.P1_08, embassy_nrf::gpio::Pull::Up));
+    let pmw3610_spi = BitBangSpiBus::new(pmw3610_sck, pmw3610_sdio);
+    let mut pmw3610_device = PointingDevice::<Pmw3610<_, _, _>>::new(
+        0,
+        pmw3610_spi,
+        pmw3610_cs,
+        pmw3610_motion,
+        pmw3610_config,
+    );
+    let mut pointing_processor = PointingProcessor::new(&keymap, PointingProcessorConfig::default());
+
     // Initialize the encoder processor
     let mut adc_device = NrfAdc::new(
         saadc,
@@ -236,7 +266,7 @@ async fn main(spawner: Spawner) {
     // Start
     join4(
         async {},
-        run_all!(matrix, encoder, adc_device, batt_proc),
+        run_all!(matrix, encoder, pmw3610_device, adc_device, batt_proc, pointing_processor),
         join(keyboard.run(), capslock_led.run()),
         join4(
             scan_peripherals(&stack, &peripheral_addrs),

@@ -31,7 +31,7 @@ pub use connection::{ConnectionChangeEvent, ConnectionType};
 pub use key::{KeyEvent, ModifierEvent};
 pub use keyboard::{KeyPos, KeyboardEvent, KeyboardEventPos, RotaryEncoderPos};
 pub use keyboard_state::{LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent};
-pub use pointing::{Axis, AxisEvent, AxisValType, PointingEvent};
+pub use pointing::{Axis, AxisEvent, AxisValType, PointingEvent, PointingSetCpiEvent};
 #[cfg(feature = "_ble")]
 pub use power::BatteryStateEvent;
 #[cfg(feature = "split")]

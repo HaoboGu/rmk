@@ -1,7 +1,10 @@
-//! Processor module for RMK
+//! Runtime traits for event consumers in RMK.
 //!
-//! This module defines the unified `Processor` trait and its `PollingProcessor` variant.
-//! These traits replace the previous `InputProcessor` and `Controller` traits.
+//! In RMK's event system, `crate::event` defines how event types are published
+//! and subscribed, while `Processor` defines how a task consumes those events.
+//! `Processor` provides the core consume loop (`subscriber` -> `next_event` ->
+//! `process`), and `PollingProcessor` extends it with timer-driven `update`
+//! calls interleaved with event handling.
 
 use embassy_futures::select::{Either, select};
 

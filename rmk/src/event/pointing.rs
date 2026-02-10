@@ -39,3 +39,13 @@ pub enum Axis {
     V,
     // .. More is allowed
 }
+
+/// Set the CPI (Resolution) of the pointing device
+/// TODO: Make the channel size configurable
+#[event(channel_size = 8, pubs = 2, subs = 2)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct PointingSetCpiEvent {
+    pub device_id: u8,
+    pub cpi: u16,
+}
