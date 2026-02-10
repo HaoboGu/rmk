@@ -9,9 +9,19 @@ use super::utils::AttributeParser;
 /// Extracts `publish = EventType`.
 pub fn parse_input_device_config(
     tokens: impl Into<TokenStream>,
-) -> Result<Option<InputDeviceConfig>, TokenStream> {
+) -> Result<InputDeviceConfig, TokenStream> {
     let parser = AttributeParser::new_validated(tokens, &["publish"])?;
-    Ok(parser
+
+    parser
         .get_path("publish")
-        .map(|event_type| InputDeviceConfig { event_type }))
+        .map(|event_type| InputDeviceConfig {
+            event_type,
+        })
+        .ok_or_else(|| {
+            syn::Error::new(
+                proc_macro2::Span::call_site(),
+                "#[input_device] requires `publish` attribute. Use `#[input_device(publish = EventType)]`",
+            )
+            .to_compile_error()
+        })
 }

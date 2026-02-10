@@ -33,18 +33,7 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         Ok(config) => config,
         Err(err) => return err.into(),
     };
-
-    // Validate single event type
-    if device_config.is_none() {
-        return syn::Error::new_spanned(
-            &input,
-            "#[input_device] requires `publish` attribute with a single event type. Use `#[input_device(publish = EventType)]`",
-        )
-        .to_compile_error()
-        .into();
-    }
-
-    let event_type = device_config.unwrap().event_type;
+    let event_type = device_config.event_type;
 
     // Validate input is a struct
     if !matches!(input.data, syn::Data::Struct(_)) {
@@ -62,25 +51,24 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Parse processor config if present (for combined Runnable)
     let processor_config: Option<ProcessorConfig> = if has_processor {
-        let parsed = input
+        let attr = input
             .attrs
             .iter()
             .find(|attr| attr_matches_name(attr, "processor"))
-            .map(|attr| {
-                if let Meta::List(meta_list) = &attr.meta {
-                    parse_processor_config(meta_list.tokens.clone())
-                } else {
-                    Ok(ProcessorConfig {
-                        event_types: vec![],
-                        poll_interval_ms: None,
-                    })
-                }
-            })
-            .transpose();
+            .unwrap(); // Safe because has_processor is true
 
-        match parsed {
-            Ok(config) => config,
-            Err(err) => return err.into(),
+        if let Meta::List(meta_list) = &attr.meta {
+            match parse_processor_config(meta_list.tokens.clone()) {
+                Ok(config) => Some(config),
+                Err(err) => return err.into(),
+            }
+        } else {
+            return syn::Error::new_spanned(
+                attr,
+                "#[processor] requires parameters. Use `#[processor(subscribe = [EventType])]`",
+            )
+            .to_compile_error()
+            .into();
         }
     } else {
         None
@@ -123,8 +111,8 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         .attrs
         .retain(|attr| !attr.path().is_ident("input_device"));
 
-    // Add marker if we generated Runnable
-    if !has_marker && generated_runnable {
+    // Add marker only when sibling macro needs to know Runnable is already generated
+    if has_processor && !has_marker && generated_runnable {
         input.attrs.push(syn::parse_quote!(
             #[::rmk::macros::runnable_generated]
         ));

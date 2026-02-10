@@ -138,7 +138,6 @@ impl ::core::fmt::Debug for NrfAdcEvent {
 /// Basic single-event device
 mod basic {
     use super::{BatteryEvent, input_device};
-    #[::rmk::macros::runnable_generated]
     pub struct BatteryReader {
         pub pin: u8,
     }
@@ -162,7 +161,6 @@ mod basic {
 /// Multi-event device using wrapper enum
 mod multi_event {
     use super::{NrfAdcEvent, input_device};
-    #[::rmk::macros::runnable_generated]
     pub struct NrfAdc<'a, const PIN_NUM: usize, const EVENT_NUM: usize> {
         saadc: Saadc<'a, PIN_NUM>,
         polling_interval: Duration,
