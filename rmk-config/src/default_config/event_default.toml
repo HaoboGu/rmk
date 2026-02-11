@@ -1,0 +1,104 @@
+# Event channel default configurations
+# Users can override any of these in their keyboard.toml under [event.xxx]
+
+# BLE events
+[event.ble_state_change]
+channel_size = 2
+pubs = 1
+subs = 1
+
+[event.ble_profile_change]
+channel_size = 1
+pubs = 1
+subs = 1
+
+# Connection events
+[event.connection_change]
+channel_size = 1
+pubs = 1
+subs = 1
+
+# Input events
+[event.key]
+channel_size = 8
+pubs = 1
+subs = 2
+
+[event.modifier]
+channel_size = 8
+pubs = 1
+subs = 2
+
+[event.keyboard]
+channel_size = 16
+pubs = 1
+subs = 1
+
+# Keyboard state events
+[event.layer_change]
+channel_size = 1
+pubs = 1
+subs = 4
+
+[event.wpm_update]
+channel_size = 1
+pubs = 1
+subs = 1
+
+[event.led_indicator]
+channel_size = 2
+pubs = 1
+subs = 4
+
+[event.sleep_state]
+channel_size = 1
+pubs = 1
+subs = 4
+
+# Power events
+[event.battery_state]
+channel_size = 1
+pubs = 1
+subs = 4
+
+[event.battery_adc]
+channel_size = 2
+pubs = 1
+subs = 1
+
+[event.charging_state]
+channel_size = 2
+pubs = 1
+subs = 1
+
+# Pointing device events
+[event.pointing]
+channel_size = 8
+pubs = 1
+subs = 2
+
+[event.touchpad]
+channel_size = 8
+pubs = 1
+subs = 2
+
+# Split events
+[event.peripheral_connected]
+channel_size = 1
+pubs = 1
+subs = 1
+
+[event.central_connected]
+channel_size = 1
+pubs = 1
+subs = 1
+
+[event.peripheral_battery]
+channel_size = 2
+pubs = 1
+subs = 2
+
+[event.clear_peer]
+channel_size = 1
+pubs = 1
+subs = 4

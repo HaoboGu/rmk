@@ -10,7 +10,7 @@ All [built-in events](../features/processor.md#built-in-events) use Embassy's `P
 - **`pubs`**: Number of publishers - how many concurrent tasks can publish this event type
 - **`subs`**: Number of subscribers - how many concurrent tasks can subscribe to this event type
 
-Each event in RMK has default values chosen for typical use cases. You only need to configure events when your specific requirements differ from these defaults.
+Each event in RMK has default values chosen for typical use cases. You only need to configure events when your specific requirements differ from these defaults. You can view all default values in [`rmk-config/src/default_config/event_default.toml`](https://github.com/HaoboGu/rmk/blob/main/rmk-config/src/default_config/event_default.toml).
 
 ## Configuration Method
 

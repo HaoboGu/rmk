@@ -3,7 +3,11 @@ use postcard::experimental::max_size::MaxSize;
 use rmk_macro::event;
 use serde::{Deserialize, Serialize};
 
-#[event(channel_size = crate::POINTING_EVENT_CHANNEL_SIZE)]
+#[event(
+    channel_size = crate::POINTING_EVENT_CHANNEL_SIZE,
+    pubs = crate::POINTING_EVENT_PUB_SIZE,
+    subs = crate::POINTING_EVENT_SUB_SIZE
+)]
 #[derive(Serialize, Deserialize, Clone, Debug, Copy, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PointingEvent(pub [AxisEvent; 3]);

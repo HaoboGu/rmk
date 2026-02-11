@@ -166,7 +166,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
                 self.process_buffered_key(key).await
             } else {
                 // No buffered tap-hold event, wait for new key
-                let event = self.keyboard_event_subscriber.receive().await;
+                let event = self.keyboard_event_subscriber.next_message_pure().await;
                 // Process the key event
                 self.process_inner(event).await
             };
@@ -179,7 +179,14 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 
     /// Keyboard event subscriber - single instance to receive all keyboard events
-    keyboard_event_subscriber: embassy_sync::channel::Receiver<'static, crate::RawMutex, KeyboardEvent, { crate::KEYBOARD_EVENT_CHANNEL_SIZE }>,
+    keyboard_event_subscriber: embassy_sync::pubsub::Subscriber<
+        'static,
+        crate::RawMutex,
+        KeyboardEvent,
+        { crate::KEYBOARD_EVENT_CHANNEL_SIZE },
+        { crate::KEYBOARD_EVENT_SUB_SIZE },
+        { crate::KEYBOARD_EVENT_PUB_SIZE },
+    >,
 
     /// Unprocessed events
     pub unprocessed_events: Vec<KeyboardEvent, 4>,
@@ -335,7 +342,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     "[Combo] Waiting combo, timeout in: {:?}ms",
                     (key.timeout_time.saturating_duration_since(Instant::now())).as_millis()
                 );
-                match with_deadline(key.timeout_time, self.keyboard_event_subscriber.receive()).await {
+                match with_deadline(key.timeout_time, self.keyboard_event_subscriber.next_message_pure()).await {
                     Ok(event) => {
                         // Process new key event
                         debug!("[Combo] Interrupted by a new key event: {:?}", event);
@@ -352,7 +359,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if key.action.is_morse() {
                     // Wait for timeout or new key event
                     info!("Waiting morse key: {:?}", key.action);
-                    match with_deadline(key.timeout_time, self.keyboard_event_subscriber.receive()).await {
+                    match with_deadline(key.timeout_time, self.keyboard_event_subscriber.next_message_pure()).await {
                         Ok(event) => {
                             debug!("Buffered morse key interrupted by a new key event: {:?}", event);
                             self.process_inner(event).await;
@@ -1282,7 +1289,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 OneShotState::Initial(m) | OneShotState::Single(m) => {
                     self.osm_state = OneShotState::Single(m);
                     let timeout = Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
-                    match select(timeout, self.keyboard_event_subscriber.receive()).await {
+                    match select(timeout, self.keyboard_event_subscriber.next_message_pure()).await {
                         Either::First(_) => {
                             // Timeout, release modifiers
                             self.update_osl(event);
@@ -1335,7 +1342,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     self.osl_state = OneShotState::Single(l);
 
                     let timeout = embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
-                    match select(timeout, self.keyboard_event_subscriber.receive()).await {
+                    match select(timeout, self.keyboard_event_subscriber.next_message_pure()).await {
                         Either::First(_) => {
                             // Timeout, deactivate layer
                             self.keymap.borrow_mut().deactivate_layer(layer_num);
@@ -1783,7 +1790,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 let len = self.keyboard_event_subscriber.len();
                 let mut released = false;
                 for _ in 0..len {
-                    let queued_event = self.keyboard_event_subscriber.receive().await;
+                    let queued_event = self.keyboard_event_subscriber.next_message_pure().await;
                     if queued_event.pos != event.pos || !queued_event.pressed {
                         publish_event_async(queued_event).await;
                     }
@@ -1815,7 +1822,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         // If there's any other key event received during this period, skip
                         match select(
                             embassy_time::Timer::after_millis(5000),
-                            self.keyboard_event_subscriber.receive(),
+                            self.keyboard_event_subscriber.next_message_pure(),
                         )
                         .await
                         {

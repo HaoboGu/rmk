@@ -39,7 +39,7 @@ fn main() {
         user_toml.rmk.split_peripherals_num = 1;
     }
 
-    let constants = get_constants_str(user_toml.rmk, user_toml.event.with_defaults());
+    let constants = get_constants_str(user_toml.rmk, user_toml.event);
 
     // Write to constants.rs file
     let out_dir = env::var("OUT_DIR").unwrap();
@@ -71,7 +71,7 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
     ];
 
     // Add event channel constants
-    // Note: with_defaults() has already been called in main(), so all values are Some
+    // Note: default values are loaded from event_default.toml via config crate
     let (ble_state_change_size, ble_state_change_pubs, ble_state_change_subs) = events.ble_state_change.into_values();
     let (ble_profile_change_size, ble_profile_change_pubs, ble_profile_change_subs) =
         events.ble_profile_change.into_values();
