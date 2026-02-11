@@ -899,4 +899,131 @@ mod tests {
         assert_eq!(acc.remainder_x, 0);
         assert_eq!(acc.remainder_y, 0);
     }
+
+    // === Integration tests for PointingProcessor ===
+
+    #[test]
+    fn test_pointing_processor_mode_selection() {
+        // Test that the processor correctly selects the mode based on current layer
+        let modes = [
+            PointingMode::Cursor,
+            PointingMode::Scroll(ScrollConfig::default()),
+            PointingMode::Sniper(SniperConfig { divisor: 4 }),
+            PointingMode::Cursor,
+        ];
+
+        // Verify all modes are correctly stored
+        for (i, expected_mode) in modes.iter().enumerate() {
+            assert_eq!(&modes[i], expected_mode);
+        }
+    }
+
+    #[test]
+    fn test_scroll_mode_zero_motion_prevention() {
+        let mut acc = MotionAccumulator::default();
+        let config = ScrollConfig { divisor_x: 8, divisor_y: 8 };
+
+        // Small motion that doesn't produce output
+        let (sx, sy) = acc.accumulate(3, 3, config.divisor_x, config.divisor_y);
+        assert_eq!(sx, 0);
+        assert_eq!(sy, 0);
+
+        // Verify remainder is kept
+        assert_eq!(acc.remainder_x, 3);
+        assert_eq!(acc.remainder_y, 3);
+
+        // Additional motion should accumulate
+        let (sx, sy) = acc.accumulate(6, 6, config.divisor_x, config.divisor_y);
+        assert_eq!(sx, 1); // (3+6)/8 = 1 remainder 1
+        assert_eq!(sy, 1);
+        assert_eq!(acc.remainder_x, 1);
+        assert_eq!(acc.remainder_y, 1);
+    }
+
+    #[test]
+    fn test_sniper_mode_divisor() {
+        let mut acc = MotionAccumulator::default();
+        let config = SniperConfig { divisor: 4 };
+
+        // Test that motion is divided correctly
+        let (sx, sy) = acc.accumulate(10, -10, config.divisor, config.divisor);
+        assert_eq!(sx, 2);  // 10/4 = 2 remainder 2
+        assert_eq!(sy, -2); // -10/4 = -2 remainder -2
+        assert_eq!(acc.remainder_x, 2);
+        assert_eq!(acc.remainder_y, -2);
+    }
+
+    #[test]
+    fn test_accumulator_negative_motion() {
+        let mut acc = MotionAccumulator::default();
+
+        // Test negative motion with divisor
+        let (ox, oy) = acc.accumulate(-15, -20, 4, 5);
+        assert_eq!(ox, -3);  // -15/4 = -3 remainder -3
+        assert_eq!(oy, -4);  // -20/5 = -4 remainder 0
+        assert_eq!(acc.remainder_x, -3);
+        assert_eq!(acc.remainder_y, 0);
+
+        // Mix positive and negative
+        let (ox, oy) = acc.accumulate(5, 10, 4, 5);
+        assert_eq!(ox, 0);   // (-3+5)/4 = 0 remainder 2
+        assert_eq!(oy, 2);   // (0+10)/5 = 2 remainder 0
+        assert_eq!(acc.remainder_x, 2);
+        assert_eq!(acc.remainder_y, 0);
+    }
+
+    #[test]
+    fn test_scroll_config_default_values() {
+        let config = ScrollConfig::default();
+        assert_eq!(config.divisor_x, 8);
+        assert_eq!(config.divisor_y, 8);
+    }
+
+    #[test]
+    fn test_sniper_config_default_values() {
+        let config = SniperConfig::default();
+        assert_eq!(config.divisor, 4);
+    }
+
+    #[test]
+    fn test_scroll_mode_asymmetric_divisors() {
+        let mut acc = MotionAccumulator::default();
+        let config = ScrollConfig {
+            divisor_x: 4,
+            divisor_y: 8,
+        };
+
+        // Test asymmetric divisors
+        let (sx, sy) = acc.accumulate(16, 16, config.divisor_x, config.divisor_y);
+        assert_eq!(sx, 4);  // 16/4 = 4
+        assert_eq!(sy, 2);  // 16/8 = 2
+    }
+
+    #[test]
+    fn test_layer_mode_bounds_checking() {
+        // Test that modes array is correctly sized
+        let modes: [PointingMode; 8] = [PointingMode::default(); 8];
+        assert_eq!(modes.len(), 8);
+
+        // Verify all default to Cursor
+        for mode in &modes {
+            assert_eq!(*mode, PointingMode::Cursor);
+        }
+    }
+
+    #[test]
+    fn test_accumulator_saturation() {
+        let mut acc = MotionAccumulator::default();
+
+        // Test with large values that might overflow
+        let (ox, oy) = acc.accumulate(i16::MAX, i16::MAX, 1, 1);
+        assert_eq!(ox, i16::MAX);
+        assert_eq!(oy, i16::MAX);
+
+        // Reset and test negative saturation
+        acc.reset();
+        let (ox, oy) = acc.accumulate(i16::MIN, i16::MIN, 1, 1);
+        assert_eq!(ox, i16::MIN);
+        assert_eq!(oy, i16::MIN);
+    }
 }

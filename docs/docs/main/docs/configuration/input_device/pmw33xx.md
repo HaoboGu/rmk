@@ -143,17 +143,74 @@ This should be added to the `central.rs`-File even if the sensor is on split per
 :::
 
 ```rust
-    use rmk::input_device::pointing::{ PointingProcessor, PointingProcessorConfig };
+use rmk::input_device::pointing::{
+    PointingProcessor, PointingProcessorConfig, PointingMode, ScrollConfig, SniperConfig
+};
 
-    let pmw3360_proc_config = PointingProcessorConfig {
-        // invert_x: true, // invert axis if neccesary
-        // invert_y: true,
-        // swap_y: true,
-        ..Default::default()
-    };
+let pmw3360_proc_config = PointingProcessorConfig {
+    // invert_x: true, // invert axis if necessary
+    // invert_y: true,
+    // swap_xy: true,
+    ..Default::default()
+};
 
-    let mut pmw3360_processor = PointingProcessor::new(&keymap, pmw3360_proc_config);
+let mut pmw3360_processor = PointingProcessor::new(&keymap, pmw3360_proc_config);
 
-    run_all!(pmw3360_processor, /* other processors and devices */)
+run_all!(pmw3360_processor, /* other processors and devices */)
 ```
+
+## Per-Layer Pointing Modes
+
+The `PointingProcessor` supports configuring different pointing behaviors for each layer. This is useful for:
+
+- **Gaming**: Normal cursor on layer 0, sniper mode on layer 1
+- **Productivity**: Cursor on layer 0, scroll mode on layer 1 for document navigation
+- **CAD/Design**: Different precision levels for different tasks
+
+### Available Modes
+
+- **Cursor mode** (default): Normal mouse movement
+- **Scroll mode**: Movement becomes scroll wheel/pan
+- **Sniper mode**: Precision mode with reduced sensitivity
+
+### Example Configuration
+
+```rust
+use rmk::input_device::pointing::{
+    PointingProcessor, PointingProcessorConfig, PointingMode, ScrollConfig, SniperConfig
+};
+
+let mut pointing_processor = PointingProcessor::new(&keymap, PointingProcessorConfig::default());
+
+// Configure different modes for each layer
+pointing_processor
+    .set_layer_mode(0, PointingMode::Cursor)                    // Layer 0: Normal cursor
+    .set_layer_mode(1, PointingMode::Scroll(ScrollConfig {
+        divisor_x: 8,  // Pan sensitivity (higher = slower)
+        divisor_y: 8,  // Wheel sensitivity (higher = slower)
+    }))
+    .set_layer_mode(2, PointingMode::Sniper(SniperConfig {
+        divisor: 4,    // Precision divisor (higher = slower)
+    }));
+```
+
+### Mode Details
+
+**Cursor Mode**
+- Direct 1:1 mapping of sensor movement to cursor movement
+- Default mode for all layers
+
+**Scroll Mode**
+- X-axis → horizontal pan, Y-axis → vertical scroll
+- `divisor_x` and `divisor_y` control sensitivity (recommended: 4-16, default: 8)
+- Perfect for document browsing and web navigation
+
+**Sniper Mode**
+- Reduces movement speed for precision
+- Single divisor for both axes (recommended: 2-8, default: 4)
+- Ideal for gaming, CAD, or detailed work
+
+::: tip
+Use momentary layer keys (`MO(n)`) in your keymap to temporarily activate different pointing modes. The motion accumulator automatically resets when switching layers to ensure smooth transitions.
+:::
 
