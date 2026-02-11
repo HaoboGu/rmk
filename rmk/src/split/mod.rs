@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "_ble")]
 use crate::event::BatteryStateEvent;
-use crate::event::{KeyboardEvent, PointingEvent, TouchpadEvent};
+use crate::event::{KeyboardEvent, PointingEvent};
 
 #[cfg(feature = "_ble")]
 pub mod ble;
@@ -26,8 +26,6 @@ pub const SPLIT_MESSAGE_MAX_SIZE: usize = SplitMessage::POSTCARD_MAX_SIZE + 4;
 pub(crate) enum SplitMessage {
     /// Keyboard event, from peripheral to central
     Key(KeyboardEvent),
-    /// Touchpad event, from peripheral to central
-    Touchpad(TouchpadEvent),
     /// Pointing device event, from peripheral to central
     Pointing(PointingEvent),
     /// Led state, on/off, from central to peripheral

@@ -238,7 +238,6 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             // Process other split messages which requires connection to host
             _ if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) => match split_message {
                 // Non-key events are drop-on-full to keep the split read loop responsive.
-                SplitMessage::Touchpad(e) => publish_event(e),
                 SplitMessage::Pointing(e) => publish_event(e),
                 #[cfg(feature = "_ble")]
                 SplitMessage::BatteryState(state) => {

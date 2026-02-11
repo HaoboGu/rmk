@@ -20,7 +20,7 @@ use crate::config::Hand;
 use crate::descriptor::KeyboardReport;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::ClearPeerEvent;
-use crate::event::{KeyEvent, ModifierEvent, publish_event};
+use crate::event::{ModifierEvent, publish_event};
 use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos, SubscribableEvent, publish_event_async};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
@@ -790,11 +790,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         #[cfg(feature = "_ble")]
         LAST_KEY_TIMESTAMP.signal(Instant::now().as_secs() as u32);
-
-        publish_event(KeyEvent {
-            keyboard_event: event,
-            key_action,
-        });
 
         if !key_action.is_morse() {
             match key_action {

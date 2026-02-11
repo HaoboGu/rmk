@@ -443,7 +443,7 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> Sp
         // Update last activity time when receiving key events from peripheral
         if matches!(
             message,
-            SplitMessage::Key(_) | SplitMessage::Touchpad(_) | SplitMessage::Pointing(_)
+            SplitMessage::Key(_) | SplitMessage::Pointing(_)
         ) {
             debug!("Activity {:?} detected from peripheral", &message);
             update_activity_time();

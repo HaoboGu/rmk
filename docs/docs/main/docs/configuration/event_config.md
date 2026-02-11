@@ -57,11 +57,9 @@ All [built-in events](../features/processor.md#built-in-events) can be configure
 - `connection_change` → [`ConnectionChangeEvent`](../features/processor.md#built-in-events) - USB/BLE connection type changes
 
 ### Input Events
-- `key` → [`KeyEvent`](../features/processor.md#built-in-events) - Key press/release events (default: channel_size=8 for fast typing)
 - `modifier` → [`ModifierEvent`](../features/processor.md#built-in-events) - Modifier key state changes (Shift, Ctrl, Alt, etc.)
 - `keyboard` → [`KeyboardEvent`](../features/processor.md#built-in-events) - Raw keyboard events (default: channel_size=16 for input buffering)
 - `pointing` → [`PointingEvent`](../features/processor.md#built-in-events) - Mouse/pointing device movement events (default: channel_size=8)
-- `touchpad` → [`TouchpadEvent`](../features/processor.md#built-in-events) - Multi-touch touchpad events (default: channel_size=8)
 
 ### Keyboard State Events
 - `layer_change` → [`LayerChangeEvent`](../features/processor.md#built-in-events) - Active layer changes (default: subs=4 for multiple displays)

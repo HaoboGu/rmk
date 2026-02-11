@@ -19,11 +19,6 @@ pubs = 2
 subs = 1
 
 # Input events
-[event.key]
-channel_size = 8
-pubs = 1
-subs = 2
-
 [event.modifier]
 channel_size = 8
 pubs = 1
@@ -73,11 +68,6 @@ subs = 2
 
 # Pointing device events
 [event.pointing]
-channel_size = 8
-pubs = 2
-subs = 2
-
-[event.touchpad]
 channel_size = 8
 pubs = 2
 subs = 2

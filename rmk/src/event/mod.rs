@@ -2,43 +2,43 @@
 //!
 //! This module provides:
 //! - Event infrastructure (traits, publish/subscribe patterns, implementations)
-//! - Built-in events (battery, connection, input, keyboard state, etc.)
+//! - Built-in events (battery, connection, input, state, split, etc.)
 //!
 //! All events use PubSubChannel for unified publish/subscribe semantics,
 //! supporting multiple subscribers per event type.
+//!
+//! ## Module organization
+//!
+//! - `input`: Input events (keyboard, modifier, pointing device)
+//! - `state`: Keyboard state events (layer, WPM, LED indicator, sleep)
+//! - `battery`: Battery events (ADC, charging, battery state)
+//! - `connection`: Connection events (USB/BLE, BLE state/profile)
+//! - `split`: Split keyboard events (peripheral/central connection)
 
 use embassy_sync::blocking_mutex::raw::RawMutex;
 use embassy_sync::pubsub::{ImmediatePublisher, Publisher, Subscriber};
 use embassy_sync::{channel, watch};
 
 mod battery;
-#[cfg(feature = "_ble")]
-mod ble;
 mod connection;
-mod key;
-mod keyboard;
-mod keyboard_state;
-mod pointing;
-mod power;
+mod input;
 #[cfg(feature = "split")]
 mod split;
-mod touchpad;
+mod state;
 
-pub use battery::{BatteryAdcEvent, ChargingStateEvent};
+pub use battery::{BatteryAdcEvent, BatteryStateEvent, ChargingStateEvent};
 #[cfg(feature = "_ble")]
-pub use ble::{BleProfileChangeEvent, BleStateChangeEvent};
+pub use connection::{BleProfileChangeEvent, BleStateChangeEvent};
 pub use connection::{ConnectionChangeEvent, ConnectionType};
-pub use key::{KeyEvent, ModifierEvent};
-pub use keyboard::{KeyPos, KeyboardEvent, KeyboardEventPos, RotaryEncoderPos};
-pub use keyboard_state::{LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent};
-pub use pointing::{Axis, AxisEvent, AxisValType, PointingEvent, PointingSetCpiEvent};
-#[cfg(feature = "_ble")]
-pub use power::BatteryStateEvent;
+pub use input::{
+    Axis, AxisEvent, AxisValType, KeyPos, KeyboardEvent, KeyboardEventPos, ModifierEvent,
+    PointingEvent, PointingSetCpiEvent, RotaryEncoderPos,
+};
 #[cfg(feature = "split")]
 pub use split::{CentralConnectedEvent, PeripheralConnectedEvent};
 #[cfg(all(feature = "split", feature = "_ble"))]
 pub use split::{ClearPeerEvent, PeripheralBatteryEvent};
-pub use touchpad::TouchpadEvent;
+pub use state::{LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent};
 
 /// Trait for event publishers
 pub trait EventPublisher {

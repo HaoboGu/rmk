@@ -77,7 +77,6 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         events.ble_profile_change.into_values();
     let (connection_change_size, connection_change_pubs, connection_change_subs) =
         events.connection_change.into_values();
-    let (key_size, key_pubs, key_subs) = events.key.into_values();
     let (modifier_size, modifier_pubs, modifier_subs) = events.modifier.into_values();
     let (keyboard_size, keyboard_pubs, keyboard_subs) = events.keyboard.into_values();
     let (layer_change_size, layer_change_pubs, layer_change_subs) = events.layer_change.into_values();
@@ -88,7 +87,6 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
     let (battery_adc_size, battery_adc_pubs, battery_adc_subs) = events.battery_adc.into_values();
     let (charging_state_size, charging_state_pubs, charging_state_subs) = events.charging_state.into_values();
     let (pointing_size, pointing_pubs, pointing_subs) = events.pointing.into_values();
-    let (touchpad_size, touchpad_pubs, touchpad_subs) = events.touchpad.into_values();
     let (peripheral_connected_size, peripheral_connected_pubs, peripheral_connected_subs) =
         events.peripheral_connected.into_values();
     let (central_connected_size, central_connected_pubs, central_connected_subs) =
@@ -110,9 +108,6 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) CONNECTION_CHANGE_EVENT_PUB_SIZE = connection_change_pubs),
         const_declaration!(pub(crate) CONNECTION_CHANGE_EVENT_SUB_SIZE = connection_change_subs),
         // Input events
-        const_declaration!(pub(crate) KEY_EVENT_CHANNEL_SIZE = key_size),
-        const_declaration!(pub(crate) KEY_EVENT_PUB_SIZE = key_pubs),
-        const_declaration!(pub(crate) KEY_EVENT_SUB_SIZE = key_subs),
         const_declaration!(pub(crate) MODIFIER_EVENT_CHANNEL_SIZE = modifier_size),
         const_declaration!(pub(crate) MODIFIER_EVENT_PUB_SIZE = modifier_pubs),
         const_declaration!(pub(crate) MODIFIER_EVENT_SUB_SIZE = modifier_subs),
@@ -146,9 +141,6 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) POINTING_EVENT_CHANNEL_SIZE = pointing_size),
         const_declaration!(pub(crate) POINTING_EVENT_PUB_SIZE = pointing_pubs),
         const_declaration!(pub(crate) POINTING_EVENT_SUB_SIZE = pointing_subs),
-        const_declaration!(pub(crate) TOUCHPAD_EVENT_CHANNEL_SIZE = touchpad_size),
-        const_declaration!(pub(crate) TOUCHPAD_EVENT_PUB_SIZE = touchpad_pubs),
-        const_declaration!(pub(crate) TOUCHPAD_EVENT_SUB_SIZE = touchpad_subs),
         // Split events
         const_declaration!(pub(crate) PERIPHERAL_CONNECTED_EVENT_CHANNEL_SIZE = peripheral_connected_size),
         const_declaration!(pub(crate) PERIPHERAL_CONNECTED_EVENT_PUB_SIZE = peripheral_connected_pubs),

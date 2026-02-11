@@ -17,7 +17,7 @@ use {
 use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
 use crate::CONNECTION_STATE;
-use crate::event::{KeyboardEvent, PointingEvent, SubscribableEvent, TouchpadEvent};
+use crate::event::{KeyboardEvent, PointingEvent, SubscribableEvent};
 
 use crate::event::{LayerChangeEvent, LedIndicatorEvent, publish_event};
 #[cfg(not(feature = "_ble"))]
@@ -79,7 +79,6 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
         let mut key_sub = KeyboardEvent::subscriber();
         #[cfg(feature = "_ble")]
         let mut charging_state_sub = ChargingStateEvent::subscriber();
-        let mut touch_sub = TouchpadEvent::subscriber();
         let mut pointing_sub = PointingEvent::subscriber();
         #[cfg(feature = "_ble")]
         let mut battery_sub = BatteryStateEvent::subscriber();
@@ -95,7 +94,6 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                             SplitMessage::BatteryState(BatteryStateEvent::NotAvailable)
                         }
                     },
-                    e = touch_sub.next_message_pure().fuse() => SplitMessage::Touchpad(e),
                     e = pointing_sub.next_message_pure().fuse() => SplitMessage::Pointing(e),
                     with_feature("_ble"): e = battery_sub.next_event().fuse() => SplitMessage::BatteryState(e),
                 };

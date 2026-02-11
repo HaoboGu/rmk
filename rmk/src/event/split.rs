@@ -2,7 +2,7 @@
 
 use rmk_macro::event;
 
-use super::power::BatteryStateEvent;
+use super::battery::BatteryStateEvent;
 
 /// Peripheral connected state changed event
 #[event(channel_size = crate::PERIPHERAL_CONNECTED_EVENT_CHANNEL_SIZE, pubs = crate::PERIPHERAL_CONNECTED_EVENT_PUB_SIZE, subs = crate::PERIPHERAL_CONNECTED_EVENT_SUB_SIZE)]

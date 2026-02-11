@@ -342,7 +342,6 @@ define_event_config!(
     // Connection events
     connection_change,
     // Input events
-    key,
     modifier,
     keyboard,
     // Keyboard state events
@@ -356,7 +355,6 @@ define_event_config!(
     charging_state,
     // Pointing device events
     pointing,
-    touchpad,
     // Split events
     peripheral_connected,
     central_connected,
