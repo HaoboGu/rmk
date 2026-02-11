@@ -27,7 +27,7 @@ subs = 2
 [event.keyboard]
 channel_size = 16
 pubs = 2
-subs = 1
+subs = 2
 
 # Keyboard state events
 [event.layer_change]
@@ -43,7 +43,7 @@ subs = 1
 [event.led_indicator]
 channel_size = 2
 pubs = 2
-subs = 2
+subs = 4
 
 [event.sleep_state]
 channel_size = 1

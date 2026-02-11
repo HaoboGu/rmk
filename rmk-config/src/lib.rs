@@ -1023,15 +1023,19 @@ mod tests {
 
         // Check some key default values from event_default.toml
         assert_eq!(config.keyboard.channel_size, 16);
-        assert_eq!(config.keyboard.pubs, 1);
-        assert_eq!(config.keyboard.subs, 1);
+        assert_eq!(config.keyboard.pubs, 2);
+        assert_eq!(config.keyboard.subs, 2);
 
-        assert_eq!(config.key.channel_size, 8);
-        assert_eq!(config.key.pubs, 1);
-        assert_eq!(config.key.subs, 2);
+        assert_eq!(config.modifier.channel_size, 8);
+        assert_eq!(config.modifier.pubs, 1);
+        assert_eq!(config.modifier.subs, 2);
 
         assert_eq!(config.layer_change.channel_size, 1);
-        assert_eq!(config.layer_change.subs, 4);
+        assert_eq!(config.layer_change.subs, 1);
+
+        assert_eq!(config.led_indicator.channel_size, 2);
+        assert_eq!(config.led_indicator.pubs, 2);
+        assert_eq!(config.led_indicator.subs, 4);
 
         assert_eq!(config.pointing.channel_size, 8);
         assert_eq!(config.pointing.subs, 2);
@@ -1043,8 +1047,6 @@ mod tests {
         let user_toml = r#"
 [event.keyboard]
 channel_size = 32
-pubs = 2
-subs = 3
 "#;
         // Parse with event defaults first, then user config
         let config: KeyboardTomlConfig = Config::builder()
@@ -1058,11 +1060,11 @@ subs = 3
         // User-overridden values
         assert_eq!(config.event.keyboard.channel_size, 32);
         assert_eq!(config.event.keyboard.pubs, 2);
-        assert_eq!(config.event.keyboard.subs, 3);
+        assert_eq!(config.event.keyboard.subs, 2);
 
         // Non-overridden values should use defaults
-        assert_eq!(config.event.key.channel_size, 8);
-        assert_eq!(config.event.key.subs, 2);
-        assert_eq!(config.event.layer_change.subs, 4);
+        assert_eq!(config.event.modifier.channel_size, 8);
+        assert_eq!(config.event.modifier.subs, 2);
+        assert_eq!(config.event.layer_change.subs, 1);
     }
 }
