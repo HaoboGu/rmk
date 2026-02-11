@@ -63,9 +63,9 @@ pub struct KeyboardTomlConfig {
     /// RMK config constants
     #[serde(default)]
     pub rmk: RmkConstantsConfig,
-    /// Controller event channel configuration
+    /// Event channel configuration
     #[serde(default)]
-    pub controller_event: EventConfig,
+    pub event: EventConfig,
 }
 
 impl KeyboardTomlConfig {
@@ -318,6 +318,8 @@ pub struct EventConfig {
     pub key: EventChannelConfig,
     #[serde(default = "default_input_event")]
     pub modifier: EventChannelConfig,
+    #[serde(default = "default_keyboard_event")]
+    pub keyboard: EventChannelConfig,
 
     // Keyboard state events
     #[serde(default = "default_monitored_event")]
@@ -332,6 +334,16 @@ pub struct EventConfig {
     // Power events
     #[serde(default = "default_monitored_event")]
     pub battery_state: EventChannelConfig,
+    #[serde(default = "default_ble_state_event")]
+    pub battery_adc: EventChannelConfig,
+    #[serde(default = "default_ble_state_event")]
+    pub charging_state: EventChannelConfig,
+
+    // Pointing device events
+    #[serde(default = "default_input_event")]
+    pub pointing: EventChannelConfig,
+    #[serde(default = "default_input_event")]
+    pub touchpad: EventChannelConfig,
 
     // Split events
     #[serde(default = "default_event")]
@@ -352,11 +364,16 @@ impl EventConfig {
         self.connection_change = self.connection_change.with_defaults(default_event());
         self.key = self.key.with_defaults(default_input_event());
         self.modifier = self.modifier.with_defaults(default_input_event());
+        self.keyboard = self.keyboard.with_defaults(default_keyboard_event());
         self.layer_change = self.layer_change.with_defaults(default_monitored_event());
         self.wpm_update = self.wpm_update.with_defaults(default_event());
         self.led_indicator = self.led_indicator.with_defaults(default_led_indicator_event());
         self.sleep_state = self.sleep_state.with_defaults(default_monitored_event());
         self.battery_state = self.battery_state.with_defaults(default_monitored_event());
+        self.battery_adc = self.battery_adc.with_defaults(default_ble_state_event());
+        self.charging_state = self.charging_state.with_defaults(default_ble_state_event());
+        self.pointing = self.pointing.with_defaults(default_input_event());
+        self.touchpad = self.touchpad.with_defaults(default_input_event());
         self.peripheral_connected = self.peripheral_connected.with_defaults(default_event());
         self.central_connected = self.central_connected.with_defaults(default_event());
         self.peripheral_battery = self
@@ -428,6 +445,16 @@ fn default_peripheral_battery_event() -> EventChannelConfig {
     }
 }
 
+/// Default for keyboard events: (16, 1, 1)
+/// High-frequency keyboard input with large buffer
+fn default_keyboard_event() -> EventChannelConfig {
+    EventChannelConfig {
+        channel_size: Some(16),
+        pubs: Some(1),
+        subs: Some(1),
+    }
+}
+
 impl Default for EventConfig {
     fn default() -> Self {
         Self {
@@ -436,11 +463,16 @@ impl Default for EventConfig {
             connection_change: default_event(),
             key: default_input_event(),
             modifier: default_input_event(),
+            keyboard: default_keyboard_event(),
             layer_change: default_monitored_event(),
             wpm_update: default_event(),
             led_indicator: default_led_indicator_event(),
             sleep_state: default_monitored_event(),
             battery_state: default_monitored_event(),
+            battery_adc: default_ble_state_event(),
+            charging_state: default_ble_state_event(),
+            pointing: default_input_event(),
+            touchpad: default_input_event(),
             peripheral_connected: default_event(),
             central_connected: default_event(),
             peripheral_battery: default_peripheral_battery_event(),

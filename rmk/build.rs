@@ -39,7 +39,7 @@ fn main() {
         user_toml.rmk.split_peripherals_num = 1;
     }
 
-    let constants = get_constants_str(user_toml.rmk, user_toml.controller_event.with_defaults());
+    let constants = get_constants_str(user_toml.rmk, user_toml.event.with_defaults());
 
     // Write to constants.rs file
     let out_dir = env::var("OUT_DIR").unwrap();
@@ -79,11 +79,16 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         events.connection_change.into_values();
     let (key_size, key_pubs, key_subs) = events.key.into_values();
     let (modifier_size, modifier_pubs, modifier_subs) = events.modifier.into_values();
+    let (keyboard_size, keyboard_pubs, keyboard_subs) = events.keyboard.into_values();
     let (layer_change_size, layer_change_pubs, layer_change_subs) = events.layer_change.into_values();
     let (wpm_update_size, wpm_update_pubs, wpm_update_subs) = events.wpm_update.into_values();
     let (led_indicator_size, led_indicator_pubs, led_indicator_subs) = events.led_indicator.into_values();
     let (sleep_state_size, sleep_state_pubs, sleep_state_subs) = events.sleep_state.into_values();
     let (battery_state_size, battery_state_pubs, battery_state_subs) = events.battery_state.into_values();
+    let (battery_adc_size, battery_adc_pubs, battery_adc_subs) = events.battery_adc.into_values();
+    let (charging_state_size, charging_state_pubs, charging_state_subs) = events.charging_state.into_values();
+    let (pointing_size, pointing_pubs, pointing_subs) = events.pointing.into_values();
+    let (touchpad_size, touchpad_pubs, touchpad_subs) = events.touchpad.into_values();
     let (peripheral_connected_size, peripheral_connected_pubs, peripheral_connected_subs) =
         events.peripheral_connected.into_values();
     let (central_connected_size, central_connected_pubs, central_connected_subs) =
@@ -111,6 +116,9 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) MODIFIER_EVENT_CHANNEL_SIZE = modifier_size),
         const_declaration!(pub(crate) MODIFIER_EVENT_PUB_SIZE = modifier_pubs),
         const_declaration!(pub(crate) MODIFIER_EVENT_SUB_SIZE = modifier_subs),
+        const_declaration!(pub(crate) KEYBOARD_EVENT_CHANNEL_SIZE = keyboard_size),
+        const_declaration!(pub(crate) KEYBOARD_EVENT_PUB_SIZE = keyboard_pubs),
+        const_declaration!(pub(crate) KEYBOARD_EVENT_SUB_SIZE = keyboard_subs),
         // Keyboard state events
         const_declaration!(pub(crate) LAYER_CHANGE_EVENT_CHANNEL_SIZE = layer_change_size),
         const_declaration!(pub(crate) LAYER_CHANGE_EVENT_PUB_SIZE = layer_change_pubs),
@@ -128,6 +136,19 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) BATTERY_STATE_EVENT_CHANNEL_SIZE = battery_state_size),
         const_declaration!(pub(crate) BATTERY_STATE_EVENT_PUB_SIZE = battery_state_pubs),
         const_declaration!(pub(crate) BATTERY_STATE_EVENT_SUB_SIZE = battery_state_subs),
+        const_declaration!(pub(crate) BATTERY_ADC_EVENT_CHANNEL_SIZE = battery_adc_size),
+        const_declaration!(pub(crate) BATTERY_ADC_EVENT_PUB_SIZE = battery_adc_pubs),
+        const_declaration!(pub(crate) BATTERY_ADC_EVENT_SUB_SIZE = battery_adc_subs),
+        const_declaration!(pub(crate) CHARGING_STATE_EVENT_CHANNEL_SIZE = charging_state_size),
+        const_declaration!(pub(crate) CHARGING_STATE_EVENT_PUB_SIZE = charging_state_pubs),
+        const_declaration!(pub(crate) CHARGING_STATE_EVENT_SUB_SIZE = charging_state_subs),
+        // Pointing device events
+        const_declaration!(pub(crate) POINTING_EVENT_CHANNEL_SIZE = pointing_size),
+        const_declaration!(pub(crate) POINTING_EVENT_PUB_SIZE = pointing_pubs),
+        const_declaration!(pub(crate) POINTING_EVENT_SUB_SIZE = pointing_subs),
+        const_declaration!(pub(crate) TOUCHPAD_EVENT_CHANNEL_SIZE = touchpad_size),
+        const_declaration!(pub(crate) TOUCHPAD_EVENT_PUB_SIZE = touchpad_pubs),
+        const_declaration!(pub(crate) TOUCHPAD_EVENT_SUB_SIZE = touchpad_subs),
         // Split events
         const_declaration!(pub(crate) PERIPHERAL_CONNECTED_EVENT_CHANNEL_SIZE = peripheral_connected_size),
         const_declaration!(pub(crate) PERIPHERAL_CONNECTED_EVENT_PUB_SIZE = peripheral_connected_pubs),

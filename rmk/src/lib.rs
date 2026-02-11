@@ -235,7 +235,7 @@ pub async fn initialize_keymap_and_storage<
 
 #[allow(unreachable_code)]
 pub async fn run_rmk<
-    'a,
+    #[cfg(feature = "host")] 'a,
     #[cfg(feature = "_ble")] 'b,
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
@@ -335,7 +335,7 @@ pub async fn run_rmk<
 // Due to https://github.com/rust-lang/rust/issues/62958, storage/host struct is used now.
 // The corresponding future(commented) will be used after the issue is fixed.
 pub(crate) async fn run_keyboard<
-    'a,
+    #[cfg(feature = "host")] 'a,
     R: HidReaderTrait<ReportType = LedIndicator>,
     W: RunnableHidWriter,
     #[cfg(feature = "storage")] F: AsyncNorFlash,

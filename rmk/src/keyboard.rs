@@ -179,7 +179,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 
     /// Keyboard event subscriber - single instance to receive all keyboard events
-    keyboard_event_subscriber: embassy_sync::channel::Receiver<'static, crate::RawMutex, KeyboardEvent, 16>,
+    keyboard_event_subscriber: embassy_sync::channel::Receiver<'static, crate::RawMutex, KeyboardEvent, { crate::KEYBOARD_EVENT_CHANNEL_SIZE }>,
 
     /// Unprocessed events
     pub unprocessed_events: Vec<KeyboardEvent, 4>,

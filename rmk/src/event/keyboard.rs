@@ -9,7 +9,7 @@ use crate::input_device::rotary_encoder::Direction;
 /// `KeyboardEvent` is different from events from pointing devices,
 /// events from pointing devices are processed directly by the corresponding processors,
 /// while `KeyboardEvent` is processed by the keyboard with the keymap.
-#[event(channel_size = 16)]
+#[event(channel_size = crate::KEYBOARD_EVENT_CHANNEL_SIZE)]
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyboardEvent {

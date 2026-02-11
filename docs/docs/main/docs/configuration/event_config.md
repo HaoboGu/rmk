@@ -59,6 +59,9 @@ All [built-in events](../features/processor.md#built-in-events) can be configure
 ### Input Events
 - `key` → [`KeyEvent`](../features/processor.md#built-in-events) - Key press/release events (default: channel_size=8 for fast typing)
 - `modifier` → [`ModifierEvent`](../features/processor.md#built-in-events) - Modifier key state changes (Shift, Ctrl, Alt, etc.)
+- `keyboard` → [`KeyboardEvent`](../features/processor.md#built-in-events) - Raw keyboard events (default: channel_size=16 for input buffering)
+- `pointing` → [`PointingEvent`](../features/processor.md#built-in-events) - Mouse/pointing device movement events (default: channel_size=8)
+- `touchpad` → [`TouchpadEvent`](../features/processor.md#built-in-events) - Multi-touch touchpad events (default: channel_size=8)
 
 ### Keyboard State Events
 - `layer_change` → [`LayerChangeEvent`](../features/processor.md#built-in-events) - Active layer changes (default: subs=4 for multiple displays)
@@ -68,6 +71,8 @@ All [built-in events](../features/processor.md#built-in-events) can be configure
 
 ### Power Events
 - `battery_state` → [`BatteryStateEvent`](../features/processor.md#built-in-events) - Battery state changes (includes level and charging status, default: subs=4 for multiple displays)
+- `battery_adc` → [`BatteryAdcEvent`](../features/processor.md#built-in-events) - Raw battery ADC readings (default: channel_size=2)
+- `charging_state` → [`ChargingStateEvent`](../features/processor.md#built-in-events) - Charging state changes (default: channel_size=2)
 
 ### Split Keyboard Events
 - `peripheral_connected` → [`PeripheralConnectedEvent`](../features/processor.md#built-in-events) - Peripheral connection status
