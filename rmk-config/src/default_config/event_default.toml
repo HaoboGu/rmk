@@ -15,7 +15,7 @@ subs = 1
 # Connection events
 [event.connection_change]
 channel_size = 1
-pubs = 1
+pubs = 2
 subs = 1
 
 # Input events
@@ -31,14 +31,14 @@ subs = 2
 
 [event.keyboard]
 channel_size = 16
-pubs = 1
+pubs = 2
 subs = 1
 
 # Keyboard state events
 [event.layer_change]
 channel_size = 1
-pubs = 1
-subs = 4
+pubs = 2
+subs = 1
 
 [event.wpm_update]
 channel_size = 1
@@ -47,19 +47,19 @@ subs = 1
 
 [event.led_indicator]
 channel_size = 2
-pubs = 1
-subs = 4
+pubs = 2
+subs = 2
 
 [event.sleep_state]
 channel_size = 1
 pubs = 1
-subs = 4
+subs = 1
 
 # Power events
 [event.battery_state]
 channel_size = 1
 pubs = 1
-subs = 4
+subs = 3
 
 [event.battery_adc]
 channel_size = 2
@@ -69,17 +69,17 @@ subs = 1
 [event.charging_state]
 channel_size = 2
 pubs = 1
-subs = 1
+subs = 2
 
 # Pointing device events
 [event.pointing]
 channel_size = 8
-pubs = 1
+pubs = 2
 subs = 2
 
 [event.touchpad]
 channel_size = 8
-pubs = 1
+pubs = 2
 subs = 2
 
 # Split events
@@ -101,4 +101,4 @@ subs = 2
 [event.clear_peer]
 channel_size = 1
 pubs = 1
-subs = 4
+subs = 1
