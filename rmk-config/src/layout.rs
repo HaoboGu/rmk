@@ -185,7 +185,7 @@ impl KeyboardTomlConfig {
 
     /// Parses and validates a matrix_map string using Pest.
     /// Ensures the string contains only valid coordinates and whitespace.
-    fn parse_matrix_map(matrix_map: &str) -> Result<Vec<(u8, u8, char)>, String> {
+    pub fn parse_matrix_map(matrix_map: &str) -> Result<Vec<(u8, u8, char)>, String> {
         match ConfigParser::parse(Rule::matrix_map, matrix_map) {
             Ok(pairs) => {
                 let mut key_info = Vec::new();
@@ -240,7 +240,7 @@ impl KeyboardTomlConfig {
         }
     }
 
-    fn alias_resolver(keys: &str, aliases: &HashMap<String, String>) -> Result<String, String> {
+    pub fn alias_resolver(keys: &str, aliases: &HashMap<String, String>) -> Result<String, String> {
         let mut current_keys = keys.to_string();
 
         let mut iterations = 0;
@@ -317,7 +317,7 @@ impl KeyboardTomlConfig {
         Ok(current_keys)
     }
 
-    fn layer_name_resolver(
+    pub fn layer_name_resolver_internal(
         prefix: &str,
         pair: pest::iterators::Pair<Rule>,
         layer_names: &HashMap<String, u32>,
@@ -351,7 +351,7 @@ impl KeyboardTomlConfig {
         Ok(action)
     }
 
-    fn keymap_parser(
+    pub fn keymap_parser(
         layer_keys: &str,
         aliases: &HashMap<String, String>,
         layer_names: &HashMap<String, u32>,
@@ -402,33 +402,33 @@ impl KeyboardTomlConfig {
 
                                 //layer actions:
                                 Rule::df_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver("DF", inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::layer_name_resolver_internal("DF", inner_pair, layer_names)?);
                                 }
                                 Rule::mo_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver("MO", inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::layer_name_resolver_internal("MO", inner_pair, layer_names)?);
                                 }
                                 Rule::lm_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver("LM", inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::layer_name_resolver_internal("LM", inner_pair, layer_names)?);
                                 }
                                 Rule::lt_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver("LT", inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::layer_name_resolver_internal("LT", inner_pair, layer_names)?);
                                     //"LT(".to_owned() + &Self::layer_name_resolver(inner_pair, layer_names)? + ")");
                                 }
                                 Rule::osl_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver(
+                                    key_action_sequence.push(Self::layer_name_resolver_internal(
                                         "OSL",
                                         inner_pair,
                                         layer_names,
                                     )?);
                                 }
                                 Rule::tt_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver("TT", inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::layer_name_resolver_internal("TT", inner_pair, layer_names)?);
                                 }
                                 Rule::tg_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver("TG", inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::layer_name_resolver_internal("TG", inner_pair, layer_names)?);
                                 }
                                 Rule::to_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver("TO", inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::layer_name_resolver_internal("TO", inner_pair, layer_names)?);
                                 }
 
                                 // tap-hold actions:
@@ -472,6 +472,63 @@ impl KeyboardTomlConfig {
         }
 
         Ok(key_action_sequence)
+    }
+
+    /// Public helper to resolve layer names in a key map string
+    /// This is used by the keymap! proc-macro
+    pub fn layer_name_resolver(
+        layer_keys: &str,
+        layer_names: &HashMap<String, usize>,
+    ) -> Result<String, String> {
+        let result = layer_keys.to_string();
+
+        // Convert usize to u32 for internal function
+        let layer_names_u32: HashMap<String, u32> = layer_names
+            .iter()
+            .map(|(k, v)| (k.clone(), *v as u32))
+            .collect();
+
+        // Parse to resolve layer names
+        match ConfigParser::parse(Rule::key_map, &result) {
+            Ok(pairs) => {
+                let mut resolved_keys = Vec::new();
+
+                for pair in pairs {
+                    if pair.as_rule() == Rule::key_map {
+                        for inner_pair in pair.into_inner() {
+                            match inner_pair.as_rule() {
+                                Rule::df_action | Rule::mo_action | Rule::lm_action |
+                                Rule::lt_action | Rule::osl_action | Rule::tt_action |
+                                Rule::tg_action | Rule::to_action => {
+                                    let prefix = match inner_pair.as_rule() {
+                                        Rule::df_action => "DF",
+                                        Rule::mo_action => "MO",
+                                        Rule::lm_action => "LM",
+                                        Rule::lt_action => "LT",
+                                        Rule::osl_action => "OSL",
+                                        Rule::tt_action => "TT",
+                                        Rule::tg_action => "TG",
+                                        Rule::to_action => "TO",
+                                        _ => unreachable!(),
+                                    };
+                                    resolved_keys.push(Self::layer_name_resolver_internal(
+                                        prefix,
+                                        inner_pair,
+                                        &layer_names_u32,
+                                    )?);
+                                }
+                                _ => {
+                                    resolved_keys.push(inner_pair.as_str().to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Ok(resolved_keys.join(" "))
+            }
+            Err(e) => Err(format!("Failed to parse keymap: {}", e)),
+        }
     }
 }
 
