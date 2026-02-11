@@ -21,8 +21,16 @@ pub(crate) fn expand_registered_processor_init(
     // Custom processors declared in the module.
     if let Some((_, items)) = &item_mod.content {
         for item in items {
-            let syn::Item::Fn(item_fn) = item else { continue };
-            let Some(attr) = item_fn.attrs.iter().find(|a| a.path().is_ident("register_processor")) else { continue };
+            let syn::Item::Fn(item_fn) = item else {
+                continue;
+            };
+            let Some(attr) = item_fn
+                .attrs
+                .iter()
+                .find(|a| a.path().is_ident("register_processor"))
+            else {
+                continue;
+            };
 
             let (custom_init, custom_exec) = expand_custom_processor(item_fn);
             let mut mode: Option<bool> = None; // Some(true) = event, Some(false) = poll
@@ -39,7 +47,8 @@ pub(crate) fn expand_registered_processor_init(
                 }
                 mode = Some(is_event);
                 Ok(())
-            }).unwrap_or_else(|e| panic!("#[register_processor] {e}"));
+            })
+            .unwrap_or_else(|e| panic!("#[register_processor] {e}"));
 
             let executor = match mode {
                 Some(true) => quote! {

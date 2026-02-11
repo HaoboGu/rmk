@@ -39,7 +39,6 @@ use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
-
 use crate::event::{BleStateChangeEvent, ConnectionChangeEvent, publish_event};
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
@@ -159,7 +158,6 @@ pub(crate) async fn run_ble<
             CONNECTION_TYPE.store(ConnectionType::Usb.into(), Ordering::SeqCst);
         }
 
-        
         publish_event(ConnectionChangeEvent {
             connection_type: CONNECTION_TYPE.load(Ordering::SeqCst).into(),
         });
@@ -245,7 +243,7 @@ pub(crate) async fn run_ble<
     join(background_task, async {
         loop {
             // Advertising state
-            
+
             publish_event(BleStateChangeEvent::new(
                 ACTIVE_PROFILE.load(Ordering::Relaxed),
                 BleState::Advertising,
@@ -270,7 +268,7 @@ pub(crate) async fn run_ble<
                         {
                             Either4::First(_) => {
                                 info!("USB enabled, run USB keyboard");
-                                
+
                                 publish_event(BleStateChangeEvent::new(0, BleState::None));
                                 // Re-send the consumed flag
                                 USB_ENABLED.signal(());
@@ -310,7 +308,7 @@ pub(crate) async fn run_ble<
                             }
                             Either4::Second(Err(BleHostError::BleHost(Error::Timeout))) => {
                                 warn!("Advertising timeout, sleep and wait for any key");
-                                
+
                                 publish_event(BleStateChangeEvent::new(0, BleState::None));
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
@@ -367,7 +365,6 @@ pub(crate) async fn run_ble<
                             Either3::First(Err(BleHostError::BleHost(Error::Timeout))) => {
                                 warn!("Advertising timeout, sleep and wait for any key");
 
-                                
                                 publish_event(BleStateChangeEvent::new(0, BleState::None));
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
@@ -491,9 +488,9 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let system_control = server.composite_service.system_report;
 
     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
-    
+
     let mut connected = false;
-    
+
     let mut published_connected_state = false;
     loop {
         match conn.next().await {
@@ -513,7 +510,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                     };
                     UPDATED_PROFILE.signal(profile_info);
                 }
-                
+
                 {
                     connected = true;
                 }
@@ -646,7 +643,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 peripheral_latency,
                 supervision_timeout,
             } => {
-                
                 {
                     connected = true;
                 }
@@ -675,7 +671,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 max_rx_octets,
                 max_rx_time,
             } => {
-                
                 {
                     connected = true;
                 }

@@ -9,11 +9,9 @@ use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::stora
 
 use super::SplitMessage;
 use crate::CONNECTION_STATE;
-use crate::event::{
-    KeyboardEvent, KeyboardEventPos, SubscribableEvent, publish_event, publish_event_async,
-};
 #[cfg(feature = "_ble")]
 use crate::event::PeripheralBatteryEvent;
+use crate::event::{KeyboardEvent, KeyboardEventPos, SubscribableEvent, publish_event, publish_event_async};
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

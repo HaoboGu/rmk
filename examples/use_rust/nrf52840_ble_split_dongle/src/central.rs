@@ -234,13 +234,8 @@ async fn main(spawner: Spawner) {
     );
     let pmw3610_motion = Some(Input::new(p.P1_08, embassy_nrf::gpio::Pull::Up));
     let pmw3610_spi = BitBangSpiBus::new(pmw3610_sck, pmw3610_sdio);
-    let mut pmw3610_device = PointingDevice::<Pmw3610<_, _, _>>::new(
-        0,
-        pmw3610_spi,
-        pmw3610_cs,
-        pmw3610_motion,
-        pmw3610_config,
-    );
+    let mut pmw3610_device =
+        PointingDevice::<Pmw3610<_, _, _>>::new(0, pmw3610_spi, pmw3610_cs, pmw3610_motion, pmw3610_config);
     let mut pointing_processor = PointingProcessor::new(&keymap, PointingProcessorConfig::default());
 
     // Initialize the encoder processor
@@ -266,7 +261,14 @@ async fn main(spawner: Spawner) {
     // Start
     join4(
         async {},
-        run_all!(matrix, encoder, pmw3610_device, adc_device, batt_proc, pointing_processor),
+        run_all!(
+            matrix,
+            encoder,
+            pmw3610_device,
+            adc_device,
+            batt_proc,
+            pointing_processor
+        ),
         join(keyboard.run(), capslock_led.run()),
         join4(
             scan_peripherals(&stack, &peripheral_addrs),

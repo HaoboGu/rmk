@@ -5,11 +5,11 @@ use rmk_config::{
     BoardConfig, ChipModel, ChipSeries, KeyboardTomlConfig, MatrixType, UniBodyConfig,
 };
 
-use super::feature::is_feature_enabled;
 use super::chip::gpio::{
     convert_direct_pins_to_initializers, convert_input_pins_to_initializers,
     convert_output_pins_to_initializers, get_input_pin_type, get_output_pin_type,
 };
+use super::feature::is_feature_enabled;
 
 pub(crate) fn expand_matrix_config(
     keyboard_config: &KeyboardTomlConfig,

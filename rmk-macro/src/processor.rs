@@ -7,10 +7,7 @@ use quote::quote;
 use syn::{DeriveInput, Meta, parse_macro_input};
 
 use crate::event_macros::runnable::{generate_event_enum_and_dispatch, generate_runnable};
-use crate::event_macros::utils::{
-    attr_matches_name, has_runnable_marker,
-    AttributeParser,
-};
+use crate::event_macros::utils::{AttributeParser, attr_matches_name, has_runnable_marker};
 
 /// Processor subscription config.
 pub struct ProcessorConfig {
@@ -19,7 +16,9 @@ pub struct ProcessorConfig {
 }
 
 /// Parse processor config from attribute tokens.
-pub fn parse_processor_config(tokens: impl Into<TokenStream>) -> Result<ProcessorConfig, TokenStream> {
+pub fn parse_processor_config(
+    tokens: impl Into<TokenStream>,
+) -> Result<ProcessorConfig, TokenStream> {
     let parser = AttributeParser::new_validated(tokens, &["subscribe", "poll_interval"])?;
 
     Ok(ProcessorConfig {
@@ -139,7 +138,9 @@ pub fn processor_impl(
     };
 
     // Remove only processor attribute to allow sibling macro expansion.
-    input.attrs.retain(|attr| !attr.path().is_ident("processor"));
+    input
+        .attrs
+        .retain(|attr| !attr.path().is_ident("processor"));
 
     // Add marker only when sibling macro needs to know Runnable is already generated.
     if has_input_device && !has_marker {

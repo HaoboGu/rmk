@@ -4,10 +4,10 @@ mod event_macros;
 mod processor;
 mod utils;
 
+use codegen::split::peripheral::parse_split_peripheral_mod;
 use darling::FromMeta;
 use darling::ast::NestedMeta;
 use proc_macro::TokenStream;
-use codegen::split::peripheral::parse_split_peripheral_mod;
 use syn::parse_macro_input;
 
 use crate::codegen::parse_keyboard_mod;

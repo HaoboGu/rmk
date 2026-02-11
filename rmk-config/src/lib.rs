@@ -1020,19 +1020,19 @@ mod tests {
     #[test]
     fn test_event_config_default_values() {
         let config = EventConfig::default();
-        
+
         // Check some key default values from event_default.toml
         assert_eq!(config.keyboard.channel_size, 16);
         assert_eq!(config.keyboard.pubs, 1);
         assert_eq!(config.keyboard.subs, 1);
-        
+
         assert_eq!(config.key.channel_size, 8);
         assert_eq!(config.key.pubs, 1);
         assert_eq!(config.key.subs, 2);
-        
+
         assert_eq!(config.layer_change.channel_size, 1);
         assert_eq!(config.layer_change.subs, 4);
-        
+
         assert_eq!(config.pointing.channel_size, 8);
         assert_eq!(config.pointing.subs, 2);
     }
@@ -1054,12 +1054,12 @@ subs = 3
             .unwrap()
             .try_deserialize()
             .unwrap();
-        
+
         // User-overridden values
         assert_eq!(config.event.keyboard.channel_size, 32);
         assert_eq!(config.event.keyboard.pubs, 2);
         assert_eq!(config.event.keyboard.subs, 3);
-        
+
         // Non-overridden values should use defaults
         assert_eq!(config.event.key.channel_size, 8);
         assert_eq!(config.event.key.subs, 2);

@@ -20,8 +20,9 @@ use crate::config::Hand;
 use crate::descriptor::KeyboardReport;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::ClearPeerEvent;
-use crate::event::{ModifierEvent, publish_event};
-use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos, SubscribableEvent, publish_event_async};
+use crate::event::{
+    KeyPos, KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event, publish_event_async,
+};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::input_device::Runnable;

@@ -5,10 +5,7 @@ use syn::{DeriveInput, Meta, parse_macro_input};
 use super::config::InputDeviceConfig;
 use super::parser::parse_input_device_config;
 use super::runnable::generate_runnable;
-use super::utils::{
-    attr_matches_name, deduplicate_type_generics,
-    has_runnable_marker,
-};
+use super::utils::{attr_matches_name, deduplicate_type_generics, has_runnable_marker};
 use crate::processor::{ProcessorConfig, parse_processor_config};
 use crate::utils::to_snake_case;
 
@@ -47,7 +44,10 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Check for processor attribute (for combined Runnable generation)
     // Support both simple form (#[processor]) and qualified form (#[rmk_macro::processor])
-    let has_processor = input.attrs.iter().any(|attr| attr_matches_name(attr, "processor"));
+    let has_processor = input
+        .attrs
+        .iter()
+        .any(|attr| attr_matches_name(attr, "processor"));
 
     // Parse processor config if present (for combined Runnable)
     let processor_config: Option<ProcessorConfig> = if has_processor {
@@ -97,13 +97,16 @@ pub fn input_device_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         let input_device_cfg = InputDeviceConfig {
             event_type: event_type.clone(),
         };
-        (generate_runnable(
-            struct_name,
-            generics,
-            where_clause,
-            Some(&input_device_cfg),
-            processor_config.as_ref(),
-        ), true)
+        (
+            generate_runnable(
+                struct_name,
+                generics,
+                where_clause,
+                Some(&input_device_cfg),
+                processor_config.as_ref(),
+            ),
+            true,
+        )
     };
 
     // Remove input_device attribute to prevent duplicate expansion

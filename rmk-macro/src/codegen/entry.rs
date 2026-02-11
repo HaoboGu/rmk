@@ -162,9 +162,12 @@ pub(crate) fn rmk_entry_select(
                 );
             }
         }
-        BoardConfig::UniBody(_) => {
-            rmk_entry_unibody(keyboard_config, devices_task, processors_task, registered_processors)
-        }
+        BoardConfig::UniBody(_) => rmk_entry_unibody(
+            keyboard_config,
+            devices_task,
+            processors_task,
+            registered_processors,
+        ),
     };
 
     quote! {

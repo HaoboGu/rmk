@@ -6,8 +6,7 @@ use {
 };
 
 use crate::config::{BehaviorConfig, PositionalConfig};
-use crate::event::{KeyboardEvent, KeyboardEventPos};
-use crate::event::{LayerChangeEvent, publish_event};
+use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_event};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
 #[cfg(feature = "vial_lock")]

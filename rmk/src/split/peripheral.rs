@@ -17,9 +17,9 @@ use {
 use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
 use crate::CONNECTION_STATE;
-use crate::event::{KeyboardEvent, PointingEvent, SubscribableEvent};
-
-use crate::event::{LayerChangeEvent, LedIndicatorEvent, publish_event};
+use crate::event::{
+    KeyboardEvent, LayerChangeEvent, LedIndicatorEvent, PointingEvent, SubscribableEvent, publish_event,
+};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;

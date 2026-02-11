@@ -13,7 +13,6 @@ use trouble_host::prelude::*;
 
 use crate::ble::{SLEEPING_STATE, update_ble_phy, update_conn_params};
 use crate::channel::FLASH_CHANNEL;
-
 use crate::event::{PeripheralConnectedEvent, SleepStateEvent, publish_event};
 #[cfg(feature = "storage")]
 use crate::split::ble::PeerAddress;
@@ -229,7 +228,6 @@ pub(crate) async fn run_ble_peripheral_manager<
         };
         wait_for_stack_started().await;
 
-        
         publish_event(PeripheralConnectedEvent {
             id: peri_id,
             connected: false,
@@ -254,7 +252,6 @@ pub(crate) async fn run_ble_peripheral_manager<
             Ok(Ok(conn)) => {
                 info!("Connected to peripheral {}", peri_id);
 
-                
                 publish_event(PeripheralConnectedEvent {
                     id: peri_id,
                     connected: true,
@@ -441,10 +438,7 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> Sp
         info!("Received split message: {:?}", message);
 
         // Update last activity time when receiving key events from peripheral
-        if matches!(
-            message,
-            SplitMessage::Key(_) | SplitMessage::Pointing(_)
-        ) {
+        if matches!(message, SplitMessage::Key(_) | SplitMessage::Pointing(_)) {
             debug!("Activity {:?} detected from peripheral", &message);
             update_activity_time();
         }
@@ -572,7 +566,7 @@ async fn sleep_manager_task<
             // Update connection parameters
             update_conn_params(stack, conn, &conn_params).await;
             SLEEPING_STATE.store(true, Ordering::Release);
-            
+
             publish_event(SleepStateEvent { sleeping: true });
         } else {
             // Wait for activity to wake up (false signal means activity/wakeup)
@@ -580,7 +574,7 @@ async fn sleep_manager_task<
             if !signal_value {
                 info!("Waking up from sleep mode due to activity");
                 SLEEPING_STATE.store(false, Ordering::Release);
-                
+
                 publish_event(SleepStateEvent { sleeping: false });
 
                 // Restore normal connection parameters

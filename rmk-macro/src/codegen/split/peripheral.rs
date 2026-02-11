@@ -10,7 +10,6 @@ use super::central::expand_serial_init;
 use crate::codegen::chip::chip_init::expand_chip_init;
 use crate::codegen::chip::flash::expand_flash_init;
 use crate::codegen::chip::gpio::expand_output_initialization;
-use crate::codegen::registered_processor::expand_registered_processor_init;
 use crate::codegen::entry::join_all_tasks;
 use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
 use crate::codegen::import::expand_custom_imports;
@@ -21,6 +20,7 @@ use crate::codegen::input_device::pmw3610::expand_pmw3610_device;
 use crate::codegen::keyboard_config::read_keyboard_toml_config;
 use crate::codegen::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
 use crate::codegen::orchestrator::get_debouncer_type;
+use crate::codegen::registered_processor::expand_registered_processor_init;
 
 /// Parse split peripheral mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_split_peripheral_mod(
@@ -315,7 +315,8 @@ fn expand_split_peripheral(
     };
 
     // Add processor support for peripherals
-    let (registered_processor_initializers, registered_processors) = expand_registered_processor_init(keyboard_config, &item_mod);
+    let (registered_processor_initializers, registered_processors) =
+        expand_registered_processor_init(keyboard_config, &item_mod);
 
     // Import Runnable trait so processor.run() calls compile
     let processor_import = if !registered_processors.is_empty() {

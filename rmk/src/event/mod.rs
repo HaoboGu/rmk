@@ -31,8 +31,8 @@ pub use battery::{BatteryAdcEvent, BatteryStateEvent, ChargingStateEvent};
 pub use connection::{BleProfileChangeEvent, BleStateChangeEvent};
 pub use connection::{ConnectionChangeEvent, ConnectionType};
 pub use input::{
-    Axis, AxisEvent, AxisValType, KeyPos, KeyboardEvent, KeyboardEventPos, ModifierEvent,
-    PointingEvent, PointingSetCpiEvent, RotaryEncoderPos,
+    Axis, AxisEvent, AxisValType, KeyPos, KeyboardEvent, KeyboardEventPos, ModifierEvent, PointingEvent,
+    PointingSetCpiEvent, RotaryEncoderPos,
 };
 #[cfg(feature = "split")]
 pub use split::{CentralConnectedEvent, PeripheralConnectedEvent};

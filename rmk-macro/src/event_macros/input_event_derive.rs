@@ -32,12 +32,9 @@ pub fn event_derive_impl(input: TokenStream) -> TokenStream {
     let data_enum = match &input.data {
         syn::Data::Enum(e) => e,
         _ => {
-            return syn::Error::new_spanned(
-                input,
-                "#[derive(Event)] can only be applied to enums",
-            )
-            .to_compile_error()
-            .into();
+            return syn::Error::new_spanned(input, "#[derive(Event)] can only be applied to enums")
+                .to_compile_error()
+                .into();
         }
     };
 
