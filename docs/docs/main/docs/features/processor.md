@@ -4,32 +4,11 @@ RMK's processor system provides a unified interface for components that consume 
 
 ## Overview
 
-Processors subscribe to events and react accordingly. Events are published by [Input Devices](./input_device) or the keyboard core. For details about events, see the [Event](./event) documentation.
+Processors subscribe to events and react accordingly. Events are published by [Input Devices](./input_device) or other processors. For details about events, see the [Event](./event) documentation.
 
 Processors can operate in two modes:
 - **Event-driven** - React to events as they arrive
 - **Polling** - Perform periodic updates at specified intervals (in addition to handling events)
-
-## Built-in LED Indicator
-
-RMK provides built-in LED indicator support for NumLock, CapsLock, and ScrollLock. Configure in `keyboard.toml` without writing any code:
-
-```toml
-[light]
-# NumLock LED
-numslock.pin = "PIN_1"
-numslock.low_active = false
-
-# CapsLock LED
-capslock.pin = "PIN_2"
-capslock.low_active = true
-
-# ScrollLock LED
-scrolllock.pin = "PIN_3"
-scrolllock.low_active = false
-```
-
-The LED indicators automatically subscribe to `LedIndicatorEvent` and update based on host keyboard state.
 
 ## Defining Processors
 
@@ -152,19 +131,18 @@ A complete example of a processor that controls an LED based on keyboard indicat
 
 ```rust
 use rmk_macro::processor;
-use embassy_hal::gpio::{Output, Level};
+use embedded_hal::digital::StatefulOutputPin;
 
 #[processor(subscribe = [LedIndicatorEvent])]
-pub struct CapsLockLed<'a> {
-    led: Output<'a>,
+pub struct CapsLockLed<P: StatefulOutputPin> {
+    led: P,
     low_active: bool,
 }
 
-impl<'a> CapsLockLed<'a> {
-    pub fn new(pin: impl Peripheral<P = impl Pin>, low_active: bool) -> Self {
-        let initial = if low_active { Level::High } else { Level::Low };
+impl<P: StatefulOutputPin> CapsLockLed<P> {
+    pub fn new(pin: P, low_active: bool) -> Self {
         Self {
-            led: Output::new(pin, initial, Speed::Low),
+            led: pin,
             low_active,
         }
     }
