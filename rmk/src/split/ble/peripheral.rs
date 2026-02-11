@@ -193,9 +193,9 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
                 Err(BleHostError::BleHost(Error::Timeout)) => {
                     // Timeout, wait new keys to continue
                     error!("Connect to central timeout");
-                    let sub = KeyboardEvent::subscriber();
+                    let mut sub = KeyboardEvent::subscriber();
                     sub.clear();
-                    let _ = sub.receive().await;
+                    let _ = sub.next_message_pure().await;
                     continue;
                 }
                 Err(e) => {

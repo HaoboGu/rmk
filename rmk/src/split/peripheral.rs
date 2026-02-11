@@ -76,27 +76,27 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     pub(crate) async fn run(&mut self) {
         CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
 
-        let key_sub = KeyboardEvent::subscriber();
+        let mut key_sub = KeyboardEvent::subscriber();
         #[cfg(feature = "_ble")]
-        let charging_state_sub = ChargingStateEvent::subscriber();
-        let touch_sub = TouchpadEvent::subscriber();
-        let pointing_sub = PointingEvent::subscriber();
+        let mut charging_state_sub = ChargingStateEvent::subscriber();
+        let mut touch_sub = TouchpadEvent::subscriber();
+        let mut pointing_sub = PointingEvent::subscriber();
         #[cfg(feature = "_ble")]
         let mut battery_sub = BatteryStateEvent::subscriber();
 
         loop {
             let read_message_to_send = async {
                 let message = crate::select_biased_with_feature! {
-                    e = key_sub.receive().fuse() => SplitMessage::Key(e),
-                    with_feature("_ble"): e = charging_state_sub.receive().fuse() => {
+                    e = key_sub.next_message_pure().fuse() => SplitMessage::Key(e),
+                    with_feature("_ble"): e = charging_state_sub.next_message_pure().fuse() => {
                         if e.charging {
                             SplitMessage::BatteryState(BatteryStateEvent::Charging)
                         } else {
                             SplitMessage::BatteryState(BatteryStateEvent::NotAvailable)
                         }
                     },
-                    e = touch_sub.receive().fuse() => SplitMessage::Touchpad(e),
-                    e = pointing_sub.receive().fuse() => SplitMessage::Pointing(e),
+                    e = touch_sub.next_message_pure().fuse() => SplitMessage::Touchpad(e),
+                    e = pointing_sub.next_message_pure().fuse() => SplitMessage::Pointing(e),
                     with_feature("_ble"): e = battery_sub.next_event().fuse() => SplitMessage::BatteryState(e),
                 };
                 message
