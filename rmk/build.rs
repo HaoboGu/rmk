@@ -19,20 +19,16 @@ fn main() {
     println!("cargo:rerun-if-env-changed=KEYBOARD_TOML_PATH");
     println!("cargo:rerun-if-env-changed=VIAL_JSON_PATH");
 
-    // Read keyboard.toml if it's present
-    let user_config_str = if let Ok(toml_path) = std::env::var("KEYBOARD_TOML_PATH") {
+    // Load keyboard.toml if it's present.
+    //
+    // Build-time constants only need [rmk] + [event]. Keep event defaults support
+    // without requiring [keyboard.board]/[keyboard.chip].
+    let mut user_toml: KeyboardTomlConfig = if let Ok(toml_path) = std::env::var("KEYBOARD_TOML_PATH") {
         println!("cargo:rerun-if-changed={toml_path}");
-        fs::read_to_string(&toml_path).expect("Failed to read user config file")
+        KeyboardTomlConfig::new_from_toml_path_with_event_defaults(&toml_path)
     } else {
-        "".to_string()
+        toml::from_str("").expect("Failed to parse empty keyboard config\n")
     };
-
-    // Parse user configuration
-    let mut user_toml: KeyboardTomlConfig =
-        toml::from_str(&user_config_str).expect("Failed to parse KEYBOARD_TOML_PATH file\n");
-
-    // FIXME: calculate the number of controllers automatically
-    user_toml.auto_calculate_parameters();
 
     // Fix the default split_peripherals_num when `split` feature is enabled
     if env::var("CARGO_FEATURE_SPLIT").is_ok() && user_toml.rmk.split_peripherals_num < 1 {
