@@ -9,7 +9,7 @@
   "usb_logging",
   "storage",
   "use_rust_api",
-  "controller",
+  "processor",
   "input_device",
   "binary_size_optimization"
 ]

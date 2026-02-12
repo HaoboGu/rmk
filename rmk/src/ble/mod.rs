@@ -39,8 +39,7 @@ use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
-#[cfg(feature = "controller")]
-use crate::event::{BleStateChangeEvent, ConnectionChangeEvent, publish_controller_event};
+use crate::event::{BleStateChangeEvent, ConnectionChangeEvent, publish_event};
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
@@ -159,8 +158,7 @@ pub(crate) async fn run_ble<
             CONNECTION_TYPE.store(ConnectionType::Usb.into(), Ordering::SeqCst);
         }
 
-        #[cfg(feature = "controller")]
-        publish_controller_event(ConnectionChangeEvent {
+        publish_event(ConnectionChangeEvent {
             connection_type: CONNECTION_TYPE.load(Ordering::SeqCst).into(),
         });
     }
@@ -245,8 +243,8 @@ pub(crate) async fn run_ble<
     join(background_task, async {
         loop {
             // Advertising state
-            #[cfg(feature = "controller")]
-            publish_controller_event(BleStateChangeEvent::new(
+
+            publish_event(BleStateChangeEvent::new(
                 ACTIVE_PROFILE.load(Ordering::Relaxed),
                 BleState::Advertising,
             ));
@@ -270,8 +268,8 @@ pub(crate) async fn run_ble<
                         {
                             Either4::First(_) => {
                                 info!("USB enabled, run USB keyboard");
-                                #[cfg(feature = "controller")]
-                                publish_controller_event(BleStateChangeEvent::new(0, BleState::None));
+
+                                publish_event(BleStateChangeEvent::new(0, BleState::None));
                                 // Re-send the consumed flag
                                 USB_ENABLED.signal(());
                                 let usb_fut = run_keyboard(
@@ -310,8 +308,8 @@ pub(crate) async fn run_ble<
                             }
                             Either4::Second(Err(BleHostError::BleHost(Error::Timeout))) => {
                                 warn!("Advertising timeout, sleep and wait for any key");
-                                #[cfg(feature = "controller")]
-                                publish_controller_event(BleStateChangeEvent::new(0, BleState::None));
+
+                                publish_event(BleStateChangeEvent::new(0, BleState::None));
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
@@ -367,8 +365,7 @@ pub(crate) async fn run_ble<
                             Either3::First(Err(BleHostError::BleHost(Error::Timeout))) => {
                                 warn!("Advertising timeout, sleep and wait for any key");
 
-                                #[cfg(feature = "controller")]
-                                publish_controller_event(BleStateChangeEvent::new(0, BleState::None));
+                                publish_event(BleStateChangeEvent::new(0, BleState::None));
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
@@ -491,9 +488,9 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let system_control = server.composite_service.system_report;
 
     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
-    #[cfg(feature = "controller")]
+
     let mut connected = false;
-    #[cfg(feature = "controller")]
+
     let mut published_connected_state = false;
     loop {
         match conn.next().await {
@@ -513,7 +510,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                     };
                     UPDATED_PROFILE.signal(profile_info);
                 }
-                #[cfg(feature = "controller")]
+
                 {
                     connected = true;
                 }
@@ -646,7 +643,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 peripheral_latency,
                 supervision_timeout,
             } => {
-                #[cfg(feature = "controller")]
                 {
                     connected = true;
                 }
@@ -675,7 +671,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 max_rx_octets,
                 max_rx_time,
             } => {
-                #[cfg(feature = "controller")]
                 {
                     connected = true;
                 }
@@ -689,11 +684,11 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
             GattConnectionEvent::PassKeyInput => warn!("[gatt] PassKeyInput event, should not happen"),
         }
 
-        // Publish the controller connected event
-        #[cfg(feature = "controller")]
+        // Publish the BLE connected event
+
         if connected && !published_connected_state {
             let profile = ACTIVE_PROFILE.load(Ordering::Acquire);
-            publish_controller_event(BleStateChangeEvent::new(profile, BleState::Connected));
+            publish_event(BleStateChangeEvent::new(profile, BleState::Connected));
             published_connected_state = true;
         }
     }

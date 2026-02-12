@@ -2,18 +2,43 @@
 //!
 //! This module provides:
 //! - Event infrastructure (traits, publish/subscribe patterns, implementations)
-//! - Built-in controller events (battery, connection, input, etc.)
-//! - Built-in input device events (keyboard, touchpad, joystick, etc.)
+//! - Built-in events (battery, connection, input, state, split, etc.)
+//!
+//! All events use PubSubChannel for unified publish/subscribe semantics,
+//! supporting multiple subscribers per event type.
+//!
+//! ## Module organization
+//!
+//! - `input`: Input events (keyboard, modifier, pointing device)
+//! - `state`: Keyboard state events (layer, WPM, LED indicator, sleep)
+//! - `battery`: Battery events (ADC, charging, battery state)
+//! - `connection`: Connection events (USB/BLE, BLE state/profile)
+//! - `split`: Split keyboard events (peripheral/central connection)
 
 use embassy_sync::blocking_mutex::raw::RawMutex;
 use embassy_sync::pubsub::{ImmediatePublisher, Publisher, Subscriber};
 use embassy_sync::{channel, watch};
 
-mod controller;
+mod battery;
+mod connection;
 mod input;
+#[cfg(feature = "split")]
+mod split;
+mod state;
 
-pub use controller::*;
-pub use input::*;
+pub use battery::{BatteryAdcEvent, BatteryStateEvent, ChargingStateEvent};
+#[cfg(feature = "_ble")]
+pub use connection::{BleProfileChangeEvent, BleStateChangeEvent};
+pub use connection::{ConnectionChangeEvent, ConnectionType};
+pub use input::{
+    Axis, AxisEvent, AxisValType, KeyPos, KeyboardEvent, KeyboardEventPos, ModifierEvent, PointingEvent,
+    PointingSetCpiEvent, RotaryEncoderPos,
+};
+#[cfg(feature = "split")]
+pub use split::{CentralConnectedEvent, PeripheralConnectedEvent};
+#[cfg(all(feature = "split", feature = "_ble"))]
+pub use split::{ClearPeerEvent, PeripheralBatteryEvent};
+pub use state::{LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent};
 
 /// Trait for event publishers
 pub trait EventPublisher {
@@ -33,77 +58,39 @@ pub trait EventSubscriber {
     async fn next_event(&mut self) -> Self::Event;
 }
 
-/// Base trait for all events
-pub trait Event: Clone + Send {}
-impl<T: Clone + Send> Event for T {}
-
-/// Trait for input events that can be published.
-pub trait PublishableInputEvent: Event {
+/// Trait for events that can be published.
+pub trait PublishableEvent: Clone + Send {
     type Publisher: EventPublisher<Event = Self>;
 
-    fn input_publisher() -> Self::Publisher;
+    fn publisher() -> Self::Publisher;
 }
 
-/// Async version of input publish event trait.
-pub trait AsyncPublishableInputEvent: PublishableInputEvent {
+/// Async version of publishable event trait.
+pub trait AsyncPublishableEvent: PublishableEvent {
     type AsyncPublisher: AsyncEventPublisher<Event = Self>;
 
-    fn input_publisher_async() -> Self::AsyncPublisher;
+    fn publisher_async() -> Self::AsyncPublisher;
 }
 
-/// Trait for input events that can be subscribed to.
-pub trait SubscribableInputEvent: Event {
+/// Trait for events that can be subscribed to.
+pub trait SubscribableEvent: Clone + Send {
     type Subscriber: EventSubscriber<Event = Self>;
 
-    fn input_subscriber() -> Self::Subscriber;
+    fn subscriber() -> Self::Subscriber;
 }
 
-/// Combined trait for input events that support both publish and subscribe.
+/// Combined trait for events that support both publish and subscribe.
 ///
-/// Most concrete input event types implement this trait.
-pub trait InputEvent: PublishableInputEvent + SubscribableInputEvent {}
+/// Most concrete event types implement this trait.
+pub trait Event: PublishableEvent + SubscribableEvent {}
 
-// Auto-implement InputEvent for types that implement both publish and subscribe
-impl<T: PublishableInputEvent + SubscribableInputEvent> InputEvent for T {}
+// Auto-implement Event for types that implement both publish and subscribe
+impl<T: PublishableEvent + SubscribableEvent> Event for T {}
 
-/// Async version of input event trait (for backward compatibility)
-pub trait AsyncInputEvent: InputEvent + AsyncPublishableInputEvent {}
+/// Async version of event trait
+pub trait AsyncEvent: Event + AsyncPublishableEvent {}
 
-impl<T: InputEvent + AsyncPublishableInputEvent> AsyncInputEvent for T {}
-
-/// Trait for controller events that can be published.
-pub trait PublishableControllerEvent: Event {
-    type Publisher: EventPublisher<Event = Self>;
-
-    fn controller_publisher() -> Self::Publisher;
-}
-
-/// Async version of controller publish event trait.
-pub trait AsyncPublishableControllerEvent: PublishableControllerEvent {
-    type AsyncPublisher: AsyncEventPublisher<Event = Self>;
-
-    fn controller_publisher_async() -> Self::AsyncPublisher;
-}
-
-/// Trait for controller events that can be subscribed to.
-pub trait SubscribableControllerEvent: Event {
-    type Subscriber: EventSubscriber<Event = Self>;
-
-    fn controller_subscriber() -> Self::Subscriber;
-}
-
-/// Combined trait for controller events that support both publish and subscribe.
-///
-/// Most concrete controller event types implement this trait.
-pub trait ControllerEvent: PublishableControllerEvent + SubscribableControllerEvent {}
-
-// Auto-implement ControllerEvent for types that implement both publish and subscribe
-impl<T: PublishableControllerEvent + SubscribableControllerEvent> ControllerEvent for T {}
-
-/// Async version of controller event trait (for backward compatibility)
-pub trait AsyncControllerEvent: ControllerEvent + AsyncPublishableControllerEvent {}
-
-impl<T: ControllerEvent + AsyncPublishableControllerEvent> AsyncControllerEvent for T {}
+impl<T: Event + AsyncPublishableEvent> AsyncEvent for T {}
 
 // Implementations for embassy-sync PubSubChannel
 impl<'a, M: RawMutex, T: Clone, const CAP: usize, const SUBS: usize, const PUBS: usize> EventPublisher
@@ -173,4 +160,18 @@ impl<'a, M: RawMutex, T: Clone, const N: usize> EventSubscriber for channel::Rec
     async fn next_event(&mut self) -> Self::Event {
         self.receive().await
     }
+}
+
+/// Publish an event (non-blocking, may drop if buffer full)
+///
+/// Example: `publish_event(KeyboardEvent::key(0, 0, true))`
+pub fn publish_event<E: PublishableEvent>(e: E) {
+    E::publisher().publish(e);
+}
+
+/// Publish an event with backpressure (waits if buffer full)
+///
+/// Example: `publish_event_async(KeyboardEvent::key(0, 0, true)).await`
+pub async fn publish_event_async<E: AsyncPublishableEvent>(e: E) {
+    E::publisher_async().publish_async(e).await;
 }

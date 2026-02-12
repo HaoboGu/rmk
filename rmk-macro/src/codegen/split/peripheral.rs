@@ -10,7 +10,6 @@ use super::central::expand_serial_init;
 use crate::codegen::chip::chip_init::expand_chip_init;
 use crate::codegen::chip::flash::expand_flash_init;
 use crate::codegen::chip::gpio::expand_output_initialization;
-use crate::codegen::controller::expand_controller_init;
 use crate::codegen::entry::join_all_tasks;
 use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
 use crate::codegen::import::expand_custom_imports;
@@ -21,6 +20,7 @@ use crate::codegen::input_device::pmw3610::expand_pmw3610_device;
 use crate::codegen::keyboard_config::read_keyboard_toml_config;
 use crate::codegen::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
 use crate::codegen::orchestrator::get_debouncer_type;
+use crate::codegen::registered_processor::expand_registered_processor_init;
 
 /// Parse split peripheral mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_split_peripheral_mod(
@@ -314,16 +314,15 @@ fn expand_split_peripheral(
         quote! {}
     };
 
-    // Add controller support for peripherals
-    let (controller_initializers, controllers) = expand_controller_init(keyboard_config, &item_mod);
+    // Add processor support for peripherals
+    let (registered_processor_initializers, registered_processors) =
+        expand_registered_processor_init(keyboard_config, &item_mod);
 
-    // Import EventController for controller support
-    let controller_import = if controllers.is_empty() {
-        quote! {}
+    // Import Runnable trait so processor.run() calls compile
+    let processor_import = if !registered_processors.is_empty() {
+        quote! { use ::rmk::input_device::Runnable; }
     } else {
-        quote! {
-            use ::rmk::controller::EventController;
-        }
+        quote! {}
     };
 
     let run_rmk_peripheral = expand_split_peripheral_entry(
@@ -333,14 +332,14 @@ fn expand_split_peripheral(
         peripheral_config,
         devices,
         processors,
-        controllers,
+        registered_processors,
     );
 
     quote! {
         #imports
-        #controller_import
+        #processor_import
         #chip_init
-        #controller_initializers
+        #registered_processor_initializers
         #matrix_config
         #keymap_init
         #output_config
@@ -356,7 +355,7 @@ fn expand_split_peripheral_entry(
     peripheral_config: &SplitBoardConfig,
     devices: Vec<TokenStream2>,
     processors: Vec<TokenStream2>,
-    controllers: Vec<TokenStream2>,
+    registered_processors: Vec<TokenStream2>,
 ) -> TokenStream2 {
     // Add matrix to devices, and run all devices
     let mut devs = devices.clone();
@@ -386,13 +385,13 @@ fn expand_split_peripheral_entry(
                 &mut storage,
             )
         };
-        // Build task list: device, processor (if any), peripheral, controllers
+        // Build task list: device, processor (if any), peripheral, registered_processors
         let mut tasks = vec![device_task];
         if !processors.is_empty() {
             tasks.push(processor_task);
         }
         tasks.push(peripheral_run);
-        tasks.extend(controllers);
+        tasks.extend(registered_processors);
         let run_rmk_peripheral = join_all_tasks(tasks);
         quote! {
             #run_rmk_peripheral
@@ -422,7 +421,7 @@ fn expand_split_peripheral_entry(
             ::rmk::split::peripheral::run_rmk_split_peripheral(#uart_instance)
         };
         let mut tasks = vec![device_task, peripheral_run];
-        tasks.extend(controllers);
+        tasks.extend(registered_processors);
         let run_rmk_peripheral = join_all_tasks(tasks);
         quote! {
             #serial_init

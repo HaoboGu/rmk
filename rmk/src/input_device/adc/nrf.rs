@@ -1,12 +1,12 @@
 use embassy_nrf::saadc::Saadc;
 use embassy_time::{Duration, Instant};
-use rmk_macro::{InputEvent, input_device};
+use rmk_macro::{Event, input_device};
 
 use super::{AdcState, AnalogEventType};
 use crate::event::{Axis, AxisEvent, AxisValType, BatteryAdcEvent, PointingEvent};
 
 /// Events produced by NrfAdc.
-#[derive(InputEvent, Clone, Debug)]
+#[derive(Event, Clone, Debug)]
 pub enum NrfAdcEvent {
     Pointing(PointingEvent),
     Battery(BatteryAdcEvent),

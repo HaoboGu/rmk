@@ -12,7 +12,6 @@ use super::chip::chip_init::expand_chip_init;
 use super::chip::comm::expand_usb_init;
 use super::chip::flash::expand_flash_init;
 use super::chip::gpio::expand_output_config;
-use super::controller::expand_controller_init;
 use super::entry::expand_rmk_entry;
 use super::feature::{get_rmk_features, is_feature_enabled};
 use super::import::expand_custom_imports;
@@ -20,6 +19,7 @@ use super::input_device::expand_input_device_config;
 use super::keyboard_config::{expand_keyboard_info, expand_vial_config, read_keyboard_toml_config};
 use super::layout::expand_default_keymap;
 use super::matrix::expand_matrix_config;
+use super::registered_processor::expand_registered_processor_init;
 use super::split::central::expand_split_central_config;
 
 /// Parse keyboard mod and generate a valid RMK main function with all needed code
@@ -136,8 +136,15 @@ fn expand_main(
     let split_central_config = expand_split_central_config(keyboard_config);
     let (input_device_config, devices, processors) = expand_input_device_config(keyboard_config);
     let matrix_and_keyboard = expand_matrix_and_keyboard_init(keyboard_config);
-    let (controller_initializers, controllers) = expand_controller_init(keyboard_config, &item_mod);
-    let run_rmk = expand_rmk_entry(keyboard_config, &item_mod, devices, processors, controllers);
+    let (registered_processor_initializers, registered_processors) =
+        expand_registered_processor_init(keyboard_config, &item_mod);
+    let run_rmk = expand_rmk_entry(
+        keyboard_config,
+        &item_mod,
+        devices,
+        processors,
+        registered_processors,
+    );
 
     let vial_config = if keyboard_config.get_host_config().vial_enabled {
         quote! { vial_config: VIAL_CONFIG,}
@@ -211,8 +218,8 @@ fn expand_main(
             // Set all keyboard config
             #rmk_config
 
-            // Initialize the controller, as `controller`
-            #controller_initializers
+            // Initialize the registered processors
+            #registered_processor_initializers
 
             // Initialize the storage and keymap, as `storage` and `keymap`
             #keymap_and_storage

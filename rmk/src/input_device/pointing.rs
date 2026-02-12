@@ -6,12 +6,12 @@ use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::InputPin;
 use embedded_hal_async::digital::Wait;
 use futures::future::pending;
-use rmk_macro::input_processor;
+use rmk_macro::{input_device, processor};
 use usbd_hid::descriptor::MouseReport;
 
-use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent};
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent, PointingSetCpiEvent};
 use crate::hid::Report;
-use crate::input_device::{InputDevice, InputProcessor};
 use crate::keymap::KeyMap;
 
 pub const ALL_POINTING_DEVICES: u8 = 255;
@@ -61,7 +61,9 @@ pub enum InitState {
 
 /// PointingDevice an InputDevice for RMK
 ///
-/// This device returns `Event::Joystick` events with relative X/Y movement.
+/// This device publishes `PointingEvent` events with relative X/Y movement.
+#[processor(subscribe = [PointingSetCpiEvent])]
+#[input_device(publish = PointingEvent)]
 pub struct PointingDevice<S: PointingDriver> {
     pub sensor: S,
     pub init_state: InitState,
@@ -74,10 +76,7 @@ pub struct PointingDevice<S: PointingDriver> {
     pub accumulated_y: i32,
 }
 
-impl<S> PointingDevice<S>
-where
-    S: PointingDriver,
-{
+impl<S: PointingDriver> PointingDevice<S> {
     const MAX_INIT_RETRIES: u8 = 3;
 
     async fn try_init(&mut self) -> bool {
@@ -171,86 +170,67 @@ where
     }
 }
 
-impl<S> crate::input_device::Runnable for PointingDevice<S>
-where
-    S: PointingDriver,
-{
-    async fn run(&mut self) -> ! {
-        use crate::event::publish_input_event_async;
-        use crate::input_device::InputDevice;
-        loop {
-            let event = self.read_event().await;
-            publish_input_event_async(event).await;
+impl<S: PointingDriver> PointingDevice<S> {
+    async fn on_pointing_set_cpi_event(&mut self, _e: PointingSetCpiEvent) {}
+
+    // Read accumulated pointing event
+    //
+    // +--------------- loop ---------------+
+    // ¦ poll_wait   report_wait            ¦
+    // ¦     ¦           ¦                  ¦
+    // ¦     V           V                  ¦
+    // ¦ poll_once()     take_report_event()¦
+    // ¦     ¦           ¦                  ¦
+    // ¦     +- accum += ¦                  ¦
+    // ¦                 >- Event returned  ¦
+    // +------------------------------------+
+    async fn read_pointing_event(&mut self) -> PointingEvent {
+        use embassy_futures::select::{Either, select};
+
+        if self.last_poll == Instant::MIN {
+            self.last_poll = Instant::now();
         }
-    }
-}
+        if self.last_report == Instant::MIN {
+            self.last_report = Instant::now();
+        }
 
-impl<S> InputDevice for PointingDevice<S>
-where
-    S: PointingDriver,
-{
-    type Event = PointingEvent;
+        loop {
+            let poll_wait = async {
+                if let Some(gpio) = self.sensor.motion_gpio() {
+                    let _ = gpio.wait_for_low().await;
+                } else {
+                    Timer::after(
+                        self.poll_interval
+                            .checked_sub(self.last_poll.elapsed())
+                            .unwrap_or(Duration::MIN),
+                    )
+                    .await;
+                }
+            };
 
-    /*
-    +--------------- loop ---------------+
-    ¦ poll_wait   report_wait            ¦
-    ¦     ¦           ¦                  ¦
-    ¦     V           V                  ¦
-    ¦ poll_once()     take_report_event()¦
-    ¦     ¦           ¦                  ¦
-    ¦     +- accum += ¦                  ¦
-    ¦                 >- Event returned  ¦
-    +------------------------------------+
-    */
-    async fn read_event(&mut self) -> PointingEvent {
-        {
-            use embassy_futures::select::{Either, select};
+            let report_wait = async {
+                if self.accumulated_x != 0 || self.accumulated_y != 0 {
+                    Timer::after(
+                        self.report_interval
+                            .checked_sub(self.last_report.elapsed())
+                            .unwrap_or(Duration::MIN),
+                    )
+                    .await;
+                } else {
+                    // Don't schedule report if there's no accumulated motion
+                    pending::<()>().await;
+                }
+            };
 
-            if self.last_poll == Instant::MIN {
-                self.last_poll = Instant::now();
-            }
-            if self.last_report == Instant::MIN {
-                self.last_report = Instant::now();
-            }
-
-            loop {
-                let poll_wait = async {
-                    if let Some(gpio) = self.sensor.motion_gpio() {
-                        let _ = gpio.wait_for_low().await;
-                    } else {
-                        Timer::after(
-                            self.poll_interval
-                                .checked_sub(self.last_poll.elapsed())
-                                .unwrap_or(Duration::MIN),
-                        )
-                        .await;
-                    }
-                };
-
-                let report_wait = async {
-                    if self.accumulated_x != 0 || self.accumulated_y != 0 {
-                        Timer::after(
-                            self.report_interval
-                                .checked_sub(self.last_report.elapsed())
-                                .unwrap_or(Duration::MIN),
-                        )
-                        .await;
-                    } else {
-                        // Don't schedule report if there's no accumulated motion
-                        pending::<()>().await;
-                    }
-                };
-
-                match select(poll_wait, report_wait).await {
-                    Either::First(_) => {
-                        self.poll_once().await;
-                        self.last_poll = Instant::now();
-                    }
-                    Either::Second(_) => {
-                        if let Some(event) = self.take_report_event() {
-                            self.last_report = Instant::now();
-                            return event;
-                        }
+            match select(poll_wait, report_wait).await {
+                Either::First(_) => {
+                    self.poll_once().await;
+                    self.last_poll = Instant::now();
+                }
+                Either::Second(_) => {
+                    if let Some(event) = self.take_report_event() {
+                        self.last_report = Instant::now();
+                        return event;
                     }
                 }
             }
@@ -269,7 +249,7 @@ pub struct PointingProcessorConfig {
 }
 
 /// PointingProcessor that converts motion events to mouse reports
-#[input_processor(subscribe = [PointingEvent])]
+#[processor(subscribe = [PointingEvent])]
 pub struct PointingProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
     /// Reference to the keymap
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
@@ -317,7 +297,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             wheel: 0,
             pan: 0,
         };
-        self.send_report(Report::MouseReport(mouse_report)).await;
+        KEYBOARD_REPORT_CHANNEL.send(Report::MouseReport(mouse_report)).await;
     }
 }
 
@@ -331,6 +311,7 @@ mod tests {
     use embedded_hal_async::digital::Wait;
 
     use super::*;
+    use crate::input_device::InputDevice;
 
     // Init logger for tests
     #[ctor::ctor]

@@ -30,9 +30,8 @@ use bt_hci::{
     cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy},
     controller::{ControllerCmdAsync, ControllerCmdSync},
 };
+use builtin_processor::wpm::WpmProcessor;
 use config::RmkConfig;
-#[cfg(feature = "controller")]
-use controller::{PollingController, wpm::WpmController};
 #[cfg(not(feature = "_ble"))]
 use descriptor::{CompositeReport, KeyboardReport};
 #[cfg(not(any(cortex_m)))]
@@ -45,6 +44,7 @@ use futures::FutureExt;
 use hid::{HidReaderTrait, RunnableHidWriter};
 use keymap::KeyMap;
 use matrix::MatrixTrait;
+use processor::PollingProcessor;
 use rmk_types::action::{EncoderAction, KeyAction};
 use rmk_types::led_indicator::LedIndicator;
 use state::CONNECTION_STATE;
@@ -64,19 +64,17 @@ use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Stor
 use crate::config::PositionalConfig;
 #[cfg(feature = "vial")]
 use crate::config::VialConfig;
-#[cfg(feature = "controller")]
-use crate::event::{LedIndicatorEvent, publish_controller_event};
+use crate::event::{LedIndicatorEvent, publish_event};
 use crate::keyboard::LOCK_LED_STATES;
 use crate::state::ConnectionState;
 
 #[cfg(feature = "_ble")]
 pub mod ble;
 mod boot;
+pub mod builtin_processor;
 pub mod channel;
 pub mod combo;
 pub mod config;
-#[cfg(feature = "controller")]
-pub mod controller;
 pub mod debounce;
 pub mod descriptor;
 pub mod direct_pin;
@@ -95,6 +93,7 @@ pub mod layout_macro;
 pub mod light;
 pub mod matrix;
 pub mod morse;
+pub mod processor;
 #[cfg(feature = "split")]
 pub mod split;
 pub mod state;
@@ -236,7 +235,7 @@ pub async fn initialize_keymap_and_storage<
 
 #[allow(unreachable_code)]
 pub async fn run_rmk<
-    'a,
+    #[cfg(feature = "host")] 'a,
     #[cfg(feature = "_ble")] 'b,
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
@@ -336,7 +335,7 @@ pub async fn run_rmk<
 // Due to https://github.com/rust-lang/rust/issues/62958, storage/host struct is used now.
 // The corresponding future(commented) will be used after the issue is fixed.
 pub(crate) async fn run_keyboard<
-    'a,
+    #[cfg(feature = "host")] 'a,
     R: HidReaderTrait<ReportType = LedIndicator>,
     W: RunnableHidWriter,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
@@ -365,8 +364,7 @@ pub(crate) async fn run_keyboard<
                 Ok(led_indicator) => {
                     info!("Got led indicator");
                     LOCK_LED_STATES.store(led_indicator.into_bits(), core::sync::atomic::Ordering::Relaxed);
-                    #[cfg(feature = "controller")]
-                    publish_controller_event(LedIndicatorEvent {
+                    publish_event(LedIndicatorEvent {
                         indicator: led_indicator,
                     });
                 }
@@ -388,8 +386,7 @@ pub(crate) async fn run_keyboard<
     #[cfg(feature = "storage")]
     let storage_fut = storage.run();
 
-    #[cfg(feature = "controller")]
-    let mut wpm_controller = WpmController::new();
+    let mut wpm_processor = WpmProcessor::new();
 
     #[cfg(feature = "storage")]
     let storage_task = core::pin::pin!(storage_fut.fuse());
@@ -402,7 +399,7 @@ pub(crate) async fn run_keyboard<
     futures::select_biased! {
         _ = communication_task => error!("Communication task has ended"),
         _ = with_feature!("storage", storage_task) => error!("Storage task has ended"),
-        _ = with_feature!("controller", wpm_controller.polling_loop()) => error!("WPM Controller task ended"),
+        _ = wpm_processor.polling_loop().fuse() => error!("WPM Processor task ended"),
         _ = led_task => error!("Led task has ended"),
         _ = with_feature!("host", host_task) => error!("Host task ended"),
         _ = writer_task => error!("Writer task has ended"),
