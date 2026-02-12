@@ -609,6 +609,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         }
                     }
                     GattEvent::Other(_) => None,
+                    GattEvent::NotAllowed(_) => None,
                 };
 
                 // This step is also performed at drop(), but writing it explicitly is necessary
@@ -653,17 +654,12 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                     supervision_timeout.as_millis()
                 );
             }
-            GattConnectionEvent::RequestConnectionParams {
-                min_connection_interval,
-                max_connection_interval,
-                max_latency,
-                supervision_timeout,
-            } => info!(
+            GattConnectionEvent::RequestConnectionParams(req) => info!(
                 "[gatt] RequestConnectionParams: interval: ({:?}, {:?})ms, {:?}, {:?}ms",
-                min_connection_interval.as_millis(),
-                max_connection_interval.as_millis(),
-                max_latency,
-                supervision_timeout.as_millis(),
+                req.params().min_connection_interval.as_millis(),
+                req.params().max_connection_interval.as_millis(),
+                req.params().max_latency,
+                req.params().supervision_timeout.as_millis(),
             ),
             GattConnectionEvent::DataLengthUpdated {
                 max_tx_octets,
@@ -790,7 +786,7 @@ pub(crate) async fn set_conn_params<
     update_conn_params(
         stack,
         conn.raw(),
-        &ConnectParams {
+        &RequestedConnParams {
             min_connection_interval: Duration::from_millis(15),
             max_connection_interval: Duration::from_millis(15),
             max_latency: 30,
@@ -807,7 +803,7 @@ pub(crate) async fn set_conn_params<
     update_conn_params(
         stack,
         conn.raw(),
-        &ConnectParams {
+        &RequestedConnParams {
             min_connection_interval: Duration::from_micros(7500),
             max_connection_interval: Duration::from_micros(7500),
             max_latency: 30,
@@ -929,7 +925,7 @@ pub(crate) async fn update_conn_params<
 >(
     stack: &Stack<'a, C, P>,
     conn: &Connection<'b, P>,
-    params: &ConnectParams,
+    params: &RequestedConnParams,
 ) {
     loop {
         match conn.update_connection_params(stack, params).await {

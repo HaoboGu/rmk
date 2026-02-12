@@ -283,8 +283,8 @@ pub(crate) async fn run_ble_peripheral_manager<
     }
 }
 
-fn defaul_central_conn_param() -> ConnectParams {
-    ConnectParams {
+fn defaul_central_conn_param() -> RequestedConnParams {
+    RequestedConnParams {
         min_connection_interval: Duration::from_micros(7500),
         max_connection_interval: Duration::from_micros(7500),
         max_latency: 30, // 225ms
@@ -545,7 +545,7 @@ async fn sleep_manager_task<
             // Connection parameters are different when central is broadcasting and connected to host
             let conn_params = if CONNECTION_STATE.load(Ordering::Acquire) {
                 // Connected, the connection interval is 20ms
-                ConnectParams {
+                RequestedConnParams {
                     min_connection_interval: Duration::from_millis(20),
                     max_connection_interval: Duration::from_millis(20),
                     max_latency: 200, // 4s
@@ -554,7 +554,7 @@ async fn sleep_manager_task<
                 }
             } else {
                 // Advertising ,the connection interval can be longer
-                ConnectParams {
+                RequestedConnParams {
                     min_connection_interval: Duration::from_millis(200),
                     max_connection_interval: Duration::from_millis(200),
                     max_latency: 25, // 5s

@@ -53,24 +53,24 @@ paste = "1"
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { version = "0.5.1", features = [
+trouble-host = { version = "0.6.0", features = [
     "gatt",
     "scan",
     "derive",
     "security",
 ], optional = true }
 rand_core = { version = "0.6", optional = true }
-bt-hci = { version = "0.6", optional = true }
+bt-hci = { version = "0.8", optional = true }
 
 # nRF dependencies
-embassy-nrf = { version = "0.8", features = [
+embassy-nrf = { version = "0.9", features = [
     "unstable-pac",
     "time",
 ], optional = true }
 
 # RP2040 dependencies
-embassy-rp = { version = "0.8", optional = true }
-embassy-hal-internal = { version = "0.3.0", optional = true }
+embassy-rp = { version = "0.9", optional = true }
+embassy-hal-internal = { version = "0.4.0", optional = true }
 rp-pac = { version = "7.0.0", optional = true }
 pio = { version = "0.3.0", optional = true }
 fixed = { version = "1.28.0", optional = true }
@@ -95,7 +95,7 @@ embedded-hal-mock = { version = "0.11.1", features =["embedded-hal-async"] }
 
 [build-dependencies]
 rmk-config = { path = "../rmk-config", version = "=0.6.1" }
-toml = "0.9"
+toml = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
 chrono = "0.4"
