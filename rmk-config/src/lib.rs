@@ -68,22 +68,46 @@ pub struct KeyboardTomlConfig {
     pub rmk: RmkConstantsConfig,
     /// Event channel configuration
     /// Default values are loaded from event_default.toml in new_from_toml_path()
-    /// For build.rs direct parsing, uses Default trait
+    /// build.rs also loads event defaults via new_from_toml_path_with_event_defaults()
     #[serde(default)]
     pub event: EventConfig,
 }
 
 impl KeyboardTomlConfig {
-    pub fn new_from_toml_path<P: AsRef<Path>>(config_toml_path: P) -> Self {
-        // First pass: load user config with event defaults to get chip model
-        // This allows user's keyboard.toml to omit [event] section
-        let user_config: KeyboardTomlConfig = Config::builder()
-            .add_source(File::from_str(EVENT_DEFAULT_CONFIG, FileFormat::Toml))
-            .add_source(File::with_name(config_toml_path.as_ref().to_str().unwrap()))
+    fn parse_from_toml_path<P: AsRef<Path>>(config_toml_path: P, chip_default_config: Option<&str>) -> Self {
+        let path = config_toml_path.as_ref();
+        let path_str = path
+            .to_str()
+            .unwrap_or_else(|| panic!("Config path is not valid UTF-8: {:?}", path));
+
+        let mut builder = Config::builder().add_source(File::from_str(EVENT_DEFAULT_CONFIG, FileFormat::Toml));
+        if let Some(default_config) = chip_default_config {
+            builder = builder.add_source(File::from_str(default_config, FileFormat::Toml));
+        }
+        builder
+            .add_source(File::with_name(path_str))
             .build()
-            .unwrap_or_else(|e| panic!("Parse {:?} error: {}", config_toml_path.as_ref(), e))
+            .unwrap_or_else(|e| panic!("Parse {:?} error: {}", path, e))
             .try_deserialize()
-            .unwrap_or_else(|e| panic!("Deserialize {:?} error: {}", config_toml_path.as_ref(), e));
+            .unwrap_or_else(|e| panic!("Deserialize {:?} error: {}", path, e))
+    }
+
+    /// Load keyboard.toml with event defaults only.
+    ///
+    /// This is used in build.rs where we only need [rmk] and [event] constants,
+    /// and should not require `[keyboard.board]`/`[keyboard.chip]`.
+    pub fn new_from_toml_path_with_event_defaults<P: AsRef<Path>>(config_toml_path: P) -> Self {
+        let mut config = Self::parse_from_toml_path(config_toml_path, None);
+        config.auto_calculate_parameters();
+        config
+    }
+
+    pub fn new_from_toml_path<P: AsRef<Path>>(config_toml_path: P) -> Self {
+        let path = config_toml_path.as_ref();
+
+        // First pass: load user config with event defaults to get chip model.
+        // This allows user's keyboard.toml to omit [event] section.
+        let user_config = Self::parse_from_toml_path(path, None);
 
         let default_config_str = user_config.get_chip_model().unwrap().get_default_config_str().unwrap();
 
@@ -92,14 +116,7 @@ impl KeyboardTomlConfig {
         // 1. Event default config (lowest priority)
         // 2. Chip-specific default config
         // 3. User config (highest priority)
-        let mut config: KeyboardTomlConfig = Config::builder()
-            .add_source(File::from_str(EVENT_DEFAULT_CONFIG, FileFormat::Toml))
-            .add_source(File::from_str(default_config_str, FileFormat::Toml))
-            .add_source(File::with_name(config_toml_path.as_ref().to_str().unwrap()))
-            .build()
-            .unwrap()
-            .try_deserialize()
-            .unwrap();
+        let mut config = Self::parse_from_toml_path(path, Some(default_config_str));
 
         config.auto_calculate_parameters();
 
@@ -1066,5 +1083,29 @@ channel_size = 32
         assert_eq!(config.event.modifier.channel_size, 8);
         assert_eq!(config.event.modifier.subs, 2);
         assert_eq!(config.event.layer_change.subs, 1);
+    }
+
+    #[test]
+    fn test_event_config_partial_override_with_event_defaults_loader() {
+        let user_toml = r#"
+[event.layer_change]
+subs = 2
+"#;
+        let path = std::env::temp_dir().join(format!(
+            "rmk-event-defaults-loader-{}-{}.toml",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::write(&path, user_toml).unwrap();
+
+        let config = KeyboardTomlConfig::new_from_toml_path_with_event_defaults(&path);
+        std::fs::remove_file(path).unwrap();
+
+        assert_eq!(config.event.layer_change.channel_size, 1);
+        assert_eq!(config.event.layer_change.pubs, 2);
+        assert_eq!(config.event.layer_change.subs, 2);
     }
 }
