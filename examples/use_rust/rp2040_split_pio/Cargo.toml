@@ -65,3 +65,11 @@ debug = true            # no overhead for bare-metal
 opt-level = "z"         # optimize for binary size
 overflow-checks = false
 lto = "fat"
+
+[patch.crates-io]
+# embassy-time-driver ={ git = "https://github.com/embassy-rs/embassy", rev = "85606cc658695230c0d89ae6b815649ab9a9307e" }
+embassy-rp ={ git = "https://github.com/embassy-rs/embassy", rev = "85606cc658695230c0d89ae6b815649ab9a9307e" }
+# embassy-sync ={ git = "https://github.com/embassy-rs/embassy", rev = "85606cc658695230c0d89ae6b815649ab9a9307e" }
+# embassy-usb ={ git = "https://github.com/embassy-rs/embassy", rev = "85606cc658695230c0d89ae6b815649ab9a9307e" }
+# embassy-usb-driver ={ git = "https://github.com/embassy-rs/embassy", rev = "85606cc658695230c0d89ae6b815649ab9a9307e" }
+# embassy-embedded-hal ={ git = "https://github.com/embassy-rs/embassy", rev = "85606cc658695230c0d89ae6b815649ab9a9307e" }

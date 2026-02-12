@@ -186,7 +186,7 @@ pub(crate) fn chip_init_default(
 
                     static STATE: ::static_cell::StaticCell<::cyw43::State> = ::static_cell::StaticCell::new();
                     let state = STATE.init(::cyw43::State::new());
-                    let (_net_device, bt_device, mut control, runner) = ::cyw43::new_with_bluetooth(state, pwr, spi, fw, btfw).await;
+                    let (_net_device, bt_device, mut control, runner) = ::cyw43::new_with_bluetooth(state, pwr, spi, fw, btfw, nvram).await;
                     spawner.spawn(cyw43_task(runner)).unwrap();
                     control.init(clm).await;
 
@@ -221,10 +221,7 @@ pub(crate) fn chip_init_default(
                 );
                 let _trng_source = ::esp_hal::rng::TrngSource::new(p.RNG, p.ADC1);
                 let mut rng = ::esp_hal::rng::Trng::try_new().unwrap();
-                static RADIO: ::static_cell::StaticCell<::esp_radio::Controller<'static>> = ::static_cell::StaticCell::new();
-                let radio = RADIO.init(::esp_radio::init().unwrap());
-                let bluetooth = p.BT;
-                let connector = ::esp_radio::ble::controller::BleConnector::new(radio, bluetooth, Default::default()).unwrap();
+                let connector = ::esp_radio::ble::controller::BleConnector::new(p.BT, Default::default()).unwrap();
                 let controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
                 let ble_addr = #ble_addr;
                 let mut host_resources = ::rmk::HostResources::new();

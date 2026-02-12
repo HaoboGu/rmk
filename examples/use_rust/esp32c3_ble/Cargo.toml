@@ -26,12 +26,11 @@ esp-storage = { version = "0.8.0", features = ["esp32c3"] }
 esp-hal = { version = "1.0", features = ["esp32c3", "unstable"] }
 esp-alloc = { version = "0.9.0" }
 esp-println = { version = "0.16.0", features = ["esp32c3", "log-04"] }
-esp-radio = { git = "https://github.com/esp-rs/esp-hal", rev = "41b522757899966d74fb3f4fab7e3b03fa854ae3", features = ["esp32c3", "unstable", "ble"] }
-esp-rtos = { git = "https://github.com/esp-rs/esp-hal", rev = "41b522757899966d74fb3f4fab7e3b03fa854ae3", features = ["esp32c3", "esp-radio", "embassy"] }
+esp-radio = { version = "0.17", features = ["esp32c3", "unstable", "ble"] }
+esp-rtos = { version = "0.2", features = ["esp32c3", "esp-radio", "embassy"] }
 esp-bootloader-esp-idf = { version = "0.4", features = ["esp32c3", "log-04"] }
 bt-hci = { version = "0.8" }
 rand_core = { version = "0.6", default-features = false }
-static_cell = "2"
 
 [build-dependencies]
 xz2 = "0.1.7"
@@ -62,3 +61,12 @@ lto = 'thin'
 opt-level = 3
 overflow-checks = false
 
+[patch.crates-io]
+esp-backtrace = { git = "https://github.com/esp-rs/esp-hal", rev = "41b522757899966d74fb3f4fab7e3b03fa854ae3" }
+esp-storage = { git = "https://github.com/esp-rs/esp-hal", rev = "41b522757899966d74fb3f4fab7e3b03fa854ae3" }
+esp-hal = { git = "https://github.com/esp-rs/esp-hal", rev = "41b522757899966d74fb3f4fab7e3b03fa854ae3" }
+esp-alloc = { git = "https://github.com/esp-rs/esp-hal", rev = "41b522757899966d74fb3f4fab7e3b03fa854ae3" }
+esp-println = { git = "https://github.com/esp-rs/esp-hal", rev = "41b522757899966d74fb3f4fab7e3b03fa854ae3" }
+esp-radio = { git = "https://github.com/esp-rs/esp-hal", rev = "41b522757899966d74fb3f4fab7e3b03fa854ae3" }
+esp-rtos = { git = "https://github.com/esp-rs/esp-hal", rev = "41b522757899966d74fb3f4fab7e3b03fa854ae3" }
+esp-bootloader-esp-idf = { git = "https://github.com/esp-rs/esp-hal", rev = "41b522757899966d74fb3f4fab7e3b03fa854ae3" }

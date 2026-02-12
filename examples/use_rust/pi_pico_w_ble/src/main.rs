@@ -8,6 +8,7 @@ mod macros;
 mod vial;
 
 use bt_hci::controller::ExternalController;
+use cyw43::aligned_bytes;
 use cyw43_pio::PioSpi;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
@@ -48,20 +49,24 @@ async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
     #[cfg(feature = "skip-cyw43-firmware")]
-    let (fw, clm, btfw) = (&[], &[], &[]);
+    let (fw, clm, btfw, nvram) = {
+        static EMPTY: &cyw43::Aligned<cyw43::A4, [u8]> = &cyw43::Aligned([0u8; 0]);
+        (EMPTY, &[] as &[u8], EMPTY, EMPTY)
+    };
 
     #[cfg(not(feature = "skip-cyw43-firmware"))]
-    let (fw, clm, btfw) = {
+    let (fw, clm, btfw, nvram) = {
         // IMPORTANT
         //
         // Download and make sure these files from https://github.com/embassy-rs/embassy/tree/main/cyw43-firmware
         // are available in `./examples/rp-pico-w`. (should be automatic)
         //
         // IMPORTANT
-        let fw = include_bytes!("../cyw43-firmware/43439A0.bin");
-        let clm = include_bytes!("../cyw43-firmware/43439A0_clm.bin");
-        let btfw = include_bytes!("../cyw43-firmware/43439A0_btfw.bin");
-        (fw, clm, btfw)
+        let fw = aligned_bytes!("../../cyw43-firmware/43439A0.bin");
+        let clm = aligned_bytes!("../../cyw43-firmware/43439A0_clm.bin");
+        let btfw = aligned_bytes!("../../cyw43-firmware/43439A0_btfw.bin");
+        let nvram = aligned_bytes!("../../cyw43-firmware/nvram_rp2040.bin");
+        (fw, clm, btfw, nvram)
     };
 
     let pwr = Output::new(p.PIN_23, Level::Low);
@@ -80,7 +85,8 @@ async fn main(spawner: Spawner) {
 
     static STATE: StaticCell<cyw43::State> = StaticCell::new();
     let state = STATE.init(cyw43::State::new());
-    let (_net_device, bt_device, mut control, runner) = cyw43::new_with_bluetooth(state, pwr, spi, fw, btfw).await;
+    let (_net_device, bt_device, mut control, runner) =
+        cyw43::new_with_bluetooth(state, pwr, spi, fw, btfw, nvram).await;
     defmt::unwrap!(spawner.spawn(cyw43_task(runner)));
     control.init(clm).await;
 
