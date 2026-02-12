@@ -473,63 +473,6 @@ impl KeyboardTomlConfig {
 
         Ok(key_action_sequence)
     }
-
-    /// Public helper to resolve layer names in a key map string
-    /// This is used by the keymap! proc-macro
-    pub fn layer_name_resolver(
-        layer_keys: &str,
-        layer_names: &HashMap<String, usize>,
-    ) -> Result<String, String> {
-        let result = layer_keys.to_string();
-
-        // Convert usize to u32 for internal function
-        let layer_names_u32: HashMap<String, u32> = layer_names
-            .iter()
-            .map(|(k, v)| (k.clone(), *v as u32))
-            .collect();
-
-        // Parse to resolve layer names
-        match ConfigParser::parse(Rule::key_map, &result) {
-            Ok(pairs) => {
-                let mut resolved_keys = Vec::new();
-
-                for pair in pairs {
-                    if pair.as_rule() == Rule::key_map {
-                        for inner_pair in pair.into_inner() {
-                            match inner_pair.as_rule() {
-                                Rule::df_action | Rule::mo_action | Rule::lm_action |
-                                Rule::lt_action | Rule::osl_action | Rule::tt_action |
-                                Rule::tg_action | Rule::to_action => {
-                                    let prefix = match inner_pair.as_rule() {
-                                        Rule::df_action => "DF",
-                                        Rule::mo_action => "MO",
-                                        Rule::lm_action => "LM",
-                                        Rule::lt_action => "LT",
-                                        Rule::osl_action => "OSL",
-                                        Rule::tt_action => "TT",
-                                        Rule::tg_action => "TG",
-                                        Rule::to_action => "TO",
-                                        _ => unreachable!(),
-                                    };
-                                    resolved_keys.push(Self::layer_name_resolver_internal(
-                                        prefix,
-                                        inner_pair,
-                                        &layer_names_u32,
-                                    )?);
-                                }
-                                _ => {
-                                    resolved_keys.push(inner_pair.as_str().to_string());
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Ok(resolved_keys.join(" "))
-            }
-            Err(e) => Err(format!("Failed to parse keymap: {}", e)),
-        }
-    }
 }
 
 #[cfg(test)]

@@ -158,31 +158,26 @@ fn generate_keymap(input: &KeymapInput) -> Result<TokenStream2, String> {
     let matrix_coords = KeyboardTomlConfig::parse_matrix_map(&input.matrix_map)?;
     let total_keys = matrix_coords.len();
 
-    // Build layer name map
+    // Build layer name map and convert to u32 for keymap_parser
     let mut layer_names = HashMap::new();
     for layer in &input.layers {
         if let Some(ref name) = layer.name {
-            layer_names.insert(name.clone(), layer.layer);
+            layer_names.insert(name.clone(), layer.layer as u32);
         }
     }
 
     // Parse each layer
     let mut layers_output = Vec::new();
     for layer_def in &input.layers {
-        // Resolve layer names in the layout string
-        let layout_str = KeyboardTomlConfig::layer_name_resolver(&layer_def.layout, &layer_names)?;
-
-        // Resolve aliases (for now, we don't support aliases in the macro, but we call it for consistency)
-        let layout_str = KeyboardTomlConfig::alias_resolver(&layout_str, &HashMap::new())?;
-
-        // Convert to HashMap<String, u32> for keymap_parser
-        let layer_names_u32: HashMap<String, u32> = layer_names
-            .iter()
-            .map(|(k, v)| (k.clone(), *v as u32))
-            .collect();
-
-        // Parse the key actions
-        let key_actions = KeyboardTomlConfig::keymap_parser(&layout_str, &HashMap::new(), &layer_names_u32)?;
+        // Parse the key actions - keymap_parser handles:
+        // 1. Alias resolution
+        // 2. Layer name resolution
+        // 3. Key action parsing
+        let key_actions = KeyboardTomlConfig::keymap_parser(
+            &layer_def.layout,
+            &HashMap::new(), // No aliases in macro for now
+            &layer_names,
+        )?;
 
         if key_actions.len() != total_keys {
             return Err(format!(
