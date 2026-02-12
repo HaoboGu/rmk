@@ -214,3 +214,41 @@ pub fn input_event_derive(item: TokenStream) -> TokenStream {
 pub fn input_device(attr: TokenStream, item: TokenStream) -> TokenStream {
     event_macros::input_device::input_device_impl(attr, item)
 }
+
+/// Macro for defining keymap in Rust code.
+///
+/// This macro provides a convenient way to define keyboard layouts directly in Rust code,
+/// reusing the same parsing logic as `keyboard.toml`.
+///
+/// # Syntax
+///
+/// ```rust,ignore
+/// const KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = keymap! {
+///     matrix_map: "
+///         (0,0) (0,1) (0,2)
+///         (1,0) (1,1) (1,2)
+///     ",
+///     layers: [
+///         {
+///             layer: 0,
+///             name: "base",
+///             layout: "
+///                 A B C
+///                 D E F
+///             "
+///         },
+///         {
+///             layer: 1,
+///             name: "fn",
+///             layout: "
+///                 F1 F2 F3
+///                 F4 F5 F6
+///             "
+///         }
+///     ]
+/// };
+/// ```
+#[proc_macro]
+pub fn keymap(input: TokenStream) -> TokenStream {
+    codegen::keymap_macro::keymap_impl(input)
+}

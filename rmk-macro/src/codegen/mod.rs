@@ -7,6 +7,7 @@ pub(crate) mod feature;
 pub(crate) mod import;
 pub(crate) mod input_device;
 pub(crate) mod keyboard_config;
+pub(crate) mod keymap_macro;
 pub(crate) mod layout;
 pub(crate) mod matrix;
 pub(crate) mod orchestrator;
