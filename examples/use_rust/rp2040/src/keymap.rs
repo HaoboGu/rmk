@@ -1,5 +1,5 @@
 use rmk::types::action::KeyAction;
-use rmk_macro::keymap;
+use rmk::keymap;
 
 pub(crate) const COL: usize = 3;
 pub(crate) const ROW: usize = 4;
@@ -13,6 +13,9 @@ const DEFAULT_KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = keymap! {
         (2,0) (2,1) (2,2)
         (3,0) (3,1) (3,2)
     ",
+    aliases: {
+        fn_layer = "MO(fn)",
+    },
     layers: [
         {
             layer: 0,
@@ -20,8 +23,8 @@ const DEFAULT_KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = keymap! {
             layout: "
                 AudioVolUp  B           AudioVolDown
                 Kp4         LShift      Kp6
-                MO(1)       Kp2         Kp3
-                MO(1)       No          Kp0
+                @fn_layer   Kp2         Kp3
+                @fn_layer   No          Kp0
             "
         },
         {

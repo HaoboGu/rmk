@@ -9,13 +9,16 @@ const KEYMAP: [[[rmk::types::action::KeyAction; COL]; ROW]; NUM_LAYER] = keymap!
         (0,0) (0,1) (0,2)
         (1,0) (1,1) (1,2)
     ",
+    aliases: {
+        my_a = "A",
+    },
     layers: [
         {
             layer: 0,
             name: "base",
             layout: "
-                A B C
-                D E F
+                @my_a B C
+                D     E F
             "
         },
         {

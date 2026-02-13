@@ -228,13 +228,17 @@ pub fn input_device(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///         (0,0) (0,1) (0,2)
 ///         (1,0) (1,1) (1,2)
 ///     ",
+///     aliases: {
+///         my_copy = "WM(C, LCtrl)",
+///         my_paste = "WM(V, LCtrl)",
+///     },
 ///     layers: [
 ///         {
 ///             layer: 0,
 ///             name: "base",
 ///             layout: "
-///                 A B C
-///                 D E F
+///                 @my_copy @my_paste C
+///                 D        E        F
 ///             "
 ///         },
 ///         {

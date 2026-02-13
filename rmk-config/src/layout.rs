@@ -317,7 +317,7 @@ impl KeyboardTomlConfig {
         Ok(current_keys)
     }
 
-    pub fn layer_name_resolver_internal(
+    fn layer_name_resolver(
         prefix: &str,
         pair: pest::iterators::Pair<Rule>,
         layer_names: &HashMap<String, u32>,
@@ -402,33 +402,33 @@ impl KeyboardTomlConfig {
 
                                 //layer actions:
                                 Rule::df_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver_internal("DF", inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::layer_name_resolver("DF", inner_pair, layer_names)?);
                                 }
                                 Rule::mo_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver_internal("MO", inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::layer_name_resolver("MO", inner_pair, layer_names)?);
                                 }
                                 Rule::lm_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver_internal("LM", inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::layer_name_resolver("LM", inner_pair, layer_names)?);
                                 }
                                 Rule::lt_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver_internal("LT", inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::layer_name_resolver("LT", inner_pair, layer_names)?);
                                     //"LT(".to_owned() + &Self::layer_name_resolver(inner_pair, layer_names)? + ")");
                                 }
                                 Rule::osl_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver_internal(
+                                    key_action_sequence.push(Self::layer_name_resolver(
                                         "OSL",
                                         inner_pair,
                                         layer_names,
                                     )?);
                                 }
                                 Rule::tt_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver_internal("TT", inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::layer_name_resolver("TT", inner_pair, layer_names)?);
                                 }
                                 Rule::tg_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver_internal("TG", inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::layer_name_resolver("TG", inner_pair, layer_names)?);
                                 }
                                 Rule::to_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver_internal("TO", inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::layer_name_resolver("TO", inner_pair, layer_names)?);
                                 }
 
                                 // tap-hold actions:

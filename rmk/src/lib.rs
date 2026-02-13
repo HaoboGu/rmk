@@ -58,6 +58,7 @@ use {
     crate::usb::{UsbKeyboardWriter, add_usb_reader_writer, add_usb_writer, new_usb_builder},
 };
 pub use {embassy_futures, futures, heapless, rmk_macro as macros, rmk_types as types};
+pub use rmk_macro::keymap;
 #[cfg(feature = "storage")]
 use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 

@@ -3,6 +3,8 @@
 //! This module provides a proc-macro for defining keymaps directly in Rust code,
 //! reusing the same parsing logic as `keyboard.toml`.
 
+use std::collections::HashMap;
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -14,6 +16,7 @@ use syn::{
 /// Main struct representing the keymap macro input
 struct KeymapInput {
     matrix_map: String,
+    aliases: HashMap<String, String>,
     layers: Vec<LayerDef>,
 }
 
@@ -27,6 +30,7 @@ struct LayerDef {
 impl Parse for KeymapInput {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut matrix_map = None;
+        let mut aliases = HashMap::new();
         let mut layers = Vec::new();
 
         // Parse the macro input
@@ -38,6 +42,21 @@ impl Parse for KeymapInput {
                 "matrix_map" => {
                     let lit: LitStr = input.parse()?;
                     matrix_map = Some(lit.value());
+                }
+                "aliases" => {
+                    let content;
+                    syn::braced!(content in input);
+
+                    // Parse alias definitions: name = "value", ...
+                    while !content.is_empty() {
+                        let alias_name: syn::Ident = content.parse()?;
+                        content.parse::<Token![=]>()?;
+                        let alias_value: LitStr = content.parse()?;
+                        aliases.insert(alias_name.to_string(), alias_value.value());
+
+                        // Parse optional comma
+                        let _ = content.parse::<Token![,]>();
+                    }
                 }
                 "layers" => {
                     let content;
@@ -129,6 +148,7 @@ impl Parse for KeymapInput {
 
         Ok(KeymapInput {
             matrix_map,
+            aliases,
             layers,
         })
     }
@@ -152,7 +172,6 @@ pub fn keymap_impl(input: TokenStream) -> TokenStream {
 /// Generate the keymap TokenStream from the parsed input
 fn generate_keymap(input: &KeymapInput) -> Result<TokenStream2, String> {
     use rmk_config::KeyboardTomlConfig;
-    use std::collections::HashMap;
 
     // Parse matrix_map
     let matrix_coords = KeyboardTomlConfig::parse_matrix_map(&input.matrix_map)?;
@@ -175,7 +194,7 @@ fn generate_keymap(input: &KeymapInput) -> Result<TokenStream2, String> {
         // 3. Key action parsing
         let key_actions = KeyboardTomlConfig::keymap_parser(
             &layer_def.layout,
-            &HashMap::new(), // No aliases in macro for now
+            &input.aliases,
             &layer_names,
         )?;
 

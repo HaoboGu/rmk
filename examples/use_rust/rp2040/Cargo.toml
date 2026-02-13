@@ -11,7 +11,6 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = ["rp2040"] }
-rmk-macro = { path = "../../../rmk-macro" }
 embassy-time = { version = "0.5", features = ["defmt"] }
 embassy-rp = { version = "0.8", features = [
     "rp2040",
