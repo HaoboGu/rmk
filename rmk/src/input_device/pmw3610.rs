@@ -177,29 +177,6 @@ impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> Pmw3610<SPI, CS, MOTIO
         }
     }
 
-    /// Set sensor resolution in CPI (200-3200, step 200)
-    async fn set_resolution(&mut self, cpi: u16) -> Result<(), PointingDriverError> {
-        if !(RES_MIN..=RES_MAX).contains(&cpi) {
-            return Err(PointingDriverError::InvalidCpi);
-        }
-
-        self.spi_clk_on().await?;
-
-        self.write_reg(PMW3610_SPI_PAGE0, SPI_PAGE0_1).await?;
-
-        let mut val = self.read_reg(PMW3610_RES_STEP).await?;
-        val &= !RES_STEP_RES_MASK;
-        val |= (cpi / RES_STEP) as u8;
-
-        self.write_reg(PMW3610_RES_STEP, val).await?;
-        self.write_reg(PMW3610_SPI_PAGE1, SPI_PAGE1_0).await?;
-
-        self.spi_clk_off().await?;
-
-        debug!("PMW3610: Resolution set to {} CPI", cpi);
-        Ok(())
-    }
-
     /// Set force awake mode
     async fn set_force_awake(&mut self, enable: bool) -> Result<(), PointingDriverError> {
         let mut val = self.read_reg(PMW3610_PERFORMANCE).await?;
@@ -443,6 +420,30 @@ where
     fn motion_gpio(&mut self) -> Option<&mut MOTION> {
         self.motion_gpio.as_mut()
     }
+
+    /// Set sensor resolution in CPI (200-3200, step 200)
+    async fn set_resolution(&mut self, cpi: u16) -> Result<(), PointingDriverError> {
+        if !(RES_MIN..=RES_MAX).contains(&cpi) {
+            return Err(PointingDriverError::InvalidCpi);
+        }
+
+        self.spi_clk_on().await?;
+
+        self.write_reg(PMW3610_SPI_PAGE0, SPI_PAGE0_1).await?;
+
+        let mut val = self.read_reg(PMW3610_RES_STEP).await?;
+        val &= !RES_STEP_RES_MASK;
+        val |= (cpi / RES_STEP) as u8;
+
+        self.write_reg(PMW3610_RES_STEP, val).await?;
+        self.write_reg(PMW3610_SPI_PAGE1, SPI_PAGE1_0).await?;
+
+        self.spi_clk_off().await?;
+
+        debug!("PMW3610: Resolution set to {} CPI", cpi);
+        Ok(())
+    }
+
 }
 
 impl<SPI, CS, MOTION> PointingDevice<Pmw3610<SPI, CS, MOTION>>

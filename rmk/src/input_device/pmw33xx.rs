@@ -362,19 +362,6 @@ where
         }
     }
 
-    /// Set sensor resolution in CPI (100-12000, step 100)
-    async fn set_resolution(&mut self, cpi: u16) -> Result<(), PointingDriverError> {
-        if !(SPEC::RES_MIN..=SPEC::RES_MAX).contains(&cpi) {
-            return Err(PointingDriverError::InvalidCpi);
-        }
-
-        SPEC::write_resolution(self, cpi).await?;
-
-        debug!("PMW33{}: Resolution set to {} CPI", SPEC::TYPENAME, cpi);
-
-        Ok(())
-    }
-
     /// Set sensor rotational transform angle (-127 to 127)
     async fn set_rot_trans_angle(&mut self, angle: i8) -> Result<(), PointingDriverError> {
         if !(ROT_MIN..=ROT_MAX).contains(&angle) {
@@ -651,6 +638,20 @@ where
     fn motion_gpio(&mut self) -> Option<&mut MOTION> {
         self.motion_gpio.as_mut()
     }
+
+    /// Set sensor resolution in CPI (100-12000, step 100)
+    async fn set_resolution(&mut self, cpi: u16) -> Result<(), PointingDriverError> {
+        if !(SPEC::RES_MIN..=SPEC::RES_MAX).contains(&cpi) {
+            return Err(PointingDriverError::InvalidCpi);
+        }
+
+        SPEC::write_resolution(self, cpi).await?;
+
+        debug!("PMW33{}: Resolution set to {} CPI", SPEC::TYPENAME, cpi);
+
+        Ok(())
+    }
+
 }
 
 /// PMW33xx as an InputDevice for RMK
