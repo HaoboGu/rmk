@@ -1,0 +1,25 @@
+[package]
+name = "rmk-gazell-sys"
+version = "0.1.0"
+edition = "2021"
+authors = ["RMK Contributors"]
+description = "Low-level FFI bindings to Nordic Gazell protocol for nRF52 MCUs"
+license = "MIT OR Apache-2.0"
+links = "gazell"  # Prevent multiple sys crates
+
+[lib]
+name = "rmk_gazell_sys"
+path = "src/lib.rs"
+
+[dependencies]
+# No runtime dependencies
+
+[build-dependencies]
+cc = "1.0"
+bindgen = "0.70"
+
+[features]
+default = []
+nrf52840 = []
+nrf52833 = []
+nrf52832 = []

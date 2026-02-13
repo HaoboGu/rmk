@@ -84,6 +84,9 @@ document-features = "0.2"
 # Used in testing
 critical-section = { version = "1.2", optional = true }
 
+# 2.4G Wireless dependencies
+rmk-gazell-sys = { path = "../rmk-gazell-sys", optional = true }
+
 [dev-dependencies]
 # A hack for enabling 'std' feature in testing, ref: https://github.com/rust-lang/cargo/issues/2911
 rmk = { path = ".", default-features = false, features = ["std", "log"] }
@@ -212,6 +215,19 @@ pico_w_ble = ["_ble", "dep:embassy-rp"]
 
 ## Enable feature if you want to use trouble BLE stack
 _ble = ["dep:trouble-host", "dep:rand_core", "dep:bt-hci", "storage"]
+
+#! ### 2.4G Wireless feature flags
+#!
+#! These features enable Nordic Gazell protocol support for 2.4GHz wireless keyboards.
+#! Requires Nordic nRF5 SDK to be installed (set NRF5_SDK_PATH environment variable).
+## Enable Gazell 2.4G wireless support
+wireless_gazell = ["dep:rmk-gazell-sys"]
+## Enable Gazell support for nRF52840
+wireless_gazell_nrf52840 = ["wireless_gazell", "rmk-gazell-sys/nrf52840"]
+## Enable Gazell support for nRF52833
+wireless_gazell_nrf52833 = ["wireless_gazell", "rmk-gazell-sys/nrf52833"]
+## Enable Gazell support for nRF52832
+wireless_gazell_nrf52832 = ["wireless_gazell", "rmk-gazell-sys/nrf52832"]
 
 [lib]
 # Don't run doctest for lib

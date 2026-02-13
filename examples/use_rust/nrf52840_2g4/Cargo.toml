@@ -1,0 +1,70 @@
+[package]
+name = "rmk-nrf52840-2g4"
+version = "0.1.0"
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "RMK keyboard firmware with 2.4G wireless (Nordic Gazell)"
+homepage = "https://github.com/haobogu/rmk"
+repository = "https://github.com/haobogu/rmk"
+readme = "README.md"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+rmk = { path = "../../../rmk", features = [
+    "async_matrix",
+    "wireless_gazell_nrf52840",
+    "defmt",
+] }
+
+# Embassy async runtime
+embassy-time = { version = "0.5", features = ["tick-hz-32_768", "defmt", "defmt-timestamp-uptime"] }
+embassy-nrf = { version = "0.8", features = [
+    "defmt",
+    "nrf52840",
+    "time-driver-rtc1",
+    "gpiote",
+    "unstable-pac",
+    "nfc-pins-as-gpio",
+    "time",
+] }
+embassy-executor = { version = "0.9", features = [
+    "defmt",
+    "arch-cortex-m",
+    "executor-thread",
+] }
+
+# TODO: Add Nordic Gazell protocol support
+#gazell-rs = "0.1"  # When available
+# OR use nrf-softdevice with Gazell support
+
+# Cortex-M
+cortex-m = "0.7.7"
+cortex-m-rt = "0.7.5"
+
+# Logging
+defmt = "1.0"
+defmt-rtt = "1.0"
+panic-probe = { version = "1.0", features = ["print-defmt"] }
+
+# Utils
+static_cell = "2"
+
+[build-dependencies]
+xz2 = "0.1.7"
+json = "0.12"
+const-gen = "1.6"
+
+[profile.dev]
+codegen-units = 1
+debug = true
+opt-level = 1
+overflow-checks = true
+lto = false
+panic = 'unwind'
+
+[profile.release]
+codegen-units = 1
+debug = true
+opt-level = "z"
+overflow-checks = false
+lto = "fat"
