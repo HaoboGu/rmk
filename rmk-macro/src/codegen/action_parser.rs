@@ -518,3 +518,236 @@ pub(crate) fn get_key_with_alias(key: String) -> Ident {
     };
     format_ident!("{}", key)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rmk_config::DurationMillis;
+
+    fn ts(tokens: proc_macro2::TokenStream) -> String {
+        tokens.to_string()
+    }
+
+    // ── Simple keys ──
+
+    #[test]
+    fn test_parse_key_transparent() {
+        let profiles = None;
+        // Single underscore
+        assert_eq!(ts(parse_key("_".into(), &profiles)), ts(quote! { ::rmk::a!(Transparent) }));
+        // Multiple underscores
+        assert_eq!(ts(parse_key("___".into(), &profiles)), ts(quote! { ::rmk::a!(Transparent) }));
+        // "trns" keyword
+        assert_eq!(ts(parse_key("trns".into(), &profiles)), ts(quote! { ::rmk::a!(Transparent) }));
+    }
+
+    #[test]
+    fn test_parse_key_no() {
+        let profiles = None;
+        assert_eq!(ts(parse_key("No".into(), &profiles)), ts(quote! { ::rmk::a!(No) }));
+    }
+
+    #[test]
+    fn test_parse_key_hid_keycode() {
+        let profiles = None;
+        assert_eq!(ts(parse_key("A".into(), &profiles)), ts(quote! { ::rmk::k!(A) }));
+        assert_eq!(ts(parse_key("B".into(), &profiles)), ts(quote! { ::rmk::k!(B) }));
+    }
+
+    // ── Layer keys ──
+
+    #[test]
+    fn test_parse_key_mo() {
+        let profiles = None;
+        assert_eq!(ts(parse_key("MO(1)".into(), &profiles)), ts(quote! { ::rmk::mo!(1u8) }));
+    }
+
+    #[test]
+    fn test_parse_key_osl() {
+        let profiles = None;
+        assert_eq!(ts(parse_key("OSL(2)".into(), &profiles)), ts(quote! { ::rmk::osl!(2u8) }));
+    }
+
+    #[test]
+    fn test_parse_key_tt() {
+        let profiles = None;
+        assert_eq!(ts(parse_key("TT(3)".into(), &profiles)), ts(quote! { ::rmk::tt!(3u8) }));
+    }
+
+    #[test]
+    fn test_parse_key_tg() {
+        let profiles = None;
+        assert_eq!(ts(parse_key("TG(4)".into(), &profiles)), ts(quote! { ::rmk::tg!(4u8) }));
+    }
+
+    #[test]
+    fn test_parse_key_to() {
+        let profiles = None;
+        assert_eq!(ts(parse_key("TO(5)".into(), &profiles)), ts(quote! { ::rmk::to!(5u8) }));
+    }
+
+    #[test]
+    fn test_parse_key_df() {
+        let profiles = None;
+        assert_eq!(ts(parse_key("DF(0)".into(), &profiles)), ts(quote! { ::rmk::df!(0u8) }));
+    }
+
+    // ── Modifier keys ──
+
+    #[test]
+    fn test_parse_key_wm() {
+        let profiles = None;
+        let result = ts(parse_key("WM(A, LShift)".into(), &profiles));
+        assert!(result.contains("rmk :: wm !"));
+        assert!(result.contains("A"));
+    }
+
+    #[test]
+    fn test_parse_key_osm() {
+        let profiles = None;
+        let result = ts(parse_key("OSM(LShift)".into(), &profiles));
+        assert!(result.contains("rmk :: osm !"));
+    }
+
+    #[test]
+    fn test_parse_key_lm() {
+        let profiles = None;
+        let result = ts(parse_key("LM(1, LShift)".into(), &profiles));
+        assert!(result.contains("rmk :: lm !"));
+        assert!(result.contains("1u8"));
+    }
+
+    #[test]
+    fn test_parse_key_mt() {
+        let profiles = None;
+        let result = ts(parse_key("MT(A, LShift)".into(), &profiles));
+        assert!(result.contains("rmk :: mt !"));
+    }
+
+    // ── Tap-Hold keys ──
+
+    #[test]
+    fn test_parse_key_lt() {
+        let profiles = None;
+        let result = ts(parse_key("LT(1, A)".into(), &profiles));
+        assert!(result.contains("rmk :: lt !"));
+        assert!(result.contains("1u8"));
+        assert!(result.contains("A"));
+    }
+
+    #[test]
+    fn test_parse_key_lt_with_profile() {
+        let mut map = HashMap::new();
+        map.insert("fast".to_string(), MorseProfile {
+            hold_timeout: Some(DurationMillis(150)),
+            ..Default::default()
+        });
+        let profiles = Some(map);
+        let result = ts(parse_key("LT(1, A, fast)".into(), &profiles));
+        assert!(result.contains("rmk :: ltp !"));
+    }
+
+    #[test]
+    fn test_parse_key_th() {
+        let profiles = None;
+        let result = ts(parse_key("TH(A, B)".into(), &profiles));
+        assert!(result.contains("rmk :: th !"));
+        assert!(result.contains("A"));
+        assert!(result.contains("B"));
+    }
+
+    #[test]
+    fn test_parse_key_th_with_profile() {
+        let mut map = HashMap::new();
+        map.insert("fast".to_string(), MorseProfile {
+            hold_timeout: Some(DurationMillis(150)),
+            ..Default::default()
+        });
+        let profiles = Some(map);
+        let result = ts(parse_key("TH(A, B, fast)".into(), &profiles));
+        assert!(result.contains("rmk :: thp !"));
+    }
+
+    // ── Special keys ──
+
+    #[test]
+    fn test_parse_key_user() {
+        let profiles = None;
+        let result = ts(parse_key("User(0)".into(), &profiles));
+        assert!(result.contains("rmk :: user !"));
+        assert!(result.contains("0u8"));
+    }
+
+    #[test]
+    fn test_parse_key_user_alt_format() {
+        let profiles = None;
+        let result = ts(parse_key("User5".into(), &profiles));
+        assert!(result.contains("rmk :: user !"));
+        assert!(result.contains("5u8"));
+    }
+
+    #[test]
+    fn test_parse_key_macro() {
+        let profiles = None;
+        let result = ts(parse_key("Macro(0)".into(), &profiles));
+        assert!(result.contains("rmk :: macros !"));
+        assert!(result.contains("0u8"));
+    }
+
+    #[test]
+    fn test_parse_key_macro_alt_format() {
+        let profiles = None;
+        let result = ts(parse_key("Macro3".into(), &profiles));
+        assert!(result.contains("rmk :: macros !"));
+        assert!(result.contains("3u8"));
+    }
+
+    #[test]
+    fn test_parse_key_td() {
+        let profiles = None;
+        let result = ts(parse_key("TD(0)".into(), &profiles));
+        assert!(result.contains("rmk :: td !"));
+        assert!(result.contains("0u8"));
+    }
+
+    #[test]
+    fn test_parse_key_shifted() {
+        let profiles = None;
+        let result = ts(parse_key("Shifted(A)".into(), &profiles));
+        assert!(result.contains("rmk :: shifted !"));
+        assert!(result.contains("A"));
+    }
+
+    // ── Negative tests ──
+
+    #[test]
+    #[should_panic(expected = "WM(key, modifier) invalid")]
+    fn test_parse_key_wm_invalid_args() {
+        let profiles = None;
+        parse_key("WM(A)".into(), &profiles);
+    }
+
+    #[test]
+    #[should_panic(expected = "is not a valid user key")]
+    fn test_parse_key_user_out_of_range() {
+        let profiles = None;
+        parse_key("User(32)".into(), &profiles);
+    }
+
+    #[test]
+    #[should_panic(expected = "profile name is not found")]
+    fn test_parse_key_profile_not_found() {
+        let profiles = None;
+        parse_key("LT(1, A, nonexistent)".into(), &profiles);
+    }
+
+    #[test]
+    #[should_panic(expected = "profile name is not found")]
+    fn test_parse_key_th_profile_not_found() {
+        let mut map = HashMap::new();
+        map.insert("fast".to_string(), MorseProfile::default());
+        let profiles = Some(map);
+        // "slow" doesn't exist in profiles
+        parse_key("TH(A, B, slow)".into(), &profiles);
+    }
+}

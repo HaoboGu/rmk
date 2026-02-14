@@ -476,3 +476,312 @@ pub(crate) fn expand_behavior_config(
         };
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rmk_config::*;
+
+    // Helper: wrap tokens in a const block so prettyplease can format them
+    fn pretty(ts: proc_macro2::TokenStream) -> String {
+        let code = format!("const _: () = {{{}}};", ts);
+        let file = syn::parse_file(&code).expect("failed to parse generated tokens");
+        prettyplease::unparse(&file)
+    }
+
+    // ── expand_tri_layer ──
+
+    #[test]
+    fn test_expand_tri_layer_some() {
+        let config = Some(TriLayerConfig {
+            upper: 2,
+            lower: 1,
+            adjust: 3,
+        });
+        let result = pretty(expand_tri_layer(&config));
+        let expected = pretty(quote! { ::core::option::Option::Some([2u8, 1u8, 3u8]) });
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_expand_tri_layer_none() {
+        let result = pretty(expand_tri_layer(&None));
+        let expected = pretty(quote! { ::core::option::Option::None::<[u8; 3]> });
+        assert_eq!(result, expected);
+    }
+
+    // ── expand_one_shot ──
+
+    #[test]
+    fn test_expand_one_shot_with_timeout() {
+        let config = Some(OneShotConfig {
+            timeout: Some(DurationMillis(300)),
+        });
+        let result = pretty(expand_one_shot(&config));
+        let expected = pretty(quote! {
+            ::rmk::config::OneShotConfig {
+                timeout: ::embassy_time::Duration::from_millis(300u64),
+            }
+        });
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_expand_one_shot_without_timeout() {
+        let config = Some(OneShotConfig { timeout: None });
+        let result = pretty(expand_one_shot(&config));
+        let expected = pretty(quote! { ::rmk::config::OneShotConfig::default() });
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_expand_one_shot_none() {
+        let result = pretty(expand_one_shot(&None));
+        let expected = pretty(quote! { ::rmk::config::OneShotConfig::default() });
+        assert_eq!(result, expected);
+    }
+
+    // ── expand_combos ──
+
+    #[test]
+    fn test_expand_combos_some() {
+        let config = Some(CombosConfig {
+            combos: vec![ComboConfig {
+                actions: vec!["A".to_string(), "B".to_string()],
+                output: "C".to_string(),
+                layer: Some(0),
+            }],
+            timeout: Some(DurationMillis(200)),
+        });
+        let profiles: Option<HashMap<String, MorseProfile>> = None;
+        let result = expand_combos(&config, &profiles);
+        // Verify it produces non-empty output containing key fragments
+        let s = result.to_string();
+        assert!(s.contains("CombosConfig"));
+        assert!(s.contains("ComboConfig"));
+        assert!(s.contains("200"));
+    }
+
+    #[test]
+    fn test_expand_combos_none() {
+        let profiles: Option<HashMap<String, MorseProfile>> = None;
+        let result = pretty(expand_combos(&None, &profiles));
+        let expected = pretty(quote! { ::core::default::Default::default() });
+        assert_eq!(result, expected);
+    }
+
+    // ── expand_macros ──
+
+    #[test]
+    fn test_expand_macros_some() {
+        let config = Some(MacrosConfig {
+            macros: vec![MacroConfig {
+                operations: vec![
+                    MacroOperation::Tap {
+                        keycode: "A".to_string(),
+                    },
+                    MacroOperation::Delay {
+                        duration: DurationMillis(100),
+                    },
+                ],
+            }],
+        });
+        let result = expand_macros(&config);
+        let s = result.to_string();
+        assert!(s.contains("KeyboardMacrosConfig"));
+        assert!(s.contains("MacroOperation"));
+    }
+
+    #[test]
+    fn test_expand_macros_none() {
+        let result = pretty(expand_macros(&None));
+        let expected = pretty(quote! { ::core::default::Default::default() });
+        assert_eq!(result, expected);
+    }
+
+    // ── expand_forks ──
+
+    #[test]
+    fn test_expand_forks_some() {
+        let config = Some(ForksConfig {
+            forks: vec![ForkConfig {
+                trigger: "A".to_string(),
+                negative_output: "A".to_string(),
+                positive_output: "B".to_string(),
+                match_any: Some("LShift".to_string()),
+                match_none: None,
+                kept_modifiers: None,
+                bindable: None,
+            }],
+        });
+        let profiles: Option<HashMap<String, MorseProfile>> = None;
+        let result = expand_forks(&config, &profiles);
+        let s = result.to_string();
+        assert!(s.contains("ForksConfig"));
+        assert!(s.contains("Fork"));
+    }
+
+    #[test]
+    fn test_expand_forks_none() {
+        let profiles: Option<HashMap<String, MorseProfile>> = None;
+        let result = pretty(expand_forks(&None, &profiles));
+        let expected = pretty(quote! { ::core::default::Default::default() });
+        assert_eq!(result, expected);
+    }
+
+    // ── expand_morse ──
+
+    #[test]
+    fn test_expand_morse_none() {
+        let result = pretty(expand_morse(&None));
+        let expected = pretty(quote! { ::rmk::config::MorsesConfig::default() });
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_expand_morse_with_morse_actions() {
+        let config = Some(MorsesConfig {
+            enable_flow_tap: None,
+            prior_idle_time: None,
+            unilateral_tap: None,
+            permissive_hold: None,
+            hold_on_other_press: None,
+            normal_mode: None,
+            hold_timeout: None,
+            gap_timeout: None,
+            profiles: None,
+            morses: Some(vec![MorseConfig {
+                profile: None,
+                tap: None,
+                hold: None,
+                hold_after_tap: None,
+                double_tap: None,
+                tap_actions: None,
+                hold_actions: None,
+                morse_actions: Some(vec![MorseActionPair {
+                    pattern: "10".to_string(),
+                    action: "A".to_string(),
+                }]),
+            }]),
+        });
+        let result = expand_morse(&config);
+        let s = result.to_string();
+        assert!(s.contains("MorsesConfig"));
+        assert!(s.contains("MorsePattern"));
+    }
+
+    #[test]
+    fn test_expand_morse_with_tap_hold_actions() {
+        let config = Some(MorsesConfig {
+            enable_flow_tap: None,
+            prior_idle_time: None,
+            unilateral_tap: None,
+            permissive_hold: None,
+            hold_on_other_press: None,
+            normal_mode: None,
+            hold_timeout: None,
+            gap_timeout: None,
+            profiles: None,
+            morses: Some(vec![MorseConfig {
+                profile: None,
+                tap: None,
+                hold: None,
+                hold_after_tap: None,
+                double_tap: None,
+                tap_actions: Some(vec!["A".to_string(), "B".to_string()]),
+                hold_actions: Some(vec!["C".to_string()]),
+                morse_actions: None,
+            }]),
+        });
+        let result = expand_morse(&config);
+        let s = result.to_string();
+        assert!(s.contains("MorsesConfig"));
+        assert!(s.contains("new_with_actions"));
+    }
+
+    #[test]
+    fn test_expand_morse_with_individual_tap_hold() {
+        let config = Some(MorsesConfig {
+            enable_flow_tap: None,
+            prior_idle_time: None,
+            unilateral_tap: None,
+            permissive_hold: None,
+            hold_on_other_press: None,
+            normal_mode: None,
+            hold_timeout: None,
+            gap_timeout: None,
+            profiles: None,
+            morses: Some(vec![MorseConfig {
+                profile: None,
+                tap: Some("A".to_string()),
+                hold: Some("B".to_string()),
+                hold_after_tap: None,
+                double_tap: None,
+                tap_actions: None,
+                hold_actions: None,
+                morse_actions: None,
+            }]),
+        });
+        let result = expand_morse(&config);
+        let s = result.to_string();
+        assert!(s.contains("MorsesConfig"));
+        assert!(s.contains("new_from_vial"));
+    }
+
+    // ── Negative tests (Phase 1.3) ──
+
+    #[test]
+    #[should_panic(expected = "morse_actions")]
+    fn test_expand_morses_conflict_actions_and_tap() {
+        let morses = vec![MorseConfig {
+            profile: None,
+            tap: Some("A".to_string()),
+            hold: None,
+            hold_after_tap: None,
+            double_tap: None,
+            tap_actions: None,
+            hold_actions: None,
+            morse_actions: Some(vec![MorseActionPair {
+                pattern: "10".to_string(),
+                action: "A".to_string(),
+            }]),
+        }];
+        let profiles: Option<HashMap<String, MorseProfile>> = None;
+        expand_morses(&morses, &profiles);
+    }
+
+    #[test]
+    #[should_panic(expected = "tap_actions")]
+    fn test_expand_morses_conflict_tap_actions_and_tap() {
+        let morses = vec![MorseConfig {
+            profile: None,
+            tap: Some("A".to_string()),
+            hold: None,
+            hold_after_tap: None,
+            double_tap: None,
+            tap_actions: Some(vec!["B".to_string()]),
+            hold_actions: None,
+            morse_actions: None,
+        }];
+        let profiles: Option<HashMap<String, MorseProfile>> = None;
+        expand_morses(&morses, &profiles);
+    }
+
+    #[test]
+    #[should_panic(expected = "missing match conditions")]
+    fn test_expand_forks_missing_match() {
+        let config = Some(ForksConfig {
+            forks: vec![ForkConfig {
+                trigger: "A".to_string(),
+                negative_output: "A".to_string(),
+                positive_output: "B".to_string(),
+                match_any: None,
+                match_none: None,
+                kept_modifiers: None,
+                bindable: None,
+            }],
+        });
+        let profiles: Option<HashMap<String, MorseProfile>> = None;
+        expand_forks(&config, &profiles);
+    }
+}
