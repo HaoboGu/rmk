@@ -455,11 +455,11 @@ impl KeyboardTomlConfig {
                                     // Ignore End of input marker
                                 }
                                 _ => {
-                                    // This case should not be reached
-                                    panic!(
-                                        "Unexpected rule encountered during layer.keys processing:{:?}",
+                                    // This case should not be reached.
+                                    return Err(format!(
+                                        "Unexpected rule encountered during layer.keys processing: {:?}",
                                         inner_pair.as_rule()
-                                    );
+                                    ));
                                 }
                             }
                         }
@@ -467,7 +467,7 @@ impl KeyboardTomlConfig {
                 }
             }
             Err(e) => {
-                panic!("Invalid keymap format: {}", e);
+                return Err(format!("Invalid keymap format: {}", e));
             }
         }
 

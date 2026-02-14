@@ -30,7 +30,7 @@ const DEFAULT_KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = keymap! {
                 Backspace P         O         I         U         Y         No
                 Enter     Backslash L         K         J         H         No
                 Slash     Up        Dot       Comma     M         N         No
-                Right     Down      Left      MO(2)     MO(4)     Space     No
+                Right     Down      Left      MO(2)     MO(3)     Space     No
             "
         },
         {
