@@ -87,12 +87,28 @@ const INIT_OBSERVATION_DELAY_MS: u64 = 10;
 const CLOCK_ON_DELAY_US: u64 = 300;
 
 // SPI timing constants (from PMW3610 datasheet)
-const T_NCS_SCLK_US: u64 = 1;
-const T_SRAD_US: u64 = 5;
-const T_SRX_US: u64 = 2;
-const T_SWX_US: u64 = 35;
-const T_SCLK_NCS_WR_US: u64 = 20;
-const T_BEXIT_US: u64 = 2;
+/// NCS to SCLK active;
+/// Delay from last NCS falling edge to 1st SCK rising edge
+const T_NCS_SCLK_NS: u64 = 120;
+/// SPI read address-data delay;
+/// from rising SCLK for last bit of the address byte, to falling SCLK for the 1st bit of data being read.
+const T_SRAD_US: u64 = 4;
+/// SPI time between read and subsequent commands;
+/// from rising SCLK for last bit of the 1st data byte, to falling SCLK for the 1st bit of data being read.
+const T_SRX_NS: u64 = 250;
+/// SPI time between write command;
+/// From rising SCLK for last bit of the first data byte, to rising SCLK for last bit of the second data byte.
+/// It's actually 20 us before read and 30 us before write, but we don't distinguish between write and read commands here, and use the larger of the two.
+const T_SWX_US: u64 = 30;
+/// SCLK to NCS inactive for SDIO write;
+/// From last SCLK falling edge to NCS rising edge, for valid SDIO data transfer
+const T_SCLK_NCS_W_US: u64 = 10;
+/// SCLK to NCS inactive for SDIO read;
+/// From last SCLK falling edge to NCS rising edge, for valid SDIO data transfer
+const T_SCLK_NCS_R_NS: u64 = 120;
+/// NCS inactive after motion burst;
+/// Minimum NCS inactive time after motion burst before next SPI usage
+const T_BEXIT_NS: u64 = 250;
 
 // Resolution constants
 const RES_STEP: u16 = 200;
@@ -194,16 +210,9 @@ impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> Pmw3610<SPI, CS, MOTIO
         Ok(())
     }
 
-    #[inline(always)]
-    fn short_delay() {
-        for _ in 0..64 {
-            core::hint::spin_loop();
-        }
-    }
-
     async fn read_reg(&mut self, addr: u8) -> Result<u8, Pmw3610Error> {
         let _ = self.cs.set_low();
-        Timer::after(Duration::from_micros(T_NCS_SCLK_US)).await;
+        Timer::after(Duration::from_nanos(T_NCS_SCLK_NS)).await;
 
         self.spi.write(&[addr & 0x7f]).await.map_err(|_| Pmw3610Error::Spi)?;
 
@@ -212,17 +221,17 @@ impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> Pmw3610<SPI, CS, MOTIO
         let mut value = [0u8];
         self.spi.read(&mut value).await.map_err(|_| Pmw3610Error::Spi)?;
 
-        Self::short_delay();
+        Timer::after(Duration::from_nanos(T_SCLK_NCS_R_NS)).await;
         let _ = self.cs.set_high();
 
-        Timer::after(Duration::from_micros(T_SRX_US)).await;
+        Timer::after(Duration::from_nanos(T_SRX_NS)).await;
 
         Ok(value[0])
     }
 
     async fn read_burst(&mut self, addr: u8, data: &mut [u8]) -> Result<(), Pmw3610Error> {
         let _ = self.cs.set_low();
-        Timer::after(Duration::from_micros(T_NCS_SCLK_US)).await;
+        Timer::after(Duration::from_nanos(T_NCS_SCLK_NS)).await;
 
         self.spi.write(&[addr & 0x7f]).await.map_err(|_| Pmw3610Error::Spi)?;
 
@@ -230,24 +239,24 @@ impl<SPI: SpiBus, CS: OutputPin, MOTION: InputPin + Wait> Pmw3610<SPI, CS, MOTIO
 
         self.spi.read(data).await.map_err(|_| Pmw3610Error::Spi)?;
 
-        Self::short_delay();
+        Timer::after(Duration::from_nanos(T_SCLK_NCS_R_NS)).await;
         let _ = self.cs.set_high();
 
-        Timer::after(Duration::from_micros(T_BEXIT_US)).await;
+        Timer::after(Duration::from_nanos(T_BEXIT_NS)).await;
 
         Ok(())
     }
 
     async fn write_reg(&mut self, addr: u8, value: u8) -> Result<(), Pmw3610Error> {
         let _ = self.cs.set_low();
-        Timer::after(Duration::from_micros(T_NCS_SCLK_US)).await;
+        Timer::after(Duration::from_nanos(T_NCS_SCLK_NS)).await;
 
         self.spi
             .write(&[addr | SPI_WRITE, value])
             .await
             .map_err(|_| Pmw3610Error::Spi)?;
 
-        Timer::after(Duration::from_micros(T_SCLK_NCS_WR_US)).await;
+        Timer::after(Duration::from_micros(T_SCLK_NCS_W_US)).await;
         let _ = self.cs.set_high();
 
         Timer::after(Duration::from_micros(T_SWX_US)).await;
