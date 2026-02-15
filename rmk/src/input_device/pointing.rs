@@ -39,6 +39,8 @@ pub enum PointingDriverError {
     InvalidFwSignature((u8, u8)),
     /// Invalid rotational transform angle
     InvalidRotTransAngle,
+    /// Not implemented
+    NotImplementedError,
 }
 
 pub trait PointingDriver {
@@ -48,6 +50,10 @@ pub trait PointingDriver {
     async fn read_motion(&mut self) -> Result<MotionData, PointingDriverError>;
     fn motion_pending(&mut self) -> bool;
     fn motion_gpio(&mut self) -> Option<&mut Self::MOTION>;
+    async fn set_resolution(&mut self, _cpi: u16) -> Result<(), PointingDriverError> {
+        debug!("set_resolution() is not implemented for this sensor.");
+        Err(PointingDriverError::NotImplementedError)
+    }
 }
 
 /// Initialization state for the device
@@ -171,7 +177,14 @@ impl<S: PointingDriver> PointingDevice<S> {
 }
 
 impl<S: PointingDriver> PointingDevice<S> {
-    async fn on_pointing_set_cpi_event(&mut self, _e: PointingSetCpiEvent) {}
+    async fn on_pointing_set_cpi_event(&mut self, e: PointingSetCpiEvent) {
+        if e.device_id == self.id {
+            info!("PointingDevice {}: Setting resolution to {}", self.id, e.cpi);
+            if let Err(err) = self.sensor.set_resolution(e.cpi).await {
+                debug!("PointingDevice {}: Setting resolution failed: {:?}", self.id, err);
+            }
+        }
+    }
 
     // Read accumulated pointing event
     //
