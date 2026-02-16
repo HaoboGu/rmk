@@ -4,10 +4,15 @@ use std::collections::HashMap;
 pub struct Behavior {
     pub tri_layer: Option<[u8; 3]>,
     pub one_shot_timeout_ms: Option<u64>,
+    pub one_shot_modifiers: Option<OneShot>,
     pub combos: Option<Combos>,
     pub macros: Option<Macros>,
     pub forks: Option<Forks>,
     pub morse: Option<Morse>,
+}
+
+pub struct OneShot {
+    pub activate_on_keypress: Option<bool>,
 }
 
 pub struct Combos {
@@ -95,6 +100,10 @@ impl crate::KeyboardTomlConfig {
         let tri_layer = toml_behavior.tri_layer.map(|t| [t.upper, t.lower, t.adjust]);
 
         let one_shot_timeout_ms = toml_behavior.one_shot.and_then(|o| o.timeout.map(|t| t.0));
+
+        let one_shot_modifiers = toml_behavior.one_shot_modifiers.map(|o| OneShot {
+            activate_on_keypress: o.activate_on_keypress,
+        });
 
         let combos = toml_behavior.combo.map(|c| Combos {
             combos: c
@@ -191,6 +200,7 @@ impl crate::KeyboardTomlConfig {
         Ok(Behavior {
             tri_layer,
             one_shot_timeout_ms,
+            one_shot_modifiers,
             combos,
             macros,
             forks,

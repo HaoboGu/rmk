@@ -8,7 +8,7 @@ mod vial;
 
 pub use behavior::{
     BehaviorConfig, CombosConfig, ForksConfig, KeyboardMacrosConfig, MorsesConfig, MouseKeyConfig, OneShotConfig,
-    TapConfig,
+    OneShotModifiersConfig, TapConfig,
 };
 #[cfg(feature = "_ble")]
 pub use ble_battery::BleBatteryConfig;
