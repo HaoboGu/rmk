@@ -114,7 +114,7 @@ impl MorseProfile {
     ///   the hold action of current morse key will be triggered
     ///   https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
     /// - if hold_on_other_press is set - triggers hold immediately if any other non-morse
-    ///   key is pressed while the current morse key is held    
+    ///   key is pressed while the current morse key is held
     pub fn mode(self) -> Option<MorseMode> {
         match self.0 & 0xC000_0000 {
             0xC000_0000 => Some(MorseMode::Normal),
@@ -241,7 +241,7 @@ pub enum KeyAction {
     Single(Action),
     /// Don't wait the release of the key, auto-release after a time threshold.
     Tap(Action),
-    /// Tap hold action    
+    /// Tap hold action
     TapHold(Action, Action, MorseProfile),
 
     /// Morse action, references a morse configuration by index.
@@ -316,7 +316,7 @@ pub enum Action {
     TriggerMacro(u8),
     /// Oneshot layer, keep the layer active until the next key is triggered.
     OneShotLayer(u8),
-    /// Oneshot modifier, keep the modifier active until the next key is triggered.
+    /// Oneshot modifier, applies ModifierCombination for the next keypress only.
     OneShotModifier(ModifierCombination),
     /// Oneshot key, keep the key active until the next key is triggered.
     OneShotKey(KeyCode),
