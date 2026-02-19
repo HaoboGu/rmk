@@ -248,7 +248,7 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
     let initialize_positional_config = if key_info.is_empty()
         || key_info.iter().all(|row| {
             row.iter()
-                .all(|key| key.hand != 'L' && key.hand != 'l' && key.hand != 'R' && key.hand != 'r')
+                .all(|key| key.hand != 'L' && key.hand != 'l' && key.hand != 'R' && key.hand != 'r' && key.hand != '*')
         })
         || key_info.len() != row
         || key_info[0].len() != col
@@ -391,6 +391,7 @@ fn expand_key_info_row(row: &Vec<KeyInfo>) -> proc_macro2::TokenStream {
         let hand = match key.hand {
             'l' | 'L' => quote! { rmk::config::Hand::Left },
             'r' | 'R' => quote! { rmk::config::Hand::Right },
+            '*' => quote! { rmk::config::Hand::Bilateral },
             _ => quote! { rmk::config::Hand::Unknown },
         };
         key_info.push(hand);

@@ -214,6 +214,7 @@ impl KeyboardTomlConfig {
                                         match part.as_rule() {
                                             Rule::left_hand => hand = 'L',
                                             Rule::right_hand => hand = 'R',
+                                            Rule::bilateral_hand => hand = '*',
                                             _ => {}
                                         }
                                     }

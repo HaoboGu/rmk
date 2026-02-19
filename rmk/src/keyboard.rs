@@ -757,7 +757,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             let hand1 = Self::get_hand(hand_info, pos1);
                             let hand2 = Self::get_hand(hand_info, pos2);
 
-                            if hand1 == hand2 && hand1 != Hand::Unknown {
+                            if hand1 == hand2 && hand1 != Hand::Unknown && hand2 != Hand::Bilateral {
                                 //if same hand
                                 debug!("Unilateral tap triggered, resolve morse key as tapping");
                                 let _ = decisions.push((held_key.event.pos, HeldKeyDecision::UnilateralTap));
