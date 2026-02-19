@@ -452,6 +452,7 @@ where
         debug!("PMW3610: Resolution set to {} CPI", cpi);
         Ok(())
     }
+
 }
 
 impl<SPI, CS, MOTION> PointingDevice<Pmw3610<SPI, CS, MOTION>>
