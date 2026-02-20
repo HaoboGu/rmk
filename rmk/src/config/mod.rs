@@ -43,6 +43,7 @@ pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap: TapConfig,
     pub one_shot: OneShotConfig,
+    pub one_shot_modifiers: OneShotModifiersConfig,
     pub combo: CombosConfig,
     pub fork: ForksConfig,
     pub morse: MorsesConfig,
@@ -117,9 +118,10 @@ impl<const ROW: usize, const COL: usize> PositionalConfig<ROW, COL> {
     }
 }
 
-/// Config for one shot behavior
+/// Config for oneshot keys behavior
 #[derive(Clone, Copy, Debug)]
 pub struct OneShotConfig {
+    /// Timeout after which modifiers/layers are canceled/released
     pub timeout: Duration,
 }
 
@@ -127,6 +129,24 @@ impl Default for OneShotConfig {
     fn default() -> Self {
         Self {
             timeout: Duration::from_secs(1),
+        }
+    }
+}
+
+/// Config for one-shot behavior
+#[derive(Clone, Debug)]
+pub struct OneShotModifiersConfig {
+    /// Should modifiers be active from keypress (sticky modifiers)
+    pub activate_on_keypress: bool,
+    /// Should the second keypress send modifiers and unstick them
+    pub send_on_second_press: bool,
+}
+
+impl Default for OneShotModifiersConfig {
+    fn default() -> Self {
+        Self {
+            activate_on_keypress: false,
+            send_on_second_press: false,
         }
     }
 }
