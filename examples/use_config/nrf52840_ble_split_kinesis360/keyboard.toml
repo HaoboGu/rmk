@@ -1,0 +1,113 @@
+[keyboard]
+name = "Kinesis Adv360 Pro"
+product_name = "Kinesis Adv360 Pro"
+vendor_id = 0x4c4b
+product_id = 0x4643
+manufacturer = "Kinesis"
+chip = "nrf52840"
+
+# The Adv360 has a complex matrix layout with 5 rows x 20 columns total
+# Left side: 10 columns, Right side: 10 columns
+[layout]
+rows = 5
+cols = 20
+layers = 4
+keymap = [
+    # Layer 0: Base layer (matching ZMK default layout)
+    # The matrix is sparse - many positions are not used
+    [
+        # Row 0 (bottom row with thumb cluster)
+        ["MO(2)", "Grave", "CapsLock", "Left", "Right", "_", "_", "Backspace", "Delete", "End", "PageDown", "Enter", "Space", "_", "_", "Up", "Down", "LeftBracket", "RightBracket", "MO(2)"],
+        # Row 1
+        ["LShift", "Z", "X", "C", "V", "B", "_", "_", "_", "Home", "PageUp", "_", "_", "_", "N", "M", "Comma", "Dot", "Slash", "RShift"],
+        # Row 2
+        ["Escape", "A", "S", "D", "F", "G", "_", "_", "LCtrl", "LAlt", "LGui", "RCtrl", "_", "_", "H", "J", "K", "L", "Semicolon", "Quote"],
+        # Row 3
+        ["Tab", "Q", "W", "E", "R", "T", "_", "_", "_", "_", "_", "_", "_", "_", "Y", "U", "I", "O", "P", "Backslash"],
+        # Row 4 (top row with numbers)
+        ["Equal", "1", "2", "3", "4", "5", "TG(1)", "_", "_", "_", "_", "_", "_", "MO(3)", "6", "7", "8", "9", "0", "Minus"]
+    ],
+    # Layer 1: Keypad
+    [
+        ["MO(2)", "Grave", "CapsLock", "Left", "Right", "_", "_", "Backspace", "Delete", "End", "PageDown", "Enter", "Kp0", "_", "_", "Up", "Down", "KpDot", "RightBracket", "MO(2)"],
+        ["LShift", "Z", "X", "C", "V", "B", "_", "_", "_", "Home", "PageUp", "_", "_", "_", "N", "Kp1", "Kp2", "Kp3", "KpEnter", "RShift"],
+        ["Escape", "A", "S", "D", "F", "G", "_", "_", "LCtrl", "LAlt", "LGui", "RCtrl", "_", "_", "H", "Kp4", "Kp5", "Kp6", "KpPlus", "Quote"],
+        ["Tab", "Q", "W", "E", "R", "T", "_", "_", "_", "_", "_", "_", "_", "_", "Y", "Kp7", "Kp8", "Kp9", "KpMinus", "Backslash"],
+        ["Equal", "1", "2", "3", "4", "5", "_", "_", "_", "_", "_", "_", "_", "MO(3)", "6", "NumLock", "KpEqual", "KpSlash", "KpAsterisk", "Minus"]
+    ],
+    # Layer 2: Function layer
+    [
+        ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_"],
+        ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_"],
+        ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_"],
+        ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_"],
+        ["F1", "F2", "F3", "F4", "F5", "F6", "TG(1)", "_", "_", "_", "_", "_", "_", "MO(3)", "F7", "F8", "F9", "F10", "F11", "F12"]
+    ],
+    # Layer 3: Mod/BLE layer - User0-2 for BLE profiles, User3 for next, User4 for prev, User5 for clear
+    [
+        ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_"],
+        ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_"],
+        ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "User5", "_", "_", "_", "_", "_", "_", "_", "_", "_"],
+        ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_"],
+        ["_", "User0", "User1", "User2", "User3", "User4", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_"]
+    ]
+]
+
+[ble]
+enabled = true
+battery_adc_pin = "P0_04"
+
+[storage]
+enabled = true
+clear_storage = true
+start_addr = 0xEC000
+num_sectors = 2
+
+[split]
+connection = "ble"
+
+# Split central (left half)
+[split.central]
+rows = 5
+cols = 10
+row_offset = 0
+col_offset = 0
+
+# Central's matrix - col2row diode direction
+# From adv360_left.dts:
+# row-gpios: P1_11, P1_15, P0_03, P1_14, P1_12
+# col-gpios: P0_25, P0_11, P0_02, P0_28, P0_29, P0_30, P0_31, P1_09, P0_12, P0_07
+[split.central.matrix]
+matrix_type = "normal"
+row_pins = ["P1_11", "P1_15", "P0_03", "P1_14", "P1_12"]
+col_pins = ["P0_25", "P0_11", "P0_02", "P0_28", "P0_29", "P0_30", "P0_31", "P1_09", "P0_12", "P0_07"]
+
+# Peripheral 0 (right half)
+[[split.peripheral]]
+rows = 5
+cols = 10
+row_offset = 0
+col_offset = 10
+
+# Peripheral's matrix - col2row diode direction
+# From adv360_right.dts:
+# row-gpios: P0_19, P0_05, P0_31, P0_30, P0_29
+# col-gpios: P0_12, P1_09, P0_07, P1_11, P1_10, P1_13, P1_15, P0_03, P0_02, P0_28
+[split.peripheral.matrix]
+matrix_type = "normal"
+row_pins = ["P0_19", "P0_05", "P0_31", "P0_30", "P0_29"]
+col_pins = ["P0_12", "P1_09", "P0_07", "P1_11", "P1_10", "P1_13", "P1_15", "P0_03", "P0_02", "P0_28"]
+
+# Enable LED power on both halves (P0_13 must be HIGH for LEDs to work)
+[[split.central.output]]
+pin = "P0_13"
+low_active = false
+initial_state_active = true
+
+[[split.peripheral.output]]
+pin = "P0_13"
+low_active = false
+initial_state_active = true
+
+[rmk]
+split_peripherals_num = 1
