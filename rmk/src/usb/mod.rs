@@ -8,12 +8,12 @@ use embassy_usb::{Builder, Handler};
 use ssmarshal::serialize;
 use static_cell::StaticCell;
 
+use crate::RawMutex;
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::config::DeviceConfig;
 use crate::descriptor::CompositeReportType;
 use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
-use crate::state::ConnectionState;
-use crate::{CONNECTION_STATE, RawMutex};
+use crate::state::{CONNECTION_STATE, CONNECTION_TYPE, ConnectionState, ConnectionType};
 
 pub(crate) static USB_REMOTE_WAKEUP: Signal<RawMutex, ()> = Signal::new();
 
@@ -242,10 +242,10 @@ impl Handler for UsbDeviceHandler {
     fn enabled(&mut self, enabled: bool) {
         if enabled {
             info!("Device enabled");
-            USB_ENABLED.signal(());
         } else {
             info!("Device disabled");
             if USB_ENABLED.signaled() {
+                CONNECTION_TYPE.store(ConnectionType::Ble.into(), Ordering::Release);
                 USB_ENABLED.reset();
                 USB_SUSPENDED.signal(());
             }
@@ -262,11 +262,17 @@ impl Handler for UsbDeviceHandler {
 
     fn configured(&mut self, configured: bool) {
         if configured {
+            CONNECTION_TYPE.store(ConnectionType::Usb.into(), Ordering::Release);
             CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
             USB_ENABLED.signal(());
             info!("Device configured, it may now draw up to the configured current from Vbus.")
         } else {
             info!("Device is no longer configured, the Vbus current limit is 100mA.");
+            if USB_ENABLED.signaled() {
+                CONNECTION_TYPE.store(ConnectionType::Ble.into(), Ordering::Release);
+                USB_ENABLED.reset();
+                USB_SUSPENDED.signal(());
+            }
         }
     }
 
