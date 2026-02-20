@@ -115,7 +115,8 @@ key_map = { SOI ~ key_action* ~ EOI }
 
 left_hand = { ^"L" | ^"LH" | ^"Left" }
 right_hand = { ^"R" | ^"RH" | ^"Right" }
-hand = _{ left_hand | right_hand }
+bilateral_hand = { "*" | ^"Bilateral" }
+hand = _{ left_hand | right_hand | bilateral_hand }
 
 // Define the key_info structure, capturing row and col numbers, and optionally some extra key information
 keypos_info = { "(" ~ number ~ "," ~ number ~ ("," ~ hand)? ~ ")" }

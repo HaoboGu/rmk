@@ -34,6 +34,7 @@ pub enum Hand {
     Unknown,
     Left,
     Right,
+    Bilateral,
 }
 
 /// Config for configurable action behavior
