@@ -13,7 +13,6 @@ use esp_hal::gpio::{Input, InputConfig, Level, Output, OutputConfig, Pull};
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::rng::TrngSource;
 use esp_hal::timer::timg::TimerGroup;
-use esp_radio::Controller;
 use esp_radio::ble::controller::BleConnector;
 use esp_storage::FlashStorage;
 use rmk::ble::build_ble_stack;
@@ -25,7 +24,6 @@ use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
 use rmk::{HostResources, initialize_keymap_and_storage, run_all, run_rmk};
-use static_cell::StaticCell;
 use {esp_alloc as _, esp_backtrace as _};
 
 use crate::keymap::*;
@@ -49,10 +47,8 @@ async fn main(_s: Spawner) {
     );
     let _trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
     let mut rng = esp_hal::rng::Trng::try_new().unwrap();
-    static RADIO: StaticCell<Controller<'static>> = StaticCell::new();
-    let radio = RADIO.init(esp_radio::init().unwrap());
-    let bluetooth = peripherals.BT;
-    let connector = BleConnector::new(radio, bluetooth, Default::default()).unwrap();
+
+    let connector = BleConnector::new(peripherals.BT, Default::default()).unwrap();
     let controller: ExternalController<_, 64> = ExternalController::new(connector);
     let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
     let mut host_resources = HostResources::new();

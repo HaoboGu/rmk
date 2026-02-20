@@ -1,10 +1,14 @@
 //! Add `bind_interrupts!` boilerplate of RMK, including USB or BLE
 //!
 
+use std::collections::HashSet;
+
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::{BoardConfig, InputDeviceConfig, KeyboardTomlConfig, UniBodyConfig};
 use syn::ItemMod;
+
+use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
 
 /// Expand `bind_interrupt!` stuffs, and other code before `main` function
 pub(crate) fn expand_bind_interrupt(
@@ -67,7 +71,17 @@ pub(crate) fn bind_interrupt_default(
     let communication = keyboard_config.get_communication_config().unwrap();
     match chip.series {
         rmk_config::ChipSeries::Stm32 => {
-            // For stm32, bind only USB interrupt by default
+            // For stm32, bind USB interrupt and EXTI interrupts (if async_matrix is enabled)
+            let rmk_features = get_rmk_features();
+            let async_matrix = is_feature_enabled(&rmk_features, "async_matrix");
+
+            // Generate EXTI interrupt bindings for async_matrix
+            let exti_interrupts = if async_matrix {
+                generate_stm32_exti_interrupts(keyboard_config)
+            } else {
+                quote! {}
+            };
+
             if let Some(usb_info) = communication.get_usb_info() {
                 let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
                 let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
@@ -75,6 +89,15 @@ pub(crate) fn bind_interrupt_default(
                     use ::embassy_stm32::bind_interrupts;
                     bind_interrupts!(struct Irqs {
                         #interrupt_name => ::embassy_stm32::usb::InterruptHandler<::embassy_stm32::peripherals::#peripheral_name>;
+                        #exti_interrupts
+                        #extern_irqs
+                    });
+                }
+            } else if async_matrix {
+                quote! {
+                    use ::embassy_stm32::bind_interrupts;
+                    bind_interrupts!(struct Irqs {
+                        #exti_interrupts
                         #extern_irqs
                     });
                 }
@@ -104,7 +127,7 @@ pub(crate) fn bind_interrupt_default(
                 quote! {}
             };
             let use_2m_phy = if ble_config.use_2m_phy.unwrap_or(true) {
-                quote! { .support_le_2m_phy()? }
+                quote! { .support_le_2m_phy() }
             } else {
                 quote! {}
             };
@@ -115,14 +138,14 @@ pub(crate) fn bind_interrupt_default(
                     let num_peri = board.get_num_periphreal() as u8;
                     quote! {
                         ::nrf_sdc::Builder::new()?
-                        .support_scan()?
-                        .support_central()?
-                        .support_adv()?
-                        .support_peripheral()?
-                        .support_dle_peripheral()?
-                        .support_dle_central()?
-                        .support_phy_update_central()?
-                        .support_phy_update_peripheral()?
+                        .support_scan()
+                        .support_central()
+                        .support_adv()
+                        .support_peripheral()
+                        .support_dle_peripheral()
+                        .support_dle_central()
+                        .support_phy_update_central()
+                        .support_phy_update_peripheral()
                         #use_2m_phy
                         #tx_power
                         .central_count(#num_peri)?
@@ -133,10 +156,10 @@ pub(crate) fn bind_interrupt_default(
                 }
                 BoardConfig::UniBody(_) => quote! {
                     ::nrf_sdc::Builder::new()?
-                    .support_adv()?
-                    .support_peripheral()?
-                    .support_dle_peripheral()?
-                    .support_phy_update_peripheral()?
+                    .support_adv()
+                    .support_peripheral()
+                    .support_dle_peripheral()
+                    .support_phy_update_peripheral()
                     #use_2m_phy
                     #tx_power
                     .peripheral_count(1)?
@@ -245,5 +268,75 @@ pub(crate) fn bind_interrupt_default(
             }
         }
         rmk_config::ChipSeries::Esp32 => quote! {},
+    }
+}
+
+/// Generate STM32 EXTI interrupt bindings based on row pins
+/// STM32 EXTI lines:
+/// - EXTI0 - EXTI4: each has its own interrupt
+/// - EXTI5 - EXTI9: share EXTI9_5 interrupt
+/// - EXTI10 - EXTI15: share EXTI15_10 interrupt
+fn generate_stm32_exti_interrupts(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
+    let board = keyboard_config.get_board_config().unwrap();
+
+    // Collect all row pins from the matrix configuration
+    let row_pins: Vec<String> = match &board {
+        BoardConfig::UniBody(unibody) => unibody
+            .matrix
+            .row_pins
+            .clone()
+            .unwrap_or_default(),
+        BoardConfig::Split(split) => split
+            .central
+            .matrix
+            .row_pins
+            .clone()
+            .unwrap_or_default(),
+    };
+
+    // Extract pin numbers and determine required EXTI interrupts
+    let mut required_interrupts: HashSet<String> = HashSet::new();
+
+    for pin in &row_pins {
+        if let Some(pin_num_str) = get_pin_num_stm32(pin) {
+            if let Ok(pin_num) = pin_num_str.parse::<u8>() {
+                let interrupt_name = match pin_num {
+                    0 => "EXTI0",
+                    1 => "EXTI1",
+                    2 => "EXTI2",
+                    3 => "EXTI3",
+                    4 => "EXTI4",
+                    5..=9 => "EXTI9_5",
+                    10..=15 => "EXTI15_10",
+                    _ => continue,
+                };
+                required_interrupts.insert(interrupt_name.to_string());
+            }
+        }
+    }
+
+    // Generate interrupt bindings
+    let interrupt_bindings: Vec<TokenStream2> = required_interrupts
+        .iter()
+        .map(|irq_name| {
+            let irq_ident = format_ident!("{}", irq_name);
+            quote! {
+                #irq_ident => ::embassy_stm32::exti::InterruptHandler<::embassy_stm32::interrupt::typelevel::#irq_ident>;
+            }
+        })
+        .collect();
+
+    quote! {
+        #(#interrupt_bindings)*
+    }
+}
+
+/// Get pin number from pin str.
+/// For example, if the pin str is "PD13", this function will return "13".
+fn get_pin_num_stm32(gpio_name: &str) -> Option<String> {
+    if gpio_name.len() < 3 {
+        None
+    } else {
+        Some(gpio_name[2..].to_string())
     }
 }

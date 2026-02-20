@@ -14,7 +14,7 @@ rmk = { path = "../../../rmk", default-features = false }
 cortex-m = { version = "0.7.7", features = ['critical-section-single-core'] }
 cortex-m-rt = "0.7.5"
 embassy-time = { version = "0.5", features = ["tick-hz-32_768"] }
-embassy-stm32 = { version = "0.4", features = [
+embassy-stm32 = { version = "0.5", features = [
     "stm32f103cb",
     "memory-x",
     "time-driver-any",
