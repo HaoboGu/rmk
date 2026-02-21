@@ -12,7 +12,7 @@ use rmk_types::action::{MorseMode, MorseProfile};
 use crate::combo::Combo;
 use crate::fork::Fork;
 use crate::morse::Morse;
-use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MORSE_MAX_NUM};
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MORSE_MAX_NUM, MOUSE_KEY_INTERVAL, MOUSE_WHEEL_INTERVAL};
 
 /// Internal configurations for RMK keyboard.
 #[derive(Default)]
@@ -263,18 +263,18 @@ impl Default for MouseKeyConfig {
     fn default() -> Self {
         Self {
             // Optimized values for comfortable and responsive mouse movement
-            initial_delay_ms: 100,         // 100ms initial delay
-            repeat_interval_ms: 20,        // 20ms between movements
-            move_delta: 6,                 // 6 pixels per movement (~300 px/sec)
-            max_speed: 3,                  // Conservative max speed multiplier (300 -> 900 px/sec)
-            time_to_max: 50,               // 1.0 second to max
-            wheel_initial_delay_ms: 100,   // 100ms initial wheel delay
-            wheel_repeat_interval_ms: 80,  // 80ms between wheel movements
-            wheel_delta: 1,                // 1 wheel unit per movement
-            wheel_max_speed_multiplier: 3, // Conservative wheel max speed
-            wheel_time_to_max: 40,         // 0.5 second to max
-            move_max: 20,                  // Maximum movement per report
-            wheel_max: 4,                  // Maximum wheel movement per report
+            initial_delay_ms: 100,                          // 100ms initial delay
+            repeat_interval_ms: MOUSE_KEY_INTERVAL,         // 20ms between movements
+            move_delta: 6,                                  // 6 pixels per movement (~300 px/sec)
+            max_speed: 3,                                   // Conservative max speed multiplier (300 -> 900 px/sec)
+            time_to_max: 50,                                // 1.0 second to max
+            wheel_initial_delay_ms: 100,                    // 100ms initial wheel delay
+            wheel_repeat_interval_ms: MOUSE_WHEEL_INTERVAL, // 80ms between wheel movements
+            wheel_delta: 1,                                 // 1 wheel unit per movement
+            wheel_max_speed_multiplier: 3,                  // Conservative wheel max speed
+            wheel_time_to_max: 40,                          // 0.5 second to max
+            move_max: 20,                                   // Maximum movement per report
+            wheel_max: 4,                                   // Maximum wheel movement per report
         }
     }
 }

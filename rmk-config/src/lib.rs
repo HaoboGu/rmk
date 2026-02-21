@@ -178,10 +178,10 @@ impl KeyboardTomlConfig {
 pub struct RmkConstantsConfig {
     /// Mouse key interval (ms) - controls mouse movement speed
     #[serde_inline_default(20)]
-    pub mouse_key_interval: u32,
+    pub mouse_key_interval: u16,
     /// Mouse wheel interval (ms) - controls scrolling speed
     #[serde_inline_default(80)]
-    pub mouse_wheel_interval: u32,
+    pub mouse_wheel_interval: u16,
     /// Maximum number of combos keyboard can store
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_combo_max_num")]
