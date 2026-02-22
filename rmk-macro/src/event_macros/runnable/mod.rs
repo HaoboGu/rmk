@@ -1,7 +1,7 @@
 //! Runnable trait implementation generation.
 //!
 //! This module handles the generation of `Runnable` trait implementations
-//! for structs that combine input_device, input_processor, and controller behaviors.
+//! for structs that combine input_device and processor behaviors.
 
 mod generator;
 mod naming;

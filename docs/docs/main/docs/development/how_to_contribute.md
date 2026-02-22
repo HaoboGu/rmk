@@ -36,8 +36,7 @@ The `rmk` crate is the main crate. It provides several entry APIs to start the k
 Generally, there are 4-5 running tasks at the same time, depending on the user's config. Communication between tasks is done via channels. There are several built-in channels:
 
 - `FLASH_CHANNEL`: a multi-sender, single-receiver channel. Many tasks send `FlashOperationMessage`, such as the BLE task (which saves bond info) and the vial task (which saves keys), etc.
-- **Input event channels**: RMK uses a type-safe event system where each input event type (e.g., `KeyboardEvent`, `PointingEvent`, `BatteryAdcEvent`) has its own dedicated channel. Input devices publish events to their typed channels, and input processors subscribe to the event types they care about.
-- **Controller event channels**: Similarly, controller events (e.g., `LayerChangeEvent`, `BatteryStateEvent`) each have their own `PubSubChannel`, allowing controllers to subscribe to specific event types independently.
+- **Event channels**: RMK uses a type-safe event system where each event type (e.g., `KeyboardEvent`, `LayerChangeEvent`, `BatteryStateEvent`) has its own `PubSubChannel`. Input devices publish events to their typed channels, and processors subscribe to the event types they care about.
 - `KEYBOARD_REPORT_CHANNEL`: a single-sender, single-receiver channel. The keyboard task sends keyboard reports to the channel after the key event is processed, and the USB/BLE task receives the keyboard report and sends the key to the host.
 
 ### Matrix Scanning & Key Processing

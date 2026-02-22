@@ -14,7 +14,3 @@ capslock = { pin = "PIN_0", low_active = true }
 scrolllock = { pin = "PIN_1", low_active = true }
 numslock= { pin = "PIN_2", low_active = true }
 ```
-
-::: info
-To use `[light]`, you need enable `controller` feature in your `Cargo.toml`
-:::

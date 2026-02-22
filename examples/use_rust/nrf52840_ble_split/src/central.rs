@@ -22,11 +22,10 @@ use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
+use rmk::builtin_processor::led_indicator::KeyboardIndicatorProcessor;
 use rmk::config::{
     BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
-use rmk::controller::EventController;
-use rmk::controller::led_indicator::KeyboardIndicatorController;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::event::*;
 use rmk::futures::future::{join4, join5};
@@ -224,7 +223,7 @@ async fn main(spawner: Spawner) {
     let mut batt_proc = BatteryProcessor::new(2000, 2806);
 
     // Initialize the controllers
-    let mut capslock_led = KeyboardIndicatorController::new(
+    let mut capslock_led = KeyboardIndicatorProcessor::new(
         Output::new(
             p.P0_00,
             embassy_nrf::gpio::Level::Low,
@@ -238,9 +237,9 @@ async fn main(spawner: Spawner) {
     // This controller subscribes to PeripheralBatteryEvent events
     // and logs the battery level of each peripheral
     use rmk::event::PeripheralBatteryEvent;
-    use rmk::macros::controller;
+    use rmk::macros::processor;
 
-    #[controller(subscribe = [PeripheralBatteryEvent, BatteryStateEvent, LayerChangeEvent])]
+    #[processor(subscribe = [PeripheralBatteryEvent, BatteryStateEvent, LayerChangeEvent])]
     struct PeripheralBatteryMonitor {}
 
     impl PeripheralBatteryMonitor {
@@ -268,8 +267,8 @@ async fn main(spawner: Spawner) {
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
             run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
             scan_peripherals(&stack, &peripheral_addrs),
-            capslock_led.event_loop(),
-            peripheral_battery_monitor.event_loop(),
+            capslock_led.run(),
+            peripheral_battery_monitor.run(),
         ),
     )
     .await;

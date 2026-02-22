@@ -9,11 +9,9 @@ use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::stora
 
 use super::SplitMessage;
 use crate::CONNECTION_STATE;
-use crate::event::{
-    KeyboardEvent, KeyboardEventPos, SubscribableControllerEvent, publish_input_event, publish_input_event_async,
-};
 #[cfg(feature = "_ble")]
-use crate::event::{PeripheralBatteryEvent, publish_controller_event};
+use crate::event::PeripheralBatteryEvent;
+use crate::event::{KeyboardEvent, KeyboardEventPos, SubscribableEvent, publish_event, publish_event_async};
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -65,7 +63,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
 
     /// Run the manager.
     ///
-    /// The manager receives from the peripheral and publishes input/controller events.
+    /// The manager receives from the peripheral and publishes input events.
     /// It also sync the `ConnectionState` to the peripheral periodically.
     pub(crate) async fn run(mut self) {
         use crate::event::EventSubscriber;
@@ -80,10 +78,10 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
         }
 
         let mut last_sync_time = Instant::now();
-        let mut keyboard_indicator_sub = crate::event::LedIndicatorEvent::controller_subscriber();
-        let mut layer_sub = crate::event::LayerChangeEvent::controller_subscriber();
+        let mut keyboard_indicator_sub = crate::event::LedIndicatorEvent::subscriber();
+        let mut layer_sub = crate::event::LayerChangeEvent::subscriber();
         #[cfg(feature = "_ble")]
-        let mut clear_peer_sub = crate::event::ClearPeerEvent::controller_subscriber();
+        let mut clear_peer_sub = crate::event::ClearPeerEvent::subscriber();
 
         loop {
             // Calculate the time until the next 3000ms sync
@@ -222,7 +220,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                             key_pos.col + COL_OFFSET as u8,
                             e.pressed,
                         );
-                        publish_input_event_async(adjusted_key_event).await;
+                        publish_event_async(adjusted_key_event).await;
                     } else {
                         warn!("Key event from peripheral is ignored because the connection is not established.");
                     }
@@ -231,19 +229,18 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                     // For rotary encoder
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
                         // Only when the connection is established, send the key event.
-                        publish_input_event_async(e).await;
+                        publish_event_async(e).await;
                     }
                 }
             },
             // Process other split messages which requires connection to host
             _ if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) => match split_message {
                 // Non-key events are drop-on-full to keep the split read loop responsive.
-                SplitMessage::Touchpad(e) => publish_input_event(e),
-                SplitMessage::Pointing(e) => publish_input_event(e),
+                SplitMessage::Pointing(e) => publish_event(e),
                 #[cfg(feature = "_ble")]
                 SplitMessage::BatteryState(state) => {
                     // Publish as PeripheralBatteryEvent with the full state
-                    publish_controller_event(PeripheralBatteryEvent { id: self.id, state })
+                    publish_event(PeripheralBatteryEvent { id: self.id, state })
                 }
                 _ => warn!("{:?} should not come from peripheral", split_message),
             },

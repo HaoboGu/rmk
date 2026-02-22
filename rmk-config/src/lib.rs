@@ -6,6 +6,9 @@ use serde::{Deserialize as SerdeDeserialize, de};
 use serde_derive::Deserialize;
 use serde_inline_default::serde_inline_default;
 
+/// Event channel default configuration
+const EVENT_DEFAULT_CONFIG: &str = include_str!("default_config/event_default.toml");
+
 pub mod chip;
 pub mod communication;
 pub mod keyboard;
@@ -63,31 +66,57 @@ pub struct KeyboardTomlConfig {
     /// RMK config constants
     #[serde(default)]
     pub rmk: RmkConstantsConfig,
-    /// Controller event channel configuration
+    /// Event channel configuration
+    /// Default values are loaded from event_default.toml in new_from_toml_path()
+    /// build.rs also loads event defaults via new_from_toml_path_with_event_defaults()
     #[serde(default)]
-    pub controller_event: EventConfig,
+    pub event: EventConfig,
 }
 
 impl KeyboardTomlConfig {
+    fn parse_from_toml_path<P: AsRef<Path>>(config_toml_path: P, chip_default_config: Option<&str>) -> Self {
+        let path = config_toml_path.as_ref();
+        let path_str = path
+            .to_str()
+            .unwrap_or_else(|| panic!("Config path is not valid UTF-8: {:?}", path));
+
+        let mut builder = Config::builder().add_source(File::from_str(EVENT_DEFAULT_CONFIG, FileFormat::Toml));
+        if let Some(default_config) = chip_default_config {
+            builder = builder.add_source(File::from_str(default_config, FileFormat::Toml));
+        }
+        builder
+            .add_source(File::with_name(path_str))
+            .build()
+            .unwrap_or_else(|e| panic!("Parse {:?} error: {}", path, e))
+            .try_deserialize()
+            .unwrap_or_else(|e| panic!("Deserialize {:?} error: {}", path, e))
+    }
+
+    /// Load keyboard.toml with event defaults only.
+    ///
+    /// This is used in build.rs where we only need [rmk] and [event] constants,
+    /// and should not require `[keyboard.board]`/`[keyboard.chip]`.
+    pub fn new_from_toml_path_with_event_defaults<P: AsRef<Path>>(config_toml_path: P) -> Self {
+        let mut config = Self::parse_from_toml_path(config_toml_path, None);
+        config.auto_calculate_parameters();
+        config
+    }
+
     pub fn new_from_toml_path<P: AsRef<Path>>(config_toml_path: P) -> Self {
-        // The first run, load chip model only
-        let user_config = match std::fs::read_to_string(config_toml_path.as_ref()) {
-            Ok(s) => match toml::from_str::<KeyboardTomlConfig>(&s) {
-                Ok(c) => c,
-                Err(e) => panic!("Parse {:?} error: {}", config_toml_path.as_ref(), e.message()),
-            },
-            Err(e) => panic!("Read keyboard config file {:?} error: {}", config_toml_path.as_ref(), e),
-        };
+        let path = config_toml_path.as_ref();
+
+        // First pass: load user config with event defaults to get chip model.
+        // This allows user's keyboard.toml to omit [event] section.
+        let user_config = Self::parse_from_toml_path(path, None);
+
         let default_config_str = user_config.get_chip_model().unwrap().get_default_config_str().unwrap();
 
-        // The second run, load the user config and merge with the default config
-        let mut config: KeyboardTomlConfig = Config::builder()
-            .add_source(File::from_str(default_config_str, FileFormat::Toml))
-            .add_source(File::with_name(config_toml_path.as_ref().to_str().unwrap()))
-            .build()
-            .unwrap()
-            .try_deserialize()
-            .unwrap();
+        // Second pass: load with all three config sources
+        // Config priority (later sources override earlier ones):
+        // 1. Event default config (lowest priority)
+        // 2. Chip-specific default config
+        // 3. User config (highest priority)
+        let mut config = Self::parse_from_toml_path(path, Some(default_config_str));
 
         config.auto_calculate_parameters();
 
@@ -149,10 +178,10 @@ impl KeyboardTomlConfig {
 pub struct RmkConstantsConfig {
     /// Mouse key interval (ms) - controls mouse movement speed
     #[serde_inline_default(20)]
-    pub mouse_key_interval: u32,
+    pub mouse_key_interval: u16,
     /// Mouse wheel interval (ms) - controls scrolling speed
     #[serde_inline_default(80)]
-    pub mouse_wheel_interval: u32,
+    pub mouse_wheel_interval: u16,
     /// Maximum number of combos keyboard can store
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_combo_max_num")]
@@ -266,188 +295,89 @@ impl Default for RmkConstantsConfig {
 }
 
 /// Event channel configuration for a single event type
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EventChannelConfig {
     /// Channel buffer size
-    #[serde(default)]
-    pub channel_size: Option<usize>,
+    pub channel_size: usize,
     /// Number of publishers
-    #[serde(default)]
-    pub pubs: Option<usize>,
+    pub pubs: usize,
     /// Number of subscribers
-    #[serde(default)]
-    pub subs: Option<usize>,
+    pub subs: usize,
 }
 
-impl EventChannelConfig {
-    /// Merge with defaults: user config takes precedence, fallback to defaults for None fields
-    pub fn with_defaults(mut self, defaults: EventChannelConfig) -> Self {
-        self.channel_size = self.channel_size.or(defaults.channel_size);
-        self.pubs = self.pubs.or(defaults.pubs);
-        self.subs = self.subs.or(defaults.subs);
-        self
-    }
-
-    /// Extract final values (all fields must be Some at this point)
-    pub fn into_values(self) -> (usize, usize, usize) {
-        (
-            self.channel_size.expect("channel_size must be set after with_defaults"),
-            self.pubs.expect("pubs must be set after with_defaults"),
-            self.subs.expect("subs must be set after with_defaults"),
-        )
-    }
-}
-
-/// Event configuration for all controller events
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct EventConfig {
-    // BLE events
-    #[serde(default = "default_ble_state_event")]
-    pub ble_state_change: EventChannelConfig,
-    #[serde(default = "default_event")]
-    pub ble_profile_change: EventChannelConfig,
-
-    // Connection events
-    #[serde(default = "default_event")]
-    pub connection_change: EventChannelConfig,
-
-    // Input events
-    #[serde(default = "default_input_event")]
-    pub key: EventChannelConfig,
-    #[serde(default = "default_input_event")]
-    pub modifier: EventChannelConfig,
-
-    // Keyboard state events
-    #[serde(default = "default_monitored_event")]
-    pub layer_change: EventChannelConfig,
-    #[serde(default = "default_event")]
-    pub wpm_update: EventChannelConfig,
-    #[serde(default = "default_led_indicator_event")]
-    pub led_indicator: EventChannelConfig,
-    #[serde(default = "default_monitored_event")]
-    pub sleep_state: EventChannelConfig,
-
-    // Power events
-    #[serde(default = "default_monitored_event")]
-    pub battery_state: EventChannelConfig,
-
-    // Split events
-    #[serde(default = "default_event")]
-    pub peripheral_connected: EventChannelConfig,
-    #[serde(default = "default_event")]
-    pub central_connected: EventChannelConfig,
-    #[serde(default = "default_peripheral_battery_event")]
-    pub peripheral_battery: EventChannelConfig,
-    #[serde(default = "default_monitored_event")]
-    pub clear_peer: EventChannelConfig,
-}
-
-impl EventConfig {
-    /// Apply defaults to all events after deserialization
-    pub fn with_defaults(mut self) -> Self {
-        self.ble_state_change = self.ble_state_change.with_defaults(default_ble_state_event());
-        self.ble_profile_change = self.ble_profile_change.with_defaults(default_event());
-        self.connection_change = self.connection_change.with_defaults(default_event());
-        self.key = self.key.with_defaults(default_input_event());
-        self.modifier = self.modifier.with_defaults(default_input_event());
-        self.layer_change = self.layer_change.with_defaults(default_monitored_event());
-        self.wpm_update = self.wpm_update.with_defaults(default_event());
-        self.led_indicator = self.led_indicator.with_defaults(default_led_indicator_event());
-        self.sleep_state = self.sleep_state.with_defaults(default_monitored_event());
-        self.battery_state = self.battery_state.with_defaults(default_monitored_event());
-        self.peripheral_connected = self.peripheral_connected.with_defaults(default_event());
-        self.central_connected = self.central_connected.with_defaults(default_event());
-        self.peripheral_battery = self
-            .peripheral_battery
-            .with_defaults(default_peripheral_battery_event());
-        self.clear_peer = self.clear_peer.with_defaults(default_monitored_event());
-        self
-    }
-}
-
-// Default event configurations with semantic names
-
-/// Default for simple events: (1, 1, 1)
-/// Used by: ble_profile_change, connection_change, wpm_update, peripheral_connected, central_connected
-fn default_event() -> EventChannelConfig {
-    EventChannelConfig {
-        channel_size: Some(1),
-        pubs: Some(1),
-        subs: Some(1),
-    }
-}
-
-/// Default for monitored events
-fn default_monitored_event() -> EventChannelConfig {
-    EventChannelConfig {
-        channel_size: Some(1),
-        pubs: Some(1),
-        subs: Some(4),
-    }
-}
-
-/// Default for buffered multi-monitored events: (2, 1, 4)
-/// LED indicator events with buffering + 4 subscribers
-fn default_led_indicator_event() -> EventChannelConfig {
-    EventChannelConfig {
-        channel_size: Some(2),
-        pubs: Some(1),
-        subs: Some(4),
-    }
-}
-
-/// Default for high-frequency input events: (8, 1, 2)
-/// Used by: key, modifier
-fn default_input_event() -> EventChannelConfig {
-    EventChannelConfig {
-        channel_size: Some(8),
-        pubs: Some(1),
-        subs: Some(2),
-    }
-}
-
-/// Default for BLE state change event: (2, 1, 1)
-/// Needs buffering for state transitions
-fn default_ble_state_event() -> EventChannelConfig {
-    EventChannelConfig {
-        channel_size: Some(2),
-        pubs: Some(1),
-        subs: Some(1),
-    }
-}
-
-/// Default for peripheral battery monitoring: (2, 1, 2)
-/// Buffering for split keyboard battery updates
-fn default_peripheral_battery_event() -> EventChannelConfig {
-    EventChannelConfig {
-        channel_size: Some(2),
-        pubs: Some(1),
-        subs: Some(2),
-    }
-}
-
-impl Default for EventConfig {
+impl Default for EventChannelConfig {
     fn default() -> Self {
         Self {
-            ble_state_change: default_ble_state_event(),
-            ble_profile_change: default_event(),
-            connection_change: default_event(),
-            key: default_input_event(),
-            modifier: default_input_event(),
-            layer_change: default_monitored_event(),
-            wpm_update: default_event(),
-            led_indicator: default_led_indicator_event(),
-            sleep_state: default_monitored_event(),
-            battery_state: default_monitored_event(),
-            peripheral_connected: default_event(),
-            central_connected: default_event(),
-            peripheral_battery: default_peripheral_battery_event(),
-            clear_peer: default_monitored_event(),
+            channel_size: 1,
+            pubs: 1,
+            subs: 1,
         }
     }
 }
+
+impl EventChannelConfig {
+    /// Extract values as tuple
+    pub fn into_values(self) -> (usize, usize, usize) {
+        (self.channel_size, self.pubs, self.subs)
+    }
+}
+
+/// Macro to define EventConfig and related code without repetition
+macro_rules! define_event_config {
+    ($($field:ident),* $(,)?) => {
+        /// Event configuration for all controller events
+        /// Default values are loaded from event_default.toml
+        #[derive(Clone, Debug, Deserialize)]
+        #[serde(deny_unknown_fields, default)]
+        pub struct EventConfig {
+            $(pub $field: EventChannelConfig,)*
+        }
+
+        /// Cached default EventConfig parsed from event_default.toml
+        static EVENT_CONFIG_DEFAULTS: std::sync::LazyLock<EventConfig> = std::sync::LazyLock::new(|| {
+            #[derive(Deserialize)]
+            struct Inner { $($field: EventChannelConfig,)* }
+            #[derive(Deserialize)]
+            struct Wrapper { event: Inner }
+            let w: Wrapper = toml::from_str(EVENT_DEFAULT_CONFIG).expect("Failed to parse event_default.toml");
+            EventConfig { $($field: w.event.$field,)* }
+        });
+
+        impl Default for EventConfig {
+            fn default() -> Self {
+                EVENT_CONFIG_DEFAULTS.clone()
+            }
+        }
+    };
+}
+
+define_event_config!(
+    // BLE events
+    ble_state_change,
+    ble_profile_change,
+    // Connection events
+    connection_change,
+    // Input events
+    modifier,
+    keyboard,
+    // Keyboard state events
+    layer_change,
+    wpm_update,
+    led_indicator,
+    sleep_state,
+    // Power events
+    battery_state,
+    battery_adc,
+    charging_state,
+    // Pointing device events
+    pointing,
+    // Split events
+    peripheral_connected,
+    central_connected,
+    peripheral_battery,
+    clear_peer,
+);
 
 /// Configurations for keyboard layout
 #[derive(Clone, Debug, Deserialize)]
@@ -1097,5 +1027,85 @@ impl KeyboardTomlConfig {
             (None, None) => Ok(Default::default()),
             _ => Err("Use [[split.output]] to define outputs for split in your keyboard.toml!".to_string()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_event_config_default_values() {
+        let config = EventConfig::default();
+
+        // Check some key default values from event_default.toml
+        assert_eq!(config.keyboard.channel_size, 16);
+        assert_eq!(config.keyboard.pubs, 2);
+        assert_eq!(config.keyboard.subs, 2);
+
+        assert_eq!(config.modifier.channel_size, 8);
+        assert_eq!(config.modifier.pubs, 1);
+        assert_eq!(config.modifier.subs, 2);
+
+        assert_eq!(config.layer_change.channel_size, 1);
+        assert_eq!(config.layer_change.subs, 1);
+
+        assert_eq!(config.led_indicator.channel_size, 2);
+        assert_eq!(config.led_indicator.pubs, 2);
+        assert_eq!(config.led_indicator.subs, 4);
+
+        assert_eq!(config.pointing.channel_size, 8);
+        assert_eq!(config.pointing.subs, 2);
+    }
+
+    #[test]
+    fn test_event_config_user_override() {
+        // Simulate user config that overrides some event settings
+        let user_toml = r#"
+[event.keyboard]
+channel_size = 32
+"#;
+        // Parse with event defaults first, then user config
+        let config: KeyboardTomlConfig = Config::builder()
+            .add_source(File::from_str(EVENT_DEFAULT_CONFIG, FileFormat::Toml))
+            .add_source(File::from_str(user_toml, FileFormat::Toml))
+            .build()
+            .unwrap()
+            .try_deserialize()
+            .unwrap();
+
+        // User-overridden values
+        assert_eq!(config.event.keyboard.channel_size, 32);
+        assert_eq!(config.event.keyboard.pubs, 2);
+        assert_eq!(config.event.keyboard.subs, 2);
+
+        // Non-overridden values should use defaults
+        assert_eq!(config.event.modifier.channel_size, 8);
+        assert_eq!(config.event.modifier.subs, 2);
+        assert_eq!(config.event.layer_change.subs, 1);
+    }
+
+    #[test]
+    fn test_event_config_partial_override_with_event_defaults_loader() {
+        let user_toml = r#"
+[event.layer_change]
+subs = 2
+"#;
+        let path = std::env::temp_dir().join(format!(
+            "rmk-event-defaults-loader-{}-{}.toml",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::write(&path, user_toml).unwrap();
+
+        let config = KeyboardTomlConfig::new_from_toml_path_with_event_defaults(&path);
+        std::fs::remove_file(path).unwrap();
+
+        assert_eq!(config.event.layer_change.channel_size, 1);
+        assert_eq!(config.event.layer_change.pubs, 2);
+        assert_eq!(config.event.layer_change.subs, 2);
     }
 }

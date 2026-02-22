@@ -1,14 +1,14 @@
 use core::cell::RefCell;
 
-use rmk_macro::input_processor;
+use rmk_macro::processor;
 use usbd_hid::descriptor::MouseReport;
 
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::event::PointingEvent;
 use crate::hid::Report;
-use crate::input_device::InputProcessor;
 use crate::keymap::KeyMap;
 
-#[input_processor(subscribe = [PointingEvent])]
+#[processor(subscribe = [PointingEvent])]
 pub struct JoystickProcessor<
     'a,
     const ROW: usize,
@@ -81,6 +81,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         };
 
         // Send mouse report directly
-        self.send_report(Report::MouseReport(mouse_report)).await;
+        KEYBOARD_REPORT_CHANNEL.send(Report::MouseReport(mouse_report)).await;
     }
 }

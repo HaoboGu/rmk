@@ -24,10 +24,6 @@ pub(crate) fn get_rmk_features() -> Option<Vec<String>> {
                     feature_set.push("vial".to_string());
                     feature_set.push("vial_lock".to_string());
                 }
-                if feature_set.contains(&"split".to_string()) {
-                    // Now `split` relies on `controller`
-                    feature_set.push("controller".to_string());
-                }
                 feature_set
             }),
         Err(_e) => None,

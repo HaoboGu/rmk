@@ -1,11 +1,6 @@
-pub(crate) mod channel;
 pub(crate) mod config;
-pub(crate) mod controller;
-pub(crate) mod controller_event;
 pub(crate) mod input_device;
-pub(crate) mod input_event;
 pub(crate) mod input_event_derive;
-pub(crate) mod input_processor;
 pub(crate) mod parser;
 pub(crate) mod runnable;
 pub(crate) mod utils;
