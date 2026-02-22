@@ -1,6 +1,7 @@
 use core::cell::RefCell;
 use core::fmt::Debug;
 
+#[cfg(all(feature = "split", feature = "_ble"))]
 use embassy_futures::select::{Either, select};
 use embassy_futures::yield_now;
 #[cfg(feature = "_ble")]
@@ -28,6 +29,7 @@ use crate::hid::Report;
 use crate::input_device::Runnable;
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
+use crate::keyboard::oneshot::OneShotState;
 use crate::keyboard_macros::MacroOperation;
 use crate::keymap::KeyMap;
 use crate::morse::{MorsePattern, TAP};
@@ -50,30 +52,6 @@ pub(crate) static LAST_KEY_TIMESTAMP: Signal<crate::RawMutex, u32> = Signal::new
 /// Led states for the keyboard hid report (its value is received by by the light service in a hid report)
 /// LedIndicator type would be nicer, but that does not have const expr constructor
 pub(crate) static LOCK_LED_STATES: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0u8);
-
-/// State machine for one shot keys
-#[derive(Default)]
-enum OneShotState<T> {
-    /// First one shot key press
-    Initial(T),
-    /// One shot key was released before any other key, normal one shot behavior
-    Single(T),
-    /// Another key was pressed before one shot key was released, treat as a normal modifier/layer
-    Held(T),
-    /// One shot inactive
-    #[default]
-    None,
-}
-
-impl<T> OneShotState<T> {
-    /// Get the current one shot value if any
-    pub fn value(&self) -> Option<&T> {
-        match self {
-            OneShotState::Initial(v) | OneShotState::Single(v) | OneShotState::Held(v) => Some(v),
-            OneShotState::None => None,
-        }
-    }
-}
 
 /// State machine for Caps Word
 #[derive(Debug, Default)]
@@ -209,10 +187,10 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// Used in repeat-key
     last_key_code: KeyCode,
 
-    /// One shot layer state
+    /// Oneshot Layer state
     osl_state: OneShotState<u8>,
 
-    /// One shot modifier state
+    /// Oneshot Modifier state
     osm_state: OneShotState<ModifierCombination>,
 
     /// Caps Word state machine
@@ -1268,99 +1246,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .for_each(|(i, k)| info!("\n✅Held buffer {}: {:?}, state: {:?}", i, k.event, k.state));
     }
 
-    async fn process_action_osm(&mut self, modifiers: ModifierCombination, event: KeyboardEvent) {
-        // Update one shot state
-        if event.pressed {
-            // Add new modifier combination to existing one shot or init if none
-            self.osm_state = match self.osm_state {
-                OneShotState::None => OneShotState::Initial(modifiers),
-                OneShotState::Initial(m) => OneShotState::Initial(m | modifiers),
-                OneShotState::Single(m) => OneShotState::Single(m | modifiers),
-                OneShotState::Held(m) => OneShotState::Held(m | modifiers),
-            };
-
-            self.update_osl(event);
-        } else {
-            match self.osm_state {
-                OneShotState::Initial(m) | OneShotState::Single(m) => {
-                    self.osm_state = OneShotState::Single(m);
-                    let timeout = Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
-                    match select(timeout, self.keyboard_event_subscriber.next_message_pure()).await {
-                        Either::First(_) => {
-                            // Timeout, release modifiers
-                            self.update_osl(event);
-                            self.osm_state = OneShotState::None;
-                        }
-                        Either::Second(e) => {
-                            // New event, send it to queue
-                            if self.unprocessed_events.push(e).is_err() {
-                                warn!("Unprocessed event queue is full, dropping event");
-                            }
-                        }
-                    }
-                }
-                OneShotState::Held(_) => {
-                    // Release modifier
-                    self.update_osl(event);
-                    self.osm_state = OneShotState::None;
-
-                    // This sends a separate hid report with the
-                    // currently registered modifiers except the
-                    // one shoot modifiers -> this way "releasing" them.
-                    self.send_keyboard_report_with_resolved_modifiers(event.pressed).await;
-                }
-                _ => (),
-            };
-        }
-    }
-
-    async fn process_action_osl(&mut self, layer_num: u8, event: KeyboardEvent) {
-        // Update one shot state
-        if event.pressed {
-            // Deactivate old layer if any
-            if let Some(&l) = self.osl_state.value() {
-                self.keymap.borrow_mut().deactivate_layer(l);
-            }
-
-            // Update layer of one shot
-            self.osl_state = match self.osl_state {
-                OneShotState::None => OneShotState::Initial(layer_num),
-                OneShotState::Initial(_) => OneShotState::Initial(layer_num),
-                OneShotState::Single(_) => OneShotState::Single(layer_num),
-                OneShotState::Held(_) => OneShotState::Held(layer_num),
-            };
-
-            // Activate new layer
-            self.keymap.borrow_mut().activate_layer(layer_num);
-        } else {
-            match self.osl_state {
-                OneShotState::Initial(l) | OneShotState::Single(l) => {
-                    self.osl_state = OneShotState::Single(l);
-
-                    let timeout = embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
-                    match select(timeout, self.keyboard_event_subscriber.next_message_pure()).await {
-                        Either::First(_) => {
-                            // Timeout, deactivate layer
-                            self.keymap.borrow_mut().deactivate_layer(layer_num);
-                            self.osl_state = OneShotState::None;
-                        }
-                        Either::Second(e) => {
-                            // New event, send it to queue
-                            if self.unprocessed_events.push(e).is_err() {
-                                warn!("Unprocessed event queue is full, dropping event");
-                            }
-                        }
-                    }
-                }
-                OneShotState::Held(layer_num) => {
-                    self.osl_state = OneShotState::None;
-                    self.keymap.borrow_mut().deactivate_layer(layer_num);
-                }
-                _ => (),
-            };
-        }
-    }
-
     /// Calculates the combined effect of "explicit modifiers":
     /// - registered modifiers
     /// - one-shot modifiers
@@ -1375,7 +1260,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         } else if let OneShotState::Held(osm) = self.osm_state {
             // One shot modifiers usually "released" together with the key release,
-            // except when one-shoot is in "held mode" (to allow Alt+Tab like use cases)
+            // except when oneshot is in "held mode" (to allow Alt+Tab like use cases)
             // In this later case Held -> None state change will report
             // the "modifier released" change in a separate hid report
             result |= osm;
@@ -1971,31 +1856,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // Prevent mouse report flooding, set maximum mouse report rate to 50 HZ
         self.send_report(Report::MouseReport(self.mouse_report)).await;
         yield_now().await;
-    }
-
-    fn update_osm(&mut self, event: KeyboardEvent) {
-        match self.osm_state {
-            OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
-            OneShotState::Single(_) => {
-                if !event.pressed {
-                    self.osm_state = OneShotState::None;
-                }
-            }
-            _ => (),
-        }
-    }
-
-    fn update_osl(&mut self, event: KeyboardEvent) {
-        match self.osl_state {
-            OneShotState::Initial(l) => self.osl_state = OneShotState::Held(l),
-            OneShotState::Single(layer_num) => {
-                if !event.pressed {
-                    self.keymap.borrow_mut().deactivate_layer(layer_num);
-                    self.osl_state = OneShotState::None;
-                }
-            }
-            _ => (),
-        }
     }
 
     /// Register a key, the key can be a basic keycode or a modifier.

@@ -109,9 +109,22 @@ MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
 # Behavior configuration, if you don't want to customize anything, just ignore this section
 [behavior]
 # Tri Layer configuration
-tri_layer = { upper = 1, lower = 2, adjust = 3 }
-# One Shot configuration
-one_shot = { timeout = "1s" }
+tri_layer = {
+  upper = 1,
+  lower = 2,
+  adjust = 3,
+}
+
+# OneShot configuration
+one_shot = {
+  timeout = "1s"
+}
+
+# One Shot Modifiers configuration
+one_shot_modifiers = {
+  activate_on_keypress = false,
+  send_on_second_press = false,
+}
 
 [behavior.morse]
 # default profile for morse, tap dance and tap-hold keys:
