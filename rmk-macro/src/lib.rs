@@ -152,6 +152,11 @@ pub fn input_device(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     ]
 /// };
 /// ```
+///
+/// # Limitations
+///
+/// Three-argument forms of `LT`, `MT`, and `TH` (morse/tap-hold profiles)
+/// are not yet supported in this macro. Use `keyboard.toml` for those features.
 #[proc_macro]
 pub fn keymap(input: TokenStream) -> TokenStream {
     codegen::keymap_macro::keymap_impl(input)

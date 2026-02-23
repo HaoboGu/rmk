@@ -34,11 +34,9 @@ Fortunately, RMK does most of the heavy lifting for you. All you need to do is c
 
 ### Add your default keymap
 
-After adding the layout of your keyboard, the default keymap should also be updated. The default keymap is defined in `src/keymap.rs`. Update the keyboard matrix constants and add a `get_default_keymap()` function that returns the default keymap of your keyboard.
+After adding the layout of your keyboard, the default keymap should also be updated. The default keymap is defined in `src/keymap.rs`. Update the keyboard matrix constants and define your keymap using the `keymap!` macro, which uses the same key action syntax as `keyboard.toml`.
 
-RMK provides a bunch of useful [macros](https://docs.rs/rmk/latest/rmk/#macros) to help you define your keymap. Check out the [keymap configuration](../configuration/keymap_configuration) chapter for more details. You can also check the `src/keymap.rs` files in the <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust> examples for reference.
-
-Some `KeyAction`s are not supported by the macros; plain `KeyAction`s also work, for example: `KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::Kc1)), Action::Key(KeyCode::Hid(HidKeyCode::Kc2)))`
+Check out the [keymap configuration](../configuration/keymap_configuration) chapter for more details. You can also check the `src/keymap.rs` files in the <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust> examples for reference.
 
 ### Define your matrix
 

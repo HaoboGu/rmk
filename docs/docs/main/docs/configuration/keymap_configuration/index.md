@@ -10,55 +10,72 @@ Please check [layout section](../layout) in keyboard configuration doc.
 
 ## Define default keymap in Rust source file
 
-The default keymap could also be defined at a Rust source file, There are `keymap.rs`s in example folder, such as [this](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/src/keymap.rs), which could be a good example of defining keymaps using Rust in RMK:
+The default keymap could also be defined in a Rust source file using the `keymap!` macro. The macro uses the same key action syntax as `keyboard.toml`, so you can use the same key names and actions in both places.
+
+There are `keymap.rs` files in the example folder, such as [this](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/rp2040/src/keymap.rs), which is a good example of defining keymaps using Rust in RMK:
 
 ```rust
-// https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/src/keymap.rs
+// https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/rp2040/src/keymap.rs
 use rmk::types::action::KeyAction;
-use rmk::{a, k, layer, mo};
-pub(crate) const COL: usize = 14;
-pub(crate) const ROW: usize = 5;
+use rmk::keymap;
+
+pub(crate) const COL: usize = 3;
+pub(crate) const ROW: usize = 4;
 pub(crate) const NUM_LAYER: usize = 2;
 
-#[rustfmt::skip]
-pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
-    [
-        layer!([
-            [k!(Grave), k!(Kc1), k!(Kc2), k!(Kc3), k!(Kc4), k!(Kc5), k!(Kc6), k!(Kc7), k!(Kc8), k!(Kc9), k!(Kc0), k!(Minus), k!(Equal), k!(Backspace)],
-            [k!(Tab), k!(Q), k!(W), k!(E), k!(R), k!(T), k!(Y), k!(U), k!(I), k!(O), k!(P), k!(LeftBracket), k!(RightBracket), k!(Backslash)],
-            [k!(Escape), k!(A), k!(S), k!(D), k!(F), k!(G), k!(H), k!(J), k!(K), k!(L), k!(Semicolon), k!(Quote), a!(No), k!(Enter)],
-            [k!(LShift), k!(Z), k!(X), k!(C), k!(V), k!(B), k!(N), k!(M), k!(Comma), k!(Dot), k!(Slash), a!(No), a!(No), k!(RShift)],
-            [k!(LCtrl), k!(LGui), k!(LAlt), a!(No), a!(No), k!(Space), a!(No), a!(No), a!(No), mo!(1), k!(RAlt), a!(No), k!(RGui), k!(RCtrl)]
-        ]),
-        layer!([
-            [k!(Grave), k!(F1), k!(F2), k!(F3), k!(F4), k!(F5), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11), k!(F12), k!(Delete)],
-            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
-            [k!(CapsLock), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
-            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Up)],
-            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Left), a!(No), k!(Down), k!(Right)]
-        ]),
+const DEFAULT_KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = keymap! {
+    matrix_map: "
+        (0,0) (0,1) (0,2)
+        (1,0) (1,1) (1,2)
+        (2,0) (2,1) (2,2)
+        (3,0) (3,1) (3,2)
+    ",
+    aliases: {
+        fn_layer = "MO(fn)",
+    },
+    layers: [
+        {
+            layer: 0,
+            name: "base",
+            layout: "
+                AudioVolUp  B           AudioVolDown
+                Kp4         LShift      Kp6
+                @fn_layer   Kp2         Kp3
+                @fn_layer   No          Kp0
+            "
+        },
+        {
+            layer: 1,
+            name: "fn",
+            layout: "
+                Kp7     Kp8     Kp9
+                Kp4     LCtrl   Kp6
+                MO(1)   Kp2     Kp3
+                MO(1)   No      Kp0
+            "
+        }
     ]
-}
+};
 
+pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
+    DEFAULT_KEYMAP
+}
 ```
 
-First of all, the keyboard matrix's basic info(number of rows, cols and layers) is defined as consts:
+First of all, the keyboard matrix's basic info (number of rows, cols and layers) is defined as consts:
 
 ```rust
-pub(crate) const COL: usize = 14;
-pub(crate) const ROW: usize = 5;
+pub(crate) const COL: usize = 3;
+pub(crate) const ROW: usize = 4;
 pub(crate) const NUM_LAYER: usize = 2;
 ```
 
-Then, the keymap is defined as a static 3-D matrix of `KeyAction`:
+Then, the keymap is defined using the `keymap!` macro. It has three sections:
 
-```rust
-// You should define a function that returns the default keymap by yourself
-pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
-    ...
-}
-```
+- **`matrix_map`**: Defines the physical layout as `(row, col)` coordinates. Each coordinate maps a position in the layout strings to a position in the key matrix.
+- **`aliases`** (optional): Defines shorthand names for key actions. Use `@alias_name` in the layout to reference them.
+- **`layers`**: A list of layer definitions. Each layer has a numeric `layer` id (must be contiguous starting from 0), an optional `name` (which can be used in layer-switching actions like `MO(fn)`), and a `layout` string with key actions.
 
-A keymap in RMK is a 3-level hierarchy: layer - row - column. Each keymap is a slice of layers whose length is `NUM_LAYER`. Each layer is a slice of rows whose length is `ROW`, and each row is a slice of `KeyAction`s whose length is `COL`.
+The layout strings use the same key action syntax as `keyboard.toml`. For example, `No` means no action, `MO(1)` activates layer 1 momentarily, and `WM(C, LCtrl)` sends Ctrl+C.
 
-RMK provides a bunch of macros which simplify the keymap definition a lot. You can check all available macros in [RMK doc](https://docs.rs/rmk/latest/rmk/index.html#macros). For example, `layer!` macro is used to define a layer. `k!` macro is used to define a normal key in the keymap. If there is no actual key at a position, you can use `a!(No)` to represent `KeyAction::No`.
+A `get_default_keymap()` function should return the keymap constant for use by the rest of the firmware. You can check all available key actions in the [layout section](../layout) of the keyboard configuration doc.

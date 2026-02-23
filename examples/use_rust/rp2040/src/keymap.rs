@@ -5,7 +5,6 @@ pub(crate) const COL: usize = 3;
 pub(crate) const ROW: usize = 4;
 pub(crate) const NUM_LAYER: usize = 2;
 
-// Using the new keymap! macro - much more concise than the old approach!
 const DEFAULT_KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = keymap! {
     matrix_map: "
         (0,0) (0,1) (0,2)
