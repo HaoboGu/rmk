@@ -237,7 +237,7 @@ fn generate_keymap(input: &KeymapInput) -> Result<TokenStream2, String> {
     for layer in &input.layers {
         if layer.layer > u8::MAX as usize {
             return Err(format!(
-                "Layer {} is out of range. layer must be in [0..{}] because layer actions are u8",
+                "layer {} is out of range; layer ids must be in 0..{}",
                 layer.layer,
                 u8::MAX
             ));
@@ -250,13 +250,13 @@ fn generate_keymap(input: &KeymapInput) -> Result<TokenStream2, String> {
             ));
         }
 
-        if let Some(ref name) = layer.name
-            && let Some(previous_layer) = layer_names.insert(name.clone(), layer.layer as u32)
-        {
-            return Err(format!(
-                "duplicate layer name '{}' found (layers {} and {})",
-                name, previous_layer, layer.layer
-            ));
+        if let Some(ref name) = layer.name {
+            if let Some(previous_layer) = layer_names.insert(name.clone(), layer.layer as u32) {
+                return Err(format!(
+                    "duplicate layer name '{}' found (layers {} and {})",
+                    name, previous_layer, layer.layer
+                ));
+            }
         }
     }
 
@@ -273,10 +273,6 @@ fn generate_keymap(input: &KeymapInput) -> Result<TokenStream2, String> {
     // Parse each layer and place in map by numeric ID.
     let mut layers_by_id = BTreeMap::new();
     for layer_def in &input.layers {
-        // Parse the key actions - keymap_parser handles:
-        // 1. Alias resolution
-        // 2. Layer name resolution
-        // 3. Key action parsing
         let key_actions = parse_layer_actions(
             layer_def.layer,
             &layer_def.layout,
@@ -286,7 +282,7 @@ fn generate_keymap(input: &KeymapInput) -> Result<TokenStream2, String> {
 
         if key_actions.len() != total_keys {
             return Err(format!(
-                "Layer {} has {} keys, but matrix_map defines {} positions",
+                "layer {} has {} keys, but matrix_map defines {} positions",
                 layer_def.layer,
                 key_actions.len(),
                 total_keys
@@ -303,19 +299,12 @@ fn generate_keymap(input: &KeymapInput) -> Result<TokenStream2, String> {
         layers_by_id.insert(layer_def.layer, key_actions);
     }
 
-    let layers_output: Vec<(usize, Vec<String>)> = layers_by_id.into_iter().collect();
-
-    // Generate the output
-    let layers_code = generate_layers_code(&layers_output, &matrix_coords)?;
-
-    Ok(quote! {
-        #layers_code
-    })
+    generate_layers_code(&layers_by_id, &matrix_coords)
 }
 
 /// Generate Rust code for all layers
 fn generate_layers_code(
-    layers: &[(usize, Vec<String>)],
+    layers: &BTreeMap<usize, Vec<String>>,
     matrix_coords: &[(u8, u8, char)],
 ) -> Result<TokenStream2, String> {
     // Calculate dimensions from matrix_coords
@@ -330,10 +319,8 @@ fn generate_layers_code(
 
         // Fill the grid with actual key actions according to matrix_map
         for (i, key) in keys.iter().enumerate() {
-            if i < matrix_coords.len() {
-                let (row, col, _hand) = matrix_coords[i];
-                grid[row as usize][col as usize] = key.clone();
-            }
+            let (row, col, _) = matrix_coords[i];
+            grid[row as usize][col as usize] = key.clone();
         }
 
         // Generate code for this layer
@@ -365,24 +352,18 @@ fn parse_layer_actions(
     layer_names: &HashMap<String, u32>,
 ) -> Result<Vec<String>, String> {
     use rmk_config::KeyboardTomlConfig;
-
-    let parsed = catch_unwind(AssertUnwindSafe(|| {
-        KeyboardTomlConfig::keymap_parser(layout, aliases, layer_names)
-    }));
-
-    match parsed {
-        Ok(result) => result.map_err(|e| format!("Layer {}: {}", layer_num, e)),
-        Err(payload) => Err(format!(
-            "Layer {}: keymap parser panicked: {}",
-            layer_num,
-            panic_payload_to_string(payload)
-        )),
-    }
+    KeyboardTomlConfig::keymap_parser(layout, aliases, layer_names)
+        .map_err(|e| format!("layer {}: {}", layer_num, e))
 }
 
 fn parse_key_action(layer_num: usize, row: usize, col: usize, key: &str) -> Result<TokenStream2, String> {
     use super::action_parser::parse_key;
 
+    // TODO: Add morse profile support for 3-argument LT/MT/TH in keymap! macro.
+    // Currently morse profiles are only available via keyboard.toml.
+
+    // TODO: Once `parse_key` returns `Result` instead of panicking,
+    // remove this `catch_unwind` wrapper.
     let parsed = catch_unwind(AssertUnwindSafe(|| parse_key(key.to_string(), &None)));
     match parsed {
         Ok(tokens) => Ok(tokens),
@@ -398,17 +379,20 @@ fn parse_key_action(layer_num: usize, row: usize, col: usize, key: &str) -> Resu
 }
 
 fn validate_unique_matrix_coords(matrix_coords: &[(u8, u8, char)]) -> Result<(), String> {
+    use std::collections::hash_map::Entry;
     let mut first_seen: HashMap<(u8, u8), usize> = HashMap::new();
 
-    for (idx, (row, col, _hand)) in matrix_coords.iter().enumerate() {
-        let coord = (*row, *col);
-        if let Some(first_idx) = first_seen.get(&coord).copied() {
-            return Err(format!(
-                "matrix_map coordinate ({},{}) is duplicated at positions {} and {}",
-                row, col, first_idx, idx
-            ));
-        } else {
-            first_seen.insert(coord, idx);
+    for (idx, (row, col, _)) in matrix_coords.iter().enumerate() {
+        match first_seen.entry((*row, *col)) {
+            Entry::Occupied(e) => {
+                return Err(format!(
+                    "matrix_map coordinate ({},{}) is duplicated at positions {} and {}",
+                    row, col, e.get(), idx
+                ));
+            }
+            Entry::Vacant(e) => {
+                e.insert(idx);
+            }
         }
     }
 
@@ -421,37 +405,44 @@ fn validate_layer_references(
     matrix_coords: &[(u8, u8, char)],
     layers: &[LayerDef],
 ) -> Result<(), String> {
-    let max_layer = layers.iter().map(|layer| layer.layer).max().unwrap_or(0);
-    let layer_count = max_layer + 1;
+    let layer_count = layers.len();
 
     for (idx, action) in key_actions.iter().enumerate() {
-        if let Some(referenced_layer) = parse_referenced_layer(action)?
-            && referenced_layer >= layer_count
-        {
-            let position = matrix_coords
-                .get(idx)
-                .map(|(row, col, _)| format!("row {}, col {}", row, col))
-                .unwrap_or_else(|| format!("key index {}", idx));
-            return Err(format!(
-                "layer reference {} in action '{}' at layer {} ({}) is out of range; valid layer range is 0..{}",
-                referenced_layer,
-                action,
-                current_layer,
-                position,
-                layer_count - 1
-            ));
+        if let Some(referenced_layer) = parse_referenced_layer(action)? {
+            if referenced_layer >= layer_count {
+                let position = matrix_coords
+                    .get(idx)
+                    .map(|(row, col, _)| format!("row {}, col {}", row, col))
+                    .unwrap_or_else(|| format!("key index {}", idx));
+                return Err(format!(
+                    "layer reference {} in action '{}' at layer {} ({}) is out of range; valid layer range is 0..{}",
+                    referenced_layer,
+                    action,
+                    current_layer,
+                    position,
+                    layer_count - 1
+                ));
+            }
         }
     }
 
     Ok(())
 }
 
+/// Extract the layer number from a layer-switching action string (e.g. `MO(3)`, `LT(1, A)`).
+///
+/// Assumes action arguments do not contain nested parentheses, which holds for the
+/// current RMK action grammar.
+///
+/// NOTE: The `prefixes` list below must stay in sync with the layer-action rules
+/// in `rmk-config`'s Pest grammar (e.g. `mo_action`, `to_action`, etc.) and the
+/// corresponding match arms in `KeyboardTomlConfig::keymap_parser`.
+/// `MT` and `TH` are intentionally excluded — they take keycodes, not layer numbers.
 fn parse_referenced_layer(action: &str) -> Result<Option<usize>, String> {
     let lower = action.to_ascii_lowercase();
     let prefixes = ["mo(", "to(", "tg(", "tt(", "df(", "osl(", "lm(", "lt("];
 
-    let is_layer_action = prefixes.iter().any(|prefix| lower.starts_with(prefix));
-    if !is_layer_action {
+    if !prefixes.iter().any(|prefix| lower.starts_with(prefix)) {
         return Ok(None);
     }
 

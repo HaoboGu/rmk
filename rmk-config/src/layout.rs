@@ -241,7 +241,7 @@ impl KeyboardTomlConfig {
         }
     }
 
-    pub fn alias_resolver(keys: &str, aliases: &HashMap<String, String>) -> Result<String, String> {
+    fn alias_resolver(keys: &str, aliases: &HashMap<String, String>) -> Result<String, String> {
         let mut current_keys = keys.to_string();
 
         let mut iterations = 0;

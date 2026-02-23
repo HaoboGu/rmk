@@ -2,6 +2,10 @@
 //!
 //! Provides minimal types and traits that mirror the real rmk crate
 //! for testing macro expansions without needing embassy or hardware dependencies.
+//!
+//! **Important**: This mock must stay in sync with the real rmk crate's public
+//! macro and type interface. When adding or changing macros/types in rmk,
+//! update this file accordingly.
 
 #![no_std]
 #![allow(dead_code)]
