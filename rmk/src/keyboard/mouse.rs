@@ -1,4 +1,7 @@
 use crate::config::MouseKeyConfig;
+use crate::event::KeyboardEventPos;
+use embassy_time::Instant;
+use heapless::Vec as HVec;
 use rmk_types::keycode::HidKeyCode;
 use usbd_hid::descriptor::MouseReport;
 
@@ -19,6 +22,18 @@ pub(crate) enum MouseKeyCategory {
     Wheel,
 }
 
+/// Pending mouse auto-repeat, checked by the main event loop.
+pub(crate) struct MouseRepeatState {
+    /// The HID key code to repeat
+    pub key: HidKeyCode,
+    /// Physical key position that owns this repeat
+    pub pos: KeyboardEventPos,
+    /// Movement or Wheel
+    pub category: MouseKeyCategory,
+    /// When to fire the next repeat
+    pub deadline: Instant,
+}
+
 /// Fixed speed overrides when MouseAccel keys are held.
 const ACCEL0_MOVE_SPEED: u16 = 4;
 const ACCEL1_MOVE_SPEED: u16 = 12;
@@ -32,6 +47,8 @@ pub(crate) struct MouseState {
     pub accel: u8,
     pub repeat: u8,
     pub wheel_repeat: u8,
+    /// Currently held direction keys with their physical positions.
+    held_directions: HVec<(HidKeyCode, KeyboardEventPos), 8>,
 }
 
 impl Default for MouseState {
@@ -53,11 +70,16 @@ impl MouseState {
             accel: 0,
             repeat: 0,
             wheel_repeat: 0,
+            held_directions: HVec::new(),
         }
     }
 
     /// Process a mouse key press. Returns what action the caller should take.
-    pub fn process_press(&mut self, key: HidKeyCode, config: &MouseKeyConfig) -> MouseAction {
+    pub fn process_press(&mut self, key: HidKeyCode, pos: KeyboardEventPos, config: &MouseKeyConfig) -> MouseAction {
+        // Track direction keys by position (deduplicate for repeat ticks)
+        if Self::is_direction_key(key) && !self.held_directions.iter().any(|e| e.0 == key && e.1 == pos) {
+            let _ = self.held_directions.push((key, pos));
+        }
         match key {
             HidKeyCode::MouseUp => {
                 if self.report.y > 0 { self.repeat = 0; }
@@ -121,16 +143,110 @@ impl MouseState {
     }
 
     /// Process a mouse key release. Returns what action the caller should take.
-    pub fn process_release(&mut self, key: HidKeyCode) -> MouseAction {
+    pub fn process_release(&mut self, key: HidKeyCode, pos: KeyboardEventPos, config: &MouseKeyConfig) -> MouseAction {
+        // Remove this specific (key, pos) from held set
+        if Self::is_direction_key(key) {
+            if let Some(idx) = self.held_directions.iter().position(|e| e.0 == key && e.1 == pos) {
+                self.held_directions.swap_remove(idx);
+            }
+        }
         match key {
-            HidKeyCode::MouseUp    => { if self.report.y < 0 { self.report.y = 0; } }
-            HidKeyCode::MouseDown  => { if self.report.y > 0 { self.report.y = 0; } }
-            HidKeyCode::MouseLeft  => { if self.report.x < 0 { self.report.x = 0; } }
-            HidKeyCode::MouseRight => { if self.report.x > 0 { self.report.x = 0; } }
-            HidKeyCode::MouseWheelUp   => { if self.report.wheel > 0 { self.report.wheel = 0; } }
-            HidKeyCode::MouseWheelDown => { if self.report.wheel < 0 { self.report.wheel = 0; } }
-            HidKeyCode::MouseWheelLeft => { if self.report.pan < 0 { self.report.pan = 0; } }
-            HidKeyCode::MouseWheelRight => { if self.report.pan > 0 { self.report.pan = 0; } }
+            HidKeyCode::MouseUp => {
+                if self.report.y < 0 {
+                    if self.is_direction_held(HidKeyCode::MouseUp) {
+                        // Same direction still held from another position — keep value
+                    } else if self.is_direction_held(HidKeyCode::MouseDown) {
+                        let unit = self.calculate_move_unit(config);
+                        self.report.y = unit;
+                    } else {
+                        self.report.y = 0;
+                    }
+                }
+            }
+            HidKeyCode::MouseDown => {
+                if self.report.y > 0 {
+                    if self.is_direction_held(HidKeyCode::MouseDown) {
+                        // Same direction still held
+                    } else if self.is_direction_held(HidKeyCode::MouseUp) {
+                        let unit = self.calculate_move_unit(config);
+                        self.report.y = -unit;
+                    } else {
+                        self.report.y = 0;
+                    }
+                }
+            }
+            HidKeyCode::MouseLeft => {
+                if self.report.x < 0 {
+                    if self.is_direction_held(HidKeyCode::MouseLeft) {
+                        // Same direction still held
+                    } else if self.is_direction_held(HidKeyCode::MouseRight) {
+                        let unit = self.calculate_move_unit(config);
+                        self.report.x = unit;
+                    } else {
+                        self.report.x = 0;
+                    }
+                }
+            }
+            HidKeyCode::MouseRight => {
+                if self.report.x > 0 {
+                    if self.is_direction_held(HidKeyCode::MouseRight) {
+                        // Same direction still held
+                    } else if self.is_direction_held(HidKeyCode::MouseLeft) {
+                        let unit = self.calculate_move_unit(config);
+                        self.report.x = -unit;
+                    } else {
+                        self.report.x = 0;
+                    }
+                }
+            }
+            HidKeyCode::MouseWheelUp => {
+                if self.report.wheel > 0 {
+                    if self.is_direction_held(HidKeyCode::MouseWheelUp) {
+                        // Same direction still held
+                    } else if self.is_direction_held(HidKeyCode::MouseWheelDown) {
+                        let unit = self.calculate_wheel_unit(config);
+                        self.report.wheel = -unit;
+                    } else {
+                        self.report.wheel = 0;
+                    }
+                }
+            }
+            HidKeyCode::MouseWheelDown => {
+                if self.report.wheel < 0 {
+                    if self.is_direction_held(HidKeyCode::MouseWheelDown) {
+                        // Same direction still held
+                    } else if self.is_direction_held(HidKeyCode::MouseWheelUp) {
+                        let unit = self.calculate_wheel_unit(config);
+                        self.report.wheel = unit;
+                    } else {
+                        self.report.wheel = 0;
+                    }
+                }
+            }
+            HidKeyCode::MouseWheelLeft => {
+                if self.report.pan < 0 {
+                    if self.is_direction_held(HidKeyCode::MouseWheelLeft) {
+                        // Same direction still held
+                    } else if self.is_direction_held(HidKeyCode::MouseWheelRight) {
+                        let unit = self.calculate_wheel_unit(config);
+                        self.report.pan = unit;
+                    } else {
+                        self.report.pan = 0;
+                    }
+                }
+            }
+            HidKeyCode::MouseWheelRight => {
+                if self.report.pan > 0 {
+                    if self.is_direction_held(HidKeyCode::MouseWheelRight) {
+                        // Same direction still held
+                    } else if self.is_direction_held(HidKeyCode::MouseWheelLeft) {
+                        let unit = self.calculate_wheel_unit(config);
+                        self.report.pan = -unit;
+                    } else {
+                        self.report.pan = 0;
+                    }
+                }
+            }
             HidKeyCode::MouseAccel0 => { self.accel &= !(1 << 0); }
             HidKeyCode::MouseAccel1 => { self.accel &= !(1 << 1); }
             HidKeyCode::MouseAccel2 => { self.accel &= !(1 << 2); }
@@ -172,6 +288,38 @@ impl MouseState {
             MouseKeyCategory::Movement => config.get_movement_delay(self.repeat),
             MouseKeyCategory::Wheel => config.get_wheel_delay(self.wheel_repeat),
         }
+    }
+
+    /// Find a still-held movement key and its physical position.
+    pub fn active_movement_key(&self) -> Option<(HidKeyCode, KeyboardEventPos)> {
+        self.held_directions.iter()
+            .find(|(k, _)| matches!(k,
+                HidKeyCode::MouseRight | HidKeyCode::MouseLeft |
+                HidKeyCode::MouseUp | HidKeyCode::MouseDown))
+            .copied()
+    }
+
+    /// Find a still-held wheel key and its physical position.
+    pub fn active_wheel_key(&self) -> Option<(HidKeyCode, KeyboardEventPos)> {
+        self.held_directions.iter()
+            .find(|(k, _)| matches!(k,
+                HidKeyCode::MouseWheelUp | HidKeyCode::MouseWheelDown |
+                HidKeyCode::MouseWheelLeft | HidKeyCode::MouseWheelRight))
+            .copied()
+    }
+
+    /// Check whether any instance of the given direction key is still held.
+    fn is_direction_held(&self, key: HidKeyCode) -> bool {
+        self.held_directions.iter().any(|(k, _)| *k == key)
+    }
+
+    /// Whether the key is a direction (movement or wheel) key.
+    fn is_direction_key(key: HidKeyCode) -> bool {
+        matches!(key,
+            HidKeyCode::MouseUp | HidKeyCode::MouseDown |
+            HidKeyCode::MouseLeft | HidKeyCode::MouseRight |
+            HidKeyCode::MouseWheelUp | HidKeyCode::MouseWheelDown |
+            HidKeyCode::MouseWheelLeft | HidKeyCode::MouseWheelRight)
     }
 
     fn button_index(key: HidKeyCode) -> Option<u8> {
@@ -278,10 +426,18 @@ impl MouseState {
 mod test {
     use super::*;
     use crate::config::MouseKeyConfig;
+    use crate::event::KeyPos;
 
     fn default_config() -> MouseKeyConfig {
         MouseKeyConfig::default()
     }
+
+    /// Dummy position for tests. Use different (row, col) to simulate distinct physical keys.
+    fn pos(row: u8, col: u8) -> KeyboardEventPos {
+        KeyboardEventPos::Key(KeyPos { row, col })
+    }
+
+    const P0: KeyboardEventPos = KeyboardEventPos::Key(KeyPos { row: 0, col: 0 });
 
     // -- button_index ----------------------------------------------------
 
@@ -296,40 +452,32 @@ mod test {
 
     #[test]
     fn calculate_unit_initial_returns_delta() {
-        // repeat=0, no accel → should return delta
         let result = MouseState::calculate_unit(0, 0, 20, 12, 4, 6, 3, 50, 20);
         assert_eq!(result, 6);
     }
 
     #[test]
     fn calculate_unit_at_max_speed() {
-        // repeat >= time_to_max → delta * max_speed = 6 * 3 = 18
         let result = MouseState::calculate_unit(0, 50, 20, 12, 4, 6, 3, 50, 20);
         assert_eq!(result, 18);
     }
 
     #[test]
     fn calculate_unit_clamped_to_max() {
-        // delta * max_speed = 6 * 3 = 18, but max = 10 → clamped to 10
         let result = MouseState::calculate_unit(0, 50, 20, 12, 4, 6, 3, 50, 10);
         assert_eq!(result, 10);
     }
 
     #[test]
     fn calculate_unit_accel_overrides() {
-        // Accel0 (bit 0) → accel_slow
         assert_eq!(MouseState::calculate_unit(1, 0, 20, 12, 4, 6, 3, 50, 20), 4);
-        // Accel1 (bit 1) → accel_mid
         assert_eq!(MouseState::calculate_unit(2, 0, 20, 12, 4, 6, 3, 50, 20), 12);
-        // Accel2 (bit 2) → accel_fast
         assert_eq!(MouseState::calculate_unit(4, 0, 20, 12, 4, 6, 3, 50, 20), 20);
-        // Higher accel wins (bit 2 set along with bit 0)
         assert_eq!(MouseState::calculate_unit(5, 0, 20, 12, 4, 6, 3, 50, 20), 20);
     }
 
     #[test]
     fn calculate_unit_never_zero() {
-        // delta=0 would produce 0, but clamped to 1
         let result = MouseState::calculate_unit(0, 0, 20, 12, 4, 0, 1, 50, 20);
         assert_eq!(result, 1);
     }
@@ -339,7 +487,6 @@ mod test {
     #[test]
     fn diagonal_compensation_reduces_magnitude() {
         let (x, y) = MouseState::apply_diagonal_compensation(10, 10);
-        // 10 * 181/256 ≈ 7
         assert!(x < 10 && x > 0);
         assert!(y < 10 && y > 0);
         assert_eq!(x, y);
@@ -354,7 +501,6 @@ mod test {
 
     #[test]
     fn diagonal_compensation_small_values_never_zero() {
-        // Value of 1 would compensate to 0, but the guard ensures ±1
         let (x, y) = MouseState::apply_diagonal_compensation(1, 1);
         assert_eq!(x, 1);
         assert_eq!(y, 1);
@@ -373,7 +519,7 @@ mod test {
     fn press_right_sets_positive_x() {
         let mut state = MouseState::new();
         let config = default_config();
-        let action = state.process_press(HidKeyCode::MouseRight, &config);
+        let action = state.process_press(HidKeyCode::MouseRight, P0, &config);
         assert!(state.report.x > 0);
         assert_eq!(action, MouseAction::SendAndRepeat(MouseKeyCategory::Movement));
     }
@@ -382,8 +528,8 @@ mod test {
     fn release_right_clears_x() {
         let mut state = MouseState::new();
         let config = default_config();
-        state.process_press(HidKeyCode::MouseRight, &config);
-        let action = state.process_release(HidKeyCode::MouseRight);
+        state.process_press(HidKeyCode::MouseRight, P0, &config);
+        let action = state.process_release(HidKeyCode::MouseRight, P0, &config);
         assert_eq!(state.report.x, 0);
         assert_eq!(action, MouseAction::SendReport);
     }
@@ -392,9 +538,9 @@ mod test {
     fn button_press_and_release() {
         let mut state = MouseState::new();
         let config = default_config();
-        state.process_press(HidKeyCode::MouseBtn1, &config);
+        state.process_press(HidKeyCode::MouseBtn1, P0, &config);
         assert_eq!(state.report.buttons, 1);
-        state.process_release(HidKeyCode::MouseBtn1);
+        state.process_release(HidKeyCode::MouseBtn1, P0, &config);
         assert_eq!(state.report.buttons, 0);
     }
 
@@ -402,7 +548,7 @@ mod test {
     fn accel_press_returns_none() {
         let mut state = MouseState::new();
         let config = default_config();
-        let action = state.process_press(HidKeyCode::MouseAccel0, &config);
+        let action = state.process_press(HidKeyCode::MouseAccel0, P0, &config);
         assert_eq!(action, MouseAction::None);
         assert_eq!(state.accel, 1);
     }
@@ -411,10 +557,9 @@ mod test {
     fn direction_change_resets_repeat() {
         let mut state = MouseState::new();
         let config = default_config();
-        state.process_press(HidKeyCode::MouseDown, &config);
+        state.process_press(HidKeyCode::MouseDown, P0, &config);
         state.repeat = 10;
-        // Pressing Up while Down is active should reset repeat
-        state.process_press(HidKeyCode::MouseUp, &config);
+        state.process_press(HidKeyCode::MouseUp, pos(0, 1), &config);
         assert_eq!(state.repeat, 0);
     }
 
@@ -422,9 +567,43 @@ mod test {
     fn release_resets_repeat_when_stopped() {
         let mut state = MouseState::new();
         let config = default_config();
-        state.process_press(HidKeyCode::MouseRight, &config);
+        state.process_press(HidKeyCode::MouseRight, P0, &config);
         state.repeat = 5;
-        state.process_release(HidKeyCode::MouseRight);
+        state.process_release(HidKeyCode::MouseRight, P0, &config);
         assert_eq!(state.repeat, 0);
+    }
+
+    // -- held-key tracking (P2 bug fixes) --------------------------------
+
+    #[test]
+    fn opposite_direction_release_reverts_axis() {
+        // Bug 2: hold Up, press Down, release Down → should revert to Up
+        let mut state = MouseState::new();
+        let config = default_config();
+        let pos_a = pos(0, 0);
+        let pos_b = pos(0, 1);
+        state.process_press(HidKeyCode::MouseUp, pos_a, &config);
+        assert!(state.report.y < 0);
+        state.process_press(HidKeyCode::MouseDown, pos_b, &config);
+        assert!(state.report.y > 0);
+        state.process_release(HidKeyCode::MouseDown, pos_b, &config);
+        // Should revert to negative (MouseUp still held)
+        assert!(state.report.y < 0, "y should be negative (MouseUp held), got {}", state.report.y);
+        assert!(state.active_movement_key().is_some());
+    }
+
+    #[test]
+    fn duplicate_binding_release_keeps_axis() {
+        // Bug 1: two physical keys mapped to MouseRight
+        let mut state = MouseState::new();
+        let config = default_config();
+        let pos_a = pos(0, 0);
+        let pos_b = pos(0, 1);
+        state.process_press(HidKeyCode::MouseRight, pos_a, &config);
+        state.process_press(HidKeyCode::MouseRight, pos_b, &config);
+        assert!(state.report.x > 0);
+        // Release one — axis should stay positive
+        state.process_release(HidKeyCode::MouseRight, pos_a, &config);
+        assert!(state.report.x > 0, "x should stay positive, got {}", state.report.x);
     }
 }
