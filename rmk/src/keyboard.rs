@@ -166,8 +166,17 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
                 self.process_buffered_key(key).await
             } else {
                 // If mouse repeat is pending, race subscriber against deadline
-                let event = if let Some(ref state) = self.mouse_repeat {
-                    match with_deadline(state.deadline, self.keyboard_event_subscriber.next_message_pure()).await {
+                let next_repeat_deadline = match (
+                    self.mouse_repeat_movement.as_ref(),
+                    self.mouse_repeat_wheel.as_ref(),
+                ) {
+                    (Some(m), Some(w)) => Some(if m.deadline <= w.deadline { m.deadline } else { w.deadline }),
+                    (Some(m), None) => Some(m.deadline),
+                    (None, Some(w)) => Some(w.deadline),
+                    (None, None) => None,
+                };
+                let event = if let Some(deadline) = next_repeat_deadline {
+                    match with_deadline(deadline, self.keyboard_event_subscriber.next_message_pure()).await {
                         Ok(event) => event,
                         Err(_) => {
                             // Repeat deadline expired, fire repeat
@@ -252,8 +261,11 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// Mouse state (report, acceleration, repeat counters)
     mouse: MouseState,
 
-    /// Pending mouse auto-repeat state, checked by the main event loop
-    mouse_repeat: Option<MouseRepeatState>,
+    /// Pending mouse auto-repeat state for movement keys, checked by the main event loop
+    mouse_repeat_movement: Option<MouseRepeatState>,
+
+    /// Pending mouse auto-repeat state for wheel keys, checked by the main event loop
+    mouse_repeat_wheel: Option<MouseRepeatState>,
 
     /// Internal media report buf
     media_report: MediaKeyboardReport,
@@ -289,7 +301,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             held_modifiers: ModifierCombination::default(),
             held_keycodes: [HidKeyCode::No; 6],
             mouse: MouseState::new(),
-            mouse_repeat: None,
+            mouse_repeat_movement: None,
+            mouse_repeat_wheel: None,
             media_report: MediaKeyboardReport { usage_id: 0 },
             system_control_report: SystemControlReport { usage_id: 0 },
             last_key_code: KeyCode::Hid(HidKeyCode::No),
@@ -1570,6 +1583,40 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
+    fn schedule_mouse_repeat(
+        &mut self,
+        category: MouseKeyCategory,
+        key: HidKeyCode,
+        pos: KeyboardEventPos,
+        delay_ms: u16,
+    ) {
+        let state = MouseRepeatState {
+            key,
+            pos,
+            deadline: Instant::now() + Duration::from_millis(delay_ms as u64),
+        };
+        match category {
+            MouseKeyCategory::Movement => {
+                self.mouse_repeat_movement = Some(state);
+            }
+            MouseKeyCategory::Wheel => {
+                self.mouse_repeat_wheel = Some(state);
+            }
+        }
+    }
+
+    fn cancel_mouse_repeat_if_pos(&mut self, pos: KeyboardEventPos) -> Option<MouseKeyCategory> {
+        if matches!(self.mouse_repeat_movement.as_ref(), Some(s) if s.pos == pos) {
+            self.mouse_repeat_movement = None;
+            return Some(MouseKeyCategory::Movement);
+        }
+        if matches!(self.mouse_repeat_wheel.as_ref(), Some(s) if s.pos == pos) {
+            self.mouse_repeat_wheel = None;
+            return Some(MouseKeyCategory::Wheel);
+        }
+        None
+    }
+
     /// Process mouse key action with acceleration support.
     async fn process_action_mouse(&mut self, key: HidKeyCode, event: KeyboardEvent) {
         let action = if event.pressed {
@@ -1577,55 +1624,25 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             self.mouse.process_press(key, event.pos, config)
         } else {
             // Cancel pending repeat if this is the key being repeated (match by position)
-            let cancelled_category = if let Some(ref state) = self.mouse_repeat {
-                if state.pos == event.pos {
-                    let cat = state.category;
-                    self.mouse_repeat = None;
-                    Some(cat)
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
+            let cancelled_category = self.cancel_mouse_repeat_if_pos(event.pos);
 
             let action = {
                 let config = &self.keymap.borrow().behavior.mouse_key;
                 self.mouse.process_release(key, event.pos, config)
             };
 
-            // Fallback: if another movement/wheel key is still held, schedule repeat for it.
-            // Check the cancelled category first, then the other category (handles
-            // cross-category switches, e.g. releasing wheel while movement is still held).
+            // Fallback: if another key in the same category is still held, schedule repeat for it.
             if let Some(category) = cancelled_category {
                 let fallback = match category {
                     MouseKeyCategory::Movement => self.mouse.active_movement_key(),
                     MouseKeyCategory::Wheel => self.mouse.active_wheel_key(),
                 };
-                let (fallback, cat) = if let Some(entry) = fallback {
-                    (Some(entry), category)
-                } else {
-                    let other = match category {
-                        MouseKeyCategory::Movement => MouseKeyCategory::Wheel,
-                        MouseKeyCategory::Wheel => MouseKeyCategory::Movement,
-                    };
-                    let other_key = match other {
-                        MouseKeyCategory::Movement => self.mouse.active_movement_key(),
-                        MouseKeyCategory::Wheel => self.mouse.active_wheel_key(),
-                    };
-                    (other_key, other)
-                };
                 if let Some((fb_key, fb_pos)) = fallback {
                     let delay = {
                         let config = &self.keymap.borrow().behavior.mouse_key;
-                        self.mouse.get_repeat_delay(cat, config)
+                        self.mouse.get_repeat_delay(category, config)
                     };
-                    self.mouse_repeat = Some(MouseRepeatState {
-                        key: fb_key,
-                        pos: fb_pos,
-                        category: cat,
-                        deadline: Instant::now() + Duration::from_millis(delay as u64),
-                    });
+                    self.schedule_mouse_repeat(category, fb_key, fb_pos, delay);
                 }
             }
 
@@ -1650,39 +1667,62 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 self.mouse.get_repeat_delay(category, config)
             };
             self.mouse.increment_repeat(category);
-            self.mouse_repeat = Some(MouseRepeatState {
-                key,
-                pos: event.pos,
-                category,
-                deadline: Instant::now() + Duration::from_millis(delay as u64),
-            });
+            self.schedule_mouse_repeat(category, key, event.pos, delay);
         }
     }
 
     /// Fire a pending mouse repeat: recalculate movement with acceleration,
     /// send the report, and schedule the next repeat.
     async fn fire_mouse_repeat(&mut self) {
-        if let Some(state) = self.mouse_repeat.take() {
-            // Recalculate movement with current acceleration curve
-            {
-                let config = &self.keymap.borrow().behavior.mouse_key;
-                self.mouse.process_press(state.key, state.pos, config);
-            }
-            self.keymap.borrow_mut().mouse_buttons = self.mouse.report.buttons;
-            self.send_mouse_report().await;
+        let now = Instant::now();
+        let movement_state = match self.mouse_repeat_movement.as_ref() {
+            Some(s) if s.deadline <= now => self.mouse_repeat_movement.take(),
+            _ => None,
+        };
+        let wheel_state = match self.mouse_repeat_wheel.as_ref() {
+            Some(s) if s.deadline <= now => self.mouse_repeat_wheel.take(),
+            _ => None,
+        };
 
-            // Schedule next repeat
+        if movement_state.is_none() && wheel_state.is_none() {
+            return;
+        }
+
+        // Recalculate movement with current acceleration curve
+        {
+            let config = &self.keymap.borrow().behavior.mouse_key;
+            if let Some(ref state) = movement_state {
+                let _ = self.mouse.process_press(state.key, state.pos, config);
+            }
+            if let Some(ref state) = wheel_state {
+                let _ = self.mouse.process_press(state.key, state.pos, config);
+            }
+        }
+        self.keymap.borrow_mut().mouse_buttons = self.mouse.report.buttons;
+
+        match (movement_state.is_some(), wheel_state.is_some()) {
+            (true, true) => self.send_mouse_report_masked(None).await,
+            (true, false) => self.send_mouse_report_masked(Some(MouseKeyCategory::Movement)).await,
+            (false, true) => self.send_mouse_report_masked(Some(MouseKeyCategory::Wheel)).await,
+            (false, false) => {}
+        }
+
+        // Schedule next repeats
+        if let Some(state) = movement_state {
             let delay = {
                 let config = &self.keymap.borrow().behavior.mouse_key;
-                self.mouse.get_repeat_delay(state.category, config)
+                self.mouse.get_repeat_delay(MouseKeyCategory::Movement, config)
             };
-            self.mouse.increment_repeat(state.category);
-            self.mouse_repeat = Some(MouseRepeatState {
-                key: state.key,
-                pos: state.pos,
-                category: state.category,
-                deadline: Instant::now() + Duration::from_millis(delay as u64),
-            });
+            self.mouse.increment_repeat(MouseKeyCategory::Movement);
+            self.schedule_mouse_repeat(MouseKeyCategory::Movement, state.key, state.pos, delay);
+        }
+        if let Some(state) = wheel_state {
+            let delay = {
+                let config = &self.keymap.borrow().behavior.mouse_key;
+                self.mouse.get_repeat_delay(MouseKeyCategory::Wheel, config)
+            };
+            self.mouse.increment_repeat(MouseKeyCategory::Wheel);
+            self.schedule_mouse_repeat(MouseKeyCategory::Wheel, state.key, state.pos, delay);
         }
     }
 
@@ -1853,7 +1893,25 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Send mouse report if needed
     pub(crate) async fn send_mouse_report(&mut self) {
         // Prevent mouse report flooding, set maximum mouse report rate to 50 HZ
-        self.send_report(Report::MouseReport(self.mouse.report)).await;
+        self.send_report(Report::MouseReport(self.mouse.compensated_report())).await;
+        yield_now().await;
+    }
+
+    async fn send_mouse_report_masked(&mut self, category: Option<MouseKeyCategory>) {
+        let mut report = self.mouse.compensated_report();
+        if let Some(category) = category {
+            match category {
+                MouseKeyCategory::Movement => {
+                    report.wheel = 0;
+                    report.pan = 0;
+                }
+                MouseKeyCategory::Wheel => {
+                    report.x = 0;
+                    report.y = 0;
+                }
+            }
+        }
+        self.send_report(Report::MouseReport(report)).await;
         yield_now().await;
     }
 

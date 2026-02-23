@@ -28,19 +28,10 @@ pub(crate) struct MouseRepeatState {
     pub key: HidKeyCode,
     /// Physical key position that owns this repeat
     pub pos: KeyboardEventPos,
-    /// Movement or Wheel
-    pub category: MouseKeyCategory,
     /// When to fire the next repeat
     pub deadline: Instant,
 }
 
-/// Fixed speed overrides when MouseAccel keys are held.
-const ACCEL0_MOVE_SPEED: u16 = 4;
-const ACCEL1_MOVE_SPEED: u16 = 12;
-const ACCEL2_MOVE_SPEED: u16 = 20;
-const ACCEL0_WHEEL_SPEED: u16 = 1;
-const ACCEL1_WHEEL_SPEED: u16 = 2;
-const ACCEL2_WHEEL_SPEED: u16 = 4;
 
 pub(crate) struct MouseState {
     pub report: MouseReport,
@@ -48,7 +39,7 @@ pub(crate) struct MouseState {
     pub repeat: u8,
     pub wheel_repeat: u8,
     /// Currently held direction keys with their physical positions.
-    held_directions: HVec<(HidKeyCode, KeyboardEventPos), 8>,
+    held_directions: HVec<(HidKeyCode, KeyboardEventPos), 12>,
 }
 
 impl Default for MouseState {
@@ -78,7 +69,9 @@ impl MouseState {
     pub fn process_press(&mut self, key: HidKeyCode, pos: KeyboardEventPos, config: &MouseKeyConfig) -> MouseAction {
         // Track direction keys by position (deduplicate for repeat ticks)
         if Self::is_direction_key(key) && !self.held_directions.iter().any(|e| e.0 == key && e.1 == pos) {
-            let _ = self.held_directions.push((key, pos));
+            if self.held_directions.push((key, pos)).is_err() {
+                warn!("Mouse held_directions overflow, dropping key");
+            }
         }
         match key {
             HidKeyCode::MouseUp => {
@@ -130,7 +123,6 @@ impl MouseState {
                 }
             }
         }
-        self.apply_diagonal_compensation_in_place();
         if matches!(key, HidKeyCode::MouseAccel0 | HidKeyCode::MouseAccel1 | HidKeyCode::MouseAccel2) {
             MouseAction::None
         } else if matches!(key, HidKeyCode::MouseUp | HidKeyCode::MouseDown | HidKeyCode::MouseLeft | HidKeyCode::MouseRight) {
@@ -263,7 +255,6 @@ impl MouseState {
         if self.report.wheel == 0 && self.report.pan == 0 {
             self.wheel_repeat = 0;
         }
-        self.apply_diagonal_compensation_in_place();
         match key {
             HidKeyCode::MouseAccel0 | HidKeyCode::MouseAccel1 | HidKeyCode::MouseAccel2 => MouseAction::None,
             _ => MouseAction::SendReport,
@@ -336,46 +327,47 @@ impl MouseState {
         }
     }
 
-    /// Apply diagonal compensation in-place on both movement and wheel axes.
-    fn apply_diagonal_compensation_in_place(&mut self) {
-        if self.report.x != 0 && self.report.y != 0 {
-            let (x, y) = Self::apply_diagonal_compensation(self.report.x, self.report.y);
-            self.report.x = x;
-            self.report.y = y;
+    /// Return a copy of the current report with diagonal compensation applied.
+    /// The internal `self.report` retains raw (uncompensated) axis values so that
+    /// repeated `process_press` calls do not shrink the non-repeated axis over time.
+    pub fn compensated_report(&self) -> MouseReport {
+        let mut r = self.report;
+        if r.x != 0 && r.y != 0 {
+            let (x, y) = Self::apply_diagonal_compensation(r.x, r.y);
+            r.x = x;
+            r.y = y;
         }
-        if self.report.wheel != 0 && self.report.pan != 0 {
-            let (w, p) = Self::apply_diagonal_compensation(self.report.wheel, self.report.pan);
-            self.report.wheel = w;
-            self.report.pan = p;
+        if r.wheel != 0 && r.pan != 0 {
+            let (w, p) = Self::apply_diagonal_compensation(r.wheel, r.pan);
+            r.wheel = w;
+            r.pan = p;
         }
+        r
     }
 
     fn calculate_unit(
         accel: u8,
         repeat: u8,
-        accel_fast: u16,
-        accel_mid: u16,
-        accel_slow: u16,
         delta: u8,
         max_speed: u8,
         time_to_max: u8,
         max: u8,
     ) -> i8 {
+        let max_unit = (delta as u16).saturating_mul(max_speed as u16);
         let unit: u16 = if accel & (1 << 2) != 0 {
-            accel_fast
+            max_unit
         } else if accel & (1 << 1) != 0 {
-            accel_mid
+            (delta as u16 + max_unit) / 2
         } else if accel & (1 << 0) != 0 {
-            accel_slow
+            delta as u16
         } else if repeat == 0 {
             delta as u16
         } else if repeat >= time_to_max {
-            (delta as u16).saturating_mul(max_speed as u16)
+            max_unit
         } else {
             let repeat_count = repeat as u16;
             let ttm = time_to_max as u16;
             let min_unit = delta as u16;
-            let max_unit = (delta as u16).saturating_mul(max_speed as u16);
             let unit_range = max_unit - min_unit;
             let linear_term = 2u16.saturating_mul(repeat_count).saturating_mul(ttm);
             let quadratic_term = repeat_count.saturating_mul(repeat_count);
@@ -391,14 +383,12 @@ impl MouseState {
     /// Calculate mouse movement distance based on current repeat count and acceleration settings
     fn calculate_move_unit(&self, config: &MouseKeyConfig) -> i8 {
         Self::calculate_unit(self.accel, self.repeat,
-            ACCEL2_MOVE_SPEED, ACCEL1_MOVE_SPEED, ACCEL0_MOVE_SPEED,
             config.move_delta, config.max_speed, config.time_to_max, config.move_max)
     }
 
     /// Calculate mouse wheel movement distance based on current repeat count and acceleration settings
     fn calculate_wheel_unit(&self, config: &MouseKeyConfig) -> i8 {
         Self::calculate_unit(self.accel, self.wheel_repeat,
-            ACCEL2_WHEEL_SPEED, ACCEL1_WHEEL_SPEED, ACCEL0_WHEEL_SPEED,
             config.wheel_delta, config.wheel_max_speed_multiplier, config.wheel_time_to_max, config.wheel_max)
     }
 
@@ -452,33 +442,41 @@ mod test {
 
     #[test]
     fn calculate_unit_initial_returns_delta() {
-        let result = MouseState::calculate_unit(0, 0, 20, 12, 4, 6, 3, 50, 20);
+        // accel=0, repeat=0, delta=6, max_speed=3, time_to_max=50, max=20
+        let result = MouseState::calculate_unit(0, 0, 6, 3, 50, 20);
         assert_eq!(result, 6);
     }
 
     #[test]
     fn calculate_unit_at_max_speed() {
-        let result = MouseState::calculate_unit(0, 50, 20, 12, 4, 6, 3, 50, 20);
+        // repeat >= time_to_max → delta * max_speed = 6 * 3 = 18
+        let result = MouseState::calculate_unit(0, 50, 6, 3, 50, 20);
         assert_eq!(result, 18);
     }
 
     #[test]
     fn calculate_unit_clamped_to_max() {
-        let result = MouseState::calculate_unit(0, 50, 20, 12, 4, 6, 3, 50, 10);
+        // delta * max_speed = 18, but max=10 → clamped to 10
+        let result = MouseState::calculate_unit(0, 50, 6, 3, 50, 10);
         assert_eq!(result, 10);
     }
 
     #[test]
     fn calculate_unit_accel_overrides() {
-        assert_eq!(MouseState::calculate_unit(1, 0, 20, 12, 4, 6, 3, 50, 20), 4);
-        assert_eq!(MouseState::calculate_unit(2, 0, 20, 12, 4, 6, 3, 50, 20), 12);
-        assert_eq!(MouseState::calculate_unit(4, 0, 20, 12, 4, 6, 3, 50, 20), 20);
-        assert_eq!(MouseState::calculate_unit(5, 0, 20, 12, 4, 6, 3, 50, 20), 20);
+        // accel0 (bit 0) → delta = 6
+        assert_eq!(MouseState::calculate_unit(1, 0, 6, 3, 50, 20), 6);
+        // accel1 (bit 1) → (delta + delta*max_speed) / 2 = (6 + 18) / 2 = 12
+        assert_eq!(MouseState::calculate_unit(2, 0, 6, 3, 50, 20), 12);
+        // accel2 (bit 2) → delta * max_speed = 18
+        assert_eq!(MouseState::calculate_unit(4, 0, 6, 3, 50, 20), 18);
+        // accel0+accel2 (bits 0+2) → highest wins → 18
+        assert_eq!(MouseState::calculate_unit(5, 0, 6, 3, 50, 20), 18);
     }
 
     #[test]
     fn calculate_unit_never_zero() {
-        let result = MouseState::calculate_unit(0, 0, 20, 12, 4, 0, 1, 50, 20);
+        // delta=0 → would be 0, but clamped to 1
+        let result = MouseState::calculate_unit(0, 0, 0, 1, 50, 20);
         assert_eq!(result, 1);
     }
 
@@ -605,5 +603,61 @@ mod test {
         // Release one — axis should stay positive
         state.process_release(HidKeyCode::MouseRight, pos_a, &config);
         assert!(state.report.x > 0, "x should stay positive, got {}", state.report.x);
+    }
+
+    // -- diagonal repeat drift regression (P1 fix) -----------------------
+
+    #[test]
+    fn diagonal_repeat_does_not_drift() {
+        let mut state = MouseState::new();
+        let config = default_config();
+        let pos_right = pos(0, 0);
+        let pos_down = pos(0, 1);
+
+        // Hold Right + Down (diagonal)
+        state.process_press(HidKeyCode::MouseRight, pos_right, &config);
+        state.process_press(HidKeyCode::MouseDown, pos_down, &config);
+        let initial_x = state.report.x;
+        let initial_y = state.report.y;
+        assert!(initial_x > 0);
+        assert!(initial_y > 0);
+
+        // Simulate 10 repeat ticks of MouseRight (as fire_mouse_repeat does)
+        for _ in 0..10 {
+            state.process_press(HidKeyCode::MouseRight, pos_right, &config);
+            // y must not drift — raw value should stay exactly the same
+            assert_eq!(state.report.y, initial_y,
+                "y drifted after Right repeat: expected {}, got {}", initial_y, state.report.y);
+        }
+
+        // Verify compensated_report still applies diagonal reduction
+        let comp = state.compensated_report();
+        assert!(comp.x < state.report.x, "compensation should reduce diagonal x");
+        assert!(comp.y < state.report.y, "compensation should reduce diagonal y");
+    }
+
+    #[test]
+    fn compensated_report_single_axis_unchanged() {
+        let mut state = MouseState::new();
+        let config = default_config();
+        state.process_press(HidKeyCode::MouseRight, P0, &config);
+        // Single axis: compensated report should equal raw report
+        let comp = state.compensated_report();
+        assert_eq!(comp.x, state.report.x);
+        assert_eq!(comp.y, 0);
+    }
+
+    #[test]
+    fn same_category_fallback_after_release() {
+        let mut state = MouseState::new();
+        let config = default_config();
+        state.process_press(HidKeyCode::MouseRight, pos(0, 0), &config);
+        state.process_press(HidKeyCode::MouseDown, pos(0, 1), &config);
+        state.process_release(HidKeyCode::MouseDown, pos(0, 1), &config);
+        assert_eq!(
+            state.active_movement_key(),
+            Some((HidKeyCode::MouseRight, pos(0, 0)))
+        );
+        assert_eq!(state.active_wheel_key(), None);
     }
 }
