@@ -33,7 +33,7 @@ enum Direction {
 enum MouseCategory {
     /// Mouse movement
     Movement(Direction),
-    /// Mouse
+    /// Mouse wheel movement
     Wheel(Direction),
     /// Accel bit
     Accel(u8),
@@ -174,10 +174,12 @@ impl MouseState {
         if let Ok(category) = MouseCategory::try_from(key) {
             match category {
                 MouseCategory::Movement(direction) => {
+                    // delay is only consumed on new-activation (false→true) inside update()
                     let delay = config.get_movement_delay(self.movement.repeat);
                     self.movement.update(direction, pressed, delay);
                 }
                 MouseCategory::Wheel(direction) => {
+                    // delay is only consumed on new-activation (false→true) inside update()
                     let delay = config.get_wheel_delay(self.wheel.repeat);
                     self.wheel.update(direction, pressed, delay);
                 }
@@ -202,7 +204,7 @@ impl MouseState {
             let old_report = self.report;
             self.recalculate_report(config);
 
-            if Self::report_changed(&old_report, &self.report) {
+            if old_report != self.report {
                 MouseAction::SendReport
             } else {
                 MouseAction::None
@@ -243,10 +245,8 @@ impl MouseState {
     /// actually fired, or `None` if nothing fired.
     pub fn fire_repeats(&mut self, config: &MouseKeyConfig) -> Option<MouseReport> {
         let now = Instant::now();
-        let fire_movement =
-            self.movement.deadline.is_some_and(|d| now >= d) && self.movement.has_active_direction();
-        let fire_wheel =
-            self.wheel.deadline.is_some_and(|d| now >= d) && self.wheel.has_active_direction();
+        let fire_movement = self.movement.deadline.is_some_and(|d| now >= d) && self.movement.has_active_direction();
+        let fire_wheel = self.wheel.deadline.is_some_and(|d| now >= d) && self.wheel.has_active_direction();
 
         if fire_movement {
             let delay = config.get_movement_delay(self.movement.repeat);
@@ -283,11 +283,6 @@ impl MouseState {
             (None, Some(w)) => Some(w),
             (None, None) => None,
         }
-    }
-
-    /// Check if report axes/buttons changed.
-    fn report_changed(old: &MouseReport, new: &MouseReport) -> bool {
-        old.x != new.x || old.y != new.y || old.wheel != new.wheel || old.pan != new.pan || old.buttons != new.buttons
     }
 
     /// Return a copy of the current report with diagonal compensation applied.
@@ -1011,5 +1006,25 @@ mod test {
         assert!(raw.wheel != 0 && raw.pan != 0);
         assert!(compensated.wheel.abs() < raw.wheel.abs());
         assert!(compensated.pan.abs() < raw.pan.abs());
+    }
+
+    // -- N. Wheel sign convention tests ----------------------------------------
+
+    #[test]
+    fn wheel_up_sets_negative_wheel() {
+        let mut state = MouseState::new();
+        let config = default_config();
+        state.process(HidKeyCode::MouseWheelUp, true, &config);
+        assert!(state.report.wheel < 0, "WheelUp should produce negative wheel");
+        assert_eq!(state.report.pan, 0);
+    }
+
+    #[test]
+    fn wheel_right_sets_positive_pan() {
+        let mut state = MouseState::new();
+        let config = default_config();
+        state.process(HidKeyCode::MouseWheelRight, true, &config);
+        assert!(state.report.pan > 0, "WheelRight should produce positive pan");
+        assert_eq!(state.report.wheel, 0);
     }
 }
