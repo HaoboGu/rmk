@@ -14,6 +14,7 @@ pub(crate) fn expand_adc_device(
         ChipSeries::Nrf52 => {
             let mut channel_cfg = vec![];
             let mut adc_type = vec![];
+            let mut event_device_ids: Vec<u8> = vec![];
             let mut default_polling_interval = 30000u16; // default 30s
             let mut light_sleep: Option<u16> = None;
             // TODO: deep sleep
@@ -39,6 +40,8 @@ pub(crate) fn expand_adc_device(
                 adc_type.push(quote! {
                     ::rmk::input_device::adc::AnalogEventType::Battery
                 });
+                // Battery event slot: device_id unused, fill with 0
+                event_device_ids.push(0u8);
 
                 let (adc_divider_measured, adc_divider_total) = if adc_pin == "vddh" {
                     (1, 5)
@@ -64,7 +67,11 @@ pub(crate) fn expand_adc_device(
                 light_sleep = Some(350);
             }
 
-            for joystick in joystick_config {
+            for (joy_idx, joystick) in joystick_config.into_iter().enumerate() {
+                // Assign device id: use configured id or fall back to sequential index
+                let device_id: u8 = joystick.id.unwrap_or(joy_idx as u8);
+                event_device_ids.push(device_id);
+
                 let mut cnt = 0u8;
                 for pin in [joystick.pin_x, joystick.pin_y, joystick.pin_z].iter() {
                     if pin == "_" {
@@ -89,7 +96,7 @@ pub(crate) fn expand_adc_device(
                 } = joystick;
                 let joystick_processor = Initializer {
                     initializer: quote! {
-                        let mut #joy_ident = rmk::input_device::joystick::JoystickProcessor::new([#([#(#transform),*]),*], [#(#bias),*], #resolution, &keymap);
+                        let mut #joy_ident = rmk::input_device::joystick::JoystickProcessor::new(#device_id, [#([#(#transform),*]),*], [#(#bias),*], #resolution, &keymap);
                     },
                     var_name: joy_ident,
                 };
@@ -119,6 +126,7 @@ pub(crate) fn expand_adc_device(
                         rmk::input_device::adc::NrfAdc::new(
                                 adc,
                                 [#(#adc_type),*],
+                                [#(#event_device_ids),*],
                                 Duration::from_millis(#default_polling_interval as u64),
                                 #light_sleep_option,
                             )

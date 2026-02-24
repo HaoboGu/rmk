@@ -150,23 +150,26 @@ impl<S: PointingDriver> PointingDevice<S> {
         self.accumulated_x = 0;
         self.accumulated_y = 0;
 
-        Some(PointingEvent([
-            AxisEvent {
-                typ: AxisValType::Rel,
-                axis: Axis::X,
-                value: dx,
-            },
-            AxisEvent {
-                typ: AxisValType::Rel,
-                axis: Axis::Y,
-                value: dy,
-            },
-            AxisEvent {
-                typ: AxisValType::Rel,
-                axis: Axis::Z,
-                value: 0,
-            },
-        ]))
+        Some(PointingEvent {
+            device_id: self.id,
+            axes: [
+                AxisEvent {
+                    typ: AxisValType::Rel,
+                    axis: Axis::X,
+                    value: dx,
+                },
+                AxisEvent {
+                    typ: AxisValType::Rel,
+                    axis: Axis::Y,
+                    value: dy,
+                },
+                AxisEvent {
+                    typ: AxisValType::Rel,
+                    axis: Axis::Z,
+                    value: 0,
+                },
+            ],
+        })
     }
 }
 
@@ -255,10 +258,14 @@ pub enum PointingMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ScrollConfig {
-    /// Divisor for X axis (pan). Higher = slower scrolling. 0 disables this axis.
+    /// Divisor for X axis (→ pan). Higher = slower. 0 disables horizontal pan.
     pub divisor_x: u8,
-    /// Divisor for Y axis (wheel). Higher = slower scrolling. 0 disables this axis.
+    /// Divisor for Y axis (→ wheel). Higher = slower. 0 disables vertical scroll.
     pub divisor_y: u8,
+    /// Invert X axis. In scroll mode X maps to pan, so this reverses pan direction.
+    pub invert_x: bool,
+    /// Invert Y axis. In scroll mode Y maps to wheel, so this reverses scroll direction.
+    pub invert_y: bool,
 }
 
 impl Default for ScrollConfig {
@@ -266,6 +273,8 @@ impl Default for ScrollConfig {
         Self {
             divisor_x: 8,
             divisor_y: 8,
+            invert_x: false,
+            invert_y: false,
         }
     }
 }
@@ -276,11 +285,19 @@ impl Default for ScrollConfig {
 pub struct SniperConfig {
     /// Divisor for both axes. Higher = slower movement. 0 disables output.
     pub divisor: u8,
+    /// Invert X axis movement.
+    pub invert_x: bool,
+    /// Invert Y axis movement.
+    pub invert_y: bool,
 }
 
 impl Default for SniperConfig {
     fn default() -> Self {
-        Self { divisor: 4 }
+        Self {
+            divisor: 4,
+            invert_x: false,
+            invert_y: false,
+        }
     }
 }
 
@@ -331,14 +348,28 @@ impl MotionAccumulator {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct PointingProcessorConfig {
-    /// Invert X axis
+    /// The id of the PointingDevice this processor handles.
+    /// Use ALL_POINTING_DEVICES (255) to process events from all devices.
+    pub device_id: u8,
+    /// Invert X axis (applied to all modes before mode-specific processing)
     pub invert_x: bool,
-    /// Invert Y axis
+    /// Invert Y axis (applied to all modes before mode-specific processing)
     pub invert_y: bool,
-    /// Swap X and Y axes
+    /// Swap X and Y axes (applied to all modes before mode-specific processing)
     pub swap_xy: bool,
+}
+
+impl Default for PointingProcessorConfig {
+    fn default() -> Self {
+        Self {
+            device_id: ALL_POINTING_DEVICES,
+            invert_x: false,
+            invert_y: false,
+            swap_xy: false,
+        }
+    }
 }
 
 /// PointingProcessor that converts motion events to mouse reports.
@@ -381,7 +412,7 @@ pub struct PointingProcessorConfig {
 pub struct PointingProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
     /// Reference to the keymap (used for mouse_buttons)
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
-    /// Base configuration (invert/swap axes)
+    /// Configuration (device filter, global invert/swap)
     config: PointingProcessorConfig,
     /// Per-layer pointing mode
     layer_modes: [PointingMode; NUM_LAYER],
@@ -423,10 +454,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     async fn on_pointing_event(&mut self, event: PointingEvent) {
+        // Filter: only process events from the configured device
+        if self.config.device_id != ALL_POINTING_DEVICES && event.device_id != self.config.device_id {
+            return;
+        }
+
         let mut x = 0i16;
         let mut y = 0i16;
 
-        for axis_event in event.0.iter() {
+        for axis_event in event.axes.iter() {
             match axis_event.axis {
                 Axis::X => x = axis_event.value,
                 Axis::Y => y = axis_event.value,
@@ -434,7 +470,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
-        // Apply base config transforms
+        // Apply global config transforms (before mode-specific processing).
+        // Order: invert → swap → mode invert.
+        // Mode-specific invert_x/y operate on the post-swap logical axes,
+        // so if swap_xy is enabled, ScrollConfig::invert_y affects the physical X axis.
         if self.config.invert_x {
             x = -x;
         }
@@ -469,12 +508,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if sx == 0 && sy == 0 {
                     return;
                 }
+                // Sensor X → pan, sensor Y → wheel.
+                // Default: sensor +Y produces negative wheel (scroll up in HID convention).
+                // invert_y reverses wheel direction; invert_x reverses pan direction.
+                let wheel = if scroll_config.invert_y { sy } else { -sy };
+                let pan = if scroll_config.invert_x { -sx } else { sx };
                 MouseReport {
                     buttons,
                     x: 0,
                     y: 0,
-                    wheel: (-sy).clamp(i8::MIN as i16, i8::MAX as i16) as i8,
-                    pan: sx.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                    wheel: wheel.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                    pan: pan.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
                 }
             }
             PointingMode::Sniper(sniper_config) => {
@@ -484,10 +528,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if sx == 0 && sy == 0 {
                     return;
                 }
+                let out_x = if sniper_config.invert_x { -sx } else { sx };
+                let out_y = if sniper_config.invert_y { -sy } else { sy };
                 MouseReport {
                     buttons,
-                    x: sx.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
-                    y: sy.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                    x: out_x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                    y: out_y.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
                     wheel: 0,
                     pan: 0,
                 }
@@ -754,7 +800,7 @@ mod tests {
 
         let event = block_on(device.read_event());
 
-        let axes = &event.0;
+        let axes = &event.axes;
         assert_eq!(axes[0].value, 3);
         assert_eq!(axes[1].value, -2);
 
@@ -791,7 +837,7 @@ mod tests {
         let event = block_on(device.read_event());
         let duration = start.elapsed();
 
-        let axes = &event.0;
+        let axes = &event.axes;
         assert_eq!(axes[0].value, 10);
         assert_eq!(axes[1].value, -5);
         // poll intervall is 10000 here, so if read_event took less than that, motion pin wait worked and we did not get the report form polling
@@ -858,16 +904,16 @@ mod tests {
 
         // One axis disabled, the other active
         let (ox, oy) = acc.accumulate(10, 10, 0, 2);
-        assert_eq!(ox, 0);  // X disabled
-        assert_eq!(oy, 5);  // 10/2 = 5
+        assert_eq!(ox, 0); // X disabled
+        assert_eq!(oy, 5); // 10/2 = 5
 
         // Remainder should not accumulate on disabled axis
         acc.reset();
         acc.accumulate(3, 3, 0, 8);
         acc.accumulate(3, 3, 0, 8);
         let (ox, oy) = acc.accumulate(3, 3, 0, 8);
-        assert_eq!(ox, 0);  // X always 0
-        assert_eq!(oy, 1);  // (3+3+3)/8 = 1 remainder 1
+        assert_eq!(ox, 0); // X always 0
+        assert_eq!(oy, 1); // (3+3+3)/8 = 1 remainder 1
     }
 
     #[test]
@@ -905,10 +951,19 @@ mod tests {
             scroll,
             PointingMode::Scroll(ScrollConfig {
                 divisor_x: 8,
-                divisor_y: 8
+                divisor_y: 8,
+                invert_x: false,
+                invert_y: false,
             })
         );
-        assert_eq!(sniper, PointingMode::Sniper(SniperConfig { divisor: 4 }));
+        assert_eq!(
+            sniper,
+            PointingMode::Sniper(SniperConfig {
+                divisor: 4,
+                invert_x: false,
+                invert_y: false,
+            })
+        );
     }
 
     #[test]
@@ -932,7 +987,11 @@ mod tests {
         let modes = [
             PointingMode::Cursor,
             PointingMode::Scroll(ScrollConfig::default()),
-            PointingMode::Sniper(SniperConfig { divisor: 4 }),
+            PointingMode::Sniper(SniperConfig {
+                divisor: 4,
+                invert_x: false,
+                invert_y: false,
+            }),
             PointingMode::Cursor,
         ];
 
@@ -945,7 +1004,12 @@ mod tests {
     #[test]
     fn test_scroll_mode_zero_motion_prevention() {
         let mut acc = MotionAccumulator::default();
-        let config = ScrollConfig { divisor_x: 8, divisor_y: 8 };
+        let config = ScrollConfig {
+            divisor_x: 8,
+            divisor_y: 8,
+            invert_x: false,
+            invert_y: false,
+        };
 
         // Small motion that doesn't produce output
         let (sx, sy) = acc.accumulate(3, 3, config.divisor_x, config.divisor_y);
@@ -967,11 +1031,15 @@ mod tests {
     #[test]
     fn test_sniper_mode_divisor() {
         let mut acc = MotionAccumulator::default();
-        let config = SniperConfig { divisor: 4 };
+        let config = SniperConfig {
+            divisor: 4,
+            invert_x: false,
+            invert_y: false,
+        };
 
         // Test that motion is divided correctly
         let (sx, sy) = acc.accumulate(10, -10, config.divisor, config.divisor);
-        assert_eq!(sx, 2);  // 10/4 = 2 remainder 2
+        assert_eq!(sx, 2); // 10/4 = 2 remainder 2
         assert_eq!(sy, -2); // -10/4 = -2 remainder -2
         assert_eq!(acc.remainder_x, 2);
         assert_eq!(acc.remainder_y, -2);
@@ -983,15 +1051,15 @@ mod tests {
 
         // Test negative motion with divisor
         let (ox, oy) = acc.accumulate(-15, -20, 4, 5);
-        assert_eq!(ox, -3);  // -15/4 = -3 remainder -3
-        assert_eq!(oy, -4);  // -20/5 = -4 remainder 0
+        assert_eq!(ox, -3); // -15/4 = -3 remainder -3
+        assert_eq!(oy, -4); // -20/5 = -4 remainder 0
         assert_eq!(acc.remainder_x, -3);
         assert_eq!(acc.remainder_y, 0);
 
         // Mix positive and negative
         let (ox, oy) = acc.accumulate(5, 10, 4, 5);
-        assert_eq!(ox, 0);   // (-3+5)/4 = 0 remainder 2
-        assert_eq!(oy, 2);   // (0+10)/5 = 2 remainder 0
+        assert_eq!(ox, 0); // (-3+5)/4 = 0 remainder 2
+        assert_eq!(oy, 2); // (0+10)/5 = 2 remainder 0
         assert_eq!(acc.remainder_x, 2);
         assert_eq!(acc.remainder_y, 0);
     }
@@ -1001,12 +1069,54 @@ mod tests {
         let config = ScrollConfig::default();
         assert_eq!(config.divisor_x, 8);
         assert_eq!(config.divisor_y, 8);
+        assert!(!config.invert_x);
+        assert!(!config.invert_y);
     }
 
     #[test]
     fn test_sniper_config_default_values() {
         let config = SniperConfig::default();
         assert_eq!(config.divisor, 4);
+        assert!(!config.invert_x);
+        assert!(!config.invert_y);
+    }
+
+    #[test]
+    fn test_scroll_config_invert_y() {
+        // invert_y=true means positive sensor Y → positive wheel (reversed from default)
+        // Default (invert_y=false): sensor +Y → wheel -1 (scroll up)
+        // With invert_y=true:        sensor +Y → wheel +1 (scroll down)
+        let mut acc_default = MotionAccumulator::default();
+        let mut acc_inverted = MotionAccumulator::default();
+
+        let divisor = 1u8;
+        let (_, sy_default) = acc_default.accumulate(0, 10, divisor, divisor);
+        let (_, sy_inverted) = acc_inverted.accumulate(0, 10, divisor, divisor);
+
+        // Default: wheel = -sy = -10
+        let wheel_default = -sy_default;
+        // Inverted: wheel = sy = 10
+        let wheel_inverted = sy_inverted;
+
+        assert_eq!(wheel_default, -10);
+        assert_eq!(wheel_inverted, 10);
+    }
+
+    #[test]
+    fn test_sniper_config_invert_axes() {
+        let mut acc = MotionAccumulator::default();
+        let config = SniperConfig {
+            divisor: 1,
+            invert_x: true,
+            invert_y: true,
+        };
+
+        let (sx, sy) = acc.accumulate(5, -3, config.divisor, config.divisor);
+        let out_x = if config.invert_x { -sx } else { sx };
+        let out_y = if config.invert_y { -sy } else { sy };
+
+        assert_eq!(out_x, -5);
+        assert_eq!(out_y, 3);
     }
 
     #[test]
@@ -1015,12 +1125,14 @@ mod tests {
         let config = ScrollConfig {
             divisor_x: 4,
             divisor_y: 8,
+            invert_x: false,
+            invert_y: false,
         };
 
         // Test asymmetric divisors
         let (sx, sy) = acc.accumulate(16, 16, config.divisor_x, config.divisor_y);
-        assert_eq!(sx, 4);  // 16/4 = 4
-        assert_eq!(sy, 2);  // 16/8 = 2
+        assert_eq!(sx, 4); // 16/4 = 4
+        assert_eq!(sy, 2); // 16/8 = 2
     }
 
     #[test]

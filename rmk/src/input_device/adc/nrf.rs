@@ -19,6 +19,9 @@ pub struct NrfAdc<'a, const PIN_NUM: usize, const EVENT_NUM: usize> {
     light_sleep: Option<Duration>,
     buf: [[i16; PIN_NUM]; 2],
     event_type: [AnalogEventType; EVENT_NUM],
+    /// Device id emitted in PointingEvent for each event slot.
+    /// Indexed by event_state; irrelevant for Battery slots (use 0).
+    event_device_ids: [u8; EVENT_NUM],
     event_state: u8,
     channel_state: u8,
     buf_state: bool,
@@ -30,6 +33,7 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT
     pub fn new(
         saadc: Saadc<'a, PIN_NUM>,
         event_type: [AnalogEventType; EVENT_NUM],
+        event_device_ids: [u8; EVENT_NUM],
         polling_interval: Duration,
         light_sleep: Option<Duration>,
     ) -> Self {
@@ -37,6 +41,7 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT
             saadc,
             polling_interval,
             event_type,
+            event_device_ids,
             light_sleep,
             buf: [[0; PIN_NUM]; 2],
             event_state: 0,
@@ -120,8 +125,9 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT
                             self.channel_state += 1;
                         }
                     }
+                    let device_id = self.event_device_ids[self.event_state as usize];
                     self.event_state += 1;
-                    return NrfAdcEvent::Pointing(PointingEvent(e));
+                    return NrfAdcEvent::Pointing(PointingEvent { device_id, axes: e });
                 }
                 AnalogEventType::Battery => {
                     let battery_adc_value = buf[self.channel_state as usize] as u16;
