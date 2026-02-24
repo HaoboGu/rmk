@@ -1570,11 +1570,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_action_mouse(&mut self, key: HidKeyCode, event: KeyboardEvent) {
         let action = {
             let config = &self.keymap.borrow().behavior.mouse_key;
-            if event.pressed {
-                self.mouse.process_press(key, config)
-            } else {
-                self.mouse.process_release(key, config)
-            }
+            self.mouse.process(key, event.pressed, config)
         };
 
         // Sync button state to keymap for conditional layer / fork consumers
@@ -1588,29 +1584,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Fire pending mouse repeats: recalculate movement with acceleration,
     /// send the report, and schedule the next repeat.
     async fn fire_mouse_repeat(&mut self) {
-        let (fired_movement, fired_wheel) = {
+        let report = {
             let config = &self.keymap.borrow().behavior.mouse_key;
-            self.mouse.fire_due_repeats(Instant::now(), config)
+            self.mouse.fire_repeats(config)
         };
 
-        if !fired_movement && !fired_wheel {
-            return;
+        if let Some(report) = report {
+            self.keymap.borrow_mut().mouse_buttons = self.mouse.report.buttons;
+            self.send_report(Report::MouseReport(report)).await;
+            yield_now().await;
         }
-
-        self.keymap.borrow_mut().mouse_buttons = self.mouse.report.buttons;
-
-        // Send masked report: only include axes for categories that actually fired
-        let mut report = self.mouse.get_report();
-        if !fired_movement {
-            report.x = 0;
-            report.y = 0;
-        }
-        if !fired_wheel {
-            report.wheel = 0;
-            report.pan = 0;
-        }
-        self.send_report(Report::MouseReport(report)).await;
-        yield_now().await;
     }
 
     async fn process_user(&mut self, id: u8, event: KeyboardEvent) {
