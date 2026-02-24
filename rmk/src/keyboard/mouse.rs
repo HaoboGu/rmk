@@ -105,7 +105,9 @@ impl DirectionState {
 
         match (was_active, now_active) {
             (false, true) => {
-                self.repeat = 0;
+                // Start at 1: the initial press counts as the first occurrence,
+                // so fire_repeats sees repeat >= 1 and uses repeat_interval_ms.
+                self.repeat = 1;
                 self.deadline = Some(Instant::now() + Duration::from_millis(repeat_delay as u64));
             }
             (true, false) => {
@@ -317,15 +319,15 @@ impl MouseState {
         } else if repeat >= ticks_to_max {
             max_unit
         } else {
-            let repeat_count = repeat as u16;
-            let ttm = ticks_to_max as u16;
-            let min_unit = delta as u16;
-            let unit_range = max_unit - min_unit;
-            let linear_term = 2u16.saturating_mul(repeat_count).saturating_mul(ttm);
-            let quadratic_term = repeat_count.saturating_mul(repeat_count);
+            let repeat_count = repeat as u32;
+            let ttm = ticks_to_max as u32;
+            let min_unit = delta as u32;
+            let unit_range = (max_unit as u32).saturating_sub(min_unit);
+            let linear_term = 2 * repeat_count * ttm;
+            let quadratic_term = repeat_count * repeat_count;
             let progress_num = linear_term.saturating_sub(quadratic_term);
-            let progress_den = ttm.saturating_mul(ttm);
-            min_unit + (unit_range.saturating_mul(progress_num) / progress_den.max(1))
+            let progress_den = ttm * ttm;
+            (min_unit + (unit_range * progress_num / progress_den.max(1))) as u16
         };
 
         // Step 2: Apply accel multiplier (highest active wins)
@@ -343,7 +345,9 @@ impl MouseState {
         };
 
         // Step 3: Clamp to [1, max] and i8 range
-        let clamped = if multiplied > max as u16 {
+        let clamped = if max == 0 {
+            1u16
+        } else if multiplied > max as u16 {
             max as u16
         } else if multiplied == 0 {
             1
@@ -380,8 +384,12 @@ impl MouseState {
     /// Apply diagonal movement compensation (approximation of 1/sqrt(2))
     fn apply_diagonal_compensation(mut x: i8, mut y: i8) -> (i8, i8) {
         if x != 0 && y != 0 {
-            let x_compensated = (x as i16 * 181 + 128) / 256;
-            let y_compensated = (y as i16 * 181 + 128) / 256;
+            let x16 = x as i16;
+            let y16 = y as i16;
+            let x_bias: i16 = if x16 >= 0 { 128 } else { -128 };
+            let y_bias: i16 = if y16 >= 0 { 128 } else { -128 };
+            let x_compensated = (x16 * 181 + x_bias) / 256;
+            let y_compensated = (y16 * 181 + y_bias) / 256;
             x = if x_compensated == 0 && x != 0 {
                 if x > 0 { 1 } else { -1 }
             } else {
@@ -821,14 +829,14 @@ mod test {
         let mut state = MouseState::new();
         let config = default_config();
         state.process(HidKeyCode::MouseRight, true, &config);
-        assert_eq!(state.movement.repeat, 0);
+        assert_eq!(state.movement.repeat, 1);
         let x_initial = state.report.x;
 
         state
             .movement
             .on_repeat_tick(config.ticks_to_max, config.get_movement_delay(state.movement.repeat));
         state.recalculate_report(&config);
-        assert_eq!(state.movement.repeat, 1);
+        assert_eq!(state.movement.repeat, 2);
         assert!(state.report.x >= x_initial);
     }
 
@@ -908,8 +916,8 @@ mod test {
         let report = report.expect("Movement was due, should return Some");
         assert!(report.x != 0, "Movement axis should be non-zero");
         assert_eq!(report.wheel, 0, "Wheel should be masked to 0");
-        assert_eq!(state.movement.repeat, 1, "Movement repeat should tick");
-        assert_eq!(state.wheel.repeat, 0, "Wheel repeat should not tick");
+        assert_eq!(state.movement.repeat, 2, "Movement repeat should tick");
+        assert_eq!(state.wheel.repeat, 1, "Wheel repeat should not tick");
     }
 
     #[test]
@@ -926,8 +934,8 @@ mod test {
         let report = state.fire_repeats(&config);
 
         assert!(report.is_none(), "Nothing due, should return None");
-        assert_eq!(state.movement.repeat, 0);
-        assert_eq!(state.wheel.repeat, 0);
+        assert_eq!(state.movement.repeat, 1);
+        assert_eq!(state.wheel.repeat, 1);
     }
 
     #[test]
@@ -946,8 +954,8 @@ mod test {
         let report = report.expect("Both due, should return Some");
         assert!(report.x != 0, "Movement axis should be non-zero");
         assert!(report.wheel != 0, "Wheel axis should be non-zero");
-        assert_eq!(state.movement.repeat, 1);
-        assert_eq!(state.wheel.repeat, 1);
+        assert_eq!(state.movement.repeat, 2);
+        assert_eq!(state.wheel.repeat, 2);
     }
 
     #[test]

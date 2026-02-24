@@ -1760,9 +1760,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         yield_now().await;
     }
 
-    /// Send mouse report if needed
+    /// Send mouse report. Rate is implicitly bounded by the repeat interval
+    /// for movement/wheel, but button events are sent immediately.
     pub(crate) async fn send_mouse_report(&mut self) {
-        // Prevent mouse report flooding, set maximum mouse report rate to 50 HZ
         self.send_report(Report::MouseReport(self.mouse.get_report())).await;
         yield_now().await;
     }
