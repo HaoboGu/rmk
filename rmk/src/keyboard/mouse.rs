@@ -371,7 +371,7 @@ impl MouseState {
             self.accel,
             self.wheel.repeat,
             config.wheel_delta,
-            config.wheel_max_speed_multiplier,
+            config.wheel_max_speed,
             config.wheel_ticks_to_max,
             config.wheel_max,
         )

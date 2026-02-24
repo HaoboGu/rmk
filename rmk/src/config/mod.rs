@@ -250,7 +250,7 @@ pub struct MouseKeyConfig {
     /// Wheel movement step size
     pub wheel_delta: u8,
     /// Maximum wheel speed
-    pub wheel_max_speed_multiplier: u8,
+    pub wheel_max_speed: u8,
     /// Number of repeat ticks until maximum wheel speed is reached
     pub wheel_ticks_to_max: u8,
     /// Maximum movement distance per report
@@ -271,7 +271,7 @@ impl Default for MouseKeyConfig {
             wheel_initial_delay_ms: 100,                    // 100ms initial wheel delay
             wheel_repeat_interval_ms: MOUSE_WHEEL_INTERVAL, // 80ms between wheel movements
             wheel_delta: 1,                                 // 1 wheel unit per movement
-            wheel_max_speed_multiplier: 3,                  // Conservative wheel max speed
+            wheel_max_speed: 3,                  // Conservative wheel max speed
             wheel_ticks_to_max: 40,                         // 40 ticks to max wheel speed (~0.8s)
             move_max: 20,                                   // Maximum movement per report
             wheel_max: 4,                                   // Maximum wheel movement per report
