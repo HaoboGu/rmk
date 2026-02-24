@@ -283,7 +283,7 @@ impl Default for ScrollConfig {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SniperConfig {
-    /// Divisor for both axes. Higher = slower movement. 0 disables output.
+    /// Divisor for both axes. Higher = slower, more precise movement.
     pub divisor: u8,
     /// Invert X axis movement.
     pub invert_x: bool,
