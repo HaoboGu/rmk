@@ -1558,4 +1558,67 @@ rusty_fork_test! {
             ]
         };
     }
+
+    #[test]
+    fn test_lt_opposite_hand_roll_permissive_hold() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 3, true, 130], // Press lt!(1, D)
+                [0, 0, true, 20], // Press Kp1 on layer1
+                [0, 1, true, 20], // Press Kp2 on layer1
+                [0, 0, false, 20], // Release Kp1 on layer1
+                [0, 1, false, 20], // Release Kp2 on layer1
+                [0, 3, false, 10], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
+    fn test_lt_opposite_hand_sequence_permissive_hold() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 3, true, 130], // Press lt!(1, D)
+                [0, 0, true, 20], // Press Kp1 on layer1
+                [0, 0, false, 20], // Release Kp1 on layer1
+                [0, 1, true, 20], // Press Kp2 on layer1
+                [0, 1, false, 20], // Release Kp2 on layer1
+                [0, 3, false, 10], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
+    fn test_lt_opposite_hand_roll_permissive_hold_early_modifier_release() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 3, true, 130], // Press lt!(1, D)
+                [0, 0, true, 20], // Press Kp1 on layer1
+                [0, 1, true, 20], // Press Kp2 on layer1
+                [0, 0, false, 20], // Release Kp1 on layer1
+                [0, 3, false, 10], // Release lt!(1, D)
+                [0, 1, false, 20], // Release B
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
 }
