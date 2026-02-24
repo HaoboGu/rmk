@@ -255,9 +255,9 @@ pub enum PointingMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ScrollConfig {
-    /// Divisor for X axis (pan). Higher = slower scrolling. 0 treated as 1.
+    /// Divisor for X axis (pan). Higher = slower scrolling. 0 disables this axis.
     pub divisor_x: u8,
-    /// Divisor for Y axis (wheel). Higher = slower scrolling. 0 treated as 1.
+    /// Divisor for Y axis (wheel). Higher = slower scrolling. 0 disables this axis.
     pub divisor_y: u8,
 }
 
@@ -274,7 +274,7 @@ impl Default for ScrollConfig {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SniperConfig {
-    /// Divisor for both axes. Higher = slower movement. 0 treated as 1.
+    /// Divisor for both axes. Higher = slower movement. 0 disables output.
     pub divisor: u8,
 }
 
@@ -302,19 +302,30 @@ impl MotionAccumulator {
         self.remainder_y = 0;
     }
 
-    /// Accumulate motion and return the divided output, keeping remainder
+    /// Accumulate motion and return the divided output, keeping remainder.
+    /// A divisor of 0 disables that axis (always outputs 0).
     pub fn accumulate(&mut self, dx: i16, dy: i16, divisor_x: u8, divisor_y: u8) -> (i16, i16) {
-        let div_x = divisor_x.max(1) as i16;
-        let div_y = divisor_y.max(1) as i16;
+        let out_x = if divisor_x == 0 {
+            self.remainder_x = 0;
+            0
+        } else {
+            let div_x = divisor_x as i16;
+            let total_x = self.remainder_x.saturating_add(dx);
+            let out = total_x / div_x;
+            self.remainder_x = total_x - out * div_x;
+            out
+        };
 
-        let total_x = self.remainder_x.saturating_add(dx);
-        let total_y = self.remainder_y.saturating_add(dy);
-
-        let out_x = total_x / div_x;
-        let out_y = total_y / div_y;
-
-        self.remainder_x = total_x - out_x * div_x;
-        self.remainder_y = total_y - out_y * div_y;
+        let out_y = if divisor_y == 0 {
+            self.remainder_y = 0;
+            0
+        } else {
+            let div_y = divisor_y as i16;
+            let total_y = self.remainder_y.saturating_add(dy);
+            let out = total_y / div_y;
+            self.remainder_y = total_y - out * div_y;
+            out
+        };
 
         (out_x, out_y)
     }
@@ -838,12 +849,25 @@ mod tests {
     }
 
     #[test]
-    fn test_motion_accumulator_zero_divisor_treated_as_one() {
+    fn test_motion_accumulator_zero_divisor_disables_axis() {
         let mut acc = MotionAccumulator::default();
-        // divisor 0 should be treated as 1 (passthrough)
+        // divisor 0 should disable that axis (output 0)
         let (ox, oy) = acc.accumulate(5, -3, 0, 0);
-        assert_eq!(ox, 5);
-        assert_eq!(oy, -3);
+        assert_eq!(ox, 0);
+        assert_eq!(oy, 0);
+
+        // One axis disabled, the other active
+        let (ox, oy) = acc.accumulate(10, 10, 0, 2);
+        assert_eq!(ox, 0);  // X disabled
+        assert_eq!(oy, 5);  // 10/2 = 5
+
+        // Remainder should not accumulate on disabled axis
+        acc.reset();
+        acc.accumulate(3, 3, 0, 8);
+        acc.accumulate(3, 3, 0, 8);
+        let (ox, oy) = acc.accumulate(3, 3, 0, 8);
+        assert_eq!(ox, 0);  // X always 0
+        assert_eq!(oy, 1);  // (3+3+3)/8 = 1 remainder 1
     }
 
     #[test]
