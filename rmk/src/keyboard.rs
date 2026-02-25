@@ -12,7 +12,7 @@ use rmk_types::keycode::{ConsumerKey, HidKeyCode, KeyCode, SpecialKey, SystemCon
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
 use rmk_types::mouse_button::MouseButtons;
-use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
+use usbd_hid::descriptor::{MediaKeyboardReport, SystemControlReport};
 
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::combo::Combo;
@@ -20,14 +20,13 @@ use crate::config::Hand;
 use crate::descriptor::KeyboardReport;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::ClearPeerEvent;
-use crate::event::{
-    KeyPos, KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event, publish_event_async,
-};
+use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::input_device::Runnable;
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
+use crate::keyboard::mouse::{MouseAction, MouseState};
 use crate::keyboard_macros::MacroOperation;
 use crate::keymap::KeyMap;
 use crate::morse::{MorsePattern, TAP};
@@ -166,9 +165,20 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
                 // Process buffered held key
                 self.process_buffered_key(key).await
             } else {
-                // No buffered tap-hold event, wait for new key
-                let event = self.keyboard_event_subscriber.next_message_pure().await;
-                // Process the key event
+                // If mouse repeat is pending, race subscriber against deadline
+                let event = if let Some(deadline) = self.mouse.next_deadline() {
+                    match with_deadline(deadline, self.keyboard_event_subscriber.next_message_pure()).await {
+                        Ok(event) => event,
+                        Err(_) => {
+                            // Repeat deadline expired, fire repeat
+                            self.fire_mouse_repeat().await;
+                            continue;
+                        }
+                    }
+                } else {
+                    // No repeat pending, wait indefinitely
+                    self.keyboard_event_subscriber.next_message_pure().await
+                };
                 self.process_inner(event).await
             };
         }
@@ -239,19 +249,14 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// This is still needed besides `held_keycodes` because multiple keys with same keycode can be registered.
     registered_keys: [Option<KeyboardEvent>; 6],
 
-    /// Internal mouse report buf
-    mouse_report: MouseReport,
+    /// Mouse state (report, acceleration, repeat counters, repeat deadlines)
+    mouse: MouseState,
 
     /// Internal media report buf
     media_report: MediaKeyboardReport,
 
     /// Internal system control report buf
     system_control_report: SystemControlReport,
-
-    /// Mouse acceleration state
-    mouse_accel: u8,
-    mouse_repeat: u8,
-    mouse_wheel_repeat: u8,
 
     /// Used for temporarily disabling combos
     combo_on: bool,
@@ -280,19 +285,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             registered_keys: [None; 6],
             held_modifiers: ModifierCombination::default(),
             held_keycodes: [HidKeyCode::No; 6],
-            mouse_report: MouseReport {
-                buttons: 0,
-                x: 0,
-                y: 0,
-                wheel: 0,
-                pan: 0,
-            },
+            mouse: MouseState::new(),
             media_report: MediaKeyboardReport { usage_id: 0 },
             system_control_report: SystemControlReport { usage_id: 0 },
             last_key_code: KeyCode::Hid(HidKeyCode::No),
-            mouse_accel: 0,
-            mouse_repeat: 0,
-            mouse_wheel_repeat: 0,
             combo_on: true,
         }
     }
@@ -834,7 +830,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // "explicit modifiers" includes the effect of one-shot modifiers, held modifiers keys only
             modifiers: self.resolve_explicit_modifiers(event.pressed),
             leds: LedIndicator::from_bits(LOCK_LED_STATES.load(core::sync::atomic::Ordering::Relaxed)),
-            mouse: MouseButtons::from_bits(self.mouse_report.buttons),
+            mouse: MouseButtons::from_bits(self.mouse.report.buttons),
         };
 
         let mut triggered_forks = [false; FORK_MAX_NUM]; // used to avoid loops
@@ -1572,233 +1568,31 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Process mouse key action with acceleration support.
     async fn process_action_mouse(&mut self, key: HidKeyCode, event: KeyboardEvent) {
-        if event.pressed {
-            match key {
-                HidKeyCode::MouseUp => {
-                    // Reset repeat counter for direction change
-                    if self.mouse_report.y > 0 {
-                        self.mouse_repeat = 0;
-                    }
-                    let unit = self.calculate_mouse_move_unit();
-                    self.mouse_report.y = -unit;
-                }
-                HidKeyCode::MouseDown => {
-                    if self.mouse_report.y < 0 {
-                        self.mouse_repeat = 0;
-                    }
-                    let unit = self.calculate_mouse_move_unit();
-                    self.mouse_report.y = unit;
-                }
-                HidKeyCode::MouseLeft => {
-                    if self.mouse_report.x > 0 {
-                        self.mouse_repeat = 0;
-                    }
-                    let unit = self.calculate_mouse_move_unit();
-                    self.mouse_report.x = -unit;
-                }
-                HidKeyCode::MouseRight => {
-                    if self.mouse_report.x < 0 {
-                        self.mouse_repeat = 0;
-                    }
-                    let unit = self.calculate_mouse_move_unit();
-                    self.mouse_report.x = unit;
-                }
-                HidKeyCode::MouseWheelUp => {
-                    if self.mouse_report.wheel < 0 {
-                        self.mouse_wheel_repeat = 0;
-                    }
-                    let unit = self.calculate_mouse_wheel_unit();
-                    self.mouse_report.wheel = unit;
-                }
-                HidKeyCode::MouseWheelDown => {
-                    if self.mouse_report.wheel > 0 {
-                        self.mouse_wheel_repeat = 0;
-                    }
-                    let unit = self.calculate_mouse_wheel_unit();
-                    self.mouse_report.wheel = -unit;
-                }
-                HidKeyCode::MouseWheelLeft => {
-                    if self.mouse_report.pan > 0 {
-                        self.mouse_wheel_repeat = 0;
-                    }
-                    let unit = self.calculate_mouse_wheel_unit();
-                    self.mouse_report.pan = -unit;
-                }
-                HidKeyCode::MouseWheelRight => {
-                    if self.mouse_report.pan < 0 {
-                        self.mouse_wheel_repeat = 0;
-                    }
-                    let unit = self.calculate_mouse_wheel_unit();
-                    self.mouse_report.pan = unit;
-                }
-                HidKeyCode::MouseBtn1 => self.mouse_report.buttons |= 1 << 0,
-                HidKeyCode::MouseBtn2 => self.mouse_report.buttons |= 1 << 1,
-                HidKeyCode::MouseBtn3 => self.mouse_report.buttons |= 1 << 2,
-                HidKeyCode::MouseBtn4 => self.mouse_report.buttons |= 1 << 3,
-                HidKeyCode::MouseBtn5 => self.mouse_report.buttons |= 1 << 4,
-                HidKeyCode::MouseBtn6 => self.mouse_report.buttons |= 1 << 5,
-                HidKeyCode::MouseBtn7 => self.mouse_report.buttons |= 1 << 6,
-                HidKeyCode::MouseBtn8 => self.mouse_report.buttons |= 1 << 7,
-                HidKeyCode::MouseAccel0 => {
-                    self.mouse_accel |= 1 << 0;
-                }
-                HidKeyCode::MouseAccel1 => {
-                    self.mouse_accel |= 1 << 1;
-                }
-                HidKeyCode::MouseAccel2 => {
-                    self.mouse_accel |= 1 << 2;
-                }
-                _ => {}
-            }
-        } else {
-            match key {
-                HidKeyCode::MouseUp => {
-                    if self.mouse_report.y < 0 {
-                        self.mouse_report.y = 0;
-                    }
-                }
-                HidKeyCode::MouseDown => {
-                    if self.mouse_report.y > 0 {
-                        self.mouse_report.y = 0;
-                    }
-                }
-                HidKeyCode::MouseLeft => {
-                    if self.mouse_report.x < 0 {
-                        self.mouse_report.x = 0;
-                    }
-                }
-                HidKeyCode::MouseRight => {
-                    if self.mouse_report.x > 0 {
-                        self.mouse_report.x = 0;
-                    }
-                }
-                HidKeyCode::MouseWheelUp => {
-                    if self.mouse_report.wheel > 0 {
-                        self.mouse_report.wheel = 0;
-                    }
-                }
-                HidKeyCode::MouseWheelDown => {
-                    if self.mouse_report.wheel < 0 {
-                        self.mouse_report.wheel = 0;
-                    }
-                }
-                HidKeyCode::MouseWheelLeft => {
-                    if self.mouse_report.pan < 0 {
-                        self.mouse_report.pan = 0;
-                    }
-                }
-                HidKeyCode::MouseWheelRight => {
-                    if self.mouse_report.pan > 0 {
-                        self.mouse_report.pan = 0;
-                    }
-                }
-                HidKeyCode::MouseBtn1 => self.mouse_report.buttons &= !(1 << 0),
-                HidKeyCode::MouseBtn2 => self.mouse_report.buttons &= !(1 << 1),
-                HidKeyCode::MouseBtn3 => self.mouse_report.buttons &= !(1 << 2),
-                HidKeyCode::MouseBtn4 => self.mouse_report.buttons &= !(1 << 3),
-                HidKeyCode::MouseBtn5 => self.mouse_report.buttons &= !(1 << 4),
-                HidKeyCode::MouseBtn6 => self.mouse_report.buttons &= !(1 << 5),
-                HidKeyCode::MouseBtn7 => self.mouse_report.buttons &= !(1 << 6),
-                HidKeyCode::MouseBtn8 => self.mouse_report.buttons &= !(1 << 7),
-                HidKeyCode::MouseAccel0 => {
-                    self.mouse_accel &= !(1 << 0);
-                }
-                HidKeyCode::MouseAccel1 => {
-                    self.mouse_accel &= !(1 << 1);
-                }
-                HidKeyCode::MouseAccel2 => {
-                    self.mouse_accel &= !(1 << 2);
-                }
-                _ => {}
-            }
+        let action = {
+            let config = &self.keymap.borrow().behavior.mouse_key;
+            self.mouse.process(key, event.pressed, config)
+        };
 
-            // Reset repeat counters when movement stops
-            if self.mouse_report.x == 0 && self.mouse_report.y == 0 {
-                self.mouse_repeat = 0;
-            }
-            if self.mouse_report.wheel == 0 && self.mouse_report.pan == 0 {
-                self.mouse_wheel_repeat = 0;
-            }
-        }
+        // Sync button state to keymap for conditional layer / fork consumers
+        self.keymap.borrow_mut().mouse_buttons = self.mouse.report.buttons;
 
-        // Apply diagonal compensation for movement
-        if self.mouse_report.x != 0 && self.mouse_report.y != 0 {
-            let (x, y) = self.apply_diagonal_compensation(self.mouse_report.x, self.mouse_report.y);
-            self.mouse_report.x = x;
-            self.mouse_report.y = y;
-        }
-
-        // Apply diagonal compensation for wheel
-        if self.mouse_report.wheel != 0 && self.mouse_report.pan != 0 {
-            let (wheel, pan) = self.apply_diagonal_compensation(self.mouse_report.wheel, self.mouse_report.pan);
-            self.mouse_report.wheel = wheel;
-            self.mouse_report.pan = pan;
-        }
-
-        // Sync button state to keymap
-        self.keymap.borrow_mut().mouse_buttons = self.mouse_report.buttons;
-
-        if !matches!(
-            key,
-            HidKeyCode::MouseAccel0 | HidKeyCode::MouseAccel1 | HidKeyCode::MouseAccel2
-        ) {
-            // Send mouse report only for movement and wheel keys
+        if let MouseAction::SendReport = action {
             self.send_mouse_report().await;
         }
+    }
 
-        // Continue processing ONLY for movement and wheel keys
-        if event.pressed {
-            let is_movement_key = matches!(
-                key,
-                HidKeyCode::MouseUp | HidKeyCode::MouseDown | HidKeyCode::MouseLeft | HidKeyCode::MouseRight
-            );
-            let is_wheel_key = matches!(
-                key,
-                HidKeyCode::MouseWheelUp
-                    | HidKeyCode::MouseWheelDown
-                    | HidKeyCode::MouseWheelLeft
-                    | HidKeyCode::MouseWheelRight
-            );
+    /// Fire pending mouse repeats: recalculate movement with acceleration,
+    /// send the report, and schedule the next repeat.
+    async fn fire_mouse_repeat(&mut self) {
+        let report = {
+            let config = &self.keymap.borrow().behavior.mouse_key;
+            self.mouse.fire_repeats(config)
+        };
 
-            // Only continue processing for movement and wheel keys
-            if is_movement_key || is_wheel_key {
-                // Determine the delay for the next repeat using convenience methods
-                let delay = {
-                    let config = &self.keymap.borrow().behavior.mouse_key;
-                    if is_movement_key {
-                        config.get_movement_delay(self.mouse_repeat)
-                    } else {
-                        config.get_wheel_delay(self.mouse_wheel_repeat)
-                    }
-                };
-
-                // Increment the appropriate repeat counter
-                if is_movement_key && self.mouse_repeat < u8::MAX {
-                    self.mouse_repeat += 1;
-                }
-                if is_wheel_key && self.mouse_wheel_repeat < u8::MAX {
-                    self.mouse_wheel_repeat += 1;
-                }
-
-                // Schedule next movement after the delay
-                embassy_time::Timer::after_millis(delay as u64).await;
-                // Check if there's a release event in the channel, if there's no release event, re-send the event
-                let len = self.keyboard_event_subscriber.len();
-                let mut released = false;
-                for _ in 0..len {
-                    let queued_event = self.keyboard_event_subscriber.next_message_pure().await;
-                    if queued_event.pos != event.pos || !queued_event.pressed {
-                        publish_event_async(queued_event).await;
-                    }
-                    // If there's a release event in the channel
-                    if queued_event.pos == event.pos && !queued_event.pressed {
-                        released = true;
-                    }
-                }
-                if !released {
-                    publish_event_async(event).await;
-                }
-            }
+        if let Some(report) = report {
+            self.keymap.borrow_mut().mouse_buttons = self.mouse.report.buttons;
+            self.send_report(Report::MouseReport(report)).await;
+            yield_now().await;
         }
     }
 
@@ -1966,10 +1760,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         yield_now().await;
     }
 
-    /// Send mouse report if needed
+    /// Send mouse report. Rate is implicitly bounded by the repeat interval
+    /// for movement/wheel, but button events are sent immediately.
     pub(crate) async fn send_mouse_report(&mut self) {
-        // Prevent mouse report flooding, set maximum mouse report rate to 50 HZ
-        self.send_report(Report::MouseReport(self.mouse_report)).await;
+        self.send_report(Report::MouseReport(self.mouse.get_report())).await;
         yield_now().await;
     }
 
@@ -2139,114 +1933,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         publish_event(ModifierEvent {
             modifier: self.held_modifiers,
         });
-    }
-
-    /// Calculate mouse movement distance based on current repeat count and acceleration settings
-    fn calculate_mouse_move_unit(&self) -> i8 {
-        let config = &self.keymap.borrow().behavior.mouse_key;
-
-        let unit = if self.mouse_accel & (1 << 2) != 0 {
-            20
-        } else if self.mouse_accel & (1 << 1) != 0 {
-            12
-        } else if self.mouse_accel & (1 << 0) != 0 {
-            4
-        } else if self.mouse_repeat == 0 {
-            config.move_delta as u16
-        } else if self.mouse_repeat >= config.time_to_max {
-            (config.move_delta as u16).saturating_mul(config.max_speed as u16)
-        } else {
-            // Natural acceleration with smooth unit progression.
-            // Calculate smooth progress using asymptotic curve: f(x) = 2x - x².
-            // Where x = repeat_count / time_to_max, giving smooth progression from 0 to 1
-            let repeat_count = self.mouse_repeat as u16;
-            let time_to_max = config.time_to_max as u16;
-            let min_unit = config.move_delta as u16;
-            let max_unit = (config.move_delta as u16).saturating_mul(config.max_speed as u16);
-            let unit_range = max_unit - min_unit;
-
-            // Use saturating operations to handle overflow cases
-            let linear_term = 2u16.saturating_mul(repeat_count).saturating_mul(time_to_max);
-            let quadratic_term = repeat_count.saturating_mul(repeat_count);
-            let progress_numerator = linear_term.saturating_sub(quadratic_term);
-            let progress_denominator = time_to_max.saturating_mul(time_to_max);
-            min_unit + (unit_range.saturating_mul(progress_numerator) / progress_denominator.max(1))
-        };
-
-        let final_unit = if unit > config.move_max as u16 {
-            config.move_max as u16
-        } else if unit == 0 {
-            1
-        } else {
-            unit
-        };
-
-        final_unit.min(i8::MAX as u16) as i8
-    }
-
-    /// Calculate mouse wheel movement distance based on current repeat count and acceleration settings
-    fn calculate_mouse_wheel_unit(&self) -> i8 {
-        let config = &self.keymap.borrow().behavior.mouse_key;
-
-        let unit = if self.mouse_accel & (1 << 2) != 0 {
-            4
-        } else if self.mouse_accel & (1 << 1) != 0 {
-            2
-        } else if self.mouse_accel & (1 << 0) != 0 {
-            1
-        } else if self.mouse_wheel_repeat == 0 {
-            config.wheel_delta as u16
-        } else if self.mouse_wheel_repeat >= config.wheel_time_to_max {
-            (config.wheel_delta as u16).saturating_mul(config.wheel_max_speed_multiplier as u16)
-        } else {
-            // Natural acceleration with smooth unit progression.
-            let repeat_count = self.mouse_wheel_repeat as u16;
-            let time_to_max = config.wheel_time_to_max as u16;
-            let min_unit = config.wheel_delta as u16;
-            let max_unit = (config.wheel_delta as u16).saturating_mul(config.wheel_max_speed_multiplier as u16);
-            let unit_range = max_unit - min_unit;
-
-            // Calculate smooth progress using asymptotic curve: f(x) = 2x - x².
-            // Use saturating operations to handle overflow cases.
-            let linear_term = 2u16.saturating_mul(repeat_count).saturating_mul(time_to_max);
-            let quadratic_term = repeat_count.saturating_mul(repeat_count);
-            let progress_numerator = linear_term.saturating_sub(quadratic_term);
-            let progress_denominator = time_to_max.saturating_mul(time_to_max);
-
-            min_unit + (unit_range.saturating_mul(progress_numerator) / progress_denominator.max(1))
-        };
-
-        let final_unit = if unit > config.wheel_max as u16 {
-            config.wheel_max as u16
-        } else if unit == 0 {
-            1
-        } else {
-            unit
-        };
-
-        final_unit.min(i8::MAX as u16) as i8
-    }
-
-    /// Apply diagonal movement compensation (approximation of 1/sqrt(2))
-    fn apply_diagonal_compensation(&self, mut x: i8, mut y: i8) -> (i8, i8) {
-        if x != 0 && y != 0 {
-            // Apply 1/sqrt(2) approximation using 181/256 (0.70703125)
-            let x_compensated = (x as i16 * 181 + 128) / 256;
-            let y_compensated = (y as i16 * 181 + 128) / 256;
-
-            x = if x_compensated == 0 && x != 0 {
-                if x > 0 { 1 } else { -1 }
-            } else {
-                x_compensated as i8
-            };
-
-            y = if y_compensated == 0 && y != 0 {
-                if y > 0 { 1 } else { -1 }
-            } else {
-                y_compensated as i8
-            };
-        }
-        (x, y)
     }
 }
 
@@ -2761,12 +2447,12 @@ mod test {
                 // Press Z key, by itself it should emit 'MouseBtn5'
                 keyboard.process_inner(KeyboardEvent::key(3, 1, true)).await;
                 assert_eq!(keyboard.held_keycodes[0], HidKeyCode::No);
-                assert_eq!(keyboard.mouse_report.buttons, 1u8 << 4); // MouseBtn5
+                assert_eq!(keyboard.mouse.report.buttons, 1u8 << 4); // MouseBtn5
 
                 // Release Z key
                 keyboard.process_inner(KeyboardEvent::key(3, 1, false)).await;
                 assert_eq!(keyboard.held_keycodes[0], HidKeyCode::No);
-                assert_eq!(keyboard.mouse_report.buttons, 0);
+                assert_eq!(keyboard.mouse.report.buttons, 0);
 
                 // Press LCtrl key
                 keyboard.process_inner(KeyboardEvent::key(4, 0, true)).await;
@@ -2784,7 +2470,7 @@ mod test {
                     ModifierCombination::new().with_left_shift(true)
                 );
                 assert_eq!(keyboard.held_keycodes[0], HidKeyCode::C);
-                assert_eq!(keyboard.mouse_report.buttons, 0);
+                assert_eq!(keyboard.mouse.report.buttons, 0);
 
                 // Release 'Z' key, suppression of ctrl is removed
                 keyboard.process_inner(KeyboardEvent::key(3, 1, false)).await;
@@ -2813,14 +2499,14 @@ mod test {
                 keyboard.process_inner(KeyboardEvent::key(2, 1, false)).await;
                 assert_eq!(keyboard.held_keycodes[0], HidKeyCode::No);
                 assert_eq!(keyboard.resolve_modifiers(false), ModifierCombination::new());
-                assert_eq!(keyboard.mouse_report.buttons, 0);
+                assert_eq!(keyboard.mouse.report.buttons, 0);
 
                 Timer::after(Duration::from_millis(200)).await; // wait a bit
 
                 // Press Z key, by itself it should emit 'MouseBtn5'
                 keyboard.process_inner(KeyboardEvent::key(3, 1, true)).await;
                 assert_eq!(keyboard.held_keycodes[0], HidKeyCode::No);
-                assert_eq!(keyboard.mouse_report.buttons, 1u8 << 4); // MouseBtn5 //this fails, but ok in debug - why?
+                assert_eq!(keyboard.mouse.report.buttons, 1u8 << 4); // MouseBtn5 //this fails, but ok in debug - why?
 
                 // Press 'A' key, with 'MouseBtn5' it should emit 'D'
                 keyboard.process_inner(KeyboardEvent::key(2, 1, true)).await;

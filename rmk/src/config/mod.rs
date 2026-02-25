@@ -241,8 +241,8 @@ pub struct MouseKeyConfig {
     pub move_delta: u8,
     /// Maximum cursor speed at which acceleration stops
     pub max_speed: u8,
-    /// Number of repeated movements until maximum cursor speed is reached
-    pub time_to_max: u8,
+    /// Number of repeat ticks until maximum cursor speed is reached
+    pub ticks_to_max: u8,
     /// Initial delay between pressing a wheel key and first wheel movement (in milliseconds)
     pub wheel_initial_delay_ms: u16,
     /// Time between subsequent wheel movements in milliseconds
@@ -250,9 +250,9 @@ pub struct MouseKeyConfig {
     /// Wheel movement step size
     pub wheel_delta: u8,
     /// Maximum wheel speed
-    pub wheel_max_speed_multiplier: u8,
-    /// Number of repeated movements until maximum wheel speed is reached
-    pub wheel_time_to_max: u8,
+    pub wheel_max_speed: u8,
+    /// Number of repeat ticks until maximum wheel speed is reached
+    pub wheel_ticks_to_max: u8,
     /// Maximum movement distance per report
     pub move_max: u8,
     /// Maximum wheel distance per report
@@ -265,15 +265,15 @@ impl Default for MouseKeyConfig {
             // Optimized values for comfortable and responsive mouse movement
             initial_delay_ms: 100,                          // 100ms initial delay
             repeat_interval_ms: MOUSE_KEY_INTERVAL,         // 20ms between movements
-            move_delta: 6,                                  // 6 pixels per movement (~300 px/sec)
-            max_speed: 3,                                   // Conservative max speed multiplier (300 -> 900 px/sec)
-            time_to_max: 50,                                // 1.0 second to max
+            move_delta: 5,                                  // 5 pixels per movement (~250 px/sec)
+            max_speed: 3,                                   // Max speed multiplier (250 -> 750 px/sec)
+            ticks_to_max: 50,                               // 50 ticks to max speed (~1s)
             wheel_initial_delay_ms: 100,                    // 100ms initial wheel delay
             wheel_repeat_interval_ms: MOUSE_WHEEL_INTERVAL, // 80ms between wheel movements
             wheel_delta: 1,                                 // 1 wheel unit per movement
-            wheel_max_speed_multiplier: 3,                  // Conservative wheel max speed
-            wheel_time_to_max: 40,                          // 0.5 second to max
-            move_max: 20,                                   // Maximum movement per report
+            wheel_max_speed: 2,                             // Wheel max speed multiplier
+            wheel_ticks_to_max: 40,                         // 40 ticks to max wheel speed (~3.2s)
+            move_max: 25,                                   // Maximum movement per report
             wheel_max: 4,                                   // Maximum wheel movement per report
         }
     }
