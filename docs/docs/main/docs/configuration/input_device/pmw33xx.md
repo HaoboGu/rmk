@@ -148,9 +148,10 @@ use rmk::input_device::pointing::{
 };
 
 let pmw3360_proc_config = PointingProcessorConfig {
-    // invert_x: true, // invert axis if necessary
-    // invert_y: true,
-    // swap_xy: true,
+    device_id: 0,        // Match the id set on the PointingDevice (default 0)
+    // invert_x: true,   // Invert X axis globally (all modes)
+    // invert_y: true,   // Invert Y axis globally (all modes)
+    // swap_xy: true,    // Swap X and Y axes globally
     ..Default::default()
 };
 
@@ -186,11 +187,15 @@ let mut pointing_processor = PointingProcessor::new(&keymap, PointingProcessorCo
 pointing_processor
     .set_layer_mode(0, PointingMode::Cursor)                    // Layer 0: Normal cursor
     .set_layer_mode(1, PointingMode::Scroll(ScrollConfig {
-        divisor_x: 8,  // Pan sensitivity (higher = slower)
-        divisor_y: 8,  // Wheel sensitivity (higher = slower)
+        divisor_x: 8,    // Pan sensitivity (higher = slower)
+        divisor_y: 8,    // Wheel sensitivity (higher = slower)
+        invert_x: false, // Set true to reverse horizontal pan direction
+        invert_y: false, // Set true to reverse scroll wheel direction
     }))
     .set_layer_mode(2, PointingMode::Sniper(SniperConfig {
-        divisor: 4,    // Precision divisor (higher = slower)
+        divisor: 4,      // Precision divisor (higher = slower)
+        invert_x: false, // Set true to reverse X movement in sniper mode
+        invert_y: false, // Set true to reverse Y movement in sniper mode
     }));
 ```
 
@@ -198,17 +203,22 @@ pointing_processor
 
 **Cursor Mode**
 - Direct 1:1 mapping of sensor movement to cursor movement
-- Default mode for all layers
+- Best for general navigation and pointer control
 
 **Scroll Mode**
-- X-axis → horizontal pan, Y-axis → vertical scroll
-- `divisor_x` and `divisor_y` control sensitivity (recommended: 4-16, default: 8)
-- Perfect for document browsing and web navigation
+- X-axis movement → horizontal pan
+- Y-axis movement → vertical scroll wheel
+- `divisor_x` / `divisor_y`: sensitivity per axis — higher = slower. **Set to `0` to disable that axis entirely** (e.g. `divisor_x: 0` disables panning)
+- `invert_x`: reverses horizontal pan direction (independent of global `invert_x`)
+- `invert_y`: reverses scroll wheel direction (independent of global `invert_y`)
+- Recommended divisor values: 4–16 (default: 8)
 
 **Sniper Mode**
-- Reduces movement speed for precision
-- Single divisor for both axes (recommended: 2-8, default: 4)
-- Ideal for gaming, CAD, or detailed work
+- Reduces movement speed for precision aiming
+- `divisor`: applies to both X and Y axes — higher = slower, more precise
+- `invert_x` / `invert_y`: reverses movement per axis in sniper mode
+- Recommended divisor values: 2–8 (default: 4)
+- Useful for games, CAD, or detailed work
 
 ::: tip
 Use momentary layer keys (`MO(n)`) in your keymap to temporarily activate different pointing modes. The motion accumulator automatically resets when switching layers to ensure smooth transitions.

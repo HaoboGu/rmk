@@ -247,17 +247,22 @@ async fn main(spawner: Spawner) {
     pointing_processor
         .set_layer_mode(0, PointingMode::Cursor)
         .set_layer_mode(1, PointingMode::Scroll(ScrollConfig {
-            divisor_x: 8,  // Pan sensitivity (higher = slower)
-            divisor_y: 8,  // Wheel sensitivity (higher = slower)
+            divisor_x: 8,    // Pan sensitivity (higher = slower)
+            divisor_y: 8,    // Wheel sensitivity (higher = slower)
+            invert_x: false, // Set true to reverse horizontal pan direction
+            invert_y: false, // Set true to reverse scroll wheel direction
         }))
         .set_layer_mode(2, PointingMode::Sniper(SniperConfig {
-            divisor: 4,  // Precision divisor (higher = slower, more precise)
+            divisor: 4,      // Precision divisor (higher = slower, more precise)
+            invert_x: false, // Set true to reverse X movement in sniper mode
+            invert_y: false, // Set true to reverse Y movement in sniper mode
         }));
 
     // Initialize the encoder processor
     let mut adc_device = NrfAdc::new(
         saadc,
         [AnalogEventType::Battery],
+        [0],
         embassy_time::Duration::from_secs(12),
         None,
     );

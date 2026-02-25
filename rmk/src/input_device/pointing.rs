@@ -396,13 +396,17 @@ impl Default for PointingProcessorConfig {
 ///
 /// // Layer 1: Scroll (trackball becomes scroll wheel)
 /// processor.set_layer_mode(1, PointingMode::Scroll(ScrollConfig {
-///     divisor_x: 8,  // Pan sensitivity (higher = slower)
-///     divisor_y: 8,  // Wheel sensitivity (higher = slower)
+///     divisor_x: 8,    // Pan sensitivity (higher = slower)
+///     divisor_y: 8,    // Wheel sensitivity (higher = slower)
+///     invert_x: false, // Set true to reverse horizontal pan direction
+///     invert_y: false, // Set true to reverse scroll wheel direction
 /// }));
 ///
 /// // Layer 2: Sniper (precision mode, 1/4 speed)
 /// processor.set_layer_mode(2, PointingMode::Sniper(SniperConfig {
-///     divisor: 4,  // Movement divisor (higher = slower)
+///     divisor: 4,      // Movement divisor (higher = slower)
+///     invert_x: false, // Set true to reverse X movement in sniper mode
+///     invert_y: false, // Set true to reverse Y movement in sniper mode
 /// }));
 ///
 /// // In keymap: use MO(1) to activate scroll, MO(2) for sniper
