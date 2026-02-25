@@ -17,6 +17,7 @@ use rmk::matrix::Matrix;
 use rmk::run_all;
 use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
 use rmk::split::peripheral::run_rmk_split_peripheral;
+use rmk::split::rp::BufferedUartWrapper;
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -45,5 +46,5 @@ async fn main(_spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, 2, 2, true>::new(row_pins, col_pins, debouncer);
 
     // Start
-    join(run_all!(matrix), run_rmk_split_peripheral(uart_instance)).await;
+    join(run_all!(matrix), run_rmk_split_peripheral(BufferedUartWrapper(uart_instance))).await;
 }

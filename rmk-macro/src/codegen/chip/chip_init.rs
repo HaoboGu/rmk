@@ -154,20 +154,24 @@ pub(crate) fn chip_init_default(
                     let p = ::embassy_rp::init(config);
 
                     #[cfg(feature = "skip-cyw43-firmware")]
-                    let (fw, clm, btfw) = (&[], &[], &[]);
+                    let (fw, clm, btfw, nvram) = {
+                        static EMPTY: &::cyw43::Aligned<::cyw43::A4, [u8]> = &::cyw43::Aligned([0u8; 0]);
+                        (EMPTY, &[] as &[u8], EMPTY, EMPTY)
+                    };
 
                     #[cfg(not(feature = "skip-cyw43-firmware"))]
-                    let (fw, clm, btfw) = {
+                    let (fw, clm, btfw, nvram) = {
                         // IMPORTANT
                         //
                         // Download and make sure these files from https://github.com/embassy-rs/embassy/tree/main/cyw43-firmware
                         // are available in `./examples/rp-pico-w`. (should be automatic)
                         //
                         // IMPORTANT
-                        let fw = include_bytes!("../cyw43-firmware/43439A0.bin");
-                        let clm = include_bytes!("../cyw43-firmware/43439A0_clm.bin");
-                        let btfw = include_bytes!("../cyw43-firmware/43439A0_btfw.bin");
-                        (fw, clm, btfw)
+                        let fw = ::cyw43::aligned_bytes!("../cyw43-firmware/43439A0.bin");
+                        let clm = ::cyw43::aligned_bytes!("../cyw43-firmware/43439A0_clm.bin");
+                        let btfw = ::cyw43::aligned_bytes!("../cyw43-firmware/43439A0_btfw.bin");
+                        let nvram = ::cyw43::aligned_bytes!("../cyw43-firmware/nvram_rp2040.bin");
+                        (fw, clm, btfw, nvram)
                     };
 
                     let pwr = ::embassy_rp::gpio::Output::new(p.PIN_23, ::embassy_rp::gpio::Level::Low);
@@ -181,7 +185,7 @@ pub(crate) fn chip_init_default(
                         cs,
                         p.PIN_24,
                         p.PIN_29,
-                        p.DMA_CH0,
+                        ::embassy_rp::dma::Channel::new(p.DMA_CH0, Irqs),
                     );
 
                     static STATE: ::static_cell::StaticCell<::cyw43::State> = ::static_cell::StaticCell::new();
@@ -212,13 +216,8 @@ pub(crate) fn chip_init_default(
                 let p = ::esp_hal::init(::esp_hal::Config::default().with_cpu_clock(::esp_hal::clock::CpuClock::max()));
                 ::esp_alloc::heap_allocator!(size: 72 * 1024);
                 let timg0 = ::esp_hal::timer::timg::TimerGroup::new(p.TIMG0);
-                #[cfg(target_arch = "riscv32")]
                 let software_interrupt = ::esp_hal::interrupt::software::SoftwareInterruptControl::new(p.SW_INTERRUPT);
-                ::esp_rtos::start(
-                    timg0.timer0,
-                    #[cfg(target_arch = "riscv32")]
-                    software_interrupt.software_interrupt0
-                );
+                ::esp_rtos::start(timg0.timer0, software_interrupt.software_interrupt0);
                 let _trng_source = ::esp_hal::rng::TrngSource::new(p.RNG, p.ADC1);
                 let mut rng = ::esp_hal::rng::Trng::try_new().unwrap();
                 let connector = ::esp_radio::ble::controller::BleConnector::new(p.BT, Default::default()).unwrap();

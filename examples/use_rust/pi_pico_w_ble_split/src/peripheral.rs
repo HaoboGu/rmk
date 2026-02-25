@@ -12,7 +12,7 @@ use embassy_rp::bind_interrupts;
 use embassy_rp::clocks::RoscRng;
 use embassy_rp::flash::{Async, Flash};
 use embassy_rp::gpio::{Input, Level, Output};
-use embassy_rp::peripherals::{DMA_CH0, PIO0};
+use embassy_rp::peripherals::{DMA_CH0, DMA_CH1, PIO0};
 use embassy_rp::pio::{self, Pio};
 use rand::SeedableRng;
 use rmk::ble::build_ble_stack;
@@ -28,6 +28,7 @@ use {defmt_rtt as _, embassy_time as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     PIO0_IRQ_0 => pio::InterruptHandler<PIO0>;
+    DMA_IRQ_0 => embassy_rp::dma::InterruptHandler<DMA_CH0>, embassy_rp::dma::InterruptHandler<DMA_CH1>;
 });
 
 #[embassy_executor::task]
@@ -55,10 +56,10 @@ async fn main(spawner: Spawner) {
         // are available in `./examples/rp-pico-w`. (should be automatic)
         //
         // IMPORTANT
-        let fw = aligned_bytes!("../../cyw43-firmware/43439A0.bin");
-        let clm = aligned_bytes!("../../cyw43-firmware/43439A0_clm.bin");
-        let btfw = aligned_bytes!("../../cyw43-firmware/43439A0_btfw.bin");
-        let nvram = aligned_bytes!("../../cyw43-firmware/nvram_rp2040.bin");
+        let fw = aligned_bytes!("../cyw43-firmware/43439A0.bin");
+        let clm = aligned_bytes!("../cyw43-firmware/43439A0_clm.bin");
+        let btfw = aligned_bytes!("../cyw43-firmware/43439A0_btfw.bin");
+        let nvram = aligned_bytes!("../cyw43-firmware/nvram_rp2040.bin");
         (fw, clm, btfw, nvram)
     };
 
@@ -73,19 +74,19 @@ async fn main(spawner: Spawner) {
         cs,
         p.PIN_24,
         p.PIN_29,
-        p.DMA_CH0,
+        embassy_rp::dma::Channel::new(p.DMA_CH0, Irqs),
     );
 
     static STATE: StaticCell<cyw43::State> = StaticCell::new();
     let state = STATE.init(cyw43::State::new());
     let (_net_device, bt_device, mut control, runner) =
         cyw43::new_with_bluetooth(state, pwr, spi, fw, btfw, nvram).await;
-    spawner.spawn(unwrap!(cyw43_task(runner)));
+    spawner.spawn(cyw43_task(runner)).unwrap();
     control.init(clm).await;
     let controller: ExternalController<_, 10> = ExternalController::new(bt_device);
 
     // Storage config
-    let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH1);
+    let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH1, Irqs);
     let storage_config = StorageConfig {
         start_addr: 0x100000, // Start from 1M
         num_sectors: 32,

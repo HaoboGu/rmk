@@ -16,13 +16,13 @@ rmk = { path = "../../../rmk", features = [
     "async_matrix",
     "adafruit_bl",
 ] }
-nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "df7e3b4f363275e2c9ad42005758cf3eb8a798e0", features = [
+nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "43df6b8b0affeacd9cb4094a3ab4f81576554887", features = [
     "defmt",
     "peripheral",
     "central",
     "nrf52840",
 ] }
-nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "df7e3b4f363275e2c9ad42005758cf3eb8a798e0", features = [
+nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "43df6b8b0affeacd9cb4094a3ab4f81576554887", features = [
     "defmt",
     "critical-section-impl",
     "nrf52840",

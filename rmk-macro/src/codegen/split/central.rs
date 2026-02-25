@@ -64,7 +64,7 @@ pub(crate) fn expand_serial_init(chip: &ChipModel, serial: Vec<SerialConfig>) ->
                             ::embassy_rp::bind_interrupts!(struct #irq_name {
                                 #uart_irq => ::embassy_rp::uart::BufferedInterruptHandler<::embassy_rp::peripherals::#uart_instance>;
                             });
-                            let #uart_name = ::embassy_rp::uart::BufferedUart::new(
+                            let #uart_name = ::rmk::split::rp::BufferedUartWrapper(::embassy_rp::uart::BufferedUart::new(
                                 p.#uart_instance,
                                 p.#tx_pin,
                                 p.#rx_pin,
@@ -72,7 +72,7 @@ pub(crate) fn expand_serial_init(chip: &ChipModel, serial: Vec<SerialConfig>) ->
                                 #tx_buf_name,
                                 #rx_buf_name,
                                 ::embassy_rp::uart::Config::default(),
-                            );
+                            ));
                         }
                     }
                     i if i.starts_with("PIO") => {
