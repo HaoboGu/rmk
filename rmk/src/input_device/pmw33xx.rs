@@ -12,9 +12,7 @@ use embedded_hal_async::spi::SpiBus;
 
 use crate::input_device::pointing::{InitState, MotionData, PointingDevice, PointingDriver, PointingDriverError};
 
-// ============================================================================
-// Burst register offsets
-// ============================================================================
+// Burst report offsets
 const BURST_MOTION_FLAGS: usize = 0;
 #[allow(dead_code)]
 const BURST_OBSERVATION: usize = 1;
@@ -24,9 +22,7 @@ const BURST_DELTA_Y_L: usize = 4;
 const BURST_DELTA_Y_H: usize = 5;
 const BURST_DATA_LEN: usize = 6;
 
-// ============================================================================
 // Constants
-// ============================================================================
 const SPI_WRITE: u8 = 0x80; // BIT(7)
 const MOTION_STATUS_MOTION: u8 = 0x80; // BIT(7)
 const MOTION_STATUS_LIFTED: u8 = 0x08; // BIT(4)
@@ -36,13 +32,32 @@ const POWER_UP_RESET_VAL: u8 = 0x5a;
 const RESET_DELAY_MS: u64 = 50;
 
 // SPI timing constants (from PMW3360 datasheet)
-const T_NCS_SCLK_US: u64 = 1;
+/// NCS to SCLK active;
+/// Delay from last NCS falling edge to 1st SCK rising edge
+const T_NCS_SCLK_NS: u64 = 120;
+/// SPI read address-data delay;
+/// from rising SCLK for last bit of the address byte, to falling SCLK for the 1st bit of data being read.
 const T_SRAD_US: u64 = 160;
+/// SPI read motion burst delay;
+/// From  rising  SCLK  for  last  bit  of  the  address byte, to falling SCLK for first bit
+/// of data being read. Applicable for Burst Mode Motion Read only.
 const T_SRAD_MOTBR_US: u64 = 35;
-const T_SRX_US: u64 = 20 - T_NCS_SCLK_US;
-const T_SWX_US: u64 = 180 - T_SCLK_NCS_WR_US;
-const T_SCLK_NCS_WR_US: u64 = 35 - T_NCS_SCLK_US;
-const T_BEXIT_US: u64 = 1;
+/// SPI time between read and subsequent commands;
+/// from rising SCLK for last bit of the 1st data byte, to falling SCLK for the 1st bit of data being read.
+const T_SRX_US: u64 = 20;
+/// SPI time between write command;
+/// From rising SCLK for last bit of the first data byte, to rising SCLK for last bit of the second data byte.
+const T_SWX_US: u64 = 180;
+/// SCLK to NCS inactive for SDIO write;
+/// From last SCLK falling edge to NCS rising edge, for valid SDIO data transfer
+const T_SCLK_NCS_W_US: u64 = 35;
+/// SCLK to NCS inactive for SDIO read;
+/// From last SCLK falling edge to NCS rising edge, for valid SDIO data transfer
+const T_SCLK_NCS_R_NS: u64 = 120;
+/// NCS inactive after motion burst;
+/// Minimum NCS inactive time after motion burst before next SPI usage
+const T_BEXIT_NS: u64 = 500;
+/// Timeout between SROM data bursts
 const T_BRSEP_US: u64 = 15;
 
 // Rotational transform angle limits
@@ -362,19 +377,6 @@ where
         }
     }
 
-    /// Set sensor resolution in CPI (100-12000, step 100)
-    async fn set_resolution(&mut self, cpi: u16) -> Result<(), PointingDriverError> {
-        if !(SPEC::RES_MIN..=SPEC::RES_MAX).contains(&cpi) {
-            return Err(PointingDriverError::InvalidCpi);
-        }
-
-        SPEC::write_resolution(self, cpi).await?;
-
-        debug!("PMW33{}: Resolution set to {} CPI", SPEC::TYPENAME, cpi);
-
-        Ok(())
-    }
-
     /// Set sensor rotational transform angle (-127 to 127)
     async fn set_rot_trans_angle(&mut self, angle: i8) -> Result<(), PointingDriverError> {
         if !(ROT_MIN..=ROT_MAX).contains(&angle) {
@@ -417,16 +419,9 @@ where
         }
     }
 
-    #[inline(always)]
-    fn short_delay() {
-        for _ in 0..64 {
-            core::hint::spin_loop();
-        }
-    }
-
     async fn read_reg(&mut self, register: Register) -> Result<u8, Pmw33xxError> {
         let _ = self.cs.set_low();
-        Timer::after(Duration::from_micros(T_NCS_SCLK_US)).await;
+        Timer::after(Duration::from_nanos(T_NCS_SCLK_NS)).await;
 
         // Send address with read bit (bit 7 = 0)
         self.spi
@@ -439,7 +434,7 @@ where
         let mut value = [0u8];
         self.spi.read(&mut value).await.map_err(|_| Pmw33xxError::Spi)?;
 
-        Self::short_delay();
+        Timer::after(Duration::from_nanos(T_SCLK_NCS_R_NS)).await;
         let _ = self.cs.set_high();
 
         Timer::after(Duration::from_micros(T_SRX_US)).await;
@@ -449,7 +444,7 @@ where
 
     async fn read_burst(&mut self, register: Register, data: &mut [u8]) -> Result<(), Pmw33xxError> {
         let _ = self.cs.set_low();
-        Timer::after(Duration::from_micros(T_NCS_SCLK_US)).await;
+        Timer::after(Duration::from_nanos(T_NCS_SCLK_NS)).await;
 
         // Send address with read bit (bit 7 = 0)
         self.spi
@@ -461,17 +456,17 @@ where
 
         self.spi.read(data).await.map_err(|_| Pmw33xxError::Spi)?;
 
-        Self::short_delay();
+        Timer::after(Duration::from_nanos(T_SCLK_NCS_R_NS)).await;
         let _ = self.cs.set_high();
 
-        Timer::after(Duration::from_micros(T_BEXIT_US)).await;
+        Timer::after(Duration::from_nanos(T_BEXIT_NS)).await;
 
         Ok(())
     }
 
     async fn write_reg(&mut self, register: Register, value: u8) -> Result<(), Pmw33xxError> {
         let _ = self.cs.set_low();
-        Timer::after(Duration::from_micros(T_NCS_SCLK_US)).await;
+        Timer::after(Duration::from_nanos(T_NCS_SCLK_NS)).await;
 
         // Send address with write bit (bit 7 = 1)
         self.spi
@@ -479,7 +474,8 @@ where
             .await
             .map_err(|_| Pmw33xxError::Spi)?;
 
-        Timer::after(Duration::from_micros(T_SCLK_NCS_WR_US)).await;
+        Timer::after(Duration::from_micros(T_SCLK_NCS_W_US)).await;
+
         let _ = self.cs.set_high();
 
         Timer::after(Duration::from_micros(T_SWX_US)).await;
@@ -546,14 +542,14 @@ where
         self.write_reg(Register::SromEnable, 0x18).await?;
 
         let _ = self.cs.set_low();
-        Timer::after(Duration::from_micros(T_NCS_SCLK_US)).await;
+        Timer::after(Duration::from_nanos(T_NCS_SCLK_NS)).await;
 
         self.spi
             .write(&[Register::SromLoadBurst.value() | SPI_WRITE])
             .await
             .map_err(|_| Pmw33xxError::Spi)?;
 
-        Timer::after(Duration::from_micros(T_SCLK_NCS_WR_US)).await;
+        Timer::after(Duration::from_micros(T_SCLK_NCS_W_US)).await;
 
         for &byte in firmware {
             debug!("PMW33{}: Uploading srom byte: 0x{:02x}", SPEC::TYPENAME, byte);
@@ -563,7 +559,7 @@ where
 
         let _ = self.cs.set_high();
 
-        Timer::after(Duration::from_micros(T_BEXIT_US)).await;
+        Timer::after(Duration::from_nanos(T_BEXIT_NS)).await;
 
         let flashed_srom_id = self.read_reg(Register::SromId).await?;
         if srom_id != flashed_srom_id {
@@ -650,6 +646,19 @@ where
 
     fn motion_gpio(&mut self) -> Option<&mut MOTION> {
         self.motion_gpio.as_mut()
+    }
+
+    /// Set sensor resolution in CPI (100-12000, step 100)
+    async fn set_resolution(&mut self, cpi: u16) -> Result<(), PointingDriverError> {
+        if !(SPEC::RES_MIN..=SPEC::RES_MAX).contains(&cpi) {
+            return Err(PointingDriverError::InvalidCpi);
+        }
+
+        SPEC::write_resolution(self, cpi).await?;
+
+        debug!("PMW33{}: Resolution set to {} CPI", SPEC::TYPENAME, cpi);
+
+        Ok(())
     }
 }
 

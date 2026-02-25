@@ -20,7 +20,7 @@ The `matrix_map` is a string built from `(row, col, <hand>)` tuples, listed in t
 The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](./keyboard_matrix#matrix-configuration), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts.
 With the help of this matrix map, the configuration of non-regular key matrices can be intuitively arranged in your key maps. (Triple quote mark `"""` is used to limit multi-line strings)
 
-The `<hand>` is optional, it should only be used when `unilateral_tap = true`. By assigning `L` or `R` to `<hand>`, each key can be associated with either the left or right hand.
+The `<hand>` is optional, it should only be used when `unilateral_tap = true`. By assigning `L` or `R` to `<hand>`, each key can be associated with either the left or right hand. If the `<hand>` is set to `*` it will be considered a "bilateral" key, meaning that in `unilateral_tap = true` it will be treated as opposite hand regardless of on which hand modifier was pressed.
 
 ```toml
 # simple numpad example:
