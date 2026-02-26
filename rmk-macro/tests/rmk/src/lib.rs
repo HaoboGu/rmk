@@ -260,7 +260,7 @@ macro_rules! lt {
 
 #[macro_export]
 macro_rules! mt {
-    ($modifiers:expr, $key:ident) => { $crate::types::action::KeyAction };
+    ($key:ident, $modifiers:expr) => { $crate::types::action::KeyAction };
 }
 
 #[macro_export]
@@ -316,4 +316,29 @@ macro_rules! special {
 #[macro_export]
 macro_rules! encoder {
     ($cw:expr, $ccw:expr) => { () };
+}
+
+#[macro_export]
+macro_rules! shifted {
+    ($key:ident) => { $crate::types::action::KeyAction };
+}
+
+#[macro_export]
+macro_rules! th {
+    ($key1:ident, $key2:ident) => { $crate::types::action::KeyAction };
+}
+
+#[macro_export]
+macro_rules! ltp {
+    ($layer:expr, $key:ident, $profile:expr) => { $crate::types::action::KeyAction };
+}
+
+#[macro_export]
+macro_rules! mtp {
+    ($key:ident, $modifiers:expr, $profile:expr) => { $crate::types::action::KeyAction };
+}
+
+#[macro_export]
+macro_rules! thp {
+    ($key1:ident, $key2:ident, $profile:expr) => { $crate::types::action::KeyAction };
 }

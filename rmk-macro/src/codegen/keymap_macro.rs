@@ -3,10 +3,7 @@
 //! This module provides a proc-macro for defining keymaps directly in Rust code,
 //! reusing the same parsing logic as `keyboard.toml`.
 
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
-    panic::{AssertUnwindSafe, catch_unwind},
-};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -228,6 +225,11 @@ fn generate_keymap(input: &KeymapInput) -> Result<TokenStream2, String> {
 
     // Parse matrix_map
     let matrix_coords = KeyboardTomlConfig::parse_matrix_map(&input.matrix_map)?;
+
+    if matrix_coords.is_empty() {
+        return Err("matrix_map must define at least one key position".to_string());
+    }
+
     let total_keys = matrix_coords.len();
     validate_unique_matrix_coords(&matrix_coords)?;
 
@@ -237,7 +239,7 @@ fn generate_keymap(input: &KeymapInput) -> Result<TokenStream2, String> {
     for layer in &input.layers {
         if layer.layer > u8::MAX as usize {
             return Err(format!(
-                "layer {} is out of range; layer ids must be in 0..{}",
+                "layer {} is out of range; layer ids must be in 0..={}",
                 layer.layer,
                 u8::MAX
             ));
@@ -260,12 +262,12 @@ fn generate_keymap(input: &KeymapInput) -> Result<TokenStream2, String> {
         }
     }
 
-    let expected_max_layer = input.layers.len().saturating_sub(1);
+    let expected_max_layer_id = input.layers.len().saturating_sub(1);
     for (expected_layer, actual_layer) in layer_ids.iter().copied().enumerate() {
         if actual_layer != expected_layer {
             return Err(format!(
-                "sparse layer id {} found; layer ids must be contiguous in 0..{}",
-                actual_layer, expected_max_layer
+                "missing layer id {}; found {} instead; layer ids must be contiguous starting from 0 (0..={})",
+                expected_layer, actual_layer, expected_max_layer_id
             ));
         }
     }
@@ -308,12 +310,13 @@ fn generate_layers_code(
     matrix_coords: &[(u8, u8, char)],
 ) -> Result<TokenStream2, String> {
     // Calculate dimensions from matrix_coords
-    let max_row = matrix_coords.iter().map(|(r, _, _)| *r).max().unwrap_or(0) as usize + 1;
-    let max_col = matrix_coords.iter().map(|(_, c, _)| *c).max().unwrap_or(0) as usize + 1;
+    debug_assert!(!matrix_coords.is_empty(), "matrix_coords must be non-empty");
+    let max_row = matrix_coords.iter().map(|(r, _, _)| *r).max().expect("matrix_coords is non-empty; invariant upheld by caller") as usize + 1;
+    let max_col = matrix_coords.iter().map(|(_, c, _)| *c).max().expect("matrix_coords is non-empty; invariant upheld by caller") as usize + 1;
 
     let mut all_layers = Vec::new();
 
-    for (layer_num, keys) in layers {
+    for (&layer_num, keys) in layers {
         // Create a 2D grid initialized with "No" actions
         let mut grid: Vec<Vec<String>> = vec![vec!["No".to_string(); max_col]; max_row];
 
@@ -331,7 +334,7 @@ fn generate_layers_code(
                 let keys_code: Vec<TokenStream2> = row
                     .iter()
                     .enumerate()
-                    .map(|(col_idx, key)| parse_key_action(*layer_num, row_idx, col_idx, key))
+                    .map(|(col_idx, key)| parse_key_action(layer_num, row_idx, col_idx, key))
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(quote! { [#(#keys_code),*] })
             })
@@ -359,23 +362,28 @@ fn parse_layer_actions(
 fn parse_key_action(layer_num: usize, row: usize, col: usize, key: &str) -> Result<TokenStream2, String> {
     use super::action_parser::parse_key;
 
-    // TODO: Add morse profile support for 3-argument LT/MT/TH in keymap! macro.
-    // Currently morse profiles are only available via keyboard.toml.
-
-    // TODO: Once `parse_key` returns `Result` instead of panicking,
-    // remove this `catch_unwind` wrapper.
-    let parsed = catch_unwind(AssertUnwindSafe(|| parse_key(key.to_string(), &None)));
-    match parsed {
-        Ok(tokens) => Ok(tokens),
-        Err(payload) => Err(format!(
-            "failed to parse key action '{}' at layer {}, row {}, col {}: {}",
-            key,
-            layer_num,
-            row,
-            col,
-            panic_payload_to_string(payload)
-        )),
+    // Morse profiles (3-argument LT/MT/TH) are not supported in keymap! macro.
+    // Detect and give a clear error instead of a cryptic profile-not-found message.
+    // NOTE: The comma-count heuristic (>= 2 commas) is intentionally best-effort.
+    // Nested actions like LT(0, WM(A, LCtrl)) are not supported by the grammar anyway,
+    // so a false positive here still produces a reasonable error message.
+    let lower = key.to_lowercase();
+    if (lower.starts_with("lt(") || lower.starts_with("mt(") || lower.starts_with("th("))
+        && key.matches(',').count() >= 2
+    {
+        let prefix = &key[..key.find('(').expect("prefix confirmed by starts_with guard") + 1];
+        return Err(format!(
+            "3-argument {}...) with morse profile is not supported in keymap! macro; use keyboard.toml for morse profiles (layer {}, row {}, col {})",
+            prefix, layer_num, row, col
+        ));
     }
+
+    parse_key(key.to_string(), &None).map_err(|e| {
+        format!(
+            "failed to parse key action '{}' at layer {}, row {}, col {}: {}",
+            key, layer_num, row, col, e
+        )
+    })
 }
 
 fn validate_unique_matrix_coords(matrix_coords: &[(u8, u8, char)]) -> Result<(), String> {
@@ -415,12 +423,12 @@ fn validate_layer_references(
                     .map(|(row, col, _)| format!("row {}, col {}", row, col))
                     .unwrap_or_else(|| format!("key index {}", idx));
                 return Err(format!(
-                    "layer reference {} in action '{}' at layer {} ({}) is out of range; valid layer range is 0..{}",
+                    "layer reference {} in action '{}' at layer {} ({}) is out of range; valid layer range is 0..={}",
                     referenced_layer,
                     action,
                     current_layer,
                     position,
-                    layer_count - 1
+                    layer_count.saturating_sub(1)
                 ));
             }
         }
@@ -437,7 +445,8 @@ fn validate_layer_references(
 /// NOTE: The `prefixes` list below must stay in sync with the layer-action rules
 /// in `rmk-config`'s Pest grammar (e.g. `mo_action`, `to_action`, etc.) and the
 /// corresponding match arms in `KeyboardTomlConfig::keymap_parser`.
-/// `MT` and `TH` are intentionally excluded — they take keycodes, not layer numbers.
+/// `MT` and `TH` are intentionally excluded — their first argument is a keycode, not a layer
+/// number. `LM` is included because its first argument IS a layer number (the modifier is second).
 fn parse_referenced_layer(action: &str) -> Result<Option<usize>, String> {
     let lower = action.to_ascii_lowercase();
     let prefixes = ["mo(", "to(", "tg(", "tt(", "df(", "osl(", "lm(", "lt("];
@@ -450,13 +459,13 @@ fn parse_referenced_layer(action: &str) -> Result<Option<usize>, String> {
         .find('(')
         .ok_or_else(|| format!("invalid action format '{}'", action))?;
     let close = action
-        .rfind(')')
+        .find(')')
         .ok_or_else(|| format!("invalid action format '{}'", action))?;
     if close <= open + 1 {
         return Err(format!("invalid action format '{}'", action));
     }
 
-    let inner = &action[open + 1..close];
+    let inner = action.get(open + 1..close).expect("open/close are ASCII char boundaries");
     let layer_str = inner
         .split(',')
         .next()
@@ -471,22 +480,26 @@ fn parse_referenced_layer(action: &str) -> Result<Option<usize>, String> {
     Ok(Some(layer_num))
 }
 
-fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
-    if let Some(message) = payload.downcast_ref::<&str>() {
-        (*message).to_string()
-    } else if let Some(message) = payload.downcast_ref::<String>() {
-        message.clone()
-    } else {
-        "unknown panic payload".to_string()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn parse_input(input: &str) -> KeymapInput {
         syn::parse_str::<KeymapInput>(input).expect("test input should parse")
+    }
+
+    #[test]
+    fn generates_valid_keymap_for_simple_input() {
+        let input = parse_input(
+            r#"
+            matrix_map: "(0,0) (0,1)",
+            layers: [
+                { layer: 0, name: "base", layout: "A B" }
+            ]
+            "#,
+        );
+        let result = generate_keymap(&input);
+        assert!(result.is_ok(), "valid input should generate successfully: {:?}", result.err());
     }
 
     #[test]
@@ -503,7 +516,7 @@ mod tests {
 
         let err = generate_keymap(&input).expect_err("generation should fail");
         assert!(
-            err.contains("sparse layer id 1 found"),
+            err.contains("missing layer id 0"),
             "non-contiguous layer ids must be rejected"
         );
     }
@@ -661,7 +674,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_layer_actions_return_errors_instead_of_panicking() {
+    fn rejects_layer_references_exceeding_layer_count() {
         let input = parse_input(
             r#"
             matrix_map: "(0,0)",
@@ -673,8 +686,8 @@ mod tests {
 
         let err = generate_keymap(&input).expect_err("generation should fail");
         assert!(
-            err.contains("out of range") || err.contains("failed to parse key action"),
-            "should return validation or parse errors instead of panicking"
+            err.contains("out of range"),
+            "MO(999) with only 1 layer defined should be rejected as out of range"
         );
     }
 
@@ -695,5 +708,39 @@ mod tests {
             err.contains("out of range"),
             "layer references beyond generated layer count must fail"
         );
+    }
+
+    /// Verify that `validate_layer_references` catches out-of-range layer numbers
+    /// for every prefix in `parse_referenced_layer`. If a new layer-switching action
+    /// is added to the grammar but not to the prefix list, this test should be
+    /// extended to cover it.
+    #[test]
+    fn validate_layer_references_catches_all_layer_prefixes() {
+        // Each prefix that parse_referenced_layer recognizes, with a sample action
+        // referencing layer 5 (which is out of range for a 2-layer keymap).
+        let layer_actions = [
+            "MO(5)", "TO(5)", "TG(5)", "TT(5)", "DF(5)", "OSL(5)", "LM(5, LShift)", "LT(5, A)",
+        ];
+
+        for action in &layer_actions {
+            let input = parse_input(&format!(
+                r#"
+                matrix_map: "(0,0)",
+                layers: [
+                    {{ layer: 0, layout: "{}" }},
+                    {{ layer: 1, layout: "A" }}
+                ]
+                "#,
+                action
+            ));
+
+            let err = generate_keymap(&input).unwrap_err();
+            assert!(
+                err.contains("out of range"),
+                "expected out-of-range error for '{}', got: {}",
+                action,
+                err
+            );
+        }
     }
 }

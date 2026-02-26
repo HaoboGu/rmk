@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use quote::quote;
 use rmk_config::{
     CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, MorseActionPair, MorseConfig,
-    MorseProfile, MorsesConfig, OneShotConfig, TriLayerConfig,
+    MorseProfile, MorsesConfig, OneShotConfig, TriLayerConfig, KEYCODE_ALIAS,
 };
 
 use super::action_parser::{expand_profile, expand_profile_name, get_key_with_alias, parse_key};
@@ -49,6 +49,9 @@ fn expand_morse_action_pair(
 ) -> proc_macro2::TokenStream {
     let mut pattern = 0b1u16;
     for ch in action_pair.pattern.chars() {
+        if pattern & 0x8000 != 0 {
+            panic!("morse pattern '{}' exceeds maximum length of 15", action_pair.pattern);
+        }
         match ch {
             '1' => pattern = pattern << 1 | 1,
             '-' => pattern = pattern << 1 | 1,
@@ -58,7 +61,8 @@ fn expand_morse_action_pair(
             _ => {}
         }
     }
-    let action = parse_key(action_pair.action.to_owned(), profiles);
+    let action = parse_key(action_pair.action.to_owned(), profiles)
+        .unwrap_or_else(|e| panic!("failed to parse morse action '{}': {}", action_pair.action, e));
     quote! { (rmk::morse::MorsePattern::from_u16(#pattern), #action.to_action()) }
 }
 
@@ -129,8 +133,8 @@ fn expand_combos(
     match combos {
         Some(combos) => {
             let combos_def = combos.combos.iter().map(|combo| {
-                let actions = combo.actions.iter().map(|a| parse_key(a.to_owned(), profiles));
-                let output = parse_key(combo.output.to_owned(), profiles);
+                let actions = combo.actions.iter().map(|a| parse_key(a.to_owned(), profiles).unwrap_or_else(|e| panic!("failed to parse combo action '{}': {}", a, e)));
+                let output = parse_key(combo.output.to_owned(), profiles).unwrap_or_else(|e| panic!("failed to parse combo output '{}': {}", combo.output, e));
                 let layer = match combo.layer {
                     Some(layer) => quote! { ::core::option::Option::Some(#layer) },
                     None => quote! { ::core::option::Option::None },
@@ -187,7 +191,9 @@ fn expand_macros(macros: &Option<MacrosConfig>) -> proc_macro2::TokenStream {
                         quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::types::keycode::KeyCode::#key).into_iter() }
                     }
                     rmk_config::MacroOperation::Delay { duration } => {
-                        let millis = duration.0 as u16;
+                        let millis = u16::try_from(duration.0).unwrap_or_else(|_| {
+                            panic!("macro delay value {} ms exceeds maximum of {} ms", duration.0, u16::MAX)
+                        });
                         quote! { ::rmk::keyboard_macros::MacroOperation::Delay(#millis).into_iter() }
                     }
                     rmk_config::MacroOperation::Text { text } => {
@@ -210,7 +216,7 @@ fn expand_morses(
 ) -> proc_macro2::TokenStream {
     let morses_def = morses.iter().map(|morse| {
         let profile = if let Some(profile_name) = &morse.profile {
-            let morse_profile = expand_profile_name(profile_name, profiles);
+            let morse_profile = expand_profile_name(profile_name, profiles).unwrap_or_else(|e| panic!("failed to expand morse profile '{}': {}", profile_name, e));
             quote! { #morse_profile }
         } else {
             quote! { rmk::types::action::MorseProfile::const_default() }
@@ -240,7 +246,7 @@ fn expand_morses(
             let tap_actions_def = match &morse.tap_actions {
                 Some(tap_actions) => {
                     let actions = tap_actions.iter().map(|action| {
-                        let parsed_action = parse_key(action.clone(), profiles);
+                        let parsed_action = parse_key(action.clone(), profiles).unwrap_or_else(|e| panic!("failed to parse tap action '{}': {}", action, e));
                         quote! { #parsed_action }
                     });
                     quote! { ::rmk::heapless::Vec::from_iter([#(#actions.to_action()),*]) }
@@ -251,7 +257,7 @@ fn expand_morses(
             let hold_actions_def = match &morse.hold_actions {
                 Some(hold_actions) => {
                     let actions = hold_actions.iter().map(|action| {
-                        let parsed_action = parse_key(action.clone(), profiles);
+                        let parsed_action = parse_key(action.clone(), profiles).unwrap_or_else(|e| panic!("failed to parse hold action '{}': {}", action, e));
                         quote! { #parsed_action }
                     });
                     quote! { ::rmk::heapless::Vec::from_iter([#(#actions.to_action()),*]) }
@@ -267,10 +273,14 @@ fn expand_morses(
                 )
             }
         } else {
-            let tap = parse_key(morse.tap.clone().unwrap_or_else(|| "No".to_string()), profiles);
-            let hold = parse_key(morse.hold.clone().unwrap_or_else(|| "No".to_string()), profiles);
-            let hold_after_tap = parse_key(morse.hold_after_tap.clone().unwrap_or_else(|| "No".to_string()), profiles);
-            let double_tap = parse_key(morse.double_tap.clone().unwrap_or_else(|| "No".to_string()), profiles);
+            let tap_str = morse.tap.clone().unwrap_or_else(|| "No".to_string());
+            let hold_str = morse.hold.clone().unwrap_or_else(|| "No".to_string());
+            let hold_after_tap_str = morse.hold_after_tap.clone().unwrap_or_else(|| "No".to_string());
+            let double_tap_str = morse.double_tap.clone().unwrap_or_else(|| "No".to_string());
+            let tap = parse_key(tap_str.clone(), profiles).unwrap_or_else(|e| panic!("failed to parse morse tap '{}': {}", tap_str, e));
+            let hold = parse_key(hold_str.clone(), profiles).unwrap_or_else(|e| panic!("failed to parse morse hold '{}': {}", hold_str, e));
+            let hold_after_tap = parse_key(hold_after_tap_str.clone(), profiles).unwrap_or_else(|e| panic!("failed to parse morse hold_after_tap '{}': {}", hold_after_tap_str, e));
+            let double_tap = parse_key(double_tap_str.clone(), profiles).unwrap_or_else(|e| panic!("failed to parse morse double_tap '{}': {}", double_tap_str, e));
 
             quote! {
                 ::rmk::morse::Morse::new_from_vial(
@@ -375,13 +385,17 @@ impl quote::ToTokens for StateBitsMacro {
     }
 }
 
-/// Get modifier combination, in types of mod1 | mod2 | ...
+/// Get state combination, in types of state1 | state2 | ...
 fn parse_state_combination(states_str: &str) -> StateBitsMacro {
     let mut combination = StateBitsMacro::default();
     let tokens = states_str.split_terminator("|");
     tokens.for_each(|w| {
         let w = w.trim();
-        match w {
+        let key = match KEYCODE_ALIAS.get(w.to_lowercase().as_str()) {
+            Some(k) => *k,
+            None => w,
+        };
+        match key {
             "LCtrl" => combination.modifiers_left_ctrl = true,
             "LShift" => combination.modifiers_left_shift = true,
             "LAlt" => combination.modifiers_left_alt = true,
@@ -420,9 +434,9 @@ fn expand_forks(
     match forks {
         Some(forks) => {
             let forks_def = forks.forks.iter().map(|fork| {
-                let trigger = parse_key(fork.trigger.to_owned(), profiles);
-                let negative_output = parse_key(fork.negative_output.to_owned(), profiles);
-                let positive_output = parse_key(fork.positive_output.to_owned(), profiles);
+                let trigger = parse_key(fork.trigger.to_owned(), profiles).unwrap_or_else(|e| panic!("failed to parse fork trigger '{}': {}", fork.trigger, e));
+                let negative_output = parse_key(fork.negative_output.to_owned(), profiles).unwrap_or_else(|e| panic!("failed to parse fork negative_output '{}': {}", fork.negative_output, e));
+                let positive_output = parse_key(fork.positive_output.to_owned(), profiles).unwrap_or_else(|e| panic!("failed to parse fork positive_output '{}': {}", fork.positive_output, e));
                 let match_any  = fork.match_any.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
                 let match_none = fork.match_none.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
                 let kept = fork.kept_modifiers.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
@@ -449,12 +463,10 @@ fn expand_forks(
 pub(crate) fn expand_behavior_config(
     keyboard_config: &KeyboardTomlConfig,
 ) -> proc_macro2::TokenStream {
-    let profiles = &keyboard_config
+    let behavior = keyboard_config
         .get_behavior_config()
-        .unwrap()
-        .morse
-        .and_then(|m| m.profiles);
-    let behavior = keyboard_config.get_behavior_config().unwrap();
+        .unwrap_or_else(|e| panic!("{}", e));
+    let profiles = &behavior.morse.as_ref().and_then(|m| m.profiles.clone());
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
     let one_shot = expand_one_shot(&behavior.one_shot);
     let combos = expand_combos(&behavior.combo, profiles);

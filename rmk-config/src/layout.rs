@@ -18,7 +18,7 @@ impl KeyboardTomlConfig {
     pub fn get_layout_config(&self) -> Result<(LayoutConfig, Vec<Vec<KeyInfo>>), String> {
         let aliases = self.aliases.clone().unwrap_or_default();
         let layers = self.layer.clone().unwrap_or_default();
-        let mut layout = self.layout.clone().expect("layout config is required");
+        let mut layout = self.layout.clone().ok_or_else(|| "keyboard.toml: [layout] section is required".to_string())?;
 
         // Temporarily allow both matrix_map and keymap to be set and append the obsolete layout.keymap based layer configurations
         // to the new [[layer]] based layer configurations in the resulting LayoutConfig
@@ -51,8 +51,8 @@ impl KeyboardTomlConfig {
                                 "keyboard.toml: Coordinate ({},{}) in `layout.matrix_map` is out of bounds: ([0..{}], [0..{}]) is the expected range",
                                 row,
                                 col,
-                                layout.rows - 1,
-                                layout.cols - 1
+                                layout.rows.saturating_sub(1),
+                                layout.cols.saturating_sub(1)
                             ));
                         }
                         if grid_to_sequence[*row as usize][*col as usize].is_some() {
@@ -76,7 +76,7 @@ impl KeyboardTomlConfig {
                 }
             }
         } else if !layers.is_empty() {
-            return Err("layout.matrix_map is need to be defined to process [[layer]] based key maps".to_string());
+            return Err("layout.matrix_map needs to be defined to process [[layer]] based key maps".to_string());
         }
         if let Some(sequence_to_grid) = &sequence_to_grid {
             // collect layer names first
@@ -85,7 +85,7 @@ impl KeyboardTomlConfig {
                 if let Some(name) = &layer.name {
                     if layer_names.contains_key(name) {
                         return Err(format!(
-                            "keyboard.toml: Duplicate layer name '{}' found in `layout.keymap`",
+                            "keyboard.toml: Duplicate layer name '{}' found in `[[layer]]` entries",
                             name
                         ));
                     }
@@ -120,7 +120,12 @@ impl KeyboardTomlConfig {
                         final_layers.push(legacy_keymap);
                     }
                     Err(parse_err) => {
-                        return Err(format!("keyboard.toml: Error in `layout.keymap`: {}", parse_err));
+                        return Err(format!(
+                            "keyboard.toml: Error in `[[layer]]` entry #{} ('{}'): {}",
+                            layer_number,
+                            layer.name.as_deref().unwrap_or("<unnamed>"),
+                            parse_err
+                        ));
                     }
                 }
             }
@@ -168,6 +173,10 @@ impl KeyboardTomlConfig {
                     *ccw = Self::alias_resolver(ccw, &aliases)?;
                 }
                 encoder_map.push(encoders);
+            }
+            // Pad encoder_map to match the total number of layers
+            while encoder_map.len() < layout.layers as usize {
+                encoder_map.push(vec![]);
             }
         }
 
@@ -298,6 +307,10 @@ impl KeyboardTomlConfig {
             // Append any remaining part of the string after the last '@' or if no '@' was found
             next_keys.push_str(&current_keys[last_index..]);
 
+            if !made_replacement {
+                break; // No more replacements needed
+            }
+
             // Check for termination conditions
             iterations += 1;
             if iterations >= MAX_ALIAS_RESOLUTION_DEPTH {
@@ -305,10 +318,6 @@ impl KeyboardTomlConfig {
                     "Alias resolution exceeded maximum depth ({}), potential infinite loop detected in '{}'",
                     MAX_ALIAS_RESOLUTION_DEPTH, keys
                 )); // Show original keys for context
-            }
-
-            if !made_replacement {
-                break; // No more replacements needed
             }
 
             // Prepare for the next iteration
@@ -413,7 +422,6 @@ impl KeyboardTomlConfig {
                                 }
                                 Rule::lt_action => {
                                     key_action_sequence.push(Self::layer_name_resolver("LT", inner_pair, layer_names)?);
-                                    //"LT(".to_owned() + &Self::layer_name_resolver(inner_pair, layer_names)? + ")");
                                 }
                                 Rule::osl_action => {
                                     key_action_sequence.push(Self::layer_name_resolver(

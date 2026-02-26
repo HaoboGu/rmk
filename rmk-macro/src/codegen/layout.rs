@@ -12,17 +12,17 @@ use super::action_parser::parse_key;
 pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
     let profiles = &keyboard_config
         .get_behavior_config()
-        .unwrap()
+        .unwrap_or_else(|e| panic!("{}", e))
         .morse
         .and_then(|m| m.profiles);
     let num_encoder = keyboard_config
         .get_board_config()
-        .unwrap()
+        .unwrap_or_else(|e| panic!("{}", e))
         .get_num_encoder()
         .iter()
         .sum();
 
-    let (layout, _) = keyboard_config.get_layout_config().unwrap();
+    let (layout, _) = keyboard_config.get_layout_config().unwrap_or_else(|e| panic!("{}", e));
 
     let mut layers = vec![];
     let mut encoder_map = vec![];
@@ -70,7 +70,7 @@ fn expand_layer(
 fn expand_row(row: Vec<String>, profiles: &Option<HashMap<String, MorseProfile>>) -> TokenStream2 {
     let mut keys = vec![];
     for key in row {
-        keys.push(parse_key(key, profiles));
+        keys.push(parse_key(key.clone(), profiles).unwrap_or_else(|e| panic!("failed to parse key action '{}': {}", key, e)));
     }
     quote! { [#(#keys), *] }
 }
@@ -84,8 +84,8 @@ fn expand_encoder_layer(
     let mut encoders = vec![];
 
     for encoder in encoder_layer {
-        let cw_action = parse_key(encoder[0].clone(), profiles);
-        let ccw_action = parse_key(encoder[1].clone(), profiles);
+        let cw_action = parse_key(encoder[0].clone(), profiles).unwrap_or_else(|e| panic!("failed to parse encoder cw action '{}': {}", encoder[0], e));
+        let ccw_action = parse_key(encoder[1].clone(), profiles).unwrap_or_else(|e| panic!("failed to parse encoder ccw action '{}': {}", encoder[1], e));
         encoders.push(quote! { ::rmk::encoder!(#cw_action, #ccw_action) });
     }
 
