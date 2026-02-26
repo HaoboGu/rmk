@@ -38,10 +38,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
             }
             KeyState::Released(pattern) => {
-                // The time since the key release is longer than the timeout, trigger the action
-                let action = Self::action_from_pattern(self.keymap.borrow().behavior, &key.action, pattern);
-                self.process_key_action_tap(action, key.event).await;
-                let _ = self.held_buffer.remove(key.event.pos); // Removing from the held buffer is like setting to an idle state
+                // The time since the key release is longer than the timeout
+                if Self::check_early_fire(self.keymap.borrow().behavior, &key.action, pattern).is_some() {
+                    // Tap was already fired early on release, just clean up
+                    let _ = self.held_buffer.remove(key.event.pos);
+                } else {
+                    let action = Self::action_from_pattern(self.keymap.borrow().behavior, &key.action, pattern);
+                    self.process_key_action_tap(action, key.event).await;
+                    let _ = self.held_buffer.remove(key.event.pos);
+                }
             }
             _ => unreachable!(),
         };
@@ -128,11 +133,22 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             self.held_buffer.remove(event.pos); // Remove the key from the held buffer, is like setting to an idle state
                         } else {
                             // Expect a possible longer morse pattern (or idle timeout), update the state
+                            let early_action =
+                                Self::check_early_fire(self.keymap.borrow().behavior, &k.action, pattern);
+
                             k.state = KeyState::Released(pattern);
                             // Use current release time for `IdleAfterTap` state
                             k.press_time = released_time; // Use release time as the "press_time"
                             let timeout = Self::morse_timeout(&self.keymap.borrow(), &k.action, false);
                             k.timeout_time = k.press_time + timeout;
+
+                            // Fire the tap immediately if the hold continuation has the same action
+                            if let Some(action) = early_action {
+                                debug!("Early fire {:?} -> {:?}", pattern, action);
+                                let mut press_event = event;
+                                press_event.pressed = true;
+                                self.process_key_action_tap(action, press_event).await;
+                            }
                         }
                     }
                     KeyState::Holding(pattern) => {
@@ -299,6 +315,27 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // Use the global default
         behavior_config.morse.default_profile.unilateral_tap().unwrap_or(false)
+    }
+
+    /// Checks if the given pattern can fire its action early even though longer
+    /// continuations exist. Returns Some(action) when the hold continuation has
+    /// the same action and the tap continuation is not configured.
+    pub fn check_early_fire(
+        behavior_config: &BehaviorConfig,
+        key_action: &KeyAction,
+        pattern: MorsePattern,
+    ) -> Option<Action> {
+        match key_action {
+            KeyAction::Morse(idx) => {
+                let morse = behavior_config.morse.morses.get(*idx as usize)?;
+                if morse.can_fire_early(pattern) {
+                    morse.get(pattern)
+                } else {
+                    None
+                }
+            }
+            _ => None, // TapHold already handles prediction in try_predict_final_action
+        }
     }
 
     //returns Some(action) if the ending of the given pattern can be "predicted" (unique)

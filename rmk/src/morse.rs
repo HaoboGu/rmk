@@ -251,6 +251,29 @@ impl Morse {
         self.actions.get(&pattern_start).copied()
     }
 
+    /// Returns true when the current pattern's action can be fired immediately
+    /// even though longer continuations exist.
+    ///
+    /// Condition: the hold continuation has the same action as the current pattern,
+    /// and the tap continuation is NOT configured.
+    /// e.g. tap=Enter + hold_after_tap=Enter (no double_tap) fires the first tap
+    /// immediately, while still allowing hold_after_tap to work.
+    pub fn can_fire_early(&self, pattern: MorsePattern) -> bool {
+        let Some(current_action) = self.actions.get(&pattern) else {
+            return false;
+        };
+
+        // Tap continuation must NOT exist
+        if self.actions.contains_key(&pattern.followed_by_tap()) {
+            return false;
+        }
+
+        // Hold continuation must exist with the SAME action
+        self.actions
+            .get(&pattern.followed_by_hold())
+            .is_some_and(|a| *a == *current_action)
+    }
+
     pub fn get(&self, pattern: MorsePattern) -> Option<Action> {
         self.actions.get(&pattern).copied()
     }
