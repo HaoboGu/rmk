@@ -5,15 +5,17 @@ pub mod common;
 
 use embassy_time::Duration;
 use rmk::combo::{Combo, ComboConfig};
-use rmk::config::{BehaviorConfig, CombosConfig, Hand, MorsesConfig};
+use rmk::config::{BehaviorConfig, CombosConfig, Hand, MorsesConfig, PositionalConfig};
 use rmk::k;
 use rmk::keyboard::Keyboard;
+use rmk::{a, mo, mt};
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
 use rmk_types::action::{MorseMode, MorseProfile};
 use rusty_fork::rusty_fork_test;
 
+use crate::common::wrap_keymap;
 use crate::common::morse::create_morse_keyboard;
 use crate::common::{KC_LGUI, KC_LSHIFT};
 
@@ -93,6 +95,33 @@ fn create_hrm_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
         },
         hand,
     )
+}
+
+fn create_release_remap_keyboard(morse_mode: MorseMode) -> Keyboard<'static, 1, 3, 2> {
+    let keymap = [
+        [[mo!(1), a!(No), k!(A)]],
+        [[a!(Transparent), k!(B), a!(Transparent)]],
+    ];
+
+    let behavior_config = BehaviorConfig {
+        morse: MorsesConfig {
+            enable_flow_tap: false,
+            default_profile: MorseProfile::new(
+                Some(false),
+                Some(morse_mode),
+                Some(250u16),
+                Some(250u16),
+            ),
+            ..Default::default()
+        },
+        ..BehaviorConfig::default()
+    };
+
+    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
+    let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
+    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 3>> = static_cell::StaticCell::new();
+    let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
+    Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
 
 rusty_fork_test! {
@@ -1618,6 +1647,128 @@ rusty_fork_test! {
                 [0, [0, 0, 0, 0, 0, 0]],
                 [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
+    fn test_release_morse_keeps_pressed_layer_no_action_after_layer_off_normal() {
+        key_sequence_test! {
+            // Timeout is not expired - no layer switching here, just results in No action
+            keyboard: create_release_remap_keyboard(MorseMode::Normal),
+            sequence: [
+                [0, 0, true, 10],   // Press mo!(1) and activate layer 1 - after timeout
+                [0, 1, true, 10],   // Press a!(No) from layer 0
+                [0, 0, false, 10],  // Release mo!(1), layer 1 is now off (didn't activate)
+                [0, 1, false, 10],  // Release a!(No)
+            ],
+            expected_reports: [
+            ]
+        };
+    }
+
+    #[test]
+    fn test_release_morse_keeps_pressed_layer_no_action_after_layer_off_normal_timeout() {
+        key_sequence_test! {
+            // Timeout is not expired - no layer switching here, just results in No action
+            keyboard: create_release_remap_keyboard(MorseMode::Normal),
+            sequence: [
+                [0, 0, true, 10],   // Press mo!(1) and activate layer 1 - after timeout
+                [0, 1, true, 10],   // Press k!(B) from layer 1
+                [0, 0, false, 240],  // Release mo!(1), layer 1 is now off
+                [0, 1, false, 10],  // Release k!(B)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Tap B down
+                [0, [0, 0, 0, 0, 0, 0]],            // Tap B up
+            ]
+        };
+    }
+
+    #[test]
+    fn test_release_morse_keeps_pressed_layer_no_action_after_layer_off_permissive_hold() {
+        key_sequence_test! {
+            // With PermissiveHold the layer switch shouldn't happen
+            keyboard: create_release_remap_keyboard(MorseMode::PermissiveHold),
+            sequence: [
+                [0, 0, true, 10],   // Press mo!(1) and activate layer 1
+                [0, 1, true, 10],   // Press k!(B) from layer 1
+                [0, 0, false, 10],  // Release mo!(1), layer 1 is now off
+                [0, 1, false, 10],  // Release k!(B)
+            ],
+            expected_reports: [
+            ]
+        };
+    }
+
+    #[test]
+    fn test_release_morse_keeps_pressed_layer_no_action_after_layer_off_hold_on_other_press() {
+        key_sequence_test! {
+            // With HoldOnOtherPress the action should be triggered immediatelly
+            keyboard: create_release_remap_keyboard(MorseMode::HoldOnOtherPress),
+            sequence: [
+                [0, 0, true, 10],   // Press mo!(1) and activate layer 1
+                [0, 1, true, 10],   // Press k!(B) from layer 1
+                [0, 0, false, 10],  // Release mo!(1), layer 1 is now off
+                [0, 1, false, 10],  // Release k!(B)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Tap B down
+                [0, [0, 0, 0, 0, 0, 0]],            // Tap B up
+            ]
+        };
+    }
+
+    #[test]
+    fn test_release_morse_keeps_pressed_layer_transparent_action_after_layer_off_normal() {
+        key_sequence_test! {
+            // In normal mode the hole timeout is not expired, hence this registers just as normal A press
+            keyboard: create_release_remap_keyboard(MorseMode::Normal),
+            sequence: [
+                [0, 0, true, 10],   // Press mo!(1) and activate layer 1
+                [0, 2, true, 10],   // Press k!(A) from layer 0
+                [0, 0, false, 10],  // Release mo!(1), layer 1 is now off
+                [0, 2, false, 10],  // Release k!(A) from layer 0
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap A down
+                [0, [0, 0, 0, 0, 0, 0]],            // Tap A up
+            ]
+        };
+    }
+
+    #[test]
+    fn test_release_morse_keeps_pressed_layer_transparent_action_after_layer_off_permissive_hold() {
+        key_sequence_test! {
+            // With PermissiveHold the layer switch shouldn't happen - normal A press
+            keyboard: create_release_remap_keyboard(MorseMode::PermissiveHold),
+            sequence: [
+                [0, 0, true, 10],   // Press mo!(1) and activate layer 1
+                [0, 2, true, 10],   // Press a!(Transparent) from layer 1
+                [0, 0, false, 10],  // Release mo!(1), layer 1 is now off
+                [0, 2, false, 10],  // Release a!(Transparent)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap A down
+                [0, [0, 0, 0, 0, 0, 0]],            // Tap A up
+            ]
+        };
+    }
+
+    #[test]
+    fn test_release_morse_keeps_pressed_layer_transparent_action_after_layer_off_hold_on_other_press() {
+        key_sequence_test! {
+            // With HoldOnOtherPress the action should be triggered immediatelly - but the key is trasparent - A press
+            keyboard: create_release_remap_keyboard(MorseMode::HoldOnOtherPress),
+            sequence: [
+                [0, 0, true, 10],   // Press mo!(1) and activate layer 1
+                [0, 2, true, 10],   // Press a!(Transparent) from layer 1
+                [0, 0, false, 10],  // Release mo!(1), layer 1 is now off
+                [0, 2, false, 10],  // Release a!(Transparent)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap A down
+                [0, [0, 0, 0, 0, 0, 0]],            // Tap A up
             ]
         };
     }

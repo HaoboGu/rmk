@@ -579,6 +579,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 KeyAction::Tap(action) => {
                                     self.process_key_action_tap(action, held_key.event).await;
                                 }
+                                KeyAction::No => {
+                                    self.process_key_action_tap(key_action.to_action(), held_key.event).await;
+                                }
                                 _ => unreachable!(),
                             }
                         } else {
