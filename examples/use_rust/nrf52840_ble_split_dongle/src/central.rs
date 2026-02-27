@@ -32,7 +32,9 @@ use rmk::input_device::Runnable;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610, Pmw3610Config};
-use rmk::input_device::pointing::{PointingDevice, PointingProcessor, PointingProcessorConfig};
+use rmk::input_device::pointing::{
+    PointingDevice, PointingMode, PointingProcessor, PointingProcessorConfig, ScrollConfig, SniperConfig,
+};
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
@@ -236,12 +238,31 @@ async fn main(spawner: Spawner) {
     let pmw3610_spi = BitBangSpiBus::new(pmw3610_sck, pmw3610_sdio);
     let mut pmw3610_device =
         PointingDevice::<Pmw3610<_, _, _>>::new(0, pmw3610_spi, pmw3610_cs, pmw3610_motion, pmw3610_config);
+
+    // Configure pointing processor with per-layer modes:
+    // Layer 0: Normal cursor movement
+    // Layer 1: Scroll mode (trackball becomes scroll wheel)
+    // Layer 2: Sniper mode (precision, 1/4 speed)
     let mut pointing_processor = PointingProcessor::new(&keymap, PointingProcessorConfig::default());
+    pointing_processor
+        .set_layer_mode(0, PointingMode::Cursor)
+        .set_layer_mode(1, PointingMode::Scroll(ScrollConfig {
+            divisor_x: 8,    // Pan sensitivity (higher = slower)
+            divisor_y: 8,    // Wheel sensitivity (higher = slower)
+            invert_x: false, // Set true to reverse horizontal pan direction
+            invert_y: false, // Set true to reverse scroll wheel direction
+        }))
+        .set_layer_mode(2, PointingMode::Sniper(SniperConfig {
+            divisor: 4,      // Precision divisor (higher = slower, more precise)
+            invert_x: false, // Set true to reverse X movement in sniper mode
+            invert_y: false, // Set true to reverse Y movement in sniper mode
+        }));
 
     // Initialize the encoder processor
     let mut adc_device = NrfAdc::new(
         saadc,
         [AnalogEventType::Battery],
+        [0],
         embassy_time::Duration::from_secs(12),
         None,
     );

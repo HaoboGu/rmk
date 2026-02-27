@@ -109,7 +109,12 @@ pub struct ModifierEvent {
 )]
 #[derive(Serialize, Deserialize, Clone, Debug, Copy, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct PointingEvent(pub [AxisEvent; 3]);
+pub struct PointingEvent {
+    /// The id of the pointing device that produced this event.
+    pub device_id: u8,
+    /// Raw axis values (X, Y, Z).
+    pub axes: [AxisEvent; 3],
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Copy, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
