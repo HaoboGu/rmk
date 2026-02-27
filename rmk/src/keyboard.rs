@@ -559,11 +559,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 HeldKeyDecision::Release => {
                     // Releasing the current key, will always be tapping, because timeout isn't here
                     if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
-                        let key_action = if keyboard_state_updated {
-                            self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event)
-                        } else {
-                            held_key.action
-                        };
+                        // Always re-evaluate action based on current layer state.
+                        // A prior layer change (e.g. permissive hold activating a layer)
+                        // may have changed what action this key maps to.
+                        let key_action = self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event);
+                        if key_action != held_key.action {
+                            keyboard_state_updated = true;
+                        }
                         debug!("Processing current key before releasing: {:?}", held_key.event);
                         if !key_action.is_morse() {
                             match key_action {
@@ -572,6 +574,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 }
                                 KeyAction::Tap(action) => {
                                     self.process_key_action_tap(action, held_key.event).await;
+                                }
+                                KeyAction::No => {
+                                    self.process_key_action_tap(key_action.to_action(), held_key.event).await;
                                 }
                                 _ => unreachable!(),
                             }
