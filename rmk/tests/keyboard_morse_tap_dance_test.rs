@@ -104,6 +104,44 @@ fn create_early_fire_keyboard() -> Keyboard<'static, 1, 5, 2> {
     Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
 
+/// Create a keyboard with permissive hold mode for testing key ordering.
+///   td!(0): tap=A, hold=B, hold_after_tap=C, double_tap=D
+///   Normal keys: k!(E) at (0,1), k!(F) at (0,2)
+fn create_permissive_hold_keyboard() -> Keyboard<'static, 1, 4, 2> {
+    let keymap = [
+        [[td!(0), k!(E), k!(F), k!(A)]],
+        [[k!(Kp1), k!(Kp2), k!(Kp3), k!(Kp4)]],
+    ];
+
+    let behavior_config = BehaviorConfig {
+        morse: MorsesConfig {
+            enable_flow_tap: false,
+            default_profile: MorseProfile::new(
+                Some(false),
+                Some(MorseMode::PermissiveHold),
+                Some(250u16),
+                Some(250u16),
+            ),
+            morses: Vec::from_slice(&[Morse::new_from_vial(
+                Action::Key(KeyCode::Hid(HidKeyCode::A)),
+                Action::Key(KeyCode::Hid(HidKeyCode::B)),
+                Action::Key(KeyCode::Hid(HidKeyCode::C)),
+                Action::Key(KeyCode::Hid(HidKeyCode::D)),
+                MorseProfile::const_default(),
+            )])
+            .unwrap(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
+    let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
+    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 4>> = static_cell::StaticCell::new();
+    let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
+    Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
+}
+
 rusty_fork_test! {
     #[test]
     fn test_tap() {
@@ -453,6 +491,60 @@ rusty_fork_test! {
                 [0, [0, 0, 0, 0, 0, 0]],
                 // hold_after_tap: Enter (hold, then release)
                 [0, [kc_to_u8!(Enter), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+    /// Regression test for permissive hold key ordering bug.
+    ///
+    /// Scenario: Press morse key (td!(0)), press normal key (E), release morse key first, release E.
+    /// With permissive hold, the normal key is buffered. When the morse key is released first,
+    /// the morse key should resolve as tap before the normal key fires.
+    ///
+    /// Expected: A (morse tap) fires first, then E fires — NOT E then A.
+    #[test]
+    fn test_permissive_hold_morse_released_first_key_order() {
+        key_sequence_test! {
+            keyboard: create_permissive_hold_keyboard(),
+            sequence: [
+                [0, 0, true, 10],    // Press td!(0) morse key
+                [0, 1, true, 10],    // Press E (buffered due to permissive hold)
+                [0, 0, false, 10],   // Release td!(0) — morse key released first
+                [0, 1, false, 300],  // Release E after gap timeout
+            ],
+            expected_reports: [
+                // Morse tap fires first (A press + release via process_key_action_tap)
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                // Then normal key E fires (press via fire_held_non_morse_keys)
+                [0, [kc_to_u8!(E), 0, 0, 0, 0, 0]],
+                // E release
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    /// Test permissive hold: normal key released first triggers hold for the morse key.
+    ///
+    /// Scenario: Press morse key (td!(0)), press normal key (E), release E first (triggers
+    /// permissive hold → morse resolves as hold=B), then release morse key.
+    #[test]
+    fn test_permissive_hold_normal_released_first() {
+        key_sequence_test! {
+            keyboard: create_permissive_hold_keyboard(),
+            sequence: [
+                [0, 0, true, 10],    // Press td!(0) morse key
+                [0, 1, true, 10],    // Press E (buffered due to permissive hold)
+                [0, 1, false, 10],   // Release E — triggers permissive hold for td!(0)
+                [0, 0, false, 10],   // Release td!(0)
+            ],
+            expected_reports: [
+                // Permissive hold: morse key resolves as hold (B press)
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+                // E fires after hold resolves (press + release via process_key_action_tap)
+                [0, [kc_to_u8!(B), kc_to_u8!(E), 0, 0, 0, 0]],
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+                // Release morse key (B release)
                 [0, [0, 0, 0, 0, 0, 0]],
             ]
         };
