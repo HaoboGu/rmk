@@ -307,7 +307,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// or a morse key that is in the pressed or released state.
     pub fn next_buffered_key(&mut self) -> Option<HeldKey> {
         self.held_buffer.next_timeout(|k| {
-            matches!(k.state, KeyState::Released(_) | KeyState::WaitingCombo)
+            matches!(k.state, KeyState::Released(_) | KeyState::EarlyFired(_) | KeyState::WaitingCombo)
                 || (matches!(k.state, KeyState::Pressed(_)) && k.action.is_morse())
         })
     }
@@ -356,7 +356,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                 }
             }
-            KeyState::Pressed(_) | KeyState::Released(_) => {
+            KeyState::Pressed(_) | KeyState::Released(_) | KeyState::EarlyFired(_) => {
                 if key.action.is_morse() {
                     // Wait for timeout or new key event
                     info!("Waiting morse key: {:?}", key.action);
@@ -404,6 +404,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_key_action(&mut self, key_action: &KeyAction, event: KeyboardEvent, is_combo: bool) {
         // First, make the decision for current key and held keys
         let (decision_for_current_key, decisions) = self.make_decisions_for_keys(key_action, event);
+
+        // Clean up early-fired keys that belong to a different position — their tap was already sent,
+        // so they should not linger in the buffer when new events arrive.
+        // Keys at the same position are kept to allow hold_after_tap on re-press.
+        self.held_buffer
+            .keys
+            .retain(|k| !matches!(k.state, KeyState::EarlyFired(_)) || k.event.pos == event.pos);
 
         // Fire held keys if needed
         let (keyboard_state_updated, updated_decision_for_cur_key) =

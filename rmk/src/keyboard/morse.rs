@@ -38,15 +38,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
             }
             KeyState::Released(pattern) => {
-                // The time since the key release is longer than the timeout
-                if Self::check_early_fire(self.keymap.borrow().behavior, &key.action, pattern).is_some() {
-                    // Tap was already fired early on release, just clean up
-                    let _ = self.held_buffer.remove(key.event.pos);
-                } else {
-                    let action = Self::action_from_pattern(self.keymap.borrow().behavior, &key.action, pattern);
-                    self.process_key_action_tap(action, key.event).await;
-                    let _ = self.held_buffer.remove(key.event.pos);
-                }
+                // The time since the key release is longer than the timeout, trigger the action
+                let action = Self::action_from_pattern(self.keymap.borrow().behavior, &key.action, pattern);
+                self.process_key_action_tap(action, key.event).await;
+                let _ = self.held_buffer.remove(key.event.pos);
+            }
+            KeyState::EarlyFired(_) => {
+                // Tap was already fired early, just clean up
+                let _ = self.held_buffer.remove(key.event.pos);
             }
             _ => unreachable!(),
         };
@@ -77,10 +76,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             match self.held_buffer.find_pos_mut(event.pos) {
                 Some(k) => {
                     // The current key is already in the buffer, update its state
-                    if let KeyState::Released(pattern) = k.state {
-                        k.state = KeyState::Pressed(pattern);
-                        k.press_time = pressed_time;
-                        k.timeout_time = timeout_time;
+                    match k.state {
+                        KeyState::Released(pattern) | KeyState::EarlyFired(pattern) => {
+                            k.state = KeyState::Pressed(pattern);
+                            k.press_time = pressed_time;
+                            k.timeout_time = timeout_time;
+                        }
+                        _ => {}
                     }
                 }
                 None => {
@@ -148,6 +150,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 let mut press_event = event;
                                 press_event.pressed = true;
                                 self.process_key_action_tap(action, press_event).await;
+                                // Mark as early-fired so fire_held_keys won't re-fire
+                                if let Some(k) = self.held_buffer.find_pos_mut(event.pos) {
+                                    k.state = KeyState::EarlyFired(pattern);
+                                }
                             }
                         }
                     }
