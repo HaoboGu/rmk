@@ -43,13 +43,13 @@ mod mpsc {
         }
     }
     #[doc(hidden)]
-    static KEYBOARD_EVENT_EVENT_CHANNEL: ::embassy_sync::channel::Channel<
+    static KEYBOARD_EVENT_EVENT_CHANNEL: ::rmk::embassy_sync::channel::Channel<
         ::rmk::RawMutex,
         KeyboardEvent,
         { 16 },
-    > = ::embassy_sync::channel::Channel::new();
+    > = ::rmk::embassy_sync::channel::Channel::new();
     impl ::rmk::event::PublishableEvent for KeyboardEvent {
-        type Publisher = ::embassy_sync::channel::Sender<
+        type Publisher = ::rmk::embassy_sync::channel::Sender<
             'static,
             ::rmk::RawMutex,
             KeyboardEvent,
@@ -60,7 +60,7 @@ mod mpsc {
         }
     }
     impl ::rmk::event::SubscribableEvent for KeyboardEvent {
-        type Subscriber = ::embassy_sync::channel::Receiver<
+        type Subscriber = ::rmk::embassy_sync::channel::Receiver<
             'static,
             ::rmk::RawMutex,
             KeyboardEvent,
@@ -71,7 +71,7 @@ mod mpsc {
         }
     }
     impl ::rmk::event::AsyncPublishableEvent for KeyboardEvent {
-        type AsyncPublisher = ::embassy_sync::channel::Sender<
+        type AsyncPublisher = ::rmk::embassy_sync::channel::Sender<
             'static,
             ::rmk::RawMutex,
             KeyboardEvent,
@@ -120,15 +120,15 @@ mod pubsub {
         }
     }
     #[doc(hidden)]
-    static LED_INDICATOR_EVENT_EVENT_CHANNEL: ::embassy_sync::pubsub::PubSubChannel<
+    static LED_INDICATOR_EVENT_EVENT_CHANNEL: ::rmk::embassy_sync::pubsub::PubSubChannel<
         ::rmk::RawMutex,
         LedIndicatorEvent,
         { 4 },
         { 8 },
         { 2 },
-    > = ::embassy_sync::pubsub::PubSubChannel::new();
+    > = ::rmk::embassy_sync::pubsub::PubSubChannel::new();
     impl ::rmk::event::PublishableEvent for LedIndicatorEvent {
-        type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
+        type Publisher = ::rmk::embassy_sync::pubsub::ImmediatePublisher<
             'static,
             ::rmk::RawMutex,
             LedIndicatorEvent,
@@ -141,7 +141,7 @@ mod pubsub {
         }
     }
     impl ::rmk::event::SubscribableEvent for LedIndicatorEvent {
-        type Subscriber = ::embassy_sync::pubsub::Subscriber<
+        type Subscriber = ::rmk::embassy_sync::pubsub::Subscriber<
             'static,
             ::rmk::RawMutex,
             LedIndicatorEvent,
@@ -158,7 +158,7 @@ mod pubsub {
         }
     }
     impl ::rmk::event::AsyncPublishableEvent for LedIndicatorEvent {
-        type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
+        type AsyncPublisher = ::rmk::embassy_sync::pubsub::Publisher<
             'static,
             ::rmk::RawMutex,
             LedIndicatorEvent,
@@ -204,13 +204,13 @@ mod tuple_struct {
         }
     }
     #[doc(hidden)]
-    static BATTERY_ADC_EVENT_EVENT_CHANNEL: ::embassy_sync::channel::Channel<
+    static BATTERY_ADC_EVENT_EVENT_CHANNEL: ::rmk::embassy_sync::channel::Channel<
         ::rmk::RawMutex,
         BatteryAdcEvent,
         { 8 },
-    > = ::embassy_sync::channel::Channel::new();
+    > = ::rmk::embassy_sync::channel::Channel::new();
     impl ::rmk::event::PublishableEvent for BatteryAdcEvent {
-        type Publisher = ::embassy_sync::channel::Sender<
+        type Publisher = ::rmk::embassy_sync::channel::Sender<
             'static,
             ::rmk::RawMutex,
             BatteryAdcEvent,
@@ -221,7 +221,7 @@ mod tuple_struct {
         }
     }
     impl ::rmk::event::SubscribableEvent for BatteryAdcEvent {
-        type Subscriber = ::embassy_sync::channel::Receiver<
+        type Subscriber = ::rmk::embassy_sync::channel::Receiver<
             'static,
             ::rmk::RawMutex,
             BatteryAdcEvent,
@@ -232,7 +232,7 @@ mod tuple_struct {
         }
     }
     impl ::rmk::event::AsyncPublishableEvent for BatteryAdcEvent {
-        type AsyncPublisher = ::embassy_sync::channel::Sender<
+        type AsyncPublisher = ::rmk::embassy_sync::channel::Sender<
             'static,
             ::rmk::RawMutex,
             BatteryAdcEvent,
@@ -275,13 +275,13 @@ mod default_size {
         }
     }
     #[doc(hidden)]
-    static LAYER_CHANGE_EVENT_EVENT_CHANNEL: ::embassy_sync::channel::Channel<
+    static LAYER_CHANGE_EVENT_EVENT_CHANNEL: ::rmk::embassy_sync::channel::Channel<
         ::rmk::RawMutex,
         LayerChangeEvent,
         { 8 },
-    > = ::embassy_sync::channel::Channel::new();
+    > = ::rmk::embassy_sync::channel::Channel::new();
     impl ::rmk::event::PublishableEvent for LayerChangeEvent {
-        type Publisher = ::embassy_sync::channel::Sender<
+        type Publisher = ::rmk::embassy_sync::channel::Sender<
             'static,
             ::rmk::RawMutex,
             LayerChangeEvent,
@@ -292,7 +292,7 @@ mod default_size {
         }
     }
     impl ::rmk::event::SubscribableEvent for LayerChangeEvent {
-        type Subscriber = ::embassy_sync::channel::Receiver<
+        type Subscriber = ::rmk::embassy_sync::channel::Receiver<
             'static,
             ::rmk::RawMutex,
             LayerChangeEvent,
@@ -303,7 +303,7 @@ mod default_size {
         }
     }
     impl ::rmk::event::AsyncPublishableEvent for LayerChangeEvent {
-        type AsyncPublisher = ::embassy_sync::channel::Sender<
+        type AsyncPublisher = ::rmk::embassy_sync::channel::Sender<
             'static,
             ::rmk::RawMutex,
             LayerChangeEvent,

@@ -40,6 +40,15 @@ pub use split::{CentralConnectedEvent, PeripheralConnectedEvent};
 pub use split::{ClearPeerEvent, PeripheralBatteryEvent};
 pub use state::{LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent};
 
+// Re-export split forwarding infrastructure
+#[cfg(feature = "split")]
+pub use crate::split::forward::{
+    decode_split_event, encode_split_event, SplitAwareSubscriber, SplitForwardable,
+    SplitForwardingPublisher, SPLIT_DISPATCH_CHANNEL, SPLIT_FORWARD_CHANNEL,
+};
+#[cfg(feature = "split")]
+pub use crate::split::{DispatchedSplitPacket, SplitUserPacket};
+
 /// Trait for event publishers
 pub trait EventPublisher {
     type Event;

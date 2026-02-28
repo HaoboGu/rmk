@@ -3,6 +3,7 @@
 
 #[macro_use]
 mod macros;
+mod split_event;
 
 use defmt::{info, unwrap};
 use embassy_executor::Spawner;
@@ -20,14 +21,17 @@ use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::config::StorageConfig;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::event::BatteryAdcEvent;
 use rmk::futures::future::join3;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
+use rmk::macros::processor;
 use rmk::matrix::Matrix;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
 use rmk::{HostResources, run_all};
+use split_event::CustomSplitEvent;
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -166,10 +170,27 @@ async fn main(spawner: Spawner) {
     );
     let mut battery_processor = BatteryProcessor::new(2000, 2806);
 
+    // Example: a processor that subscribes to BatteryAdcEvent and publishes
+    // a CustomSplitEvent, which is automatically forwarded to the central half.
+    // The peripheral_id is automatically stamped by the split transport layer.
+    #[processor(subscribe = [BatteryAdcEvent])]
+    struct SensorForwarder {}
+
+    impl SensorForwarder {
+        async fn on_battery_adc_event(&mut self, event: BatteryAdcEvent) {
+            info!("Forwarding sensor reading to central: {}", event.0);
+            rmk::event::publish_event(CustomSplitEvent {
+                sensor_value: event.0 as i16,
+            });
+        }
+    }
+
+    let mut sensor_forwarder = SensorForwarder {};
+
     // Start
     join3(
         run_all!(matrix, encoder, adc_device),
-        run_all!(battery_processor),
+        run_all!(battery_processor, sensor_forwarder),
         run_rmk_split_peripheral(0, &stack, &mut storage),
     )
     .await;

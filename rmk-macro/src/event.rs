@@ -7,6 +7,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
+use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
 use crate::event_macros::utils::{AttributeParser, has_derive};
 use crate::utils::to_upper_snake_case;
 
@@ -18,6 +19,8 @@ pub struct EventConfig {
     pub subs: Option<TokenStream>,
     /// Max publishers (pubsub only)
     pub pubs: Option<TokenStream>,
+    /// Split forwarding: None = not split, Some(None) = auto kind, Some(Some(n)) = explicit kind
+    pub split: Option<Option<u16>>,
 }
 
 /// Channel type for event macro.
@@ -36,12 +39,17 @@ enum ChannelType {
 ///
 /// Returns an error if unknown attribute keys are found.
 pub fn parse_event_config(tokens: impl Into<TokenStream>) -> Result<EventConfig, TokenStream> {
-    let parser = AttributeParser::new_validated(tokens, &["channel_size", "subs", "pubs"])?;
+    let parser = AttributeParser::new_validated(tokens, &["channel_size", "subs", "pubs", "split"])?;
+
+    // Parse split attribute: `split = N` where N is the kind (0 = auto-hash)
+    let split = parser.get_int::<u16>("split")?;
+    let split = split.map(|kind| if kind == 0 { None } else { Some(kind) });
 
     Ok(EventConfig {
         channel_size: parser.get_expr_tokens("channel_size"),
         subs: parser.get_expr_tokens("subs"),
         pubs: parser.get_expr_tokens("pubs"),
+        split,
     })
 }
 
@@ -65,16 +73,16 @@ fn generate_mpsc_channel(
 
     let channel_static = quote! {
         #[doc(hidden)]
-        static #channel_name: ::embassy_sync::channel::Channel<
+        static #channel_name: ::rmk::embassy_sync::channel::Channel<
             ::rmk::RawMutex,
             #type_name #ty_generics,
             { #cap }
-        > = ::embassy_sync::channel::Channel::new();
+        > = ::rmk::embassy_sync::channel::Channel::new();
     };
 
     let trait_impls = quote! {
         impl #impl_generics ::rmk::event::PublishableEvent for #type_name #ty_generics #where_clause {
-            type Publisher = ::embassy_sync::channel::Sender<
+            type Publisher = ::rmk::embassy_sync::channel::Sender<
                 'static,
                 ::rmk::RawMutex,
                 #type_name #ty_generics,
@@ -87,7 +95,7 @@ fn generate_mpsc_channel(
         }
 
         impl #impl_generics ::rmk::event::SubscribableEvent for #type_name #ty_generics #where_clause {
-            type Subscriber = ::embassy_sync::channel::Receiver<
+            type Subscriber = ::rmk::embassy_sync::channel::Receiver<
                 'static,
                 ::rmk::RawMutex,
                 #type_name #ty_generics,
@@ -100,7 +108,7 @@ fn generate_mpsc_channel(
         }
 
         impl #impl_generics ::rmk::event::AsyncPublishableEvent for #type_name #ty_generics #where_clause {
-            type AsyncPublisher = ::embassy_sync::channel::Sender<
+            type AsyncPublisher = ::rmk::embassy_sync::channel::Sender<
                 'static,
                 ::rmk::RawMutex,
                 #type_name #ty_generics,
@@ -138,18 +146,18 @@ fn generate_pubsub_channel(
 
     let channel_static = quote! {
         #[doc(hidden)]
-        static #channel_name: ::embassy_sync::pubsub::PubSubChannel<
+        static #channel_name: ::rmk::embassy_sync::pubsub::PubSubChannel<
             ::rmk::RawMutex,
             #type_name #ty_generics,
             { #cap },
             { #subs_val },
             { #pubs_val }
-        > = ::embassy_sync::pubsub::PubSubChannel::new();
+        > = ::rmk::embassy_sync::pubsub::PubSubChannel::new();
     };
 
     let trait_impls = quote! {
         impl #impl_generics ::rmk::event::PublishableEvent for #type_name #ty_generics #where_clause {
-            type Publisher = ::embassy_sync::pubsub::ImmediatePublisher<
+            type Publisher = ::rmk::embassy_sync::pubsub::ImmediatePublisher<
                 'static,
                 ::rmk::RawMutex,
                 #type_name #ty_generics,
@@ -164,7 +172,7 @@ fn generate_pubsub_channel(
         }
 
         impl #impl_generics ::rmk::event::SubscribableEvent for #type_name #ty_generics #where_clause {
-            type Subscriber = ::embassy_sync::pubsub::Subscriber<
+            type Subscriber = ::rmk::embassy_sync::pubsub::Subscriber<
                 'static,
                 ::rmk::RawMutex,
                 #type_name #ty_generics,
@@ -185,7 +193,7 @@ fn generate_pubsub_channel(
         }
 
         impl #impl_generics ::rmk::event::AsyncPublishableEvent for #type_name #ty_generics #where_clause {
-            type AsyncPublisher = ::embassy_sync::pubsub::Publisher<
+            type AsyncPublisher = ::rmk::embassy_sync::pubsub::Publisher<
                 'static,
                 ::rmk::RawMutex,
                 #type_name #ty_generics,
@@ -209,6 +217,155 @@ fn generate_pubsub_channel(
     (channel_static, trait_impls)
 }
 
+/// Compute FNV-1a hash of a string at compile time (returns u16)
+fn fnv1a_hash_u16(s: &str) -> u16 {
+    let mut hash: u32 = 0x811c9dc5;
+    for byte in s.as_bytes() {
+        hash ^= *byte as u32;
+        hash = hash.wrapping_mul(0x01000193);
+    }
+    hash as u16
+}
+
+/// Generate split forwarding code (SplitForwardable impl + linker symbol for collision detection)
+fn generate_split_forwarding(
+    type_name: &syn::Ident,
+    ty_generics: &syn::TypeGenerics,
+    impl_generics: &syn::ImplGenerics,
+    where_clause: Option<&syn::WhereClause>,
+    split_kind: Option<u16>,
+) -> TokenStream {
+    // Determine the kind value
+    let kind_value = split_kind.unwrap_or_else(|| fnv1a_hash_u16(&type_name.to_string()));
+
+    // Generate linker symbol for collision detection
+    let symbol_name = syn::Ident::new(
+        &format!("__RMK_SPLIT_EVENT_KIND_{}", kind_value),
+        type_name.span(),
+    );
+
+    quote! {
+        // SplitForwardable trait implementation
+        impl #impl_generics ::rmk::split::forward::SplitForwardable for #type_name #ty_generics #where_clause {
+            const SPLIT_EVENT_KIND: u16 = #kind_value;
+        }
+
+        // Linker symbol for compile-time collision detection (zero-cost)
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        pub static #symbol_name: () = ();
+    }
+}
+
+/// Generate split-aware trait impls (PublishableEvent / SubscribableEvent / AsyncPublishableEvent)
+/// that wrap the local channel with split forwarding.
+fn generate_split_trait_impls(
+    type_name: &syn::Ident,
+    ty_generics: &syn::TypeGenerics,
+    impl_generics: &syn::ImplGenerics,
+    where_clause: Option<&syn::WhereClause>,
+    config: &EventConfig,
+    channel_type: &ChannelType,
+) -> TokenStream {
+    let channel_name = syn::Ident::new(
+        &format!("{}_EVENT_CHANNEL", to_upper_snake_case(&type_name.to_string())),
+        type_name.span(),
+    );
+
+    match channel_type {
+        ChannelType::Mpsc => {
+            let cap = config.channel_size.clone().unwrap_or_else(|| quote! { 8 });
+            quote! {
+                impl #impl_generics ::rmk::event::PublishableEvent for #type_name #ty_generics #where_clause {
+                    type Publisher = ::rmk::split::forward::SplitForwardingPublisher<
+                        ::rmk::embassy_sync::channel::Sender<
+                            'static, ::rmk::RawMutex, #type_name #ty_generics, { #cap }
+                        >
+                    >;
+                    fn publisher() -> Self::Publisher {
+                        ::rmk::split::forward::SplitForwardingPublisher::new(#channel_name.sender())
+                    }
+                }
+                impl #impl_generics ::rmk::event::SubscribableEvent for #type_name #ty_generics #where_clause {
+                    type Subscriber = ::rmk::split::forward::SplitAwareSubscriber<
+                        ::rmk::embassy_sync::channel::Receiver<
+                            'static, ::rmk::RawMutex, #type_name #ty_generics, { #cap }
+                        >,
+                        #type_name #ty_generics
+                    >;
+                    fn subscriber() -> Self::Subscriber {
+                        ::rmk::split::forward::SplitAwareSubscriber::new(#channel_name.receiver())
+                    }
+                }
+                impl #impl_generics ::rmk::event::AsyncPublishableEvent for #type_name #ty_generics #where_clause {
+                    type AsyncPublisher = ::rmk::split::forward::SplitForwardingPublisher<
+                        ::rmk::embassy_sync::channel::Sender<
+                            'static, ::rmk::RawMutex, #type_name #ty_generics, { #cap }
+                        >
+                    >;
+                    fn publisher_async() -> Self::AsyncPublisher {
+                        ::rmk::split::forward::SplitForwardingPublisher::new(#channel_name.sender())
+                    }
+                }
+            }
+        }
+        ChannelType::PubSub => {
+            let cap = config.channel_size.clone().unwrap_or_else(|| quote! { 1 });
+            let subs_val = config.subs.clone().unwrap_or_else(|| quote! { 4 });
+            let pubs_val = config.pubs.clone().unwrap_or_else(|| quote! { 1 });
+            quote! {
+                impl #impl_generics ::rmk::event::PublishableEvent for #type_name #ty_generics #where_clause {
+                    type Publisher = ::rmk::split::forward::SplitForwardingPublisher<
+                        ::rmk::embassy_sync::pubsub::ImmediatePublisher<
+                            'static, ::rmk::RawMutex,
+                            #type_name #ty_generics,
+                            { #cap }, { #subs_val }, { #pubs_val }
+                        >
+                    >;
+                    fn publisher() -> Self::Publisher {
+                        ::rmk::split::forward::SplitForwardingPublisher::new(
+                            #channel_name.immediate_publisher()
+                        )
+                    }
+                }
+                impl #impl_generics ::rmk::event::SubscribableEvent for #type_name #ty_generics #where_clause {
+                    type Subscriber = ::rmk::split::forward::SplitAwareSubscriber<
+                        ::rmk::embassy_sync::pubsub::Subscriber<
+                            'static, ::rmk::RawMutex,
+                            #type_name #ty_generics,
+                            { #cap }, { #subs_val }, { #pubs_val }
+                        >,
+                        #type_name #ty_generics
+                    >;
+                    fn subscriber() -> Self::Subscriber {
+                        ::rmk::split::forward::SplitAwareSubscriber::new(
+                            #channel_name.subscriber().expect(
+                                concat!("Failed to create subscriber for ", stringify!(#type_name))
+                            )
+                        )
+                    }
+                }
+                impl #impl_generics ::rmk::event::AsyncPublishableEvent for #type_name #ty_generics #where_clause {
+                    type AsyncPublisher = ::rmk::split::forward::SplitForwardingPublisher<
+                        ::rmk::embassy_sync::pubsub::Publisher<
+                            'static, ::rmk::RawMutex,
+                            #type_name #ty_generics,
+                            { #cap }, { #subs_val }, { #pubs_val }
+                        >
+                    >;
+                    fn publisher_async() -> Self::AsyncPublisher {
+                        ::rmk::split::forward::SplitForwardingPublisher::new(
+                            #channel_name.publisher().expect(
+                                concat!("Failed to create async publisher for ", stringify!(#type_name))
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Implementation of the unified `#[event]` macro.
 pub fn event_impl(
     attr: proc_macro::TokenStream,
@@ -221,6 +378,33 @@ pub fn event_impl(
         Ok(config) => config,
         Err(err) => return err.into(),
     };
+
+    // Check split feature if split attribute is present
+    if config.split.is_some() {
+        let rmk_features = get_rmk_features();
+        if !is_feature_enabled(&rmk_features, "split") {
+            return quote! {
+                compile_error!("#[event(split)] requires the `split` feature to be enabled in the rmk dependency");
+            }.into();
+        }
+
+        // Validate that the event has required derives for split forwarding
+        if !has_derive(&input.attrs, "Serialize") {
+            return quote! {
+                compile_error!("#[event(split)] requires the event to derive Serialize");
+            }.into();
+        }
+        if !has_derive(&input.attrs, "Deserialize") {
+            return quote! {
+                compile_error!("#[event(split)] requires the event to derive Deserialize");
+            }.into();
+        }
+        if !has_derive(&input.attrs, "MaxSize") {
+            return quote! {
+                compile_error!("#[event(split)] requires the event to derive MaxSize (from postcard::experimental::max_size::MaxSize)");
+            }.into();
+        }
+    }
 
     // Validate event type
     if let Some(error) = validate_event_type(&input, "event") {
@@ -256,11 +440,38 @@ pub fn event_impl(
         ),
     };
 
+    // Generate split forwarding code if split attribute is present
+    let split_code = if let Some(split_kind) = config.split {
+        let split_forwardable = generate_split_forwarding(
+            &type_name,
+            &ty_generics,
+            &impl_generics,
+            where_clause,
+            split_kind,
+        );
+
+        let split_trait_impls = generate_split_trait_impls(
+            &type_name,
+            &ty_generics,
+            &impl_generics,
+            where_clause,
+            &config,
+            &channel_type,
+        );
+
+        quote! {
+            #split_forwardable
+            #split_trait_impls
+        }
+    } else {
+        trait_impls
+    };
+
     let expanded = quote! {
         #input
 
         #channel_static
-        #trait_impls
+        #split_code
     };
 
     expanded.into()

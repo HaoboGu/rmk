@@ -5,6 +5,7 @@ mod vial;
 #[macro_use]
 mod macros;
 mod keymap;
+mod split_event;
 
 use defmt::{info, unwrap};
 use embassy_executor::Spawner;
@@ -239,7 +240,9 @@ async fn main(spawner: Spawner) {
     use rmk::event::PeripheralBatteryEvent;
     use rmk::macros::processor;
 
-    #[processor(subscribe = [PeripheralBatteryEvent, BatteryStateEvent, LayerChangeEvent])]
+    use crate::split_event::CustomSplitEvent;
+
+    #[processor(subscribe = [PeripheralBatteryEvent, BatteryStateEvent, LayerChangeEvent, CustomSplitEvent])]
     struct PeripheralBatteryMonitor {}
 
     impl PeripheralBatteryMonitor {
@@ -251,6 +254,9 @@ async fn main(spawner: Spawner) {
         }
         async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
             info!("Layer changed to: {}", event.layer);
+        }
+        async fn on_custom_split_event(&mut self, event: CustomSplitEvent) {
+            info!("Custom split event: sensor={}", event.sensor_value);
         }
     }
 

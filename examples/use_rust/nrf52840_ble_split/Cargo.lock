@@ -1877,10 +1877,12 @@ dependencies = [
  "nrf-mpsl",
  "nrf-sdc",
  "panic-probe",
+ "postcard",
  "rand",
  "rand_chacha",
  "rand_core 0.6.4",
  "rmk",
+ "serde",
  "static_cell",
  "xz2",
 ]

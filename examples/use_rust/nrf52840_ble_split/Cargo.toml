@@ -54,6 +54,8 @@ static_cell = "2"
 rand = { version = "0.8.4", default-features = false }
 rand_core = { version = "0.6" }
 rand_chacha = { version = "0.3", default-features = false }
+serde = { version = "1", default-features = false, features = ["derive"] }
+postcard = { version = "1", features = ["experimental-derive"] }
 
 [build-dependencies]
 xz2 = "0.1.7"

@@ -28,13 +28,13 @@ impl ::core::fmt::Debug for BatteryEvent {
     }
 }
 #[doc(hidden)]
-static BATTERY_EVENT_EVENT_CHANNEL: ::embassy_sync::channel::Channel<
+static BATTERY_EVENT_EVENT_CHANNEL: ::rmk::embassy_sync::channel::Channel<
     ::rmk::RawMutex,
     BatteryEvent,
     { 8 },
-> = ::embassy_sync::channel::Channel::new();
+> = ::rmk::embassy_sync::channel::Channel::new();
 impl ::rmk::event::PublishableEvent for BatteryEvent {
-    type Publisher = ::embassy_sync::channel::Sender<
+    type Publisher = ::rmk::embassy_sync::channel::Sender<
         'static,
         ::rmk::RawMutex,
         BatteryEvent,
@@ -45,7 +45,7 @@ impl ::rmk::event::PublishableEvent for BatteryEvent {
     }
 }
 impl ::rmk::event::SubscribableEvent for BatteryEvent {
-    type Subscriber = ::embassy_sync::channel::Receiver<
+    type Subscriber = ::rmk::embassy_sync::channel::Receiver<
         'static,
         ::rmk::RawMutex,
         BatteryEvent,
@@ -56,7 +56,7 @@ impl ::rmk::event::SubscribableEvent for BatteryEvent {
     }
 }
 impl ::rmk::event::AsyncPublishableEvent for BatteryEvent {
-    type AsyncPublisher = ::embassy_sync::channel::Sender<
+    type AsyncPublisher = ::rmk::embassy_sync::channel::Sender<
         'static,
         ::rmk::RawMutex,
         BatteryEvent,
@@ -98,13 +98,13 @@ impl ::core::fmt::Debug for PointingEvent {
     }
 }
 #[doc(hidden)]
-static POINTING_EVENT_EVENT_CHANNEL: ::embassy_sync::channel::Channel<
+static POINTING_EVENT_EVENT_CHANNEL: ::rmk::embassy_sync::channel::Channel<
     ::rmk::RawMutex,
     PointingEvent,
     { 8 },
-> = ::embassy_sync::channel::Channel::new();
+> = ::rmk::embassy_sync::channel::Channel::new();
 impl ::rmk::event::PublishableEvent for PointingEvent {
-    type Publisher = ::embassy_sync::channel::Sender<
+    type Publisher = ::rmk::embassy_sync::channel::Sender<
         'static,
         ::rmk::RawMutex,
         PointingEvent,
@@ -115,7 +115,7 @@ impl ::rmk::event::PublishableEvent for PointingEvent {
     }
 }
 impl ::rmk::event::SubscribableEvent for PointingEvent {
-    type Subscriber = ::embassy_sync::channel::Receiver<
+    type Subscriber = ::rmk::embassy_sync::channel::Receiver<
         'static,
         ::rmk::RawMutex,
         PointingEvent,
@@ -126,7 +126,7 @@ impl ::rmk::event::SubscribableEvent for PointingEvent {
     }
 }
 impl ::rmk::event::AsyncPublishableEvent for PointingEvent {
-    type AsyncPublisher = ::embassy_sync::channel::Sender<
+    type AsyncPublisher = ::rmk::embassy_sync::channel::Sender<
         'static,
         ::rmk::RawMutex,
         PointingEvent,

@@ -225,6 +225,9 @@ pub struct RmkConstantsConfig {
     /// BLE Split Central sleep timeout in minutes (0 = disabled)
     #[serde_inline_default(0)]
     pub split_central_sleep_timeout_seconds: u32,
+    /// Maximum size of user event payload for split forwarding
+    #[serde_inline_default(16)]
+    pub split_user_payload_max_size: usize,
 }
 
 fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
@@ -290,6 +293,7 @@ impl Default for RmkConstantsConfig {
             split_peripherals_num: 0,
             ble_profiles_num: 3,
             split_central_sleep_timeout_seconds: 0,
+            split_user_payload_max_size: 16,
         }
     }
 }
@@ -377,6 +381,9 @@ define_event_config!(
     central_connected,
     peripheral_battery,
     clear_peer,
+    // Split forwarding channels
+    split_forward,
+    split_dispatch,
 );
 
 /// Configurations for keyboard layout

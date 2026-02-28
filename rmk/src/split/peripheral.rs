@@ -82,6 +82,10 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
         let mut pointing_sub = PointingEvent::subscriber();
         #[cfg(feature = "_ble")]
         let mut battery_sub = BatteryStateEvent::subscriber();
+        #[cfg(feature = "split")]
+        let mut forward_sub = crate::split::forward::SPLIT_FORWARD_CHANNEL
+            .subscriber()
+            .unwrap();
 
         loop {
             let read_message_to_send = async {
@@ -96,6 +100,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                     },
                     e = pointing_sub.next_message_pure().fuse() => SplitMessage::Pointing(e),
                     with_feature("_ble"): e = battery_sub.next_event().fuse() => SplitMessage::BatteryState(e),
+                    with_feature("split"): e = forward_sub.next_message_pure().fuse() => SplitMessage::User(e),
                 };
                 message
             };
@@ -127,6 +132,16 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         SplitMessage::Layer(layer) => {
                             // Publish Layer event
                             publish_event(LayerChangeEvent { layer });
+                        }
+                        #[cfg(feature = "split")]
+                        SplitMessage::User(packet) => {
+                            // Dispatch user event from central (peripheral_id 0 = central)
+                            crate::split::forward::SPLIT_DISPATCH_CHANNEL
+                                .immediate_publisher()
+                                .publish_immediate(crate::split::DispatchedSplitPacket {
+                                    peripheral_id: 0,
+                                    packet,
+                                });
                         }
                         _ => (),
                     },

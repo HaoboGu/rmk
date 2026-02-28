@@ -35,9 +35,9 @@ use config::RmkConfig;
 #[cfg(not(feature = "_ble"))]
 use descriptor::{CompositeReport, KeyboardReport};
 #[cfg(not(any(cortex_m)))]
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
+pub use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
 #[cfg(cortex_m)]
-use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
+pub use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 #[cfg(not(feature = "_no_usb"))]
 use embassy_usb::driver::Driver;
 use futures::FutureExt;
@@ -57,7 +57,7 @@ use {
     crate::light::UsbLedReader,
     crate::usb::{UsbKeyboardWriter, add_usb_reader_writer, add_usb_writer, new_usb_builder},
 };
-pub use {embassy_futures, futures, heapless, rmk_macro as macros, rmk_types as types};
+pub use {embassy_futures, embassy_sync, futures, heapless, rmk_macro as macros, rmk_types as types};
 #[cfg(feature = "storage")]
 use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 

@@ -247,7 +247,7 @@ mod multi_sub {
                             if !__any_polled {
                                 {
                                     ::std::rt::begin_panic(
-                                        "all futures in select! were completed, \
+                                        "all futures in select! were completed,\
                     but no `complete =>` handler was provided",
                                     );
                                 }
@@ -491,7 +491,7 @@ mod polling_multi {
                             if !__any_polled {
                                 {
                                     ::std::rt::begin_panic(
-                                        "all futures in select! were completed, \
+                                        "all futures in select! were completed,\
                     but no `complete =>` handler was provided",
                                     );
                                 }

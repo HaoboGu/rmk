@@ -63,6 +63,7 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS = constants.split_central_sleep_timeout_seconds),
         const_declaration!(pub(crate) MORSE_MAX_NUM = constants.morse_max_num),
         const_declaration!(pub(crate) MAX_PATTERNS_PER_KEY = constants.max_patterns_per_key),
+        const_declaration!(pub(crate) SPLIT_USER_PAYLOAD_MAX_SIZE = constants.split_user_payload_max_size),
         format!("pub(crate) const BUILD_HASH: u32 = {build_hash:#010x};\n"),
     ];
 
@@ -90,6 +91,8 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
     let (peripheral_battery_size, peripheral_battery_pubs, peripheral_battery_subs) =
         events.peripheral_battery.into_values();
     let (clear_peer_size, clear_peer_pubs, clear_peer_subs) = events.clear_peer.into_values();
+    let (split_forward_size, split_forward_pubs, split_forward_subs) = events.split_forward.into_values();
+    let (split_dispatch_size, split_dispatch_pubs, split_dispatch_subs) = events.split_dispatch.into_values();
 
     constant_strs.extend([
         // BLE events
@@ -150,6 +153,13 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) CLEAR_PEER_EVENT_CHANNEL_SIZE = clear_peer_size),
         const_declaration!(pub(crate) CLEAR_PEER_EVENT_PUB_SIZE = clear_peer_pubs),
         const_declaration!(pub(crate) CLEAR_PEER_EVENT_SUB_SIZE = clear_peer_subs),
+        // Split forwarding channels
+        const_declaration!(pub(crate) SPLIT_FORWARD_EVENT_CHANNEL_SIZE = split_forward_size),
+        const_declaration!(pub(crate) SPLIT_FORWARD_EVENT_PUB_SIZE = split_forward_pubs),
+        const_declaration!(pub(crate) SPLIT_FORWARD_EVENT_SUB_SIZE = split_forward_subs),
+        const_declaration!(pub(crate) SPLIT_DISPATCH_EVENT_CHANNEL_SIZE = split_dispatch_size),
+        const_declaration!(pub(crate) SPLIT_DISPATCH_EVENT_PUB_SIZE = split_dispatch_pubs),
+        const_declaration!(pub(crate) SPLIT_DISPATCH_EVENT_SUB_SIZE = split_dispatch_subs),
     ]);
 
     constant_strs

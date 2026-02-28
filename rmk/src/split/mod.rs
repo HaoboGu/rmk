@@ -10,11 +10,30 @@ pub mod ble;
 pub mod central;
 /// Common abstraction layer of split driver
 pub(crate) mod driver;
+#[cfg(feature = "split")]
+pub mod forward;
 pub mod peripheral;
 #[cfg(feature = "rp2040")]
 pub mod rp;
 #[cfg(not(feature = "_ble"))]
 pub mod serial;
+
+/// User event packet for split forwarding (wire format)
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct SplitUserPacket {
+    pub kind: u16,
+    pub len: u8,
+    pub data: [u8; crate::SPLIT_USER_PAYLOAD_MAX_SIZE],
+}
+
+/// Dispatched user packet with peripheral source info, used internally after receiving from wire
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct DispatchedSplitPacket {
+    pub peripheral_id: u8,
+    pub packet: SplitUserPacket,
+}
 
 /// Maximum size of a split message
 pub const SPLIT_MESSAGE_MAX_SIZE: usize = SplitMessage::POSTCARD_MAX_SIZE + 4;
@@ -44,4 +63,6 @@ pub(crate) enum SplitMessage {
     /// Battery state, from peripheral to central
     #[cfg(feature = "_ble")]
     BatteryState(BatteryStateEvent),
+    /// User-defined event forwarding
+    User(SplitUserPacket),
 }

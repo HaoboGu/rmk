@@ -183,6 +183,76 @@ pub mod processor {
     }
 }
 
+/// Split keyboard module - mirrors rmk::split
+#[cfg(feature = "split")]
+pub mod split {
+    /// Forward module - mirrors rmk::split::forward
+    pub mod forward {
+        use crate::event::{AsyncEventPublisher, EventPublisher, EventSubscriber};
+        use core::marker::PhantomData;
+
+        /// Trait for events that can be forwarded across split keyboard halves
+        pub trait SplitForwardable: Clone + Send {
+            const SPLIT_EVENT_KIND: u16;
+        }
+
+        /// Publisher wrapper that forwards events to split transport
+        pub struct SplitForwardingPublisher<P> {
+            inner: P,
+        }
+
+        impl<P> SplitForwardingPublisher<P> {
+            pub fn new(inner: P) -> Self {
+                Self { inner }
+            }
+        }
+
+        impl<P: EventPublisher> EventPublisher for SplitForwardingPublisher<P>
+        where
+            P::Event: SplitForwardable,
+        {
+            type Event = P::Event;
+            fn publish(&self, message: P::Event) {
+                self.inner.publish(message);
+            }
+        }
+
+        impl<P: AsyncEventPublisher> AsyncEventPublisher for SplitForwardingPublisher<P>
+        where
+            P::Event: SplitForwardable,
+        {
+            type Event = P::Event;
+            async fn publish_async(&self, message: P::Event) {
+                self.inner.publish_async(message).await;
+            }
+        }
+
+        /// Subscriber wrapper that receives from both local and remote
+        pub struct SplitAwareSubscriber<S, E> {
+            local: S,
+            _phantom: PhantomData<E>,
+        }
+
+        impl<S, E> SplitAwareSubscriber<S, E> {
+            pub fn new(local: S) -> Self {
+                Self {
+                    local,
+                    _phantom: PhantomData,
+                }
+            }
+        }
+
+        impl<S: EventSubscriber<Event = E>, E: SplitForwardable> EventSubscriber
+            for SplitAwareSubscriber<S, E>
+        {
+            type Event = E;
+            async fn next_event(&mut self) -> E {
+                self.local.next_event().await
+            }
+        }
+    }
+}
+
 /// Mock macros module for marker attributes
 pub mod macros {}
 
