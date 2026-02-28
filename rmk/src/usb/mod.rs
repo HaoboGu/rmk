@@ -182,6 +182,10 @@ macro_rules! add_usb_writer {
             request_handler: Some(request_handler),
             poll_ms: 1,
             max_packet_size: 64,
+            #[cfg(feature = "pico_w_ble")]
+            hid_subclass: ::embassy_usb::class::hid::HidSubclass::No,
+            #[cfg(feature = "pico_w_ble")]
+            hid_boot_protocol: ::embassy_usb::class::hid::HidBootProtocol::None,
         };
 
         let rw: ::embassy_usb::class::hid::HidWriter<_, $n> = ::embassy_usb::class::hid::HidWriter::new($usb_builder, state, hid_config);
@@ -207,6 +211,10 @@ macro_rules! add_usb_reader_writer {
             request_handler: Some(request_handler),
             poll_ms: 1,
             max_packet_size: 64,
+            #[cfg(feature = "pico_w_ble")]
+            hid_subclass: ::embassy_usb::class::hid::HidSubclass::No,
+            #[cfg(feature = "pico_w_ble")]
+            hid_boot_protocol: ::embassy_usb::class::hid::HidBootProtocol::None,
         };
 
         let rw: ::embassy_usb::class::hid::HidReaderWriter<_, $read_n, $write_n> = ::embassy_usb::class::hid::HidReaderWriter::new($usb_builder, state, hid_config);

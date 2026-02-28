@@ -81,7 +81,7 @@ fn expand_bind_interrupt_for_split_peripheral(
                 quote! {}
             };
             let use_2m_phy = if ble_config.use_2m_phy.unwrap_or(true) {
-                quote! { .support_le_2m_phy()? }
+                quote! { .support_le_2m_phy() }
             } else {
                 quote! {}
             };
@@ -159,12 +159,12 @@ fn expand_bind_interrupt_for_split_peripheral(
                     mem: &'d mut ::nrf_sdc::Mem<N>,
                 ) -> Result<::nrf_sdc::SoftdeviceController<'d>, ::nrf_sdc::Error> {
                     ::nrf_sdc::Builder::new()?
-                        .support_adv()?
-                        .support_peripheral()?
-                        .support_dle_peripheral()?
-                        .support_dle_central()?
-                        .support_phy_update_central()?
-                        .support_phy_update_peripheral()?
+                        .support_adv()
+                        .support_peripheral()
+                        .support_dle_peripheral()
+                        .support_dle_central()
+                        .support_phy_update_central()
+                        .support_phy_update_peripheral()
                         #use_2m_phy
                         #tx_power
                         .peripheral_count(1)?
@@ -179,9 +179,10 @@ fn expand_bind_interrupt_for_split_peripheral(
                     use ::embassy_rp::bind_interrupts;
                     bind_interrupts!(struct Irqs {
                         PIO0_IRQ_0 => ::embassy_rp::pio::InterruptHandler<::embassy_rp::peripherals::PIO0>;
+                        DMA_IRQ_0 => ::embassy_rp::dma::InterruptHandler<::embassy_rp::peripherals::DMA_CH0>, ::embassy_rp::dma::InterruptHandler<::embassy_rp::peripherals::DMA_CH1>;
                     });
                     #[::embassy_executor::task]
-                    async fn cyw43_task(runner: ::cyw43::Runner<'static, ::embassy_rp::gpio::Output<'static>, ::cyw43_pio::PioSpi<'static, ::embassy_rp::peripherals::PIO0, 0, ::embassy_rp::peripherals::DMA_CH0>>) -> ! {
+                    async fn cyw43_task(runner: ::cyw43::Runner<'static, ::cyw43::SpiBus<::embassy_rp::gpio::Output<'static>, ::cyw43_pio::PioSpi<'static, ::embassy_rp::peripherals::PIO0, 0>>>) -> ! {
                         runner.run().await
                     }
                 }

@@ -95,6 +95,7 @@ fn download_cyw43_firmware() {
         "43439A0.bin",
         "43439A0_btfw.bin",
         "43439A0_clm.bin",
+        "nvram_rp2040.bin",
         "LICENSE-permissive-binary-license-1.0.txt",
         "README.md",
     ];
