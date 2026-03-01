@@ -24,6 +24,12 @@ A firmware for the [Urchin Keyboard](https://github.com/duckyb/urchin), to use w
 
 ![urchin](../../images/urchin.png)
 
+## [zx66](https://github.com/zongxin1993/zx66-keybord)
+
+A modular split 66-key keyboard
+
+<img src="https://raw.githubusercontent.com/zongxin1993/zx66-keybord/refs/heads/master/Images/zx66-keybord_03.jpg">
+
 ## Show your keyboard!
 
 If you're using RMK to build your keyboard, feel free to open a PR adding your project to this page!
