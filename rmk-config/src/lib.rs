@@ -827,6 +827,9 @@ pub struct InputDeviceConfig {
 pub struct JoystickConfig {
     // Name of the joystick
     pub name: String,
+    /// Device id used to match this joystick with its JoystickProcessor.
+    /// If omitted, ids are assigned sequentially starting from 0.
+    pub id: Option<u8>,
     // Pin a of the joystick
     pub pin_x: String,
     // Pin b of the joystick

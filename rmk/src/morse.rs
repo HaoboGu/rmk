@@ -239,21 +239,16 @@ impl Morse {
             return None;
         }
 
-        let mut first: Option<&Action> = None;
-        for pair in self.actions.iter() {
-            // If pair.pattern starts with the given pattern_start
-            if pair.0.starts_with(pattern_start) {
-                if let Some(action) = first {
-                    if *action != *pair.1 {
-                        return None; //the solution is not unique, so must wait for possible continuation
-                    }
-                } else {
-                    first = Some(pair.1);
-                }
+        // If any strictly longer pattern starts with pattern_start,
+        // we cannot predict yet — must wait for possible continuation.
+        for (pattern, _) in self.actions.iter() {
+            if *pattern != pattern_start && pattern.starts_with(pattern_start) {
+                return None;
             }
         }
 
-        first.copied()
+        // pattern_start is the longest match, return its action
+        self.actions.get(&pattern_start).copied()
     }
 
     pub fn get(&self, pattern: MorsePattern) -> Option<Action> {

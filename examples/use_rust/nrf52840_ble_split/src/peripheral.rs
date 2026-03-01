@@ -161,6 +161,7 @@ async fn main(spawner: Spawner) {
     let mut adc_device = NrfAdc::new(
         saadc,
         [AnalogEventType::Battery],
+        [0],
         embassy_time::Duration::from_secs(12),
         None,
     );
