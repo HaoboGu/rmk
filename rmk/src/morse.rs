@@ -274,6 +274,12 @@ impl Morse {
             .is_some_and(|a| *a == *current_action)
     }
 
+    /// Returns true if the pattern exists in the actions or if any configured
+    /// pattern is a continuation of (starts with) the given pattern.
+    pub fn has_pattern_or_continuation(&self, pattern: MorsePattern) -> bool {
+        self.actions.iter().any(|(p, _)| p.starts_with(pattern))
+    }
+
     pub fn get(&self, pattern: MorsePattern) -> Option<Action> {
         self.actions.get(&pattern).copied()
     }

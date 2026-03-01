@@ -69,10 +69,10 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
 /// This triggers the early fire optimization: tap fires immediately on release,
 /// hold_after_tap still works on re-press.
 /// Uses HoldOnOtherPress mode to reproduce the double-press bug scenario.
-fn create_early_fire_keyboard() -> Keyboard<'static, 1, 5, 2> {
+fn create_early_fire_keyboard() -> Keyboard<'static, 1, 6, 2> {
     let keymap = [
-        [[k!(A), k!(B), k!(C), k!(D), KeyAction::Morse(0)]],
-        [[k!(Kp1), k!(Kp2), k!(Kp3), k!(Kp4), k!(Kp5)]],
+        [[k!(A), k!(B), k!(C), k!(D), KeyAction::Morse(0), KeyAction::Morse(1)]],
+        [[k!(Kp1), k!(Kp2), k!(Kp3), k!(Kp4), k!(Kp5), k!(Kp6)]],
     ];
 
     let behavior_config = BehaviorConfig {
@@ -81,6 +81,13 @@ fn create_early_fire_keyboard() -> Keyboard<'static, 1, 5, 2> {
                 Action::Key(KeyCode::Hid(HidKeyCode::Enter)),
                 Action::Key(KeyCode::Hid(HidKeyCode::B)),
                 Action::Key(KeyCode::Hid(HidKeyCode::Enter)),
+                Action::No,
+                MorseProfile::const_default(),
+            ),
+            Morse::new_from_vial(
+                Action::Key(KeyCode::Hid(HidKeyCode::E)),
+                Action::Key(KeyCode::Hid(HidKeyCode::LShift)),
+                Action::Key(KeyCode::Hid(HidKeyCode::E)),
                 Action::No,
                 MorseProfile::const_default(),
             )])
@@ -99,7 +106,7 @@ fn create_early_fire_keyboard() -> Keyboard<'static, 1, 5, 2> {
 
     static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
     let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
-    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 5>> = static_cell::StaticCell::new();
+    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 6>> = static_cell::StaticCell::new();
     let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
     Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
@@ -545,6 +552,35 @@ rusty_fork_test! {
                 [0, [kc_to_u8!(B), kc_to_u8!(E), 0, 0, 0, 0]],
                 [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
                 // Release morse key (B release)
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    /// Test that after early fire, re-pressing and release again to produce two taps.
+    ///
+    /// Scenario: Press td!(1), release quickly (early fire triggers E),
+    /// then re-press td!(1) and release quickly again.
+    ///
+    /// Expected: E press, E release (early fire), press E again
+    #[test]
+    fn test_early_fire_then_fire_on_second_tap_with_no_double_tap_config() {
+        key_sequence_test! {
+            keyboard: create_early_fire_keyboard(),
+            sequence: [
+                [0, 5, true, 10],    // Press td!(1) morse key
+                [0, 5, false, 20],   // Release td!(1) quickly — early fire triggers E
+                [0, 5, true, 20],    // Re-press td!(1)
+                [0, 5, false, 20],   // quick tap — early fire triggers E again
+                [0, 0, true, 20],    // Press A after 300ms (early-fired key timeout fires, cleans buffer)
+                [0, 0, false, 20],   // Release A
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(E), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(E), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
             ]
         };

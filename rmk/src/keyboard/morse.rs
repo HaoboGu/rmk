@@ -116,6 +116,26 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             pattern.followed_by_tap()
                         };
 
+                        // If the computed pattern is beyond all configured patterns (not in
+                        // actions and no configured pattern extends it), reset to base tap/hold.
+                        // This handles re-tapping after an early-fired tap when the continuation
+                        // pattern (e.g., double_tap) isn't configured.
+                        let pattern = match &k.action {
+                            KeyAction::Morse(idx) => {
+                                let km = self.keymap.borrow();
+                                if let Some(morse) = km.behavior.morse.morses.get(*idx as usize) {
+                                    if !morse.has_pattern_or_continuation(pattern) {
+                                        if hold { HOLD } else { TAP }
+                                    } else {
+                                        pattern
+                                    }
+                                } else {
+                                    pattern
+                                }
+                            }
+                            _ => pattern,
+                        };
+
                         let final_action =
                             Self::try_predict_final_action(self.keymap.borrow().behavior, &k.action, pattern);
                         if let Some(action) = final_action {
