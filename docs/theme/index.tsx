@@ -1,6 +1,6 @@
-import Theme from 'rspress/theme'
+import { Layout } from '@rspress/core/theme-original'
 
-import branchs from '../versions.json' assert { type: 'json' }
+import branchs from '../versions.json' with { type: 'json' }
 
 const NotFoundLayout = () => {
   if (typeof window === 'undefined') return
@@ -9,9 +9,7 @@ const NotFoundLayout = () => {
   window.location.href = versions.includes(version) ? `/${version}` : '/'
 }
 
-export default {
-  ...Theme,
-  NotFoundLayout
-}
-
-export * from 'rspress/theme'
+export { Layout, NotFoundLayout }
+export * from '@rspress/core/theme-original'
+export * from './components/LangBadge'
+export * from './components/LinkCard'
