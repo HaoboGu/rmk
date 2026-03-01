@@ -170,8 +170,7 @@ let mut matrix = Matrix::<
 On the central, you should also run the peripheral manager for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
 
 
-import { Rust, Toml } from '../../components/LangBadge'
-import { Tab, Tabs } from '@theme'
+import { Rust, Toml, Tab, Tabs } from '@theme'
 
 <Tabs>
 <Tab label={<Rust />}>

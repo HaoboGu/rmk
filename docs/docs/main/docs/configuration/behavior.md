@@ -63,7 +63,7 @@ combos = [
 
 ## Macro
 
-In the `macro` sub-table, you can configure the keyboard's macro functionality. Macros are explained in more detail in the [keyboard macros](/docs/features/keymap/keyboard_macros.md) page.
+In the `macro` sub-table, you can configure the keyboard's macro functionality. Macros are explained in more detail in the [keyboard macros](./keymap_configuration/keyboard_macros.md) page.
 
 Macro operations are defined with an `operation` and a `keycode`, `duration` or `text` field depending on the operation. Available operations are:
 
