@@ -881,7 +881,7 @@ The `buffer_size` is configurable to allow users to increase throughput for bulk
 ```rust
 use postcard_rpc::{endpoint, topic};
 use serde::{Serialize, Deserialize};
-use postcard::experimental::schema::Schema;
+use postcard_schema::Schema;
 use heapless::Vec;
 
 // === Version & Capabilities ===
