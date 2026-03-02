@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 /// The bit representation of the modifier combination.
 #[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
-#[derive(Serialize, Deserialize, MaxSize, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, MaxSize, Eq, PartialEq, postcard_schema::Schema)]
 
 pub struct ModifierCombination {
     #[bits(1)]
