@@ -24,7 +24,7 @@ once_cell = "1.19"
 cargo_toml = "0.22"
 pest = "2.8"
 pest_derive = "2.8"
-strum = { version = "0.27", default-features = false, features = ["derive"] }
+strum = { version = "0.28", default-features = false, features = ["derive"] }
 
 [lib]
 proc-macro = true
