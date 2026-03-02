@@ -63,6 +63,7 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS = constants.split_central_sleep_timeout_seconds),
         const_declaration!(pub(crate) MORSE_MAX_NUM = constants.morse_max_num),
         const_declaration!(pub(crate) MAX_PATTERNS_PER_KEY = constants.max_patterns_per_key),
+        const_declaration!(pub(crate) PASSKEY_TIMEOUT_SECS = constants.passkey_timeout_secs),
         format!("pub(crate) const BUILD_HASH: u32 = {build_hash:#010x};\n"),
     ];
 

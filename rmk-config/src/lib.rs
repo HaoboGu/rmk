@@ -225,6 +225,9 @@ pub struct RmkConstantsConfig {
     /// BLE Split Central sleep timeout in minutes (0 = disabled)
     #[serde_inline_default(0)]
     pub split_central_sleep_timeout_seconds: u32,
+    /// BLE passkey entry timeout in seconds (how long user has to type the passkey)
+    #[serde_inline_default(120)]
+    pub passkey_timeout_secs: u32,
 }
 
 fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
@@ -290,6 +293,7 @@ impl Default for RmkConstantsConfig {
             split_peripherals_num: 0,
             ble_profiles_num: 3,
             split_central_sleep_timeout_seconds: 0,
+            passkey_timeout_secs: 120,
         }
     }
 }
@@ -472,6 +476,7 @@ pub struct BleConfig {
     pub adc_divider_total: Option<u32>,
     pub default_tx_power: Option<i8>,
     pub use_2m_phy: Option<bool>,
+    pub passkey_entry: Option<bool>,
 }
 
 /// Config for chip-specific settings
