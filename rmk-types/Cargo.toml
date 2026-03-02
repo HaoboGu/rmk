@@ -15,6 +15,9 @@ log = { version = "0.4", optional = true }
 
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive"] }
+postcard-schema = { version = "0.2", default-features = false, features = ["derive", "heapless-v0_9"] }
+postcard-rpc = { version = "0.12", default-features = false }
+heapless = { version = "0.9", default-features = false, features = ["serde"] }
 strum = { version = "0.27", default-features = false, features = ["derive"] }
 
 bitfield-struct = "0.12"

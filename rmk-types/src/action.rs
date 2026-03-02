@@ -13,9 +13,9 @@ use crate::keycode::{KeyCode, SpecialKey};
 use crate::modifier::ModifierCombination;
 
 /// EncoderAction is the action at a encoder position, stored in encoder_map.
-#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize)]
+#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
 pub struct EncoderAction {
     clockwise: KeyAction,
     counter_clockwise: KeyAction,
@@ -79,7 +79,7 @@ pub enum MorseMode {
 /// to save some RAM space, manually packed into 32 bits
 #[derive(PartialEq, Eq, Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize)]
+#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
 pub struct MorseProfile(u32);
 
 impl MorseProfile {
@@ -231,7 +231,7 @@ impl From<MorseProfile> for u32 {
 /// It can be a single action like triggering a key, or a composite keyboard action like tap/hold
 #[derive(Debug, Copy, Clone, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize)]
+#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
 pub enum KeyAction {
     /// No action
     No,
@@ -288,7 +288,7 @@ impl PartialEq for KeyAction {
 /// A single basic action that a keyboard can execute.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize)]
+#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
 pub enum Action {
     /// Default action, no action.
     No,
@@ -333,7 +333,7 @@ pub enum Action {
 /// Actions for controlling the keyboard or changing the keyboard's state, for example, enable/disable a particular function
 #[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize)]
+#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
 #[cfg_attr(feature = "_codegen", derive(strum::VariantNames))]
 pub enum KeyboardAction {
     Bootloader,
@@ -352,7 +352,7 @@ pub enum KeyboardAction {
 /// Actions for controlling lights
 #[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize)]
+#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
 #[cfg_attr(feature = "_codegen", derive(strum::VariantNames))]
 pub enum LightAction {
     BacklightOn,
