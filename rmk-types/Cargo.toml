@@ -15,6 +15,9 @@ defmt = { version = "1.0", optional = true }
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive"] }
 strum = { version = "0.28", default-features = false, features = ["derive"] }
+postcard-schema = { version = "0.2", default-features = false, features = ["derive", "heapless-v0_9"] }
+postcard-rpc = { version = "0.12", default-features = false }
+heapless = { version = "0.9", default-features = false, features = ["serde"] }
 
 bitfield-struct = "0.12"
 
