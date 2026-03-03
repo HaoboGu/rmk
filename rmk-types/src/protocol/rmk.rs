@@ -12,8 +12,12 @@ use postcard_rpc::{TopicDirection, endpoints, topics};
 use serde::{Deserialize, Serialize};
 
 use crate::action::{EncoderAction, KeyAction, MorseProfile};
-pub use crate::fork::ForkStateBits;
-use crate::led_indicator::LedIndicator;
+use crate::connection::ConnectionType;
+use crate::event::{
+    BatteryStatus, BleProfilePayload, BleStatePayload, ConnectionPayload, LayerChangePayload,
+    LedPayload, SleepPayload, WpmPayload,
+};
+use crate::fork::ForkStateBits;
 use crate::modifier::ModifierCombination;
 
 // ---------------------------------------------------------------------------
@@ -151,36 +155,25 @@ pub enum StorageResetMode {
 // Connection / status types
 // ---------------------------------------------------------------------------
 
-/// Connection type enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub enum ConnectionType {
-    Usb,
-    Ble,
-}
-
 /// Current connection information.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ConnectionInfo {
     pub connection_type: ConnectionType,
     pub ble_profile: u8,
     pub ble_connected: bool,
 }
 
-/// Battery status used for both status queries and event notifications.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct BatteryStatus {
-    pub level: u8,
-    pub charging: bool,
-}
-
 /// Current matrix key-press state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MatrixState {
     pub num_pressed: u8,
 }
 
 /// Split keyboard peripheral status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SplitStatus {
     pub num_peripherals: u8,
     pub connected_peripherals: u8,
@@ -312,51 +305,12 @@ pub struct SetForkRequest {
 }
 
 // ---------------------------------------------------------------------------
-// Topic payload types
+// Topic payload types (re-exported from crate::event)
 // ---------------------------------------------------------------------------
 
-/// Payload for the layer change topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct LayerChangePayload {
-    pub layer: u8,
-}
-
-/// Payload for the WPM update topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct WpmPayload {
-    pub wpm: u16,
-}
-
-/// Payload for BLE state change topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct BleStatePayload {
-    pub connected: bool,
-    pub advertising: bool,
-}
-
-/// Payload for BLE profile change topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct BleProfilePayload {
-    pub profile: u8,
-}
-
-/// Payload for connection change topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct ConnectionPayload {
-    pub connection_type: ConnectionType,
-}
-
-/// Payload for sleep state topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct SleepPayload {
-    pub sleeping: bool,
-}
-
-/// Payload for LED indicator topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct LedPayload {
-    pub indicator: LedIndicator,
-}
+// All topic payload types (LayerChangePayload, WpmPayload, BatteryStatus,
+// BleStatePayload, BleProfilePayload, ConnectionPayload, SleepPayload,
+// LedPayload) are re-exported from `crate::event` at the top of this file.
 
 // ---------------------------------------------------------------------------
 // Endpoint declarations
@@ -430,7 +384,7 @@ topics! {
     | -------               | ---------              | ----                  |
     | LayerChangeTopic      | LayerChangePayload     | "event/layer"         |
     | WpmUpdateTopic        | WpmPayload             | "event/wpm"           |
-    | BatteryStateTopic     | BatteryStatus          | "event/battery"       |
+    | BatteryStatusTopic     | BatteryStatus          | "event/battery"       |
     | BleStateChangeTopic   | BleStatePayload        | "event/ble_state"     |
     | BleProfileChangeTopic | BleProfilePayload      | "event/ble_profile"   |
     | ConnectionChangeTopic | ConnectionPayload      | "event/connection"    |
@@ -451,6 +405,8 @@ mod tests {
     use postcard_rpc::{Endpoint, Key, Topic};
 
     use super::*;
+    use crate::led_indicator::LedIndicator;
+    use crate::event::ChargeState;
     use crate::mouse_button::MouseButtons;
 
     /// Helper: postcard round-trip for a value using a stack buffer.
@@ -540,7 +496,7 @@ mod tests {
         &[
             LayerChangeTopic::TOPIC_KEY,
             WpmUpdateTopic::TOPIC_KEY,
-            BatteryStateTopic::TOPIC_KEY,
+            BatteryStatusTopic::TOPIC_KEY,
             BleStateChangeTopic::TOPIC_KEY,
             BleProfileChangeTopic::TOPIC_KEY,
             ConnectionChangeTopic::TOPIC_KEY,
@@ -687,9 +643,18 @@ mod tests {
 
     #[test]
     fn round_trip_battery_status() {
-        round_trip(&BatteryStatus {
-            level: 85,
-            charging: true,
+        round_trip(&BatteryStatus::Unavailable);
+        round_trip(&BatteryStatus::Available {
+            charge_state: ChargeState::Charging,
+            level: Some(85),
+        });
+        round_trip(&BatteryStatus::Available {
+            charge_state: ChargeState::Discharging,
+            level: Some(50),
+        });
+        round_trip(&BatteryStatus::Available {
+            charge_state: ChargeState::Unknown,
+            level: None,
         });
     }
 
@@ -777,11 +742,12 @@ mod tests {
     fn round_trip_topic_payloads() {
         round_trip(&LayerChangePayload { layer: 3 });
         round_trip(&WpmPayload { wpm: 120 });
-        round_trip(&BatteryStatus {
-            level: 100,
-            charging: false,
+        round_trip(&BatteryStatus::Available {
+            charge_state: ChargeState::Discharging,
+            level: Some(100),
         });
         round_trip(&BleStatePayload {
+            profile: 0,
             connected: true,
             advertising: false,
         });

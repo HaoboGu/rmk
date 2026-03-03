@@ -169,11 +169,11 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// }
 ///
 /// // Polling processor
-/// #[processor(subscribe = [BatteryStateEvent], poll_interval = 1000)]
+/// #[processor(subscribe = [BatteryStatusEvent], poll_interval = 1000)]
 /// struct BatteryMonitor { /* ... */ }
 ///
 /// impl BatteryMonitor {
-///     async fn on_battery_state_event(&mut self, event: BatteryStateEvent) {
+///     async fn on_battery_state_event(&mut self, event: BatteryStatusEvent) {
 ///         // Handle event
 ///     }
 ///

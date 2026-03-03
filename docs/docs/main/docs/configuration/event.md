@@ -61,7 +61,7 @@ peripheral_battery.subs = 4
 | **Battery Events** | | |
 | `battery_adc` | `BatteryAdcEvent` | channel_size=2 |
 | `charging_state` | `ChargingStateEvent` | channel_size=2 |
-| `battery_state` | `BatteryStateEvent` | subs=4 |
+| `battery_state` | `BatteryStatusEvent` | subs=4 |
 | **Connection Events** | | |
 | `connection_change` | `ConnectionChangeEvent` | |
 | `ble_state_change` | `BleStateChangeEvent` | |

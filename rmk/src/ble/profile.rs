@@ -224,13 +224,13 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             debug!("Loaded active profile: {}", profile);
             ACTIVE_PROFILE.store(profile, Ordering::SeqCst);
 
-            publish_event(BleProfileChangeEvent { profile });
+            publish_event(BleProfileChangeEvent::new(profile));
         } else {
             // If no saved active profile, use 0 as default
             debug!("Loaded default active profile",);
             ACTIVE_PROFILE.store(0, Ordering::SeqCst);
 
-            publish_event(BleProfileChangeEvent { profile: 0 });
+            publish_event(BleProfileChangeEvent::new(0));
         };
     }
 
@@ -366,7 +366,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
         info!("Switched to BLE profile: {}", profile);
 
-        publish_event(BleProfileChangeEvent { profile });
+        publish_event(BleProfileChangeEvent::new(profile));
 
         true
     }
@@ -421,9 +421,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
                             info!("Switching connection type to: {}", updated);
 
-                            publish_event(ConnectionChangeEvent {
-                                connection_type: updated.into(),
-                            });
+                            publish_event(ConnectionChangeEvent::new(updated.into()));
 
                             #[cfg(feature = "storage")]
                             FLASH_CHANNEL.send(FlashOperationMessage::ConnectionType(updated)).await;
