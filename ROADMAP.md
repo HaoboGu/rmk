@@ -42,12 +42,12 @@
 | d | Define `DeviceCapabilities` struct with all fields (`num_layers`, `num_rows`, `num_cols`, `num_encoders`, `max_combos`, `max_macros`, `macro_space_size`, `max_morse`, `max_forks`, `has_storage`, `has_split`, `num_split_peripherals`, `has_ble`, `num_ble_profiles`, `has_lighting`, `max_payload_size`) | [x] | |
 | e | Define `RmkError` enum (`InvalidParameter`, `BadState`, `Busy`, `StorageError`, `InternalError`) and `pub type RmkResult = Result<(), RmkError>` | [x] | |
 | f | Define `LockStatus { locked: bool, awaiting_keys: bool, remaining_keys: u8 }` | [x] | |
-| g | Define `UnlockChallenge { key_positions: Vec<(u8, u8), MAX_UNLOCK_KEYS> }` with `MAX_UNLOCK_KEYS = 4` | [x] | |
+| g | Define `UnlockChallenge { key_positions: Vec<(u8, u8), MAX_UNLOCK_KEYS> }` with `MAX_UNLOCK_KEYS = 2` | [x] | |
 | h | Define `KeyPosition { layer: u8, row: u8, col: u8 }` | [x] | |
 | i | Define `BulkRequest { layer: u8, start_row: u8, start_col: u8, count: u16 }` with `MAX_BULK = 32` | [x] | |
 | j | Define `StorageResetMode` enum (`Full`, `LayoutOnly`) | [x] | |
-| k | Define Topic payload types: `LayerChangePayload`, `WpmPayload`, `BatteryStatus`, `BleStatePayload`, `BleProfilePayload`, `ConnectionPayload`, `SleepPayload`, `LedPayload` | [x] | See final_plan.md Section 8 |
-| l | Define connection/status types: `ConnectionInfo`, `ConnectionType`, `BatteryStatus`, `MatrixState`, `SplitStatus` | [x] | |
+| k | Define Topic payload types: `LayerChangePayload`, `WpmPayload`, `BatteryStateEvent` (reuse internal enum), `BleStatePayload`, `BleProfilePayload`, `ConnectionPayload`, `SleepPayload`, `LedPayload` | [x] | See final_plan.md Section 8. `BatteryStateEvent` enum matches internal event for full fidelity |
+| l | Define connection/status types: `ConnectionInfo`, `ConnectionType`, `BatteryStateEvent`, `MatrixState`, `SplitStatus` | [x] | `BatteryStateEvent` reuses internal enum: `NotAvailable`, `Normal(u8)`, `Charging`, `Charged` |
 | m | Define macro types: `MacroInfo`, `MacroData` | [x] | |
 | n | Define combo/morse/fork config types: `ComboConfig`, `MorseConfig`, `ForkConfig` (or reuse existing types from rmk-types) | [x] | Protocol-facing types defined; `ForkConfig` uses full-fidelity state bits (modifiers + LED + mouse), no downgrade |
 | o | Define protocol-facing `BehaviorConfig` (or directly reuse existing `BehaviorConfig` from `rmk` crate) | [x] | Protocol-facing version with combo_timeout_ms, oneshot_timeout_ms, tap_interval_ms, tap_tolerance |
@@ -84,13 +84,15 @@
 | b | Write serde round-trip tests: for each ICD struct/enum, use `postcard::to_slice` -> `postcard::from_bytes` and assert equality | [x] | 22 round-trip tests |
 | c | Write key hash collision detection test: collect all endpoint/topic key hashes, assert no duplicates | [x] | 3 collision tests (endpoints, topics, cross) |
 | d | Test edge cases: empty `heapless::Vec`, max-value fields, all-zero `DeviceCapabilities` | [x] | |
-| e | Run `cargo test -p rmk-types` to confirm all tests pass | [x] | 29/29 tests pass |
+| e | Run `cargo test -p rmk-types` to confirm all tests pass | [x] | 28/28 tests pass |
 
 ---
 
 ## Phase 2: Feature Gate and ProtocolService Skeleton
 
 **Goal**: Establish the new protocol's code structure alongside Vial.
+
+> **Design decision**: `ProtocolService` implements its own dispatch loop rather than using postcard-rpc's `define_dispatch!` macro + `Server` struct. The reason is that `ProtocolService` is generic over const parameters (`ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER`) and holds `&RefCell<KeyMap<...>>` — `define_dispatch!` requires static, non-generic context types. RMK reuses postcard-rpc's `endpoint!`/`topic!` definitions, wire format, key hashing, `WireTx`/`WireRx` traits, and serialization.
 
 ### Step 2.1 — Add `rmk_protocol` feature to `rmk/Cargo.toml`
 
@@ -107,87 +109,85 @@
 |---|--------|--------|-------|
 | a | Create directory `rmk/src/host/protocol/` | [ ] | |
 | b | Create `rmk/src/host/protocol/mod.rs` | [ ] | |
-| c | Define `ProtocolService` struct with fields: `&'a RefCell<KeyMap<ROW, COL, NUM_LAYER, NUM_ENCODER>>`, lock state (`bool`), RX buffer `[u8; BUF_SIZE]`, TX buffer `[u8; BUF_SIZE]`, transport (generic `T: Read + Write`) | [ ] | Follow VialService pattern |
-| d | Implement `ProtocolService::new()` constructor | [ ] | |
-| e | Implement `ProtocolService::run()` async main loop skeleton (`loop { self.process().await }` pattern) | [ ] | |
+| c | Define `ProtocolService` struct with fields: `&'a RefCell<KeyMap<ROW, COL, NUM_LAYER, NUM_ENCODER>>`, lock state (`bool`), RX buffer `[u8; BUF_SIZE]`, TX buffer `[u8; BUF_SIZE]`, transport (generic `T: WireTx + WireRx`), event subscribers (created once in `new()`) | [ ] | Follow VialService pattern. Event subscribers must be held as fields, not re-created per loop iteration |
+| d | Implement `ProtocolService::new()` constructor — create all event subscribers here | [ ] | |
+| e | Implement `ProtocolService::run()` async main loop: use `embassy_futures::select` to multiplex transport reads (endpoint requests) and event subscribers (topic sources). Single-writer: only this loop writes to transport | [ ] | Returns a future composed into `select_biased!`, NOT spawned via Spawner |
 | f | Gate entire module with `#[cfg(feature = "rmk_protocol")]` | [ ] | |
 
 ### Step 2.3 — Implement dispatch loop
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | In `process()`, implement: read bytes from transport until `0x00` delimiter (COBS frame end marker) | [ ] | |
-| b | Decode COBS frame using `postcard::take_from_bytes_cobs` or `cobs` crate | [ ] | |
-| c | Parse discriminant byte, extract key length and seq_no length | [ ] | See final_plan.md Section 6.3 |
-| d | Extract key bytes, match against registered endpoint keys | [ ] | |
-| e | On match: deserialize payload with `postcard::from_bytes`, call corresponding handler | [ ] | |
-| f | On no match: construct `WireError::UnknownKey` error response | [ ] | |
-| g | Serialize handler return value to TX buffer with `postcard::to_slice_cobs` | [ ] | |
-| h | Write serialized COBS frame to transport | [ ] | |
-| i | Add error handling: on frame parse failure, skip current frame and continue reading (resync) | [ ] | |
+| a | In the transport branch of `select`, read frame from `WireRx` | [ ] | `WireRx` handles framing (COBS for serial, packet for USB bulk) |
+| b | Parse `VarHeader` from frame: extract discriminant, key, seq_no | [ ] | Use postcard-rpc's `VarHeader::read_from_wire()` |
+| c | Match key against registered endpoint keys (compile-time key constants from `endpoint!` macro) | [ ] | Match on `<GetVersion as Endpoint>::REQ_KEY`, etc. |
+| d | On match: deserialize payload with `postcard::from_bytes`, call corresponding handler | [ ] | |
+| e | On no match: construct `WireError::UnknownKey` error response | [ ] | |
+| f | Serialize handler return value and write response frame via `WireTx` | [ ] | Include echoed seq_no for request/response correlation |
+| g | In event subscriber branches of `select`, serialize Topic frame and write via `WireTx` | [ ] | Response writes prioritized over topic writes in select order |
+| h | Add error handling: on frame parse failure, skip current frame and continue (resync) | [ ] | |
+| i | Handle transport write failures: log error, do not crash, continue running | [ ] | |
 
-### Step 2.4 — Feature-gated task spawning
+### Step 2.4 — Feature-gated task wiring
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Add `#[cfg(feature = "rmk_protocol")] pub(crate) mod protocol;` in `rmk/src/host/mod.rs` | [ ] | Parallel to existing `#[cfg(feature = "vial")] pub(crate) mod via;` |
-| b | Add `#[cfg(feature = "rmk_protocol")]` block to create and spawn `ProtocolService` async task | [ ] | Follow existing Vial task spawn code |
-| c | Ensure `ProtocolService` task receives the same `&RefCell<KeyMap>` reference as `VialService` | [ ] | |
-| d | Run `cargo check -p rmk --no-default-features --features=rmk_protocol` to verify task spawn compiles | [ ] | |
+| b | Add `#[cfg(feature = "rmk_protocol")]` version of `run_host_communicate_task()` that creates and runs `ProtocolService` | [ ] | Returns async future, composed into `select_biased!` in `run_keyboard()` |
+| c | Ensure `ProtocolService` receives the same `&RefCell<KeyMap>` reference as `VialService` | [ ] | |
+| d | Run `cargo check -p rmk --no-default-features --features=rmk_protocol` to verify task wiring compiles | [ ] | |
 
 ### Step 2.5 — Rename `VialMessage` -> `HostMessage`
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | In `rmk/src/storage/mod.rs`, rename `FlashOperationMessage::VialMessage` to `FlashOperationMessage::HostMessage` | [ ] | |
-| b | Search all references to `VialMessage` and update (`rmk/src/host/via/mod.rs`, `rmk/src/host/storage.rs`, etc.) | [ ] | Use `cargo check` to find all |
+| b | Search all references to `VialMessage` and update (`rmk/src/host/via/mod.rs`, `rmk/src/host/via/vial.rs`, etc.) | [ ] | Use `cargo check` to find all |
 | c | Keep `#[cfg(feature = "host")]` on the `HostMessage` variant (usable by both vial and rmk_protocol) | [ ] | |
-| d | Run `cargo test -p rmk --no-default-features --features=vial,storage` to confirm Vial still works | [ ] | |
+| d | Implement runtime keymap reset in storage: change `FlashOperationMessage::ResetLayout` handler to actually erase stored keymap keys and reload defaults (currently a no-op at runtime) | [ ] | Required for `ResetKeymap` endpoint to work |
+| e | Run `cargo test -p rmk --no-default-features --features=vial,storage` to confirm Vial still works | [ ] | |
 
 ---
 
-## Phase 3: USB CDC-ACM Transport
+## Phase 3: USB Raw Bulk Transport
 
 **Goal**: Get the first working transport for desktop testing.
 
-### Step 3.1 — Implement `embedded_io_async` for CDC-ACM
+### Step 3.1 — Create raw vendor-class bulk endpoint transport
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Create `rmk/src/host/protocol/transport.rs` | [ ] | |
-| b | Check if `embassy_usb::class::cdc_acm::CdcAcmClass` already implements `embedded_io_async::Read` + `Write`; if so, use directly | [ ] | May already be provided by embassy |
-| c | If not, create newtype wrapper `CdcTransport<'d, D: Driver<'d>>` wrapping `CdcAcmClass<'d, D>` | [ ] | |
-| d | Implement `embedded_io_async::Read` for wrapper: map `CdcAcmClass::read_packet()` to `Read::read()` | [ ] | |
-| e | Implement `embedded_io_async::Write` for wrapper: map `CdcAcmClass::write_packet()` to `Write::write()` | [ ] | |
-| f | Handle CDC-ACM connect/disconnect state (`wait_connection()` / `CdcAcmClass::line_coding()` checks) | [ ] | |
-| g | Gate with `#[cfg(feature = "rmk_protocol")]` | [ ] | |
+| b | Create vendor interface (class `0xFF`) with bulk IN and bulk OUT endpoints using `embassy_usb::Builder` | [ ] | 1 interface, 2 endpoints — simpler than CDC-ACM |
+| c | Add MS OS descriptors for automatic WinUSB driver binding on Windows | [ ] | Required for driverless Windows support |
+| d | Implement connect/disconnect handling | [ ] | |
+| e | Gate with `#[cfg(feature = "rmk_protocol")]` | [ ] | |
 
-### Step 3.2 — Make `ProtocolService` generic over transport
+### Step 3.2 — Implement `WireTx`/`WireRx` for USB bulk transport
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Change `ProtocolService` transport field type to generic `T: embedded_io_async::Read + embedded_io_async::Write` | [ ] | |
-| b | Update type constraints in `new()` and `run()` | [ ] | |
-| c | Ensure all read/write operations in dispatch loop use generic trait methods | [ ] | |
+| a | Implement postcard-rpc's `WireTx` trait for bulk IN endpoint | [ ] | USB bulk packets are self-delimiting — no COBS needed |
+| b | Implement postcard-rpc's `WireRx` trait for bulk OUT endpoint | [ ] | |
+| c | Reference postcard-rpc's own `embassy_usb_v0_5` impl for pattern guidance | [ ] | |
 | d | Run `cargo check` to confirm generic parameters propagate correctly | [ ] | |
 
-### Step 3.3 — Add CDC-ACM class to USB setup
+### Step 3.3 — Add vendor bulk endpoints to USB setup
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | In `rmk/src/usb/mod.rs`, under `#[cfg(feature = "rmk_protocol")]`, add CDC-ACM class creation | [ ] | |
-| b | In `new_usb_builder()` or related init function, use `embassy_usb::class::cdc_acm::CdcAcmClass::new()` to register CDC-ACM interface | [ ] | |
-| c | Ensure CDC-ACM coexists with existing HID composite device (IAD support) | [ ] | USB composite |
-| d | Pass created `CdcAcmClass` instance to `ProtocolService` constructor | [ ] | |
-| e | Test USB enumeration in an example project: after plugging in, host should see both HID and CDC-ACM devices | [ ] | |
+| a | In `rmk/src/usb/mod.rs`, under `#[cfg(feature = "rmk_protocol")]`, add vendor-class bulk endpoint creation | [ ] | |
+| b | Ensure vendor interface coexists with existing HID composite device (IAD support already enabled in `new_usb_builder`) | [ ] | USB composite |
+| c | Pass bulk endpoint handles to `ProtocolService` constructor | [ ] | |
+| d | Test USB enumeration in an example project: after plugging in, host should see both HID and vendor-class interfaces | [ ] | |
 
 ### Step 3.4 — Integration test: USB handshake
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Build firmware with `rmk_protocol` feature on an nRF52840 or RP2040 example | [ ] | |
-| b | Flash firmware, open USB CDC serial port with `picocom` / `screen` / `minicom` to confirm communication | [ ] | |
-| c | Send `GetVersion` request using postcard-rpc client or hand-crafted bytes | [ ] | |
+| b | Flash firmware, use `nusb` crate (Rust) or `libusb` to claim vendor interface and verify communication | [ ] | |
+| c | Send `GetVersion` request using postcard-rpc client with `nusb` backend | [ ] | |
 | d | Verify correct `ProtocolVersion` response received | [ ] | |
 | e | Send `GetCapabilities` request, verify received `DeviceCapabilities` fields match firmware config | [ ] | |
 
@@ -243,8 +243,8 @@
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Create new Cargo binary project `rmk-cli/` (or under `tools/` directory) | [ ] | |
-| b | Add dependencies: `postcard-rpc` (client mode), `serialport` (USB CDC serial), `clap` (CLI arg parsing) | [ ] | |
-| c | Implement serial connection logic: auto-scan or specify port to connect to CDC-ACM device | [ ] | |
+| b | Add dependencies: `postcard-rpc` (client mode), `nusb` (raw USB), `clap` (CLI arg parsing) | [ ] | |
+| c | Implement USB connection logic: scan for vendor-class USB interface using `nusb`, claim interface | [ ] | |
 | d | Implement `handshake` command: send `GetVersion` + `GetCapabilities`, print results | [ ] | |
 | e | Implement `get-key` subcommand: specify layer/row/col, call `GetKeyAction`, print KeyAction | [ ] | |
 | f | Implement `set-key` subcommand: specify layer/row/col and KeyAction, call `SetKeyAction` | [ ] | |
@@ -364,7 +364,7 @@
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Implement `GetBatteryStatus` handler: read battery state (level percentage, charging status) | [ ] | `#[cfg(feature = "_ble")]` |
+| a | Implement `GetBatteryStatus` handler: read battery state via `BatteryStateEvent` (enum: `NotAvailable`, `Normal(u8)`, `Charging`, `Charged`) | [ ] | `#[cfg(feature = "_ble")]` |
 | b | Implement `GetCurrentLayer` handler: get currently active layer from `keymap.borrow()` | [ ] | |
 | c | Implement `GetMatrixState` handler: read matrix key states, return `MatrixState` | [ ] | |
 | d | Implement `GetSplitStatus` handler: return split peripheral connection status | [ ] | `#[cfg(feature = "split")]` |
@@ -375,25 +375,26 @@
 
 ## Phase 7: Topics (Notifications)
 
-**Goal**: Device-to-host event streaming.
+**Goal**: Device-to-host event streaming via single-writer architecture.
+
+> **Architecture**: Topics are integrated directly into `ProtocolService::run()`'s existing `embassy_futures::select` loop. No separate writer task — the ProtocolService is the single owner of the transport writer. Response writes are prioritized over topic writes in select order to prevent notification bursts from starving request/response traffic.
 
 ### Step 7.1 — Event bridging module
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Create `rmk/src/host/protocol/topics.rs` | [ ] | |
-| b | Create subscribers for each internal event: `LayerChangeEvent::subscriber()`, `WpmUpdateEvent::subscriber()`, `BatteryStateEvent::subscriber()`, `BleStateChangeEvent::subscriber()`, `BleProfileChangeEvent::subscriber()`, `ConnectionChangeEvent::subscriber()`, `SleepStateEvent::subscriber()`, `LedIndicatorEvent::subscriber()` | [ ] | |
-| c | Implement conversion functions for each event: internal event -> Topic payload struct (e.g., `LayerChangeEvent` -> `LayerChangePayload`) | [ ] | |
-| d | Implement `encode_topic_frame()` function: serialize Topic payload into COBS frame (discriminant + topic key + seq=0 + payload) | [ ] | |
-| e | Gate BLE-related topics (`BatteryState`, `BleStateChange`, `BleProfileChange`) with `#[cfg]` | [ ] | |
+| b | Implement conversion functions for each event: internal event → Topic payload struct (e.g., `LayerChangeEvent` → `LayerChangePayload`, `BatteryStateEvent` → `BatteryStateEvent` (direct reuse)) | [ ] | |
+| c | Implement `encode_topic_frame()` function: serialize Topic payload into wire frame (header with topic key + seq=0 + postcard payload). Framing (COBS vs raw) is handled by `WireTx` | [ ] | |
+| d | Gate BLE-related topics (`BatteryState`, `BleStateChange`, `BleProfileChange`) with `#[cfg]` | [ ] | |
 
 ### Step 7.2 — Integrate Topics into ProtocolService
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | In `ProtocolService::run()` main loop, use `embassy_futures::select` to simultaneously await transport reads and event subscribers | [ ] | |
-| b | When event subscriber receives an event, call `encode_topic_frame()` and write to transport | [ ] | |
-| c | Ensure endpoint request processing and topic sending don't block each other (interleave via select) | [ ] | |
+| a | Verify that event subscribers created in `ProtocolService::new()` (Phase 2.2d) are already held as struct fields | [ ] | CRITICAL: do NOT create subscribers inside the select loop — watch-based subscribers immediately return on `changed()` if newly created |
+| b | Add event subscriber branches to the existing `select` loop in `ProtocolService::run()` | [ ] | Already set up in Phase 2.3g; this step adds the actual encoding and writing |
+| c | Ensure response branches are listed before topic branches in select for priority | [ ] | Prevents notification bursts from starving request/response |
 | d | Handle transport write failures (e.g., disconnected): log error but don't crash, continue running | [ ] | |
 | e | Test: simulate layer change event, verify host receives corresponding Topic frame | [ ] | |
 
@@ -424,15 +425,16 @@
 | e | Implement TX notification: send data via TX characteristic notify | [ ] | |
 | f | Handle MTU negotiation: adjust single transfer size based on negotiated MTU | [ ] | |
 
-### Step 8.2 — BLE serial `embedded_io_async` wrapper
+### Step 8.2 — BLE serial `WireTx`/`WireRx` wrapper
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Create `BleTransport` struct wrapping GATT service RX/TX channels | [ ] | |
 | b | Implement `embedded_io_async::Read` for `BleTransport`: read data from RX buffer | [ ] | |
 | c | Implement `embedded_io_async::Write` for `BleTransport`: send data via TX characteristic notify | [ ] | |
-| d | Handle BLE connect/disconnect events: `read()` returns EOF on disconnect | [ ] | |
-| e | Pass `BleTransport` to `ProtocolService::new()` — ProtocolService works without any modification | [ ] | |
+| d | Wrap with COBS framing layer, then implement postcard-rpc's `WireTx`/`WireRx` traits | [ ] | BLE serial is byte stream — needs COBS (unlike USB bulk) |
+| e | Handle BLE connect/disconnect events: `read()` returns EOF on disconnect | [ ] | |
+| f | Pass `BleTransport` to `ProtocolService::new()` — ProtocolService works without any modification | [ ] | |
 
 ### Step 8.3 — BLE integration test
 
@@ -454,9 +456,9 @@
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Technology decision: Tauri (desktop app) vs Rust->WASM + WebSerial (pure web) | [ ] | WebSerial easier to distribute |
+| a | Technology decision: Tauri (desktop app) vs Rust->WASM + WebUSB (pure web) | [ ] | Raw vendor bulk is natively WebUSB-compatible |
 | b | Set up frontend project scaffold (React/Svelte + TypeScript) | [ ] | |
-| c | Implement WebSerial connection layer: connect to CDC-ACM device via browser Serial API | [ ] | |
+| c | Implement WebUSB connection layer: connect to vendor-class USB interface via browser WebUSB API (raw bulk endpoints are natively compatible) | [ ] | |
 | d | Implement protocol client: COBS encode/decode + postcard serialization (WASM version or JS rewrite) | [ ] | |
 | e | Implement handshake flow UI: display device info and capabilities | [ ] | |
 | f | Implement keymap editor: visual key layout, drag/drop/select to modify KeyAction | [ ] | |
@@ -482,7 +484,7 @@
 | a | Design HID transport layer: split COBS frames into fixed-size HID reports (1-byte length prefix + payload) | [ ] | |
 | b | Implement `HidTransport` wrapper implementing `embedded_io_async::Read + Write` | [ ] | |
 | c | Add HID transport option in `rmk/src/usb/mod.rs` (feature-gated) | [ ] | |
-| d | Implement WebHID version of protocol client (for environments without WebSerial support) | [ ] | |
+| d | Implement WebHID version of protocol client (for environments without WebUSB support) | [ ] | Uses 32-byte HID reports with COBS fragmentation |
 
 ### Step 9.4 — Remove Vial feature gate
 
@@ -504,7 +506,7 @@
 |-------|-------------|--------|
 | 1 | ICD Types and postcard-rpc Integration | **Complete** |
 | 2 | Feature Gate and ProtocolService Skeleton | Not Started |
-| 3 | USB CDC-ACM Transport | Not Started |
+| 3 | USB Raw Bulk Transport | Not Started |
 | 4 | System and Keymap Endpoints | Not Started |
 | 5 | Security (Lock/Unlock) | Not Started |
 | 6 | Remaining Endpoints | Not Started |
@@ -521,9 +523,9 @@
 | `final_plan.md` | Full design specification |
 | `rmk-types/src/protocol/rmk.rs` | ICD types and endpoint/topic definitions |
 | `rmk/src/host/protocol/mod.rs` | ProtocolService and dispatch loop |
-| `rmk/src/host/protocol/transport.rs` | Transport adapters (CDC-ACM, BLE) |
+| `rmk/src/host/protocol/transport.rs` | Transport adapters (raw USB bulk, BLE serial) |
 | `rmk/src/host/protocol/topics.rs` | Event bus -> Topic bridging |
 | `rmk/src/host/lock.rs` | Shared lock/unlock logic |
 | `rmk/src/host/mod.rs` | Feature-gated task spawning |
 | `rmk/src/storage/mod.rs` | Flash persistence (HostMessage) |
-| `rmk/src/usb/mod.rs` | USB class setup (CDC-ACM) |
+| `rmk/src/usb/mod.rs` | USB class setup (vendor bulk + HID) |

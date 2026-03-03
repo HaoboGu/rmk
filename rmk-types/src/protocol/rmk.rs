@@ -5,21 +5,23 @@
 //! request/response types, and protocol constants.
 //!
 //! The protocol uses postcard-rpc's type-level endpoint definitions over COBS-framed
-//! byte streams (USB CDC-ACM and BLE serial).
+//! byte streams (USB bulk transfer and BLE serial).
 
 use heapless::Vec;
 use postcard_rpc::{endpoint, topic};
 use serde::{Deserialize, Serialize};
 
 use crate::action::{EncoderAction, KeyAction, MorseProfile};
+pub use crate::fork::ForkStateBits;
 use crate::led_indicator::LedIndicator;
+use crate::modifier::ModifierCombination;
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 /// Maximum number of key positions in an unlock challenge.
-pub const MAX_UNLOCK_KEYS: usize = 4;
+pub const MAX_UNLOCK_KEYS: usize = 2;
 
 /// Maximum number of key actions in a bulk get/set operation.
 pub const MAX_BULK: usize = 32;
@@ -238,17 +240,15 @@ pub struct MorsePatternEntry {
 
 /// Protocol-facing fork (key override) configuration.
 ///
-/// This is a simplified wire representation. The firmware's `Fork` type uses
-/// `StateBits` (modifiers + LEDs + mouse), but the protocol only exposes
-/// modifier-level matching via raw `u8` bitmasks.
+/// This mirrors firmware `Fork` fields without reducing match-state dimensions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
 pub struct ForkConfig {
     pub trigger: KeyAction,
     pub negative_output: KeyAction,
     pub positive_output: KeyAction,
-    pub match_mods: u8,
-    pub negative_mods: u8,
-    pub positive_mods: u8,
+    pub match_any: ForkStateBits,
+    pub match_none: ForkStateBits,
+    pub kept_modifiers: ModifierCombination,
     pub bindable: bool,
 }
 
@@ -470,6 +470,7 @@ mod tests {
     use postcard_rpc::{Endpoint, Key, Topic};
 
     use super::*;
+    use crate::mouse_button::MouseButtons;
 
     /// Helper: postcard round-trip for a value using a stack buffer.
     fn round_trip<T>(val: &T) -> T
@@ -766,9 +767,17 @@ mod tests {
             trigger: KeyAction::No,
             negative_output: KeyAction::No,
             positive_output: KeyAction::No,
-            match_mods: 0,
-            negative_mods: 0,
-            positive_mods: 0,
+            match_any: ForkStateBits {
+                modifiers: ModifierCombination::new(),
+                leds: LedIndicator::new(),
+                mouse: MouseButtons::new(),
+            },
+            match_none: ForkStateBits {
+                modifiers: ModifierCombination::new(),
+                leds: LedIndicator::new(),
+                mouse: MouseButtons::new(),
+            },
+            kept_modifiers: ModifierCombination::new(),
             bindable: false,
         });
     }
