@@ -12,11 +12,11 @@ use bt_hci::controller::ExternalController;
 use embassy_executor::Spawner;
 use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{Input, InputConfig, Level, Output, OutputConfig, Pull};
+use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::otg_fs::Usb;
 use esp_hal::otg_fs::asynch::{Config, Driver};
 use esp_hal::rng::TrngSource;
 use esp_hal::timer::timg::TimerGroup;
-use esp_radio::Controller;
 use esp_radio::ble::controller::BleConnector;
 use esp_storage::FlashStorage;
 use rmk::ble::build_ble_stack;
@@ -28,7 +28,6 @@ use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
 use rmk::{HostResources, initialize_keymap_and_storage, run_all, run_rmk};
-use static_cell::StaticCell;
 use {esp_alloc as _, esp_backtrace as _};
 
 use crate::keymap::*;
@@ -43,19 +42,12 @@ async fn main(_s: Spawner) {
     let peripherals = esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
     esp_alloc::heap_allocator!(size: 72 * 1024);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    #[cfg(target_arch = "riscv32")]
     let software_interrupt = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
-    esp_rtos::start(
-        timg0.timer0,
-        #[cfg(target_arch = "riscv32")]
-        software_interrupt.software_interrupt0,
-    );
+    esp_rtos::start(timg0.timer0, software_interrupt.software_interrupt0);
     let _trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
     let mut rng = esp_hal::rng::Trng::try_new().unwrap();
-    static RADIO: StaticCell<Controller<'static>> = StaticCell::new();
-    let radio = RADIO.init(esp_radio::init().unwrap());
-    let bluetooth = peripherals.BT;
-    let connector = BleConnector::new(radio, bluetooth, Default::default()).unwrap();
+
+    let connector = BleConnector::new(peripherals.BT, Default::default()).unwrap();
     let controller: ExternalController<_, 20> = ExternalController::new(connector);
     let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
     let mut host_resources = HostResources::new();
