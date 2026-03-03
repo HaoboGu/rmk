@@ -1335,16 +1335,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prettyplease"
-version = "0.2.37"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
-dependencies = [
- "proc-macro2",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "proc-macro-error-attr2"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1400,15 +1390,12 @@ checksum = "76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c"
 name = "rmk"
 version = "0.8.2"
 dependencies = [
- "bitfield-struct",
  "byteorder",
  "chrono",
  "const-gen",
  "cortex-m",
  "crc32fast",
  "document-features",
- "embassy-embedded-hal",
- "embassy-executor",
  "embassy-futures",
  "embassy-sync",
  "embassy-time",
@@ -1424,7 +1411,6 @@ dependencies = [
  "rmk-types",
  "sequential-storage",
  "serde",
- "serde_derive",
  "ssmarshal",
  "static_cell",
  "toml 1.0.3+spec-1.1.0",
@@ -1435,7 +1421,6 @@ dependencies = [
 name = "rmk-config"
 version = "0.6.1"
 dependencies = [
- "cargo_toml",
  "config",
  "once_cell",
  "paste",
@@ -1443,7 +1428,6 @@ dependencies = [
  "pest_derive",
  "serde",
  "serde-inline-default",
- "serde_derive",
  "toml 1.0.3+spec-1.1.0",
 ]
 
@@ -1453,19 +1437,12 @@ version = "0.7.1"
 dependencies = [
  "cargo_toml",
  "darling 0.23.0",
- "once_cell",
- "pest",
- "pest_derive",
- "prettyplease",
  "proc-macro2",
  "quote",
  "rmk-config",
  "rmk-types",
- "serde",
- "serde_derive",
  "strum",
  "syn 2.0.117",
- "toml 1.0.3+spec-1.1.0",
 ]
 
 [[package]]
