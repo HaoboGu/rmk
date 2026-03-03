@@ -71,7 +71,7 @@ use postcard_rpc::endpoint;
 endpoint!(GetVersion,      (),              ProtocolVersion,    "sys/version");
 endpoint!(GetCapabilities, (),              DeviceCapabilities, "sys/caps");
 endpoint!(GetKeyAction,    KeyPosition,     KeyAction,          "keymap/get");
-endpoint!(SetKeyAction,    SetKeyRequest,   (),                 "keymap/set");
+endpoint!(SetKeyAction,    SetKeyRequest,   RmkResult,          "keymap/set");
 // ... each new operation = one new type, purely additive
 ```
 
@@ -338,12 +338,14 @@ For WebHID fallback: COBS frames chunked into fixed-size HID reports with a 1-by
 
 ### 7.2 Keymap
 
+For endpoints with multi-field request payloads, v1 uses named request structs (instead of tuples) so the schema is self-describing and unambiguous.
+
 | Endpoint | Request | Response | Path | Permission |
 |----------|---------|----------|------|------------|
 | GetKeyAction | `KeyPosition` | `KeyAction` | `keymap/get` | ReadOnly |
-| SetKeyAction | `(KeyPosition, KeyAction)` | `RmkResult` | `keymap/set` | RequiresUnlock |
+| SetKeyAction | `SetKeyRequest` | `RmkResult` | `keymap/set` | RequiresUnlock |
 | GetKeymapBulk | `BulkRequest` | `heapless::Vec<KeyAction, MAX_BULK>` | `keymap/bulk_get` | ReadOnly |
-| SetKeymapBulk | `(BulkRequest, heapless::Vec<KeyAction, MAX_BULK>)` | `RmkResult` | `keymap/bulk_set` | RequiresUnlock |
+| SetKeymapBulk | `SetKeymapBulkRequest` | `RmkResult` | `keymap/bulk_set` | RequiresUnlock |
 | GetLayerCount | `()` | `u8` | `keymap/layer_count` | ReadOnly |
 | GetDefaultLayer | `()` | `u8` | `keymap/default_layer` | ReadOnly |
 | SetDefaultLayer | `u8` | `RmkResult` | `keymap/set_default_layer` | RequiresUnlock |
@@ -353,8 +355,8 @@ For WebHID fallback: COBS frames chunked into fixed-size HID reports with a 1-by
 
 | Endpoint | Request | Response | Path | Permission |
 |----------|---------|----------|------|------------|
-| GetEncoderAction | `(u8, u8)` | `EncoderAction` | `encoder/get` | ReadOnly |
-| SetEncoderAction | `(u8, u8, EncoderAction)` | `RmkResult` | `encoder/set` | RequiresUnlock |
+| GetEncoderAction | `GetEncoderRequest` | `EncoderAction` | `encoder/get` | ReadOnly |
+| SetEncoderAction | `SetEncoderRequest` | `RmkResult` | `encoder/set` | RequiresUnlock |
 
 ### 7.4 Macro
 
@@ -362,7 +364,7 @@ For WebHID fallback: COBS frames chunked into fixed-size HID reports with a 1-by
 |----------|---------|----------|------|------------|
 | GetMacroInfo | `()` | `MacroInfo` | `macro/info` | ReadOnly |
 | GetMacro | `u8` | `MacroData` | `macro/get` | ReadOnly |
-| SetMacro | `(u8, MacroData)` | `RmkResult` | `macro/set` | RequiresUnlock |
+| SetMacro | `SetMacroRequest` | `RmkResult` | `macro/set` | RequiresUnlock |
 | ResetMacros | `()` | `RmkResult` | `macro/reset` | Dangerous |
 
 ### 7.5 Combo
@@ -370,7 +372,7 @@ For WebHID fallback: COBS frames chunked into fixed-size HID reports with a 1-by
 | Endpoint | Request | Response | Path | Permission |
 |----------|---------|----------|------|------------|
 | GetCombo | `u8` | `ComboConfig` | `combo/get` | ReadOnly |
-| SetCombo | `(u8, ComboConfig)` | `RmkResult` | `combo/set` | RequiresUnlock |
+| SetCombo | `SetComboRequest` | `RmkResult` | `combo/set` | RequiresUnlock |
 | ResetCombos | `()` | `RmkResult` | `combo/reset` | Dangerous |
 
 ### 7.6 Morse / Tap-Dance
@@ -378,7 +380,7 @@ For WebHID fallback: COBS frames chunked into fixed-size HID reports with a 1-by
 | Endpoint | Request | Response | Path | Permission |
 |----------|---------|----------|------|------------|
 | GetMorse | `u8` | `MorseConfig` | `morse/get` | ReadOnly |
-| SetMorse | `(u8, MorseConfig)` | `RmkResult` | `morse/set` | RequiresUnlock |
+| SetMorse | `SetMorseRequest` | `RmkResult` | `morse/set` | RequiresUnlock |
 | ResetMorse | `()` | `RmkResult` | `morse/reset` | Dangerous |
 
 ### 7.7 Fork (Key Override)
@@ -386,7 +388,7 @@ For WebHID fallback: COBS frames chunked into fixed-size HID reports with a 1-by
 | Endpoint | Request | Response | Path | Permission |
 |----------|---------|----------|------|------------|
 | GetFork | `u8` | `ForkConfig` | `fork/get` | ReadOnly |
-| SetFork | `(u8, ForkConfig)` | `RmkResult` | `fork/set` | RequiresUnlock |
+| SetFork | `SetForkRequest` | `RmkResult` | `fork/set` | RequiresUnlock |
 | ResetForks | `()` | `RmkResult` | `fork/reset` | Dangerous |
 
 ### 7.8 Behavior Settings
@@ -424,7 +426,7 @@ Topics are fire-and-forget device-to-host notifications. Each maps directly to a
 |-------|---------|------|----------------|
 | LayerChange | `LayerChangePayload { layer: u8 }` | `event/layer` | `LayerChangeEvent` |
 | WpmUpdate | `WpmPayload { wpm: u16 }` | `event/wpm` | `WpmUpdateEvent` |
-| BatteryState | `BatteryPayload { level: u8, charging: bool }` | `event/battery` | `BatteryStateEvent` |
+| BatteryState | `BatteryStatus { level: u8, charging: bool }` | `event/battery` | `BatteryStateEvent` |
 | BleStateChange | `BleStatePayload { ... }` | `event/ble_state` | `BleStateChangeEvent` |
 | BleProfileChange | `BleProfilePayload { profile: u8 }` | `event/ble_profile` | `BleProfileChangeEvent` |
 | ConnectionChange | `ConnectionPayload { ... }` | `event/connection` | `ConnectionChangeEvent` |
@@ -883,6 +885,9 @@ use postcard_rpc::{endpoint, topic};
 use serde::{Serialize, Deserialize};
 use postcard_schema::Schema;
 use heapless::Vec;
+use crate::led_indicator::LedIndicator;
+use crate::modifier::ModifierCombination;
+use crate::mouse_button::MouseButtons;
 
 // === Version & Capabilities ===
 
@@ -962,6 +967,73 @@ pub struct BulkRequest {
     pub count: u16,
 }
 
+#[derive(Serialize, Deserialize, Schema)]
+pub struct SetKeyRequest {
+    pub position: KeyPosition,
+    pub action: KeyAction,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct SetKeymapBulkRequest {
+    pub request: BulkRequest,
+    pub actions: Vec<KeyAction, MAX_BULK>,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct GetEncoderRequest {
+    pub encoder_id: u8,
+    pub layer: u8,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct SetEncoderRequest {
+    pub encoder_id: u8,
+    pub layer: u8,
+    pub action: EncoderAction,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct SetMacroRequest {
+    pub index: u8,
+    pub data: MacroData,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct SetComboRequest {
+    pub index: u8,
+    pub config: ComboConfig,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct SetMorseRequest {
+    pub index: u8,
+    pub config: MorseConfig,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct ForkStateBits {
+    pub modifiers: ModifierCombination,
+    pub leds: LedIndicator,
+    pub mouse: MouseButtons,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct ForkConfig {
+    pub trigger: KeyAction,
+    pub negative_output: KeyAction,
+    pub positive_output: KeyAction,
+    pub match_any: ForkStateBits,
+    pub match_none: ForkStateBits,
+    pub kept_modifiers: ModifierCombination,
+    pub bindable: bool,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct SetForkRequest {
+    pub index: u8,
+    pub config: ForkConfig,
+}
+
 // === Storage ===
 
 #[derive(Serialize, Deserialize, Schema)]
@@ -982,37 +1054,37 @@ endpoint!(StorageReset,    StorageResetMode, (),                "sys/storage_res
 
 // === Keymap Endpoints ===
 endpoint!(GetKeyAction,    KeyPosition,     KeyAction,          "keymap/get");
-endpoint!(SetKeyAction,    (KeyPosition, KeyAction), RmkResult, "keymap/set");
+endpoint!(SetKeyAction,    SetKeyRequest,   RmkResult,          "keymap/set");
 endpoint!(GetKeymapBulk,   BulkRequest,     Vec<KeyAction, MAX_BULK>, "keymap/bulk_get");
-endpoint!(SetKeymapBulk,   (BulkRequest, Vec<KeyAction, MAX_BULK>), RmkResult, "keymap/bulk_set");
+endpoint!(SetKeymapBulk,   SetKeymapBulkRequest, RmkResult, "keymap/bulk_set");
 endpoint!(GetLayerCount,   (),              u8,                 "keymap/layer_count");
 endpoint!(GetDefaultLayer, (),              u8,                 "keymap/default_layer");
 endpoint!(SetDefaultLayer, u8,              RmkResult,          "keymap/set_default_layer");
 endpoint!(ResetKeymap,     (),              RmkResult,          "keymap/reset");
 
 // === Encoder Endpoints ===
-endpoint!(GetEncoderAction, (u8, u8),       EncoderAction,      "encoder/get");
-endpoint!(SetEncoderAction, (u8, u8, EncoderAction), RmkResult, "encoder/set");
+endpoint!(GetEncoderAction, GetEncoderRequest, EncoderAction,   "encoder/get");
+endpoint!(SetEncoderAction, SetEncoderRequest, RmkResult,       "encoder/set");
 
 // === Macro Endpoints ===
 endpoint!(GetMacroInfo,    (),              MacroInfo,          "macro/info");
 endpoint!(GetMacro,        u8,              MacroData,          "macro/get");
-endpoint!(SetMacro,        (u8, MacroData), RmkResult,          "macro/set");
+endpoint!(SetMacro,        SetMacroRequest, RmkResult,          "macro/set");
 endpoint!(ResetMacros,     (),              RmkResult,          "macro/reset");
 
 // === Combo Endpoints ===
 endpoint!(GetCombo,        u8,              ComboConfig,        "combo/get");
-endpoint!(SetCombo,        (u8, ComboConfig), RmkResult,        "combo/set");
+endpoint!(SetCombo,        SetComboRequest, RmkResult,          "combo/set");
 endpoint!(ResetCombos,     (),              RmkResult,          "combo/reset");
 
 // === Morse / Tap-Dance Endpoints ===
 endpoint!(GetMorse,        u8,              MorseConfig,        "morse/get");
-endpoint!(SetMorse,        (u8, MorseConfig), RmkResult,        "morse/set");
+endpoint!(SetMorse,        SetMorseRequest, RmkResult,          "morse/set");
 endpoint!(ResetMorse,      (),              RmkResult,          "morse/reset");
 
 // === Fork Endpoints ===
 endpoint!(GetFork,         u8,              ForkConfig,         "fork/get");
-endpoint!(SetFork,         (u8, ForkConfig), RmkResult,         "fork/set");
+endpoint!(SetFork,         SetForkRequest,  RmkResult,          "fork/set");
 endpoint!(ResetForks,      (),              RmkResult,          "fork/reset");
 
 // === Behavior Endpoints ===
@@ -1034,7 +1106,7 @@ endpoint!(GetSplitStatus,    (),            SplitStatus,        "status/split");
 // === Topics (Device -> Host Events) ===
 topic!(LayerChangeTopic,     LayerChangePayload,    "event/layer");
 topic!(WpmUpdateTopic,       WpmPayload,            "event/wpm");
-topic!(BatteryStateTopic,    BatteryPayload,        "event/battery");
+topic!(BatteryStateTopic,    BatteryStatus,         "event/battery");
 topic!(BleStateChangeTopic,  BleStatePayload,       "event/ble_state");
 topic!(BleProfileChangeTopic, BleProfilePayload,    "event/ble_profile");
 topic!(ConnectionChangeTopic, ConnectionPayload,    "event/connection");
