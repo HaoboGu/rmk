@@ -8,13 +8,14 @@ mod macros;
 mod vial;
 
 use bt_hci::controller::ExternalController;
+use cyw43::aligned_bytes;
 use cyw43_pio::PioSpi;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_rp::clocks::RoscRng;
 use embassy_rp::flash::{Async, Flash};
 use embassy_rp::gpio::{Input, Level, Output};
-use embassy_rp::peripherals::{DMA_CH0, PIO0, USB};
+use embassy_rp::peripherals::{DMA_CH0, DMA_CH1, PIO0, USB};
 use embassy_rp::pio::{self, Pio};
 use embassy_rp::usb::{self, Driver};
 use keymap::{COL, ROW};
@@ -34,10 +35,11 @@ use {defmt_rtt as _, embassy_time as _, panic_probe as _};
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => usb::InterruptHandler<USB>;
     PIO0_IRQ_0 => pio::InterruptHandler<PIO0>;
+    DMA_IRQ_0 => embassy_rp::dma::InterruptHandler<DMA_CH0>, embassy_rp::dma::InterruptHandler<DMA_CH1>;
 });
 
 #[embassy_executor::task]
-async fn cyw43_task(runner: cyw43::Runner<'static, Output<'static>, PioSpi<'static, PIO0, 0, DMA_CH0>>) -> ! {
+async fn cyw43_task(runner: cyw43::Runner<'static, cyw43::SpiBus<Output<'static>, PioSpi<'static, PIO0, 0>>>) -> ! {
     runner.run().await
 }
 
@@ -48,20 +50,24 @@ async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
     #[cfg(feature = "skip-cyw43-firmware")]
-    let (fw, clm, btfw) = (&[], &[], &[]);
+    let (fw, clm, btfw, nvram) = {
+        static EMPTY: &cyw43::Aligned<cyw43::A4, [u8]> = &cyw43::Aligned([0u8; 0]);
+        (EMPTY, &[] as &[u8], EMPTY, EMPTY)
+    };
 
     #[cfg(not(feature = "skip-cyw43-firmware"))]
-    let (fw, clm, btfw) = {
+    let (fw, clm, btfw, nvram) = {
         // IMPORTANT
         //
         // Download and make sure these files from https://github.com/embassy-rs/embassy/tree/main/cyw43-firmware
         // are available in `./examples/rp-pico-w`. (should be automatic)
         //
         // IMPORTANT
-        let fw = include_bytes!("../cyw43-firmware/43439A0.bin");
-        let clm = include_bytes!("../cyw43-firmware/43439A0_clm.bin");
-        let btfw = include_bytes!("../cyw43-firmware/43439A0_btfw.bin");
-        (fw, clm, btfw)
+        let fw = aligned_bytes!("../cyw43-firmware/43439A0.bin");
+        let clm = aligned_bytes!("../cyw43-firmware/43439A0_clm.bin");
+        let btfw = aligned_bytes!("../cyw43-firmware/43439A0_btfw.bin");
+        let nvram = aligned_bytes!("../cyw43-firmware/nvram_rp2040.bin");
+        (fw, clm, btfw, nvram)
     };
 
     let pwr = Output::new(p.PIN_23, Level::Low);
@@ -75,12 +81,13 @@ async fn main(spawner: Spawner) {
         cs,
         p.PIN_24,
         p.PIN_29,
-        p.DMA_CH0,
+        embassy_rp::dma::Channel::new(p.DMA_CH0, Irqs),
     );
 
     static STATE: StaticCell<cyw43::State> = StaticCell::new();
     let state = STATE.init(cyw43::State::new());
-    let (_net_device, bt_device, mut control, runner) = cyw43::new_with_bluetooth(state, pwr, spi, fw, btfw).await;
+    let (_net_device, bt_device, mut control, runner) =
+        cyw43::new_with_bluetooth(state, pwr, spi, fw, btfw, nvram).await;
     defmt::unwrap!(spawner.spawn(cyw43_task(runner)));
     control.init(clm).await;
 
@@ -96,7 +103,7 @@ async fn main(spawner: Spawner) {
     // Use internal flash to emulate eeprom
     // Both blocking and async flash are support, use different API
     // let flash = Flash::<_, Blocking, FLASH_SIZE>::new_blocking(p.FLASH);
-    let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH1);
+    let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH1, Irqs);
 
     let keyboard_device_config = DeviceConfig {
         vid: 0x4c4c,

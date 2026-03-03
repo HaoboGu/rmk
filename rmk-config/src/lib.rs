@@ -2,8 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use config::{Config, File, FileFormat};
-use serde::{Deserialize as SerdeDeserialize, de};
-use serde_derive::Deserialize;
+use serde::{Deserialize, de};
 use serde_inline_default::serde_inline_default;
 
 /// Event channel default configuration
@@ -231,7 +230,7 @@ fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
 where
     D: de::Deserializer<'de>,
 {
-    let value = SerdeDeserialize::deserialize(deserializer)?;
+    let value = Deserialize::deserialize(deserializer)?;
     if value > 256 {
         panic!("❌ Parse `keyboard.toml` error: combo_max_num must be between 0 and 256, got {value}");
     }
@@ -242,7 +241,7 @@ fn check_morse_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
 where
     D: de::Deserializer<'de>,
 {
-    let value = SerdeDeserialize::deserialize(deserializer)?;
+    let value = Deserialize::deserialize(deserializer)?;
     if value > 256 {
         panic!("❌ Parse `keyboard.toml` error: morse_max_num must be between 0 and 256, got {value}");
     }
@@ -253,7 +252,7 @@ fn check_max_patterns_per_key<'de, D>(deserializer: D) -> Result<usize, D::Error
 where
     D: de::Deserializer<'de>,
 {
-    let value = SerdeDeserialize::deserialize(deserializer)?;
+    let value = Deserialize::deserialize(deserializer)?;
     if !(4..=65536).contains(&value) {
         panic!("❌ Parse `keyboard.toml` error: max_patterns_per_key must be between 4 and 65536, got {value}");
     }
@@ -264,7 +263,7 @@ fn check_fork_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
 where
     D: de::Deserializer<'de>,
 {
-    let value = SerdeDeserialize::deserialize(deserializer)?;
+    let value = Deserialize::deserialize(deserializer)?;
     if value > 256 {
         panic!("❌ Parse `keyboard.toml` error: fork_max_num must be between 0 and 256, got {value}");
     }
