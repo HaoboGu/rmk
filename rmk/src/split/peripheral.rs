@@ -10,7 +10,7 @@ use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 use {
     crate::event::{BatteryStatusEvent, ChargingStateEvent, EventSubscriber},
     crate::storage::Storage,
-    crate::types::event::{BatteryStatus, ChargeState},
+    rmk_types::event::BatteryStatus,
     embedded_storage_async::nor_flash::NorFlash,
     trouble_host::prelude::*,
 };
@@ -86,23 +86,17 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
 
         loop {
             let read_message_to_send = async {
-                let message = crate::select_biased_with_feature! {
+                crate::select_biased_with_feature! {
                     e = key_sub.next_message_pure().fuse() => SplitMessage::Key(e),
                     with_feature("_ble"): e = charging_state_sub.next_message_pure().fuse() => {
-                        let charge_state = if e.charging {
-                            ChargeState::Charging
-                        } else {
-                            ChargeState::Discharging
-                        };
-                        SplitMessage::BatteryStatus(BatteryStatusEvent(BatteryStatus::Available {
-                            charge_state,
+                        SplitMessage::BatteryStatus(BatteryStatus::Available {
+                            charge_state: e.charging.into(),
                             level: None,
-                        }))
+                        }.into())
                     },
                     e = pointing_sub.next_message_pure().fuse() => SplitMessage::Pointing(e),
                     with_feature("_ble"): e = battery_sub.next_event().fuse() => SplitMessage::BatteryStatus(e),
-                };
-                message
+                }
             };
 
             match select(self.split_driver.read(), read_message_to_send).await {

@@ -4,8 +4,6 @@
 //! - Connection type change events (USB/BLE)
 //! - BLE status change events
 
-use core::ops::Deref;
-
 use rmk_macro::event;
 pub use rmk_types::connection::ConnectionType;
 use rmk_types::event::ConnectionPayload;
@@ -29,24 +27,7 @@ impl ConnectionChangeEvent {
     }
 }
 
-impl Deref for ConnectionChangeEvent {
-    type Target = ConnectionPayload;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl From<ConnectionChangeEvent> for ConnectionPayload {
-    fn from(event: ConnectionChangeEvent) -> Self {
-        event.0
-    }
-}
-
-impl From<ConnectionPayload> for ConnectionChangeEvent {
-    fn from(payload: ConnectionPayload) -> Self {
-        Self(payload)
-    }
-}
+impl_payload_wrapper!(ConnectionChangeEvent, ConnectionPayload);
 
 // ============================================================================
 // BLE Connection Events
@@ -58,3 +39,6 @@ impl From<ConnectionPayload> for ConnectionChangeEvent {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct BleStatusChangeEvent(pub BleStatus);
+
+#[cfg(feature = "_ble")]
+impl_payload_wrapper!(BleStatusChangeEvent, BleStatus);
