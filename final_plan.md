@@ -5,7 +5,7 @@
 
 ## Abstract
 
-This document specifies a new host communication protocol for RMK, replacing the current Via/Vial protocol. The new protocol uses postcard-rpc type-level endpoint definitions over COBS-framed byte streams (USB CDC-ACM and BLE serial), supports bidirectional communication with device-initiated event notifications (Topics), and serializes RMK's native types directly via postcard with zero lossy conversion. It includes physical-key-based security with auto-timeout and structured capability discovery.
+This document specifies a new host communication protocol for RMK, replacing the current Via/Vial protocol. The new protocol uses postcard-rpc type-level endpoint definitions over raw USB vendor-class bulk endpoints and BLE serial, supports bidirectional communication with device-initiated event notifications (Topics), and serializes RMK's native types directly via postcard with zero lossy conversion. It includes physical-key-based security with auto-timeout and structured capability discovery.
 
 ---
 
@@ -35,13 +35,13 @@ The current Vial/VIA implementation (`rmk/src/host/via/`) has fundamental struct
 |----|------|-----------|
 | **G1** | **Full RMK feature coverage** | Expose all runtime-configurable features: keymap, macros, combos, morse/tap-dance, forks, encoders, behavior settings, connection management, device control, status queries |
 | **G2** | **Native types, zero conversion loss** | Use RMK's own `KeyAction`, `Action`, `KeyCode`, `ComboConfig`, `Fork`, `Morse` types on the wire via postcard. No QMK keycode intermediary |
-| **G3** | **Transport-agnostic over byte streams** | Single protocol works over USB CDC-ACM and BLE serial (NUS). Optional HID fallback for WebHID environments |
+| **G3** | **Transport-agnostic over byte streams** | Single protocol works over USB raw vendor-class bulk endpoints and BLE serial (NUS). Optional HID fallback for WebHID environments |
 | **G4** | **Bidirectional with notifications from day 1** | Topic-based device-to-host events for layer changes, WPM, battery, BLE state, connection changes, sleep state, split peripheral status |
 | **G5** | **Self-describing and discoverable** | Device reports capabilities, topology, and limits at runtime. No separate `vial.json` needed |
 | **G6** | **Embedded-friendly** | `no_std` compatible, zero heap allocation, bounded buffer sizes. Must work on nRF52840, RP2040, STM32, ESP32 |
 | **G7** | **Secure by default** | Device starts locked; writes require physical unlock with auto-timeout |
 | **G8** | **Forward-compatible extensibility** | Adding endpoints/fields must not break existing host tools. Schema hashing prevents silent type mismatches |
-| **G9** | **Tooling-friendly** | Enable host tools in Rust (native + WASM/WebHID), Python, TypeScript via schema generation |
+| **G9** | **Tooling-friendly** | Enable host tools in Rust (native + WASM/WebUSB), Python, TypeScript via schema generation |
 
 ---
 
@@ -66,13 +66,18 @@ Each protocol operation is a Rust type implementing the `Endpoint` trait, not a 
 
 ```rust
 // Shared ICD (Interface Control Document), in rmk-types
-use postcard_rpc::endpoint;
+use postcard_rpc::{endpoints, topics, TopicDirection};
 
-endpoint!(GetVersion,      (),              ProtocolVersion,    "sys/version");
-endpoint!(GetCapabilities, (),              DeviceCapabilities, "sys/caps");
-endpoint!(GetKeyAction,    KeyPosition,     KeyAction,          "keymap/get");
-endpoint!(SetKeyAction,    SetKeyRequest,   (),                 "keymap/set");
-// ... each new operation = one new type, purely additive
+endpoints! {
+    list = ENDPOINT_LIST;
+    | EndpointTy     | RequestTy       | ResponseTy         | Path                |
+    | ----------     | ---------       | ----------         | ----                |
+    | GetVersion     | ()              | ProtocolVersion    | "sys/version"       |
+    | GetCapabilities| ()              | DeviceCapabilities | "sys/caps"          |
+    | GetKeyAction   | KeyPosition     | KeyAction          | "keymap/get"        |
+    | SetKeyAction   | SetKeyRequest   | RmkResult          | "keymap/set"        |
+    // ... each new operation = one new row, purely additive
+}
 ```
 
 On the wire, the PATH + Schema are hashed (FNV1a-64) into a compact `Key` (1-8 bytes). This means:
@@ -82,7 +87,13 @@ On the wire, the PATH + Schema are hashed (FNV1a-64) into a compact `Key` (1-8 b
 
 ### DP2. Transport-agnostic core over byte streams
 
-Both CDC-ACM (USB) and NUS/BLE serial are byte streams. The protocol uses COBS framing (following postcard-rpc's wire format), eliminating the need for manual fragmentation/reassembly. RMK's split serial communication already uses this pattern (`postcard::to_slice_cobs` / `postcard::take_from_bytes_cobs` in `rmk/src/split/serial/mod.rs`). The common transport interface is `embedded_io_async::{Read, Write}` — both CDC-ACM and BLE serial implement these traits, so `ProtocolService` is generic over them with no custom transport abstraction needed.
+The protocol uses COBS framing over byte streams, eliminating the need for manual fragmentation/reassembly. RMK's split serial communication already uses this pattern (`postcard::to_slice_cobs` / `postcard::take_from_bytes_cobs` in `rmk/src/split/serial/mod.rs`).
+
+Two transport implementations are planned:
+- **USB**: Raw vendor-class bulk endpoints (class `0xFF`), with MS OS descriptors for automatic WinUSB binding on Windows. This provides WebUSB compatibility for browser-based configurators and uses a simpler descriptor (1 interface, 2 endpoints) than CDC-ACM. postcard-rpc provides a native `embassy-usb` server implementation for this transport that handles framing without COBS (USB bulk packets are self-delimiting).
+- **BLE serial**: NUS-like GATT service with RX/TX characteristics, implementing `embedded_io_async::{Read, Write}` for COBS-framed byte streams.
+
+`ProtocolService` is generic over transport via postcard-rpc's `WireTx`/`WireRx` traits. Each transport implements these traits, abstracting framing differences.
 
 ### DP3. Endpoints + Topics (two-primitive model)
 
@@ -108,7 +119,7 @@ These types already derive `serde::Serialize`, `serde::Deserialize`, and `postca
 
 - `no_std` compatible, zero heap allocation in the protocol core path.
 - All variable-length collections use `heapless::Vec<T, N>` with compile-time capacity bounds.
-- Bounded buffer sizes: firmware allocates fixed-size RX/TX buffers (configurable in `keyboard.toml`, default 32 bytes).
+- Bounded buffer sizes: firmware allocates fixed-size RX/TX buffers (configurable in `keyboard.toml`, default 128 bytes). The original Vial protocol used 32-byte HID reports; the new protocol's default is larger because postcard-rpc frame overhead (discriminant + key + seq_no) plus payload for structs like `DeviceCapabilities` requires more space. Users can reduce buffer size to 32 bytes for HID fallback transport compatibility.
 - postcard serialization is zero-alloc and operates on fixed buffers.
 - COBS encoding/decoding is in-place, no additional buffer beyond the frame buffer.
 
@@ -175,6 +186,8 @@ The dispatch model determines how incoming messages are routed to handlers.
 | Extensibility | Purely additive, no central registry, no collision risk |
 
 **Verdict: Option B.** The automatic schema mismatch detection is critical for preventing subtle bugs between mismatched firmware/host versions. Path prefixes (`keymap/get`, `combo/set`) provide natural grouping for documentation. This is the approach used by postcard-rpc and Ergot.
+
+> **Implementation note**: While postcard-rpc provides `define_dispatch!` macro and `Server` struct for automatic key-based dispatch, these require static (non-generic) context types. RMK's `ProtocolService` holds `&RefCell<KeyMap<ROW, COL, NUM_LAYER, NUM_ENCODER>>` with compile-time generic parameters, making it incompatible with `define_dispatch!`'s static context model. Therefore, RMK implements its own dispatch loop using the same key-based matching pattern, while reusing postcard-rpc's `endpoints!`/`topics!` macro definitions, wire format, key hashing, and serialization infrastructure.
 
 ### Decision 2: Capability Discovery
 
@@ -309,11 +322,11 @@ Encoded within the key space:
 
 ### 6.7 Maximum frame size
 
-Bounded by firmware RX/TX buffer (configurable in `keyboard.toml`, default 32 bytes). Advertised in `DeviceCapabilities.max_payload_size`. For most operations (single key get/set), messages are well under 32 bytes. Bulk operations (full keymap dump) require a larger configured buffer.
+Bounded by firmware RX/TX buffer (configurable in `keyboard.toml`, default 128 bytes). Advertised in `DeviceCapabilities.max_payload_size`. For most operations (single key get/set), messages are well under 128 bytes. The original Vial protocol used 32-byte HID reports; the new protocol defaults to 128 bytes because postcard-rpc frame overhead (up to 13 bytes for header) plus payload for multi-field structs like `DeviceCapabilities` exceeds 32 bytes. Bulk operations (full keymap dump) may benefit from a larger configured buffer. The optional HID fallback transport (future) constrains frames to 32 bytes.
 
 ### 6.8 No manual fragmentation
 
-Unlike HID-based Vial (28-byte chunks), CDC-ACM and BLE serial are byte streams. A single COBS frame carries the entire message. No fragmentation/reassembly layer needed. The protocol layer does not deal with MTU — that is handled by the transport layer.
+Unlike HID-based Vial (28-byte chunks), raw USB bulk and BLE serial provide higher-bandwidth channels. For USB bulk, packets are self-delimiting and do not need COBS. For BLE serial, COBS framing provides frame boundaries over the byte stream. No manual fragmentation/reassembly layer needed in either case. The protocol layer does not deal with MTU — that is handled by the transport layer.
 
 ### 6.9 Optional HID transport (future)
 
@@ -338,12 +351,14 @@ For WebHID fallback: COBS frames chunked into fixed-size HID reports with a 1-by
 
 ### 7.2 Keymap
 
+For endpoints with multi-field request payloads, v1 uses named request structs (instead of tuples) so the schema is self-describing and unambiguous.
+
 | Endpoint | Request | Response | Path | Permission |
 |----------|---------|----------|------|------------|
 | GetKeyAction | `KeyPosition` | `KeyAction` | `keymap/get` | ReadOnly |
-| SetKeyAction | `(KeyPosition, KeyAction)` | `RmkResult` | `keymap/set` | RequiresUnlock |
+| SetKeyAction | `SetKeyRequest` | `RmkResult` | `keymap/set` | RequiresUnlock |
 | GetKeymapBulk | `BulkRequest` | `heapless::Vec<KeyAction, MAX_BULK>` | `keymap/bulk_get` | ReadOnly |
-| SetKeymapBulk | `(BulkRequest, heapless::Vec<KeyAction, MAX_BULK>)` | `RmkResult` | `keymap/bulk_set` | RequiresUnlock |
+| SetKeymapBulk | `SetKeymapBulkRequest` | `RmkResult` | `keymap/bulk_set` | RequiresUnlock |
 | GetLayerCount | `()` | `u8` | `keymap/layer_count` | ReadOnly |
 | GetDefaultLayer | `()` | `u8` | `keymap/default_layer` | ReadOnly |
 | SetDefaultLayer | `u8` | `RmkResult` | `keymap/set_default_layer` | RequiresUnlock |
@@ -353,8 +368,8 @@ For WebHID fallback: COBS frames chunked into fixed-size HID reports with a 1-by
 
 | Endpoint | Request | Response | Path | Permission |
 |----------|---------|----------|------|------------|
-| GetEncoderAction | `(u8, u8)` | `EncoderAction` | `encoder/get` | ReadOnly |
-| SetEncoderAction | `(u8, u8, EncoderAction)` | `RmkResult` | `encoder/set` | RequiresUnlock |
+| GetEncoderAction | `GetEncoderRequest` | `EncoderAction` | `encoder/get` | ReadOnly |
+| SetEncoderAction | `SetEncoderRequest` | `RmkResult` | `encoder/set` | RequiresUnlock |
 
 ### 7.4 Macro
 
@@ -362,7 +377,7 @@ For WebHID fallback: COBS frames chunked into fixed-size HID reports with a 1-by
 |----------|---------|----------|------|------------|
 | GetMacroInfo | `()` | `MacroInfo` | `macro/info` | ReadOnly |
 | GetMacro | `u8` | `MacroData` | `macro/get` | ReadOnly |
-| SetMacro | `(u8, MacroData)` | `RmkResult` | `macro/set` | RequiresUnlock |
+| SetMacro | `SetMacroRequest` | `RmkResult` | `macro/set` | RequiresUnlock |
 | ResetMacros | `()` | `RmkResult` | `macro/reset` | Dangerous |
 
 ### 7.5 Combo
@@ -370,7 +385,7 @@ For WebHID fallback: COBS frames chunked into fixed-size HID reports with a 1-by
 | Endpoint | Request | Response | Path | Permission |
 |----------|---------|----------|------|------------|
 | GetCombo | `u8` | `ComboConfig` | `combo/get` | ReadOnly |
-| SetCombo | `(u8, ComboConfig)` | `RmkResult` | `combo/set` | RequiresUnlock |
+| SetCombo | `SetComboRequest` | `RmkResult` | `combo/set` | RequiresUnlock |
 | ResetCombos | `()` | `RmkResult` | `combo/reset` | Dangerous |
 
 ### 7.6 Morse / Tap-Dance
@@ -378,7 +393,7 @@ For WebHID fallback: COBS frames chunked into fixed-size HID reports with a 1-by
 | Endpoint | Request | Response | Path | Permission |
 |----------|---------|----------|------|------------|
 | GetMorse | `u8` | `MorseConfig` | `morse/get` | ReadOnly |
-| SetMorse | `(u8, MorseConfig)` | `RmkResult` | `morse/set` | RequiresUnlock |
+| SetMorse | `SetMorseRequest` | `RmkResult` | `morse/set` | RequiresUnlock |
 | ResetMorse | `()` | `RmkResult` | `morse/reset` | Dangerous |
 
 ### 7.7 Fork (Key Override)
@@ -386,7 +401,7 @@ For WebHID fallback: COBS frames chunked into fixed-size HID reports with a 1-by
 | Endpoint | Request | Response | Path | Permission |
 |----------|---------|----------|------|------------|
 | GetFork | `u8` | `ForkConfig` | `fork/get` | ReadOnly |
-| SetFork | `(u8, ForkConfig)` | `RmkResult` | `fork/set` | RequiresUnlock |
+| SetFork | `SetForkRequest` | `RmkResult` | `fork/set` | RequiresUnlock |
 | ResetForks | `()` | `RmkResult` | `fork/reset` | Dangerous |
 
 ### 7.8 Behavior Settings
@@ -409,7 +424,7 @@ For WebHID fallback: COBS frames chunked into fixed-size HID reports with a 1-by
 
 | Endpoint | Request | Response | Path | Permission |
 |----------|---------|----------|------|------------|
-| GetBatteryStatus | `()` | `BatteryStatus` | `status/battery` | ReadOnly |
+| GetBatteryStatus | `()` | `BatteryStateEvent` | `status/battery` | ReadOnly |
 | GetCurrentLayer | `()` | `u8` | `status/layer` | ReadOnly |
 | GetMatrixState | `()` | `MatrixState` | `status/matrix` | ReadOnly |
 | GetSplitStatus | `()` | `SplitStatus` | `status/split` | ReadOnly |
@@ -424,30 +439,50 @@ Topics are fire-and-forget device-to-host notifications. Each maps directly to a
 |-------|---------|------|----------------|
 | LayerChange | `LayerChangePayload { layer: u8 }` | `event/layer` | `LayerChangeEvent` |
 | WpmUpdate | `WpmPayload { wpm: u16 }` | `event/wpm` | `WpmUpdateEvent` |
-| BatteryState | `BatteryPayload { level: u8, charging: bool }` | `event/battery` | `BatteryStateEvent` |
+| BatteryState | `BatteryStateEvent` | `event/battery` | `BatteryStateEvent` |
 | BleStateChange | `BleStatePayload { ... }` | `event/ble_state` | `BleStateChangeEvent` |
 | BleProfileChange | `BleProfilePayload { profile: u8 }` | `event/ble_profile` | `BleProfileChangeEvent` |
 | ConnectionChange | `ConnectionPayload { ... }` | `event/connection` | `ConnectionChangeEvent` |
 | SleepState | `SleepPayload { sleeping: bool }` | `event/sleep` | `SleepStateEvent` |
-| LedIndicator | `LedPayload { indicator: u8 }` | `event/led` | `LedIndicatorEvent` |
+| LedIndicator | `LedPayload { indicator: LedIndicator }` | `event/led` | `LedIndicatorEvent` |
 
 ### Implementation pattern
 
-```rust
-// In ProtocolService, subscribe to internal events and forward as Topics
-let mut layer_sub = LayerChangeEvent::subscriber();
+Topics use a **single-writer architecture** to prevent concurrent writes to the transport. The `ProtocolService::run()` async loop uses `embassy_futures::select` to multiplex between transport reads (endpoint requests) and internal event subscribers (topic sources). Only one writer exists — the `ProtocolService` itself — ensuring responses and topic frames never race on the same byte stream.
 
+Event subscribers must be created once at `ProtocolService` initialization and held as fields. Creating subscribers inside the select loop would cause immediate returns due to the watch-based event system's `changed()` semantics.
+
+```rust
+// In ProtocolService, subscribers created once in new()
+struct ProtocolService<...> {
+    layer_sub: LayerChangeEventSubscriber,
+    battery_sub: BatteryStateEventSubscriber,
+    // ...
+}
+
+// In ProtocolService::run(), single select loop handles both
 loop {
     select! {
-        // Handle endpoint requests from transport...
-        event = layer_sub.next() => {
-            let frame = topic_frame("event/layer", &LayerChangePayload { layer: event.layer });
-            transport.write(&frame).await;
+        // Handle endpoint requests from transport
+        frame = read_frame(&mut self.transport) => {
+            let response = self.dispatch(frame);
+            self.transport.write(&response).await;
+        }
+        // Forward internal events as Topic frames
+        event = self.layer_sub.next_event() => {
+            let frame = topic_frame::<LayerChangeTopic>(&LayerChangePayload { layer: event.layer });
+            self.transport.write(&frame).await;
+        }
+        event = self.battery_sub.next_event() => {
+            let frame = topic_frame::<BatteryStateTopic>(&event.into());
+            self.transport.write(&frame).await;
         }
         // ... other event subscribers
     }
 }
 ```
+
+Response writes are prioritized over topic writes in the select order to prevent notification bursts from starving request/response traffic. Transport write failures (e.g., disconnected host) are logged but do not crash the service.
 
 Host-to-device Topics are deferred beyond v1.
 
@@ -460,6 +495,8 @@ Write operations (`Set*` endpoints) update in-memory state AND persist to flash 
 Since configuration changes from the host tool are infrequent (a user configuring their keyboard, not a continuous stream), write-through is sufficient and avoids the complexity of dirty-state tracking, explicit save/discard endpoints, and disconnect-while-dirty edge cases.
 
 The existing `FLASH_CHANNEL` (`rmk/src/channel.rs`) and `Storage::run()` loop (`rmk/src/storage/mod.rs`) are reused. `FlashOperationMessage::VialMessage` will be renamed to `FlashOperationMessage::HostMessage` to be protocol-neutral.
+
+> **Implementation note**: The current `FlashOperationMessage::ResetLayout` variant is a no-op at runtime (ignored in `Storage::run()`, only effective at startup via `clear_layout` flag). For the `ResetKeymap` endpoint to work correctly, a new runtime keymap reset path must be implemented in the storage layer that erases stored keymap keys and reloads defaults from the compiled-in keymap.
 
 ---
 
@@ -618,7 +655,7 @@ Note: `Unsupported` is NOT an `RmkError` variant — an unsupported endpoint is 
 | Aspect | Vial (current) | QMK XAP | ZMK Studio | Ergot | **RMK Protocol** |
 |--------|---------------|---------|------------|-------|------------------|
 | Serialization | Raw bytes | Raw bytes + codegen | Protobuf | postcard | **postcard (serde)** |
-| Transport | HID only | HID (future serial) | Serial + BLE | Any (COBS) | **Serial + BLE + HID** |
+| Transport | HID only | HID (future serial) | Serial + BLE | Any (COBS) | **USB raw bulk + BLE + HID** |
 | Notifications | None (poll) | Planned | Yes | Topics | **Yes (Topics)** |
 | Discovery | Separate JSON | Subsystem bitmask | Protobuf introspect | Key + NameHash | **Capability struct + schema hash** |
 | Persistence | Write-through | N/A | Explicit save/discard | N/A | **Write-through** |
@@ -646,7 +683,7 @@ rmk/src/host/
     via/            (existing — Vial implementation)
     protocol/       (NEW — new protocol implementation)
         mod.rs      (ProtocolService, dispatch loop)
-        transport.rs (CDC-ACM and BLE serial adapters)
+        transport.rs (raw USB bulk and BLE serial adapters)
         topics.rs   (event bus to Topic bridging)
 ```
 
@@ -654,26 +691,29 @@ rmk/src/host/
 
 Replaces `VialService` with the same structural pattern:
 - Holds `&RefCell<KeyMap>` for in-memory keymap access
-- Reads/writes over byte-stream transport (not HID)
-- Dispatches by key hash instead of command ID match
+- Reads/writes over transport via postcard-rpc's `WireTx`/`WireRx` traits
+- Implements custom key-based dispatch (postcard-rpc's `define_dispatch!` cannot be used because `ProtocolService` is generic over `ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER` const parameters — the macro requires static, non-generic context types)
+- Uses `embassy_futures::select` to multiplex endpoint request handling and internal event subscriber polling (single-writer architecture for Topics)
 - Manages lock state and write-through persistence via `FLASH_CHANNEL`
+- Runs as an async future composed into `run_keyboard()`'s `futures::select_biased!` (not spawned via embassy Spawner, matching the existing `VialService` pattern)
 
 ### 14.3 Transport adapters
 
-- **USB CDC-ACM**: `embassy_usb::class::cdc_acm::CdcAcmClass` replaces `HidReaderWriter`
-- **BLE serial**: New GATT service with NUS-like characteristics replaces `BleVialServer`
-- Both implement `embedded_io_async::Read` + `embedded_io_async::Write`. The `ProtocolService` is generic over these traits, requiring no custom transport abstraction.
+- **USB**: Raw vendor-class bulk endpoints (class `0xFF`, 1 interface, 2 bulk endpoints). Uses MS OS descriptors for automatic WinUSB driver binding on Windows. Natively WebUSB-compatible for browser-based configurators. Implements postcard-rpc's `WireTx`/`WireRx` traits. USB bulk transport uses packet-based framing (no COBS needed — USB bulk packets are self-delimiting).
+- **BLE serial**: New GATT service with NUS-like RX/TX characteristics replaces `BleVialServer`. Implements `embedded_io_async::Read` + `embedded_io_async::Write`, wrapped to implement `WireTx`/`WireRx`. BLE serial transport uses COBS framing over the byte stream.
+- `ProtocolService` is generic over postcard-rpc's `WireTx`/`WireRx` traits, abstracting transport and framing differences.
 
 ### 14.4 Event bus bridging
 
-`ProtocolService` subscribes to internal events via the existing `SubscribableEvent` trait:
+`ProtocolService` subscribes to internal events via the existing `SubscribableEvent` trait. All subscribers are created once during `ProtocolService::new()` and stored as struct fields (not re-created per loop iteration, due to watch-based subscriber semantics):
 ```rust
-let mut layer_sub = LayerChangeEvent::subscriber();
-let mut wpm_sub = WpmUpdateEvent::subscriber();
-let mut battery_sub = BatteryStateEvent::subscriber();
+// Created once in ProtocolService::new()
+let layer_sub = LayerChangeEvent::subscriber();
+let wpm_sub = WpmUpdateEvent::subscriber();
+let battery_sub = BatteryStateEvent::subscriber();
 // ... etc
 ```
-Then serializes and writes Topic frames to the transport.
+In the main `run()` loop, `embassy_futures::select` multiplexes transport reads and event subscribers. When an event fires, the service serializes a Topic frame and writes it to the transport. This single-writer architecture ensures responses and topic frames never race on the same transport.
 
 ### 14.5 Storage integration
 
@@ -704,11 +744,11 @@ New `[protocol]` section in `keyboard.toml` (or extension of `[rmk]`):
 ```toml
 [protocol]
 type = "rmk"           # or "vial"
-buffer_size = 32       # RX/TX buffer size in bytes (default: 32)
+buffer_size = 128      # RX/TX buffer size in bytes (default: 128, min: 32 for HID fallback)
 lock_timeout = 90      # auto-lock seconds
 ```
 
-The `buffer_size` is configurable to allow users to increase throughput for bulk operations when RAM permits. It is advertised as `DeviceCapabilities.max_payload_size`.
+The `buffer_size` is configurable to allow users to adjust throughput vs RAM tradeoff. The default of 128 bytes accommodates postcard-rpc frame overhead (up to 13 bytes header) plus the largest standard response payloads. It is advertised as `DeviceCapabilities.max_payload_size`.
 
 ---
 
@@ -723,7 +763,7 @@ The `buffer_size` is configurable to allow users to increase throughput for bulk
 | 1.1 | `rmk-types/Cargo.toml` | Add `postcard-rpc` and `postcard` with `experimental-derive` (for `Schema`) as dependencies |
 | 1.2 | `rmk-types/src/action.rs` | Add `#[derive(Schema)]` to `KeyAction`, `Action`, `KeyCode`, `EncoderAction`, `MorseProfile` |
 | 1.3 | `rmk-types/src/protocol/rmk.rs` | Define all ICD types: `ProtocolVersion`, `DeviceCapabilities`, `RmkError`, `LockStatus`, `UnlockChallenge`, `KeyPosition`, `BulkRequest`, `StorageResetMode`, payload types for Topics |
-| 1.4 | `rmk-types/src/protocol/rmk.rs` | Define all `endpoint!()` and `topic!()` declarations (see Appendix A) |
+| 1.4 | `rmk-types/src/protocol/rmk.rs` | Define all `endpoints!()` and `topics!()` declarations (see Appendix A) |
 | 1.5 | `rmk-types/src/protocol/mod.rs` | Add `pub mod rmk;` |
 | 1.6 | Unit tests | Serialization/deserialization round-trip tests for all ICD types; key hash collision detection across all endpoints |
 
@@ -731,24 +771,27 @@ The `buffer_size` is configurable to allow users to increase throughput for bulk
 
 **Goal**: Establish the new protocol's code structure alongside Vial.
 
+> **Design decision**: `ProtocolService` implements its own dispatch loop rather than using postcard-rpc's `define_dispatch!` macro + `Server` struct. The reason is that `ProtocolService` is generic over const parameters (`ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER`) and holds `&RefCell<KeyMap<...>>` — `define_dispatch!` requires static, non-generic context types. RMK reuses postcard-rpc's `endpoints!`/`topics!` definitions, wire format, key hashing, and serialization, but handles dispatch manually.
+
 | Step | File(s) | Details |
 |------|---------|---------|
 | 2.1 | `rmk/Cargo.toml` | Add `rmk_protocol = ["host", "dep:postcard-rpc"]` feature; add `postcard-rpc` as optional dependency |
 | 2.2 | `rmk/src/host/protocol/mod.rs` | Create `ProtocolService` struct: holds `&RefCell<KeyMap>`, lock state, RX/TX buffers |
 | 2.3 | `rmk/src/host/protocol/mod.rs` | Implement dispatch loop: read COBS frame -> decode key -> match handler -> encode response -> write COBS frame |
-| 2.4 | `rmk/src/host/mod.rs` | Add `#[cfg(feature = "rmk_protocol")]` block to spawn `ProtocolService` task (parallel to existing `#[cfg(feature = "vial")]` block) |
+| 2.4 | `rmk/src/host/mod.rs` | Add `#[cfg(feature = "rmk_protocol")]` version of `run_host_communicate_task()` that creates and runs `ProtocolService` as async future (composed into `select_biased!`, not spawned) |
 | 2.5 | `rmk/src/storage/mod.rs` | Rename `FlashOperationMessage::VialMessage` to `FlashOperationMessage::HostMessage` |
 
-### Phase 3: USB CDC-ACM Transport
+### Phase 3: USB Raw Bulk Transport
 
 **Goal**: Get the first working transport for desktop testing.
 
 | Step | File(s) | Details |
 |------|---------|---------|
-| 3.1 | `rmk/src/host/protocol/transport.rs` | Implement `embedded_io_async::Read` + `embedded_io_async::Write` for `CdcAcmClass` (if not already provided by embassy, a newtype might be needed) |
-| 3.2 | `rmk/src/host/protocol/mod.rs` | Make `ProtocolService` generic over `embedded_io_async::Read + Write` |
-| 3.3 | `rmk/src/usb/mod.rs` | Add CDC-ACM class creation alongside existing HID setup (feature-gated on `rmk_protocol`) |
-| 3.4 | Integration test | Connect via USB serial, complete handshake (GetVersion + GetCapabilities) |
+| 3.1 | `rmk/src/host/protocol/transport.rs` | Implement raw vendor-class bulk endpoint transport: create vendor interface (class `0xFF`) with bulk IN/OUT endpoints using `embassy_usb::Builder`. Add MS OS descriptors for WinUSB auto-binding on Windows |
+| 3.2 | `rmk/src/host/protocol/transport.rs` | Implement postcard-rpc's `WireTx` and `WireRx` traits for the USB bulk transport |
+| 3.3 | `rmk/src/host/protocol/mod.rs` | Make `ProtocolService` generic over `WireTx + WireRx` traits |
+| 3.4 | `rmk/src/usb/mod.rs` | Add vendor-class bulk endpoint creation alongside existing HID setup (feature-gated on `rmk_protocol`). Ensure composite device coexistence with HID via IAD |
+| 3.5 | Integration test | Connect via USB, complete handshake (GetVersion + GetCapabilities). Host tool uses `nusb` crate to claim vendor interface |
 
 ### Phase 4: System and Keymap Endpoints
 
@@ -760,7 +803,7 @@ The `buffer_size` is configurable to allow users to increase throughput for bulk
 | 4.2 | `rmk/src/host/protocol/mod.rs` | Implement handlers: `GetKeyAction`, `SetKeyAction` (with write-through to `FLASH_CHANNEL`) |
 | 4.3 | `rmk/src/host/protocol/mod.rs` | Implement handlers: `GetKeymapBulk`, `SetKeymapBulk`, `GetLayerCount`, `GetDefaultLayer`, `SetDefaultLayer`, `ResetKeymap` |
 | 4.4 | `rmk/src/host/protocol/mod.rs` | Implement handlers: `Reboot`, `BootloaderJump`, `StorageReset` |
-| 4.5 | Host CLI tool | Minimal Rust CLI using `postcard-rpc` client: connect, handshake, read/write keymap, display capabilities |
+| 4.5 | Host CLI tool | Minimal Rust CLI using `postcard-rpc` client with `nusb` backend: connect to vendor-class USB interface, handshake, read/write keymap, display capabilities |
 
 ### Phase 5: Security (Lock/Unlock)
 
@@ -789,12 +832,12 @@ The `buffer_size` is configurable to allow users to increase throughput for bulk
 
 ### Phase 7: Topics (Notifications)
 
-**Goal**: Device-to-host event streaming.
+**Goal**: Device-to-host event streaming via single-writer architecture.
 
 | Step | File(s) | Details |
 |------|---------|---------|
-| 7.1 | `rmk/src/host/protocol/topics.rs` | Create event bridging module: subscribe to internal events, serialize as Topic frames |
-| 7.2 | `rmk/src/host/protocol/mod.rs` | Integrate Topic publishing into the main `ProtocolService` select loop |
+| 7.1 | `rmk/src/host/protocol/topics.rs` | Create event bridging module: conversion functions from internal events to Topic payload structs, Topic frame encoding |
+| 7.2 | `rmk/src/host/protocol/mod.rs` | Integrate event subscribers into `ProtocolService`: create all subscribers in `new()`, add to `select` loop in `run()`. Response writes prioritized over topic writes in select order |
 | 7.3 | Host CLI tool | Add Topic listener: display battery state, connection changes, layer changes in real-time |
 
 ### Phase 8: BLE Serial Transport
@@ -804,7 +847,7 @@ The `buffer_size` is configurable to allow users to increase throughput for bulk
 | Step | File(s) | Details |
 |------|---------|---------|
 | 8.1 | `rmk/src/ble/host_service/protocol.rs` | Implement NUS-like GATT service with RX/TX characteristics |
-| 8.2 | `rmk/src/ble/host_service/protocol.rs` | Implement `embedded_io_async::Read` + `Write` for the BLE serial wrapper — `ProtocolService` works unchanged |
+| 8.2 | `rmk/src/ble/host_service/protocol.rs` | Implement `embedded_io_async::Read` + `Write` for BLE serial wrapper, then wrap with COBS framing to implement postcard-rpc's `WireTx`/`WireRx` traits — `ProtocolService` works unchanged |
 | 8.3 | Integration test | Connect via BLE on nRF52840, complete handshake and keymap read/write |
 
 ### Phase 9: Host Tool and Migration
@@ -813,9 +856,9 @@ The `buffer_size` is configurable to allow users to increase throughput for bulk
 
 | Step | Details |
 |------|---------|
-| 9.1 | Build web-based configurator (Tauri or Rust -> WASM + WebSerial) |
+| 9.1 | Build web-based configurator (Tauri or Rust -> WASM + WebUSB). Raw vendor-class bulk endpoints are natively WebUSB-compatible |
 | 9.2 | Deprecate Vial in documentation; mark `vial` feature as legacy |
-| 9.3 | Optional: HID transport fallback for WebHID compatibility |
+| 9.3 | Optional: HID transport fallback for environments without WebUSB support (uses 32-byte HID reports with COBS fragmentation) |
 | 9.4 | After adoption window: remove `vial` feature gate |
 
 ---
@@ -828,7 +871,7 @@ The `buffer_size` is configurable to allow users to increase throughput for bulk
 3. Error variant coverage.
 
 ### Transport Tests
-1. USB CDC-ACM lifecycle: connect, handshake, operations, disconnect.
+1. USB raw bulk lifecycle: connect, handshake, operations, disconnect.
 2. BLE serial lifecycle.
 3. Reconnect after transport drop — re-handshake succeeds.
 
@@ -879,10 +922,13 @@ The `buffer_size` is configurable to allow users to increase throughput for bulk
 ## Appendix A: Rust Type Definitions (ICD)
 
 ```rust
-use postcard_rpc::{endpoint, topic};
+use postcard_rpc::{endpoints, topics, TopicDirection};
 use serde::{Serialize, Deserialize};
 use postcard_schema::Schema;
 use heapless::Vec;
+use crate::led_indicator::LedIndicator;
+use crate::modifier::ModifierCombination;
+use crate::mouse_button::MouseButtons;
 
 // === Version & Capabilities ===
 
@@ -927,7 +973,7 @@ pub type RmkResult = Result<(), RmkError>;
 
 // === Security ===
 
-pub const MAX_UNLOCK_KEYS: usize = 4;
+pub const MAX_UNLOCK_KEYS: usize = 2;
 
 #[derive(Serialize, Deserialize, Schema)]
 pub struct LockStatus {
@@ -962,6 +1008,73 @@ pub struct BulkRequest {
     pub count: u16,
 }
 
+#[derive(Serialize, Deserialize, Schema)]
+pub struct SetKeyRequest {
+    pub position: KeyPosition,
+    pub action: KeyAction,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct SetKeymapBulkRequest {
+    pub request: BulkRequest,
+    pub actions: Vec<KeyAction, MAX_BULK>,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct GetEncoderRequest {
+    pub encoder_id: u8,
+    pub layer: u8,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct SetEncoderRequest {
+    pub encoder_id: u8,
+    pub layer: u8,
+    pub action: EncoderAction,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct SetMacroRequest {
+    pub index: u8,
+    pub data: MacroData,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct SetComboRequest {
+    pub index: u8,
+    pub config: ComboConfig,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct SetMorseRequest {
+    pub index: u8,
+    pub config: MorseConfig,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct ForkStateBits {
+    pub modifiers: ModifierCombination,
+    pub leds: LedIndicator,
+    pub mouse: MouseButtons,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct ForkConfig {
+    pub trigger: KeyAction,
+    pub negative_output: KeyAction,
+    pub positive_output: KeyAction,
+    pub match_any: ForkStateBits,
+    pub match_none: ForkStateBits,
+    pub kept_modifiers: ModifierCombination,
+    pub bindable: bool,
+}
+
+#[derive(Serialize, Deserialize, Schema)]
+pub struct SetForkRequest {
+    pub index: u8,
+    pub config: ForkConfig,
+}
+
 // === Storage ===
 
 #[derive(Serialize, Deserialize, Schema)]
@@ -970,76 +1083,79 @@ pub enum StorageResetMode {
     LayoutOnly, // erase only keymap/layout data
 }
 
-// === System Endpoints ===
-endpoint!(GetVersion,      (),              ProtocolVersion,    "sys/version");
-endpoint!(GetCapabilities, (),              DeviceCapabilities, "sys/caps");
-endpoint!(GetLockStatus,   (),              LockStatus,         "sys/lock_status");
-endpoint!(UnlockRequest,   (),              UnlockChallenge,    "sys/unlock");
-endpoint!(LockRequest,     (),              (),                 "sys/lock");
-endpoint!(Reboot,          (),              (),                 "sys/reboot");
-endpoint!(BootloaderJump,  (),              (),                 "sys/bootloader");
-endpoint!(StorageReset,    StorageResetMode, (),                "sys/storage_reset");
+// === Endpoint Declarations ===
+endpoints! {
+    list = ENDPOINT_LIST;
+    | EndpointTy          | RequestTy              | ResponseTy                    | Path                          |
+    | ----------          | ---------              | ----------                    | ----                          |
+    // System
+    | GetVersion          | ()                     | ProtocolVersion               | "sys/version"                 |
+    | GetCapabilities     | ()                     | DeviceCapabilities            | "sys/caps"                    |
+    | GetLockStatus       | ()                     | LockStatus                    | "sys/lock_status"             |
+    | UnlockRequest       | ()                     | UnlockChallenge               | "sys/unlock"                  |
+    | LockRequest         | ()                     | ()                            | "sys/lock"                    |
+    | Reboot              | ()                     | ()                            | "sys/reboot"                  |
+    | BootloaderJump      | ()                     | ()                            | "sys/bootloader"              |
+    | StorageReset        | StorageResetMode       | ()                            | "sys/storage_reset"           |
+    // Keymap
+    | GetKeyAction        | KeyPosition            | KeyAction                     | "keymap/get"                  |
+    | SetKeyAction        | SetKeyRequest          | RmkResult                     | "keymap/set"                  |
+    | GetKeymapBulk       | BulkRequest            | Vec<KeyAction, MAX_BULK>      | "keymap/bulk_get"             |
+    | SetKeymapBulk       | SetKeymapBulkRequest   | RmkResult                     | "keymap/bulk_set"             |
+    | GetLayerCount       | ()                     | u8                            | "keymap/layer_count"          |
+    | GetDefaultLayer     | ()                     | u8                            | "keymap/default_layer"        |
+    | SetDefaultLayer     | u8                     | RmkResult                     | "keymap/set_default_layer"    |
+    | ResetKeymap         | ()                     | RmkResult                     | "keymap/reset"                |
+    // Encoder
+    | GetEncoderAction    | GetEncoderRequest      | EncoderAction                 | "encoder/get"                 |
+    | SetEncoderAction    | SetEncoderRequest      | RmkResult                     | "encoder/set"                 |
+    // Macro
+    | GetMacroInfo        | ()                     | MacroInfo                     | "macro/info"                  |
+    | GetMacro            | u8                     | MacroData                     | "macro/get"                   |
+    | SetMacro            | SetMacroRequest        | RmkResult                     | "macro/set"                   |
+    | ResetMacros         | ()                     | RmkResult                     | "macro/reset"                 |
+    // Combo
+    | GetCombo            | u8                     | ComboConfig                   | "combo/get"                   |
+    | SetCombo            | SetComboRequest        | RmkResult                     | "combo/set"                   |
+    | ResetCombos         | ()                     | RmkResult                     | "combo/reset"                 |
+    // Morse / Tap-Dance
+    | GetMorse            | u8                     | MorseConfig                   | "morse/get"                   |
+    | SetMorse            | SetMorseRequest        | RmkResult                     | "morse/set"                   |
+    | ResetMorse          | ()                     | RmkResult                     | "morse/reset"                 |
+    // Fork
+    | GetFork             | u8                     | ForkConfig                    | "fork/get"                    |
+    | SetFork             | SetForkRequest         | RmkResult                     | "fork/set"                    |
+    | ResetForks          | ()                     | RmkResult                     | "fork/reset"                  |
+    // Behavior
+    | GetBehaviorConfig   | ()                     | BehaviorConfig                | "behavior/get"                |
+    | SetBehaviorConfig   | BehaviorConfig         | RmkResult                     | "behavior/set"                |
+    // Connection
+    | GetConnectionInfo   | ()                     | ConnectionInfo                | "conn/info"                   |
+    | SetConnectionType   | ConnectionType         | RmkResult                     | "conn/set_type"               |
+    | SwitchBleProfile    | u8                     | RmkResult                     | "conn/switch_ble"             |
+    | ClearBleProfile     | u8                     | RmkResult                     | "conn/clear_ble"              |
+    // Status
+    | GetBatteryStatus    | ()                     | BatteryStateEvent             | "status/battery"              |
+    | GetCurrentLayer     | ()                     | u8                            | "status/layer"                |
+    | GetMatrixState      | ()                     | MatrixState                   | "status/matrix"               |
+    | GetSplitStatus      | ()                     | SplitStatus                   | "status/split"                |
+}
 
-// === Keymap Endpoints ===
-endpoint!(GetKeyAction,    KeyPosition,     KeyAction,          "keymap/get");
-endpoint!(SetKeyAction,    (KeyPosition, KeyAction), RmkResult, "keymap/set");
-endpoint!(GetKeymapBulk,   BulkRequest,     Vec<KeyAction, MAX_BULK>, "keymap/bulk_get");
-endpoint!(SetKeymapBulk,   (BulkRequest, Vec<KeyAction, MAX_BULK>), RmkResult, "keymap/bulk_set");
-endpoint!(GetLayerCount,   (),              u8,                 "keymap/layer_count");
-endpoint!(GetDefaultLayer, (),              u8,                 "keymap/default_layer");
-endpoint!(SetDefaultLayer, u8,              RmkResult,          "keymap/set_default_layer");
-endpoint!(ResetKeymap,     (),              RmkResult,          "keymap/reset");
-
-// === Encoder Endpoints ===
-endpoint!(GetEncoderAction, (u8, u8),       EncoderAction,      "encoder/get");
-endpoint!(SetEncoderAction, (u8, u8, EncoderAction), RmkResult, "encoder/set");
-
-// === Macro Endpoints ===
-endpoint!(GetMacroInfo,    (),              MacroInfo,          "macro/info");
-endpoint!(GetMacro,        u8,              MacroData,          "macro/get");
-endpoint!(SetMacro,        (u8, MacroData), RmkResult,          "macro/set");
-endpoint!(ResetMacros,     (),              RmkResult,          "macro/reset");
-
-// === Combo Endpoints ===
-endpoint!(GetCombo,        u8,              ComboConfig,        "combo/get");
-endpoint!(SetCombo,        (u8, ComboConfig), RmkResult,        "combo/set");
-endpoint!(ResetCombos,     (),              RmkResult,          "combo/reset");
-
-// === Morse / Tap-Dance Endpoints ===
-endpoint!(GetMorse,        u8,              MorseConfig,        "morse/get");
-endpoint!(SetMorse,        (u8, MorseConfig), RmkResult,        "morse/set");
-endpoint!(ResetMorse,      (),              RmkResult,          "morse/reset");
-
-// === Fork Endpoints ===
-endpoint!(GetFork,         u8,              ForkConfig,         "fork/get");
-endpoint!(SetFork,         (u8, ForkConfig), RmkResult,         "fork/set");
-endpoint!(ResetForks,      (),              RmkResult,          "fork/reset");
-
-// === Behavior Endpoints ===
-endpoint!(GetBehaviorConfig, (),            BehaviorConfig,     "behavior/get");
-endpoint!(SetBehaviorConfig, BehaviorConfig, RmkResult,         "behavior/set");
-
-// === Connection Endpoints ===
-endpoint!(GetConnectionInfo, (),            ConnectionInfo,     "conn/info");
-endpoint!(SetConnectionType, ConnectionType, RmkResult,         "conn/set_type");
-endpoint!(SwitchBleProfile,  u8,            RmkResult,          "conn/switch_ble");
-endpoint!(ClearBleProfile,   u8,            RmkResult,          "conn/clear_ble");
-
-// === Status Endpoints ===
-endpoint!(GetBatteryStatus,  (),            BatteryStatus,      "status/battery");
-endpoint!(GetCurrentLayer,   (),            u8,                 "status/layer");
-endpoint!(GetMatrixState,    (),            MatrixState,        "status/matrix");
-endpoint!(GetSplitStatus,    (),            SplitStatus,        "status/split");
-
-// === Topics (Device -> Host Events) ===
-topic!(LayerChangeTopic,     LayerChangePayload,    "event/layer");
-topic!(WpmUpdateTopic,       WpmPayload,            "event/wpm");
-topic!(BatteryStateTopic,    BatteryPayload,        "event/battery");
-topic!(BleStateChangeTopic,  BleStatePayload,       "event/ble_state");
-topic!(BleProfileChangeTopic, BleProfilePayload,    "event/ble_profile");
-topic!(ConnectionChangeTopic, ConnectionPayload,    "event/connection");
-topic!(SleepStateTopic,      SleepPayload,          "event/sleep");
-topic!(LedIndicatorTopic,    LedPayload,            "event/led");
+// === Topic Declarations (Device -> Host Events) ===
+topics! {
+    list = TOPICS_OUT_LIST;
+    direction = TopicDirection::ToClient;
+    | TopicTy               | MessageTy              | Path                  |
+    | -------               | ---------              | ----                  |
+    | LayerChangeTopic      | LayerChangePayload     | "event/layer"         |
+    | WpmUpdateTopic        | WpmPayload             | "event/wpm"           |
+    | BatteryStateTopic     | BatteryStateEvent      | "event/battery"       |
+    | BleStateChangeTopic   | BleStatePayload        | "event/ble_state"     |
+    | BleProfileChangeTopic | BleProfilePayload      | "event/ble_profile"   |
+    | ConnectionChangeTopic | ConnectionPayload      | "event/connection"    |
+    | SleepStateTopic       | SleepPayload           | "event/sleep"         |
+    | LedIndicatorTopic     | LedPayload             | "event/led"           |
+}
 ```
 
 ---
