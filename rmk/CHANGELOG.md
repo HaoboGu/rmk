@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **BREAKING**: `PollingController::INTERVAL` constant is now `PollingController::interval()` method, allowing dynamic interval configuration at runtime
 - **BREAKING**: PointingDevice and PointingProcessor replace Pmw3610Device and Pmw3610Processor. For the Pmw3610 the calls of ::new() for these stay the same, only the name changes. If using Rust to configure the keyboard change the calls, if using Toml nothing needs to be done.
+- **BREAKING**: `MouseKeyConfig` fields renamed: `time_to_max` → `ticks_to_max`, `wheel_time_to_max` → `wheel_ticks_to_max`, `wheel_max_speed_multiplier` → `wheel_max_speed`
+- Refactor mouse key state machine into a dedicated module with per-direction press counts, independent movement/wheel repeat scheduling, and configurable acceleration curves
 - Optimize the timing for motion read and sending reports on the PMW3610
 - Correct the delay length of PMW3610 to the precise value
 
