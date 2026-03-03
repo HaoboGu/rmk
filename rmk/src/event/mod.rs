@@ -28,7 +28,7 @@ mod split;
 mod state;
 
 pub use action::ActionEvent;
-pub use battery::{BatteryAdcEvent, BatteryStateEvent, ChargingStateEvent};
+pub use battery::{BatteryAdcEvent, BatteryStatusEvent, ChargingStateEvent};
 #[cfg(feature = "_ble")]
 pub use connection::BleStatusChangeEvent;
 pub use connection::{ConnectionChangeEvent, ConnectionType};

@@ -278,7 +278,7 @@ impl KeyMapInner<'_> {
         if self.num_layer > 3 {
             self.layer_state[3] = self.layer_state[1] && self.layer_state[2];
             let layer = self.get_activated_layer();
-            publish_event(LayerChangeEvent { layer });
+            publish_event(LayerChangeEvent::new(layer));
         }
     }
 
@@ -288,7 +288,7 @@ impl KeyMapInner<'_> {
                 self.layer_state[tri_layer[0] as usize] && self.layer_state[tri_layer[1] as usize];
         }
         let layer = self.get_activated_layer();
-        publish_event(LayerChangeEvent { layer });
+        publish_event(LayerChangeEvent::new(layer));
     }
 
     fn activate_layer(&mut self, layer_num: u8) {

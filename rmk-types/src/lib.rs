@@ -27,7 +27,9 @@
 
 pub mod action;
 pub mod ble;
+pub mod connection;
 pub mod constants;
+pub mod event;
 pub mod fork;
 pub mod keycode;
 pub mod led_indicator;
