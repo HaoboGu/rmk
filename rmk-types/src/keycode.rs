@@ -7,6 +7,7 @@ use crate::modifier::ModifierCombination;
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, FromRepr)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(postcard_schema::Schema)]
 pub enum HidKeyCode {
     /// Reserved, no-key.
     No = 0x0000,
@@ -489,7 +490,7 @@ impl From<u8> for HidKeyCode {
 /// Key codes which are not in the HID spec, but still commonly used
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize)]
+#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
 #[cfg_attr(feature = "_codegen", derive(strum::VariantNames))]
 pub enum SpecialKey {
     // GraveEscape
@@ -500,7 +501,7 @@ pub enum SpecialKey {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize)]
+#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
 pub enum KeyCode {
     Hid(HidKeyCode),
     Consumer(ConsumerKey),
@@ -513,6 +514,7 @@ pub enum KeyCode {
 #[repr(u16)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(postcard_schema::Schema)]
 pub enum ConsumerKey {
     No = 0x00,
     // 15.5 Display Controls
@@ -620,6 +622,7 @@ impl ConsumerKey {
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(postcard_schema::Schema)]
 pub enum SystemControlKey {
     No = 0x00,
     PowerDown = 0x81,
