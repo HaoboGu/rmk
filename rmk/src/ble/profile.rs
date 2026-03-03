@@ -19,7 +19,7 @@ use super::ble_server::CCCD_TABLE_SIZE;
 use super::{get_current_profile, set_ble_status};
 use crate::NUM_BLE_PROFILE;
 use crate::channel::BLE_PROFILE_CHANNEL;
-use crate::event::{ConnectionChangeEvent, ConnectionType, publish_event};
+use crate::event::{BleProfileChangeEvent, ConnectionChangeEvent, ConnectionType, publish_event};
 use crate::state::CONNECTION_TYPE;
 
 pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal::new();
@@ -233,6 +233,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             profile,
             state: BleState::Inactive,
         });
+        publish_event(BleProfileChangeEvent::new(profile));
     }
 
     /// Update bonding information in the stack according to the current active profile
@@ -369,7 +370,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             .await;
 
         info!("Switched to BLE profile: {}", profile);
-
+        publish_event(BleProfileChangeEvent::new(profile));
         true
     }
 
@@ -429,10 +430,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             CONNECTION_TYPE.store(updated.into(), Ordering::SeqCst);
 
                             info!("Switching connection type to: {:?}", updated);
-
-                            publish_event(ConnectionChangeEvent {
-                                connection_type: updated,
-                            });
+                            publish_event(ConnectionChangeEvent::new(updated));
 
                             #[cfg(feature = "storage")]
                             FLASH_CHANNEL

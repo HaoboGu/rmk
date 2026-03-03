@@ -183,9 +183,9 @@ pub(crate) async fn run_ble<
             CONNECTION_TYPE.store(ConnectionType::Usb.into(), Ordering::SeqCst);
         }
 
-        publish_event(ConnectionChangeEvent {
-            connection_type: CONNECTION_TYPE.load(Ordering::SeqCst).into(),
-        });
+        publish_event(ConnectionChangeEvent::new(
+            CONNECTION_TYPE.load(Ordering::SeqCst).into(),
+        ));
     }
 
     // Create profile manager
