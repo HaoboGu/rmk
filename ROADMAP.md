@@ -37,7 +37,7 @@
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Create file `rmk-types/src/protocol/rmk.rs` | [x] | |
-| b | Add required imports: `serde`, `postcard_schema::Schema`, `heapless::Vec`, `postcard_rpc::{endpoint, topic}` | [x] | |
+| b | Add required imports: `serde`, `postcard_schema::Schema`, `heapless::Vec`, `postcard_rpc::{endpoints, topics, TopicDirection}` | [x] | |
 | c | Define `ProtocolVersion { major: u8, minor: u8 }` with `Serialize, Deserialize, Schema` | [x] | |
 | d | Define `DeviceCapabilities` struct with all fields (`num_layers`, `num_rows`, `num_cols`, `num_encoders`, `max_combos`, `max_macros`, `macro_space_size`, `max_morse`, `max_forks`, `has_storage`, `has_split`, `num_split_peripherals`, `has_ble`, `num_ble_profiles`, `has_lighting`, `max_payload_size`) | [x] | |
 | e | Define `RmkError` enum (`InvalidParameter`, `BadState`, `Busy`, `StorageError`, `InternalError`) and `pub type RmkResult = Result<(), RmkError>` | [x] | |
@@ -52,7 +52,7 @@
 | n | Define combo/morse/fork config types: `ComboConfig`, `MorseConfig`, `ForkConfig` (or reuse existing types from rmk-types) | [x] | Protocol-facing types defined; `ForkConfig` uses full-fidelity state bits (modifiers + LED + mouse), no downgrade |
 | o | Define protocol-facing `BehaviorConfig` (or directly reuse existing `BehaviorConfig` from `rmk` crate) | [x] | Protocol-facing version with combo_timeout_ms, oneshot_timeout_ms, tap_interval_ms, tap_tolerance |
 
-### Step 1.4 — Define `endpoint!()` and `topic!()` declarations
+### Step 1.4 — Define `endpoints!()` and `topics!()` declarations
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
@@ -82,9 +82,9 @@
 |---|--------|--------|-------|
 | a | Create `#[cfg(test)] mod tests` at the bottom of `rmk-types/src/protocol/rmk.rs` or a separate test file | [x] | Inline in rmk.rs |
 | b | Write serde round-trip tests: for each ICD struct/enum, use `postcard::to_slice` -> `postcard::from_bytes` and assert equality | [x] | 22 round-trip tests |
-| c | Write key hash collision detection test: collect all endpoint/topic key hashes, assert no duplicates | [x] | 3 collision tests (endpoints, topics, cross) |
+| c | Write key hash collision detection test: collect all endpoint/topic key hashes, assert no duplicates | [x] | Intra-group collisions detected at compile time by `endpoints!`/`topics!` macros; 1 cross-group collision test remains |
 | d | Test edge cases: empty `heapless::Vec`, max-value fields, all-zero `DeviceCapabilities` | [x] | |
-| e | Run `cargo test -p rmk-types` to confirm all tests pass | [x] | 28/28 tests pass |
+| e | Run `cargo test -p rmk-types` to confirm all tests pass | [x] | 28/28 tests pass (2 intra-group collision tests removed — now compile-time; 2 list-count tests added) |
 
 ---
 
@@ -92,7 +92,7 @@
 
 **Goal**: Establish the new protocol's code structure alongside Vial.
 
-> **Design decision**: `ProtocolService` implements its own dispatch loop rather than using postcard-rpc's `define_dispatch!` macro + `Server` struct. The reason is that `ProtocolService` is generic over const parameters (`ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER`) and holds `&RefCell<KeyMap<...>>` — `define_dispatch!` requires static, non-generic context types. RMK reuses postcard-rpc's `endpoint!`/`topic!` definitions, wire format, key hashing, `WireTx`/`WireRx` traits, and serialization.
+> **Design decision**: `ProtocolService` implements its own dispatch loop rather than using postcard-rpc's `define_dispatch!` macro + `Server` struct. The reason is that `ProtocolService` is generic over const parameters (`ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER`) and holds `&RefCell<KeyMap<...>>` — `define_dispatch!` requires static, non-generic context types. RMK reuses postcard-rpc's `endpoints!`/`topics!` definitions, wire format, key hashing, `WireTx`/`WireRx` traits, and serialization.
 
 ### Step 2.1 — Add `rmk_protocol` feature to `rmk/Cargo.toml`
 

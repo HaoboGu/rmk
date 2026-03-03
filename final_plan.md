@@ -66,13 +66,18 @@ Each protocol operation is a Rust type implementing the `Endpoint` trait, not a 
 
 ```rust
 // Shared ICD (Interface Control Document), in rmk-types
-use postcard_rpc::endpoint;
+use postcard_rpc::{endpoints, topics, TopicDirection};
 
-endpoint!(GetVersion,      (),              ProtocolVersion,    "sys/version");
-endpoint!(GetCapabilities, (),              DeviceCapabilities, "sys/caps");
-endpoint!(GetKeyAction,    KeyPosition,     KeyAction,          "keymap/get");
-endpoint!(SetKeyAction,    SetKeyRequest,   RmkResult,          "keymap/set");
-// ... each new operation = one new type, purely additive
+endpoints! {
+    list = ENDPOINT_LIST;
+    | EndpointTy     | RequestTy       | ResponseTy         | Path                |
+    | ----------     | ---------       | ----------         | ----                |
+    | GetVersion     | ()              | ProtocolVersion    | "sys/version"       |
+    | GetCapabilities| ()              | DeviceCapabilities | "sys/caps"          |
+    | GetKeyAction   | KeyPosition     | KeyAction          | "keymap/get"        |
+    | SetKeyAction   | SetKeyRequest   | RmkResult          | "keymap/set"        |
+    // ... each new operation = one new row, purely additive
+}
 ```
 
 On the wire, the PATH + Schema are hashed (FNV1a-64) into a compact `Key` (1-8 bytes). This means:
@@ -182,7 +187,7 @@ The dispatch model determines how incoming messages are routed to handlers.
 
 **Verdict: Option B.** The automatic schema mismatch detection is critical for preventing subtle bugs between mismatched firmware/host versions. Path prefixes (`keymap/get`, `combo/set`) provide natural grouping for documentation. This is the approach used by postcard-rpc and Ergot.
 
-> **Implementation note**: While postcard-rpc provides `define_dispatch!` macro and `Server` struct for automatic key-based dispatch, these require static (non-generic) context types. RMK's `ProtocolService` holds `&RefCell<KeyMap<ROW, COL, NUM_LAYER, NUM_ENCODER>>` with compile-time generic parameters, making it incompatible with `define_dispatch!`'s static context model. Therefore, RMK implements its own dispatch loop using the same key-based matching pattern, while reusing postcard-rpc's `endpoint!`/`topic!` macro definitions, wire format, key hashing, and serialization infrastructure.
+> **Implementation note**: While postcard-rpc provides `define_dispatch!` macro and `Server` struct for automatic key-based dispatch, these require static (non-generic) context types. RMK's `ProtocolService` holds `&RefCell<KeyMap<ROW, COL, NUM_LAYER, NUM_ENCODER>>` with compile-time generic parameters, making it incompatible with `define_dispatch!`'s static context model. Therefore, RMK implements its own dispatch loop using the same key-based matching pattern, while reusing postcard-rpc's `endpoints!`/`topics!` macro definitions, wire format, key hashing, and serialization infrastructure.
 
 ### Decision 2: Capability Discovery
 
@@ -758,7 +763,7 @@ The `buffer_size` is configurable to allow users to adjust throughput vs RAM tra
 | 1.1 | `rmk-types/Cargo.toml` | Add `postcard-rpc` and `postcard` with `experimental-derive` (for `Schema`) as dependencies |
 | 1.2 | `rmk-types/src/action.rs` | Add `#[derive(Schema)]` to `KeyAction`, `Action`, `KeyCode`, `EncoderAction`, `MorseProfile` |
 | 1.3 | `rmk-types/src/protocol/rmk.rs` | Define all ICD types: `ProtocolVersion`, `DeviceCapabilities`, `RmkError`, `LockStatus`, `UnlockChallenge`, `KeyPosition`, `BulkRequest`, `StorageResetMode`, payload types for Topics |
-| 1.4 | `rmk-types/src/protocol/rmk.rs` | Define all `endpoint!()` and `topic!()` declarations (see Appendix A) |
+| 1.4 | `rmk-types/src/protocol/rmk.rs` | Define all `endpoints!()` and `topics!()` declarations (see Appendix A) |
 | 1.5 | `rmk-types/src/protocol/mod.rs` | Add `pub mod rmk;` |
 | 1.6 | Unit tests | Serialization/deserialization round-trip tests for all ICD types; key hash collision detection across all endpoints |
 
@@ -766,7 +771,7 @@ The `buffer_size` is configurable to allow users to adjust throughput vs RAM tra
 
 **Goal**: Establish the new protocol's code structure alongside Vial.
 
-> **Design decision**: `ProtocolService` implements its own dispatch loop rather than using postcard-rpc's `define_dispatch!` macro + `Server` struct. The reason is that `ProtocolService` is generic over const parameters (`ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER`) and holds `&RefCell<KeyMap<...>>` — `define_dispatch!` requires static, non-generic context types. RMK reuses postcard-rpc's `endpoint!`/`topic!` definitions, wire format, key hashing, and serialization, but handles dispatch manually.
+> **Design decision**: `ProtocolService` implements its own dispatch loop rather than using postcard-rpc's `define_dispatch!` macro + `Server` struct. The reason is that `ProtocolService` is generic over const parameters (`ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER`) and holds `&RefCell<KeyMap<...>>` — `define_dispatch!` requires static, non-generic context types. RMK reuses postcard-rpc's `endpoints!`/`topics!` definitions, wire format, key hashing, and serialization, but handles dispatch manually.
 
 | Step | File(s) | Details |
 |------|---------|---------|
@@ -917,7 +922,7 @@ The `buffer_size` is configurable to allow users to adjust throughput vs RAM tra
 ## Appendix A: Rust Type Definitions (ICD)
 
 ```rust
-use postcard_rpc::{endpoint, topic};
+use postcard_rpc::{endpoints, topics, TopicDirection};
 use serde::{Serialize, Deserialize};
 use postcard_schema::Schema;
 use heapless::Vec;
@@ -1078,76 +1083,79 @@ pub enum StorageResetMode {
     LayoutOnly, // erase only keymap/layout data
 }
 
-// === System Endpoints ===
-endpoint!(GetVersion,      (),              ProtocolVersion,    "sys/version");
-endpoint!(GetCapabilities, (),              DeviceCapabilities, "sys/caps");
-endpoint!(GetLockStatus,   (),              LockStatus,         "sys/lock_status");
-endpoint!(UnlockRequest,   (),              UnlockChallenge,    "sys/unlock");
-endpoint!(LockRequest,     (),              (),                 "sys/lock");
-endpoint!(Reboot,          (),              (),                 "sys/reboot");
-endpoint!(BootloaderJump,  (),              (),                 "sys/bootloader");
-endpoint!(StorageReset,    StorageResetMode, (),                "sys/storage_reset");
+// === Endpoint Declarations ===
+endpoints! {
+    list = ENDPOINT_LIST;
+    | EndpointTy          | RequestTy              | ResponseTy                    | Path                          |
+    | ----------          | ---------              | ----------                    | ----                          |
+    // System
+    | GetVersion          | ()                     | ProtocolVersion               | "sys/version"                 |
+    | GetCapabilities     | ()                     | DeviceCapabilities            | "sys/caps"                    |
+    | GetLockStatus       | ()                     | LockStatus                    | "sys/lock_status"             |
+    | UnlockRequest       | ()                     | UnlockChallenge               | "sys/unlock"                  |
+    | LockRequest         | ()                     | ()                            | "sys/lock"                    |
+    | Reboot              | ()                     | ()                            | "sys/reboot"                  |
+    | BootloaderJump      | ()                     | ()                            | "sys/bootloader"              |
+    | StorageReset        | StorageResetMode       | ()                            | "sys/storage_reset"           |
+    // Keymap
+    | GetKeyAction        | KeyPosition            | KeyAction                     | "keymap/get"                  |
+    | SetKeyAction        | SetKeyRequest          | RmkResult                     | "keymap/set"                  |
+    | GetKeymapBulk       | BulkRequest            | Vec<KeyAction, MAX_BULK>      | "keymap/bulk_get"             |
+    | SetKeymapBulk       | SetKeymapBulkRequest   | RmkResult                     | "keymap/bulk_set"             |
+    | GetLayerCount       | ()                     | u8                            | "keymap/layer_count"          |
+    | GetDefaultLayer     | ()                     | u8                            | "keymap/default_layer"        |
+    | SetDefaultLayer     | u8                     | RmkResult                     | "keymap/set_default_layer"    |
+    | ResetKeymap         | ()                     | RmkResult                     | "keymap/reset"                |
+    // Encoder
+    | GetEncoderAction    | GetEncoderRequest      | EncoderAction                 | "encoder/get"                 |
+    | SetEncoderAction    | SetEncoderRequest      | RmkResult                     | "encoder/set"                 |
+    // Macro
+    | GetMacroInfo        | ()                     | MacroInfo                     | "macro/info"                  |
+    | GetMacro            | u8                     | MacroData                     | "macro/get"                   |
+    | SetMacro            | SetMacroRequest        | RmkResult                     | "macro/set"                   |
+    | ResetMacros         | ()                     | RmkResult                     | "macro/reset"                 |
+    // Combo
+    | GetCombo            | u8                     | ComboConfig                   | "combo/get"                   |
+    | SetCombo            | SetComboRequest        | RmkResult                     | "combo/set"                   |
+    | ResetCombos         | ()                     | RmkResult                     | "combo/reset"                 |
+    // Morse / Tap-Dance
+    | GetMorse            | u8                     | MorseConfig                   | "morse/get"                   |
+    | SetMorse            | SetMorseRequest        | RmkResult                     | "morse/set"                   |
+    | ResetMorse          | ()                     | RmkResult                     | "morse/reset"                 |
+    // Fork
+    | GetFork             | u8                     | ForkConfig                    | "fork/get"                    |
+    | SetFork             | SetForkRequest         | RmkResult                     | "fork/set"                    |
+    | ResetForks          | ()                     | RmkResult                     | "fork/reset"                  |
+    // Behavior
+    | GetBehaviorConfig   | ()                     | BehaviorConfig                | "behavior/get"                |
+    | SetBehaviorConfig   | BehaviorConfig         | RmkResult                     | "behavior/set"                |
+    // Connection
+    | GetConnectionInfo   | ()                     | ConnectionInfo                | "conn/info"                   |
+    | SetConnectionType   | ConnectionType         | RmkResult                     | "conn/set_type"               |
+    | SwitchBleProfile    | u8                     | RmkResult                     | "conn/switch_ble"             |
+    | ClearBleProfile     | u8                     | RmkResult                     | "conn/clear_ble"              |
+    // Status
+    | GetBatteryStatus    | ()                     | BatteryStateEvent             | "status/battery"              |
+    | GetCurrentLayer     | ()                     | u8                            | "status/layer"                |
+    | GetMatrixState      | ()                     | MatrixState                   | "status/matrix"               |
+    | GetSplitStatus      | ()                     | SplitStatus                   | "status/split"                |
+}
 
-// === Keymap Endpoints ===
-endpoint!(GetKeyAction,    KeyPosition,     KeyAction,          "keymap/get");
-endpoint!(SetKeyAction,    SetKeyRequest,   RmkResult,          "keymap/set");
-endpoint!(GetKeymapBulk,   BulkRequest,     Vec<KeyAction, MAX_BULK>, "keymap/bulk_get");
-endpoint!(SetKeymapBulk,   SetKeymapBulkRequest, RmkResult, "keymap/bulk_set");
-endpoint!(GetLayerCount,   (),              u8,                 "keymap/layer_count");
-endpoint!(GetDefaultLayer, (),              u8,                 "keymap/default_layer");
-endpoint!(SetDefaultLayer, u8,              RmkResult,          "keymap/set_default_layer");
-endpoint!(ResetKeymap,     (),              RmkResult,          "keymap/reset");
-
-// === Encoder Endpoints ===
-endpoint!(GetEncoderAction, GetEncoderRequest, EncoderAction,   "encoder/get");
-endpoint!(SetEncoderAction, SetEncoderRequest, RmkResult,       "encoder/set");
-
-// === Macro Endpoints ===
-endpoint!(GetMacroInfo,    (),              MacroInfo,          "macro/info");
-endpoint!(GetMacro,        u8,              MacroData,          "macro/get");
-endpoint!(SetMacro,        SetMacroRequest, RmkResult,          "macro/set");
-endpoint!(ResetMacros,     (),              RmkResult,          "macro/reset");
-
-// === Combo Endpoints ===
-endpoint!(GetCombo,        u8,              ComboConfig,        "combo/get");
-endpoint!(SetCombo,        SetComboRequest, RmkResult,          "combo/set");
-endpoint!(ResetCombos,     (),              RmkResult,          "combo/reset");
-
-// === Morse / Tap-Dance Endpoints ===
-endpoint!(GetMorse,        u8,              MorseConfig,        "morse/get");
-endpoint!(SetMorse,        SetMorseRequest, RmkResult,          "morse/set");
-endpoint!(ResetMorse,      (),              RmkResult,          "morse/reset");
-
-// === Fork Endpoints ===
-endpoint!(GetFork,         u8,              ForkConfig,         "fork/get");
-endpoint!(SetFork,         SetForkRequest,  RmkResult,          "fork/set");
-endpoint!(ResetForks,      (),              RmkResult,          "fork/reset");
-
-// === Behavior Endpoints ===
-endpoint!(GetBehaviorConfig, (),            BehaviorConfig,     "behavior/get");
-endpoint!(SetBehaviorConfig, BehaviorConfig, RmkResult,         "behavior/set");
-
-// === Connection Endpoints ===
-endpoint!(GetConnectionInfo, (),            ConnectionInfo,     "conn/info");
-endpoint!(SetConnectionType, ConnectionType, RmkResult,         "conn/set_type");
-endpoint!(SwitchBleProfile,  u8,            RmkResult,          "conn/switch_ble");
-endpoint!(ClearBleProfile,   u8,            RmkResult,          "conn/clear_ble");
-
-// === Status Endpoints ===
-endpoint!(GetBatteryStatus,  (),            BatteryStateEvent,  "status/battery");
-endpoint!(GetCurrentLayer,   (),            u8,                 "status/layer");
-endpoint!(GetMatrixState,    (),            MatrixState,        "status/matrix");
-endpoint!(GetSplitStatus,    (),            SplitStatus,        "status/split");
-
-// === Topics (Device -> Host Events) ===
-topic!(LayerChangeTopic,     LayerChangePayload,    "event/layer");
-topic!(WpmUpdateTopic,       WpmPayload,            "event/wpm");
-topic!(BatteryStateTopic,    BatteryStateEvent,     "event/battery");
-topic!(BleStateChangeTopic,  BleStatePayload,       "event/ble_state");
-topic!(BleProfileChangeTopic, BleProfilePayload,    "event/ble_profile");
-topic!(ConnectionChangeTopic, ConnectionPayload,    "event/connection");
-topic!(SleepStateTopic,      SleepPayload,          "event/sleep");
-topic!(LedIndicatorTopic,    LedPayload,            "event/led");
+// === Topic Declarations (Device -> Host Events) ===
+topics! {
+    list = TOPICS_OUT_LIST;
+    direction = TopicDirection::ToClient;
+    | TopicTy               | MessageTy              | Path                  |
+    | -------               | ---------              | ----                  |
+    | LayerChangeTopic      | LayerChangePayload     | "event/layer"         |
+    | WpmUpdateTopic        | WpmPayload             | "event/wpm"           |
+    | BatteryStateTopic     | BatteryStateEvent      | "event/battery"       |
+    | BleStateChangeTopic   | BleStatePayload        | "event/ble_state"     |
+    | BleProfileChangeTopic | BleProfilePayload      | "event/ble_profile"   |
+    | ConnectionChangeTopic | ConnectionPayload      | "event/connection"    |
+    | SleepStateTopic       | SleepPayload           | "event/sleep"         |
+    | LedIndicatorTopic     | LedPayload             | "event/led"           |
+}
 ```
 
 ---

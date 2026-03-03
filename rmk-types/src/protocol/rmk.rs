@@ -8,7 +8,7 @@
 //! byte streams (USB bulk transfer and BLE serial).
 
 use heapless::Vec;
-use postcard_rpc::{endpoint, topic};
+use postcard_rpc::{TopicDirection, endpoints, topics};
 use serde::{Deserialize, Serialize};
 
 use crate::action::{EncoderAction, KeyAction, MorseProfile};
@@ -127,6 +127,9 @@ pub struct BulkRequest {
     pub start_col: u8,
     pub count: u16,
 }
+
+/// Response type for bulk keymap operations.
+pub type BulkKeyActions = Vec<KeyAction, MAX_BULK>;
 
 /// Request payload for `SetKeymapBulk` endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
@@ -356,108 +359,84 @@ pub struct LedPayload {
 }
 
 // ---------------------------------------------------------------------------
-// Endpoint declarations — System
+// Endpoint declarations
 // ---------------------------------------------------------------------------
 
-endpoint!(GetVersion, (), ProtocolVersion, "sys/version");
-endpoint!(GetCapabilities, (), DeviceCapabilities, "sys/caps");
-endpoint!(GetLockStatus, (), LockStatus, "sys/lock_status");
-endpoint!(UnlockRequest, (), UnlockChallenge, "sys/unlock");
-endpoint!(LockRequest, (), (), "sys/lock");
-endpoint!(Reboot, (), (), "sys/reboot");
-endpoint!(BootloaderJump, (), (), "sys/bootloader");
-endpoint!(StorageReset, StorageResetMode, (), "sys/storage_reset");
-
-// ---------------------------------------------------------------------------
-// Endpoint declarations — Keymap
-// ---------------------------------------------------------------------------
-
-endpoint!(GetKeyAction, KeyPosition, KeyAction, "keymap/get");
-endpoint!(SetKeyAction, SetKeyRequest, RmkResult, "keymap/set");
-endpoint!(GetKeymapBulk,    BulkRequest,              Vec<KeyAction, MAX_BULK>,      "keymap/bulk_get");
-endpoint!(SetKeymapBulk, SetKeymapBulkRequest, RmkResult, "keymap/bulk_set");
-endpoint!(GetLayerCount, (), u8, "keymap/layer_count");
-endpoint!(GetDefaultLayer, (), u8, "keymap/default_layer");
-endpoint!(SetDefaultLayer, u8, RmkResult, "keymap/set_default_layer");
-endpoint!(ResetKeymap, (), RmkResult, "keymap/reset");
-
-// ---------------------------------------------------------------------------
-// Endpoint declarations — Encoder
-// ---------------------------------------------------------------------------
-
-endpoint!(GetEncoderAction, GetEncoderRequest, EncoderAction, "encoder/get");
-endpoint!(SetEncoderAction, SetEncoderRequest, RmkResult, "encoder/set");
-
-// ---------------------------------------------------------------------------
-// Endpoint declarations — Macro
-// ---------------------------------------------------------------------------
-
-endpoint!(GetMacroInfo, (), MacroInfo, "macro/info");
-endpoint!(GetMacro, u8, MacroData, "macro/get");
-endpoint!(SetMacro, SetMacroRequest, RmkResult, "macro/set");
-endpoint!(ResetMacros, (), RmkResult, "macro/reset");
-
-// ---------------------------------------------------------------------------
-// Endpoint declarations — Combo
-// ---------------------------------------------------------------------------
-
-endpoint!(GetCombo, u8, ComboConfig, "combo/get");
-endpoint!(SetCombo, SetComboRequest, RmkResult, "combo/set");
-endpoint!(ResetCombos, (), RmkResult, "combo/reset");
-
-// ---------------------------------------------------------------------------
-// Endpoint declarations — Morse / Tap-Dance
-// ---------------------------------------------------------------------------
-
-endpoint!(GetMorse, u8, MorseConfig, "morse/get");
-endpoint!(SetMorse, SetMorseRequest, RmkResult, "morse/set");
-endpoint!(ResetMorse, (), RmkResult, "morse/reset");
-
-// ---------------------------------------------------------------------------
-// Endpoint declarations — Fork (Key Override)
-// ---------------------------------------------------------------------------
-
-endpoint!(GetFork, u8, ForkConfig, "fork/get");
-endpoint!(SetFork, SetForkRequest, RmkResult, "fork/set");
-endpoint!(ResetForks, (), RmkResult, "fork/reset");
-
-// ---------------------------------------------------------------------------
-// Endpoint declarations — Behavior
-// ---------------------------------------------------------------------------
-
-endpoint!(GetBehaviorConfig, (), BehaviorConfig, "behavior/get");
-endpoint!(SetBehaviorConfig, BehaviorConfig, RmkResult, "behavior/set");
-
-// ---------------------------------------------------------------------------
-// Endpoint declarations — Connection
-// ---------------------------------------------------------------------------
-
-endpoint!(GetConnectionInfo, (), ConnectionInfo, "conn/info");
-endpoint!(SetConnectionType, ConnectionType, RmkResult, "conn/set_type");
-endpoint!(SwitchBleProfile, u8, RmkResult, "conn/switch_ble");
-endpoint!(ClearBleProfile, u8, RmkResult, "conn/clear_ble");
-
-// ---------------------------------------------------------------------------
-// Endpoint declarations — Status
-// ---------------------------------------------------------------------------
-
-endpoint!(GetBatteryStatus, (), BatteryStatus, "status/battery");
-endpoint!(GetCurrentLayer, (), u8, "status/layer");
-endpoint!(GetMatrixState, (), MatrixState, "status/matrix");
-endpoint!(GetSplitStatus, (), SplitStatus, "status/split");
+endpoints! {
+    list = ENDPOINT_LIST;
+    | EndpointTy          | RequestTy              | ResponseTy                    | Path                          |
+    | ----------          | ---------              | ----------                    | ----                          |
+    // System
+    | GetVersion          | ()                     | ProtocolVersion               | "sys/version"                 |
+    | GetCapabilities     | ()                     | DeviceCapabilities            | "sys/caps"                    |
+    | GetLockStatus       | ()                     | LockStatus                    | "sys/lock_status"             |
+    | UnlockRequest       | ()                     | UnlockChallenge               | "sys/unlock"                  |
+    | LockRequest         | ()                     | ()                            | "sys/lock"                    |
+    | Reboot              | ()                     | ()                            | "sys/reboot"                  |
+    | BootloaderJump      | ()                     | ()                            | "sys/bootloader"              |
+    | StorageReset        | StorageResetMode       | ()                            | "sys/storage_reset"           |
+    // Keymap
+    | GetKeyAction        | KeyPosition            | KeyAction                     | "keymap/get"                  |
+    | SetKeyAction        | SetKeyRequest          | RmkResult                     | "keymap/set"                  |
+    | GetKeymapBulk       | BulkRequest            | BulkKeyActions                | "keymap/bulk_get"             |
+    | SetKeymapBulk       | SetKeymapBulkRequest   | RmkResult                     | "keymap/bulk_set"             |
+    | GetLayerCount       | ()                     | u8                            | "keymap/layer_count"          |
+    | GetDefaultLayer     | ()                     | u8                            | "keymap/default_layer"        |
+    | SetDefaultLayer     | u8                     | RmkResult                     | "keymap/set_default_layer"    |
+    | ResetKeymap         | ()                     | RmkResult                     | "keymap/reset"                |
+    // Encoder
+    | GetEncoderAction    | GetEncoderRequest      | EncoderAction                 | "encoder/get"                 |
+    | SetEncoderAction    | SetEncoderRequest      | RmkResult                     | "encoder/set"                 |
+    // Macro
+    | GetMacroInfo        | ()                     | MacroInfo                     | "macro/info"                  |
+    | GetMacro            | u8                     | MacroData                     | "macro/get"                   |
+    | SetMacro            | SetMacroRequest        | RmkResult                     | "macro/set"                   |
+    | ResetMacros         | ()                     | RmkResult                     | "macro/reset"                 |
+    // Combo
+    | GetCombo            | u8                     | ComboConfig                   | "combo/get"                   |
+    | SetCombo            | SetComboRequest        | RmkResult                     | "combo/set"                   |
+    | ResetCombos         | ()                     | RmkResult                     | "combo/reset"                 |
+    // Morse / Tap-Dance
+    | GetMorse            | u8                     | MorseConfig                   | "morse/get"                   |
+    | SetMorse            | SetMorseRequest        | RmkResult                     | "morse/set"                   |
+    | ResetMorse          | ()                     | RmkResult                     | "morse/reset"                 |
+    // Fork (Key Override)
+    | GetFork             | u8                     | ForkConfig                    | "fork/get"                    |
+    | SetFork             | SetForkRequest         | RmkResult                     | "fork/set"                    |
+    | ResetForks          | ()                     | RmkResult                     | "fork/reset"                  |
+    // Behavior
+    | GetBehaviorConfig   | ()                     | BehaviorConfig                | "behavior/get"                |
+    | SetBehaviorConfig   | BehaviorConfig         | RmkResult                     | "behavior/set"                |
+    // Connection
+    | GetConnectionInfo   | ()                     | ConnectionInfo                | "conn/info"                   |
+    | SetConnectionType   | ConnectionType         | RmkResult                     | "conn/set_type"               |
+    | SwitchBleProfile    | u8                     | RmkResult                     | "conn/switch_ble"             |
+    | ClearBleProfile     | u8                     | RmkResult                     | "conn/clear_ble"              |
+    // Status
+    | GetBatteryStatus    | ()                     | BatteryStatus                 | "status/battery"              |
+    | GetCurrentLayer     | ()                     | u8                            | "status/layer"                |
+    | GetMatrixState      | ()                     | MatrixState                   | "status/matrix"               |
+    | GetSplitStatus      | ()                     | SplitStatus                   | "status/split"                |
+}
 
 // ---------------------------------------------------------------------------
 // Topic declarations
 // ---------------------------------------------------------------------------
 
-topic!(LayerChangeTopic, LayerChangePayload, "event/layer");
-topic!(WpmUpdateTopic, WpmPayload, "event/wpm");
-topic!(BatteryStateTopic, BatteryStatus, "event/battery");
-topic!(BleStateChangeTopic, BleStatePayload, "event/ble_state");
-topic!(BleProfileChangeTopic, BleProfilePayload, "event/ble_profile");
-topic!(ConnectionChangeTopic, ConnectionPayload, "event/connection");
-topic!(SleepStateTopic, SleepPayload, "event/sleep");
-topic!(LedIndicatorTopic, LedPayload, "event/led");
+topics! {
+    list = TOPICS_OUT_LIST;
+    direction = TopicDirection::ToClient;
+    | TopicTy               | MessageTy              | Path                  |
+    | -------               | ---------              | ----                  |
+    | LayerChangeTopic      | LayerChangePayload     | "event/layer"         |
+    | WpmUpdateTopic        | WpmPayload             | "event/wpm"           |
+    | BatteryStateTopic     | BatteryStatus          | "event/battery"       |
+    | BleStateChangeTopic   | BleStatePayload        | "event/ble_state"     |
+    | BleProfileChangeTopic | BleProfilePayload      | "event/ble_profile"   |
+    | ConnectionChangeTopic | ConnectionPayload      | "event/connection"    |
+    | SleepStateTopic       | SleepPayload           | "event/sleep"         |
+    | LedIndicatorTopic     | LedPayload             | "event/led"           |
+}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -467,6 +446,8 @@ topic!(LedIndicatorTopic, LedPayload, "event/led");
 mod tests {
     extern crate alloc;
 
+    use super::ENDPOINT_LIST;
+    use super::TOPICS_OUT_LIST;
     use postcard_rpc::{Endpoint, Key, Topic};
 
     use super::*;
@@ -854,17 +835,7 @@ mod tests {
         });
     }
 
-    // -- Key collision tests --
-
-    #[test]
-    fn no_endpoint_key_collisions() {
-        assert_unique_keys(all_endpoint_keys(), "endpoint REQ_KEY");
-    }
-
-    #[test]
-    fn no_topic_key_collisions() {
-        assert_unique_keys(all_topic_keys(), "topic TOPIC_KEY");
-    }
+    // Intra-group collisions are caught at compile time by endpoints!/topics! macros.
 
     #[test]
     fn no_cross_endpoint_topic_key_collisions() {
@@ -872,5 +843,15 @@ mod tests {
         all_keys.extend_from_slice(all_endpoint_keys());
         all_keys.extend_from_slice(all_topic_keys());
         assert_unique_keys(&all_keys, "cross endpoint/topic");
+    }
+
+    #[test]
+    fn endpoint_list_contains_all_declared() {
+        assert!(ENDPOINT_LIST.endpoints.len() >= all_endpoint_keys().len());
+    }
+
+    #[test]
+    fn topic_list_contains_all_declared() {
+        assert!(TOPICS_OUT_LIST.topics.len() >= all_topic_keys().len());
     }
 }
