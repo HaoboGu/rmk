@@ -1,8 +1,8 @@
 import * as path from 'node:path'
-import { defineConfig } from 'rspress/config'
-import sitemap from "rspress-plugin-sitemap"
+import { defineConfig } from '@rspress/core'
+import {pluginSitemap } from "@rspress/plugin-sitemap"
 
-import versions from './versions.json' assert { type: 'json' }
+import versions from './versions.json' with { type: 'json' }
 
 export default defineConfig({
   root: path.join(__dirname, 'docs'),
@@ -14,8 +14,8 @@ export default defineConfig({
   },
   outDir: 'dist',
   plugins: [
-    sitemap({
-      domain: "https://rmk.rs"
+    pluginSitemap({
+      siteUrl: "https://rmk.rs"
     }),
   ],
   multiVersion: {
