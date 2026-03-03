@@ -20,6 +20,30 @@ use embassy_sync::pubsub::{ImmediatePublisher, Publisher, Subscriber};
 use embassy_sync::{channel, watch};
 
 mod action;
+/// Generates `Deref`, `From<Event> for Payload`, and `From<Payload> for Event`
+/// for a newtype event struct wrapping a payload.
+macro_rules! impl_payload_wrapper {
+    ($event:ty, $payload:ty) => {
+        impl core::ops::Deref for $event {
+            type Target = $payload;
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl From<$event> for $payload {
+            fn from(event: $event) -> Self {
+                event.0
+            }
+        }
+
+        impl From<$payload> for $event {
+            fn from(payload: $payload) -> Self {
+                Self(payload)
+            }
+        }
+    };
+}
 mod battery;
 mod connection;
 mod input;

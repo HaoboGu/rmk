@@ -4,6 +4,7 @@ use embassy_futures::join::join;
 use embassy_futures::select::{Either, select};
 use embassy_sync::pubsub::Subscriber;
 use embassy_time::{Duration, Instant, Timer, with_timeout};
+use rmk_types::event::BatteryStatus;
 use trouble_host::prelude::*;
 
 use super::ble_server::Server;
@@ -52,7 +53,7 @@ impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
         let first_report = async {
             loop {
                 let event = self.sub.next_message_pure().await;
-                if let Some(level) = event.level() {
+                if let BatteryStatus::Available { level: Some(level), .. } = event.0 {
                     if let Err(e) = self.battery_level.notify(self.conn, &level).await {
                         error!("Failed to notify battery level: {:?}", e);
                     } else {
@@ -72,7 +73,7 @@ impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
 
             // Try to receive the latest message
             let state = self.sub.try_next_message_pure().unwrap_or(battery_state);
-            if let Some(level) = state.level() {
+            if let BatteryStatus::Available { level: Some(level), .. } = state.0 {
                 if let Err(e) = self.battery_level.notify(self.conn, &level).await {
                     error!("Failed to notify battery level: {:?}", e);
                 }

@@ -173,7 +173,7 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// struct BatteryMonitor { /* ... */ }
 ///
 /// impl BatteryMonitor {
-///     async fn on_battery_state_event(&mut self, event: BatteryStatusEvent) {
+///     async fn on_battery_status_event(&mut self, event: BatteryStatusEvent) {
 ///         // Handle event
 ///     }
 ///

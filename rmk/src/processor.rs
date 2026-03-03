@@ -75,7 +75,7 @@ pub trait Processor: Runnable {
 /// }
 ///
 /// impl BatteryLedProcessor {
-///     async fn on_battery_state_event(&mut self, event: BatteryStatusEvent) {
+///     async fn on_battery_status_event(&mut self, event: BatteryStatusEvent) {
 ///         // Update internal state based on battery event
 ///     }
 ///
