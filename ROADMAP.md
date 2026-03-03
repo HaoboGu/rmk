@@ -46,10 +46,10 @@
 | h | Define `KeyPosition { layer: u8, row: u8, col: u8 }` | [x] | |
 | i | Define `BulkRequest { layer: u8, start_row: u8, start_col: u8, count: u16 }` with `MAX_BULK = 32` | [x] | |
 | j | Define `StorageResetMode` enum (`Full`, `LayoutOnly`) | [x] | |
-| k | Define Topic payload types: `LayerChangePayload`, `WpmPayload`, `BatteryPayload`, `BleStatePayload`, `BleProfilePayload`, `ConnectionPayload`, `SleepPayload`, `LedPayload` | [x] | See final_plan.md Section 8 |
+| k | Define Topic payload types: `LayerChangePayload`, `WpmPayload`, `BatteryStatus`, `BleStatePayload`, `BleProfilePayload`, `ConnectionPayload`, `SleepPayload`, `LedPayload` | [x] | See final_plan.md Section 8 |
 | l | Define connection/status types: `ConnectionInfo`, `ConnectionType`, `BatteryStatus`, `MatrixState`, `SplitStatus` | [x] | |
 | m | Define macro types: `MacroInfo`, `MacroData` | [x] | |
-| n | Define combo/morse/fork config types: `ComboConfig`, `MorseConfig`, `ForkConfig` (or reuse existing types from rmk-types) | [x] | Protocol-facing types defined; firmware types in rmk crate left as-is |
+| n | Define combo/morse/fork config types: `ComboConfig`, `MorseConfig`, `ForkConfig` (or reuse existing types from rmk-types) | [x] | Protocol-facing types defined; `ForkConfig` uses full-fidelity state bits (modifiers + LED + mouse), no downgrade |
 | o | Define protocol-facing `BehaviorConfig` (or directly reuse existing `BehaviorConfig` from `rmk` crate) | [x] | Protocol-facing version with combo_timeout_ms, oneshot_timeout_ms, tap_interval_ms, tap_tolerance |
 
 ### Step 1.4 — Define `endpoint!()` and `topic!()` declarations
@@ -212,7 +212,7 @@
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Implement `GetKeyAction` handler: extract `(layer, row, col)` from `KeyPosition`, call `keymap.borrow().get_action_at()`, return `KeyAction` | [ ] | |
-| b | Implement `SetKeyAction` handler: receive `(KeyPosition, KeyAction)`, call `keymap.borrow_mut().set_action_at()` to update in-memory state | [ ] | |
+| b | Implement `SetKeyAction` handler: receive `SetKeyRequest`, call `keymap.borrow_mut().set_action_at()` to update in-memory state | [ ] | |
 | c | In `SetKeyAction` handler, send `FLASH_CHANNEL.send(FlashOperationMessage::HostMessage(KeymapData::KeymapKey(...)))` for flash persistence | [ ] | Follow VialService pattern |
 | d | Add parameter validation: return `RmkError::InvalidParameter` when layer/row/col is out of bounds | [ ] | |
 | e | Test: read key action at (0,0,0), modify it, read again to verify consistency | [ ] | |
@@ -222,7 +222,7 @@
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Implement `GetKeymapBulk` handler: batch-read KeyActions per `BulkRequest`, fill `heapless::Vec<KeyAction, MAX_BULK>` | [ ] | Row-major order |
-| b | Implement `SetKeymapBulk` handler: batch-set KeyActions and send individual `FlashOperationMessage` per key | [ ] | |
+| b | Implement `SetKeymapBulk` handler: receive `SetKeymapBulkRequest`, batch-set KeyActions and send individual `FlashOperationMessage` per key | [ ] | |
 | c | Implement `GetLayerCount` handler: return `NUM_LAYER as u8` | [ ] | |
 | d | Implement `GetDefaultLayer` handler: call `keymap.borrow().get_default_layer()` | [ ] | |
 | e | Implement `SetDefaultLayer` handler: call `keymap.borrow_mut().set_default_layer()` + send `FlashOperationMessage::DefaultLayer` | [ ] | |
@@ -299,8 +299,8 @@
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Implement `GetEncoderAction` handler: receive `(encoder_id: u8, layer: u8)`, read `EncoderAction` from `keymap.borrow().encoders` | [ ] | |
-| b | Implement `SetEncoderAction` handler: receive `(encoder_id, layer, EncoderAction)`, update in-memory + send `FlashOperationMessage` | [ ] | |
+| a | Implement `GetEncoderAction` handler: receive `GetEncoderRequest`, read `EncoderAction` from `keymap.borrow().encoders` | [ ] | |
+| b | Implement `SetEncoderAction` handler: receive `SetEncoderRequest`, update in-memory + send `FlashOperationMessage` | [ ] | |
 | c | Add parameter validation: return `RmkError::InvalidParameter` when encoder_id or layer is out of bounds | [ ] | |
 | d | Test: read/modify encoder action, verify persistence | [ ] | |
 
@@ -310,7 +310,7 @@
 |---|--------|--------|-------|
 | a | Implement `GetMacroInfo` handler: return `MacroInfo { max_macros, macro_space_size }` | [ ] | |
 | b | Implement `GetMacro` handler: receive macro index, read `MacroData` from `BehaviorConfig.macros` | [ ] | |
-| c | Implement `SetMacro` handler: receive `(index, MacroData)`, update in-memory + persist | [ ] | |
+| c | Implement `SetMacro` handler: receive `SetMacroRequest`, update in-memory + persist | [ ] | |
 | d | Implement `ResetMacros` handler: clear all macro definitions + send flash reset message | [ ] | |
 | e | Test: complete macro CRUD flow | [ ] | |
 
@@ -319,7 +319,7 @@
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Implement `GetCombo` handler: receive combo index, read `ComboConfig` from `BehaviorConfig.combos` | [ ] | |
-| b | Implement `SetCombo` handler: receive `(index, ComboConfig)`, update in-memory + persist | [ ] | |
+| b | Implement `SetCombo` handler: receive `SetComboRequest`, update in-memory + persist | [ ] | |
 | c | Implement `ResetCombos` handler: clear all combos + flash reset | [ ] | |
 | d | Test: combo config read/write and reset | [ ] | |
 
@@ -328,7 +328,7 @@
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Implement `GetMorse` handler: receive morse index, read `MorseConfig` | [ ] | |
-| b | Implement `SetMorse` handler: update morse config + persist | [ ] | |
+| b | Implement `SetMorse` handler: receive `SetMorseRequest`, update morse config + persist | [ ] | |
 | c | Implement `ResetMorse` handler: reset all morse configs | [ ] | |
 | d | Test: complete morse config CRUD | [ ] | |
 
@@ -337,7 +337,7 @@
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Implement `GetFork` handler: receive fork index, read `ForkConfig` | [ ] | |
-| b | Implement `SetFork` handler: update fork config + persist | [ ] | |
+| b | Implement `SetFork` handler: receive `SetForkRequest`, update fork config + persist | [ ] | |
 | c | Implement `ResetForks` handler: reset all fork configs | [ ] | |
 | d | Test: complete fork config CRUD | [ ] | |
 
