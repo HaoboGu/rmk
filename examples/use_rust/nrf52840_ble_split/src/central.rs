@@ -246,7 +246,7 @@ async fn main(spawner: Spawner) {
         async fn on_peripheral_battery_event(&mut self, event: PeripheralBatteryEvent) {
             info!("Peripheral {} battery status: {:?}", event.id, event);
         }
-        async fn on_battery_state_event(&mut self, event: BatteryStatusEvent) {
+        async fn on_battery_status_event(&mut self, event: BatteryStatusEvent) {
             info!("Central battery status: {:?}", event);
         }
         async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {

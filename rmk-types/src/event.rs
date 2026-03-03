@@ -29,6 +29,17 @@ pub enum ChargeState {
     Unknown,
 }
 
+impl From<bool> for ChargeState {
+    /// `true` = Charging, `false` = Discharging.
+    fn from(charging: bool) -> Self {
+        if charging {
+            ChargeState::Charging
+        } else {
+            ChargeState::Discharging
+        }
+    }
+}
+
 /// Battery status used for both status queries and event notifications.
 #[derive(
     Debug,
@@ -48,6 +59,12 @@ pub enum BatteryStatus {
         charge_state: ChargeState,
         level: Option<u8>,
     },
+}
+
+impl BatteryStatus {
+    pub fn is_available(&self) -> bool {
+        matches!(self, BatteryStatus::Available { .. })
+    }
 }
 
 /// Payload for the layer change event/topic.
