@@ -1,9 +1,11 @@
 //! Shared connection type definitions used across RMK crates.
 
+use postcard::experimental::max_size::MaxSize;
+use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 /// Connection type for the keyboard.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ConnectionType {
     Usb,

@@ -28,9 +28,9 @@ pub(crate) struct BleBatteryServer<'stack, 'server, 'conn, P: PacketPool> {
         'static,
         crate::RawMutex,
         BatteryStatusEvent,
-        { crate::BATTERY_STATE_EVENT_CHANNEL_SIZE },
-        { crate::BATTERY_STATE_EVENT_SUB_SIZE },
-        { crate::BATTERY_STATE_EVENT_PUB_SIZE },
+        { crate::BATTERY_STATUS_EVENT_CHANNEL_SIZE },
+        { crate::BATTERY_STATUS_EVENT_SUB_SIZE },
+        { crate::BATTERY_STATUS_EVENT_PUB_SIZE },
     >,
 }
 
