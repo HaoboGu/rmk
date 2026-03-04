@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 use crate::action::{EncoderAction, KeyAction, MorseProfile};
 use crate::connection::ConnectionType;
 use crate::event::{
-    BatteryStatus, BleProfilePayload, BleStatePayload, ConnectionPayload, LayerChangePayload,
-    LedPayload, SleepPayload, WpmPayload,
+    BatteryStatus, BleStatus, ConnectionPayload, LayerChangePayload, LedPayload, SleepPayload,
+    WpmPayload,
 };
 use crate::fork::ForkStateBits;
 use crate::modifier::ModifierCombination;
@@ -309,7 +309,7 @@ pub struct SetForkRequest {
 // ---------------------------------------------------------------------------
 
 // All topic payload types (LayerChangePayload, WpmPayload, BatteryStatus,
-// BleStatePayload, BleProfilePayload, ConnectionPayload, SleepPayload,
+// BleStatus, ConnectionPayload, SleepPayload,
 // LedPayload) are re-exported from `crate::event` at the top of this file.
 
 // ---------------------------------------------------------------------------
@@ -385,8 +385,7 @@ topics! {
     | LayerChangeTopic      | LayerChangePayload     | "event/layer"         |
     | WpmUpdateTopic        | WpmPayload             | "event/wpm"           |
     | BatteryStatusTopic     | BatteryStatus          | "event/battery"       |
-    | BleStateChangeTopic   | BleStatePayload        | "event/ble_state"     |
-    | BleProfileChangeTopic | BleProfilePayload      | "event/ble_profile"   |
+    | BleStatusChangeTopic  | BleStatus              | "event/ble_status"    |
     | ConnectionChangeTopic | ConnectionPayload      | "event/connection"    |
     | SleepStateTopic       | SleepPayload           | "event/sleep"         |
     | LedIndicatorTopic     | LedPayload             | "event/led"           |
@@ -497,8 +496,7 @@ mod tests {
             LayerChangeTopic::TOPIC_KEY,
             WpmUpdateTopic::TOPIC_KEY,
             BatteryStatusTopic::TOPIC_KEY,
-            BleStateChangeTopic::TOPIC_KEY,
-            BleProfileChangeTopic::TOPIC_KEY,
+            BleStatusChangeTopic::TOPIC_KEY,
             ConnectionChangeTopic::TOPIC_KEY,
             SleepStateTopic::TOPIC_KEY,
             LedIndicatorTopic::TOPIC_KEY,
@@ -746,12 +744,18 @@ mod tests {
             charge_state: ChargeState::Discharging,
             level: Some(100),
         });
-        round_trip(&BleStatePayload {
+        round_trip(&BleStatus {
             profile: 0,
-            connected: true,
-            advertising: false,
+            state: crate::event::BleState::Advertising,
         });
-        round_trip(&BleProfilePayload { profile: 0 });
+        round_trip(&BleStatus {
+            profile: 2,
+            state: crate::event::BleState::Connected,
+        });
+        round_trip(&BleStatus {
+            profile: 0,
+            state: crate::event::BleState::Inactive,
+        });
         round_trip(&ConnectionPayload {
             connection_type: ConnectionType::Usb,
         });

@@ -1,6 +1,8 @@
 use core::cell::Cell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
+use embassy_sync::blocking_mutex::Mutex;
+
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join;
@@ -84,7 +86,6 @@ pub(crate) fn set_ble_state(state: BleState) {
     let profile = get_current_profile();
     let status = BleStatus { profile, state };
     set_ble_status(status);
-    publish_event(BleStatusChangeEvent(status));
 }
 
 /// Global state of sleep management
@@ -268,7 +269,6 @@ pub(crate) async fn run_ble<
     join(background_task, async {
         loop {
             // Advertising state
-
             set_ble_state(BleState::Advertising);
             let adv_fut = advertise(rmk_config.device_config.product_name, &mut peripheral, &server);
             // USB + BLE dual mode
@@ -433,6 +433,7 @@ pub(crate) async fn run_ble<
                 Err(BleHostError::BleHost(Error::Timeout)) => {
                     warn!("Advertising timeout, sleep and wait for any key");
 
+                    set_ble_state(BleState::Inactive);
                     // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
