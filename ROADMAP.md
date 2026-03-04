@@ -46,8 +46,8 @@
 | h | Define `KeyPosition { layer: u8, row: u8, col: u8 }` | [x] | |
 | i | Define `BulkRequest { layer: u8, start_row: u8, start_col: u8, count: u16 }` with `MAX_BULK = 32` | [x] | |
 | j | Define `StorageResetMode` enum (`Full`, `LayoutOnly`) | [x] | |
-| k | Define Topic payload types: `LayerChangePayload`, `WpmPayload`, `BatteryStateEvent` (reuse internal enum), `BleStatePayload`, `BleProfilePayload`, `ConnectionPayload`, `SleepPayload`, `LedPayload` | [x] | See final_plan.md Section 8. `BatteryStateEvent` enum matches internal event for full fidelity |
-| l | Define connection/status types: `ConnectionInfo`, `ConnectionType`, `BatteryStateEvent`, `MatrixState`, `SplitStatus` | [x] | `BatteryStateEvent` reuses internal enum: `NotAvailable`, `Normal(u8)`, `Charging`, `Charged` |
+| k | Define Topic payload types: `LayerChangePayload`, `WpmPayload`, `BatteryStatusEvent` (reuse internal enum), `BleStatus` (struct with profile + state), `ConnectionPayload`, `SleepPayload`, `LedPayload` | [x] | See final_plan.md Section 8. `BatteryStatusEvent` enum matches internal event for full fidelity |
+| l | Define connection/status types: `ConnectionInfo`, `ConnectionType`, `BatteryStatusEvent`, `MatrixState`, `SplitStatus` | [x] | `BatteryStatusEvent` reuses internal enum: `NotAvailable`, `Normal(u8)`, `Charging`, `Charged` |
 | m | Define macro types: `MacroInfo`, `MacroData` | [x] | |
 | n | Define combo/morse/fork config types: `ComboConfig`, `MorseConfig`, `ForkConfig` (or reuse existing types from rmk-types) | [x] | Protocol-facing types defined; `ForkConfig` uses full-fidelity state bits (modifiers + LED + mouse), no downgrade |
 | o | Define protocol-facing `BehaviorConfig` (or directly reuse existing `BehaviorConfig` from `rmk` crate) | [x] | Protocol-facing version with combo_timeout_ms, oneshot_timeout_ms, tap_interval_ms, tap_tolerance |
@@ -66,7 +66,7 @@
 | h | Define Behavior endpoints: `GetBehaviorConfig("behavior/get")`, `SetBehaviorConfig("behavior/set")` | [x] | 2 endpoints |
 | i | Define Connection endpoints: `GetConnectionInfo("conn/info")`, `SetConnectionType("conn/set_type")`, `SwitchBleProfile("conn/switch_ble")`, `ClearBleProfile("conn/clear_ble")` | [x] | 4 endpoints |
 | j | Define Status endpoints: `GetBatteryStatus("status/battery")`, `GetCurrentLayer("status/layer")`, `GetMatrixState("status/matrix")`, `GetSplitStatus("status/split")` | [x] | 4 endpoints |
-| k | Define all 8 topic declarations: `LayerChangeTopic`, `WpmUpdateTopic`, `BatteryStateTopic`, `BleStateChangeTopic`, `BleProfileChangeTopic`, `ConnectionChangeTopic`, `SleepStateTopic`, `LedIndicatorTopic` | [x] | |
+| k | Define all 7 topic declarations: `LayerChangeTopic`, `WpmUpdateTopic`, `BatteryStatusTopic`, `BleStatusChangeTopic`, `ConnectionChangeTopic`, `SleepStateTopic`, `LedIndicatorTopic` | [x] | `BleProfileChangeTopic` merged into `BleStatusChangeTopic` via `BleState::ProfileChanged` |
 
 ### Step 1.5 — Module wiring
 
@@ -85,6 +85,23 @@
 | c | Write key hash collision detection test: collect all endpoint/topic key hashes, assert no duplicates | [x] | Intra-group collisions detected at compile time by `endpoints!`/`topics!` macros; 1 cross-group collision test remains |
 | d | Test edge cases: empty `heapless::Vec`, max-value fields, all-zero `DeviceCapabilities` | [x] | |
 | e | Run `cargo test -p rmk-types` to confirm all tests pass | [x] | 28/28 tests pass (2 intra-group collision tests removed — now compile-time; 2 list-count tests added) |
+
+### Step 1.7 — Consolidate shared types and add event↔payload conversions
+
+Move `ConnectionType` to a single shared location in `rmk-types`, remove duplicates from `rmk` event and state modules, and add `From` conversions between internal events and protocol topic payload types. Events keep their current structure (Option 1: wrappers in `rmk` using `rmk-types` types as fields).
+
+| # | Action | Status | Notes |
+|---|--------|--------|-------|
+| a | Create `rmk-types/src/connection.rs` with shared `ConnectionType` enum (Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Schema, defmt::Format, From<u8>, From<ConnectionType> for u8) | [ ] | Single definition replacing 3 duplicates |
+| b | Add `pub mod connection;` to `rmk-types/src/lib.rs` | [ ] | |
+| c | In `rmk-types/src/protocol/rmk.rs`, remove local `ConnectionType` definition and use `crate::connection::ConnectionType` | [ ] | Protocol types use the shared definition |
+| d | In `rmk/src/event/connection.rs`, remove local `ConnectionType` enum and From impls, add `pub use rmk_types::connection::ConnectionType;` | [ ] | Event module re-exports shared type |
+| e | In `rmk/src/state.rs`, remove local `ConnectionType` enum and From impls, use `rmk_types::connection::ConnectionType` | [ ] | |
+| f | Update `rmk/src/ble/mod.rs` import from `crate::state::ConnectionType` to `rmk_types::connection::ConnectionType` | [ ] | |
+| g | Add `From` conversions in `rmk/src/event/state.rs`: `LayerChangeEvent` ↔ `LayerChangePayload`, `WpmUpdateEvent` ↔ `WpmPayload`, `SleepStateEvent` ↔ `SleepPayload`, `LedIndicatorEvent` ↔ `LedPayload` | [ ] | Bidirectional |
+| h | Add `From` conversions in `rmk/src/event/connection.rs`: `ConnectionChangeEvent` ↔ `ConnectionPayload` | [ ] | Bidirectional; BleProfileChangeEvent removed (merged into BleStatusChangeEvent) |
+| i | Add `From<BatteryStatusEvent> for BatteryStatus` in `rmk/src/event/battery.rs` | [ ] | One-way (lossy: enum → struct) |
+| j | Run `cargo test -p rmk-types` and `cargo test -p rmk --no-default-features --features=split,vial,storage,async_matrix,_ble` | [ ] | |
 
 ---
 
@@ -364,7 +381,7 @@
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Implement `GetBatteryStatus` handler: read battery state via `BatteryStateEvent` (enum: `NotAvailable`, `Normal(u8)`, `Charging`, `Charged`) | [ ] | `#[cfg(feature = "_ble")]` |
+| a | Implement `GetBatteryStatus` handler: read battery state via `BatteryStatusEvent` (enum: `NotAvailable`, `Normal(u8)`, `Charging`, `Charged`) | [ ] | `#[cfg(feature = "_ble")]` |
 | b | Implement `GetCurrentLayer` handler: get currently active layer from `keymap.borrow()` | [ ] | |
 | c | Implement `GetMatrixState` handler: read matrix key states, return `MatrixState` | [ ] | |
 | d | Implement `GetSplitStatus` handler: return split peripheral connection status | [ ] | `#[cfg(feature = "split")]` |
@@ -384,9 +401,9 @@
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Create `rmk/src/host/protocol/topics.rs` | [ ] | |
-| b | Implement conversion functions for each event: internal event → Topic payload struct (e.g., `LayerChangeEvent` → `LayerChangePayload`, `BatteryStateEvent` → `BatteryStateEvent` (direct reuse)) | [ ] | |
+| b | Implement conversion functions for each event: internal event → Topic payload struct (e.g., `LayerChangeEvent` → `LayerChangePayload`, `BatteryStatusEvent` → `BatteryStatusEvent` (direct reuse)) | [ ] | |
 | c | Implement `encode_topic_frame()` function: serialize Topic payload into wire frame (header with topic key + seq=0 + postcard payload). Framing (COBS vs raw) is handled by `WireTx` | [ ] | |
-| d | Gate BLE-related topics (`BatteryState`, `BleStateChange`, `BleProfileChange`) with `#[cfg]` | [ ] | |
+| d | Gate BLE-related topics (`BatteryStatus`, `BleStatusChange`) with `#[cfg]` | [ ] | |
 
 ### Step 7.2 — Integrate Topics into ProtocolService
 

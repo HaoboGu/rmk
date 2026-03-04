@@ -2,7 +2,7 @@
 
 use rmk_macro::event;
 
-use super::battery::BatteryStateEvent;
+use super::battery::BatteryStatusEvent;
 
 /// Peripheral connected state changed event
 #[event(channel_size = crate::PERIPHERAL_CONNECTED_EVENT_CHANNEL_SIZE, pubs = crate::PERIPHERAL_CONNECTED_EVENT_PUB_SIZE, subs = crate::PERIPHERAL_CONNECTED_EVENT_SUB_SIZE)]
@@ -27,7 +27,7 @@ pub struct CentralConnectedEvent {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PeripheralBatteryEvent {
     pub id: usize,
-    pub state: BatteryStateEvent,
+    pub state: BatteryStatusEvent,
 }
 
 /// Clear BLE peer information event

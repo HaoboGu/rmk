@@ -25,6 +25,8 @@
 #![no_std]
 
 pub mod action;
+pub mod connection;
+pub mod event;
 pub mod fork;
 pub mod keycode;
 pub mod led_indicator;

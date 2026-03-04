@@ -19,7 +19,7 @@ The current Vial/VIA implementation (`rmk/src/host/via/`) has fundamental struct
 
 **1.3 Incomplete feature coverage** — Fork/KeyOverride handlers are stubs, lighting/RGB returns "not supported", battery/split status/BLE profile/WPM/sleep state have no host-facing channel. Macro count is hardcoded to 32, `VIAL_COMBO_MAX_LENGTH` fixed to 4 (Vial limitation vs RMK's configurable `COMBO_MAX_LENGTH`).
 
-**1.4 No notifications** — Pure request/response. The host cannot receive layer changes, WPM updates, battery state, or BLE connection events. RMK already has a rich internal event bus (`LayerChangeEvent`, `WpmUpdateEvent`, `BatteryStateEvent`, `BleStateChangeEvent`, `SleepStateEvent`, etc. in `rmk/src/event/`) with no way to expose it to the host.
+**1.4 No notifications** — Pure request/response. The host cannot receive layer changes, WPM updates, battery state, or BLE connection events. RMK already has a rich internal event bus (`LayerChangeEvent`, `WpmUpdateEvent`, `BatteryStatusEvent`, `BleStatusChangeEvent`, `SleepStateEvent`, etc. in `rmk/src/event/`) with no way to expose it to the host.
 
 **1.5 Mixed endianness** — Via commands use big-endian, Vial sub-commands use little-endian, both in the same file (`byteorder::{BigEndian, LittleEndian}` in `rmk/src/host/via/mod.rs`).
 
@@ -424,7 +424,7 @@ For endpoints with multi-field request payloads, v1 uses named request structs (
 
 | Endpoint | Request | Response | Path | Permission |
 |----------|---------|----------|------|------------|
-| GetBatteryStatus | `()` | `BatteryStateEvent` | `status/battery` | ReadOnly |
+| GetBatteryStatus | `()` | `BatteryStatusEvent` | `status/battery` | ReadOnly |
 | GetCurrentLayer | `()` | `u8` | `status/layer` | ReadOnly |
 | GetMatrixState | `()` | `MatrixState` | `status/matrix` | ReadOnly |
 | GetSplitStatus | `()` | `SplitStatus` | `status/split` | ReadOnly |
@@ -439,9 +439,8 @@ Topics are fire-and-forget device-to-host notifications. Each maps directly to a
 |-------|---------|------|----------------|
 | LayerChange | `LayerChangePayload { layer: u8 }` | `event/layer` | `LayerChangeEvent` |
 | WpmUpdate | `WpmPayload { wpm: u16 }` | `event/wpm` | `WpmUpdateEvent` |
-| BatteryState | `BatteryStateEvent` | `event/battery` | `BatteryStateEvent` |
-| BleStateChange | `BleStatePayload { ... }` | `event/ble_state` | `BleStateChangeEvent` |
-| BleProfileChange | `BleProfilePayload { profile: u8 }` | `event/ble_profile` | `BleProfileChangeEvent` |
+| BatteryStatus | `BatteryStatusEvent` | `event/battery` | `BatteryStatusEvent` |
+| BleStatusChange | `BleStatus { profile: u8, state: BleState }` | `event/ble_status` | `BleStatusChangeEvent` |
 | ConnectionChange | `ConnectionPayload { ... }` | `event/connection` | `ConnectionChangeEvent` |
 | SleepState | `SleepPayload { sleeping: bool }` | `event/sleep` | `SleepStateEvent` |
 | LedIndicator | `LedPayload { indicator: LedIndicator }` | `event/led` | `LedIndicatorEvent` |
@@ -456,7 +455,7 @@ Event subscribers must be created once at `ProtocolService` initialization and h
 // In ProtocolService, subscribers created once in new()
 struct ProtocolService<...> {
     layer_sub: LayerChangeEventSubscriber,
-    battery_sub: BatteryStateEventSubscriber,
+    battery_sub: BatteryStatusEventSubscriber,
     // ...
 }
 
@@ -474,7 +473,7 @@ loop {
             self.transport.write(&frame).await;
         }
         event = self.battery_sub.next_event() => {
-            let frame = topic_frame::<BatteryStateTopic>(&event.into());
+            let frame = topic_frame::<BatteryStatusTopic>(&event.into());
             self.transport.write(&frame).await;
         }
         // ... other event subscribers
@@ -710,7 +709,7 @@ Replaces `VialService` with the same structural pattern:
 // Created once in ProtocolService::new()
 let layer_sub = LayerChangeEvent::subscriber();
 let wpm_sub = WpmUpdateEvent::subscriber();
-let battery_sub = BatteryStateEvent::subscriber();
+let battery_sub = BatteryStatusEvent::subscriber();
 // ... etc
 ```
 In the main `run()` loop, `embassy_futures::select` multiplexes transport reads and event subscribers. When an event fires, the service serializes a Topic frame and writes it to the transport. This single-writer architecture ensures responses and topic frames never race on the same transport.
@@ -766,6 +765,7 @@ The `buffer_size` is configurable to allow users to adjust throughput vs RAM tra
 | 1.4 | `rmk-types/src/protocol/rmk.rs` | Define all `endpoints!()` and `topics!()` declarations (see Appendix A) |
 | 1.5 | `rmk-types/src/protocol/mod.rs` | Add `pub mod rmk;` |
 | 1.6 | Unit tests | Serialization/deserialization round-trip tests for all ICD types; key hash collision detection across all endpoints |
+| 1.7 | `rmk-types/src/connection.rs`, `rmk-types/src/protocol/rmk.rs`, `rmk/src/event/connection.rs`, `rmk/src/event/state.rs`, `rmk/src/event/battery.rs`, `rmk/src/state.rs`, `rmk/src/ble/mod.rs` | Consolidate shared types and add event↔payload conversions: (a) Move `ConnectionType` to `rmk-types/src/connection.rs` as the single definition, remove duplicates from `rmk/src/event/connection.rs` and `rmk/src/state.rs`, update imports in `rmk/src/ble/mod.rs`; (b) Add `From` conversions between internal events and protocol topic payload types (e.g. `LayerChangeEvent` ↔ `LayerChangePayload`, `ConnectionChangeEvent` ↔ `ConnectionPayload`, `BatteryStatusEvent` → `BatteryStatus`). Events keep their current structure — wrappers use `rmk-types` types as fields where applicable (already the case for `LedIndicator`, `ModifierCombination`) |
 
 ### Phase 2: Feature Gate and ProtocolService Skeleton
 
@@ -1135,7 +1135,7 @@ endpoints! {
     | SwitchBleProfile    | u8                     | RmkResult                     | "conn/switch_ble"             |
     | ClearBleProfile     | u8                     | RmkResult                     | "conn/clear_ble"              |
     // Status
-    | GetBatteryStatus    | ()                     | BatteryStateEvent             | "status/battery"              |
+    | GetBatteryStatus    | ()                     | BatteryStatusEvent             | "status/battery"              |
     | GetCurrentLayer     | ()                     | u8                            | "status/layer"                |
     | GetMatrixState      | ()                     | MatrixState                   | "status/matrix"               |
     | GetSplitStatus      | ()                     | SplitStatus                   | "status/split"                |
@@ -1149,9 +1149,8 @@ topics! {
     | -------               | ---------              | ----                  |
     | LayerChangeTopic      | LayerChangePayload     | "event/layer"         |
     | WpmUpdateTopic        | WpmPayload             | "event/wpm"           |
-    | BatteryStateTopic     | BatteryStateEvent      | "event/battery"       |
-    | BleStateChangeTopic   | BleStatePayload        | "event/ble_state"     |
-    | BleProfileChangeTopic | BleProfilePayload      | "event/ble_profile"   |
+    | BatteryStatusTopic     | BatteryStatusEvent      | "event/battery"       |
+    | BleStatusChangeTopic  | BleStatus              | "event/ble_status"    |
     | ConnectionChangeTopic | ConnectionPayload      | "event/connection"    |
     | SleepStateTopic       | SleepPayload           | "event/sleep"         |
     | LedIndicatorTopic     | LedPayload             | "event/led"           |
