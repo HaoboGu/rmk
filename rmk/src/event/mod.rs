@@ -53,7 +53,7 @@ mod state;
 
 pub use battery::{BatteryAdcEvent, BatteryStatusEvent, ChargingStateEvent};
 #[cfg(feature = "_ble")]
-pub use connection::{BleProfileChangeEvent, BleStateChangeEvent};
+pub use connection::BleStatusChangeEvent;
 pub use connection::{ConnectionChangeEvent, ConnectionType};
 pub use input::{
     Axis, AxisEvent, AxisValType, KeyPos, KeyboardEvent, KeyboardEventPos, ModifierEvent, PointingEvent,

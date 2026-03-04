@@ -1,4 +1,7 @@
-use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use core::cell::Cell;
+use core::sync::atomic::{AtomicBool, Ordering};
+
+use embassy_sync::blocking_mutex::Mutex;
 
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
@@ -39,7 +42,7 @@ use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
-use crate::event::{BleStateChangeEvent, ConnectionChangeEvent, publish_event};
+use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, publish_event};
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
@@ -55,19 +58,23 @@ pub(crate) mod host_service;
 pub(crate) mod led;
 pub(crate) mod profile;
 
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum BleState {
-    // The BLE is advertising
-    Advertising,
-    // The BLE is connected
-    Connected,
-    // The BLE is not used, the keyboard is in USB mode or sleep mode
-    None,
-}
+pub use rmk_types::event::{BleState, BleStatus};
 
-/// The number of the active profile
-pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
+/// Global BLE status: tracks the active profile and current BLE state.
+pub static BLE_STATUS: Mutex<crate::RawMutex, Cell<BleStatus>> = Mutex::new(Cell::new(BleStatus {
+    profile: 0,
+    state: BleState::Inactive,
+}));
+
+/// Update the BLE state (preserving current profile) and publish an event.
+pub(crate) fn set_ble_state(state: BleState) {
+    let status = BLE_STATUS.lock(|c| {
+        let s = BleStatus { profile: c.get().profile, state };
+        c.set(s);
+        s
+    });
+    publish_event(BleStatusChangeEvent(status));
+}
 
 /// Global state of sleep management
 /// - `true`: Indicates central is sleeping
@@ -243,11 +250,7 @@ pub(crate) async fn run_ble<
     join(background_task, async {
         loop {
             // Advertising state
-
-            publish_event(BleStateChangeEvent::new(
-                ACTIVE_PROFILE.load(Ordering::Relaxed),
-                BleState::Advertising,
-            ));
+            set_ble_state(BleState::Advertising);
             let adv_fut = advertise(rmk_config.device_config.product_name, &mut peripheral, &server);
             // USB + BLE dual mode
             #[cfg(not(feature = "_no_usb"))]
@@ -269,7 +272,7 @@ pub(crate) async fn run_ble<
                             Either4::First(_) => {
                                 info!("USB enabled, run USB keyboard");
 
-                                publish_event(BleStateChangeEvent::new(0, BleState::None));
+                                set_ble_state(BleState::Inactive);
                                 // Re-send the consumed flag
                                 USB_ENABLED.signal(());
                                 let usb_fut = run_keyboard(
@@ -309,7 +312,7 @@ pub(crate) async fn run_ble<
                             Either4::Second(Err(BleHostError::BleHost(Error::Timeout))) => {
                                 warn!("Advertising timeout, sleep and wait for any key");
 
-                                publish_event(BleStateChangeEvent::new(0, BleState::None));
+                                set_ble_state(BleState::Inactive);
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
@@ -365,7 +368,7 @@ pub(crate) async fn run_ble<
                             Either3::First(Err(BleHostError::BleHost(Error::Timeout))) => {
                                 warn!("Advertising timeout, sleep and wait for any key");
 
-                                publish_event(BleStateChangeEvent::new(0, BleState::None));
+                                set_ble_state(BleState::Inactive);
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
@@ -411,6 +414,7 @@ pub(crate) async fn run_ble<
                 Err(BleHostError::BleHost(Error::Timeout)) => {
                     warn!("Advertising timeout, sleep and wait for any key");
 
+                    set_ble_state(BleState::Inactive);
                     // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
@@ -500,7 +504,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
             }
             GattConnectionEvent::PairingComplete { security_level, bond } => {
                 info!("[gatt] pairing complete: {:?}", security_level);
-                let profile = ACTIVE_PROFILE.load(Ordering::Acquire);
+                let profile = BLE_STATUS.lock(|c| c.get()).profile;
                 if let Some(bond_info) = bond {
                     let profile_info = ProfileInfo {
                         slot_num: profile,
@@ -683,8 +687,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
         // Publish the BLE connected event
 
         if connected && !published_connected_state {
-            let profile = ACTIVE_PROFILE.load(Ordering::Acquire);
-            publish_event(BleStateChangeEvent::new(profile, BleState::Connected));
+            set_ble_state(BleState::Connected);
             published_connected_state = true;
         }
     }
@@ -848,7 +851,7 @@ async fn run_ble_keyboard<
     // Load CCCD table from storage
     #[cfg(feature = "storage")]
     if let Ok(Some(bond_info)) = storage
-        .read_trouble_bond_info(ACTIVE_PROFILE.load(Ordering::SeqCst))
+        .read_trouble_bond_info(BLE_STATUS.lock(|c| c.get()).profile)
         .await
         && bond_info.info.identity.match_identity(&conn.raw().peer_identity())
     {
