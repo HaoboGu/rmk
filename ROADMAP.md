@@ -46,7 +46,7 @@
 | h | Define `KeyPosition { layer: u8, row: u8, col: u8 }` | [x] | |
 | i | Define `BulkRequest { layer: u8, start_row: u8, start_col: u8, count: u16 }` with `MAX_BULK = 32` | [x] | |
 | j | Define `StorageResetMode` enum (`Full`, `LayoutOnly`) | [x] | |
-| k | Define Topic payload types: `LayerChangePayload`, `WpmPayload`, `BatteryStatusEvent` (reuse internal enum), `BleStatePayload`, `BleProfilePayload`, `ConnectionPayload`, `SleepPayload`, `LedPayload` | [x] | See final_plan.md Section 8. `BatteryStatusEvent` enum matches internal event for full fidelity |
+| k | Define Topic payload types: `LayerChangePayload`, `WpmPayload`, `BatteryStatusEvent` (reuse internal enum), `BleStatus` (struct with profile + state), `ConnectionPayload`, `SleepPayload`, `LedPayload` | [x] | See final_plan.md Section 8. `BatteryStatusEvent` enum matches internal event for full fidelity |
 | l | Define connection/status types: `ConnectionInfo`, `ConnectionType`, `BatteryStatusEvent`, `MatrixState`, `SplitStatus` | [x] | `BatteryStatusEvent` reuses internal enum: `NotAvailable`, `Normal(u8)`, `Charging`, `Charged` |
 | m | Define macro types: `MacroInfo`, `MacroData` | [x] | |
 | n | Define combo/morse/fork config types: `ComboConfig`, `MorseConfig`, `ForkConfig` (or reuse existing types from rmk-types) | [x] | Protocol-facing types defined; `ForkConfig` uses full-fidelity state bits (modifiers + LED + mouse), no downgrade |
@@ -66,7 +66,7 @@
 | h | Define Behavior endpoints: `GetBehaviorConfig("behavior/get")`, `SetBehaviorConfig("behavior/set")` | [x] | 2 endpoints |
 | i | Define Connection endpoints: `GetConnectionInfo("conn/info")`, `SetConnectionType("conn/set_type")`, `SwitchBleProfile("conn/switch_ble")`, `ClearBleProfile("conn/clear_ble")` | [x] | 4 endpoints |
 | j | Define Status endpoints: `GetBatteryStatus("status/battery")`, `GetCurrentLayer("status/layer")`, `GetMatrixState("status/matrix")`, `GetSplitStatus("status/split")` | [x] | 4 endpoints |
-| k | Define all 8 topic declarations: `LayerChangeTopic`, `WpmUpdateTopic`, `BatteryStatusTopic`, `BleStateChangeTopic`, `BleProfileChangeTopic`, `ConnectionChangeTopic`, `SleepStateTopic`, `LedIndicatorTopic` | [x] | |
+| k | Define all 7 topic declarations: `LayerChangeTopic`, `WpmUpdateTopic`, `BatteryStatusTopic`, `BleStatusChangeTopic`, `ConnectionChangeTopic`, `SleepStateTopic`, `LedIndicatorTopic` | [x] | `BleProfileChangeTopic` merged into `BleStatusChangeTopic` via `BleState::ProfileChanged` |
 
 ### Step 1.5 — Module wiring
 
@@ -99,7 +99,7 @@ Move `ConnectionType` to a single shared location in `rmk-types`, remove duplica
 | e | In `rmk/src/state.rs`, remove local `ConnectionType` enum and From impls, use `rmk_types::connection::ConnectionType` | [ ] | |
 | f | Update `rmk/src/ble/mod.rs` import from `crate::state::ConnectionType` to `rmk_types::connection::ConnectionType` | [ ] | |
 | g | Add `From` conversions in `rmk/src/event/state.rs`: `LayerChangeEvent` ↔ `LayerChangePayload`, `WpmUpdateEvent` ↔ `WpmPayload`, `SleepStateEvent` ↔ `SleepPayload`, `LedIndicatorEvent` ↔ `LedPayload` | [ ] | Bidirectional |
-| h | Add `From` conversions in `rmk/src/event/connection.rs`: `ConnectionChangeEvent` ↔ `ConnectionPayload`, `BleProfileChangeEvent` ↔ `BleProfilePayload` | [ ] | Bidirectional |
+| h | Add `From` conversions in `rmk/src/event/connection.rs`: `ConnectionChangeEvent` ↔ `ConnectionPayload` | [ ] | Bidirectional; BleProfileChangeEvent removed (merged into BleStatusChangeEvent) |
 | i | Add `From<BatteryStatusEvent> for BatteryStatus` in `rmk/src/event/battery.rs` | [ ] | One-way (lossy: enum → struct) |
 | j | Run `cargo test -p rmk-types` and `cargo test -p rmk --no-default-features --features=split,vial,storage,async_matrix,_ble` | [ ] | |
 
@@ -403,7 +403,7 @@ Move `ConnectionType` to a single shared location in `rmk-types`, remove duplica
 | a | Create `rmk/src/host/protocol/topics.rs` | [ ] | |
 | b | Implement conversion functions for each event: internal event → Topic payload struct (e.g., `LayerChangeEvent` → `LayerChangePayload`, `BatteryStatusEvent` → `BatteryStatusEvent` (direct reuse)) | [ ] | |
 | c | Implement `encode_topic_frame()` function: serialize Topic payload into wire frame (header with topic key + seq=0 + postcard payload). Framing (COBS vs raw) is handled by `WireTx` | [ ] | |
-| d | Gate BLE-related topics (`BatteryStatus`, `BleStateChange`, `BleProfileChange`) with `#[cfg]` | [ ] | |
+| d | Gate BLE-related topics (`BatteryStatus`, `BleStatusChange`) with `#[cfg]` | [ ] | |
 
 ### Step 7.2 — Integrate Topics into ProtocolService
 

@@ -19,7 +19,7 @@ The current Vial/VIA implementation (`rmk/src/host/via/`) has fundamental struct
 
 **1.3 Incomplete feature coverage** — Fork/KeyOverride handlers are stubs, lighting/RGB returns "not supported", battery/split status/BLE profile/WPM/sleep state have no host-facing channel. Macro count is hardcoded to 32, `VIAL_COMBO_MAX_LENGTH` fixed to 4 (Vial limitation vs RMK's configurable `COMBO_MAX_LENGTH`).
 
-**1.4 No notifications** — Pure request/response. The host cannot receive layer changes, WPM updates, battery state, or BLE connection events. RMK already has a rich internal event bus (`LayerChangeEvent`, `WpmUpdateEvent`, `BatteryStatusEvent`, `BleStateChangeEvent`, `SleepStateEvent`, etc. in `rmk/src/event/`) with no way to expose it to the host.
+**1.4 No notifications** — Pure request/response. The host cannot receive layer changes, WPM updates, battery state, or BLE connection events. RMK already has a rich internal event bus (`LayerChangeEvent`, `WpmUpdateEvent`, `BatteryStatusEvent`, `BleStatusChangeEvent`, `SleepStateEvent`, etc. in `rmk/src/event/`) with no way to expose it to the host.
 
 **1.5 Mixed endianness** — Via commands use big-endian, Vial sub-commands use little-endian, both in the same file (`byteorder::{BigEndian, LittleEndian}` in `rmk/src/host/via/mod.rs`).
 
@@ -440,8 +440,7 @@ Topics are fire-and-forget device-to-host notifications. Each maps directly to a
 | LayerChange | `LayerChangePayload { layer: u8 }` | `event/layer` | `LayerChangeEvent` |
 | WpmUpdate | `WpmPayload { wpm: u16 }` | `event/wpm` | `WpmUpdateEvent` |
 | BatteryStatus | `BatteryStatusEvent` | `event/battery` | `BatteryStatusEvent` |
-| BleStateChange | `BleStatePayload { ... }` | `event/ble_state` | `BleStateChangeEvent` |
-| BleProfileChange | `BleProfilePayload { profile: u8 }` | `event/ble_profile` | `BleProfileChangeEvent` |
+| BleStatusChange | `BleStatus { profile: u8, state: BleState }` | `event/ble_status` | `BleStatusChangeEvent` |
 | ConnectionChange | `ConnectionPayload { ... }` | `event/connection` | `ConnectionChangeEvent` |
 | SleepState | `SleepPayload { sleeping: bool }` | `event/sleep` | `SleepStateEvent` |
 | LedIndicator | `LedPayload { indicator: LedIndicator }` | `event/led` | `LedIndicatorEvent` |
@@ -1151,8 +1150,7 @@ topics! {
     | LayerChangeTopic      | LayerChangePayload     | "event/layer"         |
     | WpmUpdateTopic        | WpmPayload             | "event/wpm"           |
     | BatteryStatusTopic     | BatteryStatusEvent      | "event/battery"       |
-    | BleStateChangeTopic   | BleStatePayload        | "event/ble_state"     |
-    | BleProfileChangeTopic | BleProfilePayload      | "event/ble_profile"   |
+    | BleStatusChangeTopic  | BleStatus              | "event/ble_status"    |
     | ConnectionChangeTopic | ConnectionPayload      | "event/connection"    |
     | SleepStateTopic       | SleepPayload           | "event/sleep"         |
     | LedIndicatorTopic     | LedPayload             | "event/led"           |

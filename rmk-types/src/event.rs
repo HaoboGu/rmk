@@ -81,20 +81,24 @@ pub struct WpmPayload {
     pub wpm: u16,
 }
 
-/// Payload for BLE state change event/topic.
+/// BLE state (what the BLE subsystem is currently doing).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct BleStatePayload {
-    pub profile: u8,
-    pub connected: bool,
-    pub advertising: bool,
+pub enum BleState {
+    /// The BLE is advertising.
+    Advertising,
+    /// The BLE is connected.
+    Connected,
+    /// The BLE is not in use (USB mode or sleep mode, default).
+    Inactive,
 }
 
-/// Payload for BLE profile change event/topic.
+/// Unified BLE status: which profile is active and what the BLE is doing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct BleProfilePayload {
+pub struct BleStatus {
     pub profile: u8,
+    pub state: BleState,
 }
 
 /// Payload for connection change event/topic.

@@ -68,3 +68,6 @@ Config is loaded in three layers (later overrides earlier): `event_default.toml`
 ## Rules
 
 - Don't use `pub use` for convenient usage **within** the crate
+
+## Coding Principles
+- Don't add helper functions for simple usage(for example, < 5 lines)

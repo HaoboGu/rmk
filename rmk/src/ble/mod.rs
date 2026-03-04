@@ -1,22 +1,20 @@
 use core::cell::Cell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
+use embassy_sync::blocking_mutex::Mutex;
+
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join;
-#[cfg(any(not(feature = "_no_usb"), feature = "passkey_entry"))]
-use embassy_futures::select::Either;
 use embassy_futures::select::{Either3, select, select3};
-use embassy_sync::blocking_mutex::Mutex;
 use embassy_time::{Duration, Timer, with_timeout};
 use rand_core::{CryptoRng, RngCore};
-use rmk_types::ble::{BleState, BleStatus};
 use rmk_types::led_indicator::LedIndicator;
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
 #[cfg(feature = "host")]
-use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap};
+use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap, core::cell::RefCell};
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
 use {crate::descriptor::ViaReport, crate::host::UsbHostReaderWriter};
 #[cfg(not(feature = "_no_usb"))]
@@ -27,7 +25,7 @@ use {
     crate::usb::UsbKeyboardWriter,
     crate::usb::{USB_ENABLED, USB_REMOTE_WAKEUP, USB_SUSPENDED},
     crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder},
-    embassy_futures::select::{Either4, select4},
+    embassy_futures::select::{Either, Either4, select4},
     embassy_usb::driver::Driver,
 };
 #[cfg(feature = "storage")]
@@ -58,9 +56,9 @@ pub(crate) mod device_info;
 #[cfg(feature = "host")]
 pub(crate) mod host_service;
 pub(crate) mod led;
-#[cfg(feature = "passkey_entry")]
-pub mod passkey;
 pub(crate) mod profile;
+
+pub use rmk_types::event::{BleState, BleStatus};
 
 /// Global BLE status: tracks the active profile and current BLE state.
 pub static BLE_STATUS: Mutex<crate::RawMutex, Cell<BleStatus>> = Mutex::new(Cell::new(BleStatus {
@@ -68,22 +66,13 @@ pub static BLE_STATUS: Mutex<crate::RawMutex, Cell<BleStatus>> = Mutex::new(Cell
     state: BleState::Inactive,
 }));
 
-/// Get current profile number
-pub(crate) fn get_current_profile() -> u8 {
-    BLE_STATUS.lock(|c| c.get().profile)
-}
-
-/// Update the BLE status and publish an event.
-pub(crate) fn set_ble_status(status: BleStatus) {
-    BLE_STATUS.lock(|c| c.set(status));
-    publish_event(BleStatusChangeEvent(status));
-}
-
-/// Update the BLE state while preserving the current profile.
+/// Update the BLE state (preserving current profile) and publish an event.
 pub(crate) fn set_ble_state(state: BleState) {
-    let profile = get_current_profile();
-    let status = BleStatus { profile, state };
-    set_ble_status(status);
+    let status = BLE_STATUS.lock(|c| {
+        let s = BleStatus { profile: c.get().profile, state };
+        c.set(s);
+        s
+    });
     publish_event(BleStatusChangeEvent(status));
 }
 
@@ -112,16 +101,9 @@ pub async fn build_ble_stack<
     resources: &'a mut HostResources<P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX>,
 ) -> Stack<'a, C, P> {
     // Initialize trouble host stack
-    let builder = trouble_host::new(controller, resources)
+    trouble_host::new(controller, resources)
         .set_random_address(Address::random(host_address))
-        .set_random_generator_seed(random_generator);
-
-    #[cfg(feature = "passkey_entry")]
-    if crate::PASSKEY_ENTRY_ENABLED {
-        builder.set_io_capabilities(IoCapabilities::KeyboardOnly);
-    }
-
-    builder
+        .set_random_generator_seed(random_generator)
 }
 
 /// Run the BLE stack.
@@ -131,12 +113,12 @@ pub(crate) async fn run_ble<
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    #[cfg(feature = "storage")] const ROW: usize,
-    #[cfg(feature = "storage")] const COL: usize,
-    #[cfg(feature = "storage")] const NUM_LAYER: usize,
-    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const ROW: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const COL: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const NUM_LAYER: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const NUM_ENCODER: usize,
 >(
-    #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
+    #[cfg(feature = "host")] keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
@@ -268,7 +250,6 @@ pub(crate) async fn run_ble<
     join(background_task, async {
         loop {
             // Advertising state
-
             set_ble_state(BleState::Advertising);
             let adv_fut = advertise(rmk_config.device_config.product_name, &mut peripheral, &server);
             // USB + BLE dual mode
@@ -433,6 +414,7 @@ pub(crate) async fn run_ble<
                 Err(BleHostError::BleHost(Error::Timeout)) => {
                     warn!("Advertising timeout, sleep and wait for any key");
 
+                    set_ble_state(BleState::Inactive);
                     // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
@@ -522,7 +504,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
             }
             GattConnectionEvent::PairingComplete { security_level, bond } => {
                 info!("[gatt] pairing complete: {:?}", security_level);
-                let profile = get_current_profile();
+                let profile = BLE_STATUS.lock(|c| c.get()).profile;
                 if let Some(bond_info) = bond {
                     let profile_info = ProfileInfo {
                         slot_num: profile,
@@ -596,8 +578,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 if event.data().len() == 32 {
                                     use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;
 
-                                    let mut data = [0u8; 32];
-                                    data.copy_from_slice(event.data());
+                                    let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
                                     HOST_GUI_INPUT_CHANNEL.send(data).await;
                                 } else {
                                     warn!("Wrong host packet data: {:?}", event.data());
@@ -700,52 +681,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
             }
             GattConnectionEvent::PassKeyDisplay(pass_key) => info!("[gatt] PassKeyDisplay: {:?}", pass_key),
             GattConnectionEvent::PassKeyConfirm(pass_key) => info!("[gatt] PassKeyConfirm: {:?}", pass_key),
-            GattConnectionEvent::PassKeyInput => {
-                #[cfg(feature = "passkey_entry")]
-                if crate::PASSKEY_ENTRY_ENABLED {
-                    use crate::ble::passkey::{
-                        PASSKEY_RESPONSE, begin_passkey_entry_session, end_passkey_entry_session,
-                    };
-
-                    info!("[gatt] PassKeyInput: entering passkey entry mode");
-                    begin_passkey_entry_session();
-
-                    // Wait with configurable timeout
-                    match embassy_time::with_timeout(
-                        Duration::from_secs(crate::PASSKEY_ENTRY_TIMEOUT_SECS as u64),
-                        PASSKEY_RESPONSE.wait(),
-                    )
-                    .await
-                    {
-                        Ok(Some(passkey)) => {
-                            end_passkey_entry_session();
-                            info!("[gatt] Passkey entered: submitting");
-                            if let Err(e) = conn.raw().pass_key_input(passkey) {
-                                error!("[gatt] pass_key_input error: {:?}", e);
-                            }
-                        }
-                        Ok(None) => {
-                            end_passkey_entry_session();
-                            info!("[gatt] Passkey entry cancelled");
-                            if let Err(e) = conn.raw().pass_key_cancel() {
-                                error!("[gatt] pass_key_cancel error: {:?}", e);
-                            }
-                        }
-                        Err(_) => {
-                            end_passkey_entry_session();
-                            warn!("[gatt] Passkey entry timeout");
-                            let _ = conn.raw().pass_key_cancel();
-                        }
-                    }
-                } else {
-                    warn!("[gatt] PassKeyInput: disabled in config, cancelling pairing, this shouldn't happen");
-                    if let Err(e) = conn.raw().pass_key_cancel() {
-                        error!("[gatt] pass_key_cancel error: {:?}", e);
-                    }
-                }
-                #[cfg(not(feature = "passkey_entry"))]
-                warn!("[gatt] PassKeyInput event, should not happen")
-            }
+            GattConnectionEvent::PassKeyInput => warn!("[gatt] PassKeyInput event, should not happen"),
         }
 
         // Publish the BLE connected event
@@ -894,15 +830,15 @@ async fn run_ble_keyboard<
     'd,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    #[cfg(feature = "storage")] const ROW: usize,
-    #[cfg(feature = "storage")] const COL: usize,
-    #[cfg(feature = "storage")] const NUM_LAYER: usize,
-    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const ROW: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const COL: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const NUM_LAYER: usize,
+    #[cfg(any(feature = "storage", feature = "host"))] const NUM_ENCODER: usize,
 >(
     server: &'b Server<'_>,
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     stack: &Stack<'_, C, DefaultPacketPool>,
-    #[cfg(feature = "host")] keymap: &'c KeyMap<'c>,
+    #[cfg(feature = "host")] keymap: &'c RefCell<KeyMap<'c, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(feature = "host")] rmk_config: &'d mut RmkConfig<'static>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
@@ -914,7 +850,9 @@ async fn run_ble_keyboard<
 
     // Load CCCD table from storage
     #[cfg(feature = "storage")]
-    if let Ok(Some(bond_info)) = storage.read_trouble_bond_info(get_current_profile()).await
+    if let Ok(Some(bond_info)) = storage
+        .read_trouble_bond_info(BLE_STATUS.lock(|c| c.get()).profile)
+        .await
         && bond_info.info.identity.match_identity(&conn.raw().peer_identity())
     {
         info!("Loading CCCD table from storage: {:?}", bond_info.cccd_table);
@@ -950,63 +888,6 @@ async fn run_ble_keyboard<
         ble_hid_server,
     )
     .await;
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::{Mutex, OnceLock};
-
-    use super::{BLE_STATUS, BleState, BleStatus, set_ble_state, set_ble_status};
-
-    fn ble_status_test_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
-    #[test]
-    fn set_ble_state_preserves_current_profile() {
-        let _guard = ble_status_test_lock().lock().unwrap();
-
-        BLE_STATUS.lock(|c| {
-            c.set(BleStatus {
-                profile: 2,
-                state: BleState::Inactive,
-            })
-        });
-        set_ble_state(BleState::Advertising);
-
-        assert_eq!(
-            BLE_STATUS.lock(|c| c.get()),
-            BleStatus {
-                profile: 2,
-                state: BleState::Advertising,
-            }
-        );
-    }
-
-    #[test]
-    fn set_ble_status_can_reset_state_when_profile_changes() {
-        let _guard = ble_status_test_lock().lock().unwrap();
-
-        BLE_STATUS.lock(|c| {
-            c.set(BleStatus {
-                profile: 1,
-                state: BleState::Connected,
-            })
-        });
-        set_ble_status(BleStatus {
-            profile: 3,
-            state: BleState::Inactive,
-        });
-
-        assert_eq!(
-            BLE_STATUS.lock(|c| c.get()),
-            BleStatus {
-                profile: 3,
-                state: BleState::Inactive,
-            }
-        );
-    }
 }
 
 // Update the PHY to 2M
