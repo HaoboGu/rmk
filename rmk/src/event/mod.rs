@@ -12,7 +12,7 @@
 //! - `input`: Input events (keyboard, modifier, pointing device)
 //! - `state`: Keyboard state events (layer, WPM, LED indicator, sleep)
 //! - `battery`: Battery events (ADC, charging, battery state)
-//! - `connection`: Connection events (USB/BLE, BLE state/profile)
+//! - `connection`: Connection events (USB/BLE, BLE status)
 //! - `split`: Split keyboard events (peripheral/central connection)
 
 use embassy_sync::blocking_mutex::raw::RawMutex;

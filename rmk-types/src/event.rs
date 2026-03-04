@@ -5,23 +5,15 @@
 //! `protocol::rmk`) because they are domain types used throughout the core
 //! firmware, not protocol-specific artifacts.
 
+use postcard::experimental::max_size::MaxSize;
+use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::connection::ConnectionType;
 use crate::led_indicator::LedIndicator;
 
 /// Charge state of the battery.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    postcard_schema::Schema,
-    postcard::experimental::max_size::MaxSize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ChargeState {
     Charging,
@@ -41,17 +33,7 @@ impl From<bool> for ChargeState {
 }
 
 /// Battery status used for both status queries and event notifications.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    postcard_schema::Schema,
-    postcard::experimental::max_size::MaxSize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum BatteryStatus {
     Unavailable,
@@ -68,21 +50,21 @@ impl BatteryStatus {
 }
 
 /// Payload for the layer change event/topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct LayerChangePayload {
     pub layer: u8,
 }
 
 /// Payload for the WPM update event/topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct WpmPayload {
     pub wpm: u16,
 }
 
 /// BLE state (what the BLE subsystem is currently doing).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum BleState {
     /// The BLE is advertising.
@@ -94,7 +76,7 @@ pub enum BleState {
 }
 
 /// Unified BLE status: which profile is active and what the BLE is doing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct BleStatus {
     pub profile: u8,
@@ -102,21 +84,21 @@ pub struct BleStatus {
 }
 
 /// Payload for connection change event/topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ConnectionPayload {
     pub connection_type: ConnectionType,
 }
 
 /// Payload for sleep state event/topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SleepPayload {
     pub sleeping: bool,
 }
 
 /// Payload for LED indicator event/topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct LedPayload {
     pub indicator: LedIndicator,

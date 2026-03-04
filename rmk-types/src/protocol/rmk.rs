@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::action::{EncoderAction, KeyAction, MorseProfile};
 use crate::connection::ConnectionType;
-use crate::event::{
+pub use crate::event::{
     BatteryStatus, BleStatus, ConnectionPayload, LayerChangePayload, LedPayload, SleepPayload,
     WpmPayload,
 };
@@ -404,8 +404,8 @@ mod tests {
     use postcard_rpc::{Endpoint, Key, Topic};
 
     use super::*;
+    use crate::event::{BleState, ChargeState};
     use crate::led_indicator::LedIndicator;
-    use crate::event::ChargeState;
     use crate::mouse_button::MouseButtons;
 
     /// Helper: postcard round-trip for a value using a stack buffer.
@@ -746,15 +746,15 @@ mod tests {
         });
         round_trip(&BleStatus {
             profile: 0,
-            state: crate::event::BleState::Advertising,
+            state: BleState::Advertising,
         });
         round_trip(&BleStatus {
             profile: 2,
-            state: crate::event::BleState::Connected,
+            state: BleState::Connected,
         });
         round_trip(&BleStatus {
             profile: 0,
-            state: crate::event::BleState::Inactive,
+            state: BleState::Inactive,
         });
         round_trip(&ConnectionPayload {
             connection_type: ConnectionType::Usb,

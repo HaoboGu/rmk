@@ -37,7 +37,7 @@ keyboard.channel_size = 16
 layer_change.subs = 8
 
 # Reduce subscribers to save memory on constrained devices
-battery_state.subs = 2
+battery_status.subs = 2
 led_indicator.subs = 2
 
 # Configure multiple parameters for one event
@@ -61,7 +61,7 @@ peripheral_battery.subs = 4
 | **Battery Events** | | |
 | `battery_adc` | `BatteryAdcEvent` | channel_size=2 |
 | `charging_state` | `ChargingStateEvent` | channel_size=2 |
-| `battery_state` | `BatteryStatusEvent` | subs=4 |
+| `battery_status` | `BatteryStatusEvent` | subs=4 |
 | **Connection Events** | | |
 | `connection_change` | `ConnectionChangeEvent` | |
 | `ble_status_change` | `BleStatusChangeEvent` | pubs=2 |
