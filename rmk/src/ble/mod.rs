@@ -46,7 +46,8 @@ use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, publish_event};
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
-use crate::state::{ConnectionState, ConnectionType};
+use crate::event::ConnectionType;
+use crate::state::ConnectionState;
 #[cfg(feature = "usb_log")]
 use crate::usb::add_usb_logger;
 use crate::{CONNECTION_STATE, run_keyboard};

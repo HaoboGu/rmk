@@ -1,7 +1,6 @@
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
-// Re-exported for convenience; canonical source is `rmk_types::connection::ConnectionType`.
-pub use rmk_types::connection::ConnectionType;
+use rmk_types::connection::ConnectionType;
 
 /// Current connection type:
 /// - 0: USB

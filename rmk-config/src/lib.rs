@@ -365,7 +365,7 @@ define_event_config!(
     led_indicator,
     sleep_state,
     // Power events
-    battery_state,
+    battery_status,
     battery_adc,
     charging_state,
     // Pointing device events

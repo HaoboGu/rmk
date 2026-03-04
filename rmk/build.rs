@@ -77,7 +77,7 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
     let (wpm_update_size, wpm_update_pubs, wpm_update_subs) = events.wpm_update.into_values();
     let (led_indicator_size, led_indicator_pubs, led_indicator_subs) = events.led_indicator.into_values();
     let (sleep_state_size, sleep_state_pubs, sleep_state_subs) = events.sleep_state.into_values();
-    let (battery_state_size, battery_state_pubs, battery_state_subs) = events.battery_state.into_values();
+    let (battery_status_size, battery_status_pubs, battery_status_subs) = events.battery_status.into_values();
     let (battery_adc_size, battery_adc_pubs, battery_adc_subs) = events.battery_adc.into_values();
     let (charging_state_size, charging_state_pubs, charging_state_subs) = events.charging_state.into_values();
     let (pointing_size, pointing_pubs, pointing_subs) = events.pointing.into_values();
@@ -119,9 +119,9 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) SLEEP_STATE_EVENT_PUB_SIZE = sleep_state_pubs),
         const_declaration!(pub(crate) SLEEP_STATE_EVENT_SUB_SIZE = sleep_state_subs),
         // Power events
-        const_declaration!(pub(crate) BATTERY_STATE_EVENT_CHANNEL_SIZE = battery_state_size),
-        const_declaration!(pub(crate) BATTERY_STATE_EVENT_PUB_SIZE = battery_state_pubs),
-        const_declaration!(pub(crate) BATTERY_STATE_EVENT_SUB_SIZE = battery_state_subs),
+        const_declaration!(pub(crate) BATTERY_STATUS_EVENT_CHANNEL_SIZE = battery_status_size),
+        const_declaration!(pub(crate) BATTERY_STATUS_EVENT_PUB_SIZE = battery_status_pubs),
+        const_declaration!(pub(crate) BATTERY_STATUS_EVENT_SUB_SIZE = battery_status_subs),
         const_declaration!(pub(crate) BATTERY_ADC_EVENT_CHANNEL_SIZE = battery_adc_size),
         const_declaration!(pub(crate) BATTERY_ADC_EVENT_PUB_SIZE = battery_adc_pubs),
         const_declaration!(pub(crate) BATTERY_ADC_EVENT_SUB_SIZE = battery_adc_subs),

@@ -33,7 +33,7 @@ pub struct ChargingStateEvent {
 }
 
 /// Battery state changed event, wraps [`BatteryStatus`].
-#[event(channel_size = crate::BATTERY_STATE_EVENT_CHANNEL_SIZE, pubs = crate::BATTERY_STATE_EVENT_PUB_SIZE, subs = crate::BATTERY_STATE_EVENT_SUB_SIZE)]
+#[event(channel_size = crate::BATTERY_STATUS_EVENT_CHANNEL_SIZE, pubs = crate::BATTERY_STATUS_EVENT_PUB_SIZE, subs = crate::BATTERY_STATUS_EVENT_SUB_SIZE)]
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct BatteryStatusEvent(pub BatteryStatus);

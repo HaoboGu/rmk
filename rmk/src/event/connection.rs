@@ -5,7 +5,6 @@
 //! - BLE state change events
 
 use rmk_macro::event;
-// Re-exported for convenience; canonical source is `rmk_types::connection::ConnectionType`.
 pub use rmk_types::connection::ConnectionType;
 use rmk_types::event::ConnectionPayload;
 
