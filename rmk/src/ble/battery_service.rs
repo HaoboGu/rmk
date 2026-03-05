@@ -4,7 +4,7 @@ use embassy_futures::join::join;
 use embassy_futures::select::{Either, select};
 use embassy_sync::pubsub::Subscriber;
 use embassy_time::{Duration, Instant, Timer, with_timeout};
-use rmk_types::event::BatteryStatus;
+use rmk_types::battery::BatteryStatus;
 use trouble_host::prelude::*;
 
 use super::ble_server::Server;
