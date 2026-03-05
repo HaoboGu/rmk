@@ -303,6 +303,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Send a keyboard report to the host
     async fn send_report(&self, report: Report) {
+        if !self.mode.should_send_report() {
+            return;
+        }
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 
@@ -385,7 +388,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Process key changes at (row, col)
     pub async fn process_inner(&mut self, event: KeyboardEvent) {
         // Check for mode transitions (e.g., entering/exiting passkey entry)
-        #[cfg(feature = "ble_passkey_entry")]
+        #[cfg(ble_passkey_entry)]
         self.check_mode_transition();
 
         #[cfg(feature = "vial_lock")]
@@ -1624,9 +1627,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         };
 
         if let Some(report) = report {
-            if !self.mode.should_send_report() {
-                return;
-            }
             self.keymap.borrow_mut().mouse_buttons = self.mouse.report.buttons;
             self.send_report(Report::MouseReport(report)).await;
             yield_now().await;
@@ -1767,9 +1767,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     pub(crate) async fn send_keyboard_report_with_resolved_modifiers(&mut self, pressed: bool) {
-        if !self.mode.should_send_report() {
-            return;
-        }
         // all modifier related effects are combined here to be sent with the hid report:
         let modifiers = self.resolve_modifiers(pressed);
         info!("Sending keyboard report, pressed: {}", pressed);
@@ -1787,9 +1784,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Send system control report if needed
     pub(crate) async fn send_system_control_report(&mut self) {
-        if !self.mode.should_send_report() {
-            return;
-        }
         self.send_report(Report::SystemControlReport(self.system_control_report))
             .await;
         self.system_control_report.usage_id = 0;
@@ -1798,9 +1792,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Send media report if needed
     pub(crate) async fn send_media_report(&mut self) {
-        if !self.mode.should_send_report() {
-            return;
-        }
         self.send_report(Report::MediaKeyboardReport(self.media_report)).await;
         self.media_report.usage_id = 0;
         yield_now().await;
@@ -1809,9 +1800,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Send mouse report. Rate is implicitly bounded by the repeat interval
     /// for movement/wheel, but button events are sent immediately.
     pub(crate) async fn send_mouse_report(&mut self) {
-        if !self.mode.should_send_report() {
-            return;
-        }
         self.send_report(Report::MouseReport(self.mouse.get_report())).await;
         yield_now().await;
     }
@@ -1976,10 +1964,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Check if the keyboard mode should transition between normal and passkey entry.
-    #[cfg(feature = "ble_passkey_entry")]
+    #[cfg(ble_passkey_entry)]
     fn check_mode_transition(&mut self) {
         use core::sync::atomic::Ordering;
-        let passkey_active = crate::ble::passkey::PASSKEY_ENTRY_MODE.load(Ordering::Relaxed);
+        let passkey_active = crate::ble::passkey::PASSKEY_ENTRY_MODE.load(Ordering::Acquire);
         if passkey_active && !self.mode.is_passkey() {
             self.mode.enter_passkey_mode();
         } else if !passkey_active && self.mode.is_passkey() {

@@ -53,7 +53,7 @@ pub(crate) mod device_info;
 #[cfg(feature = "host")]
 pub(crate) mod host_service;
 pub(crate) mod led;
-#[cfg(feature = "ble_passkey_entry")]
+#[cfg(ble_passkey_entry)]
 pub mod passkey;
 pub(crate) mod profile;
 
@@ -100,7 +100,7 @@ pub async fn build_ble_stack<
         .set_random_address(Address::random(host_address))
         .set_random_generator_seed(random_generator);
 
-    #[cfg(feature = "ble_passkey_entry")]
+    #[cfg(ble_passkey_entry)]
     let stack = stack.set_io_capabilities(IoCapabilities::KeyboardOnly);
 
     stack
@@ -689,7 +689,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
             GattConnectionEvent::PassKeyDisplay(pass_key) => info!("[gatt] PassKeyDisplay: {:?}", pass_key),
             GattConnectionEvent::PassKeyConfirm(pass_key) => info!("[gatt] PassKeyConfirm: {:?}", pass_key),
             GattConnectionEvent::PassKeyInput => {
-                #[cfg(feature = "ble_passkey_entry")]
+                #[cfg(ble_passkey_entry)]
                 {
                     use crate::ble::passkey::{
                         PASSKEY_RESPONSE, begin_passkey_entry_session, end_passkey_entry_session,
@@ -726,7 +726,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         }
                     }
                 }
-                #[cfg(not(feature = "ble_passkey_entry"))]
+                #[cfg(not(ble_passkey_entry))]
                 warn!("[gatt] PassKeyInput event, should not happen")
             }
         }

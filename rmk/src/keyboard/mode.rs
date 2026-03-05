@@ -87,57 +87,70 @@ impl KeypressHandler for NormalHandler {
 }
 
 /// Passkey entry mode — collects digits instead of registering keys.
-#[cfg(feature = "ble_passkey_entry")]
+#[cfg(ble_passkey_entry)]
 pub(crate) struct PasskeyHandler {
     passkey_state: crate::ble::passkey::PasskeyEntryState,
 }
 
-#[cfg(feature = "ble_passkey_entry")]
+#[cfg(ble_passkey_entry)]
 impl KeypressHandler for PasskeyHandler {
     fn register_key(&mut self, _key: HidKeyCode, _event: KeyboardEvent, _state: &mut KeyReportState) {
         // No-op: in passkey mode, key presses are not registered
     }
 
     fn unregister_key(&mut self, key: HidKeyCode, _event: KeyboardEvent, _state: &mut KeyReportState) {
-        use crate::ble::passkey::{
-            PASSKEY_RESPONSE, end_passkey_entry_session, hid_keycode_to_digit,
-        };
+        use crate::ble::passkey::{PASSKEY_RESPONSE, PasskeyAction, PASSKEY_LENGTH};
+        use crate::event::PasskeyStateEvent;
 
-        if let Some(digit) = hid_keycode_to_digit(key) {
-            if self.passkey_state.add_digit(digit) {
-                info!("[passkey] Digit entered, {}/6", self.passkey_state.digit_count());
+        match self.passkey_state.handle_key(key) {
+            PasskeyAction::DigitAdded(_) => {
+                info!("[passkey] Digit entered, {}/{}", self.passkey_state.digit_count(), PASSKEY_LENGTH);
+                publish_event(PasskeyStateEvent {
+                    active: true,
+                    digits_entered: self.passkey_state.digit_count() as u8,
+                });
             }
-        } else if matches!(key, HidKeyCode::Enter | HidKeyCode::KpEnter) {
-            if self.passkey_state.is_complete() {
-                let passkey = self.passkey_state.to_passkey();
+            PasskeyAction::Submitted(passkey) => {
                 info!("[passkey] Submitting passkey");
                 PASSKEY_RESPONSE.signal(Some(passkey));
-                self.passkey_state.reset();
-            } else {
+                publish_event(PasskeyStateEvent {
+                    active: false,
+                    digits_entered: 0,
+                });
+            }
+            PasskeyAction::Cancelled => {
+                info!("[passkey] Cancelled");
+                PASSKEY_RESPONSE.signal(None);
+                publish_event(PasskeyStateEvent {
+                    active: false,
+                    digits_entered: 0,
+                });
+            }
+            PasskeyAction::Backspaced => {
+                info!("[passkey] Backspace, {}/{} digits", self.passkey_state.digit_count(), PASSKEY_LENGTH);
+                publish_event(PasskeyStateEvent {
+                    active: true,
+                    digits_entered: self.passkey_state.digit_count() as u8,
+                });
+            }
+            PasskeyAction::Incomplete => {
                 warn!(
-                    "[passkey] Enter pressed but only {}/6 digits entered",
-                    self.passkey_state.digit_count()
+                    "[passkey] Enter pressed but only {}/{} digits entered",
+                    self.passkey_state.digit_count(),
+                    PASSKEY_LENGTH
                 );
             }
-        } else if matches!(key, HidKeyCode::Escape) {
-            info!("[passkey] Cancelled");
-            end_passkey_entry_session();
-            PASSKEY_RESPONSE.signal(None);
-            self.passkey_state.reset();
-        } else if matches!(key, HidKeyCode::Backspace) {
-            if self.passkey_state.remove_digit() {
-                info!("[passkey] Backspace, {}/6 digits", self.passkey_state.digit_count());
+            PasskeyAction::BufferFull | PasskeyAction::Ignored => {
+                // Silently consumed
             }
         }
-        // All other keys are silently consumed
     }
-
 }
 
 /// Active keyboard mode — delegates to the appropriate handler.
 pub(crate) enum KeyboardMode {
     Normal(NormalHandler),
-    #[cfg(feature = "ble_passkey_entry")]
+    #[cfg(ble_passkey_entry)]
     Passkey(PasskeyHandler),
 }
 
@@ -146,13 +159,13 @@ impl KeyboardMode {
     pub fn is_passkey(&self) -> bool {
         match self {
             KeyboardMode::Normal(_) => false,
-            #[cfg(feature = "ble_passkey_entry")]
+            #[cfg(ble_passkey_entry)]
             KeyboardMode::Passkey(_) => true,
         }
     }
 
     /// Switch to passkey entry mode.
-    #[cfg(feature = "ble_passkey_entry")]
+    #[cfg(ble_passkey_entry)]
     pub fn enter_passkey_mode(&mut self) {
         *self = KeyboardMode::Passkey(PasskeyHandler {
             passkey_state: crate::ble::passkey::PasskeyEntryState::new(),
@@ -160,7 +173,7 @@ impl KeyboardMode {
     }
 
     /// Switch to normal mode.
-    #[cfg(feature = "ble_passkey_entry")]
+    #[cfg(ble_passkey_entry)]
     pub fn enter_normal_mode(&mut self) {
         *self = KeyboardMode::Normal(NormalHandler);
     }
@@ -170,7 +183,7 @@ impl KeypressHandler for KeyboardMode {
     fn register_key(&mut self, key: HidKeyCode, event: KeyboardEvent, state: &mut KeyReportState) {
         match self {
             KeyboardMode::Normal(h) => h.register_key(key, event, state),
-            #[cfg(feature = "ble_passkey_entry")]
+            #[cfg(ble_passkey_entry)]
             KeyboardMode::Passkey(h) => h.register_key(key, event, state),
         }
     }
@@ -178,7 +191,7 @@ impl KeypressHandler for KeyboardMode {
     fn unregister_key(&mut self, key: HidKeyCode, event: KeyboardEvent, state: &mut KeyReportState) {
         match self {
             KeyboardMode::Normal(h) => h.unregister_key(key, event, state),
-            #[cfg(feature = "ble_passkey_entry")]
+            #[cfg(ble_passkey_entry)]
             KeyboardMode::Passkey(h) => h.unregister_key(key, event, state),
         }
     }
@@ -191,7 +204,7 @@ impl HostReportStrategy for NormalHandler {
     }
 }
 
-#[cfg(feature = "ble_passkey_entry")]
+#[cfg(ble_passkey_entry)]
 impl HostReportStrategy for PasskeyHandler {
     fn should_send_report(&self) -> bool {
         false
@@ -202,7 +215,7 @@ impl HostReportStrategy for KeyboardMode {
     fn should_send_report(&self) -> bool {
         match self {
             KeyboardMode::Normal(h) => h.should_send_report(),
-            #[cfg(feature = "ble_passkey_entry")]
+            #[cfg(ble_passkey_entry)]
             KeyboardMode::Passkey(h) => h.should_send_report(),
         }
     }

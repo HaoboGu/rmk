@@ -77,3 +77,22 @@ impl BleStateChangeEvent {
 pub struct BleProfileChangeEvent {
     pub profile: u8,
 }
+
+// ============================================================================
+// Passkey Events
+// ============================================================================
+
+/// Passkey entry state changed event — broadcast when passkey entry
+/// becomes active/inactive or when digits are added/removed.
+#[cfg(ble_passkey_entry)]
+#[event(
+    channel_size = crate::PASSKEY_STATE_EVENT_CHANNEL_SIZE,
+    pubs = crate::PASSKEY_STATE_EVENT_PUB_SIZE,
+    subs = crate::PASSKEY_STATE_EVENT_SUB_SIZE
+)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct PasskeyStateEvent {
+    pub active: bool,
+    pub digits_entered: u8,
+}

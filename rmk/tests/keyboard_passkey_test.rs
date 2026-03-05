@@ -1,4 +1,4 @@
-#![cfg(feature = "ble_passkey_entry")]
+#![cfg(ble_passkey_entry)]
 
 /// Test cases for BLE passkey entry with a split-like keyboard layout.
 ///

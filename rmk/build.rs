@@ -35,6 +35,11 @@ fn main() {
         user_toml.rmk.split_peripherals_num = 1;
     }
 
+    // Emit `ble_passkey_entry` cfg when either TOML or Cargo feature enables it
+    let passkey_from_toml = user_toml.ble_passkey_entry_enabled();
+    let passkey_from_feature = env::var("CARGO_FEATURE_BLE_PASSKEY_ENTRY").is_ok();
+    cfgs.set("ble_passkey_entry", passkey_from_toml || passkey_from_feature);
+
     let constants = get_constants_str(user_toml.rmk, user_toml.event);
 
     // Write to constants.rs file
@@ -91,6 +96,8 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
     let (peripheral_battery_size, peripheral_battery_pubs, peripheral_battery_subs) =
         events.peripheral_battery.into_values();
     let (clear_peer_size, clear_peer_pubs, clear_peer_subs) = events.clear_peer.into_values();
+    let (passkey_state_size, passkey_state_pubs, passkey_state_subs) =
+        events.passkey_state.into_values();
 
     constant_strs.extend([
         // BLE events
@@ -151,6 +158,10 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) CLEAR_PEER_EVENT_CHANNEL_SIZE = clear_peer_size),
         const_declaration!(pub(crate) CLEAR_PEER_EVENT_PUB_SIZE = clear_peer_pubs),
         const_declaration!(pub(crate) CLEAR_PEER_EVENT_SUB_SIZE = clear_peer_subs),
+        // Passkey events
+        const_declaration!(pub(crate) PASSKEY_STATE_EVENT_CHANNEL_SIZE = passkey_state_size),
+        const_declaration!(pub(crate) PASSKEY_STATE_EVENT_PUB_SIZE = passkey_state_pubs),
+        const_declaration!(pub(crate) PASSKEY_STATE_EVENT_SUB_SIZE = passkey_state_subs),
     ]);
 
     constant_strs

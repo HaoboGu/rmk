@@ -1,8 +1,10 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use embassy_sync::signal::Signal;
-use rmk_types::action::{Action, KeyAction};
-use rmk_types::keycode::{HidKeyCode, KeyCode};
+use rmk_types::keycode::HidKeyCode;
+
+/// Maximum number of digits in a BLE passkey.
+pub const PASSKEY_LENGTH: usize = 6;
 
 /// Global flag indicating passkey entry mode is active.
 /// Set when `PassKeyInput` event arrives, cleared on submit/cancel/timeout.
@@ -26,9 +28,28 @@ pub fn end_passkey_entry_session() {
     PASSKEY_ENTRY_MODE.store(false, Ordering::Release);
 }
 
-/// State for passkey digit entry (up to 6 digits).
+/// Result of processing a key press in passkey entry mode.
+#[derive(Debug, PartialEq, Eq)]
+pub enum PasskeyAction {
+    /// A digit was successfully added. Contains the digit (0-9).
+    DigitAdded(u8),
+    /// All digits entered and submitted. Contains the assembled passkey.
+    Submitted(u32),
+    /// The user cancelled passkey entry (Escape).
+    Cancelled,
+    /// A digit was removed via Backspace.
+    Backspaced,
+    /// Digit rejected because the buffer is already full.
+    BufferFull,
+    /// Enter pressed but fewer than PASSKEY_LENGTH digits entered.
+    Incomplete,
+    /// Key was not a passkey-relevant key (silently consumed).
+    Ignored,
+}
+
+/// State for passkey digit entry (up to PASSKEY_LENGTH digits).
 pub struct PasskeyEntryState {
-    digits: [u8; 6],
+    digits: [u8; PASSKEY_LENGTH],
     count: usize,
 }
 
@@ -41,20 +62,20 @@ impl Default for PasskeyEntryState {
 impl PasskeyEntryState {
     pub const fn new() -> Self {
         Self {
-            digits: [0; 6],
+            digits: [0; PASSKEY_LENGTH],
             count: 0,
         }
     }
 
     /// Reset the state for a new passkey entry session.
     pub fn reset(&mut self) {
-        self.digits = [0; 6];
+        self.digits = [0; PASSKEY_LENGTH];
         self.count = 0;
     }
 
-    /// Add a digit (0-9). Returns false if already at 6 digits.
+    /// Add a digit (0-9). Returns false if already at PASSKEY_LENGTH digits.
     pub fn add_digit(&mut self, digit: u8) -> bool {
-        if self.count < 6 {
+        if self.count < PASSKEY_LENGTH {
             self.digits[self.count] = digit;
             self.count += 1;
             true
@@ -74,9 +95,9 @@ impl PasskeyEntryState {
         }
     }
 
-    /// Whether we have all 6 digits.
+    /// Whether we have all PASSKEY_LENGTH digits.
     pub fn is_complete(&self) -> bool {
-        self.count == 6
+        self.count == PASSKEY_LENGTH
     }
 
     /// Convert the entered digits to a u32 passkey.
@@ -92,40 +113,43 @@ impl PasskeyEntryState {
     pub fn digit_count(&self) -> usize {
         self.count
     }
-}
 
-/// Extract a digit (0-9) from a `KeyAction`, if it represents a number key.
-/// Handles `Single`, `Tap`, and `TapHold` (uses the tap action).
-pub fn extract_digit(action: &KeyAction) -> Option<u8> {
-    extract_digit_from_action(match action {
-        KeyAction::Single(a) | KeyAction::Tap(a) => a,
-        KeyAction::TapHold(tap, _, _) => tap,
-        _ => return None,
-    })
-}
-
-/// Check if the action is an Enter key (regular or keypad).
-pub fn is_enter(action: &KeyAction) -> bool {
-    is_hid_key(action, |k| matches!(k, HidKeyCode::Enter | HidKeyCode::KpEnter))
-}
-
-/// Check if the action is an Escape key.
-pub fn is_escape(action: &KeyAction) -> bool {
-    is_hid_key(action, |k| matches!(k, HidKeyCode::Escape))
-}
-
-/// Check if the action is a Backspace key.
-pub fn is_backspace(action: &KeyAction) -> bool {
-    is_hid_key(action, |k| matches!(k, HidKeyCode::Backspace))
-}
-
-fn extract_digit_from_action(action: &Action) -> Option<u8> {
-    match action {
-        Action::Key(KeyCode::Hid(k)) => hid_keycode_to_digit(*k),
-        _ => None,
+    /// Process a key press and return the resulting action.
+    ///
+    /// Encapsulates all passkey entry logic: digit entry, Enter/submit,
+    /// Escape/cancel, Backspace/delete, and ignoring irrelevant keys.
+    pub fn handle_key(&mut self, key: HidKeyCode) -> PasskeyAction {
+        if let Some(digit) = hid_keycode_to_digit(key) {
+            if self.add_digit(digit) {
+                PasskeyAction::DigitAdded(digit)
+            } else {
+                PasskeyAction::BufferFull
+            }
+        } else if matches!(key, HidKeyCode::Enter | HidKeyCode::KpEnter) {
+            if self.is_complete() {
+                let passkey = self.to_passkey();
+                self.reset();
+                PasskeyAction::Submitted(passkey)
+            } else {
+                PasskeyAction::Incomplete
+            }
+        } else if matches!(key, HidKeyCode::Escape) {
+            self.reset();
+            PasskeyAction::Cancelled
+        } else if matches!(key, HidKeyCode::Backspace) {
+            if self.remove_digit() {
+                PasskeyAction::Backspaced
+            } else {
+                PasskeyAction::Ignored
+            }
+        } else {
+            PasskeyAction::Ignored
+        }
     }
 }
 
+/// Convert a HID keycode to a digit (0-9), if applicable.
+/// Supports both number row keys (Kc0-Kc9) and keypad keys (Kp0-Kp9).
 pub fn hid_keycode_to_digit(k: HidKeyCode) -> Option<u8> {
     match k {
         HidKeyCode::Kc1 => Some(1),
@@ -152,32 +176,10 @@ pub fn hid_keycode_to_digit(k: HidKeyCode) -> Option<u8> {
     }
 }
 
-/// Extract a layer number from an action if it's a layer switch.
-pub fn extract_layer_num(action: &Action) -> Option<u8> {
-    match action {
-        Action::LayerOn(n)
-        | Action::LayerOff(n)
-        | Action::LayerToggle(n)
-        | Action::DefaultLayer(n)
-        | Action::LayerToggleOnly(n) => Some(*n),
-        _ => None,
-    }
-}
-
-fn is_hid_key(action: &KeyAction, predicate: impl Fn(HidKeyCode) -> bool) -> bool {
-    let inner = match action {
-        KeyAction::Single(a) | KeyAction::Tap(a) => a,
-        KeyAction::TapHold(tap, _, _) => tap,
-        _ => return false,
-    };
-    matches!(inner, Action::Key(KeyCode::Hid(k)) if predicate(*k))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use embassy_futures::block_on;
-    use rmk_types::action::MorseProfile;
 
     #[test]
     fn test_passkey_entry_state_basic() {
@@ -236,126 +238,91 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_digit_single() {
-        let action = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Kc1)));
-        assert_eq!(extract_digit(&action), Some(1));
-
-        let action = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Kc0)));
-        assert_eq!(extract_digit(&action), Some(0));
+    fn test_handle_key_digit() {
+        let mut state = PasskeyEntryState::new();
+        assert_eq!(state.handle_key(HidKeyCode::Kc1), PasskeyAction::DigitAdded(1));
+        assert_eq!(state.handle_key(HidKeyCode::Kp5), PasskeyAction::DigitAdded(5));
+        assert_eq!(state.digit_count(), 2);
     }
 
     #[test]
-    fn test_extract_digit_keypad() {
-        let action = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Kp5)));
-        assert_eq!(extract_digit(&action), Some(5));
-
-        let action = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Kp0)));
-        assert_eq!(extract_digit(&action), Some(0));
-    }
-
-    #[test]
-    fn test_extract_digit_tap() {
-        let action = KeyAction::Tap(Action::Key(KeyCode::Hid(HidKeyCode::Kc3)));
-        assert_eq!(extract_digit(&action), Some(3));
-    }
-
-    #[test]
-    fn test_extract_digit_taphold() {
-        let action = KeyAction::TapHold(
-            Action::Key(KeyCode::Hid(HidKeyCode::Kc7)),
-            Action::LayerOn(1),
-            MorseProfile::const_default(),
-        );
-        assert_eq!(extract_digit(&action), Some(7));
-    }
-
-    #[test]
-    fn test_extract_digit_non_digit() {
-        let action = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A)));
-        assert_eq!(extract_digit(&action), None);
-
-        assert_eq!(extract_digit(&KeyAction::No), None);
-        assert_eq!(extract_digit(&KeyAction::Transparent), None);
-    }
-
-    #[test]
-    fn test_is_enter() {
-        let enter = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Enter)));
-        assert!(is_enter(&enter));
-
-        let kp_enter = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::KpEnter)));
-        assert!(is_enter(&kp_enter));
-
-        let a = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A)));
-        assert!(!is_enter(&a));
-
-        let tap_enter = KeyAction::TapHold(
-            Action::Key(KeyCode::Hid(HidKeyCode::Enter)),
-            Action::LayerOn(1),
-            MorseProfile::const_default(),
-        );
-        assert!(is_enter(&tap_enter));
-    }
-
-    #[test]
-    fn test_is_escape() {
-        let esc = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Escape)));
-        assert!(is_escape(&esc));
-
-        let a = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A)));
-        assert!(!is_escape(&a));
-    }
-
-    #[test]
-    fn test_is_backspace() {
-        let bs = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Backspace)));
-        assert!(is_backspace(&bs));
-
-        let a = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A)));
-        assert!(!is_backspace(&a));
-
-        let tap_bs = KeyAction::Tap(Action::Key(KeyCode::Hid(HidKeyCode::Backspace)));
-        assert!(is_backspace(&tap_bs));
-    }
-
-    #[test]
-    fn test_all_number_row_digits() {
-        let keycodes = [
-            (HidKeyCode::Kc0, 0),
-            (HidKeyCode::Kc1, 1),
-            (HidKeyCode::Kc2, 2),
-            (HidKeyCode::Kc3, 3),
-            (HidKeyCode::Kc4, 4),
-            (HidKeyCode::Kc5, 5),
-            (HidKeyCode::Kc6, 6),
-            (HidKeyCode::Kc7, 7),
-            (HidKeyCode::Kc8, 8),
-            (HidKeyCode::Kc9, 9),
-        ];
-        for (kc, expected) in keycodes {
-            let action = KeyAction::Single(Action::Key(KeyCode::Hid(kc)));
-            assert_eq!(extract_digit(&action), Some(expected), "Failed for {:?}", kc);
+    fn test_handle_key_submit() {
+        let mut state = PasskeyEntryState::new();
+        for d in [HidKeyCode::Kc1, HidKeyCode::Kc2, HidKeyCode::Kc3, HidKeyCode::Kc4, HidKeyCode::Kc5, HidKeyCode::Kc6] {
+            state.handle_key(d);
         }
+        assert_eq!(state.handle_key(HidKeyCode::Enter), PasskeyAction::Submitted(123456));
+        assert_eq!(state.digit_count(), 0); // reset after submit
     }
 
     #[test]
-    fn test_all_keypad_digits() {
+    fn test_handle_key_incomplete() {
+        let mut state = PasskeyEntryState::new();
+        state.handle_key(HidKeyCode::Kc1);
+        assert_eq!(state.handle_key(HidKeyCode::Enter), PasskeyAction::Incomplete);
+    }
+
+    #[test]
+    fn test_handle_key_cancel() {
+        let mut state = PasskeyEntryState::new();
+        state.handle_key(HidKeyCode::Kc1);
+        state.handle_key(HidKeyCode::Kc2);
+        assert_eq!(state.handle_key(HidKeyCode::Escape), PasskeyAction::Cancelled);
+        assert_eq!(state.digit_count(), 0);
+    }
+
+    #[test]
+    fn test_handle_key_backspace() {
+        let mut state = PasskeyEntryState::new();
+        state.handle_key(HidKeyCode::Kc1);
+        state.handle_key(HidKeyCode::Kc2);
+        assert_eq!(state.handle_key(HidKeyCode::Backspace), PasskeyAction::Backspaced);
+        assert_eq!(state.digit_count(), 1);
+        // Backspace on empty
+        state.handle_key(HidKeyCode::Backspace);
+        assert_eq!(state.handle_key(HidKeyCode::Backspace), PasskeyAction::Ignored);
+    }
+
+    #[test]
+    fn test_handle_key_buffer_full() {
+        let mut state = PasskeyEntryState::new();
+        for d in [HidKeyCode::Kc1, HidKeyCode::Kc2, HidKeyCode::Kc3, HidKeyCode::Kc4, HidKeyCode::Kc5, HidKeyCode::Kc6] {
+            state.handle_key(d);
+        }
+        assert_eq!(state.handle_key(HidKeyCode::Kc7), PasskeyAction::BufferFull);
+    }
+
+    #[test]
+    fn test_handle_key_ignored() {
+        let mut state = PasskeyEntryState::new();
+        assert_eq!(state.handle_key(HidKeyCode::A), PasskeyAction::Ignored);
+    }
+
+    #[test]
+    fn test_handle_key_kp_enter() {
+        let mut state = PasskeyEntryState::new();
+        for d in [HidKeyCode::Kp1, HidKeyCode::Kp2, HidKeyCode::Kp3, HidKeyCode::Kp4, HidKeyCode::Kp5, HidKeyCode::Kp6] {
+            state.handle_key(d);
+        }
+        assert_eq!(state.handle_key(HidKeyCode::KpEnter), PasskeyAction::Submitted(123456));
+    }
+
+    #[test]
+    fn test_hid_keycode_to_digit_all() {
         let keycodes = [
-            (HidKeyCode::Kp0, 0),
-            (HidKeyCode::Kp1, 1),
-            (HidKeyCode::Kp2, 2),
-            (HidKeyCode::Kp3, 3),
-            (HidKeyCode::Kp4, 4),
-            (HidKeyCode::Kp5, 5),
-            (HidKeyCode::Kp6, 6),
-            (HidKeyCode::Kp7, 7),
-            (HidKeyCode::Kp8, 8),
+            (HidKeyCode::Kc0, 0), (HidKeyCode::Kc1, 1), (HidKeyCode::Kc2, 2),
+            (HidKeyCode::Kc3, 3), (HidKeyCode::Kc4, 4), (HidKeyCode::Kc5, 5),
+            (HidKeyCode::Kc6, 6), (HidKeyCode::Kc7, 7), (HidKeyCode::Kc8, 8),
+            (HidKeyCode::Kc9, 9),
+            (HidKeyCode::Kp0, 0), (HidKeyCode::Kp1, 1), (HidKeyCode::Kp2, 2),
+            (HidKeyCode::Kp3, 3), (HidKeyCode::Kp4, 4), (HidKeyCode::Kp5, 5),
+            (HidKeyCode::Kp6, 6), (HidKeyCode::Kp7, 7), (HidKeyCode::Kp8, 8),
             (HidKeyCode::Kp9, 9),
         ];
         for (kc, expected) in keycodes {
-            let action = KeyAction::Single(Action::Key(KeyCode::Hid(kc)));
-            assert_eq!(extract_digit(&action), Some(expected), "Failed for {:?}", kc);
+            assert_eq!(hid_keycode_to_digit(kc), Some(expected), "Failed for {:?}", kc);
         }
+        assert_eq!(hid_keycode_to_digit(HidKeyCode::A), None);
     }
 
     #[test]

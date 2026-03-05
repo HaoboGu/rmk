@@ -381,6 +381,8 @@ define_event_config!(
     central_connected,
     peripheral_battery,
     clear_peer,
+    // Passkey events
+    passkey_state,
 );
 
 /// Configurations for keyboard layout
@@ -1032,6 +1034,14 @@ impl KeyboardTomlConfig {
             (None, None) => Ok(Default::default()),
             _ => Err("Use [[split.output]] to define outputs for split in your keyboard.toml!".to_string()),
         }
+    }
+
+    /// Check if BLE passkey entry is enabled in the TOML config.
+    pub fn ble_passkey_entry_enabled(&self) -> bool {
+        self.ble
+            .as_ref()
+            .and_then(|b| b.passkey_entry)
+            .unwrap_or(false)
     }
 }
 
