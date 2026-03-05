@@ -224,6 +224,9 @@ pub struct RmkConstantsConfig {
     /// BLE Split Central sleep timeout in minutes (0 = disabled)
     #[serde_inline_default(0)]
     pub split_central_sleep_timeout_seconds: u32,
+    /// BLE passkey entry timeout in seconds (how long user has to type the passkey)
+    #[serde_inline_default(120)]
+    pub passkey_timeout_secs: u32,
 }
 
 fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
@@ -289,6 +292,7 @@ impl Default for RmkConstantsConfig {
             split_peripherals_num: 0,
             ble_profiles_num: 3,
             split_central_sleep_timeout_seconds: 0,
+            passkey_timeout_secs: 120,
         }
     }
 }
@@ -376,6 +380,8 @@ define_event_config!(
     central_connected,
     peripheral_battery,
     clear_peer,
+    // Passkey events
+    passkey_state,
 );
 
 /// Configurations for keyboard layout
@@ -471,6 +477,7 @@ pub struct BleConfig {
     pub adc_divider_total: Option<u32>,
     pub default_tx_power: Option<i8>,
     pub use_2m_phy: Option<bool>,
+    pub passkey_entry: Option<bool>,
 }
 
 /// Config for chip-specific settings
@@ -1026,6 +1033,14 @@ impl KeyboardTomlConfig {
             (None, None) => Ok(Default::default()),
             _ => Err("Use [[split.output]] to define outputs for split in your keyboard.toml!".to_string()),
         }
+    }
+
+    /// Check if BLE passkey entry is enabled in the TOML config.
+    pub fn ble_passkey_entry_enabled(&self) -> bool {
+        self.ble
+            .as_ref()
+            .and_then(|b| b.passkey_entry)
+            .unwrap_or(false)
     }
 }
 

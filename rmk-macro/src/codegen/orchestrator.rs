@@ -56,6 +56,25 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
         }
     }
 
+    // Check "ble_passkey_entry" feature gate
+    let ble_config = keyboard_config
+        .get_communication_config()
+        .ok()
+        .and_then(|c| c.get_ble_config());
+    let passkey_entry_enabled = ble_config
+        .as_ref()
+        .and_then(|b| b.passkey_entry)
+        .unwrap_or(false);
+    let passkey_feature_enabled = is_feature_enabled(&rmk_features, "ble_passkey_entry");
+    let passkey_timeout_customized = keyboard_config.rmk.passkey_timeout_secs != 120;
+
+    // passkey_timeout_secs only makes sense when passkey entry is enabled somewhere
+    if passkey_timeout_customized && !passkey_entry_enabled && !passkey_feature_enabled {
+        panic!(
+            "If `rmk.passkey_timeout_secs` is set in keyboard.toml, passkey entry must be enabled via `ble.passkey_entry = true` in keyboard.toml or the \"ble_passkey_entry\" cargo feature."
+        )
+    }
+
     // Generate imports and statics
     let imports_and_statics = expand_imports_and_constants(&keyboard_config);
 

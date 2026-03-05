@@ -30,6 +30,8 @@ pub use battery::{BatteryAdcEvent, BatteryStateEvent, ChargingStateEvent};
 #[cfg(feature = "_ble")]
 pub use connection::{BleProfileChangeEvent, BleStateChangeEvent};
 pub use connection::{ConnectionChangeEvent, ConnectionType};
+#[cfg(ble_passkey_entry)]
+pub use connection::PasskeyStateEvent;
 pub use input::{
     Axis, AxisEvent, AxisValType, KeyPos, KeyboardEvent, KeyboardEventPos, ModifierEvent, PointingEvent,
     PointingSetCpiEvent, RotaryEncoderPos,

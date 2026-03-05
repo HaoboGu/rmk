@@ -26,6 +26,9 @@ use crate::hid::Report;
 use crate::input_device::Runnable;
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
+use crate::keyboard::mode::{
+    HostReportStrategy, KeyReportState, KeyboardMode, KeypressHandler, NormalHandler,
+};
 use crate::keyboard::mouse::{MouseAction, MouseState};
 use crate::keyboard_macros::MacroOperation;
 use crate::keymap::KeyMap;
@@ -36,6 +39,7 @@ use crate::{FORK_MAX_NUM, boot};
 
 pub(crate) mod combo;
 pub(crate) mod held_buffer;
+pub(crate) mod mode;
 pub(crate) mod morse;
 pub(crate) mod mouse;
 pub(crate) mod oneshot;
@@ -260,6 +264,9 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Used for temporarily disabling combos
     combo_on: bool,
+
+    /// Keyboard mode (normal or passkey entry)
+    mode: KeyboardMode,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -290,11 +297,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             system_control_report: SystemControlReport { usage_id: 0 },
             last_key_code: KeyCode::Hid(HidKeyCode::No),
             combo_on: true,
+            mode: KeyboardMode::Normal(NormalHandler),
         }
     }
 
     /// Send a keyboard report to the host
     async fn send_report(&self, report: Report) {
+        if !self.mode.should_send_report() {
+            return;
+        }
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 
@@ -376,6 +387,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Process key changes at (row, col)
     pub async fn process_inner(&mut self, event: KeyboardEvent) {
+        // Check for mode transitions (e.g., entering/exiting passkey entry)
+        #[cfg(ble_passkey_entry)]
+        self.check_mode_transition();
+
         #[cfg(feature = "vial_lock")]
         self.keymap.borrow_mut().matrix_state.update(&event);
 
@@ -586,7 +601,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     self.process_key_action_tap(action, held_key.event).await;
                                 }
                                 KeyAction::No => {
-                                    self.process_key_action_tap(key_action.to_action(), held_key.event).await;
+                                    self.process_key_action_tap(key_action.to_action(), held_key.event)
+                                        .await;
                                 }
                                 _ => unreachable!(),
                             }
@@ -1814,21 +1830,27 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Register a key, the key can be a basic keycode or a modifier.
+    /// Delegates to the active keyboard mode handler.
     fn register_key(&mut self, key: HidKeyCode, event: KeyboardEvent) {
-        if key.is_modifier() {
-            self.register_modifier_key(key);
-        } else {
-            self.register_keycode(key, event);
-        }
+        let mut state = KeyReportState {
+            held_keycodes: &mut self.held_keycodes,
+            registered_keys: &mut self.registered_keys,
+            held_modifiers: &mut self.held_modifiers,
+            fork_keep_mask: &mut self.fork_keep_mask,
+        };
+        self.mode.register_key(key, event, &mut state);
     }
 
     /// Unregister a key, the key can be a basic keycode or a modifier.
+    /// Delegates to the active keyboard mode handler.
     fn unregister_key(&mut self, key: HidKeyCode, event: KeyboardEvent) {
-        if key.is_modifier() {
-            self.unregister_modifier_key(key);
-        } else {
-            self.unregister_keycode(key, event);
-        }
+        let mut state = KeyReportState {
+            held_keycodes: &mut self.held_keycodes,
+            registered_keys: &mut self.registered_keys,
+            held_modifiers: &mut self.held_modifiers,
+            fork_keep_mask: &mut self.fork_keep_mask,
+        };
+        self.mode.unregister_key(key, event, &mut state);
     }
 
     /// Set the timer value for a key event
@@ -1914,29 +1936,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    /// Register a modifier to be sent in hid report.
-    fn register_modifier_key(&mut self, key: HidKeyCode) {
-        self.held_modifiers |= key.to_hid_modifiers();
-
-        publish_event(ModifierEvent {
-            modifier: self.held_modifiers,
-        });
-
-        // if a modifier key arrives after fork activation, it should be kept
-        self.fork_keep_mask |= key.to_hid_modifiers();
-    }
-
-    /// Unregister a modifier from hid report.
-    fn unregister_modifier_key(&mut self, key: HidKeyCode) {
-        self.held_modifiers &= !key.to_hid_modifiers();
-
-        publish_event(ModifierEvent {
-            modifier: self.held_modifiers,
-        });
-    }
-
     /// Register a modifier combination to be sent in hid report.
     fn register_modifiers(&mut self, modifiers: ModifierCombination) {
+        if !self.mode.should_send_report() {
+            return;
+        }
         self.held_modifiers |= modifiers;
 
         publish_event(ModifierEvent {
@@ -1949,11 +1953,26 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Unregister a modifier combination from hid report.
     fn unregister_modifiers(&mut self, modifiers: ModifierCombination) {
+        if !self.mode.should_send_report() {
+            return;
+        }
         self.held_modifiers &= !modifiers;
 
         publish_event(ModifierEvent {
             modifier: self.held_modifiers,
         });
+    }
+
+    /// Check if the keyboard mode should transition between normal and passkey entry.
+    #[cfg(ble_passkey_entry)]
+    fn check_mode_transition(&mut self) {
+        use core::sync::atomic::Ordering;
+        let passkey_active = crate::ble::passkey::PASSKEY_ENTRY_MODE.load(Ordering::Acquire);
+        if passkey_active && !self.mode.is_passkey() {
+            self.mode.enter_passkey_mode();
+        } else if !passkey_active && self.mode.is_passkey() {
+            self.mode.enter_normal_mode();
+        }
     }
 }
 

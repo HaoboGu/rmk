@@ -53,6 +53,8 @@ pub(crate) mod device_info;
 #[cfg(feature = "host")]
 pub(crate) mod host_service;
 pub(crate) mod led;
+#[cfg(ble_passkey_entry)]
+pub mod passkey;
 pub(crate) mod profile;
 
 #[derive(Clone, Copy, Debug)]
@@ -94,9 +96,14 @@ pub async fn build_ble_stack<
     resources: &'a mut HostResources<P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX>,
 ) -> Stack<'a, C, P> {
     // Initialize trouble host stack
-    trouble_host::new(controller, resources)
+    let stack = trouble_host::new(controller, resources)
         .set_random_address(Address::random(host_address))
-        .set_random_generator_seed(random_generator)
+        .set_random_generator_seed(random_generator);
+
+    #[cfg(ble_passkey_entry)]
+    let stack = stack.set_io_capabilities(IoCapabilities::KeyboardOnly);
+
+    stack
 }
 
 /// Run the BLE stack.
@@ -677,7 +684,47 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
             }
             GattConnectionEvent::PassKeyDisplay(pass_key) => info!("[gatt] PassKeyDisplay: {:?}", pass_key),
             GattConnectionEvent::PassKeyConfirm(pass_key) => info!("[gatt] PassKeyConfirm: {:?}", pass_key),
-            GattConnectionEvent::PassKeyInput => warn!("[gatt] PassKeyInput event, should not happen"),
+            GattConnectionEvent::PassKeyInput => {
+                #[cfg(ble_passkey_entry)]
+                {
+                    use crate::ble::passkey::{
+                        PASSKEY_RESPONSE, begin_passkey_entry_session, end_passkey_entry_session,
+                    };
+
+                    info!("[gatt] PassKeyInput: entering passkey entry mode");
+                    begin_passkey_entry_session();
+
+                    // Wait with configurable timeout
+                    match embassy_time::with_timeout(
+                        Duration::from_secs(crate::PASSKEY_TIMEOUT_SECS as u64),
+                        PASSKEY_RESPONSE.wait(),
+                    )
+                    .await
+                    {
+                        Ok(Some(passkey)) => {
+                            end_passkey_entry_session();
+                            info!("[gatt] Passkey entered: submitting");
+                            if let Err(e) = conn.raw().pass_key_input(passkey) {
+                                error!("[gatt] pass_key_input error: {:?}", e);
+                            }
+                        }
+                        Ok(None) => {
+                            end_passkey_entry_session();
+                            info!("[gatt] Passkey entry cancelled");
+                            if let Err(e) = conn.raw().pass_key_cancel() {
+                                error!("[gatt] pass_key_cancel error: {:?}", e);
+                            }
+                        }
+                        Err(_) => {
+                            end_passkey_entry_session();
+                            warn!("[gatt] Passkey entry timeout");
+                            let _ = conn.raw().pass_key_cancel();
+                        }
+                    }
+                }
+                #[cfg(not(ble_passkey_entry))]
+                warn!("[gatt] PassKeyInput event, should not happen")
+            }
         }
 
         // Publish the BLE connected event
