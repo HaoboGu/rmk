@@ -4,6 +4,8 @@
 //! Real endpoint handlers will be added in Phases 4-6; transport implementations
 //! come in Phase 3 (USB) and Phase 8 (BLE).
 
+pub(crate) mod transport;
+
 use core::cell::RefCell;
 
 use postcard_rpc::header::{VarHeader, VarKey, VarKeyKind};
@@ -355,5 +357,19 @@ impl<
 
         // No match
         sender.error(seq, WireError::UnknownKey).await
+    }
+}
+
+impl<
+    Tx: WireTx,
+    Rx: WireRx,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
+> super::HostService for ProtocolService<'_, Tx, Rx, ROW, COL, NUM_LAYER, NUM_ENCODER>
+{
+    async fn run(&mut self) {
+        self.run().await
     }
 }

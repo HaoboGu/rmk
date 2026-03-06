@@ -127,12 +127,12 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     #[cfg(feature = "usb_log")]
     const USB_BUF_SIZE: usize = 256;
     #[cfg(not(feature = "usb_log"))]
-    const USB_BUF_SIZE: usize = 128;
+    const USB_BUF_SIZE: usize = 256;
 
     // Create embassy-usb DeviceBuilder using the driver and config.
     static CONFIG_DESC: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
-    static BOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
-    static MSOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
+    static BOS_DESC: StaticCell<[u8; 128]> = StaticCell::new();
+    static MSOS_DESC: StaticCell<[u8; 512]> = StaticCell::new();
     static CONTROL_BUF: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
 
     // UsbDevice builder
@@ -140,8 +140,8 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
         driver,
         usb_config,
         &mut CONFIG_DESC.init([0; USB_BUF_SIZE])[..],
-        &mut BOS_DESC.init([0; 16])[..],
-        &mut MSOS_DESC.init([0; 16])[..],
+        &mut BOS_DESC.init([0; 128])[..],
+        &mut MSOS_DESC.init([0; 512])[..],
         &mut CONTROL_BUF.init([0; USB_BUF_SIZE])[..],
     );
 
@@ -225,6 +225,32 @@ macro_rules! add_usb_reader_writer {
 #[cfg(feature = "usb_log")]
 pub(crate) use add_usb_logger;
 pub(crate) use {add_usb_reader_writer, add_usb_writer};
+
+#[cfg(feature = "rmk_protocol")]
+macro_rules! add_usb_vendor_bulk {
+    ($usb_builder:expr) => {{
+        use embassy_usb::msos::{self, windows_version};
+
+        $usb_builder.msos_descriptor(windows_version::WIN8_1, 0);
+        $usb_builder.msos_feature(msos::CompatibleIdFeatureDescriptor::new("WINUSB", ""));
+        $usb_builder.msos_feature(msos::RegistryPropertyFeatureDescriptor::new(
+            "DeviceInterfaceGUIDs",
+            msos::PropertyData::RegMultiSz(&["{CDB53450-4E39-4F7E-9F61-4DEF2E5C1C3B}"]),
+        ));
+
+        let mut function = $usb_builder.function(0xFF, 0, 0);
+        let mut interface = function.interface();
+        let mut alt = interface.alt_setting(0xFF, 0, 0, None);
+        let ep_out = alt.endpoint_bulk_out(None, 64);
+        let ep_in = alt.endpoint_bulk_in(None, 64);
+        drop(function);
+
+        (ep_out, ep_in)
+    }};
+}
+
+#[cfg(feature = "rmk_protocol")]
+pub(crate) use add_usb_vendor_bulk;
 
 pub(crate) struct UsbRequestHandler {}
 

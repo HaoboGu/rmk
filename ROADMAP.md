@@ -127,45 +127,45 @@ Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rm
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Create directory `rmk/src/host/protocol/` | [ ] | |
-| b | Create `rmk/src/host/protocol/mod.rs` | [ ] | |
-| c | Define `ProtocolService` struct with fields: `&'a RefCell<KeyMap<ROW, COL, NUM_LAYER, NUM_ENCODER>>`, `Sender<Tx>` (wraps `WireTx`, provides `reply()`/`publish()`/`error()`), lock state (`bool`), RX buffer `[u8; BUF_SIZE]`, event subscribers (created once in `new()`) | [ ] | Follow VialService pattern. `Sender` from postcard-rpc wraps transport. Event subscribers must be held as fields, not re-created per loop iteration |
-| d | Implement `ProtocolService::new()` constructor — create all event subscribers here | [ ] | |
-| e | Implement `ProtocolService::run()` async main loop: use `embassy_futures::select` to multiplex transport reads (endpoint requests) and event subscribers (topic sources). Single-writer: only this loop writes to transport | [ ] | Returns a future composed into `select_biased!`, NOT spawned via Spawner |
-| f | Gate entire module with `#[cfg(feature = "rmk_protocol")]` | [ ] | |
+| a | Create directory `rmk/src/host/protocol/` | [x] | |
+| b | Create `rmk/src/host/protocol/mod.rs` | [x] | Also created `transport.rs` submodule |
+| c | Define `ProtocolService` struct with fields: `&'a RefCell<KeyMap<ROW, COL, NUM_LAYER, NUM_ENCODER>>`, `Sender<Tx>` (wraps `WireTx`, provides `reply()`/`publish()`/`error()`), lock state (`bool`), RX buffer `[u8; BUF_SIZE]`, event subscribers (created once in `new()`) | [x] | All endpoint keys registered. Event subscribers deferred to Phase 7 |
+| d | Implement `ProtocolService::new()` constructor — create all event subscribers here | [x] | |
+| e | Implement `ProtocolService::run()` async main loop: use `embassy_futures::select` to multiplex transport reads (endpoint requests) and event subscribers (topic sources). Single-writer: only this loop writes to transport | [x] | Transport read loop implemented. Event subscriber branches deferred to Phase 7 |
+| f | Gate entire module with `#[cfg(feature = "rmk_protocol")]` | [x] | |
 
 ### Step 2.3 — Implement dispatch loop
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | In the transport branch of `select`, read frame from `WireRx::receive()` into RX buffer | [ ] | `WireRx` handles framing (COBS for serial, packet for USB bulk) |
-| b | Parse `VarHeader` from frame: extract discriminant, key, seq_no | [ ] | Use postcard-rpc's `VarHeader::take_from_slice()` — returns `Option<(VarHeader, &[u8])>` |
-| c | Match key against registered endpoint keys (compile-time key constants from `endpoint!` macro) | [ ] | Match on `<GetVersion as Endpoint>::REQ_KEY`, etc. |
-| d | On match: deserialize payload with `postcard::from_bytes`, call corresponding handler | [ ] | |
-| e | On no match: send `WireError::UnknownKey` via `Sender::error()` | [ ] | |
-| f | Send handler response via `Sender::reply::<E>()` with echoed seq_no | [ ] | `Sender` handles VarHeader construction and serialization |
-| g | In event subscriber branches of `select`, publish Topic frame via `Sender::publish::<T>()` | [ ] | Response writes prioritized over topic writes in select order |
-| h | Add error handling: on frame parse failure, skip current frame and continue (resync) | [ ] | |
-| i | Handle transport write failures: log error, do not crash, continue running | [ ] | |
+| a | In the transport branch of `select`, read frame from `WireRx::receive()` into RX buffer | [x] | `WireRx` handles framing (COBS for serial, packet for USB bulk) |
+| b | Parse `VarHeader` from frame: extract discriminant, key, seq_no | [x] | Use postcard-rpc's `VarHeader::take_from_slice()` — returns `Option<(VarHeader, &[u8])>` |
+| c | Match key against registered endpoint keys (compile-time key constants from `endpoint!` macro) | [x] | Match on `<GetVersion as Endpoint>::REQ_KEY`, etc. |
+| d | On match: deserialize payload with `postcard::from_bytes`, call corresponding handler | [ ] | Dispatch structure in place; all endpoints currently return `UnknownKey` placeholder |
+| e | On no match: send `WireError::UnknownKey` via `Sender::error()` | [x] | |
+| f | Send handler response via `Sender::reply::<E>()` with echoed seq_no | [x] | GetVersion handler implemented; others are Phase 4+ |
+| g | In event subscriber branches of `select`, publish Topic frame via `Sender::publish::<T>()` | [ ] | Deferred to Phase 7 |
+| h | Add error handling: on frame parse failure, skip current frame and continue (resync) | [x] | |
+| i | Handle transport write failures: log error, do not crash, continue running | [x] | |
 
 ### Step 2.4 — Feature-gated task wiring
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Add `#[cfg(feature = "rmk_protocol")] pub(crate) mod protocol;` in `rmk/src/host/mod.rs` | [ ] | Parallel to existing `#[cfg(feature = "vial")] pub(crate) mod via;` |
-| b | Add `#[cfg(feature = "rmk_protocol")]` version of `run_host_communicate_task()` that creates and runs `ProtocolService` | [ ] | Returns async future, composed into `select_biased!` in `run_keyboard()` |
-| c | Ensure `ProtocolService` receives the same `&RefCell<KeyMap>` reference as `VialService` | [ ] | |
-| d | Run `cargo check -p rmk --no-default-features --features=rmk_protocol` to verify task wiring compiles | [ ] | |
+| a | Add `#[cfg(feature = "rmk_protocol")] pub(crate) mod protocol;` in `rmk/src/host/mod.rs` | [x] | Parallel to existing `#[cfg(feature = "vial")] pub(crate) mod via;` |
+| b | Add `#[cfg(feature = "rmk_protocol")]` version of `run_host_communicate_task()` that creates and runs `ProtocolService` | [x] | Accepts generic `Tx: WireTx, Rx: WireRx`; composed into `select_biased!` in `run_keyboard()` |
+| c | Ensure `ProtocolService` receives the same `&RefCell<KeyMap>` reference as `VialService` | [x] | |
+| d | Run `cargo check -p rmk --no-default-features --features=rmk_protocol` to verify task wiring compiles | [x] | |
 
 ### Step 2.5 — Rename `VialMessage` -> `HostMessage`
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | In `rmk/src/storage/mod.rs`, rename `FlashOperationMessage::VialMessage` to `FlashOperationMessage::HostMessage` | [ ] | |
-| b | Search all references to `VialMessage` and update (`rmk/src/host/via/mod.rs`, `rmk/src/host/via/vial.rs`, etc.) | [ ] | Use `cargo check` to find all |
-| c | Keep `#[cfg(feature = "host")]` on the `HostMessage` variant (usable by both vial and rmk_protocol) | [ ] | |
+| a | In `rmk/src/storage/mod.rs`, rename `FlashOperationMessage::VialMessage` to `FlashOperationMessage::HostMessage` | [x] | Already done in prior work |
+| b | Search all references to `VialMessage` and update (`rmk/src/host/via/mod.rs`, `rmk/src/host/via/vial.rs`, etc.) | [x] | |
+| c | Keep `#[cfg(feature = "host")]` on the `HostMessage` variant (usable by both vial and rmk_protocol) | [x] | |
 | d | Implement runtime keymap reset in storage: change `FlashOperationMessage::ResetLayout` handler to actually erase stored keymap keys and reload defaults (currently a no-op at runtime) | [ ] | Required for `ResetKeymap` endpoint to work |
-| e | Run `cargo test -p rmk --no-default-features --features=vial,storage` to confirm Vial still works | [ ] | |
+| e | Run `cargo test -p rmk --no-default-features --features=vial,storage` to confirm Vial still works | [x] | All tests pass |
 
 ---
 
@@ -177,36 +177,36 @@ Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rm
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Create `rmk/src/host/protocol/transport.rs` | [ ] | |
-| b | Create vendor interface (class `0xFF`) with bulk IN and bulk OUT endpoints using `embassy_usb::Builder` | [ ] | 1 interface, 2 endpoints — simpler than CDC-ACM |
-| c | Add MS OS descriptors for automatic WinUSB driver binding on Windows | [ ] | Required for driverless Windows support. Reference postcard-rpc's `embassy_usb_v0_5` module for WinUSB GUID and descriptor setup |
-| d | Increase `BOS_DESC_BUF` to ≥64 bytes and `MSOS_DESC_BUF` to ≥256 bytes in `rmk/src/usb/mod.rs` | [ ] | Current 16-byte buffers are too small for MS OS 2.0 descriptors |
-| e | Implement connect/disconnect handling | [ ] | |
-| f | Gate with `#[cfg(feature = "rmk_protocol")]` | [ ] | |
+| a | Create `rmk/src/host/protocol/transport.rs` | [x] | Contains `UsbBulkTx` (WireTx), `UsbBulkRx` (WireRx), and `PendingTx`/`PendingRx` for no-transport contexts |
+| b | Create vendor interface (class `0xFF`) with bulk IN and bulk OUT endpoints using `embassy_usb::Builder` | [x] | `add_usb_vendor_bulk!` macro in `rmk/src/usb/mod.rs`; 1 interface, 2 endpoints |
+| c | Add MS OS descriptors for automatic WinUSB driver binding on Windows | [x] | WINUSB CompatibleId + DeviceInterfaceGUIDs registry property via `msos_descriptor`/`msos_feature` |
+| d | Increase `BOS_DESC_BUF` to ≥64 bytes and `MSOS_DESC_BUF` to ≥256 bytes in `rmk/src/usb/mod.rs` | [x] | BOS: 16→64, MSOS: 16→256 |
+| e | Implement connect/disconnect handling | [x] | `wait_connection()` delegates to `ep.wait_enabled()`; `EndpointError::Disabled` maps to `ConnectionClosed` |
+| f | Gate with `#[cfg(feature = "rmk_protocol")]` | [x] | Vendor bulk macro and USB types gated; `PendingTx`/`PendingRx` always available for BLE path |
 
 ### Step 3.2 — Implement `WireTx`/`WireRx` for USB bulk transport
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Implement postcard-rpc's `WireTx` trait for bulk IN endpoint | [ ] | USB bulk packets are self-delimiting — no COBS needed |
-| b | Implement postcard-rpc's `WireRx` trait for bulk OUT endpoint | [ ] | |
-| c | Reference postcard-rpc's own `embassy_usb_v0_5` impl for pattern guidance | [ ] | |
-| d | Run `cargo check` to confirm generic parameters propagate correctly | [ ] | |
+| a | Implement postcard-rpc's `WireTx` trait for bulk IN endpoint | [x] | `UsbBulkTx` uses `RefCell` for interior mutability; chunks data at 64-byte USB FS max packet size with ZLP termination |
+| b | Implement postcard-rpc's `WireRx` trait for bulk OUT endpoint | [x] | `UsbBulkRx` accumulates reads until short packet signals end of transfer |
+| c | Reference postcard-rpc's own `embassy_usb_v0_5` impl for pattern guidance | [x] | Followed same send_all/receive pattern but simplified (no Mutex, no timeout, no logging) |
+| d | Run `cargo check` to confirm generic parameters propagate correctly | [x] | Compiles with `--features=rmk_protocol,storage` |
 
 ### Step 3.3 — Add vendor bulk endpoints to USB setup
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | In `rmk/src/usb/mod.rs`, under `#[cfg(feature = "rmk_protocol")]`, add vendor-class bulk endpoint creation | [ ] | |
-| b | Ensure vendor interface coexists with existing HID composite device (IAD support already enabled in `new_usb_builder`) | [ ] | USB composite |
-| c | Pass bulk endpoint handles to `ProtocolService` constructor | [ ] | |
-| d | Test USB enumeration in an example project: after plugging in, host should see both HID and vendor-class interfaces | [ ] | |
+| a | In `rmk/src/usb/mod.rs`, under `#[cfg(feature = "rmk_protocol")]`, add vendor-class bulk endpoint creation | [x] | `add_usb_vendor_bulk!` macro |
+| b | Ensure vendor interface coexists with existing HID composite device (IAD support already enabled in `new_usb_builder`) | [x] | `composite_with_iads = true` was already set; vendor function added alongside HID |
+| c | Pass bulk endpoint handles to `ProtocolService` constructor | [x] | Threaded through `run_keyboard` → `run_host_communicate_task` → `ProtocolService::new()`. BLE path uses `PendingTx`/`PendingRx` |
+| d | Test USB enumeration in an example project: after plugging in, host should see both HID and vendor-class interfaces | [ ] | Requires hardware testing |
 
 ### Step 3.4 — Integration test: USB handshake
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Build firmware with `rmk_protocol` feature on an nRF52840 or RP2040 example | [ ] | |
+| a | Build firmware with `rmk_protocol` feature on an nRF52840 or RP2040 example | [ ] | Requires hardware |
 | b | Flash firmware, use `nusb` crate (Rust) or `libusb` to claim vendor interface and verify communication | [ ] | |
 | c | Send `GetVersion` request using postcard-rpc client with `nusb` backend | [ ] | |
 | d | Verify correct `ProtocolVersion` response received | [ ] | |
@@ -527,8 +527,8 @@ Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rm
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 1 | ICD Types and postcard-rpc Integration | **Complete** |
-| 2 | Feature Gate and ProtocolService Skeleton | **Step 2.1 Complete** |
-| 3 | USB Raw Bulk Transport | Not Started |
+| 2 | Feature Gate and ProtocolService Skeleton | **Complete** |
+| 3 | USB Raw Bulk Transport | **Steps 3.1-3.3 Complete** (3.4 requires hardware) |
 | 4 | System and Keymap Endpoints | Not Started |
 | 5 | Security (Lock/Unlock) | Not Started |
 | 6 | Remaining Endpoints | Not Started |
@@ -554,7 +554,7 @@ Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rm
 | `rmk-types/src/ble.rs` | Shared `BleStatus`, `BleState` types |
 | `rmk-types/src/fork.rs` | Shared `ForkStateBits` type |
 | `rmk/src/host/protocol/mod.rs` | ProtocolService and dispatch loop (Phase 2+) |
-| `rmk/src/host/protocol/transport.rs` | Transport adapters (raw USB bulk, BLE serial) (Phase 3+) |
+| `rmk/src/host/protocol/transport.rs` | Transport adapters: `UsbBulkTx`/`UsbBulkRx` (USB bulk), `PendingTx`/`PendingRx` (no-op placeholder) |
 | `rmk/src/host/protocol/topics.rs` | Event bus -> Topic bridging (Phase 7+) |
 | `rmk/src/host/lock.rs` | Shared lock/unlock logic (Phase 5+) |
 | `rmk/src/host/mod.rs` | Feature-gated task spawning |
