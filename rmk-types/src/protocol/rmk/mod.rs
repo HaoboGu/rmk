@@ -506,7 +506,11 @@ mod tests {
 
     #[test]
     fn round_trip_matrix_state() {
-        round_trip(&MatrixState { num_pressed: 3 });
+        let mut bitmap = heapless::Vec::new();
+        bitmap.extend_from_slice(&[0b0000_0101, 0x00, 0b0010_0000]).unwrap();
+        round_trip(&MatrixState {
+            pressed_bitmap: bitmap,
+        });
     }
 
     #[test]

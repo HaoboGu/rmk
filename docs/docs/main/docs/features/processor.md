@@ -72,7 +72,7 @@ pub struct MultiEventProcessor {
 
 impl MultiEventProcessor {
     async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
-        self.layer = event.layer;
+        self.layer = event.0;
         // Update display with new layer
     }
 
@@ -107,7 +107,7 @@ impl<D: DrawTarget> DisplayProcessor<D> {
 
     // Event handler - triggered when layer changes
     async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
-        self.layer = event.layer;
+        self.layer = event.0;
         self.needs_refresh = true;
     }
 

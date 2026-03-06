@@ -250,7 +250,7 @@ async fn main(spawner: Spawner) {
             info!("Central battery status: {:?}", event);
         }
         async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
-            info!("Layer changed to: {}", event.layer);
+            info!("Layer changed to: {}", event.0);
         }
     }
 
