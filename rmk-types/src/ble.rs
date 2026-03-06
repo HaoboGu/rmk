@@ -1,11 +1,11 @@
 //! BLE status types.
 
 use postcard::experimental::max_size::MaxSize;
+use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
-/// BLE state
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+/// BLE state (what the BLE subsystem is currently doing).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum BleState {
     /// The BLE is advertising.
@@ -16,8 +16,8 @@ pub enum BleState {
     Inactive,
 }
 
-/// Current keyboard's BLE status, including the current active profile and BLE's state
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+/// Unified BLE status: which profile is active and what the BLE is doing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct BleStatus {
     pub profile: u8,

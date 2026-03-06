@@ -6,7 +6,6 @@
 
 use rmk_macro::event;
 pub use rmk_types::connection::ConnectionType;
-use rmk_types::event::ConnectionPayload;
 
 #[cfg(feature = "_ble")]
 use rmk_types::ble::BleStatus;
@@ -19,15 +18,15 @@ use rmk_types::ble::BleStatus;
 #[event(channel_size = crate::CONNECTION_CHANGE_EVENT_CHANNEL_SIZE, pubs = crate::CONNECTION_CHANGE_EVENT_PUB_SIZE, subs = crate::CONNECTION_CHANGE_EVENT_SUB_SIZE)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct ConnectionChangeEvent(pub ConnectionPayload);
+pub struct ConnectionChangeEvent(pub ConnectionType);
 
 impl ConnectionChangeEvent {
     pub fn new(connection_type: ConnectionType) -> Self {
-        Self(ConnectionPayload { connection_type })
+        Self(connection_type)
     }
 }
 
-impl_payload_wrapper!(ConnectionChangeEvent, ConnectionPayload);
+impl_payload_wrapper!(ConnectionChangeEvent, ConnectionType);
 
 // ============================================================================
 // BLE Connection Events

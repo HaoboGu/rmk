@@ -1,7 +1,7 @@
 //! Battery LED processor for RMK
 use embedded_hal::digital::StatefulOutputPin;
 use rmk_macro::processor;
-use rmk_types::event::{BatteryStatus, ChargeState};
+use rmk_types::battery::{BatteryStatus, ChargeState};
 
 use crate::driver::gpio::OutputController;
 use crate::event::BatteryStatusEvent;

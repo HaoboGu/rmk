@@ -12,7 +12,6 @@ use embassy_futures::select::{Either3, select, select3};
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_time::{Duration, Timer, with_timeout};
 use rand_core::{CryptoRng, RngCore};
-use rmk_types::ble::{BleState, BleStatus};
 use rmk_types::led_indicator::LedIndicator;
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
@@ -64,6 +63,8 @@ pub(crate) mod led;
 #[cfg(feature = "passkey_entry")]
 pub mod passkey;
 pub(crate) mod profile;
+
+pub use rmk_types::ble::{BleState, BleStatus};
 
 /// Global BLE status: tracks the active profile and current BLE state.
 pub static BLE_STATUS: Mutex<crate::RawMutex, Cell<BleStatus>> = Mutex::new(Cell::new(BleStatus {
