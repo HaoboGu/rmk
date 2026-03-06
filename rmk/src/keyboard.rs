@@ -380,7 +380,7 @@ impl<'a> Keyboard<'a> {
         #[cfg(feature = "passkey_entry")]
         self.passkey_entry_state.check_mode_transition();
 
-        #[cfg(feature = "vial_lock")]
+        #[cfg(feature = "host_security")]
         self.keymap.update_matrix_state(&event);
 
         // Matrix should process key pressed event first, record the timestamp of key changes

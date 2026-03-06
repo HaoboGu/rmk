@@ -16,8 +16,9 @@ use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_ev
 use crate::fork::Fork;
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
-#[cfg(feature = "vial_lock")]
+#[cfg(feature = "host_security")]
 use crate::matrix::MatrixState;
+
 use crate::morse::Morse;
 
 pub(crate) const HOLD_BUFFER_SIZE: usize = 16;
@@ -108,7 +109,7 @@ struct KeyMapInner<'a> {
     /// Timer for held keys (bounded by hold buffer size)
     timer: LinearMap<KeyboardEventPos, Instant, HOLD_BUFFER_SIZE>,
     /// Matrix state for vial lock
-    #[cfg(feature = "vial_lock")]
+    #[cfg(feature = "host_security")]
     matrix_state: MatrixState,
 }
 
@@ -367,7 +368,7 @@ impl<'a> KeyMap<'a> {
                 hand,
                 mouse_buttons: 0,
                 timer: LinearMap::new(),
-                #[cfg(feature = "vial_lock")]
+                #[cfg(feature = "host_security")]
                 matrix_state: MatrixState::new(ROW, COL),
             }),
         }
@@ -709,19 +710,19 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().timer.get(&pos).copied()
     }
 
-    // ── Matrix state (vial_lock) ──
+    // ── Matrix state (host_security) ──
 
-    #[cfg(feature = "vial_lock")]
+    #[cfg(feature = "host_security")]
     pub(crate) fn update_matrix_state(&self, event: &KeyboardEvent) {
         self.inner.borrow_mut().matrix_state.update(event);
     }
 
-    #[cfg(feature = "vial_lock")]
+    #[cfg(feature = "host_security")]
     pub(crate) fn read_matrix_state(&self, target: &mut [u8]) {
         self.inner.borrow().matrix_state.read_all(target);
     }
 
-    #[cfg(feature = "vial_lock")]
+    #[cfg(feature = "host_security")]
     pub(crate) fn read_matrix_key(&self, row: u8, col: u8) -> bool {
         self.inner.borrow().matrix_state.read(row, col)
     }
