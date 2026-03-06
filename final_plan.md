@@ -87,13 +87,13 @@ On the wire, the PATH + Schema are hashed (FNV1a-64) into a compact `Key` (1-8 b
 
 ### DP2. Transport-agnostic core over byte streams
 
-The protocol uses COBS framing over byte streams, eliminating the need for manual fragmentation/reassembly. RMK's split serial communication already uses this pattern (`postcard::to_slice_cobs` / `postcard::take_from_bytes_cobs` in `rmk/src/split/serial/mod.rs`).
+The protocol uses COBS framing over byte streams (BLE serial) or packet-based framing (USB bulk), eliminating the need for manual fragmentation/reassembly. RMK's split serial communication already uses the COBS pattern (`postcard::to_slice_cobs` / `postcard::take_from_bytes_cobs` in `rmk/src/split/serial/mod.rs`).
 
 Two transport implementations are planned:
-- **USB**: Raw vendor-class bulk endpoints (class `0xFF`), with MS OS descriptors for automatic WinUSB binding on Windows. This provides WebUSB compatibility for browser-based configurators and uses a simpler descriptor (1 interface, 2 endpoints) than CDC-ACM. postcard-rpc provides a native `embassy-usb` server implementation for this transport that handles framing without COBS (USB bulk packets are self-delimiting).
-- **BLE serial**: NUS-like GATT service with RX/TX characteristics, implementing `embedded_io_async::{Read, Write}` for COBS-framed byte streams.
+- **USB**: Raw vendor-class bulk endpoints (class `0xFF`), with MS OS descriptors for automatic WinUSB binding on Windows. This provides WebUSB compatibility for browser-based configurators and uses a simpler descriptor (1 interface, 2 endpoints) than CDC-ACM. USB bulk packets are self-delimiting, so no COBS framing is needed.
+- **BLE serial**: NUS-like GATT service with RX/TX characteristics, implementing `embedded_io_async::{Read, Write}` for the byte stream layer, with COBS framing on top. postcard-rpc's `CobsAccumulator` (available with the `cobs` feature flag, no-std) handles RX frame decoding.
 
-`ProtocolService` is generic over transport via postcard-rpc's `WireTx`/`WireRx` traits. Each transport implements these traits, abstracting framing differences.
+`ProtocolService` is generic over transport via postcard-rpc's `WireTx`/`WireRx` traits (available with `default-features = false`, no server features needed). Each transport implements these traits, abstracting framing differences. postcard-rpc's `Sender` struct wraps `WireTx` and provides typed convenience methods (`reply::<E>()`, `publish::<T>()`, `error()`) for frame encoding — it works standalone without the `Server` or `define_dispatch!` machinery.
 
 ### DP3. Endpoints + Topics (two-primitive model)
 
@@ -130,12 +130,12 @@ Errors use postcard-rpc's standard error path (reserved `"error"` key), extended
 ### DP7. Feature-gate isolation
 
 ```toml
-rmk = { features = ["rmk_protocol"] }   # new protocol
+rmk = { features = ["rmk_protocol"] }   # new protocol (implies host, security)
 # OR
-rmk = { features = ["vial"] }           # legacy Vial
+rmk = { features = ["vial"] }           # legacy Vial (implies host; vial_lock implies security)
 ```
 
-Mutually exclusive. No protocol-multiplexing logic, no compatibility shims. Only one protocol's code is compiled.
+Mutually exclusive. No protocol-multiplexing logic, no compatibility shims. Only one protocol's code is compiled. The `security` feature (physical unlock + matrix state) is shared between both protocols.
 
 ### DP8. Forward-compatible extensibility
 
@@ -424,10 +424,12 @@ For endpoints with multi-field request payloads, v1 uses named request structs (
 
 | Endpoint | Request | Response | Path | Permission |
 |----------|---------|----------|------|------------|
-| GetBatteryStatus | `()` | `BatteryStatusEvent` | `status/battery` | ReadOnly |
+| GetBatteryStatus | `()` | `BatteryStatus` | `status/battery` | ReadOnly |
 | GetCurrentLayer | `()` | `u8` | `status/layer` | ReadOnly |
 | GetMatrixState | `()` | `MatrixState` | `status/matrix` | ReadOnly |
 | GetSplitStatus | `()` | `SplitStatus` | `status/split` | ReadOnly |
+
+> **`MatrixState` design**: Uses a bitmap representation (`pressed_bitmap: heapless::Vec<u8, 30>`) where each bit represents one key's pressed state, row-major, `ceil(num_cols / 8)` bytes per row. Maximum 240 keys (covers all practical keyboard sizes). The host decodes the bitmap using `num_rows`/`num_cols` from `DeviceCapabilities`. This reuses the existing Vial `MatrixState<ROW, COL>` bitmap tracking (now gated on `security` feature instead of `vial_lock`), enabling both key tester UI and physical unlock verification. Bit ordering is straightforward (bit 0 = col 0, bit 1 = col 1, ...).
 
 ---
 
@@ -437,13 +439,15 @@ Topics are fire-and-forget device-to-host notifications. Each maps directly to a
 
 | Topic | Payload | Path | Internal Event |
 |-------|---------|------|----------------|
-| LayerChange | `LayerChangePayload { layer: u8 }` | `event/layer` | `LayerChangeEvent` |
-| WpmUpdate | `WpmPayload { wpm: u16 }` | `event/wpm` | `WpmUpdateEvent` |
-| BatteryStatus | `BatteryStatusEvent` | `event/battery` | `BatteryStatusEvent` |
-| BleStatusChange | `BleStatus { profile: u8, state: BleState }` | `event/ble_status` | `BleStatusChangeEvent` |
-| ConnectionChange | `ConnectionPayload { ... }` | `event/connection` | `ConnectionChangeEvent` |
-| SleepState | `SleepPayload { sleeping: bool }` | `event/sleep` | `SleepStateEvent` |
-| LedIndicator | `LedPayload { indicator: LedIndicator }` | `event/led` | `LedIndicatorEvent` |
+| LayerChange | `u8` | `event/layer` | `LayerChangeEvent` |
+| WpmUpdate | `u16` | `event/wpm` | `WpmUpdateEvent` |
+| BatteryStatus | `BatteryStatus` | `event/battery` | `BatteryStatusEvent` |
+| BleStatusChange | `BleStatus` | `event/ble_status` | `BleStatusChangeEvent` |
+| ConnectionChange | `ConnectionType` | `event/connection` | `ConnectionChangeEvent` |
+| SleepState | `bool` | `event/sleep` | `SleepStateEvent` |
+| LedIndicator | `LedIndicator` | `event/led` | `LedIndicatorEvent` |
+
+> **Implementation note (as-built)**: Topic payload types use raw types (`u8`, `u16`, `bool`, etc.) instead of wrapper structs (`LayerChangePayload`, `WpmPayload`, etc.). The `impl_payload_wrapper!` macro in `rmk/src/event/mod.rs` already generates `From<Event> for Payload` and `From<Payload> for Event` conversions, making explicit wrapper types unnecessary.
 
 ### Implementation pattern
 
@@ -469,11 +473,13 @@ loop {
         }
         // Forward internal events as Topic frames
         event = self.layer_sub.next_event() => {
-            let frame = topic_frame::<LayerChangeTopic>(&LayerChangePayload { layer: event.layer });
+            // LayerChangeEvent derefs to u8 via impl_payload_wrapper!
+            let frame = topic_frame::<LayerChangeTopic>(&*event);
             self.transport.write(&frame).await;
         }
         event = self.battery_sub.next_event() => {
-            let frame = topic_frame::<BatteryStatusTopic>(&event.into());
+            // BatteryStatusEvent derefs to BatteryStatus via impl_payload_wrapper!
+            let frame = topic_frame::<BatteryStatusTopic>(&*event);
             self.transport.write(&frame).await;
         }
         // ... other event subscribers
@@ -511,7 +517,19 @@ Three levels, assigned per endpoint (see Section 7):
 | `RequiresUnlock` | Write operations, require unlock | Keymap set, behavior set, connection set |
 | `Dangerous` | Destructive operations, require unlock | Storage reset, bootloader jump, reboot |
 
-### 10.2 Lock State Machine
+### 10.2 Feature Gate
+
+Security (lock/unlock and matrix state tracking) is gated behind a `security` feature:
+
+```toml
+security = []                          # physical key unlock, matrix state tracking
+vial_lock = ["vial", "security"]       # Vial unlock (implies security)
+rmk_protocol = ["host", "security", "dep:postcard-rpc"]  # new protocol (implies security)
+```
+
+The `security` feature enables the `matrix_state` field on `KeyMap` (needed for both physical key unlock verification and the `GetMatrixState` endpoint). Previously this was gated on `vial_lock`; the `security` feature makes it available to both protocols.
+
+### 10.3 Lock State Machine
 
 ```
               Unlock request
@@ -602,7 +620,7 @@ struct DeviceCapabilities {
 }
 ```
 
-Values are sourced from compile-time constants already emitted by `rmk/build.rs`: `NUM_LAYER`, `NUM_ROW`, `NUM_COL`, `COMBO_MAX_NUM`, `FORK_MAX_NUM`, `MORSE_MAX_NUM`, `MACRO_SPACE_SIZE`, `NUM_ENCODER`.
+Values are sourced from two places: **const generic parameters** (`ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER` — available as `ProtocolService`'s const generics) and **build-time constants** emitted by `rmk/build.rs` (`COMBO_MAX_NUM`, `FORK_MAX_NUM`, `MORSE_MAX_NUM`, `MACRO_SPACE_SIZE`, `NUM_BLE_PROFILE`, `SPLIT_PERIPHERALS_NUM`). Feature-flag booleans (`has_storage`, `has_split`, `has_ble`, `has_lighting`) are derived from `cfg!()` checks at compile time.
 
 ### 11.6 Version Compatibility Matrix
 
@@ -672,10 +690,21 @@ Note: `Unsupported` is NOT an `RmkError` variant — an unsupported endpoint is 
 ### 14.1 New module structure
 
 ```
-rmk-types/src/protocol/
-    mod.rs          (existing)
-    vial.rs         (existing — Vial types)
-    rmk.rs          (NEW — ICD types: endpoint defs, DeviceCapabilities, RmkError, etc.)
+rmk-types/src/
+    connection.rs   (NEW — shared ConnectionType)
+    battery.rs      (NEW — shared BatteryStatus, ChargeState)
+    ble.rs          (NEW — shared BleStatus, BleState)
+    fork.rs         (NEW — shared ForkStateBits)
+    protocol/
+        mod.rs          (existing)
+        vial.rs         (existing — Vial types)
+        rmk/            (NEW — ICD types, split into submodules)
+            mod.rs      (endpoint/topic declarations, constants, tests)
+            types.rs    (ProtocolVersion, DeviceCapabilities, RmkError, LockStatus, etc.)
+            keymap.rs   (KeyPosition, BulkRequest, SetKeyRequest, etc.)
+            config.rs   (BehaviorConfig, ComboConfig, MorseConfig, ForkConfig, MacroInfo, MacroData)
+            request.rs  (SetEncoderRequest, SetMacroRequest, etc.)
+            status.rs   (ConnectionInfo, MatrixState, SplitStatus)
 
 rmk/src/host/
     mod.rs          (existing — task spawning, feature-gated)
@@ -690,16 +719,20 @@ rmk/src/host/
 
 Replaces `VialService` with the same structural pattern:
 - Holds `&RefCell<KeyMap>` for in-memory keymap access
-- Reads/writes over transport via postcard-rpc's `WireTx`/`WireRx` traits
+- Reads/writes over transport via postcard-rpc's `WireTx`/`WireRx` traits (available with `default-features = false`, no server features needed)
+- Uses postcard-rpc's `Sender` struct (wraps `WireTx`) for typed frame encoding: `reply::<E>()` for endpoint responses, `publish::<T>()` for topic messages, `error()` for wire errors. `Sender` works standalone without `Server` or `define_dispatch!`
 - Implements custom key-based dispatch (postcard-rpc's `define_dispatch!` cannot be used because `ProtocolService` is generic over `ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER` const parameters — the macro requires static, non-generic context types)
+- Parses incoming frames using `VarHeader::take_from_slice()` to extract key and sequence number, then matches against endpoint key constants (`<GetVersion as Endpoint>::REQ_KEY`, etc.)
 - Uses `embassy_futures::select` to multiplex endpoint request handling and internal event subscriber polling (single-writer architecture for Topics)
 - Manages lock state and write-through persistence via `FLASH_CHANNEL`
 - Runs as an async future composed into `run_keyboard()`'s `futures::select_biased!` (not spawned via embassy Spawner, matching the existing `VialService` pattern)
 
+> **Note on protocol ICD type ↔ internal type conversion**: The protocol's `KeyPosition { layer, row, col }` must be converted to the internal `KeyboardEventPos::Key(KeyPos { row, col })` (from `rmk/src/event/input.rs`) when calling `KeyMap::get_action_at(pos, layer)` / `set_action_at(pos, layer, action)`. These are deliberately separate types — `KeyPosition` is the wire format, `KeyboardEventPos` is the internal event type.
+
 ### 14.3 Transport adapters
 
-- **USB**: Raw vendor-class bulk endpoints (class `0xFF`, 1 interface, 2 bulk endpoints). Uses MS OS descriptors for automatic WinUSB driver binding on Windows. Natively WebUSB-compatible for browser-based configurators. Implements postcard-rpc's `WireTx`/`WireRx` traits. USB bulk transport uses packet-based framing (no COBS needed — USB bulk packets are self-delimiting).
-- **BLE serial**: New GATT service with NUS-like RX/TX characteristics replaces `BleVialServer`. Implements `embedded_io_async::Read` + `embedded_io_async::Write`, wrapped to implement `WireTx`/`WireRx`. BLE serial transport uses COBS framing over the byte stream.
+- **USB**: Raw vendor-class bulk endpoints (class `0xFF`, 1 interface, 2 bulk endpoints). Uses MS OS descriptors for automatic WinUSB driver binding on Windows (requires increasing `BOS_DESC_BUF` to ≥64 bytes and `MSOS_DESC_BUF` to ≥256 bytes in `rmk/src/usb/mod.rs`). Natively WebUSB-compatible for browser-based configurators. Implements postcard-rpc's `WireTx`/`WireRx` traits. USB bulk transport uses packet-based framing (no COBS needed — USB bulk packets are self-delimiting). Reference: postcard-rpc's `embassy_usb_v0_5` module.
+- **BLE serial**: New GATT service with NUS-like RX/TX characteristics replaces `BleVialServer`. Implements `embedded_io_async::Read` + `embedded_io_async::Write` for the byte stream layer, then wraps with COBS framing to implement postcard-rpc's `WireTx`/`WireRx` traits. For RX, uses postcard-rpc's `CobsAccumulator` (available with the `cobs` feature, no-std) for frame decoding. For TX, COBS encoding uses postcard's `to_slice_cobs` (the same pattern already used in split serial). `ProtocolService` works unchanged over either transport.
 - `ProtocolService` is generic over postcard-rpc's `WireTx`/`WireRx` traits, abstracting transport and framing differences.
 
 ### 14.4 Event bus bridging
@@ -712,7 +745,7 @@ let wpm_sub = WpmUpdateEvent::subscriber();
 let battery_sub = BatteryStatusEvent::subscriber();
 // ... etc
 ```
-In the main `run()` loop, `embassy_futures::select` multiplexes transport reads and event subscribers. When an event fires, the service serializes a Topic frame and writes it to the transport. This single-writer architecture ensures responses and topic frames never race on the same transport.
+In the main `run()` loop, `embassy_futures::select` multiplexes transport reads and event subscribers. When an event fires, the service uses `Deref` (from `impl_payload_wrapper!`) to extract the raw payload and serializes a Topic frame. Topic message types are raw types (`u8`, `u16`, `bool`, `BatteryStatus`, `BleStatus`, `ConnectionType`, `LedIndicator`) — no wrapper struct conversion needed. This single-writer architecture ensures responses and topic frames never race on the same transport.
 
 ### 14.5 Storage integration
 
@@ -725,11 +758,14 @@ In the main `run()` loop, `embassy_futures::select` multiplexes transport reads 
 ```toml
 # rmk/Cargo.toml
 [features]
-host = []                              # shared base
+host = []                              # shared base (future: rename to _host)
+security = []                          # physical key unlock + matrix state tracking
 vial = ["host"]                        # legacy Vial
-vial_lock = ["vial"]                   # Vial unlock
-rmk_protocol = ["host", "dep:postcard-rpc"]  # new protocol
+vial_lock = ["vial", "security"]       # Vial unlock
+rmk_protocol = ["host", "security", "dep:postcard-rpc"]  # new protocol
 ```
+
+> **Note**: The `host` feature currently pulls in `byteorder` (needed by Vial). In the future, consider renaming to `_host` (matching the `_ble` convention for internal features) and moving `byteorder` to `vial` only. The `security` feature gates the `matrix_state` field on `KeyMap` and the shared `DeviceLock` module, making both available to `vial_lock` and `rmk_protocol`.
 
 ### 14.7 Split keyboard consideration
 
@@ -753,31 +789,31 @@ The `buffer_size` is configurable to allow users to adjust throughput vs RAM tra
 
 ## 15. Implementation Roadmap
 
-### Phase 1: ICD Types and postcard-rpc Integration
+### Phase 1: ICD Types and postcard-rpc Integration ✅
 
 **Goal**: Define the shared type contract between firmware and host.
 
 | Step | File(s) | Details |
 |------|---------|---------|
 | 1.1 | `rmk-types/Cargo.toml` | Add `postcard-rpc` and `postcard` with `experimental-derive` (for `Schema`) as dependencies |
-| 1.2 | `rmk-types/src/action.rs` | Add `#[derive(Schema)]` to `KeyAction`, `Action`, `KeyCode`, `EncoderAction`, `MorseProfile` |
-| 1.3 | `rmk-types/src/protocol/rmk.rs` | Define all ICD types: `ProtocolVersion`, `DeviceCapabilities`, `RmkError`, `LockStatus`, `UnlockChallenge`, `KeyPosition`, `BulkRequest`, `StorageResetMode`, payload types for Topics |
-| 1.4 | `rmk-types/src/protocol/rmk.rs` | Define all `endpoints!()` and `topics!()` declarations (see Appendix A) |
+| 1.2 | `rmk-types/src/action/`, `rmk-types/src/keycode/` | Add `#[derive(Schema)]` to `KeyAction`, `Action`, `KeyCode`, `EncoderAction`, `MorseProfile`, `ModifierCombination`, `LedIndicator`, `MouseButtons` |
+| 1.3 | `rmk-types/src/protocol/rmk/` | Define all ICD types split across submodules: `types.rs` (ProtocolVersion, DeviceCapabilities, RmkError, etc.), `keymap.rs` (KeyPosition, BulkRequest, etc.), `config.rs` (BehaviorConfig, ComboConfig, etc.), `request.rs` (SetEncoderRequest, etc.), `status.rs` (ConnectionInfo, MatrixState, SplitStatus) |
+| 1.4 | `rmk-types/src/protocol/rmk/mod.rs` | Define `endpoints!()` in 10 separate groups (to avoid large const-eval), assembled into combined `ENDPOINT_LIST`; define `topics!()` with raw payload types (u8, u16, bool, BatteryStatus, etc.) |
 | 1.5 | `rmk-types/src/protocol/mod.rs` | Add `pub mod rmk;` |
-| 1.6 | Unit tests | Serialization/deserialization round-trip tests for all ICD types; key hash collision detection across all endpoints |
-| 1.7 | `rmk-types/src/connection.rs`, `rmk-types/src/protocol/rmk.rs`, `rmk/src/event/connection.rs`, `rmk/src/event/state.rs`, `rmk/src/event/battery.rs`, `rmk/src/state.rs`, `rmk/src/ble/mod.rs` | Consolidate shared types and add event↔payload conversions: (a) Move `ConnectionType` to `rmk-types/src/connection.rs` as the single definition, remove duplicates from `rmk/src/event/connection.rs` and `rmk/src/state.rs`, update imports in `rmk/src/ble/mod.rs`; (b) Add `From` conversions between internal events and protocol topic payload types (e.g. `LayerChangeEvent` ↔ `LayerChangePayload`, `ConnectionChangeEvent` ↔ `ConnectionPayload`, `BatteryStatusEvent` → `BatteryStatus`). Events keep their current structure — wrappers use `rmk-types` types as fields where applicable (already the case for `LedIndicator`, `ModifierCombination`) |
+| 1.6 | Unit tests in `rmk-types/src/protocol/rmk/mod.rs` | 29 tests: serde round-trips for all ICD types, cross-group key hash collision detection, edge cases |
+| 1.7 | `rmk-types/src/connection.rs`, `rmk-types/src/battery.rs`, `rmk-types/src/ble.rs`, `rmk-types/src/fork.rs`, `rmk/src/event/`, `rmk/src/state.rs`, `rmk/src/ble/mod.rs` | Consolidate shared types: `ConnectionType`, `BatteryStatus`/`ChargeState`, `BleStatus`/`BleState`, `ForkStateBits` as top-level modules in rmk-types. Event wrappers use shared types via `impl_payload_wrapper!` — no explicit From conversions needed because topics use raw types directly |
 
 ### Phase 2: Feature Gate and ProtocolService Skeleton
 
 **Goal**: Establish the new protocol's code structure alongside Vial.
 
-> **Design decision**: `ProtocolService` implements its own dispatch loop rather than using postcard-rpc's `define_dispatch!` macro + `Server` struct. The reason is that `ProtocolService` is generic over const parameters (`ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER`) and holds `&RefCell<KeyMap<...>>` — `define_dispatch!` requires static, non-generic context types. RMK reuses postcard-rpc's `endpoints!`/`topics!` definitions, wire format, key hashing, and serialization, but handles dispatch manually.
+> **Design decision**: `ProtocolService` implements its own dispatch loop rather than using postcard-rpc's `define_dispatch!` macro + `Server` struct. The reason is that `ProtocolService` is generic over const parameters (`ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER`) and holds `&RefCell<KeyMap<...>>` — `define_dispatch!` requires static, non-generic context types. RMK reuses postcard-rpc's `endpoints!`/`topics!` definitions, wire format, key hashing, `WireTx`/`WireRx` traits, `Sender` struct, `VarHeader` parsing, and serialization, but handles dispatch manually.
 
 | Step | File(s) | Details |
 |------|---------|---------|
-| 2.1 | `rmk/Cargo.toml` | Add `rmk_protocol = ["host", "dep:postcard-rpc"]` feature; add `postcard-rpc` as optional dependency |
-| 2.2 | `rmk/src/host/protocol/mod.rs` | Create `ProtocolService` struct: holds `&RefCell<KeyMap>`, lock state, RX/TX buffers |
-| 2.3 | `rmk/src/host/protocol/mod.rs` | Implement dispatch loop: read COBS frame -> decode key -> match handler -> encode response -> write COBS frame |
+| 2.1 | `rmk/Cargo.toml` | Add `security = []` and `rmk_protocol = ["host", "security", "dep:postcard-rpc"]` features; add `postcard-rpc = { version = "0.12", default-features = false, features = ["cobs"], optional = true }` as dependency; update `vial_lock = ["vial", "security"]`. Change `matrix_state` gate in `rmk/src/keymap.rs` from `#[cfg(feature = "vial_lock")]` to `#[cfg(feature = "security")]` |
+| 2.2 | `rmk/src/host/protocol/mod.rs` | Create `ProtocolService` struct: holds `&RefCell<KeyMap>`, `Sender<Tx>` (wraps transport), lock state, RX buffer `[u8; BUF_SIZE]`, event subscribers (created once in `new()`) |
+| 2.3 | `rmk/src/host/protocol/mod.rs` | Implement dispatch loop: receive frame via `WireRx::receive()` -> parse `VarHeader::take_from_slice()` -> match key against `<Endpoint>::REQ_KEY` constants -> deserialize with `postcard::from_bytes` -> call handler -> send response via `Sender::reply::<E>()` or `Sender::error()` |
 | 2.4 | `rmk/src/host/mod.rs` | Add `#[cfg(feature = "rmk_protocol")]` version of `run_host_communicate_task()` that creates and runs `ProtocolService` as async future (composed into `select_biased!`, not spawned) |
 | 2.5 | `rmk/src/storage/mod.rs` | Rename `FlashOperationMessage::VialMessage` to `FlashOperationMessage::HostMessage` |
 
@@ -787,8 +823,8 @@ The `buffer_size` is configurable to allow users to adjust throughput vs RAM tra
 
 | Step | File(s) | Details |
 |------|---------|---------|
-| 3.1 | `rmk/src/host/protocol/transport.rs` | Implement raw vendor-class bulk endpoint transport: create vendor interface (class `0xFF`) with bulk IN/OUT endpoints using `embassy_usb::Builder`. Add MS OS descriptors for WinUSB auto-binding on Windows |
-| 3.2 | `rmk/src/host/protocol/transport.rs` | Implement postcard-rpc's `WireTx` and `WireRx` traits for the USB bulk transport |
+| 3.1 | `rmk/src/host/protocol/transport.rs` | Implement raw vendor-class bulk endpoint transport: create vendor interface (class `0xFF`) with bulk IN/OUT endpoints using `embassy_usb::Builder`. Add MS OS descriptors for WinUSB auto-binding on Windows. Increase `BOS_DESC_BUF` to ≥64 bytes and `MSOS_DESC_BUF` to ≥256 bytes in `rmk/src/usb/mod.rs` to accommodate the new descriptors |
+| 3.2 | `rmk/src/host/protocol/transport.rs` | Implement postcard-rpc's `WireTx` and `WireRx` traits for the USB bulk transport. Reference postcard-rpc's `embassy_usb_v0_5` module for the implementation pattern |
 | 3.3 | `rmk/src/host/protocol/mod.rs` | Make `ProtocolService` generic over `WireTx + WireRx` traits |
 | 3.4 | `rmk/src/usb/mod.rs` | Add vendor-class bulk endpoint creation alongside existing HID setup (feature-gated on `rmk_protocol`). Ensure composite device coexistence with HID via IAD |
 | 3.5 | Integration test | Connect via USB, complete handshake (GetVersion + GetCapabilities). Host tool uses `nusb` crate to claim vendor interface |
@@ -799,8 +835,8 @@ The `buffer_size` is configurable to allow users to adjust throughput vs RAM tra
 
 | Step | File(s) | Details |
 |------|---------|---------|
-| 4.1 | `rmk/src/host/protocol/mod.rs` | Implement handlers: `GetVersion`, `GetCapabilities`, `GetLockStatus` |
-| 4.2 | `rmk/src/host/protocol/mod.rs` | Implement handlers: `GetKeyAction`, `SetKeyAction` (with write-through to `FLASH_CHANNEL`) |
+| 4.1 | `rmk/src/host/protocol/mod.rs` | Implement handlers: `GetVersion`, `GetCapabilities` (source `num_rows`/`num_cols`/`num_layers`/`num_encoders` from const generics `ROW`/`COL`/`NUM_LAYER`/`NUM_ENCODER`; source `max_combos`/`max_forks`/`max_morse`/`macro_space_size` from build.rs constants; source feature booleans from `cfg!()` checks), `GetLockStatus` |
+| 4.2 | `rmk/src/host/protocol/mod.rs` | Implement handlers: `GetKeyAction` (convert `KeyPosition { layer, row, col }` to `KeyboardEventPos::Key(KeyPos { row, col })` for `keymap.borrow().get_action_at(pos, layer)`), `SetKeyAction` (with write-through to `FLASH_CHANNEL`) |
 | 4.3 | `rmk/src/host/protocol/mod.rs` | Implement handlers: `GetKeymapBulk`, `SetKeymapBulk`, `GetLayerCount`, `GetDefaultLayer`, `SetDefaultLayer`, `ResetKeymap` |
 | 4.4 | `rmk/src/host/protocol/mod.rs` | Implement handlers: `Reboot`, `BootloaderJump`, `StorageReset` |
 | 4.5 | Host CLI tool | Minimal Rust CLI using `postcard-rpc` client with `nusb` backend: connect to vendor-class USB interface, handshake, read/write keymap, display capabilities |
@@ -811,7 +847,7 @@ The `buffer_size` is configurable to allow users to adjust throughput vs RAM tra
 
 | Step | File(s) | Details |
 |------|---------|---------|
-| 5.1 | `rmk/src/host/lock.rs` | Extract lock logic from `rmk/src/host/via/vial_lock.rs` into a shared, protocol-neutral module |
+| 5.1 | `rmk/src/host/lock.rs` | Extract lock logic from `rmk/src/host/via/vial_lock.rs` into a shared, protocol-neutral `DeviceLock` module. Gate with `#[cfg(feature = "security")]`. Uses `keymap.borrow().matrix_state.read(row, col)` (now available via `security` feature, not just `vial_lock`) |
 | 5.2 | `rmk/src/host/protocol/mod.rs` | Implement `Unlock`, `Lock` endpoint handlers; integrate lock state into dispatch loop (check permission before executing write handlers) |
 | 5.3 | `rmk/src/host/protocol/mod.rs` | Implement auto-timeout: re-lock after 90s of no write operations |
 
@@ -836,7 +872,7 @@ The `buffer_size` is configurable to allow users to adjust throughput vs RAM tra
 
 | Step | File(s) | Details |
 |------|---------|---------|
-| 7.1 | `rmk/src/host/protocol/topics.rs` | Create event bridging module: conversion functions from internal events to Topic payload structs, Topic frame encoding |
+| 7.1 | `rmk/src/host/protocol/topics.rs` | Create event bridging module: conversion functions from internal events to Topic payload types, Topic frame encoding via `Sender::publish::<T>()` (reuses postcard-rpc's `Sender` for frame construction) |
 | 7.2 | `rmk/src/host/protocol/mod.rs` | Integrate event subscribers into `ProtocolService`: create all subscribers in `new()`, add to `select` loop in `run()`. Response writes prioritized over topic writes in select order |
 | 7.3 | Host CLI tool | Add Topic listener: display battery state, connection changes, layer changes in real-time |
 
@@ -847,7 +883,7 @@ The `buffer_size` is configurable to allow users to adjust throughput vs RAM tra
 | Step | File(s) | Details |
 |------|---------|---------|
 | 8.1 | `rmk/src/ble/host_service/protocol.rs` | Implement NUS-like GATT service with RX/TX characteristics |
-| 8.2 | `rmk/src/ble/host_service/protocol.rs` | Implement `embedded_io_async::Read` + `Write` for BLE serial wrapper, then wrap with COBS framing to implement postcard-rpc's `WireTx`/`WireRx` traits — `ProtocolService` works unchanged |
+| 8.2 | `rmk/src/ble/host_service/protocol.rs` | Implement `embedded_io_async::Read` + `Write` for BLE serial wrapper, then wrap with COBS framing to implement postcard-rpc's `WireTx`/`WireRx` traits. RX uses postcard-rpc's `CobsAccumulator` for frame decoding; TX uses postcard's `to_slice_cobs` for frame encoding. `ProtocolService` works unchanged |
 | 8.3 | Integration test | Connect via BLE on nRF52840, complete handshake and keymap read/write |
 
 ### Phase 9: Host Tool and Migration
@@ -926,9 +962,12 @@ use postcard_rpc::{endpoints, topics, TopicDirection};
 use serde::{Serialize, Deserialize};
 use postcard_schema::Schema;
 use heapless::Vec;
+use crate::connection::ConnectionType;
+use crate::battery::BatteryStatus;
+use crate::ble::BleStatus;
+use crate::fork::ForkStateBits;
 use crate::led_indicator::LedIndicator;
 use crate::modifier::ModifierCombination;
-use crate::mouse_button::MouseButtons;
 
 // === Version & Capabilities ===
 
@@ -1051,12 +1090,7 @@ pub struct SetMorseRequest {
     pub config: MorseConfig,
 }
 
-#[derive(Serialize, Deserialize, Schema)]
-pub struct ForkStateBits {
-    pub modifiers: ModifierCombination,
-    pub leds: LedIndicator,
-    pub mouse: MouseButtons,
-}
+// ForkStateBits is defined in rmk-types/src/fork.rs (shared between firmware and protocol)
 
 #[derive(Serialize, Deserialize, Schema)]
 pub struct ForkConfig {
@@ -1084,6 +1118,10 @@ pub enum StorageResetMode {
 }
 
 // === Endpoint Declarations ===
+// NOTE (as-built): Endpoints are split into 10 separate endpoints! groups
+// (SYSTEM_ENDPOINT_LIST, KEYMAP_ENDPOINT_LIST, etc.) to avoid large const-eval
+// workloads, then assembled into a combined ENDPOINT_LIST const.
+// The single block below shows the logical grouping for reference.
 endpoints! {
     list = ENDPOINT_LIST;
     | EndpointTy          | RequestTy              | ResponseTy                    | Path                          |
@@ -1135,25 +1173,28 @@ endpoints! {
     | SwitchBleProfile    | u8                     | RmkResult                     | "conn/switch_ble"             |
     | ClearBleProfile     | u8                     | RmkResult                     | "conn/clear_ble"              |
     // Status
-    | GetBatteryStatus    | ()                     | BatteryStatusEvent             | "status/battery"              |
+    | GetBatteryStatus    | ()                     | BatteryStatus                  | "status/battery"              |
     | GetCurrentLayer     | ()                     | u8                            | "status/layer"                |
     | GetMatrixState      | ()                     | MatrixState                   | "status/matrix"               |
     | GetSplitStatus      | ()                     | SplitStatus                   | "status/split"                |
 }
 
 // === Topic Declarations (Device -> Host Events) ===
+// Topic message types use raw payload types, not wrapper structs.
+// The impl_payload_wrapper! macro in rmk/src/event/mod.rs provides
+// From<Event> for Payload and From<Payload> for Event conversions.
 topics! {
     list = TOPICS_OUT_LIST;
     direction = TopicDirection::ToClient;
     | TopicTy               | MessageTy              | Path                  |
     | -------               | ---------              | ----                  |
-    | LayerChangeTopic      | LayerChangePayload     | "event/layer"         |
-    | WpmUpdateTopic        | WpmPayload             | "event/wpm"           |
-    | BatteryStatusTopic     | BatteryStatusEvent      | "event/battery"       |
+    | LayerChangeTopic      | u8                     | "event/layer"         |
+    | WpmUpdateTopic        | u16                    | "event/wpm"           |
+    | BatteryStatusTopic    | BatteryStatus          | "event/battery"       |
     | BleStatusChangeTopic  | BleStatus              | "event/ble_status"    |
-    | ConnectionChangeTopic | ConnectionPayload      | "event/connection"    |
-    | SleepStateTopic       | SleepPayload           | "event/sleep"         |
-    | LedIndicatorTopic     | LedPayload             | "event/led"           |
+    | ConnectionChangeTopic | ConnectionType         | "event/connection"    |
+    | SleepStateTopic       | bool                   | "event/sleep"         |
+    | LedIndicatorTopic     | LedIndicator           | "event/led"           |
 }
 ```
 

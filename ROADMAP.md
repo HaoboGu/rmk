@@ -32,41 +32,42 @@
 | g | Add `#[derive(Schema)]` to `KeyCode` (including `HidKeyCode`, `ConsumerKey`, `SystemControlKey`) in `rmk-types/src/keycode.rs` | [x] | Also added to SpecialKey |
 | h | Run `cargo check -p rmk-types` to confirm all Schema derives compile | [x] | Also verified rmk crate and tests pass |
 
-### Step 1.3 — Define ICD types in `rmk-types/src/protocol/rmk.rs`
+### Step 1.3 — Define ICD types in `rmk-types/src/protocol/rmk/`
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Create file `rmk-types/src/protocol/rmk.rs` | [x] | |
+| a | Create module `rmk-types/src/protocol/rmk/` | [x] | Split into submodules: `mod.rs`, `types.rs`, `keymap.rs`, `config.rs`, `request.rs`, `status.rs` |
 | b | Add required imports: `serde`, `postcard_schema::Schema`, `heapless::Vec`, `postcard_rpc::{endpoints, topics, TopicDirection}` | [x] | |
-| c | Define `ProtocolVersion { major: u8, minor: u8 }` with `Serialize, Deserialize, Schema` | [x] | |
-| d | Define `DeviceCapabilities` struct with all fields (`num_layers`, `num_rows`, `num_cols`, `num_encoders`, `max_combos`, `max_macros`, `macro_space_size`, `max_morse`, `max_forks`, `has_storage`, `has_split`, `num_split_peripherals`, `has_ble`, `num_ble_profiles`, `has_lighting`, `max_payload_size`) | [x] | |
-| e | Define `RmkError` enum (`InvalidParameter`, `BadState`, `Busy`, `StorageError`, `InternalError`) and `pub type RmkResult = Result<(), RmkError>` | [x] | |
-| f | Define `LockStatus { locked: bool, awaiting_keys: bool, remaining_keys: u8 }` | [x] | |
-| g | Define `UnlockChallenge { key_positions: Vec<(u8, u8), MAX_UNLOCK_KEYS> }` with `MAX_UNLOCK_KEYS = 2` | [x] | |
-| h | Define `KeyPosition { layer: u8, row: u8, col: u8 }` | [x] | |
-| i | Define `BulkRequest { layer: u8, start_row: u8, start_col: u8, count: u16 }` with `MAX_BULK = 32` | [x] | |
-| j | Define `StorageResetMode` enum (`Full`, `LayoutOnly`) | [x] | |
-| k | Define Topic payload types: `LayerChangePayload`, `WpmPayload`, `BatteryStatusEvent` (reuse internal enum), `BleStatus` (struct with profile + state), `ConnectionPayload`, `SleepPayload`, `LedPayload` | [x] | See final_plan.md Section 8. `BatteryStatusEvent` enum matches internal event for full fidelity |
-| l | Define connection/status types: `ConnectionInfo`, `ConnectionType`, `BatteryStatusEvent`, `MatrixState`, `SplitStatus` | [x] | `BatteryStatusEvent` reuses internal enum: `NotAvailable`, `Normal(u8)`, `Charging`, `Charged` |
-| m | Define macro types: `MacroInfo`, `MacroData` | [x] | |
-| n | Define combo/morse/fork config types: `ComboConfig`, `MorseConfig`, `ForkConfig` (or reuse existing types from rmk-types) | [x] | Protocol-facing types defined; `ForkConfig` uses full-fidelity state bits (modifiers + LED + mouse), no downgrade |
-| o | Define protocol-facing `BehaviorConfig` (or directly reuse existing `BehaviorConfig` from `rmk` crate) | [x] | Protocol-facing version with combo_timeout_ms, oneshot_timeout_ms, tap_interval_ms, tap_tolerance |
+| c | Define `ProtocolVersion { major: u8, minor: u8 }` with `Serialize, Deserialize, Schema` | [x] | In `types.rs` |
+| d | Define `DeviceCapabilities` struct with all fields (`num_layers`, `num_rows`, `num_cols`, `num_encoders`, `max_combos`, `max_macros`, `macro_space_size`, `max_morse`, `max_forks`, `has_storage`, `has_split`, `num_split_peripherals`, `has_ble`, `num_ble_profiles`, `has_lighting`, `max_payload_size`) | [x] | In `types.rs` |
+| e | Define `RmkError` enum (`InvalidParameter`, `BadState`, `Busy`, `StorageError`, `InternalError`) and `pub type RmkResult = Result<(), RmkError>` | [x] | In `types.rs` |
+| f | Define `LockStatus { locked: bool, awaiting_keys: bool, remaining_keys: u8 }` | [x] | In `types.rs` |
+| g | Define `UnlockChallenge { key_positions: Vec<(u8, u8), MAX_UNLOCK_KEYS> }` with `MAX_UNLOCK_KEYS = 2` | [x] | In `types.rs` |
+| h | Define `KeyPosition { layer: u8, row: u8, col: u8 }` | [x] | In `keymap.rs` |
+| i | Define `BulkRequest { layer: u8, start_row: u8, start_col: u8, count: u16 }` with `MAX_BULK = 32` | [x] | In `keymap.rs` |
+| j | Define `StorageResetMode` enum (`Full`, `LayoutOnly`) | [x] | In `types.rs` |
+| k | Topic payload types simplified: topics use raw types (`u8`, `u16`, `bool`, `BatteryStatus`, `BleStatus`, `ConnectionType`, `LedIndicator`) instead of wrapper structs | [x] | Simpler than original plan; wrapper structs (`LayerChangePayload`, etc.) unnecessary since `impl_payload_wrapper!` already provides conversions |
+| l | Define connection/status types: `ConnectionInfo`, `MatrixState`, `SplitStatus` | [x] | In `status.rs`; `ConnectionType` in `rmk-types/src/connection.rs`, `BatteryStatus` in `rmk-types/src/battery.rs`, `BleStatus` in `rmk-types/src/ble.rs` |
+| m | Define macro types: `MacroInfo`, `MacroData` | [x] | In `config.rs` |
+| n | Define combo/morse/fork config types: `ComboConfig`, `MorseConfig`, `ForkConfig` (or reuse existing types from rmk-types) | [x] | In `config.rs`; `ForkStateBits` shared in `rmk-types/src/fork.rs` |
+| o | Define protocol-facing `BehaviorConfig` (or directly reuse existing `BehaviorConfig` from `rmk` crate) | [x] | In `config.rs`; combo_timeout_ms, oneshot_timeout_ms, tap_interval_ms, tap_tolerance |
 
 ### Step 1.4 — Define `endpoints!()` and `topics!()` declarations
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Define System endpoints: `GetVersion("sys/version")`, `GetCapabilities("sys/caps")`, `GetLockStatus("sys/lock_status")`, `UnlockRequest("sys/unlock")`, `LockRequest("sys/lock")`, `Reboot("sys/reboot")`, `BootloaderJump("sys/bootloader")`, `StorageReset("sys/storage_reset")` | [x] | 8 endpoints |
-| b | Define Keymap endpoints: `GetKeyAction("keymap/get")`, `SetKeyAction("keymap/set")`, `GetKeymapBulk("keymap/bulk_get")`, `SetKeymapBulk("keymap/bulk_set")`, `GetLayerCount("keymap/layer_count")`, `GetDefaultLayer("keymap/default_layer")`, `SetDefaultLayer("keymap/set_default_layer")`, `ResetKeymap("keymap/reset")` | [x] | 8 endpoints |
-| c | Define Encoder endpoints: `GetEncoderAction("encoder/get")`, `SetEncoderAction("encoder/set")` | [x] | 2 endpoints |
-| d | Define Macro endpoints: `GetMacroInfo("macro/info")`, `GetMacro("macro/get")`, `SetMacro("macro/set")`, `ResetMacros("macro/reset")` | [x] | 4 endpoints |
-| e | Define Combo endpoints: `GetCombo("combo/get")`, `SetCombo("combo/set")`, `ResetCombos("combo/reset")` | [x] | 3 endpoints |
-| f | Define Morse endpoints: `GetMorse("morse/get")`, `SetMorse("morse/set")`, `ResetMorse("morse/reset")` | [x] | 3 endpoints |
-| g | Define Fork endpoints: `GetFork("fork/get")`, `SetFork("fork/set")`, `ResetForks("fork/reset")` | [x] | 3 endpoints |
-| h | Define Behavior endpoints: `GetBehaviorConfig("behavior/get")`, `SetBehaviorConfig("behavior/set")` | [x] | 2 endpoints |
-| i | Define Connection endpoints: `GetConnectionInfo("conn/info")`, `SetConnectionType("conn/set_type")`, `SwitchBleProfile("conn/switch_ble")`, `ClearBleProfile("conn/clear_ble")` | [x] | 4 endpoints |
-| j | Define Status endpoints: `GetBatteryStatus("status/battery")`, `GetCurrentLayer("status/layer")`, `GetMatrixState("status/matrix")`, `GetSplitStatus("status/split")` | [x] | 4 endpoints |
-| k | Define all 7 topic declarations: `LayerChangeTopic`, `WpmUpdateTopic`, `BatteryStatusTopic`, `BleStatusChangeTopic`, `ConnectionChangeTopic`, `SleepStateTopic`, `LedIndicatorTopic` | [x] | `BleProfileChangeTopic` merged into `BleStatusChangeTopic` via `BleState::ProfileChanged` |
+| a | Define System endpoints: `GetVersion("sys/version")`, `GetCapabilities("sys/caps")`, `GetLockStatus("sys/lock_status")`, `UnlockRequest("sys/unlock")`, `LockRequest("sys/lock")`, `Reboot("sys/reboot")`, `BootloaderJump("sys/bootloader")`, `StorageReset("sys/storage_reset")` | [x] | 8 endpoints in `SYSTEM_ENDPOINT_LIST` |
+| b | Define Keymap endpoints: `GetKeyAction("keymap/get")`, `SetKeyAction("keymap/set")`, `GetKeymapBulk("keymap/bulk_get")`, `SetKeymapBulk("keymap/bulk_set")`, `GetLayerCount("keymap/layer_count")`, `GetDefaultLayer("keymap/default_layer")`, `SetDefaultLayer("keymap/set_default_layer")`, `ResetKeymap("keymap/reset")` | [x] | 8 endpoints in `KEYMAP_ENDPOINT_LIST` |
+| c | Define Encoder endpoints: `GetEncoderAction("encoder/get")`, `SetEncoderAction("encoder/set")` | [x] | 2 endpoints in `ENCODER_ENDPOINT_LIST` |
+| d | Define Macro endpoints: `GetMacroInfo("macro/info")`, `GetMacro("macro/get")`, `SetMacro("macro/set")`, `ResetMacros("macro/reset")` | [x] | 4 endpoints in `MACRO_ENDPOINT_LIST` |
+| e | Define Combo endpoints: `GetCombo("combo/get")`, `SetCombo("combo/set")`, `ResetCombos("combo/reset")` | [x] | 3 endpoints in `COMBO_ENDPOINT_LIST` |
+| f | Define Morse endpoints: `GetMorse("morse/get")`, `SetMorse("morse/set")`, `ResetMorse("morse/reset")` | [x] | 3 endpoints in `MORSE_ENDPOINT_LIST` |
+| g | Define Fork endpoints: `GetFork("fork/get")`, `SetFork("fork/set")`, `ResetForks("fork/reset")` | [x] | 3 endpoints in `FORK_ENDPOINT_LIST` |
+| h | Define Behavior endpoints: `GetBehaviorConfig("behavior/get")`, `SetBehaviorConfig("behavior/set")` | [x] | 2 endpoints in `BEHAVIOR_ENDPOINT_LIST` |
+| i | Define Connection endpoints: `GetConnectionInfo("conn/info")`, `SetConnectionType("conn/set_type")`, `SwitchBleProfile("conn/switch_ble")`, `ClearBleProfile("conn/clear_ble")` | [x] | 4 endpoints in `CONNECTION_ENDPOINT_LIST` |
+| j | Define Status endpoints: `GetBatteryStatus("status/battery")`, `GetCurrentLayer("status/layer")`, `GetMatrixState("status/matrix")`, `GetSplitStatus("status/split")` | [x] | 4 endpoints in `STATUS_ENDPOINT_LIST` |
+| k | Define all 7 topic declarations: `LayerChangeTopic`, `WpmUpdateTopic`, `BatteryStatusTopic`, `BleStatusChangeTopic`, `ConnectionChangeTopic`, `SleepStateTopic`, `LedIndicatorTopic` | [x] | Topics use raw payload types (u8, u16, bool, etc.) instead of wrapper structs |
+| | Assemble combined `ENDPOINT_LIST` from per-group lists | [x] | Manually assembled const to avoid large single `endpoints!` const-eval workloads |
 
 ### Step 1.5 — Module wiring
 
@@ -80,28 +81,26 @@
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Create `#[cfg(test)] mod tests` at the bottom of `rmk-types/src/protocol/rmk.rs` or a separate test file | [x] | Inline in rmk.rs |
-| b | Write serde round-trip tests: for each ICD struct/enum, use `postcard::to_slice` -> `postcard::from_bytes` and assert equality | [x] | 22 round-trip tests |
+| a | Create `#[cfg(test)] mod tests` at the bottom of `rmk-types/src/protocol/rmk/mod.rs` | [x] | Inline in mod.rs |
+| b | Write serde round-trip tests: for each ICD struct/enum, use `postcard::to_slice` -> `postcard::from_bytes` and assert equality | [x] | 26 round-trip tests |
 | c | Write key hash collision detection test: collect all endpoint/topic key hashes, assert no duplicates | [x] | Intra-group collisions detected at compile time by `endpoints!`/`topics!` macros; 1 cross-group collision test remains |
 | d | Test edge cases: empty `heapless::Vec`, max-value fields, all-zero `DeviceCapabilities` | [x] | |
-| e | Run `cargo test -p rmk-types` to confirm all tests pass | [x] | 28/28 tests pass (2 intra-group collision tests removed — now compile-time; 2 list-count tests added) |
+| e | Run `cargo test -p rmk-types` to confirm all tests pass | [x] | 29/29 tests pass |
 
 ### Step 1.7 — Consolidate shared types and add event↔payload conversions
 
-Move `ConnectionType` to a single shared location in `rmk-types`, remove duplicates from `rmk` event and state modules, and add `From` conversions between internal events and protocol topic payload types. Events keep their current structure (Option 1: wrappers in `rmk` using `rmk-types` types as fields).
+Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rmk-types`, remove duplicates from `rmk` event and state modules. Topic payload conversions are handled by `impl_payload_wrapper!` macro — no explicit `From` impls needed because topics use raw types directly.
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Create `rmk-types/src/connection.rs` with shared `ConnectionType` enum (Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Schema, defmt::Format, From<u8>, From<ConnectionType> for u8) | [ ] | Single definition replacing 3 duplicates |
-| b | Add `pub mod connection;` to `rmk-types/src/lib.rs` | [ ] | |
-| c | In `rmk-types/src/protocol/rmk.rs`, remove local `ConnectionType` definition and use `crate::connection::ConnectionType` | [ ] | Protocol types use the shared definition |
-| d | In `rmk/src/event/connection.rs`, remove local `ConnectionType` enum and From impls, add `pub use rmk_types::connection::ConnectionType;` | [ ] | Event module re-exports shared type |
-| e | In `rmk/src/state.rs`, remove local `ConnectionType` enum and From impls, use `rmk_types::connection::ConnectionType` | [ ] | |
-| f | Update `rmk/src/ble/mod.rs` import from `crate::state::ConnectionType` to `rmk_types::connection::ConnectionType` | [ ] | |
-| g | Add `From` conversions in `rmk/src/event/state.rs`: `LayerChangeEvent` ↔ `LayerChangePayload`, `WpmUpdateEvent` ↔ `WpmPayload`, `SleepStateEvent` ↔ `SleepPayload`, `LedIndicatorEvent` ↔ `LedPayload` | [ ] | Bidirectional |
-| h | Add `From` conversions in `rmk/src/event/connection.rs`: `ConnectionChangeEvent` ↔ `ConnectionPayload` | [ ] | Bidirectional; BleProfileChangeEvent removed (merged into BleStatusChangeEvent) |
-| i | Add `From<BatteryStatusEvent> for BatteryStatus` in `rmk/src/event/battery.rs` | [ ] | One-way (lossy: enum → struct) |
-| j | Run `cargo test -p rmk-types` and `cargo test -p rmk --no-default-features --features=split,vial,storage,async_matrix,_ble` | [ ] | |
+| a | Create `rmk-types/src/connection.rs` with shared `ConnectionType` enum (Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Schema, defmt::Format, From<u8>, From<ConnectionType> for u8) | [x] | Single definition; also created `rmk-types/src/battery.rs` (`BatteryStatus`, `ChargeState`) and `rmk-types/src/ble.rs` (`BleStatus`, `BleState`) |
+| b | Add `pub mod connection;` (and `pub mod battery;`, `pub mod ble;`) to `rmk-types/src/lib.rs` | [x] | |
+| c | In `rmk-types/src/protocol/rmk/`, use shared types via `crate::connection::ConnectionType`, `crate::battery::BatteryStatus`, `crate::ble::BleStatus` | [x] | Protocol types import from shared modules |
+| d | In `rmk/src/event/connection.rs`, remove local `ConnectionType` enum and From impls, add `pub use rmk_types::connection::ConnectionType;` | [x] | Event module re-exports shared type; `BleStatusChangeEvent` wraps `BleStatus` via `impl_payload_wrapper!` |
+| e | In `rmk/src/state.rs`, remove local `ConnectionType` enum and From impls, use `rmk_types::connection::ConnectionType` | [x] | |
+| f | Update `rmk/src/ble/mod.rs` import to use `crate::event::ConnectionType` (via re-export from rmk_types) | [x] | |
+| g | Event↔topic payload conversions: handled implicitly by `impl_payload_wrapper!` macro | [x] | Topics use raw types (u8, u16, bool, BatteryStatus, BleStatus, ConnectionType, LedIndicator); `impl_payload_wrapper!` generates `From<Event> for Payload` and `From<Payload> for Event` for all event types |
+| h | Run `cargo test -p rmk-types` and `cargo test -p rmk --no-default-features --features=split,vial,storage,async_matrix,_ble` | [x] | 29/29 rmk-types tests + 411/411 rmk tests pass |
 
 ---
 
@@ -109,16 +108,20 @@ Move `ConnectionType` to a single shared location in `rmk-types`, remove duplica
 
 **Goal**: Establish the new protocol's code structure alongside Vial.
 
-> **Design decision**: `ProtocolService` implements its own dispatch loop rather than using postcard-rpc's `define_dispatch!` macro + `Server` struct. The reason is that `ProtocolService` is generic over const parameters (`ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER`) and holds `&RefCell<KeyMap<...>>` — `define_dispatch!` requires static, non-generic context types. RMK reuses postcard-rpc's `endpoints!`/`topics!` definitions, wire format, key hashing, `WireTx`/`WireRx` traits, and serialization.
+> **Design decision**: `ProtocolService` implements its own dispatch loop rather than using postcard-rpc's `define_dispatch!` macro + `Server` struct. The reason is that `ProtocolService` is generic over const parameters (`ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER`) and holds `&RefCell<KeyMap<...>>` — `define_dispatch!` requires static, non-generic context types. RMK reuses postcard-rpc's `endpoints!`/`topics!` definitions, wire format, key hashing, `WireTx`/`WireRx` traits, `Sender` struct, `VarHeader` parsing, and serialization — all of which are available with `default-features = false` (no server features needed).
 
-### Step 2.1 — Add `rmk_protocol` feature to `rmk/Cargo.toml`
+### Step 2.1 — Add `rmk_protocol` and `security` features to `rmk/Cargo.toml`
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Add `postcard-rpc = { version = "...", default-features = false, optional = true }` to `rmk/Cargo.toml` `[dependencies]` | [ ] | |
-| b | Add `rmk_protocol = ["host", "dep:postcard-rpc"]` to `[features]` | [ ] | |
-| c | Ensure `rmk_protocol` and `vial` are mutually exclusive (via `#[cfg]` in code, not at Cargo level) | [ ] | |
-| d | Run `cargo check -p rmk --no-default-features --features=rmk_protocol` to verify feature compiles | [ ] | |
+| a | Add `postcard-rpc = { version = "0.12", default-features = false, features = ["cobs"], optional = true }` to `rmk/Cargo.toml` `[dependencies]` | [ ] | `cobs` feature enables `CobsAccumulator` for BLE serial RX, no-std |
+| b | Add `security = []` to `[features]` | [ ] | Gates `matrix_state` field on KeyMap and shared `DeviceLock` module |
+| c | Add `rmk_protocol = ["host", "security", "dep:postcard-rpc"]` to `[features]` | [ ] | |
+| d | Update `vial_lock = ["vial", "security"]` (was `["vial"]`) | [ ] | Shares `security` feature with new protocol |
+| e | In `rmk/src/keymap.rs`, change `#[cfg(feature = "vial_lock")]` on `matrix_state` field (and `MatrixState` import) to `#[cfg(feature = "security")]` | [ ] | |
+| f | Ensure `rmk_protocol` and `vial` are mutually exclusive (via `#[cfg]` in code, not at Cargo level) | [ ] | |
+| g | Run `cargo check -p rmk --no-default-features --features=rmk_protocol` to verify feature compiles | [ ] | |
+| h | Run `cargo test -p rmk --no-default-features --features=split,vial,storage,async_matrix,_ble` to verify vial_lock still works | [ ] | |
 
 ### Step 2.2 — Create `ProtocolService` struct
 
@@ -126,7 +129,7 @@ Move `ConnectionType` to a single shared location in `rmk-types`, remove duplica
 |---|--------|--------|-------|
 | a | Create directory `rmk/src/host/protocol/` | [ ] | |
 | b | Create `rmk/src/host/protocol/mod.rs` | [ ] | |
-| c | Define `ProtocolService` struct with fields: `&'a RefCell<KeyMap<ROW, COL, NUM_LAYER, NUM_ENCODER>>`, lock state (`bool`), RX buffer `[u8; BUF_SIZE]`, TX buffer `[u8; BUF_SIZE]`, transport (generic `T: WireTx + WireRx`), event subscribers (created once in `new()`) | [ ] | Follow VialService pattern. Event subscribers must be held as fields, not re-created per loop iteration |
+| c | Define `ProtocolService` struct with fields: `&'a RefCell<KeyMap<ROW, COL, NUM_LAYER, NUM_ENCODER>>`, `Sender<Tx>` (wraps `WireTx`, provides `reply()`/`publish()`/`error()`), lock state (`bool`), RX buffer `[u8; BUF_SIZE]`, event subscribers (created once in `new()`) | [ ] | Follow VialService pattern. `Sender` from postcard-rpc wraps transport. Event subscribers must be held as fields, not re-created per loop iteration |
 | d | Implement `ProtocolService::new()` constructor — create all event subscribers here | [ ] | |
 | e | Implement `ProtocolService::run()` async main loop: use `embassy_futures::select` to multiplex transport reads (endpoint requests) and event subscribers (topic sources). Single-writer: only this loop writes to transport | [ ] | Returns a future composed into `select_biased!`, NOT spawned via Spawner |
 | f | Gate entire module with `#[cfg(feature = "rmk_protocol")]` | [ ] | |
@@ -135,13 +138,13 @@ Move `ConnectionType` to a single shared location in `rmk-types`, remove duplica
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | In the transport branch of `select`, read frame from `WireRx` | [ ] | `WireRx` handles framing (COBS for serial, packet for USB bulk) |
-| b | Parse `VarHeader` from frame: extract discriminant, key, seq_no | [ ] | Use postcard-rpc's `VarHeader::read_from_wire()` |
+| a | In the transport branch of `select`, read frame from `WireRx::receive()` into RX buffer | [ ] | `WireRx` handles framing (COBS for serial, packet for USB bulk) |
+| b | Parse `VarHeader` from frame: extract discriminant, key, seq_no | [ ] | Use postcard-rpc's `VarHeader::take_from_slice()` — returns `Option<(VarHeader, &[u8])>` |
 | c | Match key against registered endpoint keys (compile-time key constants from `endpoint!` macro) | [ ] | Match on `<GetVersion as Endpoint>::REQ_KEY`, etc. |
 | d | On match: deserialize payload with `postcard::from_bytes`, call corresponding handler | [ ] | |
-| e | On no match: construct `WireError::UnknownKey` error response | [ ] | |
-| f | Serialize handler return value and write response frame via `WireTx` | [ ] | Include echoed seq_no for request/response correlation |
-| g | In event subscriber branches of `select`, serialize Topic frame and write via `WireTx` | [ ] | Response writes prioritized over topic writes in select order |
+| e | On no match: send `WireError::UnknownKey` via `Sender::error()` | [ ] | |
+| f | Send handler response via `Sender::reply::<E>()` with echoed seq_no | [ ] | `Sender` handles VarHeader construction and serialization |
+| g | In event subscriber branches of `select`, publish Topic frame via `Sender::publish::<T>()` | [ ] | Response writes prioritized over topic writes in select order |
 | h | Add error handling: on frame parse failure, skip current frame and continue (resync) | [ ] | |
 | i | Handle transport write failures: log error, do not crash, continue running | [ ] | |
 
@@ -176,9 +179,10 @@ Move `ConnectionType` to a single shared location in `rmk-types`, remove duplica
 |---|--------|--------|-------|
 | a | Create `rmk/src/host/protocol/transport.rs` | [ ] | |
 | b | Create vendor interface (class `0xFF`) with bulk IN and bulk OUT endpoints using `embassy_usb::Builder` | [ ] | 1 interface, 2 endpoints — simpler than CDC-ACM |
-| c | Add MS OS descriptors for automatic WinUSB driver binding on Windows | [ ] | Required for driverless Windows support |
-| d | Implement connect/disconnect handling | [ ] | |
-| e | Gate with `#[cfg(feature = "rmk_protocol")]` | [ ] | |
+| c | Add MS OS descriptors for automatic WinUSB driver binding on Windows | [ ] | Required for driverless Windows support. Reference postcard-rpc's `embassy_usb_v0_5` module for WinUSB GUID and descriptor setup |
+| d | Increase `BOS_DESC_BUF` to ≥64 bytes and `MSOS_DESC_BUF` to ≥256 bytes in `rmk/src/usb/mod.rs` | [ ] | Current 16-byte buffers are too small for MS OS 2.0 descriptors |
+| e | Implement connect/disconnect handling | [ ] | |
+| f | Gate with `#[cfg(feature = "rmk_protocol")]` | [ ] | |
 
 ### Step 3.2 — Implement `WireTx`/`WireRx` for USB bulk transport
 
@@ -219,7 +223,7 @@ Move `ConnectionType` to a single shared location in `rmk-types`, remove duplica
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Implement `GetVersion` handler: return hardcoded `ProtocolVersion { major: 1, minor: 0 }` | [ ] | |
-| b | Implement `GetCapabilities` handler: construct `DeviceCapabilities` from compile-time constants (`NUM_LAYER`, `NUM_ROW`, `NUM_COL`, etc., emitted by `build.rs`) | [ ] | See `rmk/build.rs` output constants |
+| b | Implement `GetCapabilities` handler: construct `DeviceCapabilities` from const generics (`ROW` → `num_rows`, `COL` → `num_cols`, `NUM_LAYER` → `num_layers`, `NUM_ENCODER` → `num_encoders`) and build.rs constants (`COMBO_MAX_NUM` → `max_combos`, `FORK_MAX_NUM` → `max_forks`, `MORSE_MAX_NUM` → `max_morse`, `MACRO_SPACE_SIZE` → `macro_space_size`, `NUM_BLE_PROFILE` → `num_ble_profiles`, `SPLIT_PERIPHERALS_NUM` → `num_split_peripherals`). Feature booleans from `cfg!()` checks | [ ] | `NUM_ROW`/`NUM_COL`/`NUM_LAYER`/`NUM_ENCODER` are NOT build.rs constants — they are const generics on `ProtocolService` |
 | c | Implement `GetLockStatus` handler: read current lock state, return `LockStatus` | [ ] | Initially return always-unlocked |
 | d | Register these three handlers in dispatch loop key match | [ ] | |
 | e | Test: host sends all three requests, verify correct data returned | [ ] | |
@@ -228,8 +232,8 @@ Move `ConnectionType` to a single shared location in `rmk-types`, remove duplica
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Implement `GetKeyAction` handler: extract `(layer, row, col)` from `KeyPosition`, call `keymap.borrow().get_action_at()`, return `KeyAction` | [ ] | |
-| b | Implement `SetKeyAction` handler: receive `SetKeyRequest`, call `keymap.borrow_mut().set_action_at()` to update in-memory state | [ ] | |
+| a | Implement `GetKeyAction` handler: convert `KeyPosition { layer, row, col }` to `KeyboardEventPos::Key(KeyPos { row, col })` (from `rmk/src/event/input.rs`), call `keymap.borrow().get_action_at(pos, layer)`, return `KeyAction` | [ ] | `KeyPosition` is the wire type; `KeyboardEventPos` is the internal type — deliberate separation |
+| b | Implement `SetKeyAction` handler: receive `SetKeyRequest`, convert `KeyPosition` → `KeyboardEventPos`, call `keymap.borrow_mut().set_action_at(pos, layer, action)` to update in-memory state | [ ] | |
 | c | In `SetKeyAction` handler, send `FLASH_CHANNEL.send(FlashOperationMessage::HostMessage(KeymapData::KeymapKey(...)))` for flash persistence | [ ] | Follow VialService pattern |
 | d | Add parameter validation: return `RmkError::InvalidParameter` when layer/row/col is out of bounds | [ ] | |
 | e | Test: read key action at (0,0,0), modify it, read again to verify consistency | [ ] | |
@@ -279,8 +283,8 @@ Move `ConnectionType` to a single shared location in `rmk-types`, remove duplica
 |---|--------|--------|-------|
 | a | Read `rmk/src/host/via/vial_lock.rs`, understand existing `VialLock` struct and state machine | [ ] | |
 | b | Create `rmk/src/host/lock.rs`, define protocol-neutral `DeviceLock` struct | [ ] | |
-| c | Migrate `VialLock` core logic (key position generation, matrix state checking, state transitions) into `DeviceLock` | [ ] | |
-| d | Gate with `#[cfg(feature = "host")]` (usable by both vial and rmk_protocol) | [ ] | |
+| c | Migrate `VialLock` core logic (key position generation, matrix state checking, state transitions) into `DeviceLock` | [ ] | Uses `keymap.borrow().matrix_state.read(row, col)` — now available via `security` feature (Step 2.1e) |
+| d | Gate with `#[cfg(feature = "security")]` (usable by both vial_lock and rmk_protocol) | [ ] | |
 | e | Refactor `vial_lock.rs` to become a thin wrapper around `DeviceLock`, keeping Vial functionality unchanged | [ ] | |
 | f | Run `cargo test` to confirm Vial functionality is not broken | [ ] | |
 
@@ -383,7 +387,7 @@ Move `ConnectionType` to a single shared location in `rmk-types`, remove duplica
 |---|--------|--------|-------|
 | a | Implement `GetBatteryStatus` handler: read battery state via `BatteryStatusEvent` (enum: `NotAvailable`, `Normal(u8)`, `Charging`, `Charged`) | [ ] | `#[cfg(feature = "_ble")]` |
 | b | Implement `GetCurrentLayer` handler: get currently active layer from `keymap.borrow()` | [ ] | |
-| c | Implement `GetMatrixState` handler: read matrix key states, return `MatrixState` | [ ] | |
+| c | Implement `GetMatrixState` handler: read `matrix_state` bitmap from `keymap.borrow()`, copy into `MatrixState { pressed_bitmap: heapless::Vec<u8, 30> }`. Use straightforward bit ordering (bit 0 = col 0, not Vial's reversed format). Gate on `#[cfg(feature = "security")]` | [ ] | Reuses existing Vial `MatrixState<ROW, COL>` bitmap tracking, now available via `security` feature |
 | d | Implement `GetSplitStatus` handler: return split peripheral connection status | [ ] | `#[cfg(feature = "split")]` |
 | e | Endpoints without matching feature return `WireError::UnknownKey` | [ ] | |
 | f | Test: each status query under matching and non-matching feature configs | [ ] | |
@@ -401,8 +405,8 @@ Move `ConnectionType` to a single shared location in `rmk-types`, remove duplica
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
 | a | Create `rmk/src/host/protocol/topics.rs` | [ ] | |
-| b | Implement conversion functions for each event: internal event → Topic payload struct (e.g., `LayerChangeEvent` → `LayerChangePayload`, `BatteryStatusEvent` → `BatteryStatusEvent` (direct reuse)) | [ ] | |
-| c | Implement `encode_topic_frame()` function: serialize Topic payload into wire frame (header with topic key + seq=0 + postcard payload). Framing (COBS vs raw) is handled by `WireTx` | [ ] | |
+| b | Implement conversion functions for each event: internal event → Topic payload type. Topics use raw types (u8, u16, bool, BatteryStatus, etc.) extracted via `Deref` from `impl_payload_wrapper!` event wrappers | [ ] | |
+| c | Use `Sender::publish::<T>()` for Topic frame encoding (handles VarHeader construction with topic key + seq=0 + postcard serialization). No manual `encode_topic_frame()` needed — reuse postcard-rpc's `Sender` | [ ] | |
 | d | Gate BLE-related topics (`BatteryStatus`, `BleStatusChange`) with `#[cfg]` | [ ] | |
 
 ### Step 7.2 — Integrate Topics into ProtocolService
@@ -449,7 +453,8 @@ Move `ConnectionType` to a single shared location in `rmk-types`, remove duplica
 | a | Create `BleTransport` struct wrapping GATT service RX/TX channels | [ ] | |
 | b | Implement `embedded_io_async::Read` for `BleTransport`: read data from RX buffer | [ ] | |
 | c | Implement `embedded_io_async::Write` for `BleTransport`: send data via TX characteristic notify | [ ] | |
-| d | Wrap with COBS framing layer, then implement postcard-rpc's `WireTx`/`WireRx` traits | [ ] | BLE serial is byte stream — needs COBS (unlike USB bulk) |
+| d | Implement postcard-rpc's `WireTx` trait: serialize VarHeader + payload, COBS-encode, write via `Write::write_all()`. For TX COBS encoding, use `postcard::to_slice_cobs` (same pattern as split serial) | [ ] | BLE serial is byte stream — needs COBS (unlike USB bulk) |
+| d2 | Implement postcard-rpc's `WireRx` trait: read bytes via `Read::read()`, feed into postcard-rpc's `CobsAccumulator` (available via `cobs` feature), return decoded frame | [ ] | `CobsAccumulator` handles partial reads and frame boundary detection |
 | e | Handle BLE connect/disconnect events: `read()` returns EOF on disconnect | [ ] | |
 | f | Pass `BleTransport` to `ProtocolService::new()` — ProtocolService works without any modification | [ ] | |
 
@@ -511,7 +516,7 @@ Move `ConnectionType` to a single shared location in `rmk-types`, remove duplica
 | b | Remove `vial` and `vial_lock` feature definitions | [ ] | |
 | c | Delete `rmk/src/host/via/` directory and related code | [ ] | |
 | d | Delete `rmk-types/src/protocol/vial.rs` | [ ] | |
-| e | Clean up Vial-related optional dependencies in `rmk/Cargo.toml` | [ ] | |
+| e | Clean up Vial-related optional dependencies in `rmk/Cargo.toml`. Move `byteorder` from `host` to only where needed (or remove if unused). Consider renaming `host` to `_host` (matching `_ble` internal convention) | [ ] | |
 | f | Update documentation, remove all Vial-related content | [ ] | |
 | g | Publish breaking-change version | [ ] | |
 
@@ -538,11 +543,20 @@ Move `ConnectionType` to a single shared location in `rmk-types`, remove duplica
 | File | Purpose |
 |------|---------|
 | `final_plan.md` | Full design specification |
-| `rmk-types/src/protocol/rmk.rs` | ICD types and endpoint/topic definitions |
-| `rmk/src/host/protocol/mod.rs` | ProtocolService and dispatch loop |
-| `rmk/src/host/protocol/transport.rs` | Transport adapters (raw USB bulk, BLE serial) |
-| `rmk/src/host/protocol/topics.rs` | Event bus -> Topic bridging |
-| `rmk/src/host/lock.rs` | Shared lock/unlock logic |
+| `rmk-types/src/protocol/rmk/mod.rs` | Endpoint/topic declarations, constants, tests |
+| `rmk-types/src/protocol/rmk/types.rs` | Core ICD types (ProtocolVersion, DeviceCapabilities, RmkError, LockStatus, etc.) |
+| `rmk-types/src/protocol/rmk/keymap.rs` | Keymap types (KeyPosition, BulkRequest, SetKeyRequest, etc.) |
+| `rmk-types/src/protocol/rmk/config.rs` | Config types (BehaviorConfig, ComboConfig, MorseConfig, ForkConfig, MacroInfo, MacroData) |
+| `rmk-types/src/protocol/rmk/request.rs` | Request payload types (SetEncoderRequest, SetMacroRequest, etc.) |
+| `rmk-types/src/protocol/rmk/status.rs` | Status types (ConnectionInfo, MatrixState, SplitStatus) |
+| `rmk-types/src/connection.rs` | Shared `ConnectionType` enum |
+| `rmk-types/src/battery.rs` | Shared `BatteryStatus`, `ChargeState` types |
+| `rmk-types/src/ble.rs` | Shared `BleStatus`, `BleState` types |
+| `rmk-types/src/fork.rs` | Shared `ForkStateBits` type |
+| `rmk/src/host/protocol/mod.rs` | ProtocolService and dispatch loop (Phase 2+) |
+| `rmk/src/host/protocol/transport.rs` | Transport adapters (raw USB bulk, BLE serial) (Phase 3+) |
+| `rmk/src/host/protocol/topics.rs` | Event bus -> Topic bridging (Phase 7+) |
+| `rmk/src/host/lock.rs` | Shared lock/unlock logic (Phase 5+) |
 | `rmk/src/host/mod.rs` | Feature-gated task spawning |
 | `rmk/src/storage/mod.rs` | Flash persistence (HostMessage) |
 | `rmk/src/usb/mod.rs` | USB class setup (vendor bulk + HID) |
