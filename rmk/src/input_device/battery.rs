@@ -5,7 +5,7 @@ use rmk_macro::{input_device, processor};
 use crate::event::BatteryStatusEvent;
 use crate::event::{BatteryAdcEvent, ChargingStateEvent, publish_event};
 #[cfg(feature = "_ble")]
-use rmk_types::event::{BatteryStatus, ChargeState};
+use rmk_types::battery::{BatteryStatus, ChargeState};
 
 /// Reads charging state from a GPIO pin and publishes ChargingStateEvent.
 ///

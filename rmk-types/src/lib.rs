@@ -6,9 +6,9 @@
 //!
 //! ### Core Modules
 //! - [`action`] - Keyboard actions and behaviors (key presses, layer operations, macros)
+//! - [`battery`] - Battery state and charge status types
 //! - [`ble`] - BLE profile and connection status types
 //! - [`connection`] - Shared connection-mode types
-//! - [`event`] - Shared event payload types
 //! - [`keycode`] - Keycode definitions including HID keycodes, media keys, and system control keycodes
 //! - [`fork`] - Shared fork/key-override state types
 //! - [`modifier`] - Modifier key combinations and operations
@@ -28,10 +28,10 @@
 #![no_std]
 
 pub mod action;
+pub mod battery;
 pub mod ble;
 pub mod connection;
 pub mod constants;
-pub mod event;
 pub mod fork;
 pub mod keycode;
 pub mod led_indicator;
