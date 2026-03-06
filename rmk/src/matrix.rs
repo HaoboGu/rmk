@@ -16,21 +16,21 @@ use crate::state::ConnectionState;
 pub mod bidirectional_matrix;
 
 /// Recording the matrix pressed state
-#[cfg(feature = "vial_lock")]
+#[cfg(feature = "host_security")]
 pub struct MatrixState<const ROW: usize, const COL: usize> {
     // 30 bytes is the limited by Vial and 240 keys is enough for
     // most keyboard
     state: [u8; 30],
 }
 
-#[cfg(feature = "vial_lock")]
+#[cfg(feature = "host_security")]
 impl<const ROW: usize, const COL: usize> Default for MatrixState<ROW, COL> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg(feature = "vial_lock")]
+#[cfg(feature = "host_security")]
 impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
     const ROW_LEN: usize = (COL + 8) / 8;
     const OUT_OF_BOUNDARY: () = if ROW * Self::ROW_LEN > 30 {
