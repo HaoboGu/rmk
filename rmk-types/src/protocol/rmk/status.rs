@@ -13,11 +13,18 @@ pub struct ConnectionInfo {
     pub ble_connected: bool,
 }
 
-/// Current matrix key-press state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+/// Maximum bitmap size: supports up to 240 keys (e.g., 10 rows × 24 cols).
+/// Each row uses ceil(num_cols / 8) bytes. Host decodes using num_rows/num_cols
+/// from DeviceCapabilities.
+pub const MAX_MATRIX_BITMAP_SIZE: usize = 30;
+
+/// Current matrix key-press state as a bitmap.
+/// Bit ordering: row-major, bit 0 = col 0, bit 1 = col 1, etc.
+/// Total meaningful bytes = num_rows * ceil(num_cols / 8).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MatrixState {
-    pub num_pressed: u8,
+    pub pressed_bitmap: heapless::Vec<u8, MAX_MATRIX_BITMAP_SIZE>,
 }
 
 /// Split keyboard peripheral status.
