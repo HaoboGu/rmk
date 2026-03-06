@@ -196,7 +196,7 @@ impl<
                     .set_action_at(KeyboardEventPos::key_pos(col, row), layer as usize, action);
                 #[cfg(feature = "storage")]
                 FLASH_CHANNEL
-                    .send(FlashOperationMessage::VialMessage(KeymapData::KeymapKey(KeymapKey {
+                    .send(FlashOperationMessage::HostMessage(KeymapData::KeymapKey(KeymapKey {
                         layer,
                         col,
                         row,
@@ -275,7 +275,7 @@ impl<
                 {
                     let buf = self.keymap.borrow_mut().behavior.keyboard_macros.macro_sequences;
                     FLASH_CHANNEL
-                        .send(FlashOperationMessage::VialMessage(KeymapData::Macro(buf)))
+                        .send(FlashOperationMessage::HostMessage(KeymapData::Macro(buf)))
                         .await;
                     info!("Flush macros to storage")
                 }
@@ -334,7 +334,7 @@ impl<
                             offset, row, col, layer
                         );
                         #[cfg(feature = "storage")]
-                        if let Err(_e) = FLASH_CHANNEL.try_send(FlashOperationMessage::VialMessage(
+                        if let Err(_e) = FLASH_CHANNEL.try_send(FlashOperationMessage::HostMessage(
                             KeymapData::KeymapKey(KeymapKey {
                                 layer: layer as u8,
                                 col: col as u8,

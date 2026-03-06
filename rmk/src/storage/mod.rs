@@ -51,9 +51,9 @@ pub(crate) enum FlashOperationMessage {
     LayoutOptions(u32),
     // Default layer number
     DefaultLayer(u8),
-    // Vial Flash Message
+    // Host protocol flash message (used by both Vial and RMK protocol)
     #[cfg(feature = "host")]
-    VialMessage(KeymapData),
+    HostMessage(KeymapData),
     // Current saved connection type
     ConnectionType(u8),
     // Timeout time for combos
@@ -139,7 +139,7 @@ pub(crate) enum StorageData {
     BehaviorConfig(BehaviorConfig),
     ConnectionType(u8),
     #[cfg(feature = "host")]
-    VialData(KeymapData),
+    HostData(KeymapData),
     #[cfg(all(feature = "_ble", feature = "split"))]
     PeerAddress(PeerAddress),
     #[cfg(feature = "_ble")]
@@ -241,7 +241,7 @@ impl StorageData {
             #[cfg(feature = "_ble")]
             Self::ActiveBleProfile(_) => StorageKeys::ActiveBleProfile as u32,
             #[cfg(feature = "host")]
-            Self::VialData(d) => match d {
+            Self::HostData(d) => match d {
                 KeymapData::Macro(_) => StorageKeys::MacroData as u32,
                 KeymapData::KeymapKey(_) => panic!("Error"),
                 KeymapData::Encoder(_) => StorageKeys::EncoderKeys as u32,
@@ -271,7 +271,7 @@ impl Value<'_> for StorageData {
             #[cfg(feature = "_ble")]
             Self::ActiveBleProfile(d) => ser_storage_variant!(buffer, StorageKeys::ActiveBleProfile, d),
             #[cfg(feature = "host")]
-            Self::VialData(vial_data) => vial_data.serialize_into(buffer),
+            Self::HostData(vial_data) => vial_data.serialize_into(buffer),
         }
     }
 
@@ -338,8 +338,8 @@ impl Value<'_> for StorageData {
             | StorageKeys::EncoderKeys
             | StorageKeys::ForkData
             | StorageKeys::MorseData => {
-                // VialData keys handled by KeymapData
-                KeymapData::deserialize_from(buffer).map(|(data, size)| (Self::VialData(data), size))
+                // HostData keys handled by KeymapData
+                KeymapData::deserialize_from(buffer).map(|(data, size)| (Self::HostData(data), size))
             }
         }
     }
@@ -541,24 +541,24 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     update_storage_field!(&mut self.flash, &mut self.buffer, LayoutConfig, default_layer)
                 }
                 #[cfg(feature = "host")]
-                FlashOperationMessage::VialMessage(vial_data) => match vial_data {
+                FlashOperationMessage::HostMessage(vial_data) => match vial_data {
                     KeymapData::Macro(macro_data) => {
                         info!("Saving keyboard macro data");
                         self.flash
                             .store_item(
                                 &mut self.buffer,
                                 &(StorageKeys::MacroData as u32),
-                                &StorageData::VialData(KeymapData::Macro(macro_data)),
+                                &StorageData::HostData(KeymapData::Macro(macro_data)),
                             )
                             .await
                     }
                     KeymapData::KeymapKey(keymap_key) => {
                         let key = get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key);
-                        let data = StorageData::VialData(KeymapData::KeymapKey(keymap_key));
+                        let data = StorageData::HostData(KeymapData::KeymapKey(keymap_key));
                         self.flash.store_item(&mut self.buffer, &key, &data).await
                     }
                     KeymapData::Encoder(encoder_config) => {
-                        let data = StorageData::VialData(KeymapData::Encoder(encoder_config));
+                        let data = StorageData::HostData(KeymapData::Encoder(encoder_config));
                         let key = get_encoder_config_key::<NUM_ENCODER>(encoder_config.idx, encoder_config.layer);
                         self.flash.store_item(&mut self.buffer, &key, &data).await
                     }
@@ -568,7 +568,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                             .store_item(
                                 &mut self.buffer,
                                 &key,
-                                &StorageData::VialData(KeymapData::Combo(idx, config)),
+                                &StorageData::HostData(KeymapData::Combo(idx, config)),
                             )
                             .await
                     }
@@ -577,7 +577,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                             .store_item(
                                 &mut self.buffer,
                                 &get_fork_key(idx),
-                                &StorageData::VialData(KeymapData::Fork(idx, fork)),
+                                &StorageData::HostData(KeymapData::Fork(idx, fork)),
                             )
                             .await
                     }
@@ -586,7 +586,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                             .store_item(
                                 &mut self.buffer,
                                 &get_morse_key(id),
-                                &StorageData::VialData(KeymapData::Morse(id, morse)),
+                                &StorageData::HostData(KeymapData::Morse(id, morse)),
                             )
                             .await
                     }
@@ -760,7 +760,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         .store_item(
                             &mut self.buffer,
                             &get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key),
-                            &StorageData::VialData(KeymapData::KeymapKey(keymap_key)),
+                            &StorageData::HostData(KeymapData::KeymapKey(keymap_key)),
                         )
                         .await
                         .map_err(|e| print_storage_error::<F>(e))?;
@@ -784,7 +784,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         .store_item(
                             &mut self.buffer,
                             &get_encoder_config_key::<NUM_ENCODER>(encoder.idx, encoder.layer),
-                            &StorageData::VialData(KeymapData::Encoder(encoder)),
+                            &StorageData::HostData(KeymapData::Encoder(encoder)),
                         )
                         .await
                         .map_err(|e| print_storage_error::<F>(e))?;
@@ -837,7 +837,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         .store_item(
                             &mut self.buffer,
                             &get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key),
-                            &StorageData::VialData(KeymapData::KeymapKey(keymap_key)),
+                            &StorageData::HostData(KeymapData::KeymapKey(keymap_key)),
                         )
                         .await?;
                 }
@@ -853,7 +853,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         .store_item(
                             &mut self.buffer,
                             &get_encoder_config_key::<NUM_ENCODER>(idx as u8, layer as u8),
-                            &StorageData::VialData(KeymapData::Encoder(EncoderKeymap {
+                            &StorageData::HostData(KeymapData::Encoder(EncoderKeymap {
                                 idx: idx as u8,
                                 layer: layer as u8,
                                 action: *action,
