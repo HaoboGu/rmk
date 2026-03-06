@@ -6,7 +6,6 @@
 //!
 //! The protocol uses postcard-rpc's type-level endpoint definitions over COBS-framed
 //! byte streams (USB bulk transfer and BLE serial).
-
 use heapless::Vec;
 use postcard_rpc::{TopicDirection, endpoints, topics};
 use serde::{Deserialize, Serialize};
@@ -14,8 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::action::{EncoderAction, KeyAction, MorseProfile};
 use crate::connection::ConnectionType;
 pub use crate::event::{
-    BatteryStatus, BleStatus, ConnectionPayload, LayerChangePayload, LedPayload, SleepPayload,
-    WpmPayload,
+    BatteryStatus, BleStatus, ConnectionPayload, LayerChangePayload, LedPayload, SleepPayload, WpmPayload,
 };
 use crate::fork::ForkStateBits;
 use crate::modifier::ModifierCombination;
@@ -317,61 +315,168 @@ pub struct SetForkRequest {
 // ---------------------------------------------------------------------------
 
 endpoints! {
-    list = ENDPOINT_LIST;
-    | EndpointTy          | RequestTy              | ResponseTy                    | Path                          |
-    | ----------          | ---------              | ----------                    | ----                          |
-    // System
-    | GetVersion          | ()                     | ProtocolVersion               | "sys/version"                 |
-    | GetCapabilities     | ()                     | DeviceCapabilities            | "sys/caps"                    |
-    | GetLockStatus       | ()                     | LockStatus                    | "sys/lock_status"             |
-    | UnlockRequest       | ()                     | UnlockChallenge               | "sys/unlock"                  |
-    | LockRequest         | ()                     | ()                            | "sys/lock"                    |
-    | Reboot              | ()                     | ()                            | "sys/reboot"                  |
-    | BootloaderJump      | ()                     | ()                            | "sys/bootloader"              |
-    | StorageReset        | StorageResetMode       | ()                            | "sys/storage_reset"           |
-    // Keymap
-    | GetKeyAction        | KeyPosition            | KeyAction                     | "keymap/get"                  |
-    | SetKeyAction        | SetKeyRequest          | RmkResult                     | "keymap/set"                  |
-    | GetKeymapBulk       | BulkRequest            | BulkKeyActions                | "keymap/bulk_get"             |
-    | SetKeymapBulk       | SetKeymapBulkRequest   | RmkResult                     | "keymap/bulk_set"             |
-    | GetLayerCount       | ()                     | u8                            | "keymap/layer_count"          |
-    | GetDefaultLayer     | ()                     | u8                            | "keymap/default_layer"        |
-    | SetDefaultLayer     | u8                     | RmkResult                     | "keymap/set_default_layer"    |
-    | ResetKeymap         | ()                     | RmkResult                     | "keymap/reset"                |
-    // Encoder
-    | GetEncoderAction    | GetEncoderRequest      | EncoderAction                 | "encoder/get"                 |
-    | SetEncoderAction    | SetEncoderRequest      | RmkResult                     | "encoder/set"                 |
-    // Macro
-    | GetMacroInfo        | ()                     | MacroInfo                     | "macro/info"                  |
-    | GetMacro            | u8                     | MacroData                     | "macro/get"                   |
-    | SetMacro            | SetMacroRequest        | RmkResult                     | "macro/set"                   |
-    | ResetMacros         | ()                     | RmkResult                     | "macro/reset"                 |
-    // Combo
-    | GetCombo            | u8                     | ComboConfig                   | "combo/get"                   |
-    | SetCombo            | SetComboRequest        | RmkResult                     | "combo/set"                   |
-    | ResetCombos         | ()                     | RmkResult                     | "combo/reset"                 |
-    // Morse / Tap-Dance
-    | GetMorse            | u8                     | MorseConfig                   | "morse/get"                   |
-    | SetMorse            | SetMorseRequest        | RmkResult                     | "morse/set"                   |
-    | ResetMorse          | ()                     | RmkResult                     | "morse/reset"                 |
-    // Fork (Key Override)
-    | GetFork             | u8                     | ForkConfig                    | "fork/get"                    |
-    | SetFork             | SetForkRequest         | RmkResult                     | "fork/set"                    |
-    | ResetForks          | ()                     | RmkResult                     | "fork/reset"                  |
-    // Behavior
-    | GetBehaviorConfig   | ()                     | BehaviorConfig                | "behavior/get"                |
-    | SetBehaviorConfig   | BehaviorConfig         | RmkResult                     | "behavior/set"                |
-    // Connection
-    | GetConnectionInfo   | ()                     | ConnectionInfo                | "conn/info"                   |
-    | SetConnectionType   | ConnectionType         | RmkResult                     | "conn/set_type"               |
-    | SwitchBleProfile    | u8                     | RmkResult                     | "conn/switch_ble"             |
-    | ClearBleProfile     | u8                     | RmkResult                     | "conn/clear_ble"              |
-    // Status
-    | GetBatteryStatus    | ()                     | BatteryStatus                 | "status/battery"              |
-    | GetCurrentLayer     | ()                     | u8                            | "status/layer"                |
-    | GetMatrixState      | ()                     | MatrixState                   | "status/matrix"               |
-    | GetSplitStatus      | ()                     | SplitStatus                   | "status/split"                |
+    list = SYSTEM_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy      | RequestTy        | ResponseTy          | Path                |
+    | ----------      | ---------        | ----------          | ----                |
+    | GetVersion      | ()               | ProtocolVersion     | "sys/version"       |
+    | GetCapabilities | ()               | DeviceCapabilities  | "sys/caps"          |
+    | GetLockStatus   | ()               | LockStatus          | "sys/lock_status"   |
+    | UnlockRequest   | ()               | UnlockChallenge     | "sys/unlock"        |
+    | LockRequest     | ()               | ()                  | "sys/lock"          |
+    | Reboot          | ()               | ()                  | "sys/reboot"        |
+    | BootloaderJump  | ()               | ()                  | "sys/bootloader"    |
+    | StorageReset    | StorageResetMode | ()                  | "sys/storage_reset" |
 }
+
+endpoints! {
+    list = KEYMAP_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy      | RequestTy            | ResponseTy          | Path                       |
+    | ----------      | ---------            | ----------          | ----                       |
+    | GetKeyAction    | KeyPosition          | KeyAction           | "keymap/get"               |
+    | SetKeyAction    | SetKeyRequest        | RmkResult           | "keymap/set"               |
+    | GetKeymapBulk   | BulkRequest          | BulkKeyActions      | "keymap/bulk_get"          |
+    | SetKeymapBulk   | SetKeymapBulkRequest | RmkResult           | "keymap/bulk_set"          |
+    | GetLayerCount   | ()                   | u8                  | "keymap/layer_count"       |
+    | GetDefaultLayer | ()                   | u8                  | "keymap/default_layer"     |
+    | SetDefaultLayer | u8                   | RmkResult           | "keymap/set_default_layer" |
+    | ResetKeymap     | ()                   | RmkResult           | "keymap/reset"             |
+}
+
+endpoints! {
+    list = ENCODER_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy       | RequestTy         | ResponseTy    | Path          |
+    | ----------       | ---------         | ----------    | ----          |
+    | GetEncoderAction | GetEncoderRequest | EncoderAction | "encoder/get" |
+    | SetEncoderAction | SetEncoderRequest | RmkResult     | "encoder/set" |
+}
+
+endpoints! {
+    list = MACRO_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy   | RequestTy       | ResponseTy | Path          |
+    | ----------   | ---------       | ---------- | ----          |
+    | GetMacroInfo | ()              | MacroInfo  | "macro/info"  |
+    | GetMacro     | u8              | MacroData  | "macro/get"   |
+    | SetMacro     | SetMacroRequest | RmkResult  | "macro/set"   |
+    | ResetMacros  | ()              | RmkResult  | "macro/reset" |
+}
+
+endpoints! {
+    list = COMBO_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy  | RequestTy       | ResponseTy  | Path         |
+    | ----------  | ---------       | ----------  | ----         |
+    | GetCombo    | u8              | ComboConfig | "combo/get"  |
+    | SetCombo    | SetComboRequest | RmkResult   | "combo/set"  |
+    | ResetCombos | ()              | RmkResult   | "combo/reset"|
+}
+
+endpoints! {
+    list = MORSE_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy | RequestTy       | ResponseTy  | Path         |
+    | ---------- | ---------       | ----------  | ----         |
+    | GetMorse   | u8              | MorseConfig | "morse/get"  |
+    | SetMorse   | SetMorseRequest | RmkResult   | "morse/set"  |
+    | ResetMorse | ()              | RmkResult   | "morse/reset"|
+}
+
+endpoints! {
+    list = FORK_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy | RequestTy      | ResponseTy | Path        |
+    | ---------- | ---------      | ---------- | ----        |
+    | GetFork    | u8             | ForkConfig | "fork/get"  |
+    | SetFork    | SetForkRequest | RmkResult  | "fork/set"  |
+    | ResetForks | ()             | RmkResult  | "fork/reset"|
+}
+
+endpoints! {
+    list = BEHAVIOR_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy        | RequestTy      | ResponseTy     | Path           |
+    | ----------        | ---------      | ----------     | ----           |
+    | GetBehaviorConfig | ()             | BehaviorConfig | "behavior/get" |
+    | SetBehaviorConfig | BehaviorConfig | RmkResult      | "behavior/set" |
+}
+
+endpoints! {
+    list = CONNECTION_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy        | RequestTy      | ResponseTy | Path              |
+    | ----------        | ---------      | ---------- | ----              |
+    | GetConnectionInfo | ()             | ConnectionInfo | "conn/info"    |
+    | SetConnectionType | ConnectionType | RmkResult  | "conn/set_type"   |
+    | SwitchBleProfile  | u8             | RmkResult  | "conn/switch_ble" |
+    | ClearBleProfile   | u8             | RmkResult  | "conn/clear_ble"  |
+}
+
+endpoints! {
+    list = STATUS_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy       | RequestTy | ResponseTy    | Path             |
+    | ----------       | --------- | ----------    | ----             |
+    | GetBatteryStatus | ()        | BatteryStatus | "status/battery" |
+    | GetCurrentLayer  | ()        | u8            | "status/layer"   |
+    | GetMatrixState   | ()        | MatrixState   | "status/matrix"  |
+    | GetSplitStatus   | ()        | SplitStatus   | "status/split"   |
+}
+
+/// Full endpoint map for the RMK protocol.
+///
+/// This is assembled from smaller endpoint groups to avoid very large const-eval
+/// workloads in a single `endpoints!` invocation.
+pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = const {
+    use postcard_rpc::postcard_schema::schema::{DataModelType, NamedType};
+    use postcard_rpc::{EndpointMap, Key};
+
+    const NULL_KEY: Key = unsafe { Key::from_bytes([0u8; 8]) };
+    const NULL_TY: &NamedType = &NamedType {
+        name: "",
+        ty: &DataModelType::Unit,
+    };
+
+    const TYPE_SLICES: &[&[&NamedType]] = &[
+        postcard_rpc::standard_icd::STANDARD_ICD_ENDPOINTS.types,
+        SYSTEM_ENDPOINT_LIST.types,
+        KEYMAP_ENDPOINT_LIST.types,
+        ENCODER_ENDPOINT_LIST.types,
+        MACRO_ENDPOINT_LIST.types,
+        COMBO_ENDPOINT_LIST.types,
+        MORSE_ENDPOINT_LIST.types,
+        FORK_ENDPOINT_LIST.types,
+        BEHAVIOR_ENDPOINT_LIST.types,
+        CONNECTION_ENDPOINT_LIST.types,
+        STATUS_ENDPOINT_LIST.types,
+    ];
+    const TYPE_LEN: usize = postcard_rpc::uniques::total_len(TYPE_SLICES);
+    const TYPES: [&NamedType; TYPE_LEN] = postcard_rpc::uniques::combine_with_copy(TYPE_SLICES, NULL_TY);
+
+    const ENDPOINT_SLICES: &[&[(&str, Key, Key)]] = &[
+        postcard_rpc::standard_icd::STANDARD_ICD_ENDPOINTS.endpoints,
+        SYSTEM_ENDPOINT_LIST.endpoints,
+        KEYMAP_ENDPOINT_LIST.endpoints,
+        ENCODER_ENDPOINT_LIST.endpoints,
+        MACRO_ENDPOINT_LIST.endpoints,
+        COMBO_ENDPOINT_LIST.endpoints,
+        MORSE_ENDPOINT_LIST.endpoints,
+        FORK_ENDPOINT_LIST.endpoints,
+        BEHAVIOR_ENDPOINT_LIST.endpoints,
+        CONNECTION_ENDPOINT_LIST.endpoints,
+        STATUS_ENDPOINT_LIST.endpoints,
+    ];
+    const ENDPOINT_LEN: usize = postcard_rpc::uniques::total_len(ENDPOINT_SLICES);
+    const ENDPOINTS: [(&str, Key, Key); ENDPOINT_LEN] =
+        postcard_rpc::uniques::combine_with_copy(ENDPOINT_SLICES, ("", NULL_KEY, NULL_KEY));
+
+    EndpointMap {
+        types: TYPES.as_slice(),
+        endpoints: ENDPOINTS.as_slice(),
+    }
+};
 
 // ---------------------------------------------------------------------------
 // Topic declarations
