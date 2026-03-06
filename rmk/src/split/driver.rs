@@ -108,7 +108,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
 
                         if let Some(indicator_event) = keyboard_indicator_sub.try_next_message_pure() {
                             let message_to_peri =
-                                SplitMessage::KeyboardIndicator(indicator_event.indicator.into_bits());
+                                SplitMessage::KeyboardIndicator(indicator_event.0.into_bits());
                             debug!("Sending message to peripheral {}: {:?}", self.id, message_to_peri);
                             if let Err(e) = self.transceiver.write(&message_to_peri).await {
                                 match e {
@@ -117,7 +117,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                                 }
                             }
                         } else if let Some(layer_event) = layer_sub.try_next_message_pure() {
-                            let message_to_peri = SplitMessage::Layer(layer_event.layer);
+                            let message_to_peri = SplitMessage::Layer(layer_event.0);
                             debug!("Sending message to peripheral {}: {:?}", self.id, message_to_peri);
                             if let Err(e) = self.transceiver.write(&message_to_peri).await {
                                 match e {
@@ -156,9 +156,9 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 Either3::Second(e) => {
                     let message_to_peri = match e {
                         Either3::First(indicator_event) => {
-                            SplitMessage::KeyboardIndicator(indicator_event.indicator.into_bits())
+                            SplitMessage::KeyboardIndicator(indicator_event.0.into_bits())
                         }
-                        Either3::Second(layer_event) => SplitMessage::Layer(layer_event.layer),
+                        Either3::Second(layer_event) => SplitMessage::Layer(layer_event.0),
                         #[cfg(feature = "_ble")]
                         Either3::Third(_clear_peer) => {
                             #[cfg(feature = "storage")]
@@ -238,7 +238,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 // Non-key events are drop-on-full to keep the split read loop responsive.
                 SplitMessage::Pointing(e) => publish_event(e),
                 #[cfg(feature = "_ble")]
-                SplitMessage::BatteryState(state) => {
+                SplitMessage::BatteryStatus(state) => {
                     // Publish as PeripheralBatteryEvent with the full state
                     publish_event(PeripheralBatteryEvent { id: self.id, state })
                 }

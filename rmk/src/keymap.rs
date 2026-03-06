@@ -329,7 +329,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             self.layer_state[3] = self.layer_state[1] && self.layer_state[2];
             {
                 let layer = self.get_activated_layer();
-                publish_event(LayerChangeEvent { layer });
+                publish_event(LayerChangeEvent::new(layer));
             }
         }
     }
@@ -343,7 +343,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         {
             let layer = self.get_activated_layer();
-            publish_event(LayerChangeEvent { layer });
+            publish_event(LayerChangeEvent::new(layer));
         }
     }
 
@@ -387,7 +387,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         {
             let layer = self.get_activated_layer();
-            publish_event(LayerChangeEvent { layer });
+            publish_event(LayerChangeEvent::new(layer));
         }
     }
 }

@@ -68,9 +68,7 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
 
     // Add event channel constants
     // Note: default values are loaded from event_default.toml via config crate
-    let (ble_state_change_size, ble_state_change_pubs, ble_state_change_subs) = events.ble_state_change.into_values();
-    let (ble_profile_change_size, ble_profile_change_pubs, ble_profile_change_subs) =
-        events.ble_profile_change.into_values();
+    let (ble_status_change_size, ble_status_change_pubs, ble_status_change_subs) = events.ble_status_change.into_values();
     let (connection_change_size, connection_change_pubs, connection_change_subs) =
         events.connection_change.into_values();
     let (modifier_size, modifier_pubs, modifier_subs) = events.modifier.into_values();
@@ -79,7 +77,7 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
     let (wpm_update_size, wpm_update_pubs, wpm_update_subs) = events.wpm_update.into_values();
     let (led_indicator_size, led_indicator_pubs, led_indicator_subs) = events.led_indicator.into_values();
     let (sleep_state_size, sleep_state_pubs, sleep_state_subs) = events.sleep_state.into_values();
-    let (battery_state_size, battery_state_pubs, battery_state_subs) = events.battery_state.into_values();
+    let (battery_status_size, battery_status_pubs, battery_status_subs) = events.battery_status.into_values();
     let (battery_adc_size, battery_adc_pubs, battery_adc_subs) = events.battery_adc.into_values();
     let (charging_state_size, charging_state_pubs, charging_state_subs) = events.charging_state.into_values();
     let (pointing_size, pointing_pubs, pointing_subs) = events.pointing.into_values();
@@ -93,12 +91,9 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
 
     constant_strs.extend([
         // BLE events
-        const_declaration!(pub(crate) BLE_STATE_CHANGE_EVENT_CHANNEL_SIZE = ble_state_change_size),
-        const_declaration!(pub(crate) BLE_STATE_CHANGE_EVENT_PUB_SIZE = ble_state_change_pubs),
-        const_declaration!(pub(crate) BLE_STATE_CHANGE_EVENT_SUB_SIZE = ble_state_change_subs),
-        const_declaration!(pub(crate) BLE_PROFILE_CHANGE_EVENT_CHANNEL_SIZE = ble_profile_change_size),
-        const_declaration!(pub(crate) BLE_PROFILE_CHANGE_EVENT_PUB_SIZE = ble_profile_change_pubs),
-        const_declaration!(pub(crate) BLE_PROFILE_CHANGE_EVENT_SUB_SIZE = ble_profile_change_subs),
+        const_declaration!(pub(crate) BLE_STATUS_CHANGE_EVENT_CHANNEL_SIZE = ble_status_change_size),
+        const_declaration!(pub(crate) BLE_STATUS_CHANGE_EVENT_PUB_SIZE = ble_status_change_pubs),
+        const_declaration!(pub(crate) BLE_STATUS_CHANGE_EVENT_SUB_SIZE = ble_status_change_subs),
         // Connection events
         const_declaration!(pub(crate) CONNECTION_CHANGE_EVENT_CHANNEL_SIZE = connection_change_size),
         const_declaration!(pub(crate) CONNECTION_CHANGE_EVENT_PUB_SIZE = connection_change_pubs),
@@ -124,9 +119,9 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) SLEEP_STATE_EVENT_PUB_SIZE = sleep_state_pubs),
         const_declaration!(pub(crate) SLEEP_STATE_EVENT_SUB_SIZE = sleep_state_subs),
         // Power events
-        const_declaration!(pub(crate) BATTERY_STATE_EVENT_CHANNEL_SIZE = battery_state_size),
-        const_declaration!(pub(crate) BATTERY_STATE_EVENT_PUB_SIZE = battery_state_pubs),
-        const_declaration!(pub(crate) BATTERY_STATE_EVENT_SUB_SIZE = battery_state_subs),
+        const_declaration!(pub(crate) BATTERY_STATUS_EVENT_CHANNEL_SIZE = battery_status_size),
+        const_declaration!(pub(crate) BATTERY_STATUS_EVENT_PUB_SIZE = battery_status_pubs),
+        const_declaration!(pub(crate) BATTERY_STATUS_EVENT_SUB_SIZE = battery_status_subs),
         const_declaration!(pub(crate) BATTERY_ADC_EVENT_CHANNEL_SIZE = battery_adc_size),
         const_declaration!(pub(crate) BATTERY_ADC_EVENT_PUB_SIZE = battery_adc_pubs),
         const_declaration!(pub(crate) BATTERY_ADC_EVENT_SUB_SIZE = battery_adc_subs),
