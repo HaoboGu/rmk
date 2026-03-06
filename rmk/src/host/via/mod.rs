@@ -422,3 +422,17 @@ impl<'d, D: Driver<'d>> HidReaderTrait for UsbVialReaderWriter<'_, 'd, D> {
         Ok(read_report)
     }
 }
+
+impl<
+    'a,
+    RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
+> crate::host::HostService for VialService<'a, RW, ROW, COL, NUM_LAYER, NUM_ENCODER>
+{
+    async fn run(&mut self) {
+        VialService::run(self).await;
+    }
+}

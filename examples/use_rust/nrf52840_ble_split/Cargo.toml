@@ -9,8 +9,15 @@ readme = "../../README.md"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 
+[features]
+default = ["rmk_protocol"]
+rmk_protocol = ["rmk/rmk_protocol"]
+vial = ["rmk/vial", "rmk/vial_lock"]
+
 [dependencies]
-rmk = { path = "../../../rmk", features = [
+rmk = { path = "../../../rmk", default-features = false, features = [
+    "defmt",
+    "storage",
     "nrf52840_ble",
     "split",
     "async_matrix",

@@ -128,11 +128,13 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     const USB_BUF_SIZE: usize = 256;
     #[cfg(not(feature = "usb_log"))]
     const USB_BUF_SIZE: usize = 128;
+    const BOS_DESC_BUF_SIZE: usize = 64;
+    const MSOS_DESC_BUF_SIZE: usize = 256;
 
     // Create embassy-usb DeviceBuilder using the driver and config.
     static CONFIG_DESC: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
-    static BOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
-    static MSOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
+    static BOS_DESC: StaticCell<[u8; BOS_DESC_BUF_SIZE]> = StaticCell::new();
+    static MSOS_DESC: StaticCell<[u8; MSOS_DESC_BUF_SIZE]> = StaticCell::new();
     static CONTROL_BUF: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
 
     // UsbDevice builder
@@ -140,8 +142,8 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
         driver,
         usb_config,
         &mut CONFIG_DESC.init([0; USB_BUF_SIZE])[..],
-        &mut BOS_DESC.init([0; 16])[..],
-        &mut MSOS_DESC.init([0; 16])[..],
+        &mut BOS_DESC.init([0; BOS_DESC_BUF_SIZE])[..],
+        &mut MSOS_DESC.init([0; MSOS_DESC_BUF_SIZE])[..],
         &mut CONTROL_BUF.init([0; USB_BUF_SIZE])[..],
     );
 

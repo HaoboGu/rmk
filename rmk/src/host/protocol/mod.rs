@@ -4,10 +4,14 @@
 //! Real endpoint handlers will be added in Phases 4-6; transport implementations
 //! come in Phase 3 (USB) and Phase 8 (BLE).
 
+pub(crate) mod transport;
+
 use core::cell::RefCell;
 
 use postcard_rpc::header::{VarHeader, VarKey, VarKeyKind};
-use postcard_rpc::server::{AsWireRxErrorKind, Sender, WireRx, WireRxErrorKind, WireTx, min_key_needed};
+use postcard_rpc::server::{
+    AsWireRxErrorKind, AsWireTxErrorKind, Sender, WireRx, WireRxErrorKind, WireTx, WireTxErrorKind, min_key_needed,
+};
 use postcard_rpc::standard_icd::WireError;
 use postcard_rpc::{Endpoint, Key, Topic};
 use rmk_types::protocol::rmk::*;
@@ -90,7 +94,7 @@ const MIN_KEY_KIND: VarKeyKind = match MIN_KEY_LEN {
 
 pub(crate) struct ProtocolService<
     'a,
-    Tx: WireTx,
+    Tx: WireTx + Clone,
     Rx: WireRx,
     const ROW: usize,
     const COL: usize,
@@ -98,6 +102,7 @@ pub(crate) struct ProtocolService<
     const NUM_ENCODER: usize,
 > {
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    tx: Tx,
     sender: Sender<Tx>,
     rx: Rx,
     rx_buf: [u8; RX_BUF_SIZE],
@@ -106,7 +111,7 @@ pub(crate) struct ProtocolService<
 
 impl<
     'a,
-    Tx: WireTx,
+    Tx: WireTx + Clone,
     Rx: WireRx,
     const ROW: usize,
     const COL: usize,
@@ -121,7 +126,8 @@ impl<
     ) -> Self {
         Self {
             keymap,
-            sender: Sender::new(tx, MIN_KEY_KIND),
+            sender: Sender::new(tx.clone(), MIN_KEY_KIND),
+            tx,
             rx,
             rx_buf: [0u8; RX_BUF_SIZE],
             locked: cfg!(feature = "host_security"),
@@ -131,6 +137,7 @@ impl<
     pub(crate) async fn run(&mut self) {
         let Self {
             keymap,
+            tx,
             sender,
             rx,
             rx_buf,
@@ -138,22 +145,30 @@ impl<
         } = self;
 
         loop {
-            let frame = match rx.receive(rx_buf).await {
-                Ok(f) => f,
-                Err(e) => {
-                    if matches!(e.as_kind(), WireRxErrorKind::ConnectionClosed) {
-                        return;
-                    }
+            rx.wait_connection().await;
+            tx.wait_connection().await;
+
+            loop {
+                let frame = match rx.receive(rx_buf).await {
+                    Ok(f) => f,
+                    Err(e) => match e.as_kind() {
+                        WireRxErrorKind::ConnectionClosed => break,
+                        WireRxErrorKind::ReceivedMessageTooLarge | WireRxErrorKind::Other => continue,
+                        _ => continue,
+                    },
+                };
+
+                let Some((hdr, body)) = VarHeader::take_from_slice(frame) else {
                     continue;
+                };
+
+                if let Err(e) = Self::dispatch(&hdr, body, sender, keymap, locked).await {
+                    match e.as_kind() {
+                        WireTxErrorKind::ConnectionClosed | WireTxErrorKind::Timeout => break,
+                        WireTxErrorKind::Other => continue,
+                        _ => continue,
+                    }
                 }
-            };
-
-            let Some((hdr, body)) = VarHeader::take_from_slice(frame) else {
-                continue;
-            };
-
-            if let Err(_e) = Self::dispatch(&hdr, body, sender, keymap, locked).await {
-                // Transport write error — log and continue
             }
         }
     }
@@ -355,5 +370,20 @@ impl<
 
         // No match
         sender.error(seq, WireError::UnknownKey).await
+    }
+}
+
+impl<
+    'a,
+    Tx: WireTx + Clone,
+    Rx: WireRx,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
+> crate::host::HostService for ProtocolService<'a, Tx, Rx, ROW, COL, NUM_LAYER, NUM_ENCODER>
+{
+    async fn run(&mut self) {
+        ProtocolService::run(self).await;
     }
 }
