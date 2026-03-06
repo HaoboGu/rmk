@@ -7,7 +7,7 @@
 
 use postcard::experimental::max_size::MaxSize;
 use rmk_macro::event;
-use rmk_types::event::BatteryStatus;
+use rmk_types::battery::BatteryStatus;
 use serde::{Deserialize, Serialize};
 
 /// Battery adc read value

@@ -6,17 +6,26 @@
 //!
 //! The protocol uses postcard-rpc's type-level endpoint definitions over COBS-framed
 //! byte streams (USB bulk transfer and BLE serial).
-use heapless::Vec;
-use postcard_rpc::{TopicDirection, endpoints, topics};
-use serde::{Deserialize, Serialize};
 
-use crate::action::{EncoderAction, KeyAction, MorseProfile};
+mod config;
+mod keymap;
+mod request;
+mod status;
+mod types;
+
+pub use self::config::*;
+pub use self::keymap::*;
+pub use self::request::*;
+pub use self::status::*;
+pub use self::types::*;
+
+use postcard_rpc::{TopicDirection, endpoints, topics};
+
+use crate::action::{EncoderAction, KeyAction};
+use crate::battery::BatteryStatus;
+use crate::ble::BleStatus;
 use crate::connection::ConnectionType;
-pub use crate::event::{
-    BatteryStatus, BleStatus, ConnectionPayload, LayerChangePayload, LedPayload, SleepPayload, WpmPayload,
-};
-use crate::fork::ForkStateBits;
-use crate::modifier::ModifierCombination;
+use crate::led_indicator::LedIndicator;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -36,279 +45,6 @@ pub const MAX_MORSE_PATTERNS: usize = 16;
 
 /// Maximum macro data size for a single macro over the protocol.
 pub const MAX_MACRO_DATA: usize = 256;
-
-// ---------------------------------------------------------------------------
-// Core types
-// ---------------------------------------------------------------------------
-
-/// Protocol version advertised during the connection handshake.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct ProtocolVersion {
-    pub major: u8,
-    pub minor: u8,
-}
-
-impl ProtocolVersion {
-    /// Current protocol version for this firmware release.
-    pub const CURRENT: Self = Self { major: 1, minor: 0 };
-}
-
-/// Device capabilities discovered during the connection handshake.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct DeviceCapabilities {
-    pub num_layers: u8,
-    pub num_rows: u8,
-    pub num_cols: u8,
-    pub num_encoders: u8,
-    pub max_combos: u8,
-    pub max_macros: u8,
-    pub macro_space_size: u16,
-    pub max_morse: u8,
-    pub max_forks: u8,
-    pub has_storage: bool,
-    pub has_split: bool,
-    pub num_split_peripherals: u8,
-    pub has_ble: bool,
-    pub num_ble_profiles: u8,
-    pub has_lighting: bool,
-    pub max_payload_size: u16,
-}
-
-/// Protocol-level error type returned by write operations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub enum RmkError {
-    /// Valid endpoint but bad parameter values.
-    InvalidParameter,
-    /// Operation not valid in current state (e.g. device is locked).
-    BadState,
-    /// Temporary contention, retry recommended.
-    Busy,
-    /// Flash read/write failure.
-    StorageError,
-    /// Unexpected firmware error.
-    InternalError,
-}
-
-/// Result type for write operations.
-pub type RmkResult = Result<(), RmkError>;
-
-/// Current lock/unlock state of the device.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct LockStatus {
-    pub locked: bool,
-    pub awaiting_keys: bool,
-    pub remaining_keys: u8,
-}
-
-/// Challenge returned by the Unlock endpoint containing physical key positions to press.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct UnlockChallenge {
-    pub key_positions: Vec<(u8, u8), MAX_UNLOCK_KEYS>,
-}
-
-/// Identifies a specific key position in the keymap.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct KeyPosition {
-    pub layer: u8,
-    pub row: u8,
-    pub col: u8,
-}
-
-/// Request payload for `SetKeyAction` endpoint.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct SetKeyRequest {
-    pub position: KeyPosition,
-    pub action: KeyAction,
-}
-
-/// Request payload for bulk keymap operations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct BulkRequest {
-    pub layer: u8,
-    pub start_row: u8,
-    pub start_col: u8,
-    pub count: u16,
-}
-
-/// Response type for bulk keymap operations.
-pub type BulkKeyActions = Vec<KeyAction, MAX_BULK>;
-
-/// Request payload for `SetKeymapBulk` endpoint.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct SetKeymapBulkRequest {
-    pub request: BulkRequest,
-    pub actions: Vec<KeyAction, MAX_BULK>,
-}
-
-/// Storage reset mode for the `StorageReset` endpoint.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub enum StorageResetMode {
-    /// Reset all stored data.
-    Full,
-    /// Reset only the layout/keymap data.
-    LayoutOnly,
-}
-
-// ---------------------------------------------------------------------------
-// Connection / status types
-// ---------------------------------------------------------------------------
-
-/// Current connection information.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct ConnectionInfo {
-    pub connection_type: ConnectionType,
-    pub ble_profile: u8,
-    pub ble_connected: bool,
-}
-
-/// Current matrix key-press state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct MatrixState {
-    pub num_pressed: u8,
-}
-
-/// Split keyboard peripheral status.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct SplitStatus {
-    pub num_peripherals: u8,
-    pub connected_peripherals: u8,
-}
-
-// ---------------------------------------------------------------------------
-// Macro types
-// ---------------------------------------------------------------------------
-
-/// Summary information about macro capabilities.
-///
-/// These fields are also available via [`DeviceCapabilities`]; this type
-/// provides a lightweight query for tools that only need macro info.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct MacroInfo {
-    pub max_macros: u8,
-    pub macro_space_size: u16,
-}
-
-impl From<DeviceCapabilities> for MacroInfo {
-    fn from(caps: DeviceCapabilities) -> Self {
-        Self {
-            max_macros: caps.max_macros,
-            macro_space_size: caps.macro_space_size,
-        }
-    }
-}
-
-/// Raw macro data for a single macro.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct MacroData {
-    pub data: Vec<u8, MAX_MACRO_DATA>,
-}
-
-// ---------------------------------------------------------------------------
-// Combo / Morse / Fork / Behavior config types (protocol-facing)
-// ---------------------------------------------------------------------------
-
-/// Protocol-facing combo configuration.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct ComboConfig {
-    pub actions: Vec<KeyAction, MAX_COMBO_KEYS>,
-    pub output: KeyAction,
-    pub layer: Option<u8>,
-}
-
-/// Protocol-facing morse/tap-dance configuration.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct MorseConfig {
-    pub profile: MorseProfile,
-    pub patterns: Vec<MorsePatternEntry, MAX_MORSE_PATTERNS>,
-}
-
-/// A single morse pattern/action pair.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct MorsePatternEntry {
-    pub pattern: u16,
-    pub action: KeyAction,
-}
-
-/// Protocol-facing fork (key override) configuration.
-///
-/// This mirrors firmware `Fork` fields without reducing match-state dimensions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct ForkConfig {
-    pub trigger: KeyAction,
-    pub negative_output: KeyAction,
-    pub positive_output: KeyAction,
-    pub match_any: ForkStateBits,
-    pub match_none: ForkStateBits,
-    pub kept_modifiers: ModifierCombination,
-    pub bindable: bool,
-}
-
-/// Protocol-facing behavior configuration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct BehaviorConfig {
-    pub combo_timeout_ms: u16,
-    pub oneshot_timeout_ms: u16,
-    pub tap_interval_ms: u16,
-    pub tap_tolerance: u8,
-}
-
-// ---------------------------------------------------------------------------
-// Encoder request types
-// ---------------------------------------------------------------------------
-
-/// Request payload for `GetEncoderAction`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct GetEncoderRequest {
-    pub encoder_id: u8,
-    pub layer: u8,
-}
-
-/// Request payload for `SetEncoderAction`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct SetEncoderRequest {
-    pub encoder_id: u8,
-    pub layer: u8,
-    pub action: EncoderAction,
-}
-
-/// Request payload for `SetMacro`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct SetMacroRequest {
-    pub index: u8,
-    pub data: MacroData,
-}
-
-/// Request payload for `SetCombo`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct SetComboRequest {
-    pub index: u8,
-    pub config: ComboConfig,
-}
-
-/// Request payload for `SetMorse`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct SetMorseRequest {
-    pub index: u8,
-    pub config: MorseConfig,
-}
-
-/// Request payload for `SetFork`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
-pub struct SetForkRequest {
-    pub index: u8,
-    pub config: ForkConfig,
-}
-
-// ---------------------------------------------------------------------------
-// Topic payload types (re-exported from crate::event)
-// ---------------------------------------------------------------------------
-
-// All topic payload types (LayerChangePayload, WpmPayload, BatteryStatus,
-// BleStatus, ConnectionPayload, SleepPayload,
-// LedPayload) are re-exported from `crate::event` at the top of this file.
 
 // ---------------------------------------------------------------------------
 // Endpoint declarations
@@ -487,13 +223,13 @@ topics! {
     direction = TopicDirection::ToClient;
     | TopicTy               | MessageTy              | Path                  |
     | -------               | ---------              | ----                  |
-    | LayerChangeTopic      | LayerChangePayload     | "event/layer"         |
-    | WpmUpdateTopic        | WpmPayload             | "event/wpm"           |
+    | LayerChangeTopic      | u8                     | "event/layer"         |
+    | WpmUpdateTopic        | u16                    | "event/wpm"           |
     | BatteryStatusTopic     | BatteryStatus          | "event/battery"       |
     | BleStatusChangeTopic  | BleStatus              | "event/ble_status"    |
-    | ConnectionChangeTopic | ConnectionPayload      | "event/connection"    |
-    | SleepStateTopic       | SleepPayload           | "event/sleep"         |
-    | LedIndicatorTopic     | LedPayload             | "event/led"           |
+    | ConnectionChangeTopic | ConnectionType         | "event/connection"    |
+    | SleepStateTopic       | bool                   | "event/sleep"         |
+    | LedIndicatorTopic     | LedIndicator           | "event/led"           |
 }
 
 // ---------------------------------------------------------------------------
@@ -508,10 +244,17 @@ mod tests {
     use super::TOPICS_OUT_LIST;
     use postcard_rpc::{Endpoint, Key, Topic};
 
+    use serde::{Deserialize, Serialize};
+
     use super::*;
-    use crate::event::{BleState, ChargeState};
+    use crate::action::MorseProfile;
+    use crate::battery::ChargeState;
+    use crate::ble::BleState;
+    use crate::fork::ForkStateBits;
     use crate::led_indicator::LedIndicator;
+    use crate::modifier::ModifierCombination;
     use crate::mouse_button::MouseButtons;
+    use heapless::Vec;
 
     /// Helper: postcard round-trip for a value using a stack buffer.
     fn round_trip<T>(val: &T) -> T
@@ -843,8 +586,8 @@ mod tests {
 
     #[test]
     fn round_trip_topic_payloads() {
-        round_trip(&LayerChangePayload { layer: 3 });
-        round_trip(&WpmPayload { wpm: 120 });
+        round_trip(&3u8); // LayerChangeTopic
+        round_trip(&120u16); // WpmUpdateTopic
         round_trip(&BatteryStatus::Available {
             charge_state: ChargeState::Discharging,
             level: Some(100),
@@ -861,13 +604,9 @@ mod tests {
             profile: 0,
             state: BleState::Inactive,
         });
-        round_trip(&ConnectionPayload {
-            connection_type: ConnectionType::Usb,
-        });
-        round_trip(&SleepPayload { sleeping: true });
-        round_trip(&LedPayload {
-            indicator: LedIndicator::new(),
-        });
+        round_trip(&ConnectionType::Usb); // ConnectionChangeTopic
+        round_trip(&true); // SleepStateTopic
+        round_trip(&LedIndicator::new()); // LedIndicatorTopic
     }
 
     #[test]
