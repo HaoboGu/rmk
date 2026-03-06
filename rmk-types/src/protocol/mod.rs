@@ -6,6 +6,5 @@
 //! - [`vial`] - Vial protocol implementation
 //! - [`rmk`] - RMK native protocol ICD (endpoint/topic definitions and types)
 
-#[allow(long_running_const_eval)]
 pub mod rmk;
 pub mod vial;
