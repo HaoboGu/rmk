@@ -165,21 +165,143 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
                 // Process buffered held key
                 self.process_buffered_key(key).await
             } else {
-                // If mouse repeat is pending, race subscriber against deadline
-                let event = if let Some(deadline) = self.mouse.next_deadline() {
-                    match with_deadline(deadline, self.keyboard_event_subscriber.next_message_pure()).await {
-                        Ok(event) => event,
-                        Err(_) => {
-                            // Repeat deadline expired, fire repeat
-                            self.fire_mouse_repeat().await;
-                            continue;
-                        }
+                #[cfg(feature = "passkey_entry")]
+                {
+                    use crate::ble::passkey;
+                    use core::sync::atomic::Ordering;
+                    use embassy_futures::select::{Either3, select3};
+
+                    if !self.passkey_state.is_active() {
+                        // Not in passkey mode: race keyboard events vs passkey request
+                        // Also handle mouse repeat deadline if present
+                        let event = if let Some(deadline) = self.mouse.next_deadline() {
+                            match select3(
+                                self.keyboard_event_subscriber.next_message_pure(),
+                                passkey::PASSKEY_REQUESTED.wait(),
+                                Timer::at(deadline),
+                            )
+                            .await
+                            {
+                                Either3::First(event) => event,
+                                Either3::Second(()) => {
+                                    // Check that the GATT task is still waiting
+                                    if passkey::PASSKEY_PENDING.load(Ordering::Acquire) {
+                                        self.enter_passkey_mode().await;
+                                    }
+                                    continue;
+                                }
+                                Either3::Third(()) => {
+                                    self.fire_mouse_repeat().await;
+                                    continue;
+                                }
+                            }
+                        } else {
+                            match select(
+                                self.keyboard_event_subscriber.next_message_pure(),
+                                passkey::PASSKEY_REQUESTED.wait(),
+                            )
+                            .await
+                            {
+                                Either::First(event) => event,
+                                Either::Second(()) => {
+                                    // Check that the GATT task is still waiting
+                                    if passkey::PASSKEY_PENDING.load(Ordering::Acquire) {
+                                        self.enter_passkey_mode().await;
+                                    }
+                                    continue;
+                                }
+                            }
+                        };
+                        self.process_inner(event).await;
+                        continue;
                     }
-                } else {
-                    // No repeat pending, wait indefinitely
-                    self.keyboard_event_subscriber.next_message_pure().await
+
+                    // In passkey mode: wait for events, also race against
+                    // timeout deadline, cancel signal, and mouse repeat deadline
+                    let deadline = self.passkey_state.deadline();
+                    if let Some(mouse_deadline) = self.mouse.next_deadline() {
+                        // Pick the earliest deadline between passkey timeout and mouse repeat
+                        let earliest = if mouse_deadline < deadline {
+                            mouse_deadline
+                        } else {
+                            deadline
+                        };
+                        match select3(
+                            with_deadline(
+                                earliest,
+                                self.keyboard_event_subscriber.next_message_pure(),
+                            ),
+                            passkey::PASSKEY_CANCEL.wait(),
+                            core::future::pending::<()>(), // placeholder for symmetry
+                        )
+                        .await
+                        {
+                            Either3::First(Ok(event)) => self.process_inner(event).await,
+                            Either3::First(Err(_)) => {
+                                // A deadline expired — check which one
+                                if Instant::now() >= deadline {
+                                    warn!("Passkey entry timed out");
+                                    self.passkey_state.cancel();
+                                    // Only respond if GATT task is still waiting
+                                    if passkey::PASSKEY_PENDING.load(Ordering::Acquire) {
+                                        passkey::PASSKEY_RESPONSE.signal(None);
+                                    }
+                                } else {
+                                    self.fire_mouse_repeat().await;
+                                }
+                            }
+                            Either3::Second(()) => {
+                                info!("Passkey entry cancelled (disconnect)");
+                                self.passkey_state.cancel();
+                            }
+                            Either3::Third(()) => unreachable!(),
+                        }
+                    } else {
+                        match select(
+                            with_deadline(
+                                deadline,
+                                self.keyboard_event_subscriber.next_message_pure(),
+                            ),
+                            passkey::PASSKEY_CANCEL.wait(),
+                        )
+                        .await
+                        {
+                            Either::First(Ok(event)) => self.process_inner(event).await,
+                            Either::First(Err(_)) => {
+                                warn!("Passkey entry timed out");
+                                self.passkey_state.cancel();
+                                // Only respond if GATT task is still waiting
+                                if passkey::PASSKEY_PENDING.load(Ordering::Acquire) {
+                                    passkey::PASSKEY_RESPONSE.signal(None);
+                                }
+                            }
+                            Either::Second(()) => {
+                                info!("Passkey entry cancelled (disconnect)");
+                                self.passkey_state.cancel();
+                            }
+                        }
+                    };
+                    continue;
+                }
+
+                #[cfg(not(feature = "passkey_entry"))]
+                {
+                    // If mouse repeat is pending, race subscriber against deadline
+                    let event = if let Some(deadline) = self.mouse.next_deadline() {
+                        match with_deadline(deadline, self.keyboard_event_subscriber.next_message_pure()).await {
+                            Ok(event) => event,
+                            Err(_) => {
+                                // Repeat deadline expired, fire repeat
+                                self.fire_mouse_repeat().await;
+                                continue;
+                            }
+                        }
+                    } else {
+                        // No repeat pending, wait indefinitely
+                        self.keyboard_event_subscriber.next_message_pure().await
+                    };
+                    self.process_inner(event).await
                 };
-                self.process_inner(event).await
             };
         }
     }
@@ -260,6 +382,10 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Used for temporarily disabling combos
     combo_on: bool,
+
+    /// Passkey entry state for BLE pairing
+    #[cfg(feature = "passkey_entry")]
+    passkey_state: crate::ble::passkey::PasskeyState,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -290,12 +416,44 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             system_control_report: SystemControlReport { usage_id: 0 },
             last_key_code: KeyCode::Hid(HidKeyCode::No),
             combo_on: true,
+            #[cfg(feature = "passkey_entry")]
+            passkey_state: crate::ble::passkey::PasskeyState::new(),
         }
     }
 
     /// Send a keyboard report to the host
     async fn send_report(&self, report: Report) {
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
+    }
+
+    /// Enter passkey entry mode: clear held keys and send empty report
+    #[cfg(feature = "passkey_entry")]
+    async fn enter_passkey_mode(&mut self) {
+        info!("Entering passkey entry mode");
+        self.passkey_state.activate(crate::PASSKEY_ENTRY_TIMEOUT_SECS);
+
+        // Clear held keys to prevent stuck keys on host
+        self.held_keycodes = [HidKeyCode::No; 6];
+        self.held_modifiers = ModifierCombination::default();
+        self.registered_keys = [None; 6];
+
+        // Clear buffered tap-hold/combo/morse keys to prevent them from
+        // bypassing passkey intercept when they resolve
+        self.held_buffer.keys.clear();
+        self.unprocessed_events.clear();
+
+        // Clear media and system control reports
+        self.media_report.usage_id = 0;
+        self.system_control_report.usage_id = 0;
+
+        // Send empty reports so host releases all keys
+        self.send_report(Report::KeyboardReport(KeyboardReport {
+            modifier: 0,
+            reserved: 0,
+            leds: 0,
+            keycodes: [0; 6],
+        }))
+        .await;
     }
 
     /// Get a copy of the next timeout key in the buffer,
@@ -1449,6 +1607,35 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     // Process a basic keypress/release and also take care of applying one shot modifiers
     async fn process_hid_keycode(&mut self, key: HidKeyCode, event: KeyboardEvent) {
+        #[cfg(feature = "passkey_entry")]
+        if self.passkey_state.is_active() {
+            use crate::ble::passkey;
+
+            // In passkey mode: capture on release only (prevents Enter release leaking)
+            if !event.pressed {
+                if let Some(digit) = passkey::keycode_to_digit(key) {
+                    self.passkey_state.push_digit(digit);
+                    self.passkey_state.reset_deadline(crate::PASSKEY_ENTRY_TIMEOUT_SECS);
+                } else if passkey::is_enter(key) {
+                    if let Some(passkey_value) = self.passkey_state.submit() {
+                        info!("Passkey submitted");
+                        passkey::PASSKEY_RESPONSE.signal(Some(passkey_value));
+                    }
+                    // If fewer than 6 digits: submit() returns None, Enter is ignored
+                } else if passkey::is_escape(key) {
+                    info!("Passkey cancelled");
+                    self.passkey_state.cancel();
+                    passkey::PASSKEY_RESPONSE.signal(None);
+                } else if passkey::is_backspace(key) {
+                    self.passkey_state.pop_digit();
+                    self.passkey_state.reset_deadline(crate::PASSKEY_ENTRY_TIMEOUT_SECS);
+                }
+                // All other keys silently discarded
+            }
+            // Don't call register_key/unregister_key or send_report
+            return;
+        }
+
         if event.pressed {
             self.register_key(key, event);
         } else {

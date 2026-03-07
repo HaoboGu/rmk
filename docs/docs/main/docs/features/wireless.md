@@ -50,6 +50,29 @@ Vial also provides a way to customize the displayed keycode, see `customKeycodes
 
 If you've connected a host to a profile, other devices will not be able to connect to this profile without manually clearing it first.
 
+## BLE Passkey Entry
+
+When pairing with a new host device over BLE, the host may request a passkey for secure pairing.
+
+This feature is enabled by default. When the host requests a passkey during pairing, the keyboard enters passkey mode:
+
+1. The host displays a 6-digit code on screen.
+2. The keyboard intercepts all keypresses - no input is sent to the host while passkey mode is active.
+3. Type the 6-digit passkey using the number keys (top row or numpad).
+4. Press **Enter** to submit the passkey.
+5. Press **Escape** to cancel pairing.
+6. Press **Backspace** to delete the last entered digit.
+
+If the passkey is not entered within the timeout period (default: 120 seconds), passkey mode is automatically cancelled. The timeout resets with each digit or backspace keypress, so it only expires after a period of inactivity.
+
+### Requirements
+
+The `passkey_entry` Cargo feature must be enabled. This is automatically included when you enable any BLE feature gate (e.g., `nrf52840_ble`).
+
+### Configuration
+
+Passkey entry can be configured in `keyboard.toml` under the `[ble]` section. See [Configuration/Wireless](../configuration/wireless.md#passkey-entry) for details.
+
 ## Wireless Split Support
 
 RMK also supports wireless split keyboards, where one of the splits acts as the central and the other splits act as peripherals. RMK also supports heterogeneous wireless split configurations; for example, you can use an ESP32S3 as the central and an nRF52 as a peripheral.
