@@ -17,8 +17,8 @@ use crate::mouse_button::MouseButtons;
     serde::Serialize,
     serde::Deserialize,
     postcard::experimental::max_size::MaxSize,
-    postcard_schema::Schema,
 )]
+#[cfg_attr(feature = "protocol", derive(postcard_schema::Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ForkStateBits {
     pub modifiers: ModifierCombination,

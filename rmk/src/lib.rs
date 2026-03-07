@@ -18,9 +18,6 @@ extern crate self as rmk;
 // Include generated constants
 include!(concat!(env!("OUT_DIR"), "/constants.rs"));
 
-#[cfg(all(feature = "vial", feature = "rmk_protocol"))]
-compile_error!("`vial` and `rmk_protocol` are mutually exclusive.");
-
 // This mod MUST go first, so that the others see its macros.
 pub(crate) mod fmt;
 

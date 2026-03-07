@@ -120,7 +120,7 @@ vial_lock = ["vial", "host_security"]
 host_security = []
 
 ## Enable RMK protocol support (new protocol, mutually exclusive with vial)
-rmk_protocol = ["host", "host_security", "dep:postcard-rpc"]
+rmk_protocol = ["host", "host_security", "dep:postcard-rpc", "rmk-types/protocol"]
 
 ## Enable the storage. The storage is optional to save memory
 storage = [

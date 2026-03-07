@@ -10,7 +10,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["rmk_protocol"]
+default = []
 rmk_protocol = ["rmk/rmk_protocol"]
 vial = ["rmk/vial", "rmk/vial_lock"]
 

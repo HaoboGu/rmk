@@ -1,8 +1,8 @@
 //! RMK protocol service.
 //!
 //! Handles incoming postcard-rpc frames and dispatches to endpoint handlers.
-//! Real endpoint handlers will be added in Phases 4-6; transport implementations
-//! come in Phase 3 (USB) and Phase 8 (BLE).
+//! Real endpoint handlers will be added in Phases 4-5; transport implementations:
+//! USB bulk (Phase 3, complete) and BLE serial (Phase 7).
 
 pub(crate) mod transport;
 
@@ -12,16 +12,16 @@ use postcard_rpc::header::{VarHeader, VarKey, VarKeyKind};
 use postcard_rpc::server::{
     AsWireRxErrorKind, AsWireTxErrorKind, Sender, WireRx, WireRxErrorKind, WireTx, WireTxErrorKind, min_key_needed,
 };
-use postcard_rpc::standard_icd::WireError;
+use postcard_rpc::standard_icd::{self, WireError};
 use postcard_rpc::{Endpoint, Key, Topic};
 use rmk_types::protocol::rmk::*;
 
 use crate::keymap::KeyMap;
 
-const RX_BUF_SIZE: usize = 256;
+const RX_BUF_SIZE: usize = 512;
 
-// All endpoint and topic keys for minimum key length computation.
-const ALL_KEYS: &[Key] = &[
+// All endpoint request keys (inbound).
+const REQ_KEYS: &[Key] = &[
     // System
     GetVersion::REQ_KEY,
     GetCapabilities::REQ_KEY,
@@ -73,6 +73,63 @@ const ALL_KEYS: &[Key] = &[
     GetCurrentLayer::REQ_KEY,
     GetMatrixState::REQ_KEY,
     GetSplitStatus::REQ_KEY,
+];
+
+// All endpoint response keys, topic keys, and error key (outbound).
+const RESP_KEYS: &[Key] = &[
+    // Error key
+    standard_icd::ERROR_KEY,
+    // System
+    GetVersion::RESP_KEY,
+    GetCapabilities::RESP_KEY,
+    GetLockStatus::RESP_KEY,
+    UnlockRequest::RESP_KEY,
+    LockRequest::RESP_KEY,
+    Reboot::RESP_KEY,
+    BootloaderJump::RESP_KEY,
+    StorageReset::RESP_KEY,
+    // Keymap
+    GetKeyAction::RESP_KEY,
+    SetKeyAction::RESP_KEY,
+    GetKeymapBulk::RESP_KEY,
+    SetKeymapBulk::RESP_KEY,
+    GetLayerCount::RESP_KEY,
+    GetDefaultLayer::RESP_KEY,
+    SetDefaultLayer::RESP_KEY,
+    ResetKeymap::RESP_KEY,
+    // Encoder
+    GetEncoderAction::RESP_KEY,
+    SetEncoderAction::RESP_KEY,
+    // Macro
+    GetMacroInfo::RESP_KEY,
+    GetMacro::RESP_KEY,
+    SetMacro::RESP_KEY,
+    ResetMacros::RESP_KEY,
+    // Combo
+    GetCombo::RESP_KEY,
+    SetCombo::RESP_KEY,
+    ResetCombos::RESP_KEY,
+    // Morse
+    GetMorse::RESP_KEY,
+    SetMorse::RESP_KEY,
+    ResetMorse::RESP_KEY,
+    // Fork
+    GetFork::RESP_KEY,
+    SetFork::RESP_KEY,
+    ResetForks::RESP_KEY,
+    // Behavior
+    GetBehaviorConfig::RESP_KEY,
+    SetBehaviorConfig::RESP_KEY,
+    // Connection
+    GetConnectionInfo::RESP_KEY,
+    SetConnectionType::RESP_KEY,
+    SwitchBleProfile::RESP_KEY,
+    ClearBleProfile::RESP_KEY,
+    // Status
+    GetBatteryStatus::RESP_KEY,
+    GetCurrentLayer::RESP_KEY,
+    GetMatrixState::RESP_KEY,
+    GetSplitStatus::RESP_KEY,
     // Topics
     LayerChangeTopic::TOPIC_KEY,
     WpmUpdateTopic::TOPIC_KEY,
@@ -83,7 +140,17 @@ const ALL_KEYS: &[Key] = &[
     LedIndicatorTopic::TOPIC_KEY,
 ];
 
-const MIN_KEY_LEN: usize = min_key_needed(&[ALL_KEYS]);
+// Compute minimum key length separately for inbound (requests) and outbound
+// (responses + topics + error), then take the max. Request and response keys
+// don't need to be distinguishable from each other (they travel in opposite
+// directions), and endpoints with `() -> ()` share the same key hash.
+const MIN_KEY_LEN_IN: usize = min_key_needed(&[REQ_KEYS]);
+const MIN_KEY_LEN_OUT: usize = min_key_needed(&[RESP_KEYS]);
+const MIN_KEY_LEN: usize = if MIN_KEY_LEN_IN > MIN_KEY_LEN_OUT {
+    MIN_KEY_LEN_IN
+} else {
+    MIN_KEY_LEN_OUT
+};
 
 const MIN_KEY_KIND: VarKeyKind = match MIN_KEY_LEN {
     1 => VarKeyKind::Key1,
@@ -102,6 +169,8 @@ pub(crate) struct ProtocolService<
     const NUM_ENCODER: usize,
 > {
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    /// Kept for `wait_connection()` in the run loop. The `Sender` does not
+    /// expose the inner `WireTx`, so we store a clone separately.
     tx: Tx,
     sender: Sender<Tx>,
     rx: Rx,
@@ -130,7 +199,8 @@ impl<
             tx,
             rx,
             rx_buf: [0u8; RX_BUF_SIZE],
-            locked: cfg!(feature = "host_security"),
+            // rmk_protocol always implies host_security, so start locked
+            locked: true,
         }
     }
 
@@ -184,10 +254,16 @@ impl<
         let key = &hdr.key;
         let seq = hdr.seq_no;
 
+        // Dispatch by comparing the incoming key against each endpoint's REQ_KEY.
+        //
+        // We always wrap REQ_KEY in VarKey::Key8 even though the wire may use a
+        // shorter key kind (Key1/Key2/Key4). This is safe because VarKey::PartialEq
+        // performs cross-variant comparison: it XOR-folds the larger key down to the
+        // smaller key's size before comparing. See postcard-rpc's VarKey impl.
+
         // --- System (8 endpoints) ---
         if *key == VarKey::Key8(GetVersion::REQ_KEY) {
-            let resp = ProtocolVersion { major: 1, minor: 0 };
-            return sender.reply::<GetVersion>(seq, &resp).await;
+            return sender.reply::<GetVersion>(seq, &ProtocolVersion::CURRENT).await;
         }
         if *key == VarKey::Key8(GetCapabilities::REQ_KEY) {
             // TODO: Phase 4 — construct from const generics + build.rs constants
@@ -220,35 +296,35 @@ impl<
 
         // --- Keymap (8 endpoints) ---
         if *key == VarKey::Key8(GetKeyAction::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 4
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetKeyAction::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 4
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(GetKeymapBulk::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 4
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetKeymapBulk::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 4
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(GetLayerCount::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 4
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(GetDefaultLayer::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 4
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetDefaultLayer::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 4
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(ResetKeymap::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 4
             return sender.error(seq, WireError::UnknownKey).await;
         }
 
@@ -282,89 +358,89 @@ impl<
 
         // --- Combo (3 endpoints) ---
         if *key == VarKey::Key8(GetCombo::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetCombo::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(ResetCombos::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
 
         // --- Morse (3 endpoints) ---
         if *key == VarKey::Key8(GetMorse::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetMorse::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(ResetMorse::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
 
         // --- Fork (3 endpoints) ---
         if *key == VarKey::Key8(GetFork::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetFork::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(ResetForks::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
 
         // --- Behavior (2 endpoints) ---
         if *key == VarKey::Key8(GetBehaviorConfig::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetBehaviorConfig::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
 
         // --- Connection (4 endpoints) ---
         if *key == VarKey::Key8(GetConnectionInfo::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetConnectionType::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SwitchBleProfile::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(ClearBleProfile::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
 
         // --- Status (4 endpoints) ---
         if *key == VarKey::Key8(GetBatteryStatus::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(GetCurrentLayer::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(GetMatrixState::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(GetSplitStatus::REQ_KEY) {
-            // TODO: Phase 6
+            // TODO: Phase 5
             return sender.error(seq, WireError::UnknownKey).await;
         }
 

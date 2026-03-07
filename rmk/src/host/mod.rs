@@ -137,6 +137,7 @@ where
         transport: &'s mut UsbHostTransport<'d, D>,
         rmk_config: &RmkConfig<'static>,
     ) -> Self {
+        // TODO: Phase 4 — use rmk_config for protocol capabilities reporting
         let _ = rmk_config;
         Self(protocol::ProtocolService::new(
             keymap,
@@ -226,6 +227,9 @@ where
     P: PacketPool,
 {
     async fn run(&mut self) {
+        // TODO: Phase 7 — BLE transport for rmk_protocol is not yet implemented.
+        // This stub hangs forever; the protocol service is only functional over USB.
+        warn!("BLE host protocol transport not yet implemented");
         core::future::pending::<()>().await;
     }
 }

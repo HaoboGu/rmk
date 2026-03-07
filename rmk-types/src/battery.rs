@@ -1,11 +1,11 @@
 //! Battery status types.
 
 use postcard::experimental::max_size::MaxSize;
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 /// Charge state of the battery.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "protocol", derive(postcard_schema::Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ChargeState {
     Charging,
@@ -25,7 +25,8 @@ impl From<bool> for ChargeState {
 }
 
 /// Battery status used for both status queries and event notifications.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "protocol", derive(postcard_schema::Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum BatteryStatus {
     Unavailable,

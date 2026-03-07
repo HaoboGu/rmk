@@ -12,5 +12,5 @@ anyhow = "1"
 clap = { version = "4.5", features = ["derive"] }
 nusb = "0.1"
 postcard-rpc = { version = "0.12", features = ["raw-nusb"] }
-rmk-types = { path = "../rmk-types" }
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+rmk-types = { path = "../rmk-types", features = ["protocol"] }
+tokio = { version = "1", features = ["macros", "rt"] }

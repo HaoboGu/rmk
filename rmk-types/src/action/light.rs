@@ -3,7 +3,8 @@
 /// Actions for controlling lights
 #[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
+#[derive(postcard::experimental::max_size::MaxSize)]
+#[cfg_attr(feature = "protocol", derive(postcard_schema::Schema))]
 #[cfg_attr(feature = "_codegen", derive(strum::VariantNames))]
 pub enum LightAction {
     BacklightOn,

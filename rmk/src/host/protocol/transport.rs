@@ -15,7 +15,7 @@ use crate::RawMutex;
 
 pub(crate) const USB_BULK_PACKET_SIZE: usize = 64;
 const TX_BUF_SIZE: usize = 256;
-const TX_TIMEOUT_MS_PER_FRAME: usize = 2;
+const TX_TIMEOUT_MS_PER_FRAME: usize = 10;
 const RMK_WINUSB_GUIDS: &[&str] = &["{533E7A32-4C6B-49F8-8C5B-60D2D784F2C6}"];
 
 pub(crate) struct UsbBulkTxState<'d, D: Driver<'d>> {
@@ -101,7 +101,7 @@ impl<'d, D: Driver<'d>> WireRx for UsbBulkRx<'_, 'd, D> {
                 Err(EndpointError::Disabled) => return Err(WireRxErrorKind::ConnectionClosed),
             };
 
-            let (_now, later) = window.split_at_mut(n);
+            let (_, later) = window.split_at_mut(n);
             window = later;
 
             if n != USB_BULK_PACKET_SIZE {
@@ -110,8 +110,10 @@ impl<'d, D: Driver<'d>> WireRx for UsbBulkRx<'_, 'd, D> {
             }
         }
 
+        // Buffer full — drain remaining packets without overwriting received data
+        let mut drain = [0u8; USB_BULK_PACKET_SIZE];
         loop {
-            match self.ep_out.read(buf).await {
+            match self.ep_out.read(&mut drain).await {
                 Ok(n) if n == USB_BULK_PACKET_SIZE => {}
                 Ok(_) => return Err(WireRxErrorKind::ReceivedMessageTooLarge),
                 Err(EndpointError::BufferOverflow) => return Err(WireRxErrorKind::ReceivedMessageTooLarge),
@@ -125,6 +127,10 @@ impl<'d, D: Driver<'d>> WireTx for UsbBulkTx<'_, 'd, D> {
     type Error = WireTxErrorKind;
 
     async fn wait_connection(&self) {
+        // NOTE: This holds the mutex for the duration of `wait_enabled()`.
+        // This is safe because `wait_connection` is only called before the
+        // dispatch loop starts (no concurrent senders). If topic publishers
+        // are added later, this must be revisited (e.g., use a separate Signal).
         let mut inner = self.inner.lock().await;
         inner.ep_in.wait_enabled().await;
     }
@@ -170,11 +176,47 @@ impl<'d, D: Driver<'d>> WireTx for UsbBulkTx<'_, 'd, D> {
             seq_no: VarSeq::Seq2(seq),
         };
         let (hdr_used, remain) = hdr.write_to_slice(&mut inner.tx_buf).ok_or(WireTxErrorKind::Other)?;
-        let mut writer = SliceWriter::new(remain);
+
+        // Reserve max varint space (5 bytes), then format the string body after it.
+        // Postcard serializes `str` as varint-length + raw UTF-8 bytes.
+        const MAX_VARINT: usize = 5;
+        if remain.len() <= MAX_VARINT {
+            return Err(WireTxErrorKind::Other);
+        }
+        let mut writer = SliceWriter::new(&mut remain[MAX_VARINT..]);
         writer.write_fmt(args).map_err(|_| WireTxErrorKind::Other)?;
-        let used = hdr_used.len() + writer.len();
+        let body_len = writer.len();
+
+        // Encode the varint length prefix (LEB128).
+        let varint_len = encode_varint_usize(body_len, &mut remain[..MAX_VARINT]);
+
+        // Shift body to be contiguous with varint if varint used fewer than MAX_VARINT bytes.
+        let gap = MAX_VARINT - varint_len;
+        if gap > 0 {
+            remain.copy_within(MAX_VARINT..MAX_VARINT + body_len, varint_len);
+        }
+
+        let used = hdr_used.len() + varint_len + body_len;
         let state = &mut *inner;
         send_buf(&mut state.ep_in, &mut state.pending_frame, &state.tx_buf[..used]).await
+    }
+}
+
+/// Encode a usize as a postcard varint (LEB128) into the buffer.
+/// Returns the number of bytes written.
+fn encode_varint_usize(mut value: usize, buf: &mut [u8]) -> usize {
+    let mut i = 0;
+    loop {
+        if i >= buf.len() {
+            return i;
+        }
+        if value < 0x80 {
+            buf[i] = value as u8;
+            return i + 1;
+        }
+        buf[i] = (value as u8) | 0x80;
+        value >>= 7;
+        i += 1;
     }
 }
 
@@ -222,7 +264,9 @@ async fn send_buf(
     match select(send_fut, Timer::after_millis(timeout_ms as u64)).await {
         Either::First(res) => res,
         Either::Second(()) => {
-            *pending_frame = false;
+            // Keep pending_frame=true: partial data may have been written to the
+            // endpoint, so the next send_buf call will emit a ZLP first to
+            // cleanly terminate the aborted transfer before starting a new frame.
             Err(WireTxErrorKind::Timeout)
         }
     }

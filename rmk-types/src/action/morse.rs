@@ -3,7 +3,8 @@
 /// Mode for morse key behavior
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
+#[derive(postcard::experimental::max_size::MaxSize)]
+#[cfg_attr(feature = "protocol", derive(postcard_schema::Schema))]
 #[repr(u8)]
 pub enum MorseMode {
     /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
@@ -20,7 +21,8 @@ pub enum MorseMode {
 /// to save some RAM space, manually packed into 32 bits
 #[derive(PartialEq, Eq, Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
+#[derive(postcard::experimental::max_size::MaxSize)]
+#[cfg_attr(feature = "protocol", derive(postcard_schema::Schema))]
 pub struct MorseProfile(u32);
 
 impl MorseProfile {
