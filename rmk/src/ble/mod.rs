@@ -3,7 +3,7 @@ use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join;
-use embassy_futures::select::{Either, Either3, select, select3};
+use embassy_futures::select::{Either3, select, select3};
 use embassy_time::{Duration, Timer, with_timeout};
 use rand_core::{CryptoRng, RngCore};
 use rmk_types::led_indicator::LedIndicator;
@@ -31,6 +31,8 @@ use {
     crate::{read_storage, state::CONNECTION_TYPE},
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
 };
+#[cfg(any(not(feature = "_no_usb"), feature = "passkey_entry"))]
+use embassy_futures::select::{Either};
 
 use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
