@@ -101,13 +101,18 @@ pub async fn build_ble_stack<
         .set_random_generator_seed(random_generator);
 
     #[cfg(feature = "passkey_entry")]
-    let builder = if crate::PASSKEY_ENTRY_ENABLED {
-        builder.set_io_capabilities(IoCapabilities::KeyboardOnly)
-    } else {
-        builder
+    let stack = {
+        let stack = builder;
+        if crate::PASSKEY_ENTRY_ENABLED {
+            stack.set_io_capabilities(IoCapabilities::KeyboardOnly);
+        }
+        stack
     };
 
-    builder
+    #[cfg(not(feature = "passkey_entry"))]
+    let stack = builder;
+
+    stack
 }
 
 /// Run the BLE stack.
