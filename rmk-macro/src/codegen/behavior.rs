@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 use quote::quote;
 use rmk_config::{
-    CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, MorseActionPair, MorseConfig,
-    MorseProfile, MorsesConfig, OneShotConfig, TriLayerConfig,
+    CombosConfig, DurationMillis, ForksConfig, KeyboardTomlConfig, MacrosConfig, MorseActionPair,
+    MorseConfig, MorseProfile, MorsesConfig, OneShotConfig, TriLayerConfig,
 };
 
 use super::action_parser::{expand_profile, expand_profile_name, get_key_with_alias, parse_key};
@@ -93,13 +93,15 @@ fn expand_morse(morse: &Option<MorsesConfig>) -> proc_macro2::TokenStream {
             None => quote! {},
         };
 
+        // Use default timeout values (250ms) when not specified in TOML config
+        let default_timeout = DurationMillis(250);
         let default_profile = expand_profile(&MorseProfile {
             unilateral_tap: config.unilateral_tap,
             permissive_hold: config.permissive_hold,
             hold_on_other_press: config.hold_on_other_press,
             normal_mode: config.normal_mode,
-            hold_timeout: config.hold_timeout.clone(),
-            gap_timeout: config.gap_timeout.clone(),
+            hold_timeout: Some(config.hold_timeout.clone().unwrap_or(default_timeout.clone())),
+            gap_timeout: Some(config.gap_timeout.clone().unwrap_or(default_timeout)),
         });
 
         let morses = match &config.morses {
