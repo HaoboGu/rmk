@@ -67,7 +67,7 @@ If the passkey is not entered within the timeout period (default: 120 seconds), 
 
 ### Requirements
 
-The `passkey_entry` Cargo feature must be enabled. This is automatically included when you enable any BLE feature gate (e.g., `nrf52840_ble`).
+The `passkey_entry` Cargo feature must be enabled.
 
 ### Configuration
 

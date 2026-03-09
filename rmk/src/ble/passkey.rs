@@ -1,76 +1,97 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use embassy_sync::signal::Signal;
-use embassy_time::{Duration, Instant};
 use rmk_types::keycode::HidKeyCode;
 
-/// Signal from gatt_events_task -> keyboard: passkey entry requested
-pub(crate) static PASSKEY_REQUESTED: Signal<crate::RawMutex, ()> = Signal::new();
+/// Maximum number of digits in a BLE passkey.
+pub const PASSKEY_LENGTH: usize = 6;
 
-/// Signal from keyboard -> gatt_events_task: passkey result
-/// Some(u32) = passkey entered, None = cancelled/timeout
-pub(crate) static PASSKEY_RESPONSE: Signal<crate::RawMutex, Option<u32>> = Signal::new();
+/// Global flag indicating passkey entry mode is active.
+/// Set when `PassKeyInput` event arrives, cleared on submit/cancel/timeout.
+pub static PASSKEY_ENTRY_MODE: AtomicBool = AtomicBool::new(false);
 
-/// Signal from gatt_events_task -> keyboard: cancel active passkey entry (e.g. on disconnect)
-pub(crate) static PASSKEY_CANCEL: Signal<crate::RawMutex, ()> = Signal::new();
+/// Signal to carry the passkey result from the keyboard task back to the GATT task.
+/// `Some(passkey)` = submit, `None` = cancel.
+pub static PASSKEY_RESPONSE: Signal<crate::RawMutex, Option<u32>> = Signal::new();
 
-/// Flag indicating the GATT task is actively waiting for a passkey response.
-/// The keyboard checks this before entering passkey mode (prevents stale requests)
-/// and before sending a timeout response (prevents responding to nobody).
-pub(crate) static PASSKEY_PENDING: AtomicBool = AtomicBool::new(false);
+/// Start a new passkey entry session.
+///
+/// IMPORTANT: reset the response signal before enabling passkey mode, so an
+/// immediate keyboard response cannot be dropped by a late reset.
+pub fn begin_passkey_entry_session() {
+    PASSKEY_RESPONSE.reset();
+    PASSKEY_ENTRY_MODE.store(true, Ordering::Release);
+}
 
-/// Drop guard that clears `PASSKEY_PENDING` and signals `PASSKEY_CANCEL` when
-/// the GATT task is dropped (e.g. profile switch mid-passkey).
-pub(crate) struct PasskeyPendingGuard;
+/// End the current passkey entry session.
+pub fn end_passkey_entry_session() {
+    PASSKEY_ENTRY_MODE.store(false, Ordering::Release);
+}
 
-impl Drop for PasskeyPendingGuard {
-    fn drop(&mut self) {
-        if PASSKEY_PENDING.swap(false, Ordering::Release) {
-            // GATT task was dropped while passkey was pending (e.g. profile switch).
-            // Signal cancel so the keyboard exits passkey mode.
-            PASSKEY_CANCEL.signal(());
-        }
+/// Result of processing a key press in passkey entry mode.
+#[derive(Debug, PartialEq, Eq)]
+pub enum PasskeyAction {
+    /// A digit was successfully added. Contains the digit (0-9).
+    DigitAdded(u8),
+    /// All digits entered and submitted. Contains the assembled passkey.
+    Submitted(u32),
+    /// The user cancelled passkey entry (Escape).
+    Cancelled,
+    /// A digit was removed via Backspace.
+    Backspaced,
+    /// Digit rejected because the buffer is already full.
+    BufferFull,
+    /// Enter pressed but fewer than PASSKEY_LENGTH digits entered.
+    Incomplete,
+    /// Key was not a passkey-relevant key (silently consumed).
+    Ignored,
+}
+
+/// State for passkey digit entry (up to PASSKEY_LENGTH digits).
+pub struct PasskeyEntryState {
+    digits: [u8; PASSKEY_LENGTH],
+    count: usize,
+    active: bool,
+}
+
+impl Default for PasskeyEntryState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-const PASSKEY_DIGITS: usize = 6;
-
-pub(crate) struct PasskeyState {
-    digits: [u8; PASSKEY_DIGITS],
-    count: u8,
-    active: bool,
-    deadline: Instant,
-}
-
-impl PasskeyState {
-    pub fn new() -> Self {
+impl PasskeyEntryState {
+    pub const fn new() -> Self {
         Self {
-            digits: [0; PASSKEY_DIGITS],
+            digits: [0; PASSKEY_LENGTH],
             count: 0,
             active: false,
-            deadline: Instant::now(),
         }
     }
 
-    pub fn activate(&mut self, timeout_secs: u32) {
-        self.digits = [0; PASSKEY_DIGITS];
-        self.count = 0;
-        self.active = true;
-        self.deadline = Instant::now() + Duration::from_secs(timeout_secs as u64);
-    }
-
-    pub fn is_active(&self) -> bool {
+    pub fn is_active(&self) ->  bool {
         self.active
     }
 
-    pub fn deadline(&self) -> Instant {
-        self.deadline
+    pub fn activate(&mut self) {
+        self.active = true;
+        self.reset();
     }
 
-    /// Push digit. Returns false if buffer full (rejects overflow).
-    pub fn push_digit(&mut self, digit: u8) -> bool {
-        if (self.count as usize) < PASSKEY_DIGITS {
-            self.digits[self.count as usize] = digit;
+    pub fn deactivate(&mut self) {
+        self.active = false;
+    }
+
+    /// Reset the state for a new passkey entry session.
+    pub fn reset(&mut self) {
+        self.digits = [0; PASSKEY_LENGTH];
+        self.count = 0;
+    }
+
+    /// Add a digit (0-9). Returns false if already at PASSKEY_LENGTH digits.
+    pub fn add_digit(&mut self, digit: u8) -> bool {
+        if self.count < PASSKEY_LENGTH {
+            self.digits[self.count] = digit;
             self.count += 1;
             true
         } else {
@@ -78,42 +99,74 @@ impl PasskeyState {
         }
     }
 
-    /// Delete last digit. Returns false if buffer empty.
-    pub fn pop_digit(&mut self) -> bool {
+    /// Remove the last digit. Returns false if empty.
+    pub fn remove_digit(&mut self) -> bool {
         if self.count > 0 {
             self.count -= 1;
+            self.digits[self.count] = 0;
             true
         } else {
             false
         }
     }
 
-    /// Submit passkey. Returns Some(u32) only if exactly 6 digits entered.
-    pub fn submit(&mut self) -> Option<u32> {
-        if self.count as usize != PASSKEY_DIGITS {
-            return None;
-        }
-        let mut passkey: u32 = 0;
-        for i in 0..PASSKEY_DIGITS {
-            passkey = passkey * 10 + self.digits[i] as u32;
-        }
-        self.deactivate();
-        Some(passkey)
+    /// Whether we have all PASSKEY_LENGTH digits.
+    pub fn is_complete(&self) -> bool {
+        self.count == PASSKEY_LENGTH
     }
 
-    pub fn cancel(&mut self) {
-        self.deactivate();
+    /// Convert the entered digits to a u32 passkey.
+    pub fn to_passkey(&self) -> u32 {
+        let mut result: u32 = 0;
+        for i in 0..self.count {
+            result = result * 10 + self.digits[i] as u32;
+        }
+        result
     }
 
-    fn deactivate(&mut self) {
-        self.active = false;
-        self.count = 0;
+    /// Number of digits entered so far.
+    pub fn digit_count(&self) -> usize {
+        self.count
+    }
+
+    /// Process a key press and return the resulting action.
+    ///
+    /// Encapsulates all passkey entry logic: digit entry, Enter/submit,
+    /// Escape/cancel, Backspace/delete, and ignoring irrelevant keys.
+    pub fn handle_key(&mut self, key: HidKeyCode) -> PasskeyAction {
+        if let Some(digit) = hid_keycode_to_digit(key) {
+            if self.add_digit(digit) {
+                PasskeyAction::DigitAdded(digit)
+            } else {
+                PasskeyAction::BufferFull
+            }
+        } else if matches!(key, HidKeyCode::Enter | HidKeyCode::KpEnter) {
+            if self.is_complete() {
+                let passkey = self.to_passkey();
+                self.reset();
+                PasskeyAction::Submitted(passkey)
+            } else {
+                PasskeyAction::Incomplete
+            }
+        } else if matches!(key, HidKeyCode::Escape) {
+            self.reset();
+            PasskeyAction::Cancelled
+        } else if matches!(key, HidKeyCode::Backspace) {
+            if self.remove_digit() {
+                PasskeyAction::Backspaced
+            } else {
+                PasskeyAction::Ignored
+            }
+        } else {
+            PasskeyAction::Ignored
+        }
     }
 }
 
 /// Convert a HID keycode to a digit (0-9), if applicable.
-pub(crate) fn keycode_to_digit(keycode: HidKeyCode) -> Option<u8> {
-    match keycode {
+/// Supports both number row keys (Kc0-Kc9) and keypad keys (Kp0-Kp9).
+pub fn hid_keycode_to_digit(k: HidKeyCode) -> Option<u8> {
+    match k {
         HidKeyCode::Kc1 => Some(1),
         HidKeyCode::Kc2 => Some(2),
         HidKeyCode::Kc3 => Some(3),
@@ -138,145 +191,169 @@ pub(crate) fn keycode_to_digit(keycode: HidKeyCode) -> Option<u8> {
     }
 }
 
-pub(crate) fn is_enter(k: HidKeyCode) -> bool {
-    matches!(k, HidKeyCode::Enter | HidKeyCode::KpEnter)
-}
-
-pub(crate) fn is_escape(k: HidKeyCode) -> bool {
-    matches!(k, HidKeyCode::Escape)
-}
-
-pub(crate) fn is_backspace(k: HidKeyCode) -> bool {
-    matches!(k, HidKeyCode::Backspace)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+use super::*;
+use embassy_futures::block_on;
 
-    #[test]
-    fn test_keycode_to_digit() {
-        assert_eq!(keycode_to_digit(HidKeyCode::Kc0), Some(0));
-        assert_eq!(keycode_to_digit(HidKeyCode::Kc1), Some(1));
-        assert_eq!(keycode_to_digit(HidKeyCode::Kc9), Some(9));
-        assert_eq!(keycode_to_digit(HidKeyCode::Kp0), Some(0));
-        assert_eq!(keycode_to_digit(HidKeyCode::Kp5), Some(5));
-        assert_eq!(keycode_to_digit(HidKeyCode::A), None);
-        assert_eq!(keycode_to_digit(HidKeyCode::Enter), None);
+#[test]
+fn test_passkey_entry_state_basic() {
+    let mut state = PasskeyEntryState::new();
+    assert_eq!(state.digit_count(), 0);
+    assert!(!state.is_complete());
+
+    // Add digits 1-6
+    for d in 1..=6 {
+        assert!(state.add_digit(d));
     }
+    assert!(state.is_complete());
+    assert_eq!(state.to_passkey(), 123456);
 
-    #[test]
-    fn test_passkey_state_push_and_submit() {
-        let mut state = PasskeyState::new();
-        state.activate(120);
-        assert!(state.is_active());
+    // Can't add 7th digit
+    assert!(!state.add_digit(7));
+    assert_eq!(state.to_passkey(), 123456);
+}
 
-        // Push 6 digits: 1, 2, 3, 4, 5, 6
-        for d in 1..=6 {
-            assert!(state.push_digit(d));
-        }
+#[test]
+fn test_passkey_entry_state_remove() {
+    let mut state = PasskeyEntryState::new();
+    assert!(!state.remove_digit()); // empty
 
-        // 7th digit should be rejected
-        assert!(!state.push_digit(7));
+    state.add_digit(1);
+    state.add_digit(2);
+    state.add_digit(3);
+    assert_eq!(state.to_passkey(), 123);
 
-        // Submit should succeed with 123456
-        assert_eq!(state.submit(), Some(123456));
-        assert!(!state.is_active());
+    assert!(state.remove_digit());
+    assert_eq!(state.to_passkey(), 12);
+    assert_eq!(state.digit_count(), 2);
+}
+
+#[test]
+fn test_passkey_entry_state_reset() {
+    let mut state = PasskeyEntryState::new();
+    state.add_digit(9);
+    state.add_digit(8);
+    state.reset();
+    assert_eq!(state.digit_count(), 0);
+    assert_eq!(state.to_passkey(), 0);
+}
+
+#[test]
+fn test_passkey_with_zeros() {
+    let mut state = PasskeyEntryState::new();
+    // 007890
+    state.add_digit(0);
+    state.add_digit(0);
+    state.add_digit(7);
+    state.add_digit(8);
+    state.add_digit(9);
+    state.add_digit(0);
+    assert_eq!(state.to_passkey(), 7890);
+}
+
+#[test]
+fn test_handle_key_digit() {
+    let mut state = PasskeyEntryState::new();
+    assert_eq!(state.handle_key(HidKeyCode::Kc1), PasskeyAction::DigitAdded(1));
+    assert_eq!(state.handle_key(HidKeyCode::Kp5), PasskeyAction::DigitAdded(5));
+    assert_eq!(state.digit_count(), 2);
+}
+
+#[test]
+fn test_handle_key_submit() {
+    let mut state = PasskeyEntryState::new();
+    for d in [HidKeyCode::Kc1, HidKeyCode::Kc2, HidKeyCode::Kc3, HidKeyCode::Kc4, HidKeyCode::Kc5, HidKeyCode::Kc6] {
+        state.handle_key(d);
     }
+    assert_eq!(state.handle_key(HidKeyCode::Enter), PasskeyAction::Submitted(123456));
+    assert_eq!(state.digit_count(), 0); // reset after submit
+}
 
-    #[test]
-    fn test_passkey_state_submit_incomplete() {
-        let mut state = PasskeyState::new();
-        state.activate(120);
+#[test]
+fn test_handle_key_incomplete() {
+    let mut state = PasskeyEntryState::new();
+    state.handle_key(HidKeyCode::Kc1);
+    assert_eq!(state.handle_key(HidKeyCode::Enter), PasskeyAction::Incomplete);
+}
 
-        // Push only 3 digits
-        state.push_digit(1);
-        state.push_digit(2);
-        state.push_digit(3);
+#[test]
+fn test_handle_key_cancel() {
+    let mut state = PasskeyEntryState::new();
+    state.handle_key(HidKeyCode::Kc1);
+    state.handle_key(HidKeyCode::Kc2);
+    assert_eq!(state.handle_key(HidKeyCode::Escape), PasskeyAction::Cancelled);
+    assert_eq!(state.digit_count(), 0);
+}
 
-        // Submit should fail with fewer than 6 digits
-        assert_eq!(state.submit(), None);
-        // State should still be active after failed submit
-        assert!(state.is_active());
+#[test]
+fn test_handle_key_backspace() {
+    let mut state = PasskeyEntryState::new();
+    state.handle_key(HidKeyCode::Kc1);
+    state.handle_key(HidKeyCode::Kc2);
+    assert_eq!(state.handle_key(HidKeyCode::Backspace), PasskeyAction::Backspaced);
+    assert_eq!(state.digit_count(), 1);
+    // Backspace on empty
+    state.handle_key(HidKeyCode::Backspace);
+    assert_eq!(state.handle_key(HidKeyCode::Backspace), PasskeyAction::Ignored);
+}
+
+#[test]
+fn test_handle_key_buffer_full() {
+    let mut state = PasskeyEntryState::new();
+    for d in [HidKeyCode::Kc1, HidKeyCode::Kc2, HidKeyCode::Kc3, HidKeyCode::Kc4, HidKeyCode::Kc5, HidKeyCode::Kc6] {
+        state.handle_key(d);
     }
+    assert_eq!(state.handle_key(HidKeyCode::Kc7), PasskeyAction::BufferFull);
+}
 
-    #[test]
-    fn test_passkey_state_pop_digit() {
-        let mut state = PasskeyState::new();
-        state.activate(120);
+#[test]
+fn test_handle_key_ignored() {
+    let mut state = PasskeyEntryState::new();
+    assert_eq!(state.handle_key(HidKeyCode::A), PasskeyAction::Ignored);
+}
 
-        state.push_digit(1);
-        state.push_digit(2);
-        assert!(state.pop_digit());
-
-        // Push more to fill 6 digits: now have [1], push 3,4,5,6,7
-        for d in 3..=7 {
-            state.push_digit(d);
-        }
-
-        // Should be [1, 3, 4, 5, 6, 7]
-        assert_eq!(state.submit(), Some(134567));
+#[test]
+fn test_handle_key_kp_enter() {
+    let mut state = PasskeyEntryState::new();
+    for d in [HidKeyCode::Kp1, HidKeyCode::Kp2, HidKeyCode::Kp3, HidKeyCode::Kp4, HidKeyCode::Kp5, HidKeyCode::Kp6] {
+        state.handle_key(d);
     }
+    assert_eq!(state.handle_key(HidKeyCode::KpEnter), PasskeyAction::Submitted(123456));
+}
 
-    #[test]
-    fn test_passkey_state_pop_empty() {
-        let mut state = PasskeyState::new();
-        state.activate(120);
-        assert!(!state.pop_digit());
+#[test]
+fn test_hid_keycode_to_digit_all() {
+    let keycodes = [
+        (HidKeyCode::Kc0, 0), (HidKeyCode::Kc1, 1), (HidKeyCode::Kc2, 2),
+        (HidKeyCode::Kc3, 3), (HidKeyCode::Kc4, 4), (HidKeyCode::Kc5, 5),
+        (HidKeyCode::Kc6, 6), (HidKeyCode::Kc7, 7), (HidKeyCode::Kc8, 8),
+        (HidKeyCode::Kc9, 9),
+        (HidKeyCode::Kp0, 0), (HidKeyCode::Kp1, 1), (HidKeyCode::Kp2, 2),
+        (HidKeyCode::Kp3, 3), (HidKeyCode::Kp4, 4), (HidKeyCode::Kp5, 5),
+        (HidKeyCode::Kp6, 6), (HidKeyCode::Kp7, 7), (HidKeyCode::Kp8, 8),
+        (HidKeyCode::Kp9, 9),
+    ];
+    for (kc, expected) in keycodes {
+        assert_eq!(hid_keycode_to_digit(kc), Some(expected), "Failed for {:?}", kc);
     }
+    assert_eq!(hid_keycode_to_digit(HidKeyCode::A), None);
+}
 
-    #[test]
-    fn test_passkey_state_cancel() {
-        let mut state = PasskeyState::new();
-        state.activate(120);
-        state.push_digit(1);
-        state.cancel();
-        assert!(!state.is_active());
-    }
+#[test]
+fn test_passkey_session_begin_order_allows_immediate_response() {
+    // Simulate stale data from a previous session.
+    PASSKEY_RESPONSE.signal(Some(111111));
 
-    #[test]
-    fn test_passkey_leading_zeros() {
-        let mut state = PasskeyState::new();
-        state.activate(120);
+    begin_passkey_entry_session();
+    assert!(PASSKEY_ENTRY_MODE.load(Ordering::Acquire));
 
-        // Enter 000000
-        for _ in 0..6 {
-            state.push_digit(0);
-        }
-        assert_eq!(state.submit(), Some(0));
-    }
+    // Simulate immediate keyboard response right after session begin.
+    PASSKEY_RESPONSE.signal(Some(222222));
+    let got = block_on(async { PASSKEY_RESPONSE.wait().await });
+    assert_eq!(got, Some(222222));
 
-    #[test]
-    fn test_passkey_with_leading_zeros() {
-        let mut state = PasskeyState::new();
-        state.activate(120);
-
-        // Enter 001234
-        state.push_digit(0);
-        state.push_digit(0);
-        state.push_digit(1);
-        state.push_digit(2);
-        state.push_digit(3);
-        state.push_digit(4);
-        assert_eq!(state.submit(), Some(1234));
-    }
-
-    #[test]
-    fn test_is_enter() {
-        assert!(is_enter(HidKeyCode::Enter));
-        assert!(is_enter(HidKeyCode::KpEnter));
-        assert!(!is_enter(HidKeyCode::A));
-    }
-
-    #[test]
-    fn test_is_escape() {
-        assert!(is_escape(HidKeyCode::Escape));
-        assert!(!is_escape(HidKeyCode::A));
-    }
-
-    #[test]
-    fn test_is_backspace() {
-        assert!(is_backspace(HidKeyCode::Backspace));
-        assert!(!is_backspace(HidKeyCode::A));
-    }
+    end_passkey_entry_session();
+    assert!(!PASSKEY_ENTRY_MODE.load(Ordering::Acquire));
+}
 }
