@@ -9,7 +9,7 @@ use crate::config::{BehaviorConfig, PositionalConfig};
 use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_event};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
-#[cfg(feature = "vial_lock")]
+#[cfg(feature = "host_security")]
 use crate::matrix::MatrixState;
 
 /// Keymap represents the stack of layers.
@@ -33,7 +33,7 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     pub(crate) behavior: &'a mut BehaviorConfig,
     pub positional_config: &'a mut PositionalConfig<ROW, COL>,
     /// Matrix state
-    #[cfg(feature = "vial_lock")]
+    #[cfg(feature = "host_security")]
     pub(crate) matrix_state: MatrixState<ROW, COL>,
     /// Mouse button state (buttons 0-7 as bits)
     pub(crate) mouse_buttons: u8,
@@ -69,7 +69,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             encoder_layer_cache: [[0; 2]; NUM_ENCODER],
             behavior,
             positional_config,
-            #[cfg(feature = "vial_lock")]
+            #[cfg(feature = "host_security")]
             matrix_state: MatrixState::new(),
             mouse_buttons: 0,
         }
@@ -124,7 +124,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             encoder_layer_cache: [[0; 2]; NUM_ENCODER],
             behavior,
             positional_config,
-            #[cfg(feature = "vial_lock")]
+            #[cfg(feature = "host_security")]
             matrix_state: MatrixState::new(),
             mouse_buttons: 0,
         }

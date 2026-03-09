@@ -91,9 +91,9 @@ The protocol uses COBS framing over byte streams (BLE serial) or packet-based fr
 
 Two transport implementations are planned:
 - **USB**: Raw vendor-class bulk endpoints (class `0xFF`), with MS OS descriptors for automatic WinUSB binding on Windows. This provides WebUSB compatibility for browser-based configurators and uses a simpler descriptor (1 interface, 2 endpoints) than CDC-ACM. USB bulk packets are self-delimiting, so no COBS framing is needed.
-- **BLE serial**: NUS-like GATT service with RX/TX characteristics, implementing `embedded_io_async::{Read, Write}` for the byte stream layer, with COBS framing on top. postcard-rpc's `CobsAccumulator` (available with the `cobs` feature flag, no-std) handles RX frame decoding.
+- **BLE serial**: NUS-like GATT service with RX/TX characteristics, implementing `embedded_io_async::{Read, Write}` for the byte stream layer, with COBS framing on top. postcard-rpc's `CobsAccumulator` handles RX frame decoding.
 
-`ProtocolService` is generic over transport via postcard-rpc's `WireTx`/`WireRx` traits (available with `default-features = false`, no server features needed). Each transport implements these traits, abstracting framing differences. postcard-rpc's `Sender` struct wraps `WireTx` and provides typed convenience methods (`reply::<E>()`, `publish::<T>()`, `error()`) for frame encoding — it works standalone without the `Server` or `define_dispatch!` machinery.
+`ProtocolService` is generic over transport via postcard-rpc's `WireTx`/`WireRx` traits. Each transport implements these traits, abstracting framing differences. postcard-rpc's `Sender` struct wraps `WireTx` and provides typed convenience methods (`reply::<E>()`, `publish::<T>()`, `error()`) for frame encoding — it works standalone without the `Server` or `define_dispatch!` machinery.
 
 ### DP3. Endpoints + Topics (two-primitive model)
 
@@ -522,9 +522,9 @@ Three levels, assigned per endpoint (see Section 7):
 Security (lock/unlock and matrix state tracking) is gated behind a `security` feature:
 
 ```toml
-security = []                          # physical key unlock, matrix state tracking
-vial_lock = ["vial", "security"]       # Vial unlock (implies security)
-rmk_protocol = ["host", "security", "dep:postcard-rpc"]  # new protocol (implies security)
+host_security = []                          # physical key unlock, matrix state tracking
+vial_lock = ["vial", "host_security"]       # Vial unlock (implies host_security)
+rmk_protocol = ["host", "host_security", "dep:postcard-rpc"]  # new protocol (implies host_security)
 ```
 
 The `security` feature enables the `matrix_state` field on `KeyMap` (needed for both physical key unlock verification and the `GetMatrixState` endpoint). Previously this was gated on `vial_lock`; the `security` feature makes it available to both protocols.
@@ -719,7 +719,7 @@ rmk/src/host/
 
 Replaces `VialService` with the same structural pattern:
 - Holds `&RefCell<KeyMap>` for in-memory keymap access
-- Reads/writes over transport via postcard-rpc's `WireTx`/`WireRx` traits (available with `default-features = false`, no server features needed)
+- Reads/writes over transport via postcard-rpc's `WireTx`/`WireRx` traits
 - Uses postcard-rpc's `Sender` struct (wraps `WireTx`) for typed frame encoding: `reply::<E>()` for endpoint responses, `publish::<T>()` for topic messages, `error()` for wire errors. `Sender` works standalone without `Server` or `define_dispatch!`
 - Implements custom key-based dispatch (postcard-rpc's `define_dispatch!` cannot be used because `ProtocolService` is generic over `ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER` const parameters — the macro requires static, non-generic context types)
 - Parses incoming frames using `VarHeader::take_from_slice()` to extract key and sequence number, then matches against endpoint key constants (`<GetVersion as Endpoint>::REQ_KEY`, etc.)
@@ -732,7 +732,7 @@ Replaces `VialService` with the same structural pattern:
 ### 14.3 Transport adapters
 
 - **USB**: Raw vendor-class bulk endpoints (class `0xFF`, 1 interface, 2 bulk endpoints). Uses MS OS descriptors for automatic WinUSB driver binding on Windows (requires increasing `BOS_DESC_BUF` to ≥64 bytes and `MSOS_DESC_BUF` to ≥256 bytes in `rmk/src/usb/mod.rs`). Natively WebUSB-compatible for browser-based configurators. Implements postcard-rpc's `WireTx`/`WireRx` traits. USB bulk transport uses packet-based framing (no COBS needed — USB bulk packets are self-delimiting). Reference: postcard-rpc's `embassy_usb_v0_5` module.
-- **BLE serial**: New GATT service with NUS-like RX/TX characteristics replaces `BleVialServer`. Implements `embedded_io_async::Read` + `embedded_io_async::Write` for the byte stream layer, then wraps with COBS framing to implement postcard-rpc's `WireTx`/`WireRx` traits. For RX, uses postcard-rpc's `CobsAccumulator` (available with the `cobs` feature, no-std) for frame decoding. For TX, COBS encoding uses postcard's `to_slice_cobs` (the same pattern already used in split serial). `ProtocolService` works unchanged over either transport.
+- **BLE serial**: New GATT service with NUS-like RX/TX characteristics replaces `BleVialServer`. Implements `embedded_io_async::Read` + `embedded_io_async::Write` for the byte stream layer, then wraps with COBS framing to implement postcard-rpc's `WireTx`/`WireRx` traits. For RX, uses postcard-rpc's `CobsAccumulator` for frame decoding. For TX, COBS encoding uses postcard's `to_slice_cobs` (the same pattern already used in split serial). `ProtocolService` works unchanged over either transport.
 - `ProtocolService` is generic over postcard-rpc's `WireTx`/`WireRx` traits, abstracting transport and framing differences.
 
 ### 14.4 Event bus bridging
@@ -759,10 +759,10 @@ In the main `run()` loop, `embassy_futures::select` multiplexes transport reads 
 # rmk/Cargo.toml
 [features]
 host = []                              # shared base (future: rename to _host)
-security = []                          # physical key unlock + matrix state tracking
+host_security = []                          # physical key unlock + matrix state tracking
 vial = ["host"]                        # legacy Vial
-vial_lock = ["vial", "security"]       # Vial unlock
-rmk_protocol = ["host", "security", "dep:postcard-rpc"]  # new protocol
+vial_lock = ["vial", "host_security"]       # Vial unlock
+rmk_protocol = ["host", "host_security", "dep:postcard-rpc"]  # new protocol
 ```
 
 > **Note**: The `host` feature currently pulls in `byteorder` (needed by Vial). In the future, consider renaming to `_host` (matching the `_ble` convention for internal features) and moving `byteorder` to `vial` only. The `security` feature gates the `matrix_state` field on `KeyMap` and the shared `DeviceLock` module, making both available to `vial_lock` and `rmk_protocol`.
@@ -811,7 +811,7 @@ The `buffer_size` is configurable to allow users to adjust throughput vs RAM tra
 
 | Step | File(s) | Details |
 |------|---------|---------|
-| 2.1 | `rmk/Cargo.toml` | Add `security = []` and `rmk_protocol = ["host", "security", "dep:postcard-rpc"]` features; add `postcard-rpc = { version = "0.12", default-features = false, features = ["cobs"], optional = true }` as dependency; update `vial_lock = ["vial", "security"]`. Change `matrix_state` gate in `rmk/src/keymap.rs` from `#[cfg(feature = "vial_lock")]` to `#[cfg(feature = "security")]` |
+| 2.1 | `rmk/Cargo.toml` | Add `host_security = []` and `rmk_protocol = ["host", "host_security", "dep:postcard-rpc"]` features; add `postcard-rpc = { version = "0.12", optional = true }` as dependency; update `vial_lock = ["vial", "host_security"]`. Change `matrix_state` gate in `rmk/src/keymap.rs` from `#[cfg(feature = "vial_lock")]` to `#[cfg(feature = "host_security")]` |
 | 2.2 | `rmk/src/host/protocol/mod.rs` | Create `ProtocolService` struct: holds `&RefCell<KeyMap>`, `Sender<Tx>` (wraps transport), lock state, RX buffer `[u8; BUF_SIZE]`, event subscribers (created once in `new()`) |
 | 2.3 | `rmk/src/host/protocol/mod.rs` | Implement dispatch loop: receive frame via `WireRx::receive()` -> parse `VarHeader::take_from_slice()` -> match key against `<Endpoint>::REQ_KEY` constants -> deserialize with `postcard::from_bytes` -> call handler -> send response via `Sender::reply::<E>()` or `Sender::error()` |
 | 2.4 | `rmk/src/host/mod.rs` | Add `#[cfg(feature = "rmk_protocol")]` version of `run_host_communicate_task()` that creates and runs `ProtocolService` as async future (composed into `select_biased!`, not spawned) |
@@ -847,7 +847,7 @@ The `buffer_size` is configurable to allow users to adjust throughput vs RAM tra
 
 | Step | File(s) | Details |
 |------|---------|---------|
-| 5.1 | `rmk/src/host/lock.rs` | Extract lock logic from `rmk/src/host/via/vial_lock.rs` into a shared, protocol-neutral `DeviceLock` module. Gate with `#[cfg(feature = "security")]`. Uses `keymap.borrow().matrix_state.read(row, col)` (now available via `security` feature, not just `vial_lock`) |
+| 5.1 | `rmk/src/host/lock.rs` | Extract lock logic from `rmk/src/host/via/vial_lock.rs` into a shared, protocol-neutral `DeviceLock` module. Gate with `#[cfg(feature = "host_security")]`. Uses `keymap.borrow().matrix_state.read(row, col)` (now available via `host_security` feature, not just `vial_lock`) |
 | 5.2 | `rmk/src/host/protocol/mod.rs` | Implement `Unlock`, `Lock` endpoint handlers; integrate lock state into dispatch loop (check permission before executing write handlers) |
 | 5.3 | `rmk/src/host/protocol/mod.rs` | Implement auto-timeout: re-lock after 90s of no write operations |
 
