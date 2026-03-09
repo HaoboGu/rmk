@@ -140,7 +140,7 @@ pub(crate) async fn process_vial<
                         .morse
                         .default_profile
                         .hold_timeout_ms()
-                        .unwrap_or(0);
+                        .unwrap_or(250);
                     LittleEndian::write_u16(&mut report.input_data[1..3], tapping_term);
                 }
                 SettingKey::OneShotTimeout => {
