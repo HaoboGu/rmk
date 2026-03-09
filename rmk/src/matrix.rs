@@ -32,14 +32,16 @@ impl<const ROW: usize, const COL: usize> Default for MatrixState<ROW, COL> {
 
 #[cfg(feature = "host_security")]
 impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
-    const ROW_LEN: usize = (COL + 8) / 8;
-    const OUT_OF_BOUNDARY: () = if ROW * Self::ROW_LEN > 30 {
+    const ROW_LEN: usize = (COL + 7) / 8;
+    const _ASSERT_FITS: () = if ROW * Self::ROW_LEN > 30 {
         panic!(
             "Cannot use matrix tester because your keyboard has too many keys. \
-            Consider disable the `matrix_tester` feature"
+            Consider disable the `host_security` feature"
         )
     };
     pub fn new() -> Self {
+        // Reference the const assertion so it is always evaluated.
+        let _ = Self::_ASSERT_FITS;
         Self { state: [0; 30] }
     }
     pub fn update(&mut self, event: &KeyboardEvent) {

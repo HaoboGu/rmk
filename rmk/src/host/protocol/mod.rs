@@ -16,9 +16,16 @@ use postcard_rpc::standard_icd::{self, WireError};
 use postcard_rpc::{Endpoint, Key, Topic};
 use rmk_types::protocol::rmk::*;
 
+use crate::event::{KeyPos, KeyboardEventPos};
 use crate::keymap::KeyMap;
+#[cfg(feature = "storage")]
+use crate::channel::FLASH_CHANNEL;
+#[cfg(feature = "storage")]
+use crate::storage::FlashOperationMessage;
+#[cfg(feature = "storage")]
+use crate::host::storage::{KeymapData, KeymapKey};
 
-const RX_BUF_SIZE: usize = 512;
+const RX_BUF_SIZE: usize = 256;
 
 // All endpoint request keys (inbound).
 const REQ_KEYS: &[Key] = &[
@@ -223,8 +230,13 @@ impl<
                     Ok(f) => f,
                     Err(e) => match e.as_kind() {
                         WireRxErrorKind::ConnectionClosed => break,
-                        WireRxErrorKind::ReceivedMessageTooLarge | WireRxErrorKind::Other => continue,
-                        _ => continue,
+                        WireRxErrorKind::ReceivedMessageTooLarge => {
+                            // Cannot reply: the frame was too large to read so we
+                            // don't have a sequence number. Log and drop.
+                            warn!("Dropped oversize frame (>{} bytes)", RX_BUF_SIZE);
+                            continue;
+                        }
+                        WireRxErrorKind::Other | _ => continue,
                     },
                 };
 
@@ -266,66 +278,245 @@ impl<
             return sender.reply::<GetVersion>(seq, &ProtocolVersion::CURRENT).await;
         }
         if *key == VarKey::Key8(GetCapabilities::REQ_KEY) {
-            // TODO: Phase 4 — construct from const generics + build.rs constants
-            return sender.error(seq, WireError::UnknownKey).await;
+            let caps = DeviceCapabilities {
+                num_layers: NUM_LAYER as u8,
+                num_rows: ROW as u8,
+                num_cols: COL as u8,
+                num_encoders: NUM_ENCODER as u8,
+                max_combos: crate::COMBO_MAX_NUM as u8,
+                max_macros: 32,
+                macro_space_size: crate::MACRO_SPACE_SIZE as u16,
+                max_morse: crate::MORSE_MAX_NUM as u8,
+                max_forks: crate::FORK_MAX_NUM as u8,
+                has_storage: cfg!(feature = "storage"),
+                has_split: cfg!(feature = "split"),
+                num_split_peripherals: crate::SPLIT_PERIPHERALS_NUM as u8,
+                has_ble: cfg!(feature = "_ble"),
+                num_ble_profiles: crate::NUM_BLE_PROFILE as u8,
+                has_lighting: false,
+                max_payload_size: RX_BUF_SIZE as u16,
+            };
+            return sender.reply::<GetCapabilities>(seq, &caps).await;
         }
         if *key == VarKey::Key8(GetLockStatus::REQ_KEY) {
-            // TODO: Phase 4
-            return sender.error(seq, WireError::UnknownKey).await;
+            let status = LockStatus {
+                locked: *locked,
+                awaiting_keys: false,
+                remaining_keys: 0,
+            };
+            return sender.reply::<GetLockStatus>(seq, &status).await;
         }
         if *key == VarKey::Key8(UnlockRequest::REQ_KEY) {
-            // TODO: Phase 4
+            // TODO: Phase 8 — full lock state machine
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(LockRequest::REQ_KEY) {
-            // TODO: Phase 4
+            // TODO: Phase 8 — full lock state machine
             return sender.error(seq, WireError::UnknownKey).await;
         }
+
+        // --- Device Control (3 endpoints) ---
         if *key == VarKey::Key8(Reboot::REQ_KEY) {
-            // TODO: Phase 4
-            return sender.error(seq, WireError::UnknownKey).await;
+            sender.reply::<Reboot>(seq, &()).await?;
+            crate::boot::reboot_keyboard();
+            return Ok(()); // unreachable on embedded
         }
         if *key == VarKey::Key8(BootloaderJump::REQ_KEY) {
-            // TODO: Phase 4
-            return sender.error(seq, WireError::UnknownKey).await;
+            sender.reply::<BootloaderJump>(seq, &()).await?;
+            crate::boot::jump_to_bootloader();
+            return Ok(()); // unreachable on embedded
         }
         if *key == VarKey::Key8(StorageReset::REQ_KEY) {
-            // TODO: Phase 4
-            return sender.error(seq, WireError::UnknownKey).await;
+            if *locked {
+                return sender.error(seq, WireError::UnknownKey).await;
+            }
+            let mode: StorageResetMode = match postcard::from_bytes(body) {
+                Ok(m) => m,
+                Err(_) => return sender.error(seq, WireError::DeserFailed).await,
+            };
+            sender.reply::<StorageReset>(seq, &()).await?;
+            #[cfg(feature = "storage")]
+            {
+                let msg = match mode {
+                    StorageResetMode::Full => FlashOperationMessage::ResetAndReboot,
+                    StorageResetMode::LayoutOnly => FlashOperationMessage::ResetLayout,
+                };
+                FLASH_CHANNEL.send(msg).await;
+            }
+            // Storage task handles erase + reboot; don't race it
+            #[cfg(not(feature = "storage"))]
+            crate::boot::reboot_keyboard();
+            core::future::pending::<()>().await;
+            return Ok(()); // unreachable
         }
 
         // --- Keymap (8 endpoints) ---
         if *key == VarKey::Key8(GetKeyAction::REQ_KEY) {
-            // TODO: Phase 4
-            return sender.error(seq, WireError::UnknownKey).await;
+            let pos: KeyPosition = match postcard::from_bytes(body) {
+                Ok(p) => p,
+                Err(_) => return sender.error(seq, WireError::DeserFailed).await,
+            };
+            if pos.row as usize >= ROW || pos.col as usize >= COL || pos.layer as usize >= NUM_LAYER {
+                return sender.reply::<GetKeyAction>(seq, &rmk_types::action::KeyAction::No).await;
+            }
+            let event_pos = KeyboardEventPos::Key(KeyPos {
+                row: pos.row,
+                col: pos.col,
+            });
+            let action = keymap.borrow().get_action_at(event_pos, pos.layer as usize);
+            return sender.reply::<GetKeyAction>(seq, &action).await;
         }
         if *key == VarKey::Key8(SetKeyAction::REQ_KEY) {
-            // TODO: Phase 4
-            return sender.error(seq, WireError::UnknownKey).await;
+            if *locked {
+                return sender.error(seq, WireError::UnknownKey).await;
+            }
+            let req: SetKeyRequest = match postcard::from_bytes(body) {
+                Ok(r) => r,
+                Err(_) => return sender.error(seq, WireError::DeserFailed).await,
+            };
+            let pos = &req.position;
+            if pos.row as usize >= ROW || pos.col as usize >= COL || pos.layer as usize >= NUM_LAYER {
+                return sender
+                    .reply::<SetKeyAction>(seq, &Err(RmkError::InvalidParameter))
+                    .await;
+            }
+            let event_pos = KeyboardEventPos::Key(KeyPos {
+                row: pos.row,
+                col: pos.col,
+            });
+            keymap
+                .borrow_mut()
+                .set_action_at(event_pos, pos.layer as usize, req.action);
+            #[cfg(feature = "storage")]
+            FLASH_CHANNEL
+                .send(FlashOperationMessage::HostMessage(KeymapData::KeymapKey(
+                    KeymapKey {
+                        row: pos.row,
+                        col: pos.col,
+                        layer: pos.layer,
+                        action: req.action,
+                    },
+                )))
+                .await;
+            return sender.reply::<SetKeyAction>(seq, &Ok(())).await;
         }
         if *key == VarKey::Key8(GetKeymapBulk::REQ_KEY) {
-            // TODO: Phase 4
-            return sender.error(seq, WireError::UnknownKey).await;
+            let req: BulkRequest = match postcard::from_bytes(body) {
+                Ok(r) => r,
+                Err(_) => return sender.error(seq, WireError::DeserFailed).await,
+            };
+            let mut actions: BulkKeyActions = heapless::Vec::new();
+            let mut row = req.start_row as usize;
+            let mut col = req.start_col as usize;
+            let layer = req.layer as usize;
+            let km = keymap.borrow();
+            for _ in 0..req.count {
+                if row >= ROW || col >= COL || layer >= NUM_LAYER {
+                    break;
+                }
+                let event_pos = KeyboardEventPos::Key(KeyPos {
+                    row: row as u8,
+                    col: col as u8,
+                });
+                let action = km.get_action_at(event_pos, layer);
+                if actions.push(action).is_err() {
+                    break;
+                }
+                col += 1;
+                if col >= COL {
+                    col = 0;
+                    row += 1;
+                }
+            }
+            return sender.reply::<GetKeymapBulk>(seq, &actions).await;
         }
         if *key == VarKey::Key8(SetKeymapBulk::REQ_KEY) {
-            // TODO: Phase 4
-            return sender.error(seq, WireError::UnknownKey).await;
+            if *locked {
+                return sender.error(seq, WireError::UnknownKey).await;
+            }
+            let req: SetKeymapBulkRequest = match postcard::from_bytes(body) {
+                Ok(r) => r,
+                Err(_) => return sender.error(seq, WireError::DeserFailed).await,
+            };
+            let layer = req.request.layer as usize;
+            if layer >= NUM_LAYER {
+                return sender
+                    .reply::<SetKeymapBulk>(seq, &Err(RmkError::InvalidParameter))
+                    .await;
+            }
+            let mut row = req.request.start_row as usize;
+            let mut col = req.request.start_col as usize;
+            for action in req.actions.iter() {
+                if row >= ROW || col >= COL {
+                    break;
+                }
+                let event_pos = KeyboardEventPos::Key(KeyPos {
+                    row: row as u8,
+                    col: col as u8,
+                });
+                keymap
+                    .borrow_mut()
+                    .set_action_at(event_pos, layer, *action);
+                #[cfg(feature = "storage")]
+                FLASH_CHANNEL
+                    .send(FlashOperationMessage::HostMessage(KeymapData::KeymapKey(
+                        KeymapKey {
+                            row: row as u8,
+                            col: col as u8,
+                            layer: layer as u8,
+                            action: *action,
+                        },
+                    )))
+                    .await;
+                col += 1;
+                if col >= COL {
+                    col = 0;
+                    row += 1;
+                }
+            }
+            return sender.reply::<SetKeymapBulk>(seq, &Ok(())).await;
         }
         if *key == VarKey::Key8(GetLayerCount::REQ_KEY) {
-            // TODO: Phase 4
-            return sender.error(seq, WireError::UnknownKey).await;
+            return sender.reply::<GetLayerCount>(seq, &(NUM_LAYER as u8)).await;
         }
         if *key == VarKey::Key8(GetDefaultLayer::REQ_KEY) {
-            // TODO: Phase 4
-            return sender.error(seq, WireError::UnknownKey).await;
+            let layer = keymap.borrow().get_default_layer();
+            return sender.reply::<GetDefaultLayer>(seq, &layer).await;
         }
         if *key == VarKey::Key8(SetDefaultLayer::REQ_KEY) {
-            // TODO: Phase 4
-            return sender.error(seq, WireError::UnknownKey).await;
+            if *locked {
+                return sender.error(seq, WireError::UnknownKey).await;
+            }
+            let layer: u8 = match postcard::from_bytes(body) {
+                Ok(l) => l,
+                Err(_) => return sender.error(seq, WireError::DeserFailed).await,
+            };
+            if layer as usize >= NUM_LAYER {
+                return sender
+                    .reply::<SetDefaultLayer>(seq, &Err(RmkError::InvalidParameter))
+                    .await;
+            }
+            keymap.borrow_mut().set_default_layer(layer);
+            #[cfg(feature = "storage")]
+            FLASH_CHANNEL
+                .send(FlashOperationMessage::DefaultLayer(layer))
+                .await;
+            return sender.reply::<SetDefaultLayer>(seq, &Ok(())).await;
         }
         if *key == VarKey::Key8(ResetKeymap::REQ_KEY) {
-            // TODO: Phase 4
-            return sender.error(seq, WireError::UnknownKey).await;
+            if *locked {
+                return sender.error(seq, WireError::UnknownKey).await;
+            }
+            sender.reply::<ResetKeymap>(seq, &Ok(())).await?;
+            #[cfg(feature = "storage")]
+            FLASH_CHANNEL
+                .send(FlashOperationMessage::ResetLayout)
+                .await;
+            // Storage task handles erase + reboot; don't race it
+            #[cfg(not(feature = "storage"))]
+            crate::boot::reboot_keyboard();
+            core::future::pending::<()>().await;
+            return Ok(()); // unreachable
         }
 
         // --- Encoder (2 endpoints) ---

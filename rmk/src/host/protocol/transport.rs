@@ -14,7 +14,7 @@ use serde::Serialize;
 use crate::RawMutex;
 
 pub(crate) const USB_BULK_PACKET_SIZE: usize = 64;
-const TX_BUF_SIZE: usize = 256;
+pub(crate) const TX_BUF_SIZE: usize = 512;
 const TX_TIMEOUT_MS_PER_FRAME: usize = 10;
 const RMK_WINUSB_GUIDS: &[&str] = &["{533E7A32-4C6B-49F8-8C5B-60D2D784F2C6}"];
 

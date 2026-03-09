@@ -43,7 +43,9 @@ pub(crate) enum FlashOperationMessage {
     PeerAddress(PeerAddress),
     // Clear the storage
     Reset,
-    // Clear the layout info
+    // Clear the storage and reboot
+    ResetAndReboot,
+    // Clear the layout info and reboot
     ResetLayout,
     // Clear info of given slot number
     ClearSlot(u8),
@@ -532,9 +534,24 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     update_storage_field!(&mut self.flash, &mut self.buffer, LayoutConfig, layout_option)
                 }
                 FlashOperationMessage::Reset => self.flash.erase_all().await,
+                FlashOperationMessage::ResetAndReboot => {
+                    info!("Resetting storage and rebooting...");
+                    let _ = self.flash.erase_all().await;
+                    crate::boot::reboot_keyboard();
+                    Ok(()) // unreachable on embedded
+                }
                 FlashOperationMessage::ResetLayout => {
-                    info!("Ignoring ResetLayout at runtime (handled at startup via clear_layout).");
-                    Ok(())
+                    // TODO: Implement true layout-only reset. Currently this
+                    // falls through to a full erase because the storage task
+                    // does not hold the default keymap needed by
+                    // `reset_layout_only()`.  A proper fix requires either
+                    // passing the default keymap into the storage task or
+                    // persisting a "clear_layout_on_boot" flag in
+                    // LocalStorageConfig.
+                    warn!("ResetLayout: falling back to full erase (layout-only not yet available at runtime)");
+                    let _ = self.flash.erase_all().await;
+                    crate::boot::reboot_keyboard();
+                    Ok(()) // unreachable on embedded
                 }
                 FlashOperationMessage::DefaultLayer(default_layer) => {
                     // Read out layout options, update layer option and save back

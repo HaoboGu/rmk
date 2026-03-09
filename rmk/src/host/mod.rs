@@ -14,6 +14,12 @@ compile_error!("`vial` and `rmk_protocol` are mutually exclusive features");
 #[cfg(all(feature = "host", not(any(feature = "vial", feature = "rmk_protocol"))))]
 compile_error!("`host` requires enabling either `vial` or `rmk_protocol`.");
 
+#[cfg(all(feature = "rmk_protocol", feature = "_ble", feature = "_no_usb"))]
+compile_error!(
+    "`rmk_protocol` over BLE-only (no USB) is not yet supported. \
+     BLE transport is planned for Phase 7."
+);
+
 #[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
 use embassy_usb::class::hid::HidReaderWriter;
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
