@@ -108,20 +108,20 @@ Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rm
 
 **Goal**: Establish the new protocol's code structure alongside Vial.
 
-> **Design decision**: `ProtocolService` implements its own dispatch loop rather than using postcard-rpc's `define_dispatch!` macro + `Server` struct. The reason is that `ProtocolService` is generic over const parameters (`ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER`) and holds `&RefCell<KeyMap<...>>` — `define_dispatch!` requires static, non-generic context types. RMK reuses postcard-rpc's `endpoints!`/`topics!` definitions, wire format, key hashing, `WireTx`/`WireRx` traits, `Sender` struct, `VarHeader` parsing, and serialization — all of which are available with `default-features = false` (no server features needed).
+> **Design decision**: `ProtocolService` implements its own dispatch loop rather than using postcard-rpc's `define_dispatch!` macro + `Server` struct. The reason is that `ProtocolService` is generic over const parameters (`ROW`, `COL`, `NUM_LAYER`, `NUM_ENCODER`) and holds `&RefCell<KeyMap<...>>` — `define_dispatch!` requires static, non-generic context types. RMK reuses postcard-rpc's `endpoints!`/`topics!` definitions, wire format, key hashing, `WireTx`/`WireRx` traits, `Sender` struct, `VarHeader` parsing, and serialization.
 
-### Step 2.1 — Add `rmk_protocol` and `security` features to `rmk/Cargo.toml`
+### Step 2.1 — Add `rmk_protocol` and `host_security` features to `rmk/Cargo.toml`
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Add `postcard-rpc = { version = "0.12", default-features = false, features = ["cobs"], optional = true }` to `rmk/Cargo.toml` `[dependencies]` | [ ] | `cobs` feature enables `CobsAccumulator` for BLE serial RX, no-std |
-| b | Add `security = []` to `[features]` | [ ] | Gates `matrix_state` field on KeyMap and shared `DeviceLock` module |
-| c | Add `rmk_protocol = ["host", "security", "dep:postcard-rpc"]` to `[features]` | [ ] | |
-| d | Update `vial_lock = ["vial", "security"]` (was `["vial"]`) | [ ] | Shares `security` feature with new protocol |
-| e | In `rmk/src/keymap.rs`, change `#[cfg(feature = "vial_lock")]` on `matrix_state` field (and `MatrixState` import) to `#[cfg(feature = "security")]` | [ ] | |
-| f | Ensure `rmk_protocol` and `vial` are mutually exclusive (via `#[cfg]` in code, not at Cargo level) | [ ] | |
-| g | Run `cargo check -p rmk --no-default-features --features=rmk_protocol` to verify feature compiles | [ ] | |
-| h | Run `cargo test -p rmk --no-default-features --features=split,vial,storage,async_matrix,_ble` to verify vial_lock still works | [ ] | |
+| a | Add `postcard-rpc = { version = "0.12", optional = true }` to `rmk/Cargo.toml` `[dependencies]` | [x] | no-std by default, no extra features needed |
+| b | Add `host_security = []` to `[features]` | [x] | Gates `matrix_state` field on KeyMap and shared `DeviceLock` module |
+| c | Add `rmk_protocol = ["host", "host_security", "dep:postcard-rpc"]` to `[features]` | [x] | |
+| d | Update `vial_lock = ["vial", "host_security"]` (was `["vial"]`) | [x] | Shares `host_security` feature with new protocol |
+| e | In `rmk/src/keymap.rs`, `rmk/src/matrix.rs`, `rmk/src/keyboard.rs`, change `#[cfg(feature = "vial_lock")]` on `matrix_state`-related code to `#[cfg(feature = "host_security")]` | [x] | 4 occurrences in keymap.rs (import, field, 2 inits), 3 in matrix.rs (struct, Default impl, main impl), 1 in keyboard.rs (update call) |
+| f | Ensure `rmk_protocol` and `vial` are mutually exclusive (via `#[cfg]` in code, not at Cargo level) | [ ] | Deferred to Step 2.2+ when protocol module is created |
+| g | Run `cargo check -p rmk --no-default-features --features=rmk_protocol` to verify feature compiles | [x] | |
+| h | Run `cargo test -p rmk --no-default-features --features=split,vial,storage,async_matrix,_ble` to verify vial_lock still works | [x] | 411/411 tests pass |
 
 ### Step 2.2 — Create `ProtocolService` struct
 
@@ -283,8 +283,8 @@ Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rm
 |---|--------|--------|-------|
 | a | Read `rmk/src/host/via/vial_lock.rs`, understand existing `VialLock` struct and state machine | [ ] | |
 | b | Create `rmk/src/host/lock.rs`, define protocol-neutral `DeviceLock` struct | [ ] | |
-| c | Migrate `VialLock` core logic (key position generation, matrix state checking, state transitions) into `DeviceLock` | [ ] | Uses `keymap.borrow().matrix_state.read(row, col)` — now available via `security` feature (Step 2.1e) |
-| d | Gate with `#[cfg(feature = "security")]` (usable by both vial_lock and rmk_protocol) | [ ] | |
+| c | Migrate `VialLock` core logic (key position generation, matrix state checking, state transitions) into `DeviceLock` | [ ] | Uses `keymap.borrow().matrix_state.read(row, col)` — now available via `host_security` feature (Step 2.1e) |
+| d | Gate with `#[cfg(feature = "host_security")]` (usable by both vial_lock and rmk_protocol) | [ ] | |
 | e | Refactor `vial_lock.rs` to become a thin wrapper around `DeviceLock`, keeping Vial functionality unchanged | [ ] | |
 | f | Run `cargo test` to confirm Vial functionality is not broken | [ ] | |
 
@@ -387,7 +387,7 @@ Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rm
 |---|--------|--------|-------|
 | a | Implement `GetBatteryStatus` handler: read battery state via `BatteryStatusEvent` (enum: `NotAvailable`, `Normal(u8)`, `Charging`, `Charged`) | [ ] | `#[cfg(feature = "_ble")]` |
 | b | Implement `GetCurrentLayer` handler: get currently active layer from `keymap.borrow()` | [ ] | |
-| c | Implement `GetMatrixState` handler: read `matrix_state` bitmap from `keymap.borrow()`, copy into `MatrixState { pressed_bitmap: heapless::Vec<u8, 30> }`. Use straightforward bit ordering (bit 0 = col 0, not Vial's reversed format). Gate on `#[cfg(feature = "security")]` | [ ] | Reuses existing Vial `MatrixState<ROW, COL>` bitmap tracking, now available via `security` feature |
+| c | Implement `GetMatrixState` handler: read `matrix_state` bitmap from `keymap.borrow()`, copy into `MatrixState { pressed_bitmap: heapless::Vec<u8, 30> }`. Use straightforward bit ordering (bit 0 = col 0, not Vial's reversed format). Gate on `#[cfg(feature = "host_security")]` | [ ] | Reuses existing Vial `MatrixState<ROW, COL>` bitmap tracking, now available via `host_security` feature |
 | d | Implement `GetSplitStatus` handler: return split peripheral connection status | [ ] | `#[cfg(feature = "split")]` |
 | e | Endpoints without matching feature return `WireError::UnknownKey` | [ ] | |
 | f | Test: each status query under matching and non-matching feature configs | [ ] | |
@@ -454,7 +454,7 @@ Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rm
 | b | Implement `embedded_io_async::Read` for `BleTransport`: read data from RX buffer | [ ] | |
 | c | Implement `embedded_io_async::Write` for `BleTransport`: send data via TX characteristic notify | [ ] | |
 | d | Implement postcard-rpc's `WireTx` trait: serialize VarHeader + payload, COBS-encode, write via `Write::write_all()`. For TX COBS encoding, use `postcard::to_slice_cobs` (same pattern as split serial) | [ ] | BLE serial is byte stream — needs COBS (unlike USB bulk) |
-| d2 | Implement postcard-rpc's `WireRx` trait: read bytes via `Read::read()`, feed into postcard-rpc's `CobsAccumulator` (available via `cobs` feature), return decoded frame | [ ] | `CobsAccumulator` handles partial reads and frame boundary detection |
+| d2 | Implement postcard-rpc's `WireRx` trait: read bytes via `Read::read()`, feed into postcard-rpc's `CobsAccumulator`, return decoded frame | [ ] | `CobsAccumulator` handles partial reads and frame boundary detection |
 | e | Handle BLE connect/disconnect events: `read()` returns EOF on disconnect | [ ] | |
 | f | Pass `BleTransport` to `ProtocolService::new()` — ProtocolService works without any modification | [ ] | |
 
@@ -527,7 +527,7 @@ Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rm
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 1 | ICD Types and postcard-rpc Integration | **Complete** |
-| 2 | Feature Gate and ProtocolService Skeleton | Not Started |
+| 2 | Feature Gate and ProtocolService Skeleton | **Step 2.1 Complete** |
 | 3 | USB Raw Bulk Transport | Not Started |
 | 4 | System and Keymap Endpoints | Not Started |
 | 5 | Security (Lock/Unlock) | Not Started |
