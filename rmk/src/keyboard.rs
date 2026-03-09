@@ -226,18 +226,17 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
                         } else {
                             deadline
                         };
-                        match select3(
+                        match select(
                             with_deadline(
                                 earliest,
                                 self.keyboard_event_subscriber.next_message_pure(),
                             ),
                             passkey::PASSKEY_CANCEL.wait(),
-                            core::future::pending::<()>(), // placeholder for symmetry
                         )
                         .await
                         {
-                            Either3::First(Ok(event)) => self.process_inner(event).await,
-                            Either3::First(Err(_)) => {
+                            Either::First(Ok(event)) => self.process_inner(event).await,
+                            Either::First(Err(_)) => {
                                 // A deadline expired — check which one
                                 if Instant::now() >= deadline {
                                     warn!("Passkey entry timed out");
@@ -250,11 +249,10 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
                                     self.fire_mouse_repeat().await;
                                 }
                             }
-                            Either3::Second(()) => {
+                            Either::Second(()) => {
                                 info!("Passkey entry cancelled (disconnect)");
                                 self.passkey_state.cancel();
                             }
-                            Either3::Third(()) => unreachable!(),
                         }
                     } else {
                         match select(
@@ -1615,7 +1613,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             if !event.pressed {
                 if let Some(digit) = passkey::keycode_to_digit(key) {
                     self.passkey_state.push_digit(digit);
-                    self.passkey_state.reset_deadline(crate::PASSKEY_ENTRY_TIMEOUT_SECS);
                 } else if passkey::is_enter(key) {
                     if let Some(passkey_value) = self.passkey_state.submit() {
                         info!("Passkey submitted");
@@ -1628,7 +1625,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     passkey::PASSKEY_RESPONSE.signal(None);
                 } else if passkey::is_backspace(key) {
                     self.passkey_state.pop_digit();
-                    self.passkey_state.reset_deadline(crate::PASSKEY_ENTRY_TIMEOUT_SECS);
                 }
                 // All other keys silently discarded
             }

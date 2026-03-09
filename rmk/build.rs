@@ -69,15 +69,22 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         format!("pub(crate) const BUILD_HASH: u32 = {build_hash:#010x};\n"),
     ];
 
-    // Add passkey entry constants from [ble] config
-    let passkey_entry_enabled = ble.as_ref().and_then(|b| b.passkey_entry).unwrap_or(true);
-    let passkey_entry_timeout_secs = ble
-        .as_ref()
-        .and_then(|b| b.passkey_entry_timeout)
-        .unwrap_or(DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS)
-        .max(MIN_PASSKEY_ENTRY_TIMEOUT_SECS);
-    constant_strs.push(const_declaration!(pub(crate) PASSKEY_ENTRY_ENABLED = passkey_entry_enabled));
-    constant_strs.push(const_declaration!(pub(crate) PASSKEY_ENTRY_TIMEOUT_SECS = passkey_entry_timeout_secs));
+    // Add passkey entry constants from [ble] config, only when the feature is enabled
+    if env::var("CARGO_FEATURE_PASSKEY_ENTRY").is_ok() {
+        let passkey_entry_enabled = ble.as_ref().and_then(|b| b.passkey_entry).unwrap_or(false);
+        let passkey_entry_timeout_secs = ble
+            .as_ref()
+            .and_then(|b| b.passkey_entry_timeout)
+            .unwrap_or(DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS);
+        if passkey_entry_timeout_secs < MIN_PASSKEY_ENTRY_TIMEOUT_SECS {
+            panic!(
+                "passkey_entry_timeout must be at least {} seconds, got {}",
+                MIN_PASSKEY_ENTRY_TIMEOUT_SECS, passkey_entry_timeout_secs
+            );
+        }
+        constant_strs.push(const_declaration!(pub(crate) PASSKEY_ENTRY_ENABLED = passkey_entry_enabled));
+        constant_strs.push(const_declaration!(pub(crate) PASSKEY_ENTRY_TIMEOUT_SECS = passkey_entry_timeout_secs));
+    }
 
     // Add event channel constants
     // Note: default values are loaded from event_default.toml via config crate

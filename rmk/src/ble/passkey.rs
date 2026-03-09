@@ -67,11 +67,6 @@ impl PasskeyState {
         self.deadline
     }
 
-    /// Reset the deadline to `timeout_secs` from now.
-    pub fn reset_deadline(&mut self, timeout_secs: u32) {
-        self.deadline = Instant::now() + Duration::from_secs(timeout_secs as u64);
-    }
-
     /// Push digit. Returns false if buffer full (rejects overflow).
     pub fn push_digit(&mut self, digit: u8) -> bool {
         if (self.count as usize) < PASSKEY_DIGITS {

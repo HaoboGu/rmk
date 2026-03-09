@@ -22,8 +22,8 @@ adc_divider_total = 2806
 default_tx_power = 0
 # Whether to enable 2M PHY, defaults to true.
 use_2m_phy = true
-# Enable or disable passkey entry, defaults to true
-passkey_entry = true
+# Enable or disable passkey entry, defaults to false
+passkey_entry = false
 # Timeout in seconds for passkey entry, defaults to 120
 passkey_entry_timeout = 120
 # [Deprecated] Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
@@ -34,15 +34,16 @@ passkey_entry_timeout = 120
 
 ### Passkey entry
 
-RMK supports typing a BLE passkey directly on the keyboard during pairing. This is enabled by default.
+RMK supports typing a BLE passkey directly on the keyboard during pairing. This is disabled by default.
 
 ```toml
 [ble]
-# Enable or disable passkey entry (default: true)
+# Enable or disable passkey entry (default: false)
 # When disabled, passkey pairing requests from the host are automatically rejected.
 passkey_entry = true
 # Timeout in seconds for passkey entry (default: 120, minimum: 30)
 # If the user does not finish entering the passkey within this time, pairing is cancelled.
+# Setting this below 30 will cause a build error.
 passkey_entry_timeout = 120
 ```
 

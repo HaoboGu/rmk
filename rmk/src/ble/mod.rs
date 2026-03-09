@@ -32,7 +32,7 @@ use {
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
 };
 #[cfg(any(not(feature = "_no_usb"), feature = "passkey_entry"))]
-use embassy_futures::select::{Either};
+use embassy_futures::select::Either;
 
 use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};

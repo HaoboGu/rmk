@@ -54,7 +54,7 @@ If you've connected a host to a profile, other devices will not be able to conne
 
 When pairing with a new host device over BLE, the host may request a passkey for secure pairing.
 
-This feature is enabled by default. When the host requests a passkey during pairing, the keyboard enters passkey mode:
+This feature is disabled by default and must be explicitly enabled in `keyboard.toml`. When the host requests a passkey during pairing, the keyboard enters passkey mode:
 
 1. The host displays a 6-digit code on screen.
 2. The keyboard intercepts all keypresses - no input is sent to the host while passkey mode is active.
@@ -63,7 +63,7 @@ This feature is enabled by default. When the host requests a passkey during pair
 5. Press **Escape** to cancel pairing.
 6. Press **Backspace** to delete the last entered digit.
 
-If the passkey is not entered within the timeout period (default: 120 seconds), passkey mode is automatically cancelled. The timeout resets with each digit or backspace keypress, so it only expires after a period of inactivity.
+If the passkey is not entered within the timeout period (default: 120 seconds), passkey mode is automatically cancelled.
 
 ### Requirements
 
