@@ -23,6 +23,10 @@ dcdc_reg0_voltage = "3V3"  # Options: "3V3" or "1V8"
 ::: danger Hardware Requirement
 Do not enable DC/DC regulators without an external LC filter being connected, as this will inhibit device operation, including debug access, until an LC filter is connected.
 :::
+::: danger Bootloader Version
+If your hardware is using the [Adafruit nRF52 Bootloader](https://github.com/adafruit/Adafruit_nRF52_Bootloader) (e.g. nice!nano) ensure that your bootloader is updated to version ≥ [0.10.0](https://github.com/adafruit/Adafruit_nRF52_Bootloader/releases/tag/0.10.0) when setting a voltage other than 3V3.
+There is a bug in older versions that can lead to a boot loop which can only be fixed by re-flashing the bootloader via the debug interface.
+:::
 
 ## nRF52833
 
