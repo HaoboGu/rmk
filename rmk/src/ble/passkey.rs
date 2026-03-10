@@ -82,6 +82,16 @@ impl PasskeyEntryState {
         self.active = false;
     }
 
+    fn check_mode_transition(&mut self) {
+        use core::sync::atomic::Ordering;
+        let passkey_active = crate::ble::passkey::PASSKEY_ENTRY_MODE.load(Ordering::Acquire);
+        if passkey_active && !self.is_active() {
+            self.activate();
+        } else if !passkey_active && self.is_active() {
+            self.deactivate();
+        }
+    }
+
     /// Reset the state for a new passkey entry session.
     pub fn reset(&mut self) {
         self.digits = [0; PASSKEY_LENGTH];

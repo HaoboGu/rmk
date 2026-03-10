@@ -390,7 +390,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     pub async fn process_inner(&mut self, event: KeyboardEvent) {
         // Check for mode transitions (e.g., entering/exiting passkey entry)
         #[cfg(feature = "passkey_entry")]
-        self.check_mode_transition();
+        self.passkey_entry_state.check_mode_transition();
 
         #[cfg(feature = "vial_lock")]
         self.keymap.borrow_mut().matrix_state.update(&event);
@@ -412,18 +412,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         } else {
             self.process_key_action(key_action, event, false).await
-        }
-    }
-
-    /// Check if the keyboard mode should transition between normal and passkey entry.
-    #[cfg(feature = "passkey_entry")]
-    fn check_mode_transition(&mut self) {
-        use core::sync::atomic::Ordering;
-        let passkey_active = crate::ble::passkey::PASSKEY_ENTRY_MODE.load(Ordering::Acquire);
-        if passkey_active && !self.passkey_entry_state.is_active() {
-            self.passkey_entry_state.activate();
-        } else if !passkey_active && self.passkey_entry_state.is_active() {
-            self.passkey_entry_state.deactivate();
         }
     }
 
