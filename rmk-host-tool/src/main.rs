@@ -5,9 +5,9 @@ use postcard_rpc::header::VarSeqKind;
 use postcard_rpc::host_client::{HostClient, HostErr};
 use postcard_rpc::standard_icd::{ERROR_PATH, WireError};
 use rmk_types::protocol::rmk::{
-    BulkRequest, GetCapabilities, GetDefaultLayer, GetKeyAction, GetKeymapBulk, GetLayerCount,
-    GetLockStatus, GetVersion, KeyPosition, Reboot, ResetKeymap, SetDefaultLayer, SetKeyAction,
-    SetKeyRequest, StorageReset, StorageResetMode,
+    BulkRequest, GetCapabilities, GetDefaultLayer, GetKeyAction, GetKeymapBulk, GetLockStatus,
+    GetVersion, KeyPosition, Reboot, ResetKeymap, SetDefaultLayer, SetKeyAction, SetKeyRequest,
+    StorageReset, StorageResetMode,
 };
 use rmk_types::action::{Action, KeyAction};
 use rmk_types::keycode::{HidKeyCode, KeyCode};
@@ -127,13 +127,30 @@ struct SetDefaultLayerArgs {
     layer: u8,
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum StorageResetModeArg {
+    /// Erase everything.
+    Full,
+    /// Erase only layout data.
+    Layout,
+}
+
+impl From<StorageResetModeArg> for StorageResetMode {
+    fn from(value: StorageResetModeArg) -> Self {
+        match value {
+            StorageResetModeArg::Full => StorageResetMode::Full,
+            StorageResetModeArg::Layout => StorageResetMode::LayoutOnly,
+        }
+    }
+}
+
 #[derive(Args, Debug, Clone)]
 struct StorageResetArgs {
     #[command(flatten)]
     connect: ConnectArgs,
-    /// Reset mode: "full" erases everything, "layout" erases only layout data.
+    /// Reset mode.
     #[arg(long, default_value = "full")]
-    mode: String,
+    mode: StorageResetModeArg,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -304,11 +321,8 @@ async fn set_key(args: SetKeyArgs) -> Result<()> {
         .await
         .context("SetKeyAction request failed")?;
     match result {
-        Ok(()) => println!(
-            "key[{},{},{}] set to {:?}",
-            args.layer, args.row, args.col, action
-        ),
-        Err(e) => println!("SetKeyAction error: {:?}", e),
+        Ok(()) => println!("key[{},{},{}] set to {:?}", args.layer, args.row, args.col, action),
+        Err(e) => bail!("SetKeyAction error: {:?}", e),
     }
     Ok(())
 }
@@ -321,17 +335,12 @@ async fn dump_keymap(args: ConnectArgs) -> Result<()> {
         .await
         .context("GetCapabilities request failed")?;
 
-    let num_layers = client
-        .send_resp::<GetLayerCount>(&())
-        .await
-        .context("GetLayerCount request failed")?;
-
     println!(
         "Keymap: {} layers x {} rows x {} cols",
-        num_layers, caps.num_rows, caps.num_cols
+        caps.num_layers, caps.num_rows, caps.num_cols
     );
 
-    for layer in 0..num_layers {
+    for layer in 0..caps.num_layers {
         println!("\n=== Layer {} ===", layer);
         let mut row: u8 = 0;
         let mut col: u8 = 0;
@@ -405,7 +414,7 @@ async fn set_default_layer(args: SetDefaultLayerArgs) -> Result<()> {
         .context("SetDefaultLayer request failed")?;
     match result {
         Ok(()) => println!("default_layer set to {}", args.layer),
-        Err(e) => println!("SetDefaultLayer error: {:?}", e),
+        Err(e) => bail!("SetDefaultLayer error: {:?}", e),
     }
     Ok(())
 }
@@ -435,11 +444,7 @@ async fn reset_keymap(args: ConnectArgs) -> Result<()> {
 
 async fn storage_reset(args: StorageResetArgs) -> Result<()> {
     let client = connect(&args.connect)?;
-    let mode = match args.mode.as_str() {
-        "full" => StorageResetMode::Full,
-        "layout" => StorageResetMode::LayoutOnly,
-        other => bail!("Unknown reset mode: {other}. Use 'full' or 'layout'."),
-    };
+    let mode = StorageResetMode::from(args.mode);
     match client.send_resp::<StorageReset>(&mode).await {
         Ok(()) => println!("StorageReset({:?}) sent, device is rebooting...", mode),
         Err(HostErr::Closed) => println!("StorageReset command sent (device disconnected as expected)"),

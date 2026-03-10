@@ -2,6 +2,7 @@
 pub(crate) mod protocol;
 #[cfg(feature = "storage")]
 pub(crate) mod storage;
+#[cfg(feature = "vial")]
 pub mod via;
 
 use core::cell::RefCell;
@@ -37,7 +38,7 @@ pub(crate) trait HostService {
     async fn run(&mut self);
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial", not(feature = "rmk_protocol")))]
 pub(crate) struct UsbHostTransport<'d, D>
 where
     D: Driver<'d>,
@@ -45,28 +46,29 @@ where
     reader_writer: HidReaderWriter<'d, D, 32, 32>,
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
-impl<'d, D> UsbHostTransport<'d, D>
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial", not(feature = "rmk_protocol")))]
+impl<D> UsbHostTransport<'static, D>
 where
-    D: Driver<'d>,
+    D: Driver<'static>,
 {
-    pub(crate) fn new(builder: &mut Builder<'d, D>) -> Self {
+    pub(crate) fn new(builder: &mut Builder<'static, D>) -> Self {
         Self {
             reader_writer: crate::usb::add_usb_reader_writer!(builder, ViaReport, 32, 32),
         }
     }
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol", not(feature = "vial")))]
 pub(crate) struct UsbHostTransport<'d, D>
 where
     D: Driver<'d>,
 {
     tx_state: Mutex<crate::RawMutex, protocol::transport::UsbBulkTxState<'d, D>>,
+    tx_connected: embassy_sync::signal::Signal<crate::RawMutex, ()>,
     rx: D::EndpointOut,
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol", not(feature = "vial")))]
 impl<'d, D> UsbHostTransport<'d, D>
 where
     D: Driver<'d>,
@@ -75,19 +77,20 @@ where
         let (ep_in, rx) = protocol::transport::add_usb_bulk_interface(builder);
         Self {
             tx_state: Mutex::new(protocol::transport::UsbBulkTxState::<'d, D>::new(ep_in)),
+            tx_connected: embassy_sync::signal::Signal::new(),
             rx,
         }
     }
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial", not(feature = "rmk_protocol")))]
 pub(crate) struct UsbHostService<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
     via::VialService<'a, via::UsbVialReaderWriter<'s, 'd, D>, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 )
 where
     D: Driver<'d>;
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial", not(feature = "rmk_protocol")))]
 impl<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     UsbHostService<'s, 'a, 'd, D, ROW, COL, NUM_LAYER, NUM_ENCODER>
 where
@@ -106,7 +109,7 @@ where
     }
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial", not(feature = "rmk_protocol")))]
 impl<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> HostService
     for UsbHostService<'s, 'a, 'd, D, ROW, COL, NUM_LAYER, NUM_ENCODER>
 where
@@ -117,7 +120,7 @@ where
     }
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol", not(feature = "vial")))]
 pub(crate) struct UsbHostService<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
     protocol::ProtocolService<
         'a,
@@ -132,7 +135,7 @@ pub(crate) struct UsbHostService<'s, 'a, 'd, D, const ROW: usize, const COL: usi
 where
     D: Driver<'d>;
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol", not(feature = "vial")))]
 impl<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     UsbHostService<'s, 'a, 'd, D, ROW, COL, NUM_LAYER, NUM_ENCODER>
 where
@@ -147,13 +150,13 @@ where
         let _ = rmk_config;
         Self(protocol::ProtocolService::new(
             keymap,
-            protocol::transport::UsbBulkTx::new(&transport.tx_state),
-            protocol::transport::UsbBulkRx::<'_, 'd, D>::new(&mut transport.rx),
+            protocol::transport::UsbBulkTx::new(&transport.tx_state, &transport.tx_connected),
+            protocol::transport::UsbBulkRx::<'_, 'd, D>::new(&mut transport.rx, &transport.tx_connected),
         ))
     }
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol", not(feature = "vial")))]
 impl<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> HostService
     for UsbHostService<'s, 'a, 'd, D, ROW, COL, NUM_LAYER, NUM_ENCODER>
 where

@@ -56,7 +56,9 @@ use crate::{CONNECTION_STATE, run_keyboard};
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;
-#[cfg(feature = "vial")]
+// Currently only contains VIA-over-BLE implementation.
+// Phase 7 will add rmk_protocol BLE transport here.
+#[cfg(feature = "host")]
 pub(crate) mod host_service;
 pub(crate) mod led;
 pub(crate) mod profile;
@@ -64,7 +66,8 @@ pub(crate) mod profile;
 pub use rmk_types::ble::{BleState, BleStatus};
 
 /// Global BLE status: tracks the active profile and current BLE state.
-pub static BLE_STATUS: Mutex<crate::RawMutex, Cell<BleStatus>> = Mutex::new(Cell::new(BleStatus {
+/// Access externally through events, not this static directly.
+pub(crate) static BLE_STATUS: Mutex<crate::RawMutex, Cell<BleStatus>> = Mutex::new(Cell::new(BleStatus {
     profile: 0,
     state: BleState::Inactive,
 }));
@@ -335,7 +338,8 @@ pub(crate) async fn run_ble<
                             _ => {}
                         }
                     }
-                    ConnectionType::Ble => {
+                    // BLE priority mode (also handles unknown future variants as BLE)
+                    _ => {
                         info!("BLE priority mode, running USB keyboard while advertising");
                         #[cfg(feature = "host")]
                         let mut host_service = UsbHostService::new(keymap, &mut host_transport, &rmk_config);
@@ -580,7 +584,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 if event.data().len() == 32 {
                                     use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;
 
-                                    let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
+                                    let data: [u8; 32] = event.data().try_into().unwrap();
                                     HOST_GUI_INPUT_CHANNEL.send(data).await;
                                 } else {
                                     warn!("Wrong host packet data: {:?}", event.data());

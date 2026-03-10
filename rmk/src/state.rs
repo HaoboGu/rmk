@@ -16,7 +16,7 @@ pub enum ConnectionState {
 }
 
 impl ConnectionState {
-    pub(crate) fn from(state: &AtomicBool) -> Self {
+    pub(crate) fn from_atomic(state: &AtomicBool) -> Self {
         if state.load(Ordering::Acquire) {
             Self::Connected
         } else {

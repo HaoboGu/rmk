@@ -208,7 +208,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             SplitMessage::Key(e) => match e.pos {
                 KeyboardEventPos::Key(key_pos) => {
                     // Verify the row/col
-                    if key_pos.row as usize > ROW || key_pos.col as usize > COL {
+                    if key_pos.row as usize >= ROW || key_pos.col as usize >= COL {
                         error!("Invalid peripheral row/col: {} {}", key_pos.row, key_pos.col);
                         return;
                     }

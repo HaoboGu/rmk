@@ -53,6 +53,7 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) COMBO_MAX_NUM = constants.combo_max_num),
         const_declaration!(pub(crate) COMBO_MAX_LENGTH = constants.combo_max_length),
         const_declaration!(pub(crate) MACRO_SPACE_SIZE = constants.macro_space_size),
+        const_declaration!(pub(crate) MACRO_MAX_NUM = constants.macro_max_num),
         const_declaration!(pub(crate) FORK_MAX_NUM = constants.fork_max_num),
         const_declaration!(pub(crate) DEBOUNCE_THRESHOLD = constants.debounce_time),
         const_declaration!(pub(crate) REPORT_CHANNEL_SIZE = constants.report_channel_size),

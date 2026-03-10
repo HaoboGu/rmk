@@ -2,6 +2,7 @@ use core::fmt::{Arguments, Write};
 
 use embassy_futures::select::{Either, select};
 use embassy_sync::mutex::Mutex;
+use embassy_sync::signal::Signal;
 use embassy_time::Timer;
 use embassy_usb::driver::{Driver, Endpoint, EndpointError, EndpointIn, EndpointOut};
 use embassy_usb::{Builder, msos};
@@ -15,13 +16,19 @@ use crate::RawMutex;
 
 pub(crate) const USB_BULK_PACKET_SIZE: usize = 64;
 pub(crate) const TX_BUF_SIZE: usize = 512;
-const TX_TIMEOUT_MS_PER_FRAME: usize = 10;
+// Per-packet timeout acts as a watchdog, not a hard deadline.
+// 50ms per packet gives ~400ms for a full 512-byte frame, which is generous
+// enough to accommodate scheduling jitter on resource-constrained MCUs.
+const TX_TIMEOUT_MS_PER_PACKET: usize = 50;
 const RMK_WINUSB_GUIDS: &[&str] = &["{533E7A32-4C6B-49F8-8C5B-60D2D784F2C6}"];
 
 pub(crate) struct UsbBulkTxState<'d, D: Driver<'d>> {
     ep_in: D::EndpointIn,
     log_seq: u16,
     tx_buf: [u8; TX_BUF_SIZE],
+    /// True when a previous send was interrupted mid-frame (e.g. by timeout).
+    /// The next send must emit a ZLP first to cleanly terminate the aborted
+    /// transfer so the host can detect the frame boundary.
     pending_frame: bool,
 }
 
@@ -38,11 +45,12 @@ impl<'d, D: Driver<'d>> UsbBulkTxState<'d, D> {
 
 pub(crate) struct UsbBulkTx<'a, 'd, D: Driver<'d>> {
     inner: &'a Mutex<RawMutex, UsbBulkTxState<'d, D>>,
+    connected: &'a Signal<RawMutex, ()>,
 }
 
 impl<'a, 'd, D: Driver<'d>> UsbBulkTx<'a, 'd, D> {
-    pub(crate) fn new(inner: &'a Mutex<RawMutex, UsbBulkTxState<'d, D>>) -> Self {
-        Self { inner }
+    pub(crate) fn new(inner: &'a Mutex<RawMutex, UsbBulkTxState<'d, D>>, connected: &'a Signal<RawMutex, ()>) -> Self {
+        Self { inner, connected }
     }
 }
 
@@ -56,29 +64,33 @@ impl<'d, D: Driver<'d>> Copy for UsbBulkTx<'_, 'd, D> {}
 
 pub(crate) struct UsbBulkRx<'a, 'd, D: Driver<'d>> {
     ep_out: &'a mut D::EndpointOut,
+    tx_connected: &'a Signal<RawMutex, ()>,
 }
 
 impl<'a, 'd, D: Driver<'d>> UsbBulkRx<'a, 'd, D> {
-    pub(crate) fn new(ep_out: &'a mut D::EndpointOut) -> Self {
-        Self { ep_out }
+    pub(crate) fn new(ep_out: &'a mut D::EndpointOut, tx_connected: &'a Signal<RawMutex, ()>) -> Self {
+        Self { ep_out, tx_connected }
     }
 }
 
 pub(crate) fn add_usb_bulk_interface<'d, D: Driver<'d>>(builder: &mut Builder<'d, D>) -> (D::EndpointIn, D::EndpointOut) {
-    builder.msos_descriptor(msos::windows_version::WIN8_1, 0);
+    // Vendor code 1 (non-zero to avoid conflicts with standard USB requests on older Windows)
+    builder.msos_descriptor(msos::windows_version::WIN8_1, 1);
 
-    let mut function = builder.function(0xFF, 0, 0);
-    function.msos_feature(msos::CompatibleIdFeatureDescriptor::new("WINUSB", ""));
-    function.msos_feature(msos::RegistryPropertyFeatureDescriptor::new(
-        "DeviceInterfaceGUIDs",
-        msos::PropertyData::RegMultiSz(RMK_WINUSB_GUIDS),
-    ));
+    let (ep_in, ep_out) = {
+        let mut function = builder.function(0xFF, 0, 0);
+        function.msos_feature(msos::CompatibleIdFeatureDescriptor::new("WINUSB", ""));
+        function.msos_feature(msos::RegistryPropertyFeatureDescriptor::new(
+            "DeviceInterfaceGUIDs",
+            msos::PropertyData::RegMultiSz(RMK_WINUSB_GUIDS),
+        ));
 
-    let mut interface = function.interface();
-    let mut alt = interface.alt_setting(0xFF, 0, 0, None);
-    let ep_out = alt.endpoint_bulk_out(None, USB_BULK_PACKET_SIZE as u16);
-    let ep_in = alt.endpoint_bulk_in(None, USB_BULK_PACKET_SIZE as u16);
-    drop(function);
+        let mut interface = function.interface();
+        let mut alt = interface.alt_setting(0xFF, 0, 0, None);
+        let ep_out = alt.endpoint_bulk_out(None, USB_BULK_PACKET_SIZE as u16);
+        let ep_in = alt.endpoint_bulk_in(None, USB_BULK_PACKET_SIZE as u16);
+        (ep_in, ep_out)
+    };
 
     (ep_in, ep_out)
 }
@@ -87,7 +99,11 @@ impl<'d, D: Driver<'d>> WireRx for UsbBulkRx<'_, 'd, D> {
     type Error = WireRxErrorKind;
 
     async fn wait_connection(&mut self) {
+        // Clear any stale signal from a previous connection cycle
+        self.tx_connected.reset();
         self.ep_out.wait_enabled().await;
+        // Signal the TX side that the connection is ready
+        self.tx_connected.signal(());
     }
 
     async fn receive<'a>(&mut self, buf: &'a mut [u8]) -> Result<&'a mut [u8], Self::Error> {
@@ -110,11 +126,25 @@ impl<'d, D: Driver<'d>> WireRx for UsbBulkRx<'_, 'd, D> {
             }
         }
 
-        // Buffer full — drain remaining packets without overwriting received data
+        // Buffer full — drain remaining packets without overwriting received data.
+        // If the next read returns a ZLP (0 bytes) or a short packet, the transfer
+        // is complete. The frame is valid ONLY if no extra full packets were drained
+        // (i.e., the frame was exactly buffer-sized and terminated by a ZLP).
         let mut drain = [0u8; USB_BULK_PACKET_SIZE];
+        let mut drained_excess = false;
         loop {
             match self.ep_out.read(&mut drain).await {
-                Ok(n) if n == USB_BULK_PACKET_SIZE => {}
+                Ok(0) => {
+                    // ZLP terminates the transfer. If we drained extra full
+                    // packets before this ZLP, the frame exceeded the buffer.
+                    if drained_excess {
+                        return Err(WireRxErrorKind::ReceivedMessageTooLarge);
+                    }
+                    return Ok(buf);
+                }
+                Ok(n) if n == USB_BULK_PACKET_SIZE => {
+                    drained_excess = true; // extra full packet beyond buffer
+                }
                 Ok(_) => return Err(WireRxErrorKind::ReceivedMessageTooLarge),
                 Err(EndpointError::BufferOverflow) => return Err(WireRxErrorKind::ReceivedMessageTooLarge),
                 Err(EndpointError::Disabled) => return Err(WireRxErrorKind::ConnectionClosed),
@@ -127,27 +157,45 @@ impl<'d, D: Driver<'d>> WireTx for UsbBulkTx<'_, 'd, D> {
     type Error = WireTxErrorKind;
 
     async fn wait_connection(&self) {
-        // NOTE: This holds the mutex for the duration of `wait_enabled()`.
-        // This is safe because `wait_connection` is only called before the
-        // dispatch loop starts (no concurrent senders). If topic publishers
-        // are added later, this must be revisited (e.g., use a separate Signal).
+        // Wait for the connection signal from the RX side without holding the
+        // TX mutex. The signal is set by UsbBulkRx::wait_connection after
+        // ep_out becomes enabled, so topic publishers won't deadlock.
+        self.connected.wait().await;
+
+        // After reconnection, lock the mutex to reset endpoint state.
+        // ep_in.wait_enabled() ensures the hardware endpoint is ready
+        // (it returns immediately if already enabled — the signal guarantees
+        // USB is up). Clearing pending_frame prevents a stale ZLP.
         let mut inner = self.inner.lock().await;
         inner.ep_in.wait_enabled().await;
+        inner.pending_frame = false;
     }
 
     async fn send<T: Serialize + ?Sized>(&self, hdr: VarHeader, msg: &T) -> Result<(), Self::Error> {
         let mut inner = self.inner.lock().await;
-        let (hdr_used, remain) = hdr.write_to_slice(&mut inner.tx_buf).ok_or(WireTxErrorKind::Other)?;
-        let bdy_used = postcard::to_slice(msg, remain).map_err(|_| WireTxErrorKind::Other)?;
+        let (hdr_used, remain) = match hdr.write_to_slice(&mut inner.tx_buf) {
+            Some(v) => v,
+            None => {
+                warn!("TX header serialization failed (buffer too small)");
+                return Err(WireTxErrorKind::Other);
+            }
+        };
+        let bdy_used = match postcard::to_slice(msg, remain) {
+            Ok(v) => v,
+            Err(_) => {
+                warn!("TX body serialization failed (buffer too small)");
+                return Err(WireTxErrorKind::Other);
+            }
+        };
         let used = hdr_used.len() + bdy_used.len();
         let state = &mut *inner;
-        send_buf(&mut state.ep_in, &mut state.pending_frame, &state.tx_buf[..used]).await
+        send_buf(&mut state.ep_in, &state.tx_buf[..used], &mut state.pending_frame).await
     }
 
     async fn send_raw(&self, buf: &[u8]) -> Result<(), Self::Error> {
         let mut inner = self.inner.lock().await;
         let state = &mut *inner;
-        send_buf(&mut state.ep_in, &mut state.pending_frame, buf).await
+        send_buf(&mut state.ep_in, buf, &mut state.pending_frame).await
     }
 
     async fn send_log_str(&self, kkind: VarKeyKind, s: &str) -> Result<(), Self::Error> {
@@ -163,7 +211,7 @@ impl<'d, D: Driver<'d>> WireTx for UsbBulkTx<'_, 'd, D> {
         let bdy_used = postcard::to_slice::<str>(s, remain).map_err(|_| WireTxErrorKind::Other)?;
         let used = hdr_used.len() + bdy_used.len();
         let state = &mut *inner;
-        send_buf(&mut state.ep_in, &mut state.pending_frame, &state.tx_buf[..used]).await
+        send_buf(&mut state.ep_in, &state.tx_buf[..used], &mut state.pending_frame).await
     }
 
     async fn send_log_fmt<'a>(&self, kkind: VarKeyKind, args: Arguments<'a>) -> Result<(), Self::Error> {
@@ -184,8 +232,31 @@ impl<'d, D: Driver<'d>> WireTx for UsbBulkTx<'_, 'd, D> {
             return Err(WireTxErrorKind::Other);
         }
         let mut writer = SliceWriter::new(&mut remain[MAX_VARINT..]);
-        writer.write_fmt(args).map_err(|_| WireTxErrorKind::Other)?;
-        let body_len = writer.len();
+        let overflow = writer.write_fmt(args).is_err();
+        let mut body_len = writer.len();
+
+        // If the message was truncated, append "..." to indicate truncation.
+        // We must not split a multi-byte UTF-8 character — scan backwards from
+        // body_len-3 to find a char boundary (a byte that is NOT a continuation
+        // byte, i.e. not matching 10xxxxxx / 0x80..=0xBF).
+        if overflow && body_len >= 3 {
+            let body = &remain[MAX_VARINT..MAX_VARINT + body_len];
+            let mut trunc = body_len - 3;
+            while trunc > 0 && (body[trunc] & 0xC0) == 0x80 {
+                trunc -= 1;
+            }
+            // If trunc landed on 0 and byte 0 is still a continuation byte
+            // (indicating the buffer starts mid-character — shouldn't happen
+            // with valid UTF-8 but handle defensively), just emit "...".
+            if trunc == 0 && !body.is_empty() && (body[0] & 0xC0) == 0x80 {
+                // No valid char boundary found; replace entire body with "..."
+                remain[MAX_VARINT..MAX_VARINT + 3].copy_from_slice(b"...");
+                body_len = 3;
+            } else {
+                remain[MAX_VARINT + trunc..MAX_VARINT + trunc + 3].copy_from_slice(b"...");
+                body_len = trunc + 3;
+            }
+        }
 
         // Encode the varint length prefix (LEB128).
         let varint_len = encode_varint_usize(body_len, &mut remain[..MAX_VARINT]);
@@ -198,18 +269,20 @@ impl<'d, D: Driver<'d>> WireTx for UsbBulkTx<'_, 'd, D> {
 
         let used = hdr_used.len() + varint_len + body_len;
         let state = &mut *inner;
-        send_buf(&mut state.ep_in, &mut state.pending_frame, &state.tx_buf[..used]).await
+        send_buf(&mut state.ep_in, &state.tx_buf[..used], &mut state.pending_frame).await
     }
 }
 
 /// Encode a usize as a postcard varint (LEB128) into the buffer.
 /// Returns the number of bytes written.
+///
+/// Safety assumption: the caller always passes a 5-byte buffer (`MAX_VARINT`),
+/// which is sufficient for any value up to ~268 MB. The `body_len` values
+/// encoded here are bounded by `TX_BUF_SIZE` (512), so overflow is impossible.
 fn encode_varint_usize(mut value: usize, buf: &mut [u8]) -> usize {
     let mut i = 0;
     loop {
-        if i >= buf.len() {
-            return i;
-        }
+        debug_assert!(i < buf.len(), "varint buffer overflow: value needs more than {} bytes", buf.len());
         if value < 0x80 {
             buf[i] = value as u8;
             return i + 1;
@@ -231,22 +304,29 @@ fn logging_key(kkind: VarKeyKind) -> VarKey {
 
 async fn send_buf(
     ep_in: &mut impl EndpointIn,
-    pending_frame: &mut bool,
     out: &[u8],
+    pending_frame: &mut bool,
 ) -> Result<(), WireTxErrorKind> {
+    // If a previous send was interrupted mid-frame, send a ZLP to cleanly
+    // terminate it so the host can detect the frame boundary.
+    if *pending_frame {
+        if ep_in.write(&[]).await.is_err() {
+            return Err(WireTxErrorKind::ConnectionClosed);
+        }
+        *pending_frame = false;
+    }
+
     if out.is_empty() {
         return Ok(());
     }
 
+    *pending_frame = true;
+
     let frames = out.len().div_ceil(USB_BULK_PACKET_SIZE);
-    let timeout_ms = frames * TX_TIMEOUT_MS_PER_FRAME;
+    // Minimum 100ms timeout to account for scheduling jitter + possible ZLP
+    let timeout_ms = (frames * TX_TIMEOUT_MS_PER_PACKET).max(100);
 
     let send_fut = async {
-        if *pending_frame && ep_in.write(&[]).await.is_err() {
-            return Err(WireTxErrorKind::ConnectionClosed);
-        }
-        *pending_frame = true;
-
         for chunk in out.chunks(USB_BULK_PACKET_SIZE) {
             if ep_in.write(chunk).await.is_err() {
                 return Err(WireTxErrorKind::ConnectionClosed);
@@ -257,17 +337,28 @@ async fn send_buf(
             return Err(WireTxErrorKind::ConnectionClosed);
         }
 
-        *pending_frame = false;
         Ok(())
     };
 
     match select(send_fut, Timer::after_millis(timeout_ms as u64)).await {
-        Either::First(res) => res,
+        Either::First(Ok(())) => {
+            *pending_frame = false;
+            Ok(())
+        }
+        Either::First(Err(e)) => Err(e),
         Either::Second(()) => {
-            // Keep pending_frame=true: partial data may have been written to the
-            // endpoint, so the next send_buf call will emit a ZLP first to
-            // cleanly terminate the aborted transfer before starting a new frame.
-            Err(WireTxErrorKind::Timeout)
+            // CANCEL-SAFETY: Embassy-usb endpoint write futures are NOT
+            // cancel-safe. Dropping mid-write can leave the hardware endpoint
+            // in an undefined state. We set pending_frame=true so the next
+            // send (or wait_connection after the dispatch loop breaks) will
+            // emit a ZLP to cleanly terminate the aborted transfer.
+            //
+            // Recovery path: returning ConnectionClosed breaks the dispatch
+            // loop → run() re-enters wait_connection() → ep_in.wait_enabled()
+            // waits for a USB bus reset → pending_frame is cleared. The bus
+            // reset also resets the hardware endpoint, which is the only
+            // reliable way to recover from a cancelled write.
+            Err(WireTxErrorKind::ConnectionClosed)
         }
     }
 }
@@ -289,12 +380,20 @@ impl<'a> SliceWriter<'a> {
 
 impl Write for SliceWriter<'_> {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        let end = self.used.checked_add(s.len()).ok_or(core::fmt::Error)?;
-        if end > self.buf.len() {
-            return Err(core::fmt::Error);
+        let remaining = self.buf.len() - self.used;
+        let mut to_write = s.len().min(remaining);
+        // Don't split a multi-byte UTF-8 character at the buffer boundary.
+        while to_write > 0 && !s.is_char_boundary(to_write) {
+            to_write -= 1;
         }
-        self.buf[self.used..end].copy_from_slice(s.as_bytes());
-        self.used = end;
-        Ok(())
+        if to_write > 0 {
+            self.buf[self.used..self.used + to_write].copy_from_slice(&s.as_bytes()[..to_write]);
+            self.used += to_write;
+        }
+        if to_write < s.len() {
+            Err(core::fmt::Error)
+        } else {
+            Ok(())
+        }
     }
 }

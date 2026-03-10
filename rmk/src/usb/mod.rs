@@ -128,8 +128,15 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     const USB_BUF_SIZE: usize = 256;
     #[cfg(not(feature = "usb_log"))]
     const USB_BUF_SIZE: usize = 128;
+    // rmk_protocol adds WinUSB MS OS descriptors which need larger buffers
+    #[cfg(feature = "rmk_protocol")]
     const BOS_DESC_BUF_SIZE: usize = 64;
+    #[cfg(not(feature = "rmk_protocol"))]
+    const BOS_DESC_BUF_SIZE: usize = 16;
+    #[cfg(feature = "rmk_protocol")]
     const MSOS_DESC_BUF_SIZE: usize = 256;
+    #[cfg(not(feature = "rmk_protocol"))]
+    const MSOS_DESC_BUF_SIZE: usize = 16;
 
     // Create embassy-usb DeviceBuilder using the driver and config.
     static CONFIG_DESC: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
@@ -147,8 +154,8 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
         &mut CONTROL_BUF.init([0; USB_BUF_SIZE])[..],
     );
 
-    static device_handler: StaticCell<UsbDeviceHandler> = StaticCell::new();
-    builder.handler(device_handler.init(UsbDeviceHandler::new()));
+    static DEVICE_HANDLER: StaticCell<UsbDeviceHandler> = StaticCell::new();
+    builder.handler(DEVICE_HANDLER.init(UsbDeviceHandler::new()));
 
     builder
 }

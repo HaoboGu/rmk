@@ -150,6 +150,7 @@ defmt = [
     "trouble-host?/defmt",
     "bt-hci?/defmt",
     "heapless/defmt",
+    "postcard-rpc?/defmt",
 ]
 
 ## Enable logging via usb

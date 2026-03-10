@@ -1,6 +1,6 @@
 use core::cell::RefCell;
 
-use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use byteorder::{BigEndian, ByteOrder};
 use embassy_time::{Instant, Timer};
 use embassy_usb::class::hid::HidReaderWriter;
 use embassy_usb::driver::Driver;
@@ -40,7 +40,7 @@ pub(crate) struct VialService<
     // Vial config
     vial_config: VialConfig<'static>,
 
-    // Vail lock instance
+    // Vial lock instance
     #[cfg(feature = "vial_lock")]
     locker: vial_lock::VialLock<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 
@@ -78,7 +78,7 @@ impl<
             match self.process().await {
                 Ok(_) => continue,
                 Err(e) => {
-                    if ConnectionState::Disconnected == ConnectionState::from(&CONNECTION_STATE) {
+                    if ConnectionState::Disconnected == ConnectionState::from_atomic(&CONNECTION_STATE) {
                         Timer::after_millis(1000).await;
                     } else {
                         error!("Process vial error: {:?}", e);
@@ -129,17 +129,14 @@ impl<
                         }
                         ViaKeyboardInfo::SwitchMatrixState => {
                             #[cfg(feature = "vial_lock")]
-                            {
-                                #[cfg(not(feature = "vial_lock"))]
-                                {
-                                    self.keymap.borrow().matrix_state.read_all(&mut report.input_data[2..]);
-                                    error!("It is not secure to use matrix tester without vial lock");
-                                }
+                            if self.locker.is_unlocked() {
+                                self.keymap.borrow().matrix_state.read_all(&mut report.input_data[2..]);
+                            }
 
-                                #[cfg(feature = "vial_lock")]
-                                if self.locker.is_unlocked() {
-                                    self.keymap.borrow().matrix_state.read_all(&mut report.input_data[2..]);
-                                }
+                            #[cfg(all(feature = "host_security", not(feature = "vial_lock")))]
+                            {
+                                self.keymap.borrow().matrix_state.read_all(&mut report.input_data[2..]);
+                                error!("It is not secure to use matrix tester without vial lock");
                             }
                         }
                         ViaKeyboardInfo::FirmwareVersion => {
@@ -167,7 +164,7 @@ impl<
                         }
                         _ => (),
                     },
-                    Err(e) => error!("Invalid subcommand: {} of GetKeyboardValue", e),
+                    Err(e) => error!("Invalid subcommand: {} of SetKeyboardValue", e),
                 }
             }
             ViaCommand::DynamicKeymapGetKeyCode => {
@@ -323,7 +320,7 @@ impl<
                     .take(size as usize)
                     .enumerate()
                     .for_each(|(i, a)| {
-                        let via_keycode = LittleEndian::read_u16(&report.output_data[idx..idx + 2]);
+                        let via_keycode = BigEndian::read_u16(&report.output_data[idx..idx + 2]);
                         let action: rmk_types::action::KeyAction = from_via_keycode(via_keycode);
                         *a = action;
                         idx += 2;
@@ -376,10 +373,6 @@ fn get_position_from_offset(offset: usize, max_row: usize, max_col: usize) -> (u
     let row = current_layer_offset / max_col;
     let col = current_layer_offset % max_col;
     (row, col, layer)
-}
-
-fn count_zeros(data: &[u8]) -> usize {
-    data.iter().filter(|&&x| x == 0).count()
 }
 
 pub struct UsbVialReaderWriter<'a, 'd, D: Driver<'d>> {

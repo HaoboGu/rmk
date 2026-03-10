@@ -18,8 +18,7 @@ pub mod bidirectional_matrix;
 /// Recording the matrix pressed state
 #[cfg(feature = "host_security")]
 pub struct MatrixState<const ROW: usize, const COL: usize> {
-    // 30 bytes is the limited by Vial and 240 keys is enough for
-    // most keyboard
+    // 30 bytes supports up to 240 keys, which is enough for most keyboards
     state: [u8; 30],
 }
 
@@ -58,6 +57,10 @@ impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
             self.state[byte_index] = self.state[byte_index] & !(1 << bit_index) | ((pressed as u8) << bit_index);
         }
     }
+    /// Read all matrix state into `target` with Vial-compatible reversed byte order
+    /// per row. Note: the RMK protocol (Phase 5, Step 5.8c) should use non-reversed
+    /// ordering (bit 0 = col 0). A separate method or conversion will be needed for
+    /// the `GetMatrixState` endpoint.
     pub fn read_all(&self, target: &mut [u8]) {
         let slice = &self.state[..(ROW * Self::ROW_LEN)];
         let mut target_iter = target.iter_mut();

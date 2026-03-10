@@ -47,7 +47,8 @@ pub(crate) enum FlashOperationMessage {
     ResetAndReboot,
     // Clear the layout info and reboot
     ResetLayout,
-    // Clear info of given slot number
+    // Clear info of given slot number (only meaningful with BLE, handled by the
+    // `#[cfg(not(feature = "_ble"))] _` catch-all when BLE is disabled)
     ClearSlot(u8),
     // Layout option
     LayoutOptions(u32),
@@ -245,7 +246,7 @@ impl StorageData {
             #[cfg(feature = "host")]
             Self::HostData(d) => match d {
                 KeymapData::Macro(_) => StorageKeys::MacroData as u32,
-                KeymapData::KeymapKey(_) => panic!("Error"),
+                KeymapData::KeymapKey(_) => panic!("KeymapKey uses a computed key; use get_keymap_key() instead of StorageData::key()"),
                 KeymapData::Encoder(_) => StorageKeys::EncoderKeys as u32,
                 KeymapData::Combo(_, _) => StorageKeys::ComboData as u32,
                 KeymapData::Fork(_, _) => StorageKeys::ForkData as u32,
@@ -273,7 +274,7 @@ impl Value<'_> for StorageData {
             #[cfg(feature = "_ble")]
             Self::ActiveBleProfile(d) => ser_storage_variant!(buffer, StorageKeys::ActiveBleProfile, d),
             #[cfg(feature = "host")]
-            Self::HostData(vial_data) => vial_data.serialize_into(buffer),
+            Self::HostData(host_data) => host_data.serialize_into(buffer),
         }
     }
 
@@ -414,14 +415,27 @@ pub struct Storage<
 
 /// Read out storage config, update and then save back.
 /// This macro applies to only some of the configs.
+///
+/// If the key is not yet stored, a warning is logged and the field is not
+/// persisted. This prevents silent data loss when the storage entry has not
+/// been initialised yet.
 macro_rules! update_storage_field {
     ($f: expr, $buf: expr, $key:ident, $field:ident) => {
-        if let Ok(Some(StorageData::$key(mut saved))) = $f.fetch_item($buf, &(StorageKeys::$key as u32)).await {
-            saved.$field = $field;
-            $f.store_item($buf, &(StorageKeys::$key as u32), &StorageData::$key(saved))
-                .await
-        } else {
-            Ok(())
+        match $f.fetch_item($buf, &(StorageKeys::$key as u32)).await {
+            Ok(Some(StorageData::$key(mut saved))) => {
+                saved.$field = $field;
+                $f.store_item($buf, &(StorageKeys::$key as u32), &StorageData::$key(saved))
+                    .await
+            }
+            Ok(None) => {
+                warn!("update_storage_field: key {} not found in storage, skipping update of {}", stringify!($key), stringify!($field));
+                Ok(())
+            }
+            Ok(Some(_)) => {
+                error!("update_storage_field: unexpected variant for key {}", stringify!($key));
+                Ok(())
+            }
+            Err(e) => Err(e),
         }
     };
 }
@@ -536,20 +550,25 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 FlashOperationMessage::Reset => self.flash.erase_all().await,
                 FlashOperationMessage::ResetAndReboot => {
                     info!("Resetting storage and rebooting...");
-                    let _ = self.flash.erase_all().await;
+                    if let Err(e) = self.flash.erase_all().await {
+                        print_storage_error::<F>(e);
+                    }
                     crate::boot::reboot_keyboard();
                     Ok(()) // unreachable on embedded
                 }
                 FlashOperationMessage::ResetLayout => {
-                    // TODO: Implement true layout-only reset. Currently this
-                    // falls through to a full erase because the storage task
-                    // does not hold the default keymap needed by
-                    // `reset_layout_only()`.  A proper fix requires either
-                    // passing the default keymap into the storage task or
-                    // persisting a "clear_layout_on_boot" flag in
-                    // LocalStorageConfig.
+                    // WARNING: Layout-only reset is not yet implemented.
+                    // This falls back to a FULL erase which also clears:
+                    // - BLE bonding information
+                    // - Behavior configuration (combos, morse, forks)
+                    // - Connection preferences
+                    // A proper layout-only reset requires either passing the
+                    // default keymap into the storage task or persisting a
+                    // "clear_layout_on_boot" flag in LocalStorageConfig.
                     warn!("ResetLayout: falling back to full erase (layout-only not yet available at runtime)");
-                    let _ = self.flash.erase_all().await;
+                    if let Err(e) = self.flash.erase_all().await {
+                        print_storage_error::<F>(e);
+                    }
                     crate::boot::reboot_keyboard();
                     Ok(()) // unreachable on embedded
                 }
@@ -558,7 +577,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     update_storage_field!(&mut self.flash, &mut self.buffer, LayoutConfig, default_layer)
                 }
                 #[cfg(feature = "host")]
-                FlashOperationMessage::HostMessage(vial_data) => match vial_data {
+                FlashOperationMessage::HostMessage(host_data) => match host_data {
                     KeymapData::Macro(macro_data) => {
                         info!("Saving keyboard macro data");
                         self.flash
@@ -685,6 +704,12 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 FlashOperationMessage::MorseDefaultProfile(morse_default_profile) => {
                     update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, morse_default_profile)
                 }
+                // When BLE is disabled, BLE-only variants (ClearSlot, ProfileInfo,
+                // ActiveBleProfile, PeerAddress) are either not compiled or not
+                // meaningful. This catch-all handles them safely.
+                // NOTE: if new FlashOperationMessage variants are added, ensure
+                // they have explicit match arms above — this catch-all should
+                // only cover BLE-gated variants.
                 #[cfg(not(feature = "_ble"))]
                 _ => Ok(()),
             } {
@@ -890,8 +915,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .fetch_item(&mut self.buffer, &(StorageKeys::StorageConfig as u32))
             .await
         {
-            // if config.enable && config.build_hash == BUILD_HASH {
-            if config.enable {
+            if config.enable && config.build_hash == BUILD_HASH {
                 return true;
             }
         }

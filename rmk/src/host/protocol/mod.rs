@@ -3,6 +3,11 @@
 //! Handles incoming postcard-rpc frames and dispatches to endpoint handlers.
 //! Real endpoint handlers will be added in Phases 4-5; transport implementations:
 //! USB bulk (Phase 3, complete) and BLE serial (Phase 7).
+//!
+//! The USB transport uses raw USB bulk transfer boundaries (short packet
+//! termination) for framing — not COBS. Each postcard-rpc frame is sent
+//! as a single USB bulk transfer (one or more 64-byte packets, terminated
+//! by a short packet or ZLP).
 
 pub(crate) mod transport;
 
@@ -16,7 +21,7 @@ use postcard_rpc::standard_icd::{self, WireError};
 use postcard_rpc::{Endpoint, Key, Topic};
 use rmk_types::protocol::rmk::*;
 
-use crate::event::{KeyPos, KeyboardEventPos};
+use crate::event::KeyboardEventPos;
 use crate::keymap::KeyMap;
 #[cfg(feature = "storage")]
 use crate::channel::FLASH_CHANNEL;
@@ -25,7 +30,11 @@ use crate::storage::FlashOperationMessage;
 #[cfg(feature = "storage")]
 use crate::host::storage::{KeymapData, KeymapKey};
 
-const RX_BUF_SIZE: usize = 256;
+// RX buffer must fit the largest possible incoming frame:
+// SetKeymapBulkRequest = BulkRequest(4 bytes) + up to MAX_BULK(32) KeyAction values.
+// Each KeyAction can be up to ~10 bytes postcard-serialized, so worst case is
+// ~4 + 32*10 + VarHeader(~6) ≈ 330 bytes. 512 provides comfortable headroom.
+const RX_BUF_SIZE: usize = 512;
 
 // All endpoint request keys (inbound).
 const REQ_KEYS: &[Key] = &[
@@ -159,10 +168,12 @@ const MIN_KEY_LEN: usize = if MIN_KEY_LEN_IN > MIN_KEY_LEN_OUT {
     MIN_KEY_LEN_OUT
 };
 
+// Map the minimum key length to the next VarKeyKind that can hold it.
+// VarKeyKind only supports 1, 2, 4, and 8 byte keys — round up accordingly.
 const MIN_KEY_KIND: VarKeyKind = match MIN_KEY_LEN {
-    1 => VarKeyKind::Key1,
+    0 | 1 => VarKeyKind::Key1,
     2 => VarKeyKind::Key2,
-    4 => VarKeyKind::Key4,
+    3 | 4 => VarKeyKind::Key4,
     _ => VarKeyKind::Key8,
 };
 
@@ -206,7 +217,10 @@ impl<
             tx,
             rx,
             rx_buf: [0u8; RX_BUF_SIZE],
-            // rmk_protocol always implies host_security, so start locked
+            // TODO: Phase 8 — implement full unlock state machine with physical
+            // key challenge. The device starts locked; the host must send
+            // UnlockRequest to unlock. Until Phase 8 is implemented,
+            // UnlockRequest immediately sets locked=false without a challenge.
             locked: true,
         }
     }
@@ -222,8 +236,11 @@ impl<
         } = self;
 
         loop {
-            rx.wait_connection().await;
-            tx.wait_connection().await;
+            // Re-lock on every new USB connection so a reconnecting host
+            // must complete the unlock handshake again.
+            *locked = true;
+
+            embassy_futures::join::join(rx.wait_connection(), tx.wait_connection()).await;
 
             loop {
                 let frame = match rx.receive(rx_buf).await {
@@ -236,7 +253,7 @@ impl<
                             warn!("Dropped oversize frame (>{} bytes)", RX_BUF_SIZE);
                             continue;
                         }
-                        WireRxErrorKind::Other | _ => continue,
+                        _ => continue,
                     },
                 };
 
@@ -247,7 +264,6 @@ impl<
                 if let Err(e) = Self::dispatch(&hdr, body, sender, keymap, locked).await {
                     match e.as_kind() {
                         WireTxErrorKind::ConnectionClosed | WireTxErrorKind::Timeout => break,
-                        WireTxErrorKind::Other => continue,
                         _ => continue,
                     }
                 }
@@ -255,7 +271,7 @@ impl<
         }
     }
 
-    #[allow(unused_variables)]
+    #[inline(never)]
     async fn dispatch(
         hdr: &VarHeader,
         body: &[u8],
@@ -268,6 +284,10 @@ impl<
 
         // Dispatch by comparing the incoming key against each endpoint's REQ_KEY.
         //
+        // We use a linear if-chain rather than `match` because VarKey's
+        // PartialEq performs cross-variant XOR-fold comparison, which is
+        // not compatible with Rust's pattern matching.
+        //
         // We always wrap REQ_KEY in VarKey::Key8 even though the wire may use a
         // shorter key kind (Key1/Key2/Key4). This is safe because VarKey::PartialEq
         // performs cross-variant comparison: it XOR-folds the larger key down to the
@@ -278,13 +298,20 @@ impl<
             return sender.reply::<GetVersion>(seq, &ProtocolVersion::CURRENT).await;
         }
         if *key == VarKey::Key8(GetCapabilities::REQ_KEY) {
+            // Compile-time assertions: these const generics must fit in u8.
+            const { assert!(ROW <= 255, "ROW exceeds u8 range") };
+            const { assert!(COL <= 255, "COL exceeds u8 range") };
+            const { assert!(NUM_LAYER <= 255, "NUM_LAYER exceeds u8 range") };
+            const { assert!(NUM_ENCODER <= 255, "NUM_ENCODER exceeds u8 range") };
+
             let caps = DeviceCapabilities {
+                protocol_version: ProtocolVersion::CURRENT,
                 num_layers: NUM_LAYER as u8,
                 num_rows: ROW as u8,
                 num_cols: COL as u8,
                 num_encoders: NUM_ENCODER as u8,
                 max_combos: crate::COMBO_MAX_NUM as u8,
-                max_macros: 32,
+                max_macros: crate::MACRO_MAX_NUM as u8,
                 macro_space_size: crate::MACRO_SPACE_SIZE as u16,
                 max_morse: crate::MORSE_MAX_NUM as u8,
                 max_forks: crate::FORK_MAX_NUM as u8,
@@ -307,39 +334,52 @@ impl<
             return sender.reply::<GetLockStatus>(seq, &status).await;
         }
         if *key == VarKey::Key8(UnlockRequest::REQ_KEY) {
-            // TODO: Phase 8 — full lock state machine
-            return sender.error(seq, WireError::UnknownKey).await;
+            // TODO: Phase 8 — full lock state machine with physical key challenge.
+            // Until then, UnlockRequest immediately unlocks the device (no challenge).
+            // The host should poll GetLockStatus to confirm unlock is complete.
+            *locked = false;
+            return sender
+                .reply::<UnlockRequest>(seq, &UnlockChallenge { key_positions: heapless::Vec::new() })
+                .await;
         }
         if *key == VarKey::Key8(LockRequest::REQ_KEY) {
-            // TODO: Phase 8 — full lock state machine
-            return sender.error(seq, WireError::UnknownKey).await;
+            *locked = true;
+            return sender.reply::<LockRequest>(seq, &()).await;
         }
 
-        // --- Device Control (3 endpoints) ---
+        // --- Device Control (3 endpoints, all Dangerous — require unlock) ---
         if *key == VarKey::Key8(Reboot::REQ_KEY) {
-            sender.reply::<Reboot>(seq, &()).await?;
+            if *locked {
+                return sender.reply::<Reboot>(seq, &Err(RmkError::Locked)).await;
+            }
+            sender.reply::<Reboot>(seq, &Ok(())).await?;
             crate::boot::reboot_keyboard();
             return Ok(()); // unreachable on embedded
         }
         if *key == VarKey::Key8(BootloaderJump::REQ_KEY) {
-            sender.reply::<BootloaderJump>(seq, &()).await?;
+            if *locked {
+                return sender.reply::<BootloaderJump>(seq, &Err(RmkError::Locked)).await;
+            }
+            sender.reply::<BootloaderJump>(seq, &Ok(())).await?;
             crate::boot::jump_to_bootloader();
             return Ok(()); // unreachable on embedded
         }
         if *key == VarKey::Key8(StorageReset::REQ_KEY) {
             if *locked {
-                return sender.error(seq, WireError::UnknownKey).await;
+                return sender.reply::<StorageReset>(seq, &Err(RmkError::Locked)).await;
             }
             let mode: StorageResetMode = match postcard::from_bytes(body) {
                 Ok(m) => m,
                 Err(_) => return sender.error(seq, WireError::DeserFailed).await,
             };
-            sender.reply::<StorageReset>(seq, &()).await?;
+            sender.reply::<StorageReset>(seq, &Ok(())).await?;
             #[cfg(feature = "storage")]
             {
                 let msg = match mode {
                     StorageResetMode::Full => FlashOperationMessage::ResetAndReboot,
                     StorageResetMode::LayoutOnly => FlashOperationMessage::ResetLayout,
+                    // Future variants — treat as full reset for safety
+                    _ => FlashOperationMessage::ResetAndReboot,
                 };
                 FLASH_CHANNEL.send(msg).await;
             }
@@ -357,18 +397,23 @@ impl<
                 Err(_) => return sender.error(seq, WireError::DeserFailed).await,
             };
             if pos.row as usize >= ROW || pos.col as usize >= COL || pos.layer as usize >= NUM_LAYER {
-                return sender.reply::<GetKeyAction>(seq, &rmk_types::action::KeyAction::No).await;
+                // Out of bounds — the response type is `KeyAction` (no error variant),
+                // so we use `WireError::DeserFailed` as the closest available wire error.
+                // `WireError` only has `DeserFailed` and `UnknownKey`; neither is a
+                // perfect semantic match for "invalid parameter". The host should check
+                // bounds via GetCapabilities before requesting. Consider changing the
+                // endpoint response type to `Result<KeyAction, RmkError>` in a future
+                // protocol version for proper error reporting.
+                return sender.error(seq, WireError::DeserFailed).await;
             }
-            let event_pos = KeyboardEventPos::Key(KeyPos {
-                row: pos.row,
-                col: pos.col,
-            });
+            // key_pos takes (col, row) — note the reversed order
+            let event_pos = KeyboardEventPos::key_pos(pos.col, pos.row);
             let action = keymap.borrow().get_action_at(event_pos, pos.layer as usize);
             return sender.reply::<GetKeyAction>(seq, &action).await;
         }
         if *key == VarKey::Key8(SetKeyAction::REQ_KEY) {
             if *locked {
-                return sender.error(seq, WireError::UnknownKey).await;
+                return sender.reply::<SetKeyAction>(seq, &Err(RmkError::Locked)).await;
             }
             let req: SetKeyRequest = match postcard::from_bytes(body) {
                 Ok(r) => r,
@@ -380,10 +425,8 @@ impl<
                     .reply::<SetKeyAction>(seq, &Err(RmkError::InvalidParameter))
                     .await;
             }
-            let event_pos = KeyboardEventPos::Key(KeyPos {
-                row: pos.row,
-                col: pos.col,
-            });
+            // key_pos takes (col, row) — note the reversed order
+            let event_pos = KeyboardEventPos::key_pos(pos.col, pos.row);
             keymap
                 .borrow_mut()
                 .set_action_at(event_pos, pos.layer as usize, req.action);
@@ -409,30 +452,30 @@ impl<
             let mut row = req.start_row as usize;
             let mut col = req.start_col as usize;
             let layer = req.layer as usize;
-            let km = keymap.borrow();
-            for _ in 0..req.count {
-                if row >= ROW || col >= COL || layer >= NUM_LAYER {
-                    break;
-                }
-                let event_pos = KeyboardEventPos::Key(KeyPos {
-                    row: row as u8,
-                    col: col as u8,
-                });
-                let action = km.get_action_at(event_pos, layer);
-                if actions.push(action).is_err() {
-                    break;
-                }
-                col += 1;
-                if col >= COL {
-                    col = 0;
-                    row += 1;
+            let count = (req.count as usize).min(MAX_BULK);
+            if layer < NUM_LAYER && row < ROW && col < COL {
+                let km = keymap.borrow();
+                for _ in 0..count {
+                    if row >= ROW {
+                        break;
+                    }
+                    // key_pos takes (col, row)
+                    let action = km.get_action_at(KeyboardEventPos::key_pos(col as u8, row as u8), layer);
+                    if actions.push(action).is_err() {
+                        break;
+                    }
+                    col += 1;
+                    if col >= COL {
+                        col = 0;
+                        row += 1;
+                    }
                 }
             }
             return sender.reply::<GetKeymapBulk>(seq, &actions).await;
         }
         if *key == VarKey::Key8(SetKeymapBulk::REQ_KEY) {
             if *locked {
-                return sender.error(seq, WireError::UnknownKey).await;
+                return sender.reply::<SetKeymapBulk>(seq, &Err(RmkError::Locked)).await;
             }
             let req: SetKeymapBulkRequest = match postcard::from_bytes(body) {
                 Ok(r) => r,
@@ -446,17 +489,22 @@ impl<
             }
             let mut row = req.request.start_row as usize;
             let mut col = req.request.start_col as usize;
+            if row >= ROW || col >= COL {
+                return sender
+                    .reply::<SetKeymapBulk>(seq, &Err(RmkError::InvalidParameter))
+                    .await;
+            }
             for action in req.actions.iter() {
-                if row >= ROW || col >= COL {
+                if row >= ROW {
                     break;
                 }
-                let event_pos = KeyboardEventPos::Key(KeyPos {
-                    row: row as u8,
-                    col: col as u8,
-                });
+                // SAFETY (RefCell): borrow_mut() is a temporary expression — the
+                // borrow is dropped before the .await below. Do NOT bind it to a
+                // variable, or it will be held across the .await and panic at runtime.
+                // key_pos takes (col, row)
                 keymap
                     .borrow_mut()
-                    .set_action_at(event_pos, layer, *action);
+                    .set_action_at(KeyboardEventPos::key_pos(col as u8, row as u8), layer, *action);
                 #[cfg(feature = "storage")]
                 FLASH_CHANNEL
                     .send(FlashOperationMessage::HostMessage(KeymapData::KeymapKey(
@@ -485,7 +533,7 @@ impl<
         }
         if *key == VarKey::Key8(SetDefaultLayer::REQ_KEY) {
             if *locked {
-                return sender.error(seq, WireError::UnknownKey).await;
+                return sender.reply::<SetDefaultLayer>(seq, &Err(RmkError::Locked)).await;
             }
             let layer: u8 = match postcard::from_bytes(body) {
                 Ok(l) => l,
@@ -505,7 +553,7 @@ impl<
         }
         if *key == VarKey::Key8(ResetKeymap::REQ_KEY) {
             if *locked {
-                return sender.error(seq, WireError::UnknownKey).await;
+                return sender.reply::<ResetKeymap>(seq, &Err(RmkError::Locked)).await;
             }
             sender.reply::<ResetKeymap>(seq, &Ok(())).await?;
             #[cfg(feature = "storage")]
@@ -525,7 +573,7 @@ impl<
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetEncoderAction::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 5 — requires unlock
             return sender.error(seq, WireError::UnknownKey).await;
         }
 
@@ -539,11 +587,11 @@ impl<
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetMacro::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 5 — requires unlock
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(ResetMacros::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 5 — requires unlock
             return sender.error(seq, WireError::UnknownKey).await;
         }
 
@@ -553,11 +601,11 @@ impl<
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetCombo::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 5 — requires unlock
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(ResetCombos::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 5 — requires unlock
             return sender.error(seq, WireError::UnknownKey).await;
         }
 
@@ -567,11 +615,11 @@ impl<
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetMorse::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 5 — requires unlock
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(ResetMorse::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 5 — requires unlock
             return sender.error(seq, WireError::UnknownKey).await;
         }
 
@@ -581,11 +629,11 @@ impl<
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetFork::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 5 — requires unlock
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(ResetForks::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 5 — requires unlock
             return sender.error(seq, WireError::UnknownKey).await;
         }
 
@@ -595,7 +643,7 @@ impl<
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetBehaviorConfig::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 5 — requires unlock
             return sender.error(seq, WireError::UnknownKey).await;
         }
 
@@ -605,15 +653,15 @@ impl<
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SetConnectionType::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 5 — requires unlock
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(SwitchBleProfile::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 5 — requires unlock
             return sender.error(seq, WireError::UnknownKey).await;
         }
         if *key == VarKey::Key8(ClearBleProfile::REQ_KEY) {
-            // TODO: Phase 5
+            // TODO: Phase 5 — requires unlock
             return sender.error(seq, WireError::UnknownKey).await;
         }
 

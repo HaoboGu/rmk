@@ -435,8 +435,9 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                         BleProfileAction::ToggleConnection => {
                             let current: ConnectionType = CONNECTION_TYPE.load(Ordering::SeqCst).into();
                             let updated = match current {
-                                ConnectionType::Usb => ConnectionType::Ble,
                                 ConnectionType::Ble => ConnectionType::Usb,
+                                // Usb and any future unknown variant toggle to Ble
+                                _ => ConnectionType::Ble,
                             };
 
                             CONNECTION_TYPE.store(updated.into(), Ordering::SeqCst);
