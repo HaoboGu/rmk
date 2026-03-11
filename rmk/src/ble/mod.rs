@@ -22,7 +22,7 @@ use {
     crate::usb::UsbKeyboardWriter,
     crate::usb::{USB_ENABLED, USB_REMOTE_WAKEUP, USB_SUSPENDED},
     crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder},
-    embassy_futures::select::{Either, Either4, select4},
+    embassy_futures::select::{Either4, select4},
     embassy_usb::driver::Driver,
 };
 #[cfg(feature = "storage")]
@@ -31,6 +31,8 @@ use {
     crate::{read_storage, state::CONNECTION_TYPE},
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
 };
+#[cfg(any(not(feature = "_no_usb"), feature = "passkey_entry"))]
+use embassy_futures::select::Either;
 
 use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
@@ -53,6 +55,8 @@ pub(crate) mod device_info;
 #[cfg(feature = "host")]
 pub(crate) mod host_service;
 pub(crate) mod led;
+#[cfg(feature = "passkey_entry")]
+pub(crate) mod passkey;
 pub(crate) mod profile;
 
 #[derive(Clone, Copy, Debug)]
@@ -94,9 +98,16 @@ pub async fn build_ble_stack<
     resources: &'a mut HostResources<P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX>,
 ) -> Stack<'a, C, P> {
     // Initialize trouble host stack
-    trouble_host::new(controller, resources)
+    let builder = trouble_host::new(controller, resources)
         .set_random_address(Address::random(host_address))
-        .set_random_generator_seed(random_generator)
+        .set_random_generator_seed(random_generator);
+
+    #[cfg(feature = "passkey_entry")]
+    if crate::PASSKEY_ENTRY_ENABLED {
+        builder.set_io_capabilities(IoCapabilities::KeyboardOnly);
+    }
+
+    builder
 }
 
 /// Run the BLE stack.
@@ -677,7 +688,52 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
             }
             GattConnectionEvent::PassKeyDisplay(pass_key) => info!("[gatt] PassKeyDisplay: {:?}", pass_key),
             GattConnectionEvent::PassKeyConfirm(pass_key) => info!("[gatt] PassKeyConfirm: {:?}", pass_key),
-            GattConnectionEvent::PassKeyInput => warn!("[gatt] PassKeyInput event, should not happen"),
+            GattConnectionEvent::PassKeyInput => {
+                #[cfg(feature = "passkey_entry")]
+                if crate::PASSKEY_ENTRY_ENABLED {
+                    use crate::ble::passkey::{
+                        PASSKEY_RESPONSE, begin_passkey_entry_session, end_passkey_entry_session,
+                    };
+
+                    info!("[gatt] PassKeyInput: entering passkey entry mode");
+                    begin_passkey_entry_session();
+
+                    // Wait with configurable timeout
+                    match embassy_time::with_timeout(
+                        Duration::from_secs(crate::PASSKEY_ENTRY_TIMEOUT_SECS as u64),
+                        PASSKEY_RESPONSE.wait(),
+                    )
+                    .await
+                    {
+                        Ok(Some(passkey)) => {
+                            end_passkey_entry_session();
+                            info!("[gatt] Passkey entered: submitting");
+                            if let Err(e) = conn.raw().pass_key_input(passkey) {
+                                error!("[gatt] pass_key_input error: {:?}", e);
+                            }
+                        }
+                        Ok(None) => {
+                            end_passkey_entry_session();
+                            info!("[gatt] Passkey entry cancelled");
+                            if let Err(e) = conn.raw().pass_key_cancel() {
+                                error!("[gatt] pass_key_cancel error: {:?}", e);
+                            }
+                        }
+                        Err(_) => {
+                            end_passkey_entry_session();
+                            warn!("[gatt] Passkey entry timeout");
+                            let _ = conn.raw().pass_key_cancel();
+                        }
+                    }
+                } else {
+                    warn!("[gatt] PassKeyInput: disabled in config, cancelling pairing, this shouldn't happen");
+                    if let Err(e) = conn.raw().pass_key_cancel() {
+                        error!("[gatt] pass_key_cancel error: {:?}", e);
+                    }
+                }
+                #[cfg(not(feature = "passkey_entry"))]
+                warn!("[gatt] PassKeyInput event, should not happen")
+            }
         }
 
         // Publish the BLE connected event

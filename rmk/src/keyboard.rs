@@ -260,6 +260,10 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Used for temporarily disabling combos
     combo_on: bool,
+
+    /// Passkey entry state for BLE pairing
+    #[cfg(feature = "passkey_entry")]
+    passkey_entry_state: crate::ble::passkey::PasskeyEntryState,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -290,11 +294,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             system_control_report: SystemControlReport { usage_id: 0 },
             last_key_code: KeyCode::Hid(HidKeyCode::No),
             combo_on: true,
+            #[cfg(feature = "passkey_entry")]
+            passkey_entry_state: crate::ble::passkey::PasskeyEntryState::new(),
         }
     }
 
     /// Send a keyboard report to the host
     async fn send_report(&self, report: Report) {
+        // Do not report keypresses to Host in passkey mode
+        #[cfg(feature = "passkey_entry")]
+        if self.passkey_entry_state.is_active() {
+            return;
+        }
+
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 
@@ -376,6 +388,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Process key changes at (row, col)
     pub async fn process_inner(&mut self, event: KeyboardEvent) {
+        // Check for mode transitions (e.g., entering/exiting passkey entry)
+        #[cfg(feature = "passkey_entry")]
+        self.passkey_entry_state.check_mode_transition();
+
         #[cfg(feature = "vial_lock")]
         self.keymap.borrow_mut().matrix_state.update(&event);
 
@@ -1449,6 +1465,30 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     // Process a basic keypress/release and also take care of applying one shot modifiers
     async fn process_hid_keycode(&mut self, key: HidKeyCode, event: KeyboardEvent) {
+        #[cfg(feature = "passkey_entry")]
+        if self.passkey_entry_state.is_active() {
+            use crate::ble::passkey::{PASSKEY_RESPONSE, PasskeyAction};
+
+            // In passkey mode: capture on release only (prevents Enter release leaking)
+            if !event.pressed {
+                match self.passkey_entry_state.handle_key(key) {
+                    PasskeyAction::Submitted(passkey) => {
+                        info!("[passkey] Submitting passkey");
+                        PASSKEY_RESPONSE.signal(Some(passkey));
+                    },
+                    PasskeyAction::Cancelled => {
+                        info!("[passkey] Cancelled");
+                        PASSKEY_RESPONSE.signal(None);
+                    },
+                    _ => {
+                        // Ignore other states
+                    }
+                }
+            }
+            // Don't call register_key/unregister_key or send_report
+            return;
+        }
+
         if event.pressed {
             self.register_key(key, event);
         } else {
