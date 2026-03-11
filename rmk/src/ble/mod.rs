@@ -56,7 +56,7 @@ pub(crate) mod device_info;
 pub(crate) mod host_service;
 pub(crate) mod led;
 #[cfg(feature = "passkey_entry")]
-pub(crate) mod passkey;
+pub mod passkey;
 pub(crate) mod profile;
 
 #[derive(Clone, Copy, Debug)]
