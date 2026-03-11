@@ -219,6 +219,13 @@ pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = const {
 // ---------------------------------------------------------------------------
 
 topics! {
+    list = TOPICS_IN_LIST;
+    direction = TopicDirection::ToServer;
+    | TopicTy | MessageTy | Path |
+    | ------- | --------- | ---- |
+}
+
+topics! {
     list = TOPICS_OUT_LIST;
     direction = TopicDirection::ToClient;
     | TopicTy               | MessageTy              | Path                  |

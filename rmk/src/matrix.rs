@@ -51,9 +51,8 @@ impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
                 return;
             }
             let pressed = event.pressed;
-            let index = row as usize * Self::ROW_LEN * 8 + col as usize;
-            let byte_index = index / 8;
-            let bit_index = index % 8;
+            let byte_index = row as usize * Self::ROW_LEN + col as usize / 8;
+            let bit_index = col as usize % 8;
             self.state[byte_index] = self.state[byte_index] & !(1 << bit_index) | ((pressed as u8) << bit_index);
         }
     }
@@ -73,14 +72,17 @@ impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
             }
         }
     }
+    pub fn read_protocol_bitmap(&self, target: &mut [u8]) {
+        let len = target.len().min(ROW * Self::ROW_LEN);
+        target[..len].copy_from_slice(&self.state[..len]);
+    }
     pub fn read(&self, row: u8, col: u8) -> bool {
         if row as usize >= ROW || col as usize >= COL {
             warn!("Matrix read out of bounds");
             return false;
         }
-        let index = row as usize * Self::ROW_LEN * 8 + col as usize;
-        let byte_index = index / 8;
-        let bit_index = index % 8;
+        let byte_index = row as usize * Self::ROW_LEN + col as usize / 8;
+        let bit_index = col as usize % 8;
         self.state[byte_index] & (1 << bit_index) != 0
     }
 }

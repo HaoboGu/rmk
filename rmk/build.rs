@@ -1,8 +1,7 @@
 #[path = "./build_common.rs"]
 mod common;
 
-use std::path::Path;
-use std::process::Command;
+use std::path::{Path, PathBuf};
 use std::{env, fs};
 
 use const_gen::*;
@@ -13,9 +12,8 @@ fn main() {
     let mut cfgs = common::CfgSet::new();
     common::set_target_cfgs(&mut cfgs);
 
-    // Ensure build.rs is re-run when files change
-    // println!("cargo:rerun-if-changed=.git/HEAD");
-    println!("cargo:rerun-if-changed=build.rs");
+    // Environment-driven config inputs are tracked here. Source files that
+    // contribute to BUILD_HASH are tracked inside `compute_build_hash()`.
     println!("cargo:rerun-if-env-changed=KEYBOARD_TOML_PATH");
     println!("cargo:rerun-if-env-changed=VIAL_JSON_PATH");
 
@@ -44,7 +42,7 @@ fn main() {
 }
 
 fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventConfig) -> String {
-    // Compute build hash according to the latest git commit
+    // Compute a deterministic build hash from stable inputs only.
     let build_hash = compute_build_hash();
     // Add other constants
     let mut constant_strs = vec![
@@ -156,26 +154,87 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
 }
 
 fn compute_build_hash() -> u32 {
-    // Get the short hash of the latest Git commit. Use "unknown" if it fails
-    let commit_id = Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
-        .output()
-        .ok()
-        .and_then(|output| {
-            if output.status.success() {
-                Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(|| "unknown".to_string());
-
-    // Get and format current local time
-    let now = chrono::Local::now();
-
-    // Combine data and compute CRC32
-    let combined = format!("{commit_id}_{now}");
     let mut hasher = crc32fast::Hasher::new();
-    hasher.update(combined.as_bytes());
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"));
+
+    hash_str(&mut hasher, "rmk-build-hash-v2");
+    hash_str(&mut hasher, &env::var("TARGET").unwrap_or_default());
+
+    let mut feature_names = env::vars()
+        .filter_map(|(key, value)| (key.starts_with("CARGO_FEATURE_") && value == "1").then_some(key))
+        .collect::<Vec<_>>();
+    feature_names.sort();
+    for feature_name in feature_names {
+        hash_str(&mut hasher, &feature_name);
+    }
+
+    hash_workspace_crate(&mut hasher, &manifest_dir);
+    hash_optional_input_path(&mut hasher, &manifest_dir.join("build_common.rs"), &manifest_dir);
+
+    if let Some(workspace_dir) = manifest_dir.parent() {
+        for crate_name in ["rmk-config", "rmk-macro", "rmk-types"] {
+            hash_workspace_crate(&mut hasher, &workspace_dir.join(crate_name));
+        }
+    }
+
+    if let Ok(toml_path) = env::var("KEYBOARD_TOML_PATH") {
+        let toml_path = PathBuf::from(toml_path);
+        let root = toml_path.parent().unwrap_or_else(|| Path::new("."));
+        hash_input_path(&mut hasher, &toml_path, root);
+    }
+
+    if let Ok(vial_json_path) = env::var("VIAL_JSON_PATH") {
+        let vial_json_path = PathBuf::from(vial_json_path);
+        let root = vial_json_path.parent().unwrap_or_else(|| Path::new("."));
+        hash_input_path(&mut hasher, &vial_json_path, root);
+    }
+
     hasher.finalize()
+}
+
+fn hash_workspace_crate(hasher: &mut crc32fast::Hasher, crate_dir: &Path) {
+    hash_optional_input_path(hasher, &crate_dir.join("Cargo.toml"), crate_dir);
+    hash_optional_input_path(hasher, &crate_dir.join("build.rs"), crate_dir);
+    hash_optional_input_path(hasher, &crate_dir.join("src"), crate_dir);
+}
+
+fn hash_optional_input_path(hasher: &mut crc32fast::Hasher, path: &Path, root: &Path) {
+    if path.exists() {
+        hash_input_path(hasher, path, root);
+    }
+}
+
+fn hash_input_path(hasher: &mut crc32fast::Hasher, path: &Path, root: &Path) {
+    println!("cargo:rerun-if-changed={}", path.display());
+
+    if path.is_dir() {
+        let mut entries = fs::read_dir(path)
+            .unwrap_or_else(|err| panic!("Failed to read build hash input directory {}: {err}", path.display()))
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .collect::<Vec<_>>();
+        entries.sort();
+
+        for entry in entries {
+            hash_input_path(hasher, &entry, root);
+        }
+        return;
+    }
+
+    if !path.is_file() {
+        hash_str(hasher, "missing");
+        hash_str(hasher, &path.display().to_string());
+        return;
+    }
+
+    let relative_path = path.strip_prefix(root).unwrap_or(path);
+    hash_str(hasher, &relative_path.display().to_string());
+
+    let bytes = fs::read(path).unwrap_or_else(|err| panic!("Failed to read build hash input {}: {err}", path.display()));
+    hasher.update(&bytes);
+    hasher.update(&[0]);
+}
+
+fn hash_str(hasher: &mut crc32fast::Hasher, value: &str) {
+    hasher.update(value.as_bytes());
+    hasher.update(&[0]);
 }

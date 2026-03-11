@@ -1,16 +1,19 @@
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use nusb::{DeviceInfo, InterfaceInfo};
+use postcard_rpc::Endpoint;
 use postcard_rpc::header::VarSeqKind;
-use postcard_rpc::host_client::{HostClient, HostErr};
-use postcard_rpc::standard_icd::{ERROR_PATH, WireError};
-use rmk_types::protocol::rmk::{
-    BulkRequest, GetCapabilities, GetDefaultLayer, GetKeyAction, GetKeymapBulk, GetLockStatus,
-    GetVersion, KeyPosition, ProtocolVersion, Reboot, ResetKeymap, RmkError, SetDefaultLayer,
-    SetKeyAction, SetKeyRequest, StorageReset, StorageResetMode, UnlockRequest, MAX_BULK,
-};
+use postcard_rpc::host_client::{HostClient, HostErr, SchemaError, SchemaReport};
+use postcard_rpc::postcard_schema::schema::owned::OwnedNamedType;
+use postcard_rpc::standard_icd::{ERROR_PATH, PingEndpoint, WireError};
 use rmk_types::action::{Action, KeyAction};
 use rmk_types::keycode::{HidKeyCode, KeyCode};
+use rmk_types::protocol::rmk::{
+    BootloaderJump, BulkRequest, ENDPOINT_LIST, GetCapabilities, GetConnectionInfo, GetCurrentLayer, GetDefaultLayer,
+    GetKeyAction, GetKeymapBulk, GetLayerCount, GetLockStatus, GetMatrixState, GetVersion, KeyPosition, LockRequest,
+    MAX_BULK, ProtocolVersion, Reboot, ResetKeymap, RmkError, SetDefaultLayer, SetKeyAction, SetKeyRequest,
+    SetKeymapBulk, StorageReset, StorageResetMode, UnlockRequest,
+};
 
 const DEFAULT_OUTGOING_DEPTH: usize = 8;
 const VENDOR_INTERFACE_CLASS: u8 = 0xFF;
@@ -26,6 +29,10 @@ struct Cli {
 enum Command {
     /// List matching USB devices and interfaces.
     List(DeviceArgs),
+    /// Exercise postcard-rpc standard ping.
+    Ping(PingArgs),
+    /// Dump the schema for the connected RMK protocol version.
+    Schema(ConnectArgs),
     /// Connect over raw USB bulk and run the RMK handshake.
     Handshake(HandshakeArgs),
     /// Get a single key action from the keymap.
@@ -92,6 +99,15 @@ struct HandshakeArgs {
     /// Fail if `GetCapabilities` is not implemented yet.
     #[arg(long)]
     require_capabilities: bool,
+}
+
+#[derive(Args, Debug, Clone)]
+struct PingArgs {
+    #[command(flatten)]
+    connect: ConnectArgs,
+    /// Ping value to echo through postcard-rpc standard ICD.
+    #[arg(long, default_value_t = 42)]
+    value: u32,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -194,6 +210,8 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Command::List(args) => list_devices(&args),
+        Command::Ping(args) => ping(args).await,
+        Command::Schema(args) => schema(args).await,
         Command::Handshake(args) => handshake(args).await,
         Command::GetKey(args) => get_key(args).await,
         Command::SetKey(args) => set_key(args).await,
@@ -254,7 +272,8 @@ fn connect(args: &ConnectArgs) -> Result<HostClient<WireError>> {
 }
 
 /// Check protocol version compatibility and print a warning if mismatched.
-async fn check_version(client: &HostClient<WireError>) -> Result<()> {
+/// Returns the firmware version on success.
+async fn check_version(client: &HostClient<WireError>) -> Result<ProtocolVersion> {
     let version = client
         .send_resp::<GetVersion>(&())
         .await
@@ -266,7 +285,7 @@ async fn check_version(client: &HostClient<WireError>) -> Result<()> {
             version.major, version.minor, expected.major, expected.minor
         );
     }
-    Ok(())
+    Ok(version)
 }
 
 /// Send an UnlockRequest so write operations are accepted by the firmware.
@@ -279,14 +298,124 @@ async fn ensure_unlocked(client: &HostClient<WireError>) -> Result<()> {
     Ok(())
 }
 
+async fn ping(args: PingArgs) -> Result<()> {
+    let client = connect(&args.connect)?;
+    let echoed = client
+        .send_resp::<PingEndpoint>(&args.value)
+        .await
+        .context("PingEndpoint request failed")?;
+    println!("ping.request={}", args.value);
+    println!("ping.response={}", echoed);
+    if echoed != args.value {
+        bail!("unexpected ping response: expected {}, got {}", args.value, echoed);
+    }
+    Ok(())
+}
+
+async fn schema(args: ConnectArgs) -> Result<()> {
+    let client = connect(&args)?;
+    let version = check_version(&client).await?;
+    let (mut report, schema_source) = match client.get_schema_report().await {
+        Ok(report) => (report, "device"),
+        Err(SchemaError::Comms(HostErr::Wire(WireError::UnknownKey))) => (local_schema_report(), "shared-icd"),
+        Err(SchemaError::InvalidReportData | SchemaError::LostData) => (local_schema_report(), "shared-icd"),
+        Err(err) => return Err(err).context("schema discovery failed"),
+    };
+
+    report.endpoints.sort_by(|a, b| a.path.cmp(&b.path));
+    report.topics_in.sort_by(|a, b| a.path.cmp(&b.path));
+    report.topics_out.sort_by(|a, b| a.path.cmp(&b.path));
+
+    println!("protocol.version={}.{}", version.major, version.minor);
+    println!("schema.source={schema_source}");
+    println!("schema.types={}", report.types.len());
+    println!("schema.endpoints={}", report.endpoints.len());
+    println!("schema.topics.in={}", report.topics_in.len());
+    println!("schema.topics.out={}", report.topics_out.len());
+
+    if !report.endpoints.is_empty() {
+        println!("\n# Endpoints");
+        for endpoint in report.endpoints {
+            println!(
+                "{} req={} {} resp={} {}",
+                endpoint.path,
+                format_key(endpoint.req_key),
+                endpoint.req_ty,
+                format_key(endpoint.resp_key),
+                endpoint.resp_ty,
+            );
+        }
+    }
+
+    if !report.topics_in.is_empty() {
+        println!("\n# Topics ToServer");
+        for topic in report.topics_in {
+            println!("{} key={} {}", topic.path, format_key(topic.key), topic.ty);
+        }
+    }
+
+    if !report.topics_out.is_empty() {
+        println!("\n# Topics ToClient");
+        for topic in report.topics_out {
+            println!("{} key={} {}", topic.path, format_key(topic.key), topic.ty);
+        }
+    }
+
+    Ok(())
+}
+
+fn local_schema_report() -> SchemaReport {
+    let mut report = SchemaReport::default();
+
+    for ty in ENDPOINT_LIST.types {
+        report.add_type(OwnedNamedType::from(*ty));
+    }
+
+    report
+        .add_endpoint(
+            PingEndpoint::PATH.to_string(),
+            PingEndpoint::REQ_KEY,
+            PingEndpoint::RESP_KEY,
+        )
+        .expect("standard ping endpoint should resolve");
+
+    for path in [
+        GetVersion::PATH,
+        GetCapabilities::PATH,
+        GetLockStatus::PATH,
+        UnlockRequest::PATH,
+        LockRequest::PATH,
+        Reboot::PATH,
+        BootloaderJump::PATH,
+        StorageReset::PATH,
+        GetKeyAction::PATH,
+        SetKeyAction::PATH,
+        GetKeymapBulk::PATH,
+        SetKeymapBulk::PATH,
+        GetLayerCount::PATH,
+        GetDefaultLayer::PATH,
+        SetDefaultLayer::PATH,
+        ResetKeymap::PATH,
+        GetConnectionInfo::PATH,
+        GetCurrentLayer::PATH,
+        GetMatrixState::PATH,
+    ] {
+        let endpoint = ENDPOINT_LIST
+            .endpoints
+            .iter()
+            .find(|entry| entry.0 == path)
+            .expect("implemented endpoint should exist in shared ICD");
+        report
+            .add_endpoint(path.to_string(), endpoint.1, endpoint.2)
+            .expect("implemented endpoint schema should resolve");
+    }
+
+    report
+}
+
 async fn handshake(args: HandshakeArgs) -> Result<()> {
     let client = connect(&args.connect)?;
-
-    let version = client
-        .send_resp::<GetVersion>(&())
-        .await
-        .context("GetVersion request failed")?;
-
+    let version = check_version(&client).await?;
     println!("protocol.version={}.{}", version.major, version.minor);
 
     match client.send_resp::<GetCapabilities>(&()).await {
@@ -380,7 +509,12 @@ async fn dump_keymap(args: ConnectArgs) -> Result<()> {
             let col = (fetched % num_cols) as u8;
             let count = ((total - fetched).min(MAX_BULK as u16)) as u8;
             let actions = client
-                .send_resp::<GetKeymapBulk>(&BulkRequest { layer, start_row: row, start_col: col, count })
+                .send_resp::<GetKeymapBulk>(&BulkRequest {
+                    layer,
+                    start_row: row,
+                    start_col: col,
+                    count,
+                })
                 .await
                 .context("GetKeymapBulk request failed")?;
 
@@ -466,9 +600,7 @@ async fn reset_keymap(args: DestructiveArgs) -> Result<()> {
 
 async fn storage_reset(args: StorageResetArgs) -> Result<()> {
     let warning = match args.mode {
-        StorageResetModeArg::Full => {
-            "This will erase ALL storage and reboot. All configuration data will be lost."
-        }
+        StorageResetModeArg::Full => "This will erase ALL storage and reboot. All configuration data will be lost.",
         StorageResetModeArg::Layout => {
             "WARNING: Layout-only reset is not yet implemented in firmware.\n\
              This currently falls back to a FULL erase, which also clears:\n\
@@ -493,10 +625,7 @@ async fn storage_reset(args: StorageResetArgs) -> Result<()> {
 
 /// Handle the result of a destructive command that reboots the device.
 /// The device disconnects after replying, so `HostErr::Closed` is expected success.
-fn handle_reboot_response(
-    result: Result<Result<(), RmkError>, HostErr<WireError>>,
-    cmd: &str,
-) -> Result<()> {
+fn handle_reboot_response(result: Result<Result<(), RmkError>, HostErr<WireError>>, cmd: &str) -> Result<()> {
     match result {
         Ok(Ok(())) => println!("{cmd} command sent, device is rebooting..."),
         Ok(Err(e)) => bail!("{cmd} rejected: {e}"),
@@ -534,7 +663,7 @@ fn select_device(args: &DeviceArgs) -> Result<SelectedDevice> {
         eprintln!("matched {} devices; selecting the first one", devices.len());
     }
 
-    let device = devices.remove(0);
+    let device = devices.swap_remove(0);
     let interface = select_interface(&device, args)?;
     Ok(SelectedDevice {
         device,
@@ -626,6 +755,10 @@ fn print_selected_device(selected: &SelectedDevice) {
         ),
         None => println!("selected interface {}", selected.interface_number),
     }
+}
+
+fn format_key(key: postcard_rpc::Key) -> String {
+    format!("0x{:016X}", u64::from_le_bytes(key.to_bytes()))
 }
 
 fn parse_u16(value: &str) -> Result<u16, String> {

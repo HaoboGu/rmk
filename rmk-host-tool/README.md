@@ -5,6 +5,8 @@ Minimal host-side USB tool for the RMK protocol.
 ## Commands
 
 - `list` — enumerate matching USB devices and interfaces
+- `ping` — send postcard-rpc standard `PingEndpoint`
+- `schema` — dump the postcard-rpc standard schema report
 - `handshake` — connect over raw USB bulk, send `GetVersion` and `GetCapabilities`
 - `get-key` — get a single key action from the keymap
 - `set-key` — set a single key action (simple HID keycode only)
@@ -20,6 +22,8 @@ Minimal host-side USB tool for the RMK protocol.
 
 ```bash
 cargo run --manifest-path rmk-host-tool/Cargo.toml -- list
+cargo run --manifest-path rmk-host-tool/Cargo.toml -- ping --vid 0x4C4B --pid 0x4643 --value 123
+cargo run --manifest-path rmk-host-tool/Cargo.toml -- schema --vid 0x4C4B --pid 0x4643
 cargo run --manifest-path rmk-host-tool/Cargo.toml -- handshake --vid 0x4C4B --pid 0x4643
 cargo run --manifest-path rmk-host-tool/Cargo.toml -- get-key --vid 0x4C4B --pid 0x4643 --layer 0 --row 0 --col 0
 cargo run --manifest-path rmk-host-tool/Cargo.toml -- dump-keymap --vid 0x4C4B --pid 0x4643

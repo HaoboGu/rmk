@@ -6,18 +6,20 @@ use embassy_sync::signal::Signal;
 use embassy_time::Timer;
 use embassy_usb::driver::{Driver, Endpoint, EndpointError, EndpointIn, EndpointOut};
 use embassy_usb::{Builder, msos};
+use postcard_rpc::Topic;
 use postcard_rpc::header::{VarHeader, VarKey, VarKeyKind, VarSeq};
 use postcard_rpc::server::{WireRx, WireRxErrorKind, WireTx, WireTxErrorKind};
 use postcard_rpc::standard_icd::LoggingTopic;
-use postcard_rpc::Topic;
 use serde::Serialize;
 
 use crate::RawMutex;
 
 pub(crate) const USB_BULK_PACKET_SIZE: usize = 64;
+// Largest non-schema response is BulkKeyActions (~362 bytes).
+// 512 provides comfortable headroom for all normal endpoint responses.
 pub(crate) const TX_BUF_SIZE: usize = 512;
 // Per-packet timeout acts as a watchdog, not a hard deadline.
-// 50ms per packet gives ~400ms for a full 512-byte frame, which is generous
+// 50ms per packet gives ~1.6s for a full 2048-byte frame, which is generous
 // enough to accommodate scheduling jitter on resource-constrained MCUs.
 const TX_TIMEOUT_MS_PER_PACKET: usize = 50;
 const RMK_WINUSB_GUIDS: &[&str] = &["{533E7A32-4C6B-49F8-8C5B-60D2D784F2C6}"];
@@ -73,7 +75,9 @@ impl<'a, 'd, D: Driver<'d>> UsbBulkRx<'a, 'd, D> {
     }
 }
 
-pub(crate) fn add_usb_bulk_interface<'d, D: Driver<'d>>(builder: &mut Builder<'d, D>) -> (D::EndpointIn, D::EndpointOut) {
+pub(crate) fn add_usb_bulk_interface<'d, D: Driver<'d>>(
+    builder: &mut Builder<'d, D>,
+) -> (D::EndpointIn, D::EndpointOut) {
     // Vendor code 1 (non-zero to avoid conflicts with standard USB requests on older Windows)
     builder.msos_descriptor(msos::windows_version::WIN8_1, 1);
 
@@ -269,7 +273,11 @@ impl<'d, D: Driver<'d>> WireTx for UsbBulkTx<'_, 'd, D> {
 fn encode_varint_usize(mut value: usize, buf: &mut [u8]) -> usize {
     let mut i = 0;
     loop {
-        debug_assert!(i < buf.len(), "varint buffer overflow: value needs more than {} bytes", buf.len());
+        debug_assert!(
+            i < buf.len(),
+            "varint buffer overflow: value needs more than {} bytes",
+            buf.len()
+        );
         if value < 0x80 {
             buf[i] = value as u8;
             return i + 1;
@@ -289,11 +297,7 @@ fn logging_key(kkind: VarKeyKind) -> VarKey {
     }
 }
 
-async fn send_buf(
-    ep_in: &mut impl EndpointIn,
-    out: &[u8],
-    pending_frame: &mut bool,
-) -> Result<(), WireTxErrorKind> {
+async fn send_buf(ep_in: &mut impl EndpointIn, out: &[u8], pending_frame: &mut bool) -> Result<(), WireTxErrorKind> {
     // If a previous send was interrupted mid-frame, send a ZLP to cleanly
     // terminate it so the host can detect the frame boundary.
     if *pending_frame {

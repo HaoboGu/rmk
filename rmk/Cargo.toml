@@ -92,7 +92,6 @@ embedded-hal-mock = { version = "0.11.1", features = ["embedded-hal-async"] }
 [build-dependencies]
 rmk-config = { path = "../rmk-config", version = "=0.6.1" }
 toml = "1.0"
-chrono = "0.4"
 crc32fast = "1.3"
 const-gen = "1.6"
 
