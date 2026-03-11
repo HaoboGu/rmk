@@ -1,13 +1,11 @@
 //! RMK protocol service.
 //!
 //! Handles incoming postcard-rpc frames and dispatches to endpoint handlers.
-//! Real endpoint handlers will be added in Phases 4-5; transport implementations:
-//! USB bulk (Phase 3, complete) and BLE serial (Phase 7).
+//! Currently implements system and keymap endpoints; remaining endpoints
+//! (encoder, macro, combo, etc.) are stubbed and return `UnknownKey`.
 //!
-//! The USB transport uses raw USB bulk transfer boundaries (short packet
-//! termination) for framing — not COBS. Each postcard-rpc frame is sent
-//! as a single USB bulk transfer (one or more 64-byte packets, terminated
-//! by a short packet or ZLP).
+//! The USB transport uses raw bulk transfer boundaries (short-packet
+//! termination) for framing, not COBS.
 
 pub(crate) mod transport;
 
@@ -29,6 +27,16 @@ use crate::channel::FLASH_CHANNEL;
 use crate::storage::FlashOperationMessage;
 #[cfg(feature = "storage")]
 use crate::host::storage::{KeymapData, KeymapKey};
+
+/// Deserialize the request body or reply with `DeserFailed` and return early.
+macro_rules! deser_body {
+    ($body:expr, $sender:expr, $seq:expr) => {
+        match postcard::from_bytes($body) {
+            Ok(v) => v,
+            Err(_) => return $sender.error($seq, WireError::DeserFailed).await,
+        }
+    };
+}
 
 // RX buffer must fit the largest possible incoming frame:
 // SetKeymapBulkRequest = BulkRequest(4 bytes) + up to MAX_BULK(32) KeyAction values.
@@ -217,10 +225,8 @@ impl<
             tx,
             rx,
             rx_buf: [0u8; RX_BUF_SIZE],
-            // TODO: Phase 8 — implement full unlock state machine with physical
-            // key challenge. The device starts locked; the host must send
-            // UnlockRequest to unlock. Until Phase 8 is implemented,
-            // UnlockRequest immediately sets locked=false without a challenge.
+            // Device starts locked. UnlockRequest currently unlocks immediately
+            // without a physical key challenge (TODO: implement challenge).
             locked: true,
         }
     }
@@ -282,16 +288,8 @@ impl<
         let key = &hdr.key;
         let seq = hdr.seq_no;
 
-        // Dispatch by comparing the incoming key against each endpoint's REQ_KEY.
-        //
-        // We use a linear if-chain rather than `match` because VarKey's
-        // PartialEq performs cross-variant XOR-fold comparison, which is
-        // not compatible with Rust's pattern matching.
-        //
-        // We always wrap REQ_KEY in VarKey::Key8 even though the wire may use a
-        // shorter key kind (Key1/Key2/Key4). This is safe because VarKey::PartialEq
-        // performs cross-variant comparison: it XOR-folds the larger key down to the
-        // smaller key's size before comparing. See postcard-rpc's VarKey impl.
+        // Linear if-chain: VarKey::PartialEq performs cross-variant XOR-fold
+        // comparison, so wrapping REQ_KEY in Key8 works regardless of wire key size.
 
         // --- System (8 endpoints) ---
         if *key == VarKey::Key8(GetVersion::REQ_KEY) {
@@ -334,9 +332,7 @@ impl<
             return sender.reply::<GetLockStatus>(seq, &status).await;
         }
         if *key == VarKey::Key8(UnlockRequest::REQ_KEY) {
-            // TODO: Phase 8 — full lock state machine with physical key challenge.
-            // Until then, UnlockRequest immediately unlocks the device (no challenge).
-            // The host should poll GetLockStatus to confirm unlock is complete.
+            // TODO: implement physical key challenge. Currently unlocks immediately.
             *locked = false;
             return sender
                 .reply::<UnlockRequest>(seq, &UnlockChallenge { key_positions: heapless::Vec::new() })
@@ -368,14 +364,13 @@ impl<
             if *locked {
                 return sender.reply::<StorageReset>(seq, &Err(RmkError::Locked)).await;
             }
-            let mode: StorageResetMode = match postcard::from_bytes(body) {
-                Ok(m) => m,
-                Err(_) => return sender.error(seq, WireError::DeserFailed).await,
-            };
+            // Validate the request body even when storage is disabled, so
+            // malformed requests are rejected consistently.
+            let _mode: StorageResetMode = deser_body!(body, sender, seq);
             sender.reply::<StorageReset>(seq, &Ok(())).await?;
             #[cfg(feature = "storage")]
             {
-                let msg = match mode {
+                let msg = match _mode {
                     StorageResetMode::Full => FlashOperationMessage::ResetAndReboot,
                     StorageResetMode::LayoutOnly => FlashOperationMessage::ResetLayout,
                     // Future variants — treat as full reset for safety
@@ -383,7 +378,6 @@ impl<
                 };
                 FLASH_CHANNEL.send(msg).await;
             }
-            // Storage task handles erase + reboot; don't race it
             #[cfg(not(feature = "storage"))]
             crate::boot::reboot_keyboard();
             core::future::pending::<()>().await;
@@ -392,18 +386,10 @@ impl<
 
         // --- Keymap (8 endpoints) ---
         if *key == VarKey::Key8(GetKeyAction::REQ_KEY) {
-            let pos: KeyPosition = match postcard::from_bytes(body) {
-                Ok(p) => p,
-                Err(_) => return sender.error(seq, WireError::DeserFailed).await,
-            };
+            let pos: KeyPosition = deser_body!(body, sender, seq);
             if pos.row as usize >= ROW || pos.col as usize >= COL || pos.layer as usize >= NUM_LAYER {
-                // Out of bounds — the response type is `KeyAction` (no error variant),
-                // so we use `WireError::DeserFailed` as the closest available wire error.
-                // `WireError` only has `DeserFailed` and `UnknownKey`; neither is a
-                // perfect semantic match for "invalid parameter". The host should check
-                // bounds via GetCapabilities before requesting. Consider changing the
-                // endpoint response type to `Result<KeyAction, RmkError>` in a future
-                // protocol version for proper error reporting.
+                // Out of bounds. WireError::DeserFailed is the closest wire error
+                // available; the host should check bounds via GetCapabilities.
                 return sender.error(seq, WireError::DeserFailed).await;
             }
             // key_pos takes (col, row) — note the reversed order
@@ -415,10 +401,7 @@ impl<
             if *locked {
                 return sender.reply::<SetKeyAction>(seq, &Err(RmkError::Locked)).await;
             }
-            let req: SetKeyRequest = match postcard::from_bytes(body) {
-                Ok(r) => r,
-                Err(_) => return sender.error(seq, WireError::DeserFailed).await,
-            };
+            let req: SetKeyRequest = deser_body!(body, sender, seq);
             let pos = &req.position;
             if pos.row as usize >= ROW || pos.col as usize >= COL || pos.layer as usize >= NUM_LAYER {
                 return sender
@@ -444,10 +427,7 @@ impl<
             return sender.reply::<SetKeyAction>(seq, &Ok(())).await;
         }
         if *key == VarKey::Key8(GetKeymapBulk::REQ_KEY) {
-            let req: BulkRequest = match postcard::from_bytes(body) {
-                Ok(r) => r,
-                Err(_) => return sender.error(seq, WireError::DeserFailed).await,
-            };
+            let req: BulkRequest = deser_body!(body, sender, seq);
             let mut actions: BulkKeyActions = heapless::Vec::new();
             let mut row = req.start_row as usize;
             let mut col = req.start_col as usize;
@@ -477,10 +457,7 @@ impl<
             if *locked {
                 return sender.reply::<SetKeymapBulk>(seq, &Err(RmkError::Locked)).await;
             }
-            let req: SetKeymapBulkRequest = match postcard::from_bytes(body) {
-                Ok(r) => r,
-                Err(_) => return sender.error(seq, WireError::DeserFailed).await,
-            };
+            let req: SetKeymapBulkRequest = deser_body!(body, sender, seq);
             let layer = req.request.layer as usize;
             if layer >= NUM_LAYER {
                 return sender
@@ -498,10 +475,8 @@ impl<
                 if row >= ROW {
                     break;
                 }
-                // SAFETY (RefCell): borrow_mut() is a temporary expression — the
-                // borrow is dropped before the .await below. Do NOT bind it to a
-                // variable, or it will be held across the .await and panic at runtime.
-                // key_pos takes (col, row)
+                // borrow_mut() must stay as a temporary (not bound to a variable)
+                // to avoid holding the borrow across the .await below.
                 keymap
                     .borrow_mut()
                     .set_action_at(KeyboardEventPos::key_pos(col as u8, row as u8), layer, *action);
@@ -535,10 +510,7 @@ impl<
             if *locked {
                 return sender.reply::<SetDefaultLayer>(seq, &Err(RmkError::Locked)).await;
             }
-            let layer: u8 = match postcard::from_bytes(body) {
-                Ok(l) => l,
-                Err(_) => return sender.error(seq, WireError::DeserFailed).await,
-            };
+            let layer: u8 = deser_body!(body, sender, seq);
             if layer as usize >= NUM_LAYER {
                 return sender
                     .reply::<SetDefaultLayer>(seq, &Err(RmkError::InvalidParameter))
@@ -567,123 +539,10 @@ impl<
             return Ok(()); // unreachable
         }
 
-        // --- Encoder (2 endpoints) ---
-        if *key == VarKey::Key8(GetEncoderAction::REQ_KEY) {
-            // TODO: Phase 5
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(SetEncoderAction::REQ_KEY) {
-            // TODO: Phase 5 — requires unlock
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-
-        // --- Macro (4 endpoints) ---
-        if *key == VarKey::Key8(GetMacroInfo::REQ_KEY) {
-            // TODO: Phase 5
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(GetMacro::REQ_KEY) {
-            // TODO: Phase 5
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(SetMacro::REQ_KEY) {
-            // TODO: Phase 5 — requires unlock
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(ResetMacros::REQ_KEY) {
-            // TODO: Phase 5 — requires unlock
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-
-        // --- Combo (3 endpoints) ---
-        if *key == VarKey::Key8(GetCombo::REQ_KEY) {
-            // TODO: Phase 5
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(SetCombo::REQ_KEY) {
-            // TODO: Phase 5 — requires unlock
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(ResetCombos::REQ_KEY) {
-            // TODO: Phase 5 — requires unlock
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-
-        // --- Morse (3 endpoints) ---
-        if *key == VarKey::Key8(GetMorse::REQ_KEY) {
-            // TODO: Phase 5
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(SetMorse::REQ_KEY) {
-            // TODO: Phase 5 — requires unlock
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(ResetMorse::REQ_KEY) {
-            // TODO: Phase 5 — requires unlock
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-
-        // --- Fork (3 endpoints) ---
-        if *key == VarKey::Key8(GetFork::REQ_KEY) {
-            // TODO: Phase 5
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(SetFork::REQ_KEY) {
-            // TODO: Phase 5 — requires unlock
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(ResetForks::REQ_KEY) {
-            // TODO: Phase 5 — requires unlock
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-
-        // --- Behavior (2 endpoints) ---
-        if *key == VarKey::Key8(GetBehaviorConfig::REQ_KEY) {
-            // TODO: Phase 5
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(SetBehaviorConfig::REQ_KEY) {
-            // TODO: Phase 5 — requires unlock
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-
-        // --- Connection (4 endpoints) ---
-        if *key == VarKey::Key8(GetConnectionInfo::REQ_KEY) {
-            // TODO: Phase 5
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(SetConnectionType::REQ_KEY) {
-            // TODO: Phase 5 — requires unlock
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(SwitchBleProfile::REQ_KEY) {
-            // TODO: Phase 5 — requires unlock
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(ClearBleProfile::REQ_KEY) {
-            // TODO: Phase 5 — requires unlock
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-
-        // --- Status (4 endpoints) ---
-        if *key == VarKey::Key8(GetBatteryStatus::REQ_KEY) {
-            // TODO: Phase 5
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(GetCurrentLayer::REQ_KEY) {
-            // TODO: Phase 5
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(GetMatrixState::REQ_KEY) {
-            // TODO: Phase 5
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-        if *key == VarKey::Key8(GetSplitStatus::REQ_KEY) {
-            // TODO: Phase 5
-            return sender.error(seq, WireError::UnknownKey).await;
-        }
-
-        // No match
+        // Unimplemented endpoints (encoder, macro, combo, morse, fork,
+        // behavior, connection, status) fall through here. Their keys are
+        // declared in REQ_KEYS/RESP_KEYS for key-length computation but
+        // handlers will be added in later phases.
         sender.error(seq, WireError::UnknownKey).await
     }
 }

@@ -77,21 +77,17 @@ pub(crate) fn add_usb_bulk_interface<'d, D: Driver<'d>>(builder: &mut Builder<'d
     // Vendor code 1 (non-zero to avoid conflicts with standard USB requests on older Windows)
     builder.msos_descriptor(msos::windows_version::WIN8_1, 1);
 
-    let (ep_in, ep_out) = {
-        let mut function = builder.function(0xFF, 0, 0);
-        function.msos_feature(msos::CompatibleIdFeatureDescriptor::new("WINUSB", ""));
-        function.msos_feature(msos::RegistryPropertyFeatureDescriptor::new(
-            "DeviceInterfaceGUIDs",
-            msos::PropertyData::RegMultiSz(RMK_WINUSB_GUIDS),
-        ));
+    let mut function = builder.function(0xFF, 0, 0);
+    function.msos_feature(msos::CompatibleIdFeatureDescriptor::new("WINUSB", ""));
+    function.msos_feature(msos::RegistryPropertyFeatureDescriptor::new(
+        "DeviceInterfaceGUIDs",
+        msos::PropertyData::RegMultiSz(RMK_WINUSB_GUIDS),
+    ));
 
-        let mut interface = function.interface();
-        let mut alt = interface.alt_setting(0xFF, 0, 0, None);
-        let ep_out = alt.endpoint_bulk_out(None, USB_BULK_PACKET_SIZE as u16);
-        let ep_in = alt.endpoint_bulk_in(None, USB_BULK_PACKET_SIZE as u16);
-        (ep_in, ep_out)
-    };
-
+    let mut interface = function.interface();
+    let mut alt = interface.alt_setting(0xFF, 0, 0, None);
+    let ep_out = alt.endpoint_bulk_out(None, USB_BULK_PACKET_SIZE as u16);
+    let ep_in = alt.endpoint_bulk_in(None, USB_BULK_PACKET_SIZE as u16);
     (ep_in, ep_out)
 }
 
@@ -235,19 +231,14 @@ impl<'d, D: Driver<'d>> WireTx for UsbBulkTx<'_, 'd, D> {
         let overflow = writer.write_fmt(args).is_err();
         let mut body_len = writer.len();
 
-        // If the message was truncated, append "..." to indicate truncation.
-        // We must not split a multi-byte UTF-8 character — scan backwards from
-        // body_len-3 to find a char boundary (a byte that is NOT a continuation
-        // byte, i.e. not matching 10xxxxxx / 0x80..=0xBF).
+        // If truncated, append "..." at a UTF-8 char boundary (scan backwards
+        // to avoid splitting multi-byte characters).
         if overflow && body_len >= 3 {
             let body = &remain[MAX_VARINT..MAX_VARINT + body_len];
             let mut trunc = body_len - 3;
             while trunc > 0 && (body[trunc] & 0xC0) == 0x80 {
                 trunc -= 1;
             }
-            // If trunc landed on 0 and byte 0 is still a continuation byte
-            // (indicating the buffer starts mid-character — shouldn't happen
-            // with valid UTF-8 but handle defensively), just emit "...".
             if trunc == 0 && !body.is_empty() && (body[0] & 0xC0) == 0x80 {
                 // No valid char boundary found; replace entire body with "..."
                 remain[MAX_VARINT..MAX_VARINT + 3].copy_from_slice(b"...");
@@ -273,12 +264,8 @@ impl<'d, D: Driver<'d>> WireTx for UsbBulkTx<'_, 'd, D> {
     }
 }
 
-/// Encode a usize as a postcard varint (LEB128) into the buffer.
-/// Returns the number of bytes written.
-///
-/// Safety assumption: the caller always passes a 5-byte buffer (`MAX_VARINT`),
-/// which is sufficient for any value up to ~268 MB. The `body_len` values
-/// encoded here are bounded by `TX_BUF_SIZE` (512), so overflow is impossible.
+/// Encode a usize as a postcard varint (LEB128) into `buf`.
+/// Returns the number of bytes written. Caller must provide at least 5 bytes.
 fn encode_varint_usize(mut value: usize, buf: &mut [u8]) -> usize {
     let mut i = 0;
     loop {
@@ -347,17 +334,10 @@ async fn send_buf(
         }
         Either::First(Err(e)) => Err(e),
         Either::Second(()) => {
-            // CANCEL-SAFETY: Embassy-usb endpoint write futures are NOT
-            // cancel-safe. Dropping mid-write can leave the hardware endpoint
-            // in an undefined state. We set pending_frame=true so the next
-            // send (or wait_connection after the dispatch loop breaks) will
-            // emit a ZLP to cleanly terminate the aborted transfer.
-            //
-            // Recovery path: returning ConnectionClosed breaks the dispatch
-            // loop → run() re-enters wait_connection() → ep_in.wait_enabled()
-            // waits for a USB bus reset → pending_frame is cleared. The bus
-            // reset also resets the hardware endpoint, which is the only
-            // reliable way to recover from a cancelled write.
+            // Embassy-usb endpoint writes are NOT cancel-safe. pending_frame
+            // stays true so the next send emits a ZLP to terminate the aborted
+            // transfer. Returning ConnectionClosed breaks the dispatch loop,
+            // which re-enters wait_connection() and waits for a USB bus reset.
             Err(WireTxErrorKind::ConnectionClosed)
         }
     }

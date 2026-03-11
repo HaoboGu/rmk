@@ -223,7 +223,14 @@ async fn main(spawner: Spawner) {
             batt_proc
         },
         keyboard.run(), // Keyboard is special
-        run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+        run_rmk(
+            #[cfg(any(feature = "vial", feature = "rmk_protocol"))]
+            &keymap,
+            driver,
+            &stack,
+            &mut storage,
+            rmk_config,
+        ),
     )
     .await;
 }

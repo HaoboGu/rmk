@@ -57,7 +57,7 @@ pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;
 // Currently only contains VIA-over-BLE implementation.
-// Phase 7 will add rmk_protocol BLE transport here.
+// TODO: add rmk_protocol BLE transport here.
 #[cfg(feature = "host")]
 pub(crate) mod host_service;
 pub(crate) mod led;

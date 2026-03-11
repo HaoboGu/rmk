@@ -169,7 +169,7 @@ async fn main(spawner: Spawner) {
         pid: 0x4643,
         manufacturer: "Haobo",
         product_name: "RMK Keyboard",
-        serial_number: "rmk:f64c2b3c:000001",
+        serial_number: "vial:f64c2b3c:000001",
     };
     #[cfg(feature = "vial")]
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]);
@@ -269,7 +269,14 @@ async fn main(spawner: Spawner) {
         keyboard.run(),
         join5(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
-            run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+            run_rmk(
+                #[cfg(any(feature = "vial", feature = "rmk_protocol"))]
+                &keymap,
+                driver,
+                &stack,
+                &mut storage,
+                rmk_config,
+            ),
             scan_peripherals(&stack, &peripheral_addrs),
             capslock_led.run(),
             peripheral_battery_monitor.run(),

@@ -4,6 +4,7 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 /// Charge state of the battery.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "protocol", derive(postcard_schema::Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

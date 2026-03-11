@@ -28,6 +28,7 @@ protocol = ["dep:postcard-schema", "dep:postcard-rpc", "dep:heapless"]
 defmt = [
     "dep:defmt",
     "postcard/defmt",
+    "heapless?/defmt",
 ]
 # Feature for proc-macro code generation only, not included in firmware
 _codegen = []

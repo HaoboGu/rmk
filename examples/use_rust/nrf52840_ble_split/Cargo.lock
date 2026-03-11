@@ -1701,6 +1701,7 @@ version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1b0f9cc8bd8f38f5893fb7f07626b1c8722b3166ead66cfb14b5c5d5352822c"
 dependencies = [
+ "defmt 1.0.1",
  "heapless 0.9.2",
  "portable-atomic",
  "postcard",

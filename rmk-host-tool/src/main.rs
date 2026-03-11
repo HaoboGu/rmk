@@ -6,8 +6,8 @@ use postcard_rpc::host_client::{HostClient, HostErr};
 use postcard_rpc::standard_icd::{ERROR_PATH, WireError};
 use rmk_types::protocol::rmk::{
     BulkRequest, GetCapabilities, GetDefaultLayer, GetKeyAction, GetKeymapBulk, GetLockStatus,
-    GetVersion, KeyPosition, Reboot, ResetKeymap, SetDefaultLayer, SetKeyAction, SetKeyRequest,
-    StorageReset, StorageResetMode,
+    GetVersion, KeyPosition, ProtocolVersion, Reboot, ResetKeymap, RmkError, SetDefaultLayer,
+    SetKeyAction, SetKeyRequest, StorageReset, StorageResetMode, UnlockRequest, MAX_BULK,
 };
 use rmk_types::action::{Action, KeyAction};
 use rmk_types::keycode::{HidKeyCode, KeyCode};
@@ -41,9 +41,9 @@ enum Command {
     /// Set default layer.
     SetDefaultLayer(SetDefaultLayerArgs),
     /// Reboot the device.
-    Reboot(ConnectArgs),
+    Reboot(DestructiveArgs),
     /// Reset keymap to defaults (erases storage and reboots).
-    ResetKeymap(ConnectArgs),
+    ResetKeymap(DestructiveArgs),
     /// Reset storage (erases storage and reboots).
     StorageReset(StorageResetArgs),
 }
@@ -74,6 +74,15 @@ struct ConnectArgs {
     /// Sequence-number width used by the host client.
     #[arg(long, value_enum, default_value_t = SeqKindArg::Seq2)]
     seq_kind: SeqKindArg,
+}
+
+#[derive(Args, Debug, Clone)]
+struct DestructiveArgs {
+    #[command(flatten)]
+    connect: ConnectArgs,
+    /// Skip confirmation prompt.
+    #[arg(long, short = 'y')]
+    yes: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -114,8 +123,10 @@ struct SetKeyArgs {
     #[arg(long)]
     col: u8,
     /// HID keycode value (e.g. 0x04 for KeyA). Decimal or hex with 0x prefix.
-    #[arg(long, value_parser = parse_u16)]
-    keycode: u16,
+    /// Only basic HID keycodes (0-255) are supported; complex KeyAction
+    /// variants (TapHold, LayerSwitch, etc.) are not yet available from the CLI.
+    #[arg(long)]
+    keycode: u8,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -147,7 +158,7 @@ impl From<StorageResetModeArg> for StorageResetMode {
 #[derive(Args, Debug, Clone)]
 struct StorageResetArgs {
     #[command(flatten)]
-    connect: ConnectArgs,
+    destructive: DestructiveArgs,
     /// Reset mode.
     #[arg(long, default_value = "full")]
     mode: StorageResetModeArg,
@@ -242,6 +253,32 @@ fn connect(args: &ConnectArgs) -> Result<HostClient<WireError>> {
     .map_err(|err| anyhow!(err))
 }
 
+/// Check protocol version compatibility and print a warning if mismatched.
+async fn check_version(client: &HostClient<WireError>) -> Result<()> {
+    let version = client
+        .send_resp::<GetVersion>(&())
+        .await
+        .context("GetVersion request failed")?;
+    let expected = ProtocolVersion::CURRENT;
+    if !expected.is_backward_compatible_with(&version) {
+        eprintln!(
+            "WARNING: firmware protocol version {}.{} is not compatible with host version {}.{}",
+            version.major, version.minor, expected.major, expected.minor
+        );
+    }
+    Ok(())
+}
+
+/// Send an UnlockRequest so write operations are accepted by the firmware.
+/// Currently the firmware unlocks immediately without a physical challenge.
+async fn ensure_unlocked(client: &HostClient<WireError>) -> Result<()> {
+    client
+        .send_resp::<UnlockRequest>(&())
+        .await
+        .context("UnlockRequest failed")?;
+    Ok(())
+}
+
 async fn handshake(args: HandshakeArgs) -> Result<()> {
     let client = connect(&args.connect)?;
 
@@ -253,26 +290,8 @@ async fn handshake(args: HandshakeArgs) -> Result<()> {
     println!("protocol.version={}.{}", version.major, version.minor);
 
     match client.send_resp::<GetCapabilities>(&()).await {
-        Ok(capabilities) => {
-            println!("capabilities.num_layers={}", capabilities.num_layers);
-            println!("capabilities.num_rows={}", capabilities.num_rows);
-            println!("capabilities.num_cols={}", capabilities.num_cols);
-            println!("capabilities.num_encoders={}", capabilities.num_encoders);
-            println!("capabilities.max_combos={}", capabilities.max_combos);
-            println!("capabilities.max_macros={}", capabilities.max_macros);
-            println!("capabilities.macro_space_size={}", capabilities.macro_space_size);
-            println!("capabilities.max_morse={}", capabilities.max_morse);
-            println!("capabilities.max_forks={}", capabilities.max_forks);
-            println!("capabilities.has_storage={}", capabilities.has_storage);
-            println!("capabilities.has_split={}", capabilities.has_split);
-            println!(
-                "capabilities.num_split_peripherals={}",
-                capabilities.num_split_peripherals
-            );
-            println!("capabilities.has_ble={}", capabilities.has_ble);
-            println!("capabilities.num_ble_profiles={}", capabilities.num_ble_profiles);
-            println!("capabilities.has_lighting={}", capabilities.has_lighting);
-            println!("capabilities.max_payload_size={}", capabilities.max_payload_size);
+        Ok(caps) => {
+            println!("capabilities={:#?}", caps);
         }
         Err(HostErr::Wire(WireError::UnknownKey)) => {
             if args.require_capabilities {
@@ -288,6 +307,7 @@ async fn handshake(args: HandshakeArgs) -> Result<()> {
 
 async fn get_key(args: GetKeyArgs) -> Result<()> {
     let client = connect(&args.connect)?;
+    check_version(&client).await?;
     let pos = KeyPosition {
         layer: args.layer,
         row: args.row,
@@ -303,10 +323,9 @@ async fn get_key(args: GetKeyArgs) -> Result<()> {
 
 async fn set_key(args: SetKeyArgs) -> Result<()> {
     let client = connect(&args.connect)?;
-    if args.keycode > u8::MAX as u16 {
-        bail!("keycode {} exceeds u8 range (max 255); high byte would be silently truncated", args.keycode);
-    }
-    let hid_code = HidKeyCode::from(args.keycode as u8);
+    check_version(&client).await?;
+    ensure_unlocked(&client).await?;
+    let hid_code = HidKeyCode::from(args.keycode);
     let action = KeyAction::Single(Action::Key(KeyCode::Hid(hid_code)));
     let req = SetKeyRequest {
         position: KeyPosition {
@@ -329,34 +348,39 @@ async fn set_key(args: SetKeyArgs) -> Result<()> {
 
 async fn dump_keymap(args: ConnectArgs) -> Result<()> {
     let client = connect(&args)?;
+    check_version(&client).await?;
 
     let caps = client
         .send_resp::<GetCapabilities>(&())
         .await
         .context("GetCapabilities request failed")?;
 
+    if caps.num_layers == 0 || caps.num_rows == 0 || caps.num_cols == 0 {
+        bail!(
+            "invalid capabilities: layers={} rows={} cols={} (all must be > 0)",
+            caps.num_layers,
+            caps.num_rows,
+            caps.num_cols
+        );
+    }
+
     println!(
         "Keymap: {} layers x {} rows x {} cols",
         caps.num_layers, caps.num_rows, caps.num_cols
     );
 
+    let num_cols = caps.num_cols as u16;
     for layer in 0..caps.num_layers {
         println!("\n=== Layer {} ===", layer);
-        let mut row: u8 = 0;
-        let mut col: u8 = 0;
-        let total = caps.num_rows as u16 * caps.num_cols as u16;
+        let total = caps.num_rows as u16 * num_cols;
         let mut fetched: u16 = 0;
 
         while fetched < total {
-            let count = (total - fetched).min(32);
-            let req = BulkRequest {
-                layer,
-                start_row: row,
-                start_col: col,
-                count,
-            };
+            let row = (fetched / num_cols) as u8;
+            let col = (fetched % num_cols) as u8;
+            let count = ((total - fetched).min(MAX_BULK as u16)) as u8;
             let actions = client
-                .send_resp::<GetKeymapBulk>(&req)
+                .send_resp::<GetKeymapBulk>(&BulkRequest { layer, start_row: row, start_col: col, count })
                 .await
                 .context("GetKeymapBulk request failed")?;
 
@@ -365,17 +389,14 @@ async fn dump_keymap(args: ConnectArgs) -> Result<()> {
             }
 
             for action in actions.iter() {
-                if col == 0 {
-                    print!("  row {:2}: ", row);
+                if fetched % num_cols == 0 {
+                    print!("  row {:2}: ", fetched / num_cols);
                 }
                 print!("{:?} ", action);
-                col += 1;
-                if col >= caps.num_cols {
-                    println!();
-                    col = 0;
-                    row += 1;
-                }
                 fetched += 1;
+                if fetched % num_cols == 0 {
+                    println!();
+                }
             }
         }
     }
@@ -385,6 +406,7 @@ async fn dump_keymap(args: ConnectArgs) -> Result<()> {
 
 async fn get_lock_status(args: ConnectArgs) -> Result<()> {
     let client = connect(&args)?;
+    check_version(&client).await?;
     let status = client
         .send_resp::<GetLockStatus>(&())
         .await
@@ -398,6 +420,7 @@ async fn get_lock_status(args: ConnectArgs) -> Result<()> {
 
 async fn get_default_layer(args: ConnectArgs) -> Result<()> {
     let client = connect(&args)?;
+    check_version(&client).await?;
     let layer = client
         .send_resp::<GetDefaultLayer>(&())
         .await
@@ -408,6 +431,8 @@ async fn get_default_layer(args: ConnectArgs) -> Result<()> {
 
 async fn set_default_layer(args: SetDefaultLayerArgs) -> Result<()> {
     let client = connect(&args.connect)?;
+    check_version(&client).await?;
+    ensure_unlocked(&client).await?;
     let result = client
         .send_resp::<SetDefaultLayer>(&args.layer)
         .await
@@ -419,36 +444,77 @@ async fn set_default_layer(args: SetDefaultLayerArgs) -> Result<()> {
     Ok(())
 }
 
-async fn reboot(args: ConnectArgs) -> Result<()> {
-    let client = connect(&args)?;
-    // Device will disconnect after replying, so ignore connection errors
-    match client.send_resp::<Reboot>(&()).await {
-        Ok(()) => println!("Reboot command sent, device is rebooting..."),
-        Err(HostErr::Wire(WireError::UnknownKey)) => println!("Reboot not supported"),
-        Err(HostErr::Closed) => println!("Reboot command sent (device disconnected as expected)"),
-        Err(e) => eprintln!("Reboot failed: {e:?}"),
+async fn reboot(args: DestructiveArgs) -> Result<()> {
+    if !args.yes {
+        confirm_destructive("This will reboot the keyboard device.")?;
     }
-    Ok(())
+    let client = connect(&args.connect)?;
+    check_version(&client).await?;
+    ensure_unlocked(&client).await?;
+    handle_reboot_response(client.send_resp::<Reboot>(&()).await, "Reboot")
 }
 
-async fn reset_keymap(args: ConnectArgs) -> Result<()> {
-    let client = connect(&args)?;
-    match client.send_resp::<ResetKeymap>(&()).await {
-        Ok(Ok(())) => println!("ResetKeymap command sent, device is rebooting..."),
-        Ok(Err(e)) => println!("ResetKeymap error: {:?}", e),
-        Err(HostErr::Closed) => println!("ResetKeymap command sent (device disconnected as expected)"),
-        Err(e) => eprintln!("ResetKeymap failed: {e:?}"),
+async fn reset_keymap(args: DestructiveArgs) -> Result<()> {
+    if !args.yes {
+        confirm_destructive("This will erase all keymap data and reboot. BLE bonds may also be lost.")?;
     }
-    Ok(())
+    let client = connect(&args.connect)?;
+    check_version(&client).await?;
+    ensure_unlocked(&client).await?;
+    handle_reboot_response(client.send_resp::<ResetKeymap>(&()).await, "ResetKeymap")
 }
 
 async fn storage_reset(args: StorageResetArgs) -> Result<()> {
-    let client = connect(&args.connect)?;
+    let warning = match args.mode {
+        StorageResetModeArg::Full => {
+            "This will erase ALL storage and reboot. All configuration data will be lost."
+        }
+        StorageResetModeArg::Layout => {
+            "WARNING: Layout-only reset is not yet implemented in firmware.\n\
+             This currently falls back to a FULL erase, which also clears:\n\
+             - BLE bonding information\n\
+             - Behavior configuration (combos, morse, forks)\n\
+             - Connection preferences\n\
+             The device will reboot after erasing."
+        }
+    };
+    if !args.destructive.yes {
+        confirm_destructive(warning)?;
+    }
+    let client = connect(&args.destructive.connect)?;
+    check_version(&client).await?;
+    ensure_unlocked(&client).await?;
     let mode = StorageResetMode::from(args.mode);
-    match client.send_resp::<StorageReset>(&mode).await {
-        Ok(()) => println!("StorageReset({:?}) sent, device is rebooting...", mode),
-        Err(HostErr::Closed) => println!("StorageReset command sent (device disconnected as expected)"),
-        Err(e) => eprintln!("StorageReset failed: {e:?}"),
+    handle_reboot_response(
+        client.send_resp::<StorageReset>(&mode).await,
+        &format!("StorageReset({mode:?})"),
+    )
+}
+
+/// Handle the result of a destructive command that reboots the device.
+/// The device disconnects after replying, so `HostErr::Closed` is expected success.
+fn handle_reboot_response(
+    result: Result<Result<(), RmkError>, HostErr<WireError>>,
+    cmd: &str,
+) -> Result<()> {
+    match result {
+        Ok(Ok(())) => println!("{cmd} command sent, device is rebooting..."),
+        Ok(Err(e)) => bail!("{cmd} rejected: {e}"),
+        Err(HostErr::Closed) => println!("{cmd} command sent (device disconnected as expected)"),
+        Err(e) => bail!("{cmd} failed: {e:?}"),
+    }
+    Ok(())
+}
+
+fn confirm_destructive(message: &str) -> Result<()> {
+    eprintln!("{}", message);
+    eprint!("Continue? [y/N] ");
+    let mut input = String::new();
+    std::io::stdin()
+        .read_line(&mut input)
+        .context("failed to read confirmation")?;
+    if !input.trim().eq_ignore_ascii_case("y") {
+        bail!("aborted by user");
     }
     Ok(())
 }

@@ -44,7 +44,7 @@
 | f | Define `LockStatus { locked: bool, awaiting_keys: bool, remaining_keys: u8 }` | [x] | In `types.rs` |
 | g | Define `UnlockChallenge { key_positions: Vec<(u8, u8), MAX_UNLOCK_KEYS> }` with `MAX_UNLOCK_KEYS = 2` | [x] | In `types.rs` |
 | h | Define `KeyPosition { layer: u8, row: u8, col: u8 }` | [x] | In `keymap.rs` |
-| i | Define `BulkRequest { layer: u8, start_row: u8, start_col: u8, count: u16 }` with `MAX_BULK = 32` | [x] | In `keymap.rs` |
+| i | Define `BulkRequest { layer: u8, start_row: u8, start_col: u8, count: u8 }` with `MAX_BULK = 32` | [x] | In `keymap.rs` |
 | j | Define `StorageResetMode` enum (`Full`, `LayoutOnly`) | [x] | In `types.rs` |
 | k | Topic payload types simplified: topics use raw types (`u8`, `u16`, `bool`, `BatteryStatus`, `BleStatus`, `ConnectionType`, `LedIndicator`) instead of wrapper structs | [x] | Simpler than original plan; wrapper structs (`LayerChangePayload`, etc.) unnecessary since `impl_payload_wrapper!` already provides conversions |
 | l | Define connection/status types: `ConnectionInfo`, `MatrixState`, `SplitStatus` | [x] | In `status.rs`; `ConnectionType` in `rmk-types/src/connection.rs`, `BatteryStatus` in `rmk-types/src/battery.rs`, `BleStatus` in `rmk-types/src/ble.rs` |
@@ -163,11 +163,11 @@ Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rm
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | In `rmk/src/storage/mod.rs`, rename `FlashOperationMessage::VialMessage` to `FlashOperationMessage::HostMessage` | [→4.0] | |
-| b | Search all references to `VialMessage` and update (`rmk/src/host/via/mod.rs`, `rmk/src/host/via/vial.rs`, etc.) | [→4.0] | |
-| c | Keep `#[cfg(feature = "host")]` on the `HostMessage` variant (usable by both vial and rmk_protocol) | [→4.0] | |
-| d | Implement runtime keymap reset in storage: change `FlashOperationMessage::ResetLayout` handler to actually erase stored keymap keys and reload defaults (currently a no-op at runtime) | [→4.0] | Required for `ResetKeymap` endpoint to work |
-| e | Run `cargo test -p rmk --no-default-features --features=vial,storage` to confirm Vial still works | [→4.0] | |
+| a | In `rmk/src/storage/mod.rs`, rename `FlashOperationMessage::VialMessage` to `FlashOperationMessage::HostMessage` | [x] | Done in Phase 4 Step 4.0 |
+| b | Search all references to `VialMessage` and update (`rmk/src/host/via/mod.rs`, `rmk/src/host/via/vial.rs`, etc.) | [x] | Done in Phase 4 Step 4.0 |
+| c | Keep `#[cfg(feature = "host")]` on the `HostMessage` variant (usable by both vial and rmk_protocol) | [x] | Done in Phase 4 Step 4.0 |
+| d | Implement runtime keymap reset in storage: change `FlashOperationMessage::ResetLayout` handler to actually erase stored keymap keys and reload defaults (currently a no-op at runtime) | [~] | Falls back to full erase + reboot; true layout-only reset deferred |
+| e | Run `cargo test -p rmk --no-default-features --features=vial,storage` to confirm Vial still works | [x] | Done in Phase 4 Step 4.0 |
 
 ---
 
@@ -216,7 +216,7 @@ Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rm
 
 ---
 
-## Phase 4: Core Endpoints (System + Keymap)
+## Phase 4: Core Endpoints (System + Keymap) ✅
 
 **Goal**: Core configuration functionality working end-to-end.
 
@@ -226,52 +226,52 @@ Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rm
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Rename `FlashOperationMessage::VialMessage` → `FlashOperationMessage::HostMessage` in `rmk/src/storage/mod.rs` and all references | [ ] | From old 2.5a-c |
-| b | Implement runtime `ResetLayout` handler in storage: erase stored keymap keys and reload defaults (currently a no-op at runtime) | [ ] | From old 2.5d. Required for `ResetKeymap` endpoint |
-| c | Add `compile_error!` for `rmk_protocol` + `_ble` + `_no_usb` combination | [ ] | Prevent silent hang — BLE transport is not yet implemented (Phase 7). The current stub in `BleHostService::run()` hangs forever with only a warning log |
-| d | Buffer sizing audit: verify `TX_BUF_SIZE` (256) and `RX_BUF_SIZE` (512) are sufficient for largest payloads (`GetKeymapBulk` response with `MAX_BULK=32` `KeyAction`s, `DeviceCapabilities`, etc.) | [ ] | |
-| e | Run `cargo test -p rmk --no-default-features --features=vial,storage` to confirm Vial still works | [ ] | |
+| a | Rename `FlashOperationMessage::VialMessage` → `FlashOperationMessage::HostMessage` in `rmk/src/storage/mod.rs` and all references | [x] | From old 2.5a-c |
+| b | Implement runtime `ResetLayout` handler in storage: erase stored keymap keys and reload defaults (currently a no-op at runtime) | [~] | Falls back to full erase + reboot; true layout-only reset deferred |
+| c | Add `compile_error!` for `rmk_protocol` + `_ble` + `_no_usb` combination | [x] | Prevent silent hang — BLE transport is not yet implemented (Phase 7). The current stub in `BleHostService::run()` hangs forever with only a warning log |
+| d | Buffer sizing audit: verify `TX_BUF_SIZE` (512) and `RX_BUF_SIZE` (512) are sufficient for largest payloads (`GetKeymapBulk` response with `MAX_BULK=32` `KeyAction`s, `DeviceCapabilities`, etc.) | [x] | Both set to 512 bytes |
+| e | Run `cargo test -p rmk --no-default-features --features=vial,storage` to confirm Vial still works | [x] | |
 
 ### Step 4.1 — System endpoint handlers
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Implement `GetVersion` handler: return hardcoded `ProtocolVersion { major: 1, minor: 0 }` | [ ] | |
-| b | Implement `GetCapabilities` handler: construct `DeviceCapabilities` from const generics (`ROW` → `num_rows`, `COL` → `num_cols`, `NUM_LAYER` → `num_layers`, `NUM_ENCODER` → `num_encoders`) and build.rs constants (`COMBO_MAX_NUM` → `max_combos`, `FORK_MAX_NUM` → `max_forks`, `MORSE_MAX_NUM` → `max_morse`, `MACRO_SPACE_SIZE` → `macro_space_size`, `NUM_BLE_PROFILE` → `num_ble_profiles`, `SPLIT_PERIPHERALS_NUM` → `num_split_peripherals`). Feature booleans from `cfg!()` checks | [ ] | `NUM_ROW`/`NUM_COL`/`NUM_LAYER`/`NUM_ENCODER` are NOT build.rs constants — they are const generics on `ProtocolService` |
-| c | Implement `GetLockStatus` handler: read current lock state, return `LockStatus` | [ ] | Initially return always-unlocked |
-| d | Register these three handlers in dispatch loop key match | [ ] | |
-| e | Test: host sends all three requests, verify correct data returned | [ ] | |
+| a | Implement `GetVersion` handler: return hardcoded `ProtocolVersion { major: 1, minor: 0 }` | [x] | |
+| b | Implement `GetCapabilities` handler: construct `DeviceCapabilities` from const generics (`ROW` → `num_rows`, `COL` → `num_cols`, `NUM_LAYER` → `num_layers`, `NUM_ENCODER` → `num_encoders`) and build.rs constants (`COMBO_MAX_NUM` → `max_combos`, `FORK_MAX_NUM` → `max_forks`, `MORSE_MAX_NUM` → `max_morse`, `MACRO_SPACE_SIZE` → `macro_space_size`, `NUM_BLE_PROFILE` → `num_ble_profiles`, `SPLIT_PERIPHERALS_NUM` → `num_split_peripherals`). Feature booleans from `cfg!()` checks | [x] | `NUM_ROW`/`NUM_COL`/`NUM_LAYER`/`NUM_ENCODER` are NOT build.rs constants — they are const generics on `ProtocolService` |
+| c | Implement `GetLockStatus` handler: read current lock state, return `LockStatus` | [x] | Starts locked; full lock state machine deferred to Phase 8 |
+| d | Register these three handlers in dispatch loop key match | [x] | |
+| e | Test: host sends all three requests, verify correct data returned | [ ] | Pending hardware test |
 
 ### Step 4.2 — Keymap get/set handlers
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Implement `GetKeyAction` handler: convert `KeyPosition { layer, row, col }` to `KeyboardEventPos::Key(KeyPos { row, col })` (from `rmk/src/event/input.rs`), call `keymap.borrow().get_action_at(pos, layer)`, return `KeyAction` | [ ] | `KeyPosition` is the wire type; `KeyboardEventPos` is the internal type — deliberate separation |
-| b | Implement `SetKeyAction` handler: receive `SetKeyRequest`, convert `KeyPosition` → `KeyboardEventPos`, call `keymap.borrow_mut().set_action_at(pos, layer, action)` to update in-memory state | [ ] | |
-| c | In `SetKeyAction` handler, send `FLASH_CHANNEL.send(FlashOperationMessage::HostMessage(KeymapData::KeymapKey(...)))` for flash persistence | [ ] | Follow VialService pattern |
-| d | Add parameter validation: return `RmkError::InvalidParameter` when layer/row/col is out of bounds | [ ] | |
-| e | Test: read key action at (0,0,0), modify it, read again to verify consistency | [ ] | |
+| a | Implement `GetKeyAction` handler: convert `KeyPosition { layer, row, col }` to `KeyboardEventPos::Key(KeyPos { row, col })` (from `rmk/src/event/input.rs`), call `keymap.borrow().get_action_at(pos, layer)`, return `KeyAction` | [x] | |
+| b | Implement `SetKeyAction` handler: receive `SetKeyRequest`, convert `KeyPosition` → `KeyboardEventPos`, call `keymap.borrow_mut().set_action_at(pos, layer, action)` to update in-memory state | [x] | |
+| c | In `SetKeyAction` handler, send `FLASH_CHANNEL.send(FlashOperationMessage::HostMessage(KeymapData::KeymapKey(...)))` for flash persistence | [x] | |
+| d | Add parameter validation: return `RmkError::InvalidParameter` when layer/row/col is out of bounds | [x] | |
+| e | Test: read key action at (0,0,0), modify it, read again to verify consistency | [ ] | Pending hardware test |
 
 ### Step 4.3 — Bulk keymap and layer handlers
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Implement `GetKeymapBulk` handler: batch-read KeyActions per `BulkRequest`, fill `heapless::Vec<KeyAction, MAX_BULK>` | [ ] | Row-major order |
-| b | Implement `SetKeymapBulk` handler: receive `SetKeymapBulkRequest`, batch-set KeyActions and send individual `FlashOperationMessage` per key | [ ] | |
-| c | Implement `GetLayerCount` handler: return `NUM_LAYER as u8` | [ ] | |
-| d | Implement `GetDefaultLayer` handler: call `keymap.borrow().get_default_layer()` | [ ] | |
-| e | Implement `SetDefaultLayer` handler: call `keymap.borrow_mut().set_default_layer()` + send `FlashOperationMessage::DefaultLayer` | [ ] | |
-| f | Implement `ResetKeymap` handler: send `FlashOperationMessage::ResetLayout` to `FLASH_CHANNEL` | [ ] | |
-| g | Test: bulk-read entire layer keymap, bulk-write, re-read to verify consistency | [ ] | |
+| a | Implement `GetKeymapBulk` handler: batch-read KeyActions per `BulkRequest`, fill `heapless::Vec<KeyAction, MAX_BULK>` | [x] | Row-major order |
+| b | Implement `SetKeymapBulk` handler: receive `SetKeymapBulkRequest`, batch-set KeyActions and send individual `FlashOperationMessage` per key | [x] | |
+| c | Implement `GetLayerCount` handler: return `NUM_LAYER as u8` | [x] | |
+| d | Implement `GetDefaultLayer` handler: call `keymap.borrow().get_default_layer()` | [x] | |
+| e | Implement `SetDefaultLayer` handler: call `keymap.borrow_mut().set_default_layer()` + send `FlashOperationMessage::DefaultLayer` | [x] | |
+| f | Implement `ResetKeymap` handler: send `FlashOperationMessage::ResetLayout` to `FLASH_CHANNEL` | [x] | |
+| g | Test: bulk-read entire layer keymap, bulk-write, re-read to verify consistency | [ ] | Pending hardware test |
 
 ### Step 4.4 — Device control handlers
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Implement `Reboot` handler: call `cortex_m::peripheral::SCB::sys_reset()` or platform-specific reset function | [ ] | Needs `#[cfg]` per chip |
-| b | Implement `BootloaderJump` handler: write bootloader magic value then reset (reference existing `KeyboardAction::Bootloader` impl) | [ ] | |
-| c | Implement `StorageReset` handler: based on `StorageResetMode`, send `FlashOperationMessage::Reset` or `FlashOperationMessage::ResetLayout` | [ ] | |
-| d | These three operations are `Dangerous` permission level; lock check deferred to Phase 8 | [ ] | |
+| a | Implement `Reboot` handler: call `cortex_m::peripheral::SCB::sys_reset()` or platform-specific reset function | [x] | Uses `crate::boot::reboot_keyboard()` |
+| b | Implement `BootloaderJump` handler: write bootloader magic value then reset (reference existing `KeyboardAction::Bootloader` impl) | [x] | Uses `crate::boot::jump_to_bootloader()` |
+| c | Implement `StorageReset` handler: based on `StorageResetMode`, send `FlashOperationMessage::Reset` or `FlashOperationMessage::ResetLayout` | [x] | |
+| d | These three operations are `Dangerous` permission level; lock check deferred to Phase 8 | [x] | Lock check done for StorageReset |
 
 ### Step 4.5 — Host CLI tool
 
@@ -279,12 +279,12 @@ Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rm
 
 | # | Action | Status | Notes |
 |---|--------|--------|-------|
-| a | Add `clap` dependency for CLI arg parsing to `rmk-host-tool/` | [ ] | Project already exists from Phase 3 |
-| b | Implement USB connection logic: scan for vendor-class USB interface using `nusb`, claim interface | [ ] | |
-| c | Implement `handshake` command: send `GetVersion` + `GetCapabilities`, print results | [ ] | |
-| d | Implement `get-key` subcommand: specify layer/row/col, call `GetKeyAction`, print KeyAction | [ ] | |
-| e | Implement `set-key` subcommand: specify layer/row/col and KeyAction, call `SetKeyAction` | [ ] | |
-| f | Implement `dump-keymap` subcommand: call `GetKeymapBulk` layer by layer, print as table | [ ] | |
+| a | Add `clap` dependency for CLI arg parsing to `rmk-host-tool/` | [x] | |
+| b | Implement USB connection logic: scan for vendor-class USB interface using `nusb`, claim interface | [x] | |
+| c | Implement `handshake` command: send `GetVersion` + `GetCapabilities`, print results | [x] | |
+| d | Implement `get-key` subcommand: specify layer/row/col, call `GetKeyAction`, print KeyAction | [x] | |
+| e | Implement `set-key` subcommand: specify layer/row/col and KeyAction, call `SetKeyAction` | [x] | Simple HID keycodes only |
+| f | Implement `dump-keymap` subcommand: call `GetKeymapBulk` layer by layer, print as table | [x] | |
 
 ---
 
@@ -561,12 +561,12 @@ Move `ConnectionType`, `BatteryStatus`, and `BleStatus` to shared modules in `rm
 | 1 | ICD Types and postcard-rpc Integration | **Complete** |
 | 2 | Feature Gate and ProtocolService Skeleton | **Complete** (Step 2.5 moved to Phase 4.0) |
 | 3 | USB Raw Bulk Transport | **Complete** (pending hardware integration test) |
-| 4 | Core Endpoints (System + Keymap) | Not Started |
+| 4 | Core Endpoints (System + Keymap) | **Complete** |
 | 5 | Remaining Endpoints | Not Started |
 | 6 | Topics (Notifications) | Not Started |
 | 7 | BLE Serial Transport | Not Started |
 | 8 | Security (Lock/Unlock) — Deferred | Not Started |
-| 9 | Host Tool and Migration | Not Started |
+| 9 | Host Tool and Migration | **In Progress** (basic CLI operational) |
 
 ---
 

@@ -228,6 +228,19 @@ macro_rules! ser_storage_variant {
     }};
 }
 
+/// Macro to deserialize standard variants: skip key byte, postcard-deserialize data.
+/// Counterpart to [`ser_storage_variant!`].
+#[macro_export]
+macro_rules! deser_storage_variant {
+    ($buffer:expr, $variant:ident) => {{
+        let (data, unused) =
+            postcard::take_from_bytes(&$buffer[1..])
+                .map_err($crate::storage::postcard_error_to_serialization_error)?;
+        let size = $buffer.len() - unused.len();
+        Ok((Self::$variant(data), size))
+    }};
+}
+
 // Helper methods for StorageData
 impl StorageData {
     /// Get the StorageKey for this variant (used as the first byte in stored data)
@@ -289,51 +302,16 @@ impl Value<'_> for StorageData {
         let key = StorageKeys::from_u8(buffer[0]).ok_or(SerializationError::InvalidFormat)?;
 
         match key {
-            StorageKeys::StorageConfig => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::StorageConfig(data), size))
-            }
-            StorageKeys::LayoutConfig => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::LayoutConfig(data), size))
-            }
-            StorageKeys::BehaviorConfig => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::BehaviorConfig(data), size))
-            }
-            StorageKeys::ConnectionType => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::ConnectionType(data), size))
-            }
+            StorageKeys::StorageConfig => deser_storage_variant!(buffer, StorageConfig),
+            StorageKeys::LayoutConfig => deser_storage_variant!(buffer, LayoutConfig),
+            StorageKeys::BehaviorConfig => deser_storage_variant!(buffer, BehaviorConfig),
+            StorageKeys::ConnectionType => deser_storage_variant!(buffer, ConnectionType),
             #[cfg(all(feature = "_ble", feature = "split"))]
-            StorageKeys::PeerAddress => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::PeerAddress(data), size))
-            }
+            StorageKeys::PeerAddress => deser_storage_variant!(buffer, PeerAddress),
             #[cfg(feature = "_ble")]
-            StorageKeys::BleBondInfo => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::BondInfo(data), size))
-            }
+            StorageKeys::BleBondInfo => deser_storage_variant!(buffer, BondInfo),
             #[cfg(feature = "_ble")]
-            StorageKeys::ActiveBleProfile => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::ActiveBleProfile(data), size))
-            }
+            StorageKeys::ActiveBleProfile => deser_storage_variant!(buffer, ActiveBleProfile),
             #[cfg(feature = "host")]
             StorageKeys::KeymapConfig
             | StorageKeys::MacroData
@@ -341,7 +319,6 @@ impl Value<'_> for StorageData {
             | StorageKeys::EncoderKeys
             | StorageKeys::ForkData
             | StorageKeys::MorseData => {
-                // HostData keys handled by KeymapData
                 KeymapData::deserialize_from(buffer).map(|(data, size)| (Self::HostData(data), size))
             }
         }
@@ -548,24 +525,14 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     update_storage_field!(&mut self.flash, &mut self.buffer, LayoutConfig, layout_option)
                 }
                 FlashOperationMessage::Reset => self.flash.erase_all().await,
-                FlashOperationMessage::ResetAndReboot => {
-                    info!("Resetting storage and rebooting...");
-                    if let Err(e) = self.flash.erase_all().await {
-                        print_storage_error::<F>(e);
+                msg @ (FlashOperationMessage::ResetAndReboot | FlashOperationMessage::ResetLayout) => {
+                    // ResetLayout falls back to full erase (layout-only not yet
+                    // available at runtime). A proper implementation requires
+                    // passing the default keymap into the storage task.
+                    if matches!(msg, FlashOperationMessage::ResetLayout) {
+                        warn!("ResetLayout: falling back to full erase");
                     }
-                    crate::boot::reboot_keyboard();
-                    Ok(()) // unreachable on embedded
-                }
-                FlashOperationMessage::ResetLayout => {
-                    // WARNING: Layout-only reset is not yet implemented.
-                    // This falls back to a FULL erase which also clears:
-                    // - BLE bonding information
-                    // - Behavior configuration (combos, morse, forks)
-                    // - Connection preferences
-                    // A proper layout-only reset requires either passing the
-                    // default keymap into the storage task or persisting a
-                    // "clear_layout_on_boot" flag in LocalStorageConfig.
-                    warn!("ResetLayout: falling back to full erase (layout-only not yet available at runtime)");
+                    info!("Erasing storage and rebooting...");
                     if let Err(e) = self.flash.erase_all().await {
                         print_storage_error::<F>(e);
                     }

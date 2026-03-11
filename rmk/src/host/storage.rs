@@ -11,7 +11,7 @@ use crate::storage::{
     Storage, StorageData, StorageKeys, get_combo_key, get_fork_key, get_morse_key,
     postcard_error_to_serialization_error, print_storage_error,
 };
-use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, ser_storage_variant};
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, deser_storage_variant, ser_storage_variant};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -113,18 +113,8 @@ impl Value<'_> for KeymapData {
                 macro_data.copy_from_slice(&buffer[1..1 + MACRO_SPACE_SIZE]);
                 Ok((Self::Macro(macro_data), MACRO_SPACE_SIZE + 1))
             }
-            StorageKeys::KeymapConfig => {
-                let (keymap_key, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::KeymapKey(keymap_key), size))
-            }
-            StorageKeys::EncoderKeys => {
-                let (encoder, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::Encoder(encoder), size))
-            }
+            StorageKeys::KeymapConfig => deser_storage_variant!(buffer, KeymapKey),
+            StorageKeys::EncoderKeys => deser_storage_variant!(buffer, Encoder),
             StorageKeys::ComboData => {
                 let ((idx, combo), unused): ((u8, ComboConfig), _) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;

@@ -11,24 +11,17 @@ use core::marker::PhantomData;
 
 #[cfg(all(feature = "vial", feature = "rmk_protocol"))]
 compile_error!("`vial` and `rmk_protocol` are mutually exclusive features");
-
 #[cfg(all(feature = "host", not(any(feature = "vial", feature = "rmk_protocol"))))]
 compile_error!("`host` requires enabling either `vial` or `rmk_protocol`.");
-
 #[cfg(all(feature = "rmk_protocol", feature = "_ble", feature = "_no_usb"))]
-compile_error!(
-    "`rmk_protocol` over BLE-only (no USB) is not yet supported. \
-     BLE transport is planned for Phase 7."
-);
+compile_error!("`rmk_protocol` over BLE-only (no USB) is not yet supported.");
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
-use embassy_usb::class::hid::HidReaderWriter;
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
 use embassy_usb::{driver::Driver, Builder};
 #[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
 use embassy_sync::mutex::Mutex;
 #[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
-use crate::descriptor::ViaReport;
+use {crate::descriptor::ViaReport, embassy_usb::class::hid::HidReaderWriter};
 #[cfg(feature = "host")]
 use crate::{config::RmkConfig, keymap::KeyMap};
 #[cfg(all(feature = "host", feature = "_ble"))]
@@ -38,7 +31,7 @@ pub(crate) trait HostService {
     async fn run(&mut self);
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial", not(feature = "rmk_protocol")))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
 pub(crate) struct UsbHostTransport<'d, D>
 where
     D: Driver<'d>,
@@ -46,7 +39,7 @@ where
     reader_writer: HidReaderWriter<'d, D, 32, 32>,
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial", not(feature = "rmk_protocol")))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
 impl<D> UsbHostTransport<'static, D>
 where
     D: Driver<'static>,
@@ -58,7 +51,7 @@ where
     }
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol", not(feature = "vial")))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
 pub(crate) struct UsbHostTransport<'d, D>
 where
     D: Driver<'d>,
@@ -68,7 +61,7 @@ where
     rx: D::EndpointOut,
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol", not(feature = "vial")))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
 impl<'d, D> UsbHostTransport<'d, D>
 where
     D: Driver<'d>,
@@ -76,21 +69,21 @@ where
     pub(crate) fn new(builder: &mut Builder<'d, D>) -> Self {
         let (ep_in, rx) = protocol::transport::add_usb_bulk_interface(builder);
         Self {
-            tx_state: Mutex::new(protocol::transport::UsbBulkTxState::<'d, D>::new(ep_in)),
+            tx_state: Mutex::new(protocol::transport::UsbBulkTxState::new(ep_in)),
             tx_connected: embassy_sync::signal::Signal::new(),
             rx,
         }
     }
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial", not(feature = "rmk_protocol")))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
 pub(crate) struct UsbHostService<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
     via::VialService<'a, via::UsbVialReaderWriter<'s, 'd, D>, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 )
 where
     D: Driver<'d>;
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial", not(feature = "rmk_protocol")))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
 impl<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     UsbHostService<'s, 'a, 'd, D, ROW, COL, NUM_LAYER, NUM_ENCODER>
 where
@@ -109,7 +102,7 @@ where
     }
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial", not(feature = "rmk_protocol")))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
 impl<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> HostService
     for UsbHostService<'s, 'a, 'd, D, ROW, COL, NUM_LAYER, NUM_ENCODER>
 where
@@ -120,7 +113,7 @@ where
     }
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol", not(feature = "vial")))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
 pub(crate) struct UsbHostService<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
     protocol::ProtocolService<
         'a,
@@ -135,7 +128,7 @@ pub(crate) struct UsbHostService<'s, 'a, 'd, D, const ROW: usize, const COL: usi
 where
     D: Driver<'d>;
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol", not(feature = "vial")))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
 impl<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     UsbHostService<'s, 'a, 'd, D, ROW, COL, NUM_LAYER, NUM_ENCODER>
 where
@@ -146,17 +139,17 @@ where
         transport: &'s mut UsbHostTransport<'d, D>,
         rmk_config: &RmkConfig<'static>,
     ) -> Self {
-        // TODO: Phase 4 — use rmk_config for protocol capabilities reporting
+        // TODO: use rmk_config for protocol capabilities reporting
         let _ = rmk_config;
         Self(protocol::ProtocolService::new(
             keymap,
             protocol::transport::UsbBulkTx::new(&transport.tx_state, &transport.tx_connected),
-            protocol::transport::UsbBulkRx::<'_, 'd, D>::new(&mut transport.rx, &transport.tx_connected),
+            protocol::transport::UsbBulkRx::new(&mut transport.rx, &transport.tx_connected),
         ))
     }
 }
 
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol", not(feature = "vial")))]
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
 impl<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> HostService
     for UsbHostService<'s, 'a, 'd, D, ROW, COL, NUM_LAYER, NUM_ENCODER>
 where
@@ -236,8 +229,7 @@ where
     P: PacketPool,
 {
     async fn run(&mut self) {
-        // TODO: Phase 7 — BLE transport for rmk_protocol is not yet implemented.
-        // This stub hangs forever; the protocol service is only functional over USB.
+        // TODO: BLE transport for rmk_protocol is not yet implemented.
         warn!("BLE host protocol transport not yet implemented");
         core::future::pending::<()>().await;
     }

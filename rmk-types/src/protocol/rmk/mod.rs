@@ -4,8 +4,8 @@
 //! RMK communication protocol. It contains all endpoint and topic declarations,
 //! request/response types, and protocol constants.
 //!
-//! The protocol uses postcard-rpc's type-level endpoint definitions over COBS-framed
-//! byte streams (USB bulk transfer and BLE serial).
+//! The protocol uses postcard-rpc's type-level endpoint definitions over
+//! raw USB bulk transfer (short-packet framing) and BLE serial (COBS-framed).
 
 mod config;
 mod keymap;
@@ -60,9 +60,9 @@ endpoints! {
     | GetLockStatus   | ()               | LockStatus          | "sys/lock_status"   |
     | UnlockRequest   | ()               | UnlockChallenge     | "sys/unlock"        |
     | LockRequest     | ()               | ()                  | "sys/lock"          |
-    | Reboot          | ()               | ()                  | "sys/reboot"        |
-    | BootloaderJump  | ()               | ()                  | "sys/bootloader"    |
-    | StorageReset    | StorageResetMode | ()                  | "sys/storage_reset" |
+    | Reboot          | ()               | RmkResult       | "sys/reboot"        |
+    | BootloaderJump  | ()               | RmkResult       | "sys/bootloader"    |
+    | StorageReset    | StorageResetMode | RmkResult       | "sys/storage_reset" |
 }
 
 endpoints! {
@@ -362,6 +362,7 @@ mod tests {
     #[test]
     fn round_trip_device_capabilities() {
         let caps = DeviceCapabilities {
+            protocol_version: ProtocolVersion::CURRENT,
             num_layers: 4,
             num_rows: 6,
             num_cols: 14,
@@ -385,6 +386,7 @@ mod tests {
     #[test]
     fn round_trip_device_capabilities_all_zero() {
         let caps = DeviceCapabilities {
+            protocol_version: ProtocolVersion { major: 0, minor: 0 },
             num_layers: 0,
             num_rows: 0,
             num_cols: 0,
@@ -409,6 +411,7 @@ mod tests {
     fn round_trip_rmk_error() {
         round_trip(&RmkError::InvalidParameter);
         round_trip(&RmkError::BadState);
+        round_trip(&RmkError::Locked);
         round_trip(&RmkError::Busy);
         round_trip(&RmkError::StorageError);
         round_trip(&RmkError::InternalError);
@@ -539,11 +542,11 @@ mod tests {
 
     #[test]
     fn round_trip_combo_config() {
-        let mut actions = Vec::new();
-        actions.push(KeyAction::No).unwrap();
-        actions.push(KeyAction::No).unwrap();
+        let mut triggers = Vec::new();
+        triggers.push(KeyAction::No).unwrap();
+        triggers.push(KeyAction::No).unwrap();
         round_trip(&ComboConfig {
-            actions,
+            triggers,
             output: KeyAction::No,
             layer: Some(1),
         });
@@ -653,6 +656,65 @@ mod tests {
         });
     }
 
+    #[test]
+    fn round_trip_set_combo_request() {
+        let mut triggers = Vec::new();
+        triggers.push(KeyAction::No).unwrap();
+        round_trip(&SetComboRequest {
+            index: 0,
+            config: ComboConfig {
+                triggers,
+                output: KeyAction::No,
+                layer: Some(1),
+            },
+        });
+    }
+
+    #[test]
+    fn round_trip_set_morse_request() {
+        round_trip(&SetMorseRequest {
+            index: 3,
+            config: MorseConfig {
+                profile: MorseProfile::const_default(),
+                patterns: Vec::new(),
+            },
+        });
+    }
+
+    #[test]
+    fn round_trip_set_fork_request() {
+        round_trip(&SetForkRequest {
+            index: 1,
+            config: ForkConfig {
+                trigger: KeyAction::No,
+                negative_output: KeyAction::No,
+                positive_output: KeyAction::No,
+                match_any: ForkStateBits {
+                    modifiers: ModifierCombination::new(),
+                    leds: LedIndicator::new(),
+                    mouse: MouseButtons::new(),
+                },
+                match_none: ForkStateBits {
+                    modifiers: ModifierCombination::new(),
+                    leds: LedIndicator::new(),
+                    mouse: MouseButtons::new(),
+                },
+                kept_modifiers: ModifierCombination::new(),
+                bindable: false,
+            },
+        });
+    }
+
+    #[test]
+    fn round_trip_set_macro_request() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&[0x01, 0x02]).unwrap();
+        round_trip(&SetMacroRequest {
+            index: 5,
+            data: MacroData { data },
+        });
+    }
+
     // Intra-group collisions are caught at compile time by endpoints!/topics! macros.
 
     #[test]
@@ -671,5 +733,30 @@ mod tests {
     #[test]
     fn topic_list_contains_all_declared() {
         assert!(TOPICS_OUT_LIST.topics.len() >= all_topic_keys().len());
+    }
+
+    #[test]
+    fn round_trip_bulk_key_actions_at_capacity() {
+        let mut actions: BulkKeyActions = Vec::new();
+        for _ in 0..MAX_BULK {
+            actions.push(KeyAction::No).unwrap();
+        }
+        assert_eq!(actions.len(), MAX_BULK);
+        round_trip(&actions);
+    }
+
+    #[test]
+    fn round_trip_unlock_challenge_at_capacity() {
+        let mut kp = Vec::new();
+        for i in 0..MAX_UNLOCK_KEYS {
+            kp.push((i as u8, i as u8)).unwrap();
+        }
+        assert_eq!(kp.len(), MAX_UNLOCK_KEYS);
+        round_trip(&UnlockChallenge { key_positions: kp });
+    }
+
+    #[test]
+    fn round_trip_morse_profile() {
+        round_trip(&MorseProfile::const_default());
     }
 }
