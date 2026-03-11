@@ -1,3 +1,7 @@
+// This test requires the passkey_entry feature (which implies _ble).
+// When compiled without it, the entire module is empty.
+#![cfg(feature = "passkey_entry")]
+
 pub mod common;
 
 use embassy_futures::block_on;

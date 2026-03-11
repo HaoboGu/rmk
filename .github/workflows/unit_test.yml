@@ -39,6 +39,8 @@ jobs:
           - "split,storage"
           - "vial,storage"
           - "split,vial,storage"
+          - "passkey_entry"
+          - "split,vial,storage,passkey_entry"
     steps:
       - uses: actions/checkout@v4
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
