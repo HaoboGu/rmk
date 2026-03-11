@@ -82,7 +82,7 @@ impl PasskeyEntryState {
         self.active = false;
     }
 
-    fn check_mode_transition(&mut self) {
+    pub fn check_mode_transition(&mut self) {
         use core::sync::atomic::Ordering;
         let passkey_active = crate::ble::passkey::PASSKEY_ENTRY_MODE.load(Ordering::Acquire);
         if passkey_active && !self.is_active() {
