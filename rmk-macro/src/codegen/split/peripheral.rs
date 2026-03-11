@@ -304,11 +304,17 @@ fn expand_split_peripheral(
             // Peripheral doesn't use keymap for key processing.
             let mut default_keymap = [[[::rmk::types::action::KeyAction::No; 1]; 1]; 1];
             let mut behavior_config = ::rmk::config::BehaviorConfig::default();
-            let mut per_key_config = ::rmk::config::PositionalConfig::default();
+            let per_key_config = ::rmk::config::PositionalConfig::default();
+            static LAYER_STATE_CELL: ::static_cell::StaticCell<[bool; 1]> = ::static_cell::StaticCell::new();
+            let layer_state = LAYER_STATE_CELL.init([false; 1]);
+            static CACHE_CELL: ::static_cell::StaticCell<[u8; 1]> = ::static_cell::StaticCell::new();
+            let cache = CACHE_CELL.init([0u8; 1]);
             let keymap = ::rmk::initialize_keymap(
                 &mut default_keymap,
                 &mut behavior_config,
-                &mut per_key_config
+                &per_key_config,
+                layer_state,
+                cache,
             ).await;
         }
     } else {

@@ -21,7 +21,6 @@ include!(concat!(env!("OUT_DIR"), "/constants.rs"));
 // This mod MUST go first, so that the others see its macros.
 pub(crate) mod fmt;
 
-use core::cell::RefCell;
 use core::future::Future;
 use core::sync::atomic::Ordering;
 
@@ -105,9 +104,19 @@ pub mod usb;
 pub async fn initialize_keymap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
     default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     behavior_config: &'a mut config::BehaviorConfig,
-    positional_config: &'a mut PositionalConfig<ROW, COL>,
-) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>> {
-    RefCell::new(KeyMap::new(default_keymap, None, behavior_config, positional_config).await)
+    positional_config: &'a PositionalConfig<ROW, COL>,
+    layer_state: &'a mut [bool; NUM_LAYER],
+    cache: &'a mut [u8],
+) -> KeyMap<'a> {
+    KeyMap::new(
+        default_keymap,
+        None::<&'a mut [[EncoderAction; 0]; NUM_LAYER]>,
+        behavior_config,
+        positional_config,
+        layer_state,
+        cache,
+    )
+    .await
 }
 
 pub async fn initialize_encoder_keymap<
@@ -120,17 +129,19 @@ pub async fn initialize_encoder_keymap<
     default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
     behavior_config: &'a mut config::BehaviorConfig,
-    positional_config: &'a mut PositionalConfig<ROW, COL>,
-) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
-    RefCell::new(
-        KeyMap::new(
-            default_keymap,
-            Some(default_encoder_map),
-            behavior_config,
-            positional_config,
-        )
-        .await,
+    positional_config: &'a PositionalConfig<ROW, COL>,
+    layer_state: &'a mut [bool; NUM_LAYER],
+    cache: &'a mut [u8],
+) -> KeyMap<'a> {
+    KeyMap::new(
+        default_keymap,
+        Some(default_encoder_map),
+        behavior_config,
+        positional_config,
+        layer_state,
+        cache,
     )
+    .await
 }
 
 #[cfg(feature = "storage")]
@@ -147,9 +158,11 @@ pub async fn initialize_encoder_keymap_and_storage<
     flash: F,
     storage_config: &config::StorageConfig,
     behavior_config: &'a mut config::BehaviorConfig,
-    positional_config: &'a mut PositionalConfig<ROW, COL>,
+    positional_config: &'a PositionalConfig<ROW, COL>,
+    layer_state: &'a mut [bool; NUM_LAYER],
+    cache: &'a mut [u8],
 ) -> (
-    RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    KeyMap<'a>,
     Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     #[cfg(feature = "host")]
@@ -163,31 +176,31 @@ pub async fn initialize_encoder_keymap_and_storage<
         )
         .await;
 
-        let keymap = RefCell::new(
-            KeyMap::new_from_storage(
-                default_keymap,
-                Some(default_encoder_map),
-                Some(&mut storage),
-                behavior_config,
-                positional_config,
-            )
-            .await,
-        );
+        let keymap = KeyMap::new_from_storage(
+            default_keymap,
+            Some(default_encoder_map),
+            Some(&mut storage),
+            behavior_config,
+            positional_config,
+            layer_state,
+            cache,
+        )
+        .await;
         (keymap, storage)
     }
 
     #[cfg(not(feature = "host"))]
     {
         let storage = Storage::new(flash, storage_config, &behavior_config).await;
-        let keymap = RefCell::new(
-            KeyMap::new(
-                default_keymap,
-                Some(default_encoder_map),
-                behavior_config,
-                positional_config,
-            )
-            .await,
-        );
+        let keymap = KeyMap::new(
+            default_keymap,
+            Some(default_encoder_map),
+            behavior_config,
+            positional_config,
+            layer_state,
+            cache,
+        )
+        .await;
         (keymap, storage)
     }
 }
@@ -204,31 +217,41 @@ pub async fn initialize_keymap_and_storage<
     flash: F,
     storage_config: &config::StorageConfig,
     behavior_config: &'a mut config::BehaviorConfig,
-    positional_config: &'a mut PositionalConfig<ROW, COL>,
+    positional_config: &'a PositionalConfig<ROW, COL>,
+    layer_state: &'a mut [bool; NUM_LAYER],
+    cache: &'a mut [u8],
 ) -> (
-    RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, 0>>,
+    KeyMap<'a>,
     Storage<F, ROW, COL, NUM_LAYER, 0>,
 ) {
     #[cfg(feature = "host")]
     {
         let mut storage = Storage::new(flash, default_keymap, &None, storage_config, behavior_config).await;
-        let keymap = RefCell::new(
-            KeyMap::new_from_storage(
-                default_keymap,
-                None,
-                Some(&mut storage),
-                behavior_config,
-                positional_config,
-            )
-            .await,
-        );
+        let keymap = KeyMap::new_from_storage(
+            default_keymap,
+            None::<&'a mut [[EncoderAction; 0]; NUM_LAYER]>,
+            Some(&mut storage),
+            behavior_config,
+            positional_config,
+            layer_state,
+            cache,
+        )
+        .await;
         (keymap, storage)
     }
 
     #[cfg(not(feature = "host"))]
     {
         let storage = Storage::new(flash, storage_config, &behavior_config).await;
-        let keymap = RefCell::new(KeyMap::new(default_keymap, None, behavior_config, positional_config).await);
+        let keymap = KeyMap::new(
+            default_keymap,
+            None::<&'a mut [[EncoderAction; 0]; NUM_LAYER]>,
+            behavior_config,
+            positional_config,
+            layer_state,
+            cache,
+        )
+        .await;
         (keymap, storage)
     }
 }
@@ -240,12 +263,12 @@ pub async fn run_rmk<
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    #[cfg(any(feature = "storage", feature = "host"))] const ROW: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const COL: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_LAYER: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_ENCODER: usize,
+    #[cfg(feature = "storage")] const ROW: usize,
+    #[cfg(feature = "storage")] const COL: usize,
+    #[cfg(feature = "storage")] const NUM_LAYER: usize,
+    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
-    #[cfg(feature = "host")] keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(feature = "_ble")] stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
@@ -340,15 +363,15 @@ pub(crate) async fn run_keyboard<
     W: RunnableHidWriter,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(feature = "host")] Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
-    #[cfg(any(feature = "storage", feature = "host"))] const ROW: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const COL: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_LAYER: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_ENCODER: usize,
+    #[cfg(feature = "storage")] const ROW: usize,
+    #[cfg(feature = "storage")] const COL: usize,
+    #[cfg(feature = "storage")] const NUM_LAYER: usize,
+    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
     // #[cfg(feature = "storage")] storage_task: impl Future<Output = ()>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     // #[cfg(feature = "host")] host_task: impl Future<Output = ()>,
-    #[cfg(feature = "host")] keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
     #[cfg(feature = "host")] reader_writer: Rw,
     #[cfg(feature = "vial")] vial_config: VialConfig<'static>,
     communication_fut: impl Future<Output = ()>,

@@ -25,7 +25,7 @@ use crate::common::morse::create_morse_keyboard;
 
 /// Create a keyboard with col 0 marked as Bilateral in the matrix_map.
 /// Hand: [Bilateral, Left, Right, Right, Right]
-fn create_bilateral_keyboard() -> Keyboard<'static, 1, 5, 2> {
+fn create_bilateral_keyboard() -> Keyboard<'static> {
     let hand = [[Hand::Bilateral, Hand::Left, Hand::Right, Hand::Right, Hand::Right]];
     create_morse_keyboard(
         BehaviorConfig {

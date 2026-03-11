@@ -1,8 +1,6 @@
 pub mod morse;
 pub mod test_macro;
 
-use core::cell::RefCell;
-
 use embassy_futures::block_on;
 use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -45,8 +43,8 @@ pub struct TestKeyPress {
 }
 
 // run a keyboard, test input is seq of key input with delay, use expected report to verify
-pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
-    keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
+pub async fn run_key_sequence_test<'a>(
+    keyboard: &mut Keyboard<'a>,
     key_sequence: &[TestKeyPress],
     expected_reports: &[KeyboardReport],
 ) {
@@ -150,7 +148,7 @@ pub const fn get_keymap() -> [[[KeyAction; 14]; 5]; 2] {
     ]
 }
 
-pub fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'static, 5, 14, 2> {
+pub fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'static> {
     static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
     let behavior_config: &'static mut BehaviorConfig = BEHAVIOR_CONFIG.init(config);
     static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<5, 14>> = static_cell::StaticCell::new();
@@ -160,17 +158,25 @@ pub fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'sta
 
 pub fn wrap_keymap<'a, const R: usize, const C: usize, const L: usize>(
     keymap: [[[KeyAction; C]; R]; L],
-    per_key_config: &'static mut PositionalConfig<R, C>,
+    per_key_config: &'static PositionalConfig<R, C>,
     config: &'static mut BehaviorConfig,
-) -> &'a mut RefCell<KeyMap<'static, R, C, L>> {
+) -> &'a KeyMap<'static> {
     // Box::leak is acceptable in tests
     let leaked_keymap = Box::leak(Box::new(keymap));
+    let layer_state = Box::leak(Box::new([false; L]));
+    let cache: &'static mut [u8] = Box::leak(vec![0u8; R * C].into_boxed_slice());
 
-    let keymap = block_on(KeyMap::new(leaked_keymap, None, config, per_key_config));
-    let keymap_cell = RefCell::new(keymap);
-    Box::leak(Box::new(keymap_cell))
+    let keymap = block_on(KeyMap::new::<R, C, L, 0>(
+        leaked_keymap,
+        None,
+        config,
+        per_key_config,
+        layer_state,
+        cache,
+    ));
+    Box::leak(Box::new(keymap))
 }
 
-pub fn create_test_keyboard() -> Keyboard<'static, 5, 14, 2> {
+pub fn create_test_keyboard() -> Keyboard<'static> {
     create_test_keyboard_with_config(BehaviorConfig::default())
 }
