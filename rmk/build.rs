@@ -5,7 +5,10 @@ use std::path::{Path, PathBuf};
 use std::{env, fs};
 
 use const_gen::*;
-use rmk_config::{KeyboardTomlConfig, RmkConstantsConfig};
+use rmk_config::{
+    BleConfig, KeyboardTomlConfig, RmkConstantsConfig, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS,
+    MIN_PASSKEY_ENTRY_TIMEOUT_SECS,
+};
 
 fn main() {
     // Set the compilation target configuration
@@ -33,7 +36,7 @@ fn main() {
         user_toml.rmk.split_peripherals_num = 1;
     }
 
-    let constants = get_constants_str(user_toml.rmk, user_toml.event);
+    let constants = get_constants_str(user_toml.rmk, user_toml.event, user_toml.ble);
 
     // Write to constants.rs file
     let out_dir = env::var("OUT_DIR").unwrap();
@@ -41,7 +44,7 @@ fn main() {
     fs::write(&dest_path, constants).expect("Failed to write constants.rs file");
 }
 
-fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventConfig) -> String {
+fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventConfig, ble: Option<BleConfig>) -> String {
     // Compute a deterministic build hash from stable inputs only.
     let build_hash = compute_build_hash();
     // Add other constants
@@ -64,6 +67,23 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) MAX_PATTERNS_PER_KEY = constants.max_patterns_per_key),
         format!("pub(crate) const BUILD_HASH: u32 = {build_hash:#010x};\n"),
     ];
+
+    // Add passkey entry constants from [ble] config, only when the feature is enabled
+    if env::var("CARGO_FEATURE_PASSKEY_ENTRY").is_ok() {
+        let passkey_entry_enabled = ble.as_ref().and_then(|b| b.passkey_entry).unwrap_or(false);
+        let passkey_entry_timeout_secs = ble
+            .as_ref()
+            .and_then(|b| b.passkey_entry_timeout)
+            .unwrap_or(DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS);
+        if passkey_entry_timeout_secs < MIN_PASSKEY_ENTRY_TIMEOUT_SECS {
+            panic!(
+                "passkey_entry_timeout must be at least {} seconds, got {}",
+                MIN_PASSKEY_ENTRY_TIMEOUT_SECS, passkey_entry_timeout_secs
+            );
+        }
+        constant_strs.push(const_declaration!(pub(crate) PASSKEY_ENTRY_ENABLED = passkey_entry_enabled));
+        constant_strs.push(const_declaration!(pub(crate) PASSKEY_ENTRY_TIMEOUT_SECS = passkey_entry_timeout_secs));
+    }
 
     // Add event channel constants
     // Note: default values are loaded from event_default.toml via config crate

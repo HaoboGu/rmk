@@ -22,11 +22,41 @@ adc_divider_total = 2806
 default_tx_power = 0
 # Whether to enable 2M PHY, defaults to true.
 use_2m_phy = true
+# Enable or disable passkey entry, defaults to false
+passkey_entry = false
+# Timeout in seconds for passkey entry, defaults to 120
+passkey_entry_timeout = 120
 # [Deprecated] Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 # charge_state = { pin = "PIN_1", low_active = true }
 # [Deprecated] Output LED pin that blinks when the battery is low
 # charge_led= { pin = "PIN_2", low_active = true }
 ```
+
+### Passkey entry
+
+RMK supports typing a BLE passkey directly on the keyboard during pairing. This is disabled by default.
+
+```toml
+[ble]
+# Enable or disable passkey entry (default: false)
+# When disabled, passkey pairing requests from the host are automatically rejected.
+passkey_entry = true
+# Timeout in seconds for passkey entry (default: 120, minimum: 30)
+# If the user does not finish entering the passkey within this time, pairing is cancelled.
+# Setting this below 30 will cause a build error.
+passkey_entry_timeout = 120
+```
+
+During passkey mode, the keyboard intercepts all keypresses. Only the following keys are recognized:
+
+| Key | Action |
+| --- | --- |
+| `0`–`9` (top row or numpad) | Enter a digit |
+| `Enter` / `Numpad Enter` | Submit the 6-digit passkey |
+| `Escape` | Cancel pairing |
+| `Backspace` | Delete the last digit |
+
+All other keys are silently discarded while passkey mode is active.
 
 ### Split battery ADC configuration
 

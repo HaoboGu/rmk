@@ -14,7 +14,7 @@ use rusty_fork::rusty_fork_test;
 use crate::common::morse::create_simple_morse_keyboard;
 use crate::common::{KC_LGUI, KC_LSHIFT};
 
-fn create_permissive_hold_keyboard() -> Keyboard<'static, 1, 5, 2> {
+fn create_permissive_hold_keyboard() -> Keyboard<'static> {
     create_simple_morse_keyboard(BehaviorConfig {
         morse: MorsesConfig {
             enable_flow_tap: false,
@@ -30,7 +30,7 @@ fn create_permissive_hold_keyboard() -> Keyboard<'static, 1, 5, 2> {
     })
 }
 
-fn create_permissive_hold_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
+fn create_permissive_hold_keyboard_with_combo() -> Keyboard<'static> {
     let combo_key = KeyAction::TapHold(
         Action::Key(KeyCode::Hid(HidKeyCode::B)),
         Action::Modifier(ModifierCombination::LSHIFT),

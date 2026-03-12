@@ -10,8 +10,6 @@ mod dispatch_macro;
 mod handlers;
 pub(crate) mod transport;
 
-use core::cell::RefCell;
-
 use crate::define_dispatch;
 use postcard_rpc::header::VarHeader;
 use postcard_rpc::server::{
@@ -59,14 +57,10 @@ where
 define_dispatch! {
     app: RmkDispatcher[
         'a,
-        Tx: WireTx,
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-        const NUM_ENCODER: usize
+        Tx: WireTx
     ];
     tx_impl: Tx;
-    context: ProtocolContext<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>;
+    context: ProtocolContext<'a>;
 
     endpoints: {
         list: ENDPOINT_LIST;
@@ -109,25 +103,15 @@ define_dispatch! {
 // Protocol service
 // ---------------------------------------------------------------------------
 
-pub(crate) struct ProtocolService<
-    'a,
-    Tx: WireTx,
-    Rx: WireRx,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
-> {
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+pub(crate) struct ProtocolService<'a, Tx: WireTx, Rx: WireRx> {
+    keymap: &'a KeyMap<'a>,
     tx: Tx,
     rx: Rx,
     rx_buf: [u8; RX_BUF_SIZE],
 }
 
-impl<'a, Tx: WireTx + Clone, Rx: WireRx, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    ProtocolService<'a, Tx, Rx, ROW, COL, NUM_LAYER, NUM_ENCODER>
-{
-    pub(crate) fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>, tx: Tx, rx: Rx) -> Self {
+impl<'a, Tx: WireTx + Clone, Rx: WireRx> ProtocolService<'a, Tx, Rx> {
+    pub(crate) fn new(keymap: &'a KeyMap<'a>, tx: Tx, rx: Rx) -> Self {
         Self {
             keymap,
             tx,
@@ -146,7 +130,7 @@ impl<'a, Tx: WireTx + Clone, Rx: WireRx, const ROW: usize, const COL: usize, con
                 keymap: self.keymap,
                 locked: true,
             };
-            let mut dispatch = impls::RmkDispatcher::<'_, _, ROW, COL, NUM_LAYER, NUM_ENCODER, { sizer::NEEDED_SZ }>::new(ctx, NoSpawn);
+            let mut dispatch = impls::RmkDispatcher::<'_, _, { sizer::NEEDED_SZ }>::new(ctx, NoSpawn);
             let vkk = dispatch.min_key_len();
             let sender = Sender::new(self.tx.clone(), vkk);
 
@@ -179,9 +163,7 @@ impl<'a, Tx: WireTx + Clone, Rx: WireRx, const ROW: usize, const COL: usize, con
     }
 }
 
-impl<'a, Tx: WireTx + Clone, Rx: WireRx, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    crate::host::HostService for ProtocolService<'a, Tx, Rx, ROW, COL, NUM_LAYER, NUM_ENCODER>
-{
+impl<'a, Tx: WireTx + Clone, Rx: WireRx> crate::host::HostService for ProtocolService<'a, Tx, Rx> {
     async fn run(&mut self) {
         ProtocolService::run(self).await;
     }

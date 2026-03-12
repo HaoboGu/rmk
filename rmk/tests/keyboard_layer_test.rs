@@ -9,7 +9,7 @@ use rusty_fork::rusty_fork_test;
 
 use crate::common::{KC_LSHIFT, wrap_keymap};
 
-fn create_simple_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'static, 1, 2, 2> {
+fn create_simple_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'static> {
     let keymap = [
         [[
             KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A))),

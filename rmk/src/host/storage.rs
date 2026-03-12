@@ -143,8 +143,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 {
     pub(crate) async fn read_keymap(
         &mut self,
-        keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: &mut Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+        data: &mut crate::keymap::KeymapData<ROW, COL, NUM_LAYER, NUM_ENCODER>,
     ) -> Result<(), ()> {
         // Use fetch_all_items to speed up the keymap reading
         let mut key_iterator = self
@@ -165,16 +164,14 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     let row = key.row as usize;
                     let col = key.col as usize;
                     if layer < NUM_LAYER && row < ROW && col < COL {
-                        keymap[layer][row][col] = key.action;
+                        data.keymap[layer][row][col] = key.action;
                     }
                 }
                 StorageData::HostData(KeymapData::Encoder(encoder)) => {
-                    if let Some(map) = encoder_map {
-                        let idx = encoder.idx as usize;
-                        let layer = encoder.layer as usize;
-                        if layer < NUM_LAYER && idx < NUM_ENCODER {
-                            map[layer][idx] = encoder.action;
-                        }
+                    let idx = encoder.idx as usize;
+                    let layer = encoder.layer as usize;
+                    if layer < NUM_LAYER && idx < NUM_ENCODER {
+                        data.encoder_map[layer][idx] = encoder.action;
                     }
                 }
                 _ => continue,

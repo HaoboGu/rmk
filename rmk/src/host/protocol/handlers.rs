@@ -6,8 +6,6 @@
 //! Endpoints not listed in the `define_dispatch!` handler table are automatically
 //! rejected with `WireError::UnknownKey` by the macro's default match arm.
 
-use core::cell::RefCell;
-
 use postcard_rpc::header::VarHeader;
 use rmk_types::protocol::rmk::*;
 
@@ -23,14 +21,8 @@ use crate::storage::FlashOperationMessage;
 use super::RX_BUF_SIZE;
 
 /// Shared context passed to every handler by the dispatcher.
-pub(crate) struct ProtocolContext<
-    'a,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
-> {
-    pub keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+pub(crate) struct ProtocolContext<'a> {
+    pub keymap: &'a KeyMap<'a>,
     pub locked: bool,
 }
 
@@ -38,46 +30,28 @@ pub(crate) struct ProtocolContext<
 // System handlers
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn get_version<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    _ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn get_version(
+    _ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     _req: (),
 ) -> ProtocolVersion {
     ProtocolVersion::CURRENT
 }
 
-pub(crate) async fn get_capabilities<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    _ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn get_capabilities(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     _req: (),
 ) -> DeviceCapabilities {
-    const {
-        if ROW > u8::MAX as usize {
-            core::panic!("ROW exceeds u8 range")
-        }
-    };
-    const {
-        if COL > u8::MAX as usize {
-            core::panic!("COL exceeds u8 range")
-        }
-    };
-    const {
-        if NUM_LAYER > u8::MAX as usize {
-            core::panic!("NUM_LAYER exceeds u8 range")
-        }
-    };
-    const {
-        if NUM_ENCODER > u8::MAX as usize {
-            core::panic!("NUM_ENCODER exceeds u8 range")
-        }
-    };
+    let (num_rows, num_cols, num_layers) = ctx.keymap.get_keymap_config();
+    let num_encoders = ctx.keymap.num_encoder();
 
     DeviceCapabilities {
         protocol_version: ProtocolVersion::CURRENT,
-        num_layers: NUM_LAYER as u8,
-        num_rows: ROW as u8,
-        num_cols: COL as u8,
-        num_encoders: NUM_ENCODER as u8,
+        num_layers: num_layers as u8,
+        num_rows: num_rows as u8,
+        num_cols: num_cols as u8,
+        num_encoders: num_encoders as u8,
         max_combos: crate::COMBO_MAX_NUM as u8,
         max_macros: crate::MACRO_MAX_NUM as u8,
         macro_space_size: crate::MACRO_SPACE_SIZE as u16,
@@ -93,8 +67,8 @@ pub(crate) async fn get_capabilities<const ROW: usize, const COL: usize, const N
     }
 }
 
-pub(crate) async fn get_lock_status<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn get_lock_status(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     _req: (),
 ) -> LockStatus {
@@ -105,8 +79,8 @@ pub(crate) async fn get_lock_status<const ROW: usize, const COL: usize, const NU
     }
 }
 
-pub(crate) async fn unlock_request<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn unlock_request(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     _req: (),
 ) -> UnlockChallenge {
@@ -117,16 +91,16 @@ pub(crate) async fn unlock_request<const ROW: usize, const COL: usize, const NUM
     }
 }
 
-pub(crate) async fn lock_request<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn lock_request(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     _req: (),
 ) -> () {
     ctx.locked = true;
 }
 
-pub(crate) async fn reboot<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn reboot(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     _req: (),
 ) -> RmkResult {
@@ -137,8 +111,8 @@ pub(crate) async fn reboot<const ROW: usize, const COL: usize, const NUM_LAYER: 
     Ok(()) // unreachable on embedded
 }
 
-pub(crate) async fn bootloader_jump<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn bootloader_jump(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     _req: (),
 ) -> RmkResult {
@@ -149,8 +123,8 @@ pub(crate) async fn bootloader_jump<const ROW: usize, const COL: usize, const NU
     Ok(()) // unreachable on embedded
 }
 
-pub(crate) async fn storage_reset<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn storage_reset(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     mode: StorageResetMode,
 ) -> RmkResult {
@@ -179,20 +153,21 @@ pub(crate) async fn storage_reset<const ROW: usize, const COL: usize, const NUM_
 // Keymap handlers
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn get_key_action<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn get_key_action(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     pos: KeyPosition,
 ) -> rmk_types::action::KeyAction {
-    if (pos.row as usize) >= ROW || (pos.col as usize) >= COL || (pos.layer as usize) >= NUM_LAYER {
+    let (row_count, col_count, layer_count) = ctx.keymap.get_keymap_config();
+    if (pos.row as usize) >= row_count || (pos.col as usize) >= col_count || (pos.layer as usize) >= layer_count {
         return rmk_types::action::KeyAction::No;
     }
     let event_pos = KeyboardEventPos::key_pos(pos.col, pos.row);
-    ctx.keymap.borrow().get_action_at(event_pos, pos.layer as usize)
+    ctx.keymap.get_action_at(event_pos, pos.layer as usize)
 }
 
-pub(crate) async fn set_key_action<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn set_key_action(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     req: SetKeyRequest,
 ) -> RmkResult {
@@ -200,13 +175,12 @@ pub(crate) async fn set_key_action<const ROW: usize, const COL: usize, const NUM
         return Err(RmkError::Locked);
     }
     let pos = &req.position;
-    if (pos.row as usize) >= ROW || (pos.col as usize) >= COL || (pos.layer as usize) >= NUM_LAYER {
+    let (row_count, col_count, layer_count) = ctx.keymap.get_keymap_config();
+    if (pos.row as usize) >= row_count || (pos.col as usize) >= col_count || (pos.layer as usize) >= layer_count {
         return Err(RmkError::InvalidParameter);
     }
     let event_pos = KeyboardEventPos::key_pos(pos.col, pos.row);
-    ctx.keymap
-        .borrow_mut()
-        .set_action_at(event_pos, pos.layer as usize, req.action);
+    ctx.keymap.set_action_at(event_pos, pos.layer as usize, req.action);
     #[cfg(feature = "storage")]
     FLASH_CHANNEL
         .send(FlashOperationMessage::HostMessage(KeymapData::KeymapKey(KeymapKey {
@@ -219,28 +193,28 @@ pub(crate) async fn set_key_action<const ROW: usize, const COL: usize, const NUM
     Ok(())
 }
 
-pub(crate) async fn get_keymap_bulk<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn get_keymap_bulk(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     req: BulkRequest,
 ) -> BulkKeyActions {
+    let (row_count, col_count, layer_count) = ctx.keymap.get_keymap_config();
     let mut actions: BulkKeyActions = heapless::Vec::new();
     let mut row = req.start_row as usize;
     let mut col = req.start_col as usize;
     let layer = req.layer as usize;
     let count = (req.count as usize).min(MAX_BULK);
-    if layer < NUM_LAYER && row < ROW && col < COL {
-        let km = ctx.keymap.borrow();
+    if layer < layer_count && row < row_count && col < col_count {
         for _ in 0..count {
-            if row >= ROW {
+            if row >= row_count {
                 break;
             }
-            let action = km.get_action_at(KeyboardEventPos::key_pos(col as u8, row as u8), layer);
+            let action = ctx.keymap.get_action_at(KeyboardEventPos::key_pos(col as u8, row as u8), layer);
             if actions.push(action).is_err() {
                 break;
             }
             col += 1;
-            if col >= COL {
+            if col >= col_count {
                 col = 0;
                 row += 1;
             }
@@ -249,29 +223,29 @@ pub(crate) async fn get_keymap_bulk<const ROW: usize, const COL: usize, const NU
     actions
 }
 
-pub(crate) async fn set_keymap_bulk<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn set_keymap_bulk(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     req: SetKeymapBulkRequest,
 ) -> RmkResult {
     if ctx.locked {
         return Err(RmkError::Locked);
     }
+    let (row_count, col_count, layer_count) = ctx.keymap.get_keymap_config();
     let layer = req.request.layer as usize;
-    if layer >= NUM_LAYER {
+    if layer >= layer_count {
         return Err(RmkError::InvalidParameter);
     }
     let mut row = req.request.start_row as usize;
     let mut col = req.request.start_col as usize;
-    if row >= ROW || col >= COL {
+    if row >= row_count || col >= col_count {
         return Err(RmkError::InvalidParameter);
     }
     for action in req.actions.iter() {
-        if row >= ROW {
+        if row >= row_count {
             break;
         }
         ctx.keymap
-            .borrow_mut()
             .set_action_at(KeyboardEventPos::key_pos(col as u8, row as u8), layer, *action);
         #[cfg(feature = "storage")]
         FLASH_CHANNEL
@@ -283,7 +257,7 @@ pub(crate) async fn set_keymap_bulk<const ROW: usize, const COL: usize, const NU
             })))
             .await;
         col += 1;
-        if col >= COL {
+        if col >= col_count {
             col = 0;
             row += 1;
         }
@@ -291,41 +265,43 @@ pub(crate) async fn set_keymap_bulk<const ROW: usize, const COL: usize, const NU
     Ok(())
 }
 
-pub(crate) async fn get_layer_count<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    _ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn get_layer_count(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     _req: (),
 ) -> u8 {
-    NUM_LAYER as u8
+    let (_, _, num_layer) = ctx.keymap.get_keymap_config();
+    num_layer as u8
 }
 
-pub(crate) async fn get_default_layer<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn get_default_layer(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     _req: (),
 ) -> u8 {
-    ctx.keymap.borrow().get_default_layer()
+    ctx.keymap.get_default_layer()
 }
 
-pub(crate) async fn set_default_layer<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn set_default_layer(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     layer: u8,
 ) -> RmkResult {
     if ctx.locked {
         return Err(RmkError::Locked);
     }
-    if layer as usize >= NUM_LAYER {
+    let (_, _, num_layer) = ctx.keymap.get_keymap_config();
+    if layer as usize >= num_layer {
         return Err(RmkError::InvalidParameter);
     }
-    ctx.keymap.borrow_mut().set_default_layer(layer);
+    ctx.keymap.set_default_layer(layer);
     #[cfg(feature = "storage")]
     FLASH_CHANNEL.send(FlashOperationMessage::DefaultLayer(layer)).await;
     Ok(())
 }
 
-pub(crate) async fn reset_keymap<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn reset_keymap(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     _req: (),
 ) -> RmkResult {
@@ -344,8 +320,8 @@ pub(crate) async fn reset_keymap<const ROW: usize, const COL: usize, const NUM_L
 // Connection / Status handlers
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn get_connection_info<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    _ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn get_connection_info(
+    _ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     _req: (),
 ) -> ConnectionInfo {
@@ -361,25 +337,23 @@ pub(crate) async fn get_connection_info<const ROW: usize, const COL: usize, cons
     }
 }
 
-pub(crate) async fn get_current_layer<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn get_current_layer(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     _req: (),
 ) -> u8 {
-    ctx.keymap.borrow().get_activated_layer()
+    ctx.keymap.get_activated_layer()
 }
 
-pub(crate) async fn get_matrix_state<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    ctx: &mut ProtocolContext<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) async fn get_matrix_state(
+    ctx: &mut ProtocolContext<'_>,
     _hdr: VarHeader,
     _req: (),
 ) -> MatrixState {
-    let bitmap_len = ROW * COL.div_ceil(8);
+    let (row_count, col_count, _) = ctx.keymap.get_keymap_config();
+    let bitmap_len = row_count * col_count.div_ceil(8);
     let mut raw = [0u8; MAX_MATRIX_BITMAP_SIZE];
-    ctx.keymap
-        .borrow()
-        .matrix_state
-        .read_protocol_bitmap(&mut raw[..bitmap_len]);
+    ctx.keymap.read_matrix_state(&mut raw[..bitmap_len]);
     let pressed_bitmap = heapless::Vec::from_slice(&raw[..bitmap_len]).expect("matrix bitmap length fits");
     MatrixState { pressed_bitmap }
 }

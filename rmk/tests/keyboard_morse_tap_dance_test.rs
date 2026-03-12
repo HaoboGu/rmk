@@ -13,7 +13,7 @@ use rusty_fork::rusty_fork_test;
 
 use crate::common::wrap_keymap;
 
-pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
+pub fn create_tap_dance_test_keyboard() -> Keyboard<'static> {
     let keymap = [
         [[td!(0), td!(1), td!(2), k!(A)]],
         [[k!(Kp1), k!(Kp2), k!(Kp3), k!(Kp4)]],
@@ -69,7 +69,7 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
 /// This triggers the early fire optimization: tap fires immediately on release,
 /// hold_after_tap still works on re-press.
 /// Uses HoldOnOtherPress mode to reproduce the double-press bug scenario.
-fn create_early_fire_keyboard() -> Keyboard<'static, 1, 6, 2> {
+fn create_early_fire_keyboard() -> Keyboard<'static> {
     let keymap = [
         [[k!(A), k!(B), k!(C), k!(D), KeyAction::Morse(0), KeyAction::Morse(1)]],
         [[k!(Kp1), k!(Kp2), k!(Kp3), k!(Kp4), k!(Kp5), k!(Kp6)]],
@@ -114,7 +114,7 @@ fn create_early_fire_keyboard() -> Keyboard<'static, 1, 6, 2> {
 /// Create a keyboard with permissive hold mode for testing key ordering.
 ///   td!(0): tap=A, hold=B, hold_after_tap=C, double_tap=D
 ///   Normal keys: k!(E) at (0,1), k!(F) at (0,2)
-fn create_permissive_hold_keyboard() -> Keyboard<'static, 1, 4, 2> {
+fn create_permissive_hold_keyboard() -> Keyboard<'static> {
     let keymap = [
         [[td!(0), k!(E), k!(F), k!(A)]],
         [[k!(Kp1), k!(Kp2), k!(Kp3), k!(Kp4)]],

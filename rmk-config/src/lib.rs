@@ -49,7 +49,7 @@ pub struct KeyboardTomlConfig {
     /// Storage config
     storage: Option<StorageConfig>,
     /// Ble config
-    ble: Option<BleConfig>,
+    pub ble: Option<BleConfig>,
     /// Chip-specific configs (e.g., [chip.nrf52840])
     chip: Option<HashMap<String, ChipConfig>>,
     /// Dependency config
@@ -474,7 +474,15 @@ pub struct BleConfig {
     pub adc_divider_total: Option<u32>,
     pub default_tx_power: Option<i8>,
     pub use_2m_phy: Option<bool>,
+    pub passkey_entry: Option<bool>,
+    pub passkey_entry_timeout: Option<u32>,
 }
+
+/// Default passkey entry timeout in seconds.
+pub const DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS: u32 = 120;
+
+/// Minimum passkey entry timeout in seconds.
+pub const MIN_PASSKEY_ENTRY_TIMEOUT_SECS: u32 = 30;
 
 /// Config for chip-specific settings
 #[derive(Clone, Default, Debug, Deserialize)]

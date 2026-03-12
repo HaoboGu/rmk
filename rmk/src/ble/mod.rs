@@ -14,11 +14,9 @@ use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
 #[cfg(feature = "host")]
-use {crate::keymap::KeyMap, core::cell::RefCell};
-#[cfg(all(feature = "host", not(feature = "_no_usb")))]
-use crate::host::{UsbHostService, UsbHostTransport};
-#[cfg(feature = "host")]
-use crate::host::BleHostService;
+use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap};
+#[cfg(all(feature = "vial", not(feature = "_no_usb")))]
+use {crate::descriptor::ViaReport, crate::host::UsbHostReaderWriter};
 #[cfg(not(feature = "_no_usb"))]
 use {
     crate::descriptor::{CompositeReport, KeyboardReport},
@@ -27,7 +25,7 @@ use {
     crate::usb::UsbKeyboardWriter,
     crate::usb::{USB_ENABLED, USB_REMOTE_WAKEUP, USB_SUSPENDED},
     crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder},
-    embassy_futures::select::{Either, Either4, select4},
+    embassy_futures::select::{Either4, select4},
     embassy_usb::driver::Driver,
 };
 #[cfg(feature = "storage")]
@@ -36,6 +34,8 @@ use {
     crate::{read_storage, state::CONNECTION_TYPE},
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
 };
+#[cfg(any(not(feature = "_no_usb"), feature = "passkey_entry"))]
+use embassy_futures::select::Either;
 
 use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
@@ -56,18 +56,17 @@ use crate::{CONNECTION_STATE, run_keyboard};
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;
-// Currently only contains VIA-over-BLE implementation.
-// TODO: add rmk_protocol BLE transport here.
 #[cfg(feature = "host")]
 pub(crate) mod host_service;
 pub(crate) mod led;
+#[cfg(feature = "passkey_entry")]
+pub mod passkey;
 pub(crate) mod profile;
 
 pub use rmk_types::ble::{BleState, BleStatus};
 
 /// Global BLE status: tracks the active profile and current BLE state.
-/// Access externally through events, not this static directly.
-pub(crate) static BLE_STATUS: Mutex<crate::RawMutex, Cell<BleStatus>> = Mutex::new(Cell::new(BleStatus {
+pub static BLE_STATUS: Mutex<crate::RawMutex, Cell<BleStatus>> = Mutex::new(Cell::new(BleStatus {
     profile: 0,
     state: BleState::Inactive,
 }));
@@ -107,9 +106,16 @@ pub async fn build_ble_stack<
     resources: &'a mut HostResources<P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX>,
 ) -> Stack<'a, C, P> {
     // Initialize trouble host stack
-    trouble_host::new(controller, resources)
+    let builder = trouble_host::new(controller, resources)
         .set_random_address(Address::random(host_address))
-        .set_random_generator_seed(random_generator)
+        .set_random_generator_seed(random_generator);
+
+    #[cfg(feature = "passkey_entry")]
+    if crate::PASSKEY_ENTRY_ENABLED {
+        builder.set_io_capabilities(IoCapabilities::KeyboardOnly);
+    }
+
+    builder
 }
 
 /// Run the BLE stack.
@@ -119,12 +125,12 @@ pub(crate) async fn run_ble<
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    #[cfg(any(feature = "storage", feature = "host"))] const ROW: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const COL: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_LAYER: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_ENCODER: usize,
+    #[cfg(feature = "storage")] const ROW: usize,
+    #[cfg(feature = "storage")] const COL: usize,
+    #[cfg(feature = "storage")] const NUM_LAYER: usize,
+    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
-    #[cfg(feature = "host")] keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
@@ -134,9 +140,6 @@ pub(crate) async fn run_ble<
     {
         rmk_config.device_config.serial_number = crate::hid::get_serial_number();
     }
-
-    #[cfg(all(feature = "host", feature = "_no_usb", not(feature = "vial")))]
-    let _ = keymap;
 
     // Initialize usb device and usb hid reader/writer
     #[cfg(not(feature = "_no_usb"))]
@@ -149,7 +152,7 @@ pub(crate) async fn run_ble<
     };
 
     #[cfg(all(not(feature = "_no_usb"), feature = "host"))]
-    let mut host_transport = UsbHostTransport::new(&mut _usb_builder);
+    let mut host_reader_writer = add_usb_reader_writer!(&mut _usb_builder, ViaReport, 32, 32);
 
     // Optional usb logger initialization
     #[cfg(all(feature = "usb_log", not(feature = "_no_usb")))]
@@ -284,13 +287,15 @@ pub(crate) async fn run_ble<
                                 set_ble_state(BleState::Inactive);
                                 // Re-send the consumed flag
                                 USB_ENABLED.signal(());
-                                #[cfg(feature = "host")]
-                                let mut host_service = UsbHostService::new(keymap, &mut host_transport, &rmk_config);
                                 let usb_fut = run_keyboard(
                                     #[cfg(feature = "storage")]
                                     storage,
                                     #[cfg(feature = "host")]
-                                    &mut host_service,
+                                    keymap,
+                                    #[cfg(feature = "vial")]
+                                    UsbHostReaderWriter::new(&mut host_reader_writer),
+                                    #[cfg(feature = "vial")]
+                                    rmk_config.vial_config,
                                     USB_SUSPENDED.wait(),
                                     UsbLedReader::new(&mut keyboard_reader),
                                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
@@ -309,7 +314,7 @@ pub(crate) async fn run_ble<
                                     #[cfg(feature = "host")]
                                     keymap,
                                     #[cfg(feature = "host")]
-                                    &rmk_config,
+                                    &mut rmk_config,
                                     #[cfg(feature = "storage")]
                                     storage,
                                 );
@@ -338,17 +343,18 @@ pub(crate) async fn run_ble<
                             _ => {}
                         }
                     }
-                    // BLE priority mode (also handles unknown future variants as BLE)
-                    _ => {
+                    ConnectionType::Ble => {
                         info!("BLE priority mode, running USB keyboard while advertising");
-                        #[cfg(feature = "host")]
-                        let mut host_service = UsbHostService::new(keymap, &mut host_transport, &rmk_config);
                         let usb_fut = run_keyboard(
                             #[cfg(feature = "storage")]
                             storage,
                             #[cfg(feature = "host")]
-                            &mut host_service,
-                            core::future::pending::<()>(),
+                            keymap,
+                            #[cfg(feature = "vial")]
+                            UsbHostReaderWriter::new(&mut host_reader_writer),
+                            #[cfg(feature = "vial")]
+                            rmk_config.vial_config,
+                            core::future::pending::<()>(), // Run forever until BLE connected
                             UsbLedReader::new(&mut keyboard_reader),
                             UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
                         );
@@ -363,7 +369,7 @@ pub(crate) async fn run_ble<
                                         #[cfg(feature = "host")]
                                         keymap,
                                         #[cfg(feature = "host")]
-                                        &rmk_config,
+                                        &mut rmk_config,
                                         #[cfg(feature = "storage")]
                                         storage,
                                     ),
@@ -394,6 +400,7 @@ pub(crate) async fn run_ble<
                             _ => {}
                         }
                     }
+                    _ => {}
                 }
             }
 
@@ -409,7 +416,7 @@ pub(crate) async fn run_ble<
                             #[cfg(feature = "host")]
                             keymap,
                             #[cfg(feature = "host")]
-                            &rmk_config,
+                            &mut rmk_config,
                             #[cfg(feature = "storage")]
                             storage,
                         ),
@@ -485,11 +492,11 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let output_keyboard = server.hid_service.output_keyboard;
     let hid_control_point = server.hid_service.hid_control_point;
     let input_keyboard = server.hid_service.input_keyboard;
-    #[cfg(feature = "vial")]
+    #[cfg(feature = "host")]
     let output_host = server.host_service.output_data;
-    #[cfg(feature = "vial")]
+    #[cfg(feature = "host")]
     let input_host = server.host_service.input_data;
-    #[cfg(feature = "vial")]
+    #[cfg(feature = "host")]
     let host_control_point = server.host_service.hid_control_point;
     let battery_level = server.battery_service.level;
     let mouse = server.composite_service.mouse_report;
@@ -578,13 +585,13 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 }
                             }
                         } else {
-                            #[cfg(feature = "vial")]
+                            #[cfg(feature = "host")]
                             if event.handle() == output_host.handle {
                                 debug!("Got host packet: {:?}", event.data());
                                 if event.data().len() == 32 {
                                     use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;
 
-                                    let data: [u8; 32] = event.data().try_into().unwrap();
+                                    let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
                                     HOST_GUI_INPUT_CHANNEL.send(data).await;
                                 } else {
                                     warn!("Wrong host packet data: {:?}", event.data());
@@ -608,7 +615,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             } else {
                                 debug!("Write GATT Event to Unknown: {:?}", event.handle());
                             }
-                            #[cfg(not(feature = "vial"))]
+                            #[cfg(not(feature = "host"))]
                             debug!("Write GATT Event to Unknown: {:?}", event.handle());
                         }
 
@@ -687,7 +694,52 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
             }
             GattConnectionEvent::PassKeyDisplay(pass_key) => info!("[gatt] PassKeyDisplay: {:?}", pass_key),
             GattConnectionEvent::PassKeyConfirm(pass_key) => info!("[gatt] PassKeyConfirm: {:?}", pass_key),
-            GattConnectionEvent::PassKeyInput => warn!("[gatt] PassKeyInput event, should not happen"),
+            GattConnectionEvent::PassKeyInput => {
+                #[cfg(feature = "passkey_entry")]
+                if crate::PASSKEY_ENTRY_ENABLED {
+                    use crate::ble::passkey::{
+                        PASSKEY_RESPONSE, begin_passkey_entry_session, end_passkey_entry_session,
+                    };
+
+                    info!("[gatt] PassKeyInput: entering passkey entry mode");
+                    begin_passkey_entry_session();
+
+                    // Wait with configurable timeout
+                    match embassy_time::with_timeout(
+                        Duration::from_secs(crate::PASSKEY_ENTRY_TIMEOUT_SECS as u64),
+                        PASSKEY_RESPONSE.wait(),
+                    )
+                    .await
+                    {
+                        Ok(Some(passkey)) => {
+                            end_passkey_entry_session();
+                            info!("[gatt] Passkey entered: submitting");
+                            if let Err(e) = conn.raw().pass_key_input(passkey) {
+                                error!("[gatt] pass_key_input error: {:?}", e);
+                            }
+                        }
+                        Ok(None) => {
+                            end_passkey_entry_session();
+                            info!("[gatt] Passkey entry cancelled");
+                            if let Err(e) = conn.raw().pass_key_cancel() {
+                                error!("[gatt] pass_key_cancel error: {:?}", e);
+                            }
+                        }
+                        Err(_) => {
+                            end_passkey_entry_session();
+                            warn!("[gatt] Passkey entry timeout");
+                            let _ = conn.raw().pass_key_cancel();
+                        }
+                    }
+                } else {
+                    warn!("[gatt] PassKeyInput: disabled in config, cancelling pairing, this shouldn't happen");
+                    if let Err(e) = conn.raw().pass_key_cancel() {
+                        error!("[gatt] pass_key_cancel error: {:?}", e);
+                    }
+                }
+                #[cfg(not(feature = "passkey_entry"))]
+                warn!("[gatt] PassKeyInput event, should not happen")
+            }
         }
 
         // Publish the BLE connected event
@@ -836,19 +888,21 @@ async fn run_ble_keyboard<
     'd,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    #[cfg(any(feature = "storage", feature = "host"))] const ROW: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const COL: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_LAYER: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_ENCODER: usize,
+    #[cfg(feature = "storage")] const ROW: usize,
+    #[cfg(feature = "storage")] const COL: usize,
+    #[cfg(feature = "storage")] const NUM_LAYER: usize,
+    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
     server: &'b Server<'_>,
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     stack: &Stack<'_, C, DefaultPacketPool>,
-    #[cfg(feature = "host")] keymap: &'c RefCell<KeyMap<'c, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
-    #[cfg(feature = "host")] rmk_config: &'d RmkConfig<'static>,
+    #[cfg(feature = "host")] keymap: &'c KeyMap<'c>,
+    #[cfg(feature = "host")] rmk_config: &'d mut RmkConfig<'static>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     let ble_hid_server = BleHidServer::new(server, conn);
+    #[cfg(feature = "host")]
+    let ble_host_server = BleHostServer::new(server, conn);
     let ble_led_reader = BleLedReader {};
     let mut ble_battery_server = BleBatteryServer::new(server, conn);
 
@@ -878,14 +932,15 @@ async fn run_ble_keyboard<
         }
     };
 
-    #[cfg(feature = "host")]
-    let mut host_service = BleHostService::new(keymap, server, conn, rmk_config);
-
     run_keyboard(
         #[cfg(feature = "storage")]
         storage,
         #[cfg(feature = "host")]
-        &mut host_service,
+        keymap,
+        #[cfg(feature = "host")]
+        ble_host_server,
+        #[cfg(feature = "vial")]
+        rmk_config.vial_config,
         communication_task,
         ble_led_reader,
         ble_hid_server,

@@ -17,52 +17,44 @@ pub mod bidirectional_matrix;
 
 /// Recording the matrix pressed state
 #[cfg(feature = "host_security")]
-pub struct MatrixState<const ROW: usize, const COL: usize> {
-    // 30 bytes supports up to 240 keys, which is enough for most keyboards
+pub struct MatrixState {
+    // 30 bytes is the limit by Vial and 240 keys is enough for most keyboards
     state: [u8; 30],
+    row: usize,
+    col: usize,
+    row_len: usize,
 }
 
 #[cfg(feature = "host_security")]
-impl<const ROW: usize, const COL: usize> Default for MatrixState<ROW, COL> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(feature = "host_security")]
-impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
-    const ROW_LEN: usize = (COL + 7) / 8;
-    const _ASSERT_FITS: () = if ROW * Self::ROW_LEN > 30 {
-        panic!(
-            "Cannot use matrix tester because your keyboard has too many keys. \
-            Consider disable the `host_security` feature"
-        )
-    };
-    pub fn new() -> Self {
-        // Reference the const assertion so it is always evaluated.
-        let _ = Self::_ASSERT_FITS;
-        Self { state: [0; 30] }
+impl MatrixState {
+    pub fn new(row: usize, col: usize) -> Self {
+        let row_len = (col + 7) / 8;
+        assert!(row * row_len <= 30, "Matrix too large for MatrixState");
+        Self {
+            state: [0; 30],
+            row,
+            col,
+            row_len,
+        }
     }
     pub fn update(&mut self, event: &KeyboardEvent) {
         use crate::event::{KeyPos, KeyboardEventPos};
         if let KeyboardEventPos::Key(KeyPos { row, col }) = event.pos {
-            if row as usize >= ROW || col as usize >= COL {
+            if row as usize >= self.row || col as usize >= self.col {
                 warn!("Matrix read out of bounds");
                 return;
             }
             let pressed = event.pressed;
-            let byte_index = row as usize * Self::ROW_LEN + col as usize / 8;
-            let bit_index = col as usize % 8;
+            let index = row as usize * self.row_len * 8 + col as usize;
+            let byte_index = index / 8;
+            let bit_index = index % 8;
             self.state[byte_index] = self.state[byte_index] & !(1 << bit_index) | ((pressed as u8) << bit_index);
         }
     }
-    /// Read all matrix state into `target` with Vial-compatible reversed byte
-    /// order per row. The RMK protocol's `GetMatrixState` endpoint will use
-    /// non-reversed ordering via a separate method.
     pub fn read_all(&self, target: &mut [u8]) {
-        let slice = &self.state[..(ROW * Self::ROW_LEN)];
+        let slice = &self.state[..(self.row * self.row_len)];
         let mut target_iter = target.iter_mut();
-        for row_bytes in slice.chunks(Self::ROW_LEN) {
+        for row_bytes in slice.chunks(self.row_len) {
             for byte in row_bytes.iter().rev() {
                 if let Some(target_byte) = target_iter.next() {
                     *target_byte = *byte;
@@ -72,17 +64,14 @@ impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
             }
         }
     }
-    pub fn read_protocol_bitmap(&self, target: &mut [u8]) {
-        let len = target.len().min(ROW * Self::ROW_LEN);
-        target[..len].copy_from_slice(&self.state[..len]);
-    }
     pub fn read(&self, row: u8, col: u8) -> bool {
-        if row as usize >= ROW || col as usize >= COL {
+        if row as usize >= self.row || col as usize >= self.col {
             warn!("Matrix read out of bounds");
             return false;
         }
-        let byte_index = row as usize * Self::ROW_LEN + col as usize / 8;
-        let bit_index = col as usize % 8;
+        let index = row as usize * self.row_len * 8 + col as usize;
+        let byte_index = index / 8;
+        let bit_index = index % 8;
         self.state[byte_index] & (1 << bit_index) != 0
     }
 }

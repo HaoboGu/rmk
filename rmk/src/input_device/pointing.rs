@@ -1,7 +1,5 @@
 //! Common functionality across pointing devices
 
-use core::cell::RefCell;
-
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::InputPin;
 use embedded_hal_async::digital::Wait;
@@ -263,18 +261,16 @@ pub struct PointingProcessorConfig {
 
 /// PointingProcessor that converts motion events to mouse reports
 #[processor(subscribe = [PointingEvent])]
-pub struct PointingProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
+pub struct PointingProcessor<'a> {
     /// Reference to the keymap
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    keymap: &'a KeyMap<'a>,
     config: PointingProcessorConfig,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    PointingProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
-{
+impl<'a> PointingProcessor<'a> {
     /// Create a new pointing processor with default settings
     pub fn new(
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+        keymap: &'a KeyMap<'a>,
         config: PointingProcessorConfig,
     ) -> Self {
         Self { keymap, config }
@@ -302,7 +298,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             (x, y) = (y, x);
         }
 
-        let buttons = self.keymap.borrow().mouse_buttons;
+        let buttons = self.keymap.mouse_buttons();
         let mouse_report = MouseReport {
             buttons,
             x: x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,

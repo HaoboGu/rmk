@@ -5,7 +5,9 @@ pub(crate) mod storage;
 #[cfg(feature = "vial")]
 pub mod via;
 
-use core::cell::RefCell;
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
+pub use via::UsbVialReaderWriter as UsbHostReaderWriter;
+
 #[cfg(all(feature = "host", feature = "_ble", not(feature = "vial")))]
 use core::marker::PhantomData;
 
@@ -24,6 +26,10 @@ use embassy_sync::mutex::Mutex;
 use {crate::descriptor::ViaReport, embassy_usb::class::hid::HidReaderWriter};
 #[cfg(feature = "host")]
 use crate::{config::RmkConfig, keymap::KeyMap};
+#[cfg(feature = "vial")]
+use crate::config::VialConfig;
+#[cfg(feature = "host")]
+use crate::hid::{HidReaderTrait, HidWriterTrait};
 #[cfg(all(feature = "host", feature = "_ble"))]
 use trouble_host::prelude::{GattConnection, PacketPool};
 
@@ -77,20 +83,19 @@ where
 }
 
 #[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
-pub(crate) struct UsbHostService<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    via::VialService<'a, via::UsbVialReaderWriter<'s, 'd, D>, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) struct UsbHostService<'s, 'a, 'd, D>(
+    via::VialService<'a, via::UsbVialReaderWriter<'s, 'd, D>>,
 )
 where
     D: Driver<'d>;
 
 #[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
-impl<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    UsbHostService<'s, 'a, 'd, D, ROW, COL, NUM_LAYER, NUM_ENCODER>
+impl<'s, 'a, 'd, D> UsbHostService<'s, 'a, 'd, D>
 where
     D: Driver<'d>,
 {
     pub(crate) fn new(
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+        keymap: &'a KeyMap<'a>,
         transport: &'s mut UsbHostTransport<'d, D>,
         rmk_config: &RmkConfig<'static>,
     ) -> Self {
@@ -103,8 +108,7 @@ where
 }
 
 #[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
-impl<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> HostService
-    for UsbHostService<'s, 'a, 'd, D, ROW, COL, NUM_LAYER, NUM_ENCODER>
+impl<'s, 'a, 'd, D> HostService for UsbHostService<'s, 'a, 'd, D>
 where
     D: Driver<'d>,
 {
@@ -114,32 +118,26 @@ where
 }
 
 #[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
-pub(crate) struct UsbHostService<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
+pub(crate) struct UsbHostService<'s, 'a, 'd, D>(
     protocol::ProtocolService<
         'a,
         protocol::transport::UsbBulkTx<'s, 'd, D>,
         protocol::transport::UsbBulkRx<'s, 'd, D>,
-        ROW,
-        COL,
-        NUM_LAYER,
-        NUM_ENCODER,
     >,
 )
 where
     D: Driver<'d>;
 
 #[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
-impl<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    UsbHostService<'s, 'a, 'd, D, ROW, COL, NUM_LAYER, NUM_ENCODER>
+impl<'s, 'a, 'd, D> UsbHostService<'s, 'a, 'd, D>
 where
     D: Driver<'d>,
 {
     pub(crate) fn new(
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+        keymap: &'a KeyMap<'a>,
         transport: &'s mut UsbHostTransport<'d, D>,
         rmk_config: &RmkConfig<'static>,
     ) -> Self {
-        // TODO: use rmk_config for protocol capabilities reporting
         let _ = rmk_config;
         Self(protocol::ProtocolService::new(
             keymap,
@@ -150,8 +148,7 @@ where
 }
 
 #[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
-impl<'s, 'a, 'd, D, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> HostService
-    for UsbHostService<'s, 'a, 'd, D, ROW, COL, NUM_LAYER, NUM_ENCODER>
+impl<'s, 'a, 'd, D> HostService for UsbHostService<'s, 'a, 'd, D>
 where
     D: Driver<'d>,
 {
@@ -161,20 +158,19 @@ where
 }
 
 #[cfg(all(feature = "host", feature = "_ble", feature = "vial"))]
-pub(crate) struct BleHostService<'stack, 'server, 'conn, 'a, P, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-    via::VialService<'a, crate::ble::host_service::BleHostServer<'stack, 'server, 'conn, P>, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+pub(crate) struct BleHostService<'stack, 'server, 'conn, 'a, P>(
+    via::VialService<'a, crate::ble::host_service::BleHostServer<'stack, 'server, 'conn, P>>,
 )
 where
     P: PacketPool;
 
 #[cfg(all(feature = "host", feature = "_ble", feature = "vial"))]
-impl<'stack, 'server, 'conn, 'a, P, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    BleHostService<'stack, 'server, 'conn, 'a, P, ROW, COL, NUM_LAYER, NUM_ENCODER>
+impl<'stack, 'server, 'conn, 'a, P> BleHostService<'stack, 'server, 'conn, 'a, P>
 where
     P: PacketPool,
 {
     pub(crate) fn new(
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+        keymap: &'a KeyMap<'a>,
         server: &crate::ble::ble_server::Server<'_>,
         conn: &'conn GattConnection<'stack, 'server, P>,
         rmk_config: &RmkConfig<'static>,
@@ -188,8 +184,7 @@ where
 }
 
 #[cfg(all(feature = "host", feature = "_ble", feature = "vial"))]
-impl<'stack, 'server, 'conn, 'a, P, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    HostService for BleHostService<'stack, 'server, 'conn, 'a, P, ROW, COL, NUM_LAYER, NUM_ENCODER>
+impl<'stack, 'server, 'conn, 'a, P> HostService for BleHostService<'stack, 'server, 'conn, 'a, P>
 where
     P: PacketPool,
 {
@@ -199,20 +194,19 @@ where
 }
 
 #[cfg(all(feature = "host", feature = "_ble", not(feature = "vial")))]
-pub(crate) struct BleHostService<'stack, 'server, 'conn, 'a, P, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
+pub(crate) struct BleHostService<'stack, 'server, 'conn, 'a, P>(
     PhantomData<(&'a (), &'conn GattConnection<'stack, 'server, P>)>,
 )
 where
     P: PacketPool;
 
 #[cfg(all(feature = "host", feature = "_ble", not(feature = "vial")))]
-impl<'stack, 'server, 'conn, 'a, P, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    BleHostService<'stack, 'server, 'conn, 'a, P, ROW, COL, NUM_LAYER, NUM_ENCODER>
+impl<'stack, 'server, 'conn, 'a, P> BleHostService<'stack, 'server, 'conn, 'a, P>
 where
     P: PacketPool,
 {
     pub(crate) fn new(
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+        keymap: &'a KeyMap<'a>,
         server: &crate::ble::ble_server::Server<'_>,
         conn: &'conn GattConnection<'stack, 'server, P>,
         rmk_config: &RmkConfig<'static>,
@@ -223,8 +217,7 @@ where
 }
 
 #[cfg(all(feature = "host", feature = "_ble", not(feature = "vial")))]
-impl<'stack, 'server, 'conn, 'a, P, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    HostService for BleHostService<'stack, 'server, 'conn, 'a, P, ROW, COL, NUM_LAYER, NUM_ENCODER>
+impl<'stack, 'server, 'conn, 'a, P> HostService for BleHostService<'stack, 'server, 'conn, 'a, P>
 where
     P: PacketPool,
 {
@@ -233,4 +226,30 @@ where
         warn!("BLE host protocol transport not yet implemented");
         core::future::pending::<()>().await;
     }
+}
+
+#[cfg(feature = "vial")]
+pub(crate) async fn run_host_communicate_task<
+    'a,
+    Rw: HidReaderTrait<ReportType = crate::descriptor::ViaReport>
+        + HidWriterTrait<ReportType = crate::descriptor::ViaReport>,
+>(
+    keymap: &'a KeyMap<'a>,
+    reader_writer: Rw,
+    vial_config: VialConfig<'static>,
+) {
+    let mut service = via::VialService::new(keymap, vial_config, reader_writer);
+    service.run().await
+}
+
+#[cfg(not(feature = "vial"))]
+pub(crate) async fn run_host_communicate_task<
+    'a,
+    Rw: HidReaderTrait<ReportType = crate::descriptor::ViaReport>
+        + HidWriterTrait<ReportType = crate::descriptor::ViaReport>,
+>(
+    _keymap: &'a KeyMap<'a>,
+    _reader_writer: Rw,
+) {
+    todo!()
 }

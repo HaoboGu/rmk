@@ -21,7 +21,6 @@ include!(concat!(env!("OUT_DIR"), "/constants.rs"));
 // This mod MUST go first, so that the others see its macros.
 pub(crate) mod fmt;
 
-use core::cell::RefCell;
 use core::future::Future;
 use core::sync::atomic::Ordering;
 
@@ -42,16 +41,18 @@ use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 use embassy_usb::driver::Driver;
 use futures::FutureExt;
 use hid::{HidReaderTrait, RunnableHidWriter};
+pub use keymap::KeymapData;
 use keymap::KeyMap;
 use matrix::MatrixTrait;
 use processor::PollingProcessor;
-use rmk_types::action::{EncoderAction, KeyAction};
+#[cfg(all(feature = "storage", feature = "host"))]
+use rmk_types::action::EncoderAction;
 use rmk_types::led_indicator::LedIndicator;
 use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
 pub use trouble_host::prelude::*;
-#[cfg(all(feature = "host", not(feature = "_ble")))]
-use crate::host::{UsbHostService, UsbHostTransport};
+#[cfg(feature = "host")]
+use {crate::descriptor::ViaReport, crate::hid::HidWriterTrait, crate::host::run_host_communicate_task};
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
     crate::light::UsbLedReader,
@@ -102,94 +103,18 @@ pub mod storage;
 #[cfg(not(feature = "_no_usb"))]
 pub mod usb;
 
-pub async fn initialize_keymap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
-    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    behavior_config: &'a mut config::BehaviorConfig,
-    positional_config: &'a mut PositionalConfig<ROW, COL>,
-) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>> {
-    RefCell::new(KeyMap::new(default_keymap, None, behavior_config, positional_config).await)
-}
-
-pub async fn initialize_encoder_keymap<
+pub async fn initialize_keymap<
     'a,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
     const NUM_ENCODER: usize,
 >(
-    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
+    data: &'a mut KeymapData<ROW, COL, NUM_LAYER, NUM_ENCODER>,
     behavior_config: &'a mut config::BehaviorConfig,
-    positional_config: &'a mut PositionalConfig<ROW, COL>,
-) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
-    RefCell::new(
-        KeyMap::new(
-            default_keymap,
-            Some(default_encoder_map),
-            behavior_config,
-            positional_config,
-        )
-        .await,
-    )
-}
-
-#[cfg(feature = "storage")]
-pub async fn initialize_encoder_keymap_and_storage<
-    'a,
-    F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
->(
-    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
-    flash: F,
-    storage_config: &config::StorageConfig,
-    behavior_config: &'a mut config::BehaviorConfig,
-    positional_config: &'a mut PositionalConfig<ROW, COL>,
-) -> (
-    RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
-    Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-) {
-    #[cfg(feature = "host")]
-    {
-        let mut storage = Storage::new(
-            flash,
-            default_keymap,
-            &Some(default_encoder_map),
-            storage_config,
-            behavior_config,
-        )
-        .await;
-
-        let keymap = RefCell::new(
-            KeyMap::new_from_storage(
-                default_keymap,
-                Some(default_encoder_map),
-                Some(&mut storage),
-                behavior_config,
-                positional_config,
-            )
-            .await,
-        );
-        (keymap, storage)
-    }
-
-    #[cfg(not(feature = "host"))]
-    {
-        let storage = Storage::new(flash, storage_config, &behavior_config).await;
-        let keymap = RefCell::new(
-            KeyMap::new(
-                default_keymap,
-                Some(default_encoder_map),
-                behavior_config,
-                positional_config,
-            )
-            .await,
-        );
-        (keymap, storage)
-    }
+    positional_config: &'a PositionalConfig<ROW, COL>,
+) -> KeyMap<'a> {
+    KeyMap::new(data, behavior_config, positional_config).await
 }
 
 #[cfg(feature = "storage")]
@@ -199,36 +124,46 @@ pub async fn initialize_keymap_and_storage<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
 >(
-    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    data: &'a mut KeymapData<ROW, COL, NUM_LAYER, NUM_ENCODER>,
     flash: F,
     storage_config: &config::StorageConfig,
     behavior_config: &'a mut config::BehaviorConfig,
-    positional_config: &'a mut PositionalConfig<ROW, COL>,
+    positional_config: &'a PositionalConfig<ROW, COL>,
 ) -> (
-    RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, 0>>,
-    Storage<F, ROW, COL, NUM_LAYER, 0>,
+    KeyMap<'a>,
+    Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     #[cfg(feature = "host")]
     {
-        let mut storage = Storage::new(flash, default_keymap, &None, storage_config, behavior_config).await;
-        let keymap = RefCell::new(
-            KeyMap::new_from_storage(
-                default_keymap,
-                None,
-                Some(&mut storage),
+        let mut storage = {
+            let encoder_opt: Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]> =
+                if NUM_ENCODER > 0 { Some(&mut data.encoder_map) } else { None };
+            Storage::new(
+                flash,
+                &data.keymap,
+                &encoder_opt,
+                storage_config,
                 behavior_config,
-                positional_config,
             )
-            .await,
-        );
+            .await
+        };
+
+        let keymap = KeyMap::new_from_storage(
+            data,
+            Some(&mut storage),
+            behavior_config,
+            positional_config,
+        )
+        .await;
         (keymap, storage)
     }
 
     #[cfg(not(feature = "host"))]
     {
         let storage = Storage::new(flash, storage_config, &behavior_config).await;
-        let keymap = RefCell::new(KeyMap::new(default_keymap, None, behavior_config, positional_config).await);
+        let keymap = KeyMap::new(data, behavior_config, positional_config).await;
         (keymap, storage)
     }
 }
@@ -240,12 +175,12 @@ pub async fn run_rmk<
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    #[cfg(any(feature = "storage", feature = "host"))] const ROW: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const COL: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_LAYER: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_ENCODER: usize,
+    #[cfg(feature = "storage")] const ROW: usize,
+    #[cfg(feature = "storage")] const COL: usize,
+    #[cfg(feature = "storage")] const NUM_LAYER: usize,
+    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
-    #[cfg(feature = "host")] keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(feature = "_ble")] stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
@@ -273,7 +208,7 @@ pub async fn run_rmk<
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
         let mut other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
         #[cfg(feature = "host")]
-        let mut host_transport = UsbHostTransport::new(&mut usb_builder);
+        let mut host_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
 
         let (mut keyboard_reader, mut keyboard_writer) = keyboard_reader_writer.split();
 
@@ -308,14 +243,15 @@ pub async fn run_rmk<
                     }
                 };
 
-                #[cfg(feature = "host")]
-                let mut host_service = UsbHostService::new(keymap, &mut host_transport, &rmk_config);
-
                 run_keyboard(
                     #[cfg(feature = "storage")]
                     storage,
                     #[cfg(feature = "host")]
-                    &mut host_service,
+                    keymap,
+                    #[cfg(feature = "vial")]
+                    crate::host::UsbHostReaderWriter::new(&mut host_reader_writer),
+                    #[cfg(feature = "vial")]
+                    rmk_config.vial_config,
                     usb_task,
                     UsbLedReader::new(&mut keyboard_reader),
                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
@@ -334,10 +270,11 @@ pub async fn run_rmk<
 // Due to https://github.com/rust-lang/rust/issues/62958, storage/host struct is used now.
 // The corresponding future(commented) will be used after the issue is fixed.
 pub(crate) async fn run_keyboard<
-    #[cfg(feature = "host")] H: crate::host::HostService,
+    #[cfg(feature = "host")] 'a,
     R: HidReaderTrait<ReportType = LedIndicator>,
     W: RunnableHidWriter,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
+    #[cfg(feature = "vial")] Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
     #[cfg(feature = "storage")] const ROW: usize,
     #[cfg(feature = "storage")] const COL: usize,
     #[cfg(feature = "storage")] const NUM_LAYER: usize,
@@ -345,7 +282,10 @@ pub(crate) async fn run_keyboard<
 >(
     // #[cfg(feature = "storage")] storage_task: impl Future<Output = ()>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-    #[cfg(feature = "host")] host_service: &mut H,
+    // #[cfg(feature = "host")] host_task: impl Future<Output = ()>,
+    #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
+    #[cfg(feature = "vial")] reader_writer: Rw,
+    #[cfg(feature = "vial")] vial_config: VialConfig<'static>,
     communication_fut: impl Future<Output = ()>,
     mut led_reader: R,
     mut keyboard_writer: W,
@@ -369,6 +309,12 @@ pub(crate) async fn run_keyboard<
         }
     };
 
+    #[cfg(feature = "vial")]
+    let host_fut = run_host_communicate_task(
+        keymap,
+        reader_writer,
+        vial_config,
+    );
     #[cfg(feature = "storage")]
     let storage_fut = storage.run();
 
@@ -376,8 +322,8 @@ pub(crate) async fn run_keyboard<
 
     #[cfg(feature = "storage")]
     let storage_task = core::pin::pin!(storage_fut.fuse());
-    #[cfg(feature = "host")]
-    let host_task = core::pin::pin!(host_service.run().fuse());
+    #[cfg(feature = "vial")]
+    let host_task = core::pin::pin!(host_fut.fuse());
     let mut communication_task = core::pin::pin!(communication_fut.fuse());
     let mut led_task = core::pin::pin!(led_fut.fuse());
     let mut writer_task = core::pin::pin!(writer_fut.fuse());
@@ -387,7 +333,7 @@ pub(crate) async fn run_keyboard<
         _ = with_feature!("storage", storage_task) => error!("Storage task has ended"),
         _ = wpm_processor.polling_loop().fuse() => error!("WPM Processor task ended"),
         _ = led_task => error!("Led task has ended"),
-        _ = with_feature!("host", host_task) => error!("Host task ended"),
+        _ = with_feature!("vial", host_task) => error!("Host task ended"),
         _ = writer_task => error!("Writer task has ended"),
     };
 

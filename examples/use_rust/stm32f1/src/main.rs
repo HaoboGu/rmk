@@ -19,7 +19,7 @@ use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::{initialize_keymap, run_all, run_rmk};
+use rmk::{KeymapData, initialize_keymap, run_all, run_rmk};
 
 bind_interrupts!(struct Irqs {
     USB_LP_CAN1_RX0 => InterruptHandler<USB>;
@@ -52,10 +52,10 @@ async fn main(_spawner: Spawner) {
     let rmk_config = RmkConfig { ..Default::default() };
 
     // Initialize the storage and keymap
-    let mut default_keymap = keymap::get_default_keymap();
+    let mut keymap_data = KeymapData::new(keymap::get_default_keymap());
     let mut behavior_config = BehaviorConfig::default();
-    let mut per_key_config = PositionalConfig::default();
-    let keymap = initialize_keymap(&mut default_keymap, &mut behavior_config, &mut per_key_config).await;
+    let per_key_config = PositionalConfig::default();
+    let keymap = initialize_keymap(&mut keymap_data, &mut behavior_config, &per_key_config).await;
 
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::new();

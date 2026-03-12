@@ -12,14 +12,13 @@
     "preview": "rspress preview"
   },
   "dependencies": {
-    "@rspress/core": "github:liyang8246/rspress#fix/core-dotted-version-prefix-built&path:/packages/core"
+    "@rspress/core": "^2.0.5"
   },
   "devDependencies": {
-    "@iconify/json": "^2.2.444",
-    "@iconify/tailwind4": "^1.2.1",
-    "@rspress/plugin-sitemap": "^2.0.3",
+    "@iconify/json": "^2.2.447",
+    "@iconify/tailwind4": "^1.2.3",
+    "@rspress/plugin-sitemap": "^2.0.5",
     "@tailwindcss/postcss": "^4.2.1",
-    "@types/node": "^24.11.0",
     "@types/react": "^19.2.14",
     "prettier": "3.6.2",
     "tailwindcss": "^4.2.1"
@@ -27,10 +26,6 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "core-js"
-    ],
-    "overrides": {
-      "@rspress/core": "github:liyang8246/rspress#fix/core-dotted-version-prefix-built&path:/packages/core",
-      "@rspress/shared": "github:liyang8246/rspress#fix/core-dotted-version-prefix-built&path:/packages/shared"
-    }
+    ]
   }
 }

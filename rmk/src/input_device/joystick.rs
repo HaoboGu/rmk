@@ -1,5 +1,3 @@
-use core::cell::RefCell;
-
 use rmk_macro::processor;
 use usbd_hid::descriptor::MouseReport;
 
@@ -11,27 +9,21 @@ use crate::keymap::KeyMap;
 #[processor(subscribe = [PointingEvent])]
 pub struct JoystickProcessor<
     'a,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
     const N: usize,
 > {
     transform: [[i16; N]; N],
     bias: [i16; N],
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    keymap: &'a KeyMap<'a>,
     record: [i16; N],
     resolution: u16,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize, const N: usize>
-    JoystickProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER, N>
-{
+impl<'a, const N: usize> JoystickProcessor<'a, N> {
     pub fn new(
         transform: [[i16; N]; N],
         bias: [i16; N],
         resolution: u16,
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+        keymap: &'a KeyMap<'a>,
     ) -> Self {
         Self {
             transform,
@@ -71,7 +63,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         debug!("JoystickProcessor::generate_report: report = {:?}", report);
         // map to mouse
-        let buttons = self.keymap.borrow().mouse_buttons;
+        let buttons = self.keymap.mouse_buttons();
         let mouse_report = MouseReport {
             buttons,
             x: (report[0].clamp(i8::MIN as i16, i8::MAX as i16)) as i8,

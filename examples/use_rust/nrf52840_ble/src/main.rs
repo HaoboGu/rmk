@@ -35,7 +35,7 @@ use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::{DefaultPhase, RotaryEncoder};
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::{HostResources, initialize_encoder_keymap_and_storage, run_all, run_rmk};
+use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
 #[cfg(feature = "vial")]
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -184,17 +184,18 @@ async fn main(spawner: Spawner) {
 
     // Initialze keyboard stuffs
     // Initialize the storage and keymap
-    let mut default_keymap = keymap::get_default_keymap();
-    let mut key_config = PositionalConfig::default();
+    let mut keymap_data = KeymapData::new_with_encoder(
+        keymap::get_default_keymap(),
+        keymap::get_default_encoder_map(),
+    );
+    let key_config = PositionalConfig::default();
     let mut behavior_config = BehaviorConfig::default();
-    let mut encoder_map = keymap::get_default_encoder_map();
-    let (keymap, mut storage) = initialize_encoder_keymap_and_storage(
-        &mut default_keymap,
-        &mut encoder_map,
+    let (keymap, mut storage) = initialize_keymap_and_storage(
+        &mut keymap_data,
         flash,
         &storage_config,
         &mut behavior_config,
-        &mut key_config,
+        &key_config,
     )
     .await;
 
