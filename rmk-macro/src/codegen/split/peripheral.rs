@@ -302,13 +302,13 @@ fn expand_split_peripheral(
         quote! {
             // Create a minimal keymap for processors that may read from it.
             // Peripheral doesn't use keymap for key processing.
-            let mut default_keymap = [[[::rmk::types::action::KeyAction::No; 1]; 1]; 1];
+            let mut keymap_data = ::rmk::KeymapData::new([[[::rmk::types::action::KeyAction::No; 1]; 1]; 1]);
             let mut behavior_config = ::rmk::config::BehaviorConfig::default();
-            let mut per_key_config = ::rmk::config::PositionalConfig::default();
+            let per_key_config = ::rmk::config::PositionalConfig::default();
             let keymap = ::rmk::initialize_keymap(
-                &mut default_keymap,
+                &mut keymap_data,
                 &mut behavior_config,
-                &mut per_key_config
+                &per_key_config,
             ).await;
         }
     } else {

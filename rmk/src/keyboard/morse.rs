@@ -1,7 +1,6 @@
 use embassy_time::{Duration, Instant};
 use rmk_types::action::{Action, KeyAction, MorseMode};
 
-use crate::config::BehaviorConfig;
 use crate::event::KeyboardEvent;
 use crate::keyboard::Keyboard;
 use crate::keyboard::held_buffer::{HeldKey, KeyState};
@@ -9,9 +8,7 @@ use crate::keymap::KeyMap;
 use crate::morse::{HOLD, MorsePattern, TAP};
 
 // 'morse' is an alias for the superset of tap dance and tap hold keys, since their handling have many similarities
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    Keyboard<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
-{
+impl<'a> Keyboard<'a> {
     // When a morse key reaches timeout after press / release
     pub(crate) async fn handle_morse_timeout(&mut self, key: &HeldKey) {
         assert!(key.action.is_morse());
@@ -22,7 +19,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // if there is no possibility for longer morse patterns, trigger the action:
                 let pattern = pattern.followed_by_hold();
                 debug!("pattern while holding: {:?}", pattern);
-                let final_action = Self::try_predict_final_action(self.keymap.borrow().behavior, &key.action, pattern);
+                let final_action = Self::try_predict_final_action(self.keymap, &key.action, pattern);
                 if let Some(action) = final_action {
                     debug!("hold prediction {:?} -> {:?}", pattern, action);
                     self.process_key_action_normal(action, key.event).await;
@@ -39,7 +36,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
             KeyState::Released(pattern) => {
                 // The time since the key release is longer than the timeout, trigger the action
-                let action = Self::action_from_pattern(self.keymap.borrow().behavior, &key.action, pattern);
+                let action = Self::action_from_pattern(self.keymap, &key.action, pattern);
                 self.process_key_action_tap(action, key.event).await;
                 let _ = self.held_buffer.remove(key.event.pos);
             }
@@ -72,7 +69,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if event.pressed {
             // Pressed, check the held buffer, update the tap state
             let pressed_time = self.get_timer_value(event).unwrap_or(Instant::now());
-            let timeout_time = pressed_time + Self::morse_timeout(&self.keymap.borrow(), key_action, true);
+            let timeout_time = pressed_time + Self::morse_timeout(self.keymap, key_action, true);
             match self.held_buffer.find_pos_mut(event.pos) {
                 Some(k) => {
                     // The current key is already in the buffer, update its state
@@ -122,8 +119,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         // pattern (e.g., double_tap) isn't configured.
                         let pattern = match &k.action {
                             KeyAction::Morse(idx) => {
-                                let km = self.keymap.borrow();
-                                if let Some(morse) = km.behavior.morse.morses.get(*idx as usize) {
+                                if let Some(morse) = self.keymap.get_morse(*idx as usize) {
                                     if !morse.has_pattern_or_continuation(pattern) {
                                         if hold { HOLD } else { TAP }
                                     } else {
@@ -137,7 +133,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         };
 
                         let final_action =
-                            Self::try_predict_final_action(self.keymap.borrow().behavior, &k.action, pattern);
+                            Self::try_predict_final_action(self.keymap, &k.action, pattern);
                         if let Some(action) = final_action {
                             debug!("released prediction {:?} -> {:?}", pattern, action);
                             // Reached the longest configured morse pattern, trigger the corresponding action immediately
@@ -156,12 +152,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         } else {
                             // Expect a possible longer morse pattern (or idle timeout), update the state
                             let early_action =
-                                Self::check_early_fire(self.keymap.borrow().behavior, &k.action, pattern);
+                                Self::check_early_fire(self.keymap, &k.action, pattern);
 
                             k.state = KeyState::Released(pattern);
                             // Use current release time for `IdleAfterTap` state
                             k.press_time = released_time; // Use release time as the "press_time"
-                            let timeout = Self::morse_timeout(&self.keymap.borrow(), &k.action, false);
+                            let timeout = Self::morse_timeout(self.keymap, &k.action, false);
                             k.timeout_time = k.press_time + timeout;
 
                             // Fire the tap immediately if the hold continuation has the same action
@@ -180,11 +176,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     KeyState::Holding(pattern) => {
                         // The try_predict_final_action => None is already decided, when we entered in Holding mode
                         // So, just expect a possible longer morse pattern (or idle timeout), update the state
-                        let released_time = Instant::now(); // TODO? It would be better if the event would carry the real timestamp of the release event!                        
+                        let released_time = Instant::now(); // TODO? It would be better if the event would carry the real timestamp of the release event!
                         k.state = KeyState::Released(pattern);
                         // Use current release time for `IdleAfterTap` state
                         k.press_time = released_time; // Use release time as the "press_time"
-                        k.timeout_time = k.press_time + Self::morse_timeout(&self.keymap.borrow(), &k.action, false);
+                        k.timeout_time = k.press_time + Self::morse_timeout(self.keymap, &k.action, false);
                     }
                     KeyState::ProcessedButReleaseNotReportedYet(action) => {
                         // Releasing a tap-hold action whose pressed HID report is already sent
@@ -208,7 +204,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // Trigger all non morse keys in the buffer
         while let Some(key) = self.held_buffer.remove_if(|k| !k.action.is_morse()) {
             debug!("Trigger non-morse key: {:?}", key);
-            let action = self.keymap.borrow_mut().get_action_with_layer_cache(key.event);
+            let action = self.keymap.get_action_with_layer_cache(key.event);
             match action {
                 KeyAction::Single(action) => self.process_key_action_normal(action, key.event).await,
                 KeyAction::Tap(action) => self.process_key_action_tap(action, key.event).await,
@@ -220,7 +216,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     pub fn action_from_pattern(
-        behavior_config: &BehaviorConfig,
+        keymap: &KeyMap,
         keyAction: &KeyAction,
         pattern: MorsePattern,
     ) -> Action {
@@ -230,10 +226,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 HOLD => *hold_action,
                 _ => Action::No,
             },
-            KeyAction::Morse(idx) => behavior_config
-                .morse
-                .morses
-                .get(*idx as usize)
+            KeyAction::Morse(idx) => keymap
+                .get_morse(*idx as usize)
                 .map(|morse| morse.get(pattern).unwrap_or(Action::No))
                 .unwrap_or(Action::No),
             _ => Action::No,
@@ -241,11 +235,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     pub fn morse_timeout(
-        keymap: &KeyMap<ROW, COL, NUM_LAYER, NUM_ENCODER>,
+        keymap: &KeyMap,
         key_action: &KeyAction,
         hold_timeout_needed: bool,
     ) -> Duration {
-        let behavior_config = &keymap.behavior;
         // Check per-key profile config first
         match key_action {
             KeyAction::TapHold(_, _, profile) => {
@@ -260,7 +253,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
             }
             KeyAction::Morse(index) => {
-                if let Some(morse) = behavior_config.morse.morses.get(*index as usize) {
+                if let Some(morse) = keymap.get_morse(*index as usize) {
                     let timeout = if hold_timeout_needed {
                         morse.profile.hold_timeout_ms()
                     } else {
@@ -276,10 +269,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         // If no per-key config, use the global default profile
+        let default_profile = keymap.morse_default_profile();
         let timeout = if hold_timeout_needed {
-            behavior_config.morse.default_profile.hold_timeout_ms()
+            default_profile.hold_timeout_ms()
         } else {
-            behavior_config.morse.default_profile.gap_timeout_ms()
+            default_profile.gap_timeout_ms()
         }
         .unwrap_or(250u16);
 
@@ -288,8 +282,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Decides and returns the morse mode
     /// based on configuration for the given key action / key position
-    pub fn tap_hold_mode(keymap: &KeyMap<ROW, COL, NUM_LAYER, NUM_ENCODER>, key_action: &KeyAction) -> MorseMode {
-        let behavior_config = &keymap.behavior;
+    pub fn tap_hold_mode(keymap: &KeyMap, key_action: &KeyAction) -> MorseMode {
         // Check per-key profile config first
         match key_action {
             KeyAction::TapHold(_, _, profile) => {
@@ -298,7 +291,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
             }
             KeyAction::Morse(index) => {
-                if let Some(morse) = behavior_config.morse.morses.get(*index as usize)
+                if let Some(morse) = keymap.get_morse(*index as usize)
                     && let Some(mode) = morse.profile.mode()
                 {
                     return mode;
@@ -308,9 +301,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         // If no per-key config, use the global default profile
-        behavior_config
-            .morse
-            .default_profile
+        keymap
+            .morse_default_profile()
             .mode()
             .unwrap_or(MorseMode::Normal)
     }
@@ -318,10 +310,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Decides and returns the morse mode
     /// based on configuration for the given key action / key position
     pub fn is_unilateral_tap_enabled(
-        keymap: &KeyMap<ROW, COL, NUM_LAYER, NUM_ENCODER>,
+        keymap: &KeyMap,
         key_action: &KeyAction,
     ) -> bool {
-        let behavior_config = &keymap.behavior;
         // try to look for a per-key profile config
         match key_action {
             KeyAction::TapHold(_, _, profile) => {
@@ -330,7 +321,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
             }
             KeyAction::Morse(index) => {
-                if let Some(morse) = behavior_config.morse.morses.get(*index as usize)
+                if let Some(morse) = keymap.get_morse(*index as usize)
                     && let Some(enabled) = morse.profile.unilateral_tap()
                 {
                     return enabled;
@@ -340,20 +331,20 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         // Use the global default
-        behavior_config.morse.default_profile.unilateral_tap().unwrap_or(false)
+        keymap.morse_default_profile().unilateral_tap().unwrap_or(false)
     }
 
     /// Checks if the given pattern can fire its action early even though longer
     /// continuations exist. Returns Some(action) when the hold continuation has
     /// the same action and the tap continuation is not configured.
     pub fn check_early_fire(
-        behavior_config: &BehaviorConfig,
+        keymap: &KeyMap,
         key_action: &KeyAction,
         pattern: MorsePattern,
     ) -> Option<Action> {
         match key_action {
             KeyAction::Morse(idx) => {
-                let morse = behavior_config.morse.morses.get(*idx as usize)?;
+                let morse = keymap.get_morse(*idx as usize)?;
                 if morse.can_fire_early(pattern) {
                     morse.get(pattern)
                 } else {
@@ -366,7 +357,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     //returns Some(action) if the ending of the given pattern can be "predicted" (unique)
     pub fn try_predict_final_action(
-        behavior_config: &BehaviorConfig,
+        keymap: &KeyMap,
         keyAction: &KeyAction,
         pattern_start: MorsePattern,
     ) -> Option<Action> {
@@ -378,10 +369,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     Some(*tap_action)
                 }
             }
-            KeyAction::Morse(idx) => behavior_config
-                .morse
-                .morses
-                .get(*idx as usize)
+            KeyAction::Morse(idx) => keymap
+                .get_morse(*idx as usize)
                 .and_then(|td| td.try_predict_final_action(pattern_start)),
             _ => None,
         }

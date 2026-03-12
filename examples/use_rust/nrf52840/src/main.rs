@@ -22,7 +22,7 @@ use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
-use rmk::{initialize_keymap_and_storage, run_all, run_rmk};
+use rmk::{KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
 
@@ -62,16 +62,16 @@ async fn main(_spawner: Spawner) {
     };
 
     // Initialize the storage and keymap
-    let mut default_keymap = keymap::get_default_keymap();
+    let mut keymap_data = KeymapData::new(keymap::get_default_keymap());
     let storage_config = StorageConfig::default();
     let mut behavior_config = BehaviorConfig::default();
-    let mut per_key_config = PositionalConfig::default();
+    let per_key_config = PositionalConfig::default();
     let (keymap, mut storage) = initialize_keymap_and_storage(
-        &mut default_keymap,
+        &mut keymap_data,
         flash,
         &storage_config,
         &mut behavior_config,
-        &mut per_key_config,
+        &per_key_config,
     )
     .await;
 

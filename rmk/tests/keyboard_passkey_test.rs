@@ -26,8 +26,8 @@ use crate::common::create_test_keyboard;
 /// Verifies that:
 ///   - No keyboard reports are sent to the host while in passkey mode.
 ///   - The passkey response signal receives the expected value.
-async fn run_passkey_test<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
-    keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
+async fn run_passkey_test<'a>(
+    keyboard: &mut Keyboard<'a>,
     key_sequence: &[common::TestKeyPress],
     expected_passkey: Option<u32>,
 ) {

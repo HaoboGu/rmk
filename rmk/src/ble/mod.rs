@@ -11,7 +11,7 @@ use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
 #[cfg(feature = "host")]
-use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap, core::cell::RefCell};
+use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap};
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
 use {crate::descriptor::ViaReport, crate::host::UsbHostReaderWriter};
 #[cfg(not(feature = "_no_usb"))]
@@ -117,12 +117,12 @@ pub(crate) async fn run_ble<
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    #[cfg(any(feature = "storage", feature = "host"))] const ROW: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const COL: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_LAYER: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_ENCODER: usize,
+    #[cfg(feature = "storage")] const ROW: usize,
+    #[cfg(feature = "storage")] const COL: usize,
+    #[cfg(feature = "storage")] const NUM_LAYER: usize,
+    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
-    #[cfg(feature = "host")] keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
@@ -883,15 +883,15 @@ async fn run_ble_keyboard<
     'd,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    #[cfg(any(feature = "storage", feature = "host"))] const ROW: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const COL: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_LAYER: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_ENCODER: usize,
+    #[cfg(feature = "storage")] const ROW: usize,
+    #[cfg(feature = "storage")] const COL: usize,
+    #[cfg(feature = "storage")] const NUM_LAYER: usize,
+    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
     server: &'b Server<'_>,
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     stack: &Stack<'_, C, DefaultPacketPool>,
-    #[cfg(feature = "host")] keymap: &'c RefCell<KeyMap<'c, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "host")] keymap: &'c KeyMap<'c>,
     #[cfg(feature = "host")] rmk_config: &'d mut RmkConfig<'static>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {

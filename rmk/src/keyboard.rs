@@ -1,4 +1,3 @@
-use core::cell::RefCell;
 use core::fmt::Debug;
 
 use embassy_futures::select::{Either, select};
@@ -20,11 +19,10 @@ use crate::config::Hand;
 use crate::descriptor::KeyboardReport;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::ClearPeerEvent;
-use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event};
+use crate::event::{KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::input_device::Runnable;
-use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard::mouse::{MouseAction, MouseState};
 use crate::keyboard_macros::MacroOperation;
@@ -32,7 +30,7 @@ use crate::keymap::KeyMap;
 use crate::morse::{MorsePattern, TAP};
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
-use crate::{FORK_MAX_NUM, boot};
+use crate::{FORK_MAX_NUM, MACRO_SPACE_SIZE, boot};
 
 pub(crate) mod combo;
 pub(crate) mod held_buffer;
@@ -40,7 +38,7 @@ pub(crate) mod morse;
 pub(crate) mod mouse;
 pub(crate) mod oneshot;
 
-const HOLD_BUFFER_SIZE: usize = 16;
+use crate::keymap::HOLD_BUFFER_SIZE;
 
 // Timestamp of the last key action, the value is the number of seconds since the boot
 #[cfg(feature = "_ble")]
@@ -147,8 +145,7 @@ impl CapsWordState {
     }
 }
 
-impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> Runnable
-    for Keyboard<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>
+impl Runnable for Keyboard<'_>
 {
     /// Main keyboard processing task, it receives input devices result, processes keys.
     /// The report is sent using `send_report`.
@@ -185,9 +182,9 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
     }
 }
 
-pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0> {
+pub struct Keyboard<'a> {
     /// Keymap
-    pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    pub(crate) keymap: &'a KeyMap<'a>,
 
     /// Keyboard event subscriber - single instance to receive all keyboard events
     keyboard_event_subscriber: embassy_sync::pubsub::Subscriber<
@@ -204,12 +201,6 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Buffered held keys
     pub held_buffer: HeldBuffer,
-
-    /// Timer which records the timestamp of key changes
-    pub(crate) timer: [[Option<Instant>; ROW]; COL],
-
-    /// Timer which records the timestamp of rotary encoder changes
-    pub(crate) rotary_encoder_timer: [[Option<Instant>; 2]; NUM_ENCODER],
 
     /// Record the timestamp of last **simple key** press.
     /// It's used in tap-hold prior-idle-time check.
@@ -266,15 +257,12 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     passkey_entry_state: crate::ble::passkey::PasskeyEntryState,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    Keyboard<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
+impl<'a> Keyboard<'a>
 {
-    pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>) -> Self {
+    pub fn new(keymap: &'a KeyMap<'a>) -> Self {
         Keyboard {
             keymap,
             keyboard_event_subscriber: KeyboardEvent::subscriber(),
-            timer: [[None; ROW]; COL],
-            rotary_encoder_timer: [[None; 2]; NUM_ENCODER],
             last_press_time: Instant::now(),
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
@@ -393,7 +381,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.passkey_entry_state.check_mode_transition();
 
         #[cfg(feature = "vial_lock")]
-        self.keymap.borrow_mut().matrix_state.update(&event);
+        self.keymap.update_matrix_state(&event);
 
         // Matrix should process key pressed event first, record the timestamp of key changes
         if event.pressed {
@@ -404,7 +392,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         update_activity_time();
 
         // Process key
-        let key_action = &self.keymap.borrow_mut().get_action_with_layer_cache(event);
+        let key_action = &self.keymap.get_action_with_layer_cache(event);
 
         if self.combo_on {
             if let (Some(key_action), is_combo) = self.process_combo(key_action, event).await {
@@ -436,7 +424,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 debug!("Clean buffer, then process current key normally");
                 let key_action = if keyboard_state_updated && !is_combo {
                     // The key_action needs to be updated due to the morse key might be triggered
-                    &self.keymap.borrow_mut().get_action_with_layer_cache(event)
+                    &self.keymap.get_action_with_layer_cache(event)
                 } else {
                     key_action
                 };
@@ -446,7 +434,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 debug!("Current key is buffered");
                 let press_time = Instant::now();
                 let timeout_time = if key_action.is_morse() {
-                    press_time + Self::morse_timeout(&self.keymap.borrow(), key_action, true)
+                    press_time + Self::morse_timeout(self.keymap, key_action, true)
                 } else {
                     press_time
                 };
@@ -463,18 +451,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // Process current key normally
                 let key_action = if keyboard_state_updated && !is_combo {
                     // The key_action needs to be updated due to the morse key might be triggered
-                    &self.keymap.borrow_mut().get_action_with_layer_cache(event)
+                    &self.keymap.get_action_with_layer_cache(event)
                 } else {
                     key_action
                 };
                 self.process_key_action_inner(key_action, event).await
             }
             KeyBehaviorDecision::FlowTap => {
-                let action = Self::action_from_pattern(self.keymap.borrow().behavior, key_action, TAP); //tap action
+                let action = Self::action_from_pattern(self.keymap, key_action, TAP); //tap action
                 self.process_key_action_normal(action, event).await;
                 // Push back after triggered press
                 let now = Instant::now();
-                let time_out = now + Self::morse_timeout(&self.keymap.borrow(), key_action, true);
+                let time_out = now + Self::morse_timeout(self.keymap, key_action, true);
                 self.held_buffer.push(HeldKey::new(
                     event,
                     *key_action,
@@ -520,7 +508,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 };
                                 debug!("Pattern after unilateral tap or flow tap: {:?}", pattern);
                                 let action =
-                                    Self::action_from_pattern(self.keymap.borrow().behavior, &held_key.action, pattern);
+                                    Self::action_from_pattern(self.keymap, &held_key.action, pattern);
                                 self.process_key_action_normal(action, held_key.event).await;
                                 held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                 // Push back after triggered tap
@@ -531,7 +519,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 // however an other key is pressed so terminate the sequence, try to resolve as is
                                 debug!("Pattern after released, unilateral tap or flow tap: {:?}", pattern);
                                 let action =
-                                    Self::action_from_pattern(self.keymap.borrow().behavior, &held_key.action, pattern);
+                                    Self::action_from_pattern(self.keymap, &held_key.action, pattern);
                                 held_key.event.pressed = true;
                                 self.process_key_action_tap(action, held_key.event).await;
                                 // The tap is fully fired, don't push it back to buffer again
@@ -543,7 +531,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
                 HeldKeyDecision::PermissiveHold | HeldKeyDecision::HoldOnOtherKeyPress => {
                     if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
-                        let action = self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event);
+                        let action = self.keymap.get_action_with_layer_cache(held_key.event);
 
                         if action.is_morse() {
                             // Permissive hold of held key is triggered
@@ -561,7 +549,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     keyboard_state_updated = true;
                                     debug!("pattern after permissive hold: {:?}", pattern);
                                     let action =
-                                        Self::action_from_pattern(self.keymap.borrow().behavior, &action, pattern);
+                                        Self::action_from_pattern(self.keymap, &action, pattern);
                                     self.process_key_action_normal(action, held_key.event).await;
                                     held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                     // Push back after triggered hold
@@ -570,7 +558,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 KeyState::Released(pattern) => {
                                     debug!("pattern after released, permissive hold: {:?}", pattern);
                                     let action =
-                                        Self::action_from_pattern(self.keymap.borrow().behavior, &action, pattern);
+                                        Self::action_from_pattern(self.keymap, &action, pattern);
                                     held_key.event.pressed = true;
                                     self.process_key_action_tap(action, held_key.event).await;
                                     // The tap is fully fired, don't push it back to buffer again
@@ -588,7 +576,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         // Always re-evaluate action based on current layer state.
                         // A prior layer change (e.g. permissive hold activating a layer)
                         // may have changed what action this key maps to.
-                        let key_action = self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event);
+                        let key_action = self.keymap.get_action_with_layer_cache(held_key.event);
                         if key_action != held_key.action {
                             keyboard_state_updated = true;
                         }
@@ -621,7 +609,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     debug!("pattern by decided tap release: {:?}", pattern);
 
                                     let final_action = Self::try_predict_final_action(
-                                        self.keymap.borrow().behavior,
+                                        self.keymap,
                                         &key_action,
                                         pattern,
                                     );
@@ -654,7 +642,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     if trigger_normal && let Some(held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
                         debug!("Cleaning buffered normal key");
                         let action = if keyboard_state_updated {
-                            self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event)
+                            self.keymap.get_action_with_layer_cache(held_key.event)
                         } else {
                             held_key.action
                         };
@@ -669,16 +657,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
         (keyboard_state_updated, decision_for_current_key)
-    }
-
-    fn get_hand(hand_info: &[[Hand; COL]; ROW], pos: KeyPos) -> Hand {
-        let col = pos.col as usize;
-        let row = pos.row as usize;
-        if col < COL && row < ROW {
-            hand_info[row][col]
-        } else {
-            Hand::Unknown
-        }
     }
 
     /// Make decisions for current key and each held key.
@@ -698,9 +676,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // When pressing a morse key, check flow tap first.
         if event.pressed
-            && self.keymap.borrow().behavior.morse.enable_flow_tap
+            && self.keymap.morse_enable_flow_tap()
             && key_action.is_morse()
-            && self.last_press_time.elapsed() < self.keymap.borrow().behavior.morse.prior_idle_time
+            && self.last_press_time.elapsed() < self.keymap.morse_prior_idle_time()
         {
             // It's in key streak, trigger the first tap action
             debug!("Flow tap detected, trigger tap action for current morse key");
@@ -743,7 +721,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                 // The remaining keys are not same as the current key, check only morse keys
                 if held_key.event.pos != event.pos && held_key.action.is_morse() {
-                    let mode = Self::tap_hold_mode(&self.keymap.borrow(), &held_key.action);
+                    let mode = Self::tap_hold_mode(self.keymap, &held_key.action);
 
                     if event.pressed {
                         // The current key is being pressed
@@ -774,7 +752,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             _ => {}
                         }
                     } else {
-                        let unilateral_tap = Self::is_unilateral_tap_enabled(&self.keymap.borrow(), &held_key.action);
+                        let unilateral_tap = Self::is_unilateral_tap_enabled(self.keymap, &held_key.action);
 
                         // 1. Check unilateral tap of held key
                         // Note: `decision for current key == Release` means that current held key is pressed AFTER the current releasing key,
@@ -785,10 +763,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             && let KeyboardEventPos::Key(pos1) = held_key.event.pos
                             && let KeyboardEventPos::Key(pos2) = event.pos
                         {
-                            let hand_info = &self.keymap.borrow().positional_config.hand;
-
-                            let hand1 = Self::get_hand(hand_info, pos1);
-                            let hand2 = Self::get_hand(hand_info, pos2);
+                            let hand1 = self.keymap.hand_at(pos1.row as usize, pos1.col as usize);
+                            let hand2 = self.keymap.hand_at(pos2.row as usize, pos2.col as usize);
 
                             if hand1 == hand2 && hand1 != Hand::Unknown && hand2 != Hand::Bilateral {
                                 //if same hand
@@ -845,22 +821,26 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// The replacement decision is made at key_press time, and the decision
     /// is kept until the key is released.
     fn try_start_forks(&mut self, key_action: &KeyAction, event: KeyboardEvent) -> KeyAction {
-        if self.keymap.borrow().behavior.fork.forks.is_empty() {
+        if self.keymap.forks_is_empty() {
             return *key_action;
         }
 
         if !event.pressed {
-            for (i, fork) in (&self.keymap.borrow().behavior.fork.forks).into_iter().enumerate() {
-                if fork.trigger == *key_action
-                    && let Some(active) = self.fork_states[i]
-                {
-                    // If the originating key of a fork is released, simply release the replacement key
-                    // (The fork deactivation is delayed, will happen after the release hid report is sent)
-                    debug!("replace input with fork action {:?}", active);
-                    return active.replacement;
+            let fork_states = &self.fork_states;
+            let result = self.keymap.with_forks(|forks| {
+                for (i, fork) in forks.iter().enumerate() {
+                    if fork.trigger == *key_action
+                        && let Some(active) = fork_states[i]
+                    {
+                        // If the originating key of a fork is released, simply release the replacement key
+                        // (The fork deactivation is delayed, will happen after the release hid report is sent)
+                        debug!("replace input with fork action {:?}", active);
+                        return Some(active.replacement);
+                    }
                 }
-            }
-            return *key_action;
+                None
+            });
+            return result.unwrap_or(*key_action);
         }
 
         let mut decision_state = StateBits {
@@ -870,63 +850,70 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             mouse: MouseButtons::from_bits(self.mouse.report.buttons),
         };
 
-        let mut triggered_forks = [false; FORK_MAX_NUM]; // used to avoid loops
-        let mut chain_starter: Option<usize> = None;
-        let mut combined_suppress = ModifierCombination::default();
-        let mut replacement = *key_action;
+        let fork_states = &self.fork_states;
+        let with_modifiers = &mut self.with_modifiers;
+        let fork_keep_mask = &mut self.fork_keep_mask;
+        let (replacement, chain_starter, combined_suppress) = self.keymap.with_forks(|forks| {
+            let mut triggered_forks = [false; FORK_MAX_NUM]; // used to avoid loops
+            let mut chain_starter: Option<usize> = None;
+            let mut combined_suppress = ModifierCombination::default();
+            let mut replacement = *key_action;
 
-        'bind: loop {
-            for (i, fork) in (&self.keymap.borrow().behavior.fork.forks).into_iter().enumerate() {
-                if !triggered_forks[i] && self.fork_states[i].is_none() && fork.trigger == replacement {
-                    let decision = (fork.match_any & decision_state) != StateBits::default()
-                        && (fork.match_none & decision_state) == StateBits::default();
+            'bind: loop {
+                for (i, fork) in forks.iter().enumerate() {
+                    if !triggered_forks[i] && fork_states[i].is_none() && fork.trigger == replacement {
+                        let decision = (fork.match_any & decision_state) != StateBits::default()
+                            && (fork.match_none & decision_state) == StateBits::default();
 
-                    replacement = if decision {
-                        fork.positive_output
-                    } else {
-                        fork.negative_output
-                    };
+                        replacement = if decision {
+                            fork.positive_output
+                        } else {
+                            fork.negative_output
+                        };
 
-                    let suppress = fork.match_any.modifiers & !fork.kept_modifiers;
+                        let suppress = fork.match_any.modifiers & !fork.kept_modifiers;
 
-                    combined_suppress |= suppress;
+                        combined_suppress |= suppress;
 
-                    // Suppress the previously activated Action::KeyWithModifiers
-                    // (even if they held for a long time, a new keypress arrived
-                    // since then, which breaks the key repeat, so losing their
-                    // effect likely will not cause problem...)
-                    self.with_modifiers &= !suppress;
+                        // Suppress the previously activated Action::KeyWithModifiers
+                        // (even if they held for a long time, a new keypress arrived
+                        // since then, which breaks the key repeat, so losing their
+                        // effect likely will not cause problem...)
+                        *with_modifiers &= !suppress;
 
-                    // Reduce the previously aggregated keeps with the match_any mask
-                    // (since this is the expected behavior in most cases)
-                    self.fork_keep_mask &= !fork.match_any.modifiers;
+                        // Reduce the previously aggregated keeps with the match_any mask
+                        // (since this is the expected behavior in most cases)
+                        *fork_keep_mask &= !fork.match_any.modifiers;
 
-                    // Then add the user defined keeps (if any)
-                    self.fork_keep_mask |= fork.kept_modifiers;
+                        // Then add the user defined keeps (if any)
+                        *fork_keep_mask |= fork.kept_modifiers;
 
-                    if chain_starter.is_none() {
-                        chain_starter = Some(i);
+                        if chain_starter.is_none() {
+                            chain_starter = Some(i);
+                        }
+
+                        if fork.bindable {
+                            // If this fork is bindable look for other not yet activated forks,
+                            // which can be triggered by that the current replacement key
+                            triggered_forks[i] = true; // Avoid triggering the same fork again -> no infinite loops either
+
+                            // For the next fork evaluations, update the decision state
+                            // with the suppressed modifiers
+                            decision_state.modifiers &= !suppress;
+                            continue 'bind;
+                        }
+
+                        //return final decision is ready
+                        break 'bind;
                     }
-
-                    if fork.bindable {
-                        // If this fork is bindable look for other not yet activated forks,
-                        // which can be triggered by that the current replacement key
-                        triggered_forks[i] = true; // Avoid triggering the same fork again -> no infinite loops either
-
-                        // For the next fork evaluations, update the decision state
-                        // with the suppressed modifiers
-                        decision_state.modifiers &= !suppress;
-                        continue 'bind;
-                    }
-
-                    //return final decision is ready
-                    break 'bind;
                 }
+
+                // No (more) forks were triggered, so we are done
+                break 'bind;
             }
 
-            // No (more) forks were triggered, so we are done
-            break 'bind;
-        }
+            (replacement, chain_starter, combined_suppress)
+        });
 
         if let Some(initial) = chain_starter {
             // After the initial fork triggered, we have switched to "bind mode".
@@ -947,12 +934,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     // (explicit modifier suppressing effect will be stopped only AFTER the release hid report is sent)
     fn try_finish_forks(&mut self, original_key_action: &KeyAction, event: KeyboardEvent) {
         if !event.pressed {
-            for (i, fork) in (&self.keymap.borrow().behavior.fork.forks).into_iter().enumerate() {
-                if self.fork_states[i].is_some() && fork.trigger == *original_key_action {
-                    // if the originating key of a fork is released the replacement decision is not valid anymore
-                    self.fork_states[i] = None;
+            let fork_states = &mut self.fork_states;
+            self.keymap.with_forks(|forks| {
+                for (i, fork) in forks.iter().enumerate() {
+                    if fork_states[i].is_some() && fork.trigger == *original_key_action {
+                        // if the originating key of a fork is released the replacement decision is not valid anymore
+                        fork_states[i] = None;
+                    }
                 }
-            }
+            });
         }
     }
 
@@ -975,27 +965,24 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     ///   When releasing, only trigger combos that contain the key_action.
     async fn trigger_delayed_combo(&mut self, key_action: &KeyAction, event: KeyboardEvent) {
         // First, find the delayed combo and trigger it
-        let triggered_combo = self
-            .keymap
-            .borrow_mut()
-            .behavior
-            .combo
-            .combos
-            .iter_mut()
-            .filter_map(|c| c.as_mut())
-            .filter_map(|c| {
-                if c.is_all_pressed() && !c.is_triggered() {
-                    // When a key is pressed (interrupting a combo wait), trigger any delayed combo.
-                    // When releasing a key, only trigger combos that contain the key_action.
-                    if event.pressed || c.config.actions.contains(key_action) {
-                        // All keys are pressed but the combo is not triggered, trigger it
-                        return Some((c.size(), c));
+        let triggered_combo = self.keymap.with_combos_mut(|combos| {
+            combos
+                .iter_mut()
+                .filter_map(|c| c.as_mut())
+                .filter_map(|c| {
+                    if c.is_all_pressed() && !c.is_triggered() {
+                        // When a key is pressed (interrupting a combo wait), trigger any delayed combo.
+                        // When releasing a key, only trigger combos that contain the key_action.
+                        if event.pressed || c.config.actions.contains(key_action) {
+                            // All keys are pressed but the combo is not triggered, trigger it
+                            return Some((c.size(), c));
+                        }
                     }
-                }
-                None
-            }) // Find all delayed combos
-            .max_by_key(|x| x.0) // Find only the longest one
-            .map(|(_, c)| (c.trigger(), c.config.actions)); // Trigger it and get the actions
+                    None
+                }) // Find all delayed combos
+                .max_by_key(|x| x.0) // Find only the longest one
+                .map(|(_, c)| (c.trigger(), c.config.actions)) // Trigger it and get the actions
+        });
 
         // Clean the held buffer, process the combo output action and clear other combos
         if let Some((action, combo_actions)) = triggered_combo {
@@ -1021,49 +1008,44 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     // Reset combos that contain a key_action but not triggered yet
     fn reset_combo(&mut self, key_action: &KeyAction) {
         // Reset other sub-combo states
-        self.keymap
-            .borrow_mut()
-            .behavior
-            .combo
-            .combos
-            .iter_mut()
-            .filter_map(|c| c.as_mut())
-            .for_each(|c| {
-                if c.is_all_pressed() && !c.is_triggered() && c.config.actions.contains(key_action) {
-                    info!("Resetting combo: {:?}", c,);
-                    c.reset();
-                }
-            });
+        self.keymap.with_combos_mut(|combos| {
+            combos
+                .iter_mut()
+                .filter_map(|c| c.as_mut())
+                .for_each(|c| {
+                    if c.is_all_pressed() && !c.is_triggered() && c.config.actions.contains(key_action) {
+                        info!("Resetting combo: {:?}", c,);
+                        c.reset();
+                    }
+                });
+        });
     }
 
     /// Check combo before process keys.
     ///
     /// This function returns key action after processing combo, and a boolean indicates that if current returned key action is a combo output
     async fn process_combo(&mut self, key_action: &KeyAction, event: KeyboardEvent) -> (Option<KeyAction>, bool) {
-        let current_layer = self.keymap.borrow().get_activated_layer();
+        let current_layer = self.keymap.get_activated_layer();
 
         // First, when releasing a key, check whether there's untriggered combo, if so, triggerer it first
         if !event.pressed {
             self.trigger_delayed_combo(key_action, event).await;
         }
 
-        let max_size_of_updated_combo = self
-            .keymap
-            .borrow_mut()
-            .behavior
-            .combo
-            .combos
-            .iter_mut()
-            .filter_map(|c| c.as_mut())
-            .map(|c| {
-                if c.update(key_action, event, current_layer) {
-                    info!("Updated combo: {:?}", c);
-                    c.size()
-                } else {
-                    0
-                }
-            })
-            .max();
+        let max_size_of_updated_combo = self.keymap.with_combos_mut(|combos| {
+            combos
+                .iter_mut()
+                .filter_map(|c| c.as_mut())
+                .map(|c| {
+                    if c.update(key_action, event, current_layer) {
+                        info!("Updated combo: {:?}", c);
+                        c.size()
+                    } else {
+                        0
+                    }
+                })
+                .max()
+        });
 
         if event.pressed
             && let Some(max_size) = max_size_of_updated_combo
@@ -1076,25 +1058,22 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 *key_action,
                 KeyState::WaitingCombo,
                 pressed_time,
-                pressed_time + self.keymap.borrow().behavior.combo.timeout,
+                pressed_time + self.keymap.combo_timeout(),
             ));
 
             // Only one combo is updated, and triggered
-            let next_action = self
-                .keymap
-                .borrow_mut()
-                .behavior
-                .combo
-                .combos
-                .iter_mut()
-                .filter_map(|c| c.as_mut())
-                .find_map(|c| {
-                    if c.is_all_pressed() && !c.is_triggered() && c.size() == max_size {
-                        Some(c.trigger())
-                    } else {
-                        None
-                    }
-                });
+            let next_action = self.keymap.with_combos_mut(|combos| {
+                combos
+                    .iter_mut()
+                    .filter_map(|c| c.as_mut())
+                    .find_map(|c| {
+                        if c.is_all_pressed() && !c.is_triggered() && c.size() == max_size {
+                            Some(c.trigger())
+                        } else {
+                            None
+                        }
+                    })
+            });
 
             if let Some(next_action) = next_action {
                 debug!("[Combo] {:?} triggered", next_action);
@@ -1113,28 +1092,22 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 let mut combo_output = None;
                 let mut releasing_triggered_combo = false;
 
-                for combo in self
-                    .keymap
-                    .borrow_mut()
-                    .behavior
-                    .combo
-                    .combos
-                    .iter_mut()
-                    .filter_map(|c| c.as_mut())
-                {
-                    if combo.config.actions.contains(key_action) {
-                        // Releasing a combo key in triggered combo
-                        releasing_triggered_combo |= combo.is_triggered();
-                        info!("[Combo] releasing: {:?}", combo);
+                self.keymap.with_combos_mut(|combos| {
+                    for combo in combos.iter_mut().filter_map(|c| c.as_mut()) {
+                        if combo.config.actions.contains(key_action) {
+                            // Releasing a combo key in triggered combo
+                            releasing_triggered_combo |= combo.is_triggered();
+                            info!("[Combo] releasing: {:?}", combo);
 
-                        // Release the combo key, check whether the combo is fully released
-                        if combo.update_released(key_action) {
-                            // If the combo is fully released, update the combo output
-                            debug!("[Combo] {:?} is released", combo.config.output);
-                            combo_output = combo_output.or(Some(combo.config.output));
+                            // Release the combo key, check whether the combo is fully released
+                            if combo.update_released(key_action) {
+                                // If the combo is fully released, update the combo output
+                                debug!("[Combo] {:?} is released", combo.config.output);
+                                combo_output = combo_output.or(Some(combo.config.output));
+                            }
                         }
                     }
-                }
+                });
 
                 // Releasing a triggered combo
                 // - Return the output of the triggered combo when the combo is fully released
@@ -1167,15 +1140,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         // Reset triggered combo states
-        self.keymap
-            .borrow_mut()
-            .behavior
-            .combo
-            .combos
-            .iter_mut()
-            .filter_map(|combo| combo.as_mut())
-            .filter(|combo| !combo.is_triggered())
-            .for_each(Combo::reset);
+        self.keymap.with_combos_mut(|combos| {
+            combos
+                .iter_mut()
+                .filter_map(|combo| combo.as_mut())
+                .filter(|combo| !combo.is_triggered())
+                .for_each(Combo::reset);
+        });
     }
 
     async fn process_key_action_normal(&mut self, action: Action, event: KeyboardEvent) {
@@ -1187,32 +1158,33 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // Turn off a layer temporarily when the key is pressed
                 // Reactivate the layer after the key is released
                 if event.pressed {
-                    self.keymap.borrow_mut().deactivate_layer(layer_num);
+                    self.keymap.deactivate_layer(layer_num);
                 }
             }
             Action::LayerToggle(layer_num) => {
                 // Toggle a layer when the key is release
                 if !event.pressed {
-                    self.keymap.borrow_mut().toggle_layer(layer_num);
+                    self.keymap.toggle_layer(layer_num);
                 }
             }
             Action::LayerToggleOnly(layer_num) => {
                 // Activate a layer and deactivate all other layers(except default layer)
                 if event.pressed {
                     // Disable all layers except the default layer
-                    let default_layer = self.keymap.borrow().get_default_layer();
-                    for i in 0..NUM_LAYER as u8 {
+                    let default_layer = self.keymap.get_default_layer();
+                    let (_, _, num_layer) = self.keymap.get_keymap_config();
+                    for i in 0..num_layer as u8 {
                         if i != default_layer {
-                            self.keymap.borrow_mut().deactivate_layer(i);
+                            self.keymap.deactivate_layer(i);
                         }
                     }
                     // Activate the target layer
-                    self.keymap.borrow_mut().activate_layer(layer_num);
+                    self.keymap.activate_layer(layer_num);
                 }
             }
             Action::DefaultLayer(layer_num) => {
                 // Set the default layer
-                self.keymap.borrow_mut().set_default_layer(layer_num);
+                self.keymap.set_default_layer(layer_num);
             }
             Action::Modifier(modifiers) => {
                 if event.pressed {
@@ -1268,12 +1240,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             Action::TriLayerLower => {
                 // Tri-layer lower, turn layer 1 on and update layer state
                 self.process_action_layer_switch(1, event);
-                self.keymap.borrow_mut().update_fn_layer_state();
+                self.keymap.update_fn_layer_state();
             }
             Action::TriLayerUpper => {
                 // Tri-layer upper, turn layer 2 on and update layer state
                 self.process_action_layer_switch(2, event);
-                self.keymap.borrow_mut().update_fn_layer_state();
+                self.keymap.update_fn_layer_state();
             }
         }
     }
@@ -1317,7 +1289,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             match self.osm_state {
                 OneShotState::Initial(m) | OneShotState::Single(m) => {
                     self.osm_state = OneShotState::Single(m);
-                    let timeout = Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
+                    let timeout = Timer::after(self.keymap.one_shot_timeout());
                     match select(timeout, self.keyboard_event_subscriber.next_message_pure()).await {
                         Either::First(_) => {
                             // Timeout, release modifiers
@@ -1352,7 +1324,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if event.pressed {
             // Deactivate old layer if any
             if let Some(&l) = self.osl_state.value() {
-                self.keymap.borrow_mut().deactivate_layer(l);
+                self.keymap.deactivate_layer(l);
             }
 
             // Update layer of one shot
@@ -1364,17 +1336,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             };
 
             // Activate new layer
-            self.keymap.borrow_mut().activate_layer(layer_num);
+            self.keymap.activate_layer(layer_num);
         } else {
             match self.osl_state {
                 OneShotState::Initial(l) | OneShotState::Single(l) => {
                     self.osl_state = OneShotState::Single(l);
 
-                    let timeout = embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
+                    let timeout = embassy_time::Timer::after(self.keymap.one_shot_timeout());
                     match select(timeout, self.keyboard_event_subscriber.next_message_pure()).await {
                         Either::First(_) => {
                             // Timeout, deactivate layer
-                            self.keymap.borrow_mut().deactivate_layer(layer_num);
+                            self.keymap.deactivate_layer(layer_num);
                             self.osl_state = OneShotState::None;
                         }
                         Either::Second(e) => {
@@ -1387,7 +1359,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
                 OneShotState::Held(layer_num) => {
                     self.osl_state = OneShotState::None;
-                    self.keymap.borrow_mut().deactivate_layer(layer_num);
+                    self.keymap.deactivate_layer(layer_num);
                 }
                 _ => (),
             };
@@ -1603,9 +1575,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn process_action_layer_switch(&mut self, layer_num: u8, event: KeyboardEvent) {
         // Change layer state only when the key's state is changed
         if event.pressed {
-            self.keymap.borrow_mut().activate_layer(layer_num);
+            self.keymap.activate_layer(layer_num);
         } else {
-            self.keymap.borrow_mut().deactivate_layer(layer_num);
+            self.keymap.deactivate_layer(layer_num);
         }
     }
 
@@ -1630,12 +1602,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Process mouse key action with acceleration support.
     async fn process_action_mouse(&mut self, key: HidKeyCode, event: KeyboardEvent) {
         let action = {
-            let config = &self.keymap.borrow().behavior.mouse_key;
-            self.mouse.process(key, event.pressed, config)
+            let config = self.keymap.mouse_key_config();
+            self.mouse.process(key, event.pressed, &config)
         };
 
         // Sync button state to keymap for conditional layer / fork consumers
-        self.keymap.borrow_mut().mouse_buttons = self.mouse.report.buttons;
+        self.keymap.set_mouse_buttons(self.mouse.report.buttons);
 
         if let MouseAction::SendReport = action {
             self.send_mouse_report().await;
@@ -1646,12 +1618,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// send the report, and schedule the next repeat.
     async fn fire_mouse_repeat(&mut self) {
         let report = {
-            let config = &self.keymap.borrow().behavior.mouse_key;
-            self.mouse.fire_repeats(config)
+            let config = self.keymap.mouse_key_config();
+            self.mouse.fire_repeats(&config)
         };
 
         if let Some(report) = report {
-            self.keymap.borrow_mut().mouse_buttons = self.mouse.report.buttons;
+            self.keymap.set_mouse_buttons(self.mouse.report.buttons);
             self.send_report(Report::MouseReport(report)).await;
             yield_now().await;
         }
@@ -1722,12 +1694,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         // Read macro operations until the end of the macro
-        let macro_idx = self.keymap.borrow().get_macro_sequence_start(macro_idx);
+        let macro_idx = self.keymap.get_macro_sequence_start(macro_idx);
         if let Some(macro_start_idx) = macro_idx {
             let mut offset = 0;
             loop {
                 // First, get the next macro operation
-                let (operation, new_offset) = self.keymap.borrow().get_next_macro_operation(macro_start_idx, offset);
+                let (operation, new_offset) = self.keymap.get_next_macro_operation(macro_start_idx, offset);
                 // Execute the operation
                 match operation {
                     MacroOperation::Press(k) => {
@@ -1780,7 +1752,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 };
 
                 offset = new_offset;
-                if offset > self.keymap.borrow().behavior.keyboard_macros.macro_sequences.len() {
+                if offset > MACRO_SPACE_SIZE {
                     break;
                 }
                 embassy_time::Timer::after_millis(1).await;
@@ -1845,7 +1817,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             OneShotState::Initial(l) => self.osl_state = OneShotState::Held(l),
             OneShotState::Single(layer_num) => {
                 if !event.pressed {
-                    self.keymap.borrow_mut().deactivate_layer(layer_num);
+                    self.keymap.deactivate_layer(layer_num);
                     self.osl_state = OneShotState::None;
                 }
             }
@@ -1873,35 +1845,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Set the timer value for a key event
     fn set_timer_value(&mut self, event: KeyboardEvent, value: Option<Instant>) {
-        match event.pos {
-            KeyboardEventPos::Key(pos) => {
-                self.timer[pos.col as usize][pos.row as usize] = value;
-            }
-            KeyboardEventPos::RotaryEncoder(encoder_pos) => {
-                // Check if the rotary encoder id is valid
-                if let Some(encoder) = self.rotary_encoder_timer.get_mut(encoder_pos.id as usize)
-                    && encoder_pos.direction != Direction::None
-                {
-                    encoder[encoder_pos.direction as usize] = value;
-                }
-            }
-        }
+        self.keymap.set_timer(event.pos, value);
     }
 
     /// Get the timer value for a key event, if the key event is not in the timer, return the current time
     fn get_timer_value(&self, event: KeyboardEvent) -> Option<Instant> {
-        match event.pos {
-            KeyboardEventPos::Key(pos) => self.timer[pos.col as usize][pos.row as usize],
-            KeyboardEventPos::RotaryEncoder(encoder_pos) => {
-                // Check if the rotary encoder id is valid
-                if let Some(encoder) = self.rotary_encoder_timer.get(encoder_pos.id as usize)
-                    && encoder_pos.direction != Direction::None
-                {
-                    return encoder[encoder_pos.direction as usize];
-                }
-                None
-            }
-        }
+        self.keymap.get_timer(event.pos)
     }
 
     /// Register a key to be sent in hid report.
@@ -2108,33 +2057,31 @@ mod test {
         }
     }
 
-    fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'static, 5, 14, 2> {
+    fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'static> {
         static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
         let behavior_config = BEHAVIOR_CONFIG.init(config);
 
-        // Box::leak is acceptable in tests
-        let keymap = Box::new(get_keymap());
-        let leaked_keymap = Box::leak(keymap);
-
         static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<5, 14>> = static_cell::StaticCell::new();
         let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
-        let keymap = block_on(KeyMap::new(leaked_keymap, None, behavior_config, per_key_config));
-        let keymap_cell = RefCell::new(keymap);
-        let keymap_ref = Box::leak(Box::new(keymap_cell));
+
+        // Box::leak is acceptable in tests
+        let data = Box::leak(Box::new(crate::keymap::KeymapData::new(get_keymap())));
+        let keymap = block_on(KeyMap::new(data, behavior_config, per_key_config));
+        let keymap_ref = Box::leak(Box::new(keymap));
 
         Keyboard::new(keymap_ref)
     }
 
-    fn create_test_keyboard() -> Keyboard<'static, 5, 14, 2> {
+    fn create_test_keyboard() -> Keyboard<'static> {
         create_test_keyboard_with_config(BehaviorConfig::default())
     }
 
-    async fn force_timeout_first_hold(keyboard: &mut Keyboard<'static, 5, 14, 2>) {
+    async fn force_timeout_first_hold(keyboard: &mut Keyboard<'static>) {
         let key = keyboard.next_buffered_key().unwrap();
         keyboard.process_buffered_key(key).await;
     }
 
-    fn create_test_keyboard_with_forks(fork1: Fork, fork2: Fork) -> Keyboard<'static, 5, 14, 2> {
+    fn create_test_keyboard_with_forks(fork1: Fork, fork2: Fork) -> Keyboard<'static> {
         let mut cfg = ForksConfig::default();
         let _ = cfg.forks.push(fork1);
         let _ = cfg.forks.push(fork2);
@@ -2217,7 +2164,7 @@ mod test {
         fn test_repeat_key_single() {
             let main = async {
                 let mut keyboard = create_test_keyboard();
-                keyboard.keymap.borrow_mut().set_action_at(
+                keyboard.keymap.set_action_at(
                     KeyboardEventPos::Key(KeyPos { row: 0, col: 0 }),
                     0,
                     KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Again))),
@@ -2259,17 +2206,17 @@ mod test {
         fn test_repeat_key_th() {
             let main = async {
                 let mut keyboard = create_test_keyboard();
-                keyboard.keymap.borrow_mut().set_action_at(
+                keyboard.keymap.set_action_at(
                     KeyboardEventPos::Key(KeyPos { row: 0, col: 0 }),
                     0,
                     KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::F)), Action::Key(KeyCode::Hid(HidKeyCode::Again)), Default::default()),
                 );
-                keyboard.keymap.borrow_mut().set_action_at(
+                keyboard.keymap.set_action_at(
                     KeyboardEventPos::Key(KeyPos { row: 2, col: 1 }),
                     0,
                     KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A))),
                 );
-                keyboard.keymap.borrow_mut().set_action_at(
+                keyboard.keymap.set_action_at(
                     KeyboardEventPos::Key(KeyPos { row: 2, col: 2 }),
                     0,
                     KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::S))),
@@ -2498,7 +2445,7 @@ mod test {
                 let mut keyboard = create_test_keyboard_with_forks(fork1, fork2);
 
                 // disable th on a
-                keyboard.keymap.borrow_mut().set_action_at(
+                keyboard.keymap.set_action_at(
                     KeyboardEventPos::Key(KeyPos { row: 2, col: 1 }),
                     0,
                     KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A))),

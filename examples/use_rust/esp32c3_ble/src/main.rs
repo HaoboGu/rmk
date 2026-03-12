@@ -23,7 +23,7 @@ use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
-use rmk::{HostResources, initialize_keymap_and_storage, run_all, run_rmk};
+use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use {esp_alloc as _, esp_backtrace as _};
 
 use crate::keymap::*;
@@ -71,15 +71,15 @@ async fn main(_s: Spawner) {
 
     // Initialze keyboard stuffs
     // Initialize the storage and keymap
-    let mut default_keymap = keymap::get_default_keymap();
+    let mut keymap_data = KeymapData::new(keymap::get_default_keymap());
     let mut behavior_config = BehaviorConfig::default();
-    let mut per_key_config = PositionalConfig::default();
+    let per_key_config = PositionalConfig::default();
     let (keymap, mut storage) = initialize_keymap_and_storage(
-        &mut default_keymap,
+        &mut keymap_data,
         flash,
         &storage_config,
         &mut behavior_config,
-        &mut per_key_config,
+        &per_key_config,
     )
     .await;
 
