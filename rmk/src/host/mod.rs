@@ -2,8 +2,6 @@
 pub(crate) mod storage;
 pub mod via;
 
-use core::cell::RefCell;
-
 // TODO: Remove those aliases
 pub use via::UsbVialReaderWriter as UsbHostReaderWriter;
 #[cfg(feature = "vial")]
@@ -19,12 +17,8 @@ use crate::keymap::KeyMap;
 pub(crate) async fn run_host_communicate_task<
     'a,
     Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
 >(
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    keymap: &'a KeyMap<'a>,
     reader_writer: Rw,
     vial_config: VialConfig<'static>,
 ) {
@@ -36,12 +30,8 @@ pub(crate) async fn run_host_communicate_task<
 pub(crate) async fn run_host_communicate_task<
     'a,
     Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
 >(
-    _keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    _keymap: &'a KeyMap<'a>,
     _reader_writer: Rw,
 ) {
     todo!()

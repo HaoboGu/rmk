@@ -12,7 +12,7 @@ mod macro_test {
     use crate::common::{KC_LSHIFT, wrap_keymap};
     use crate::{kc_to_u8, key_sequence_test};
 
-    fn create_simple_macro_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'static, 1, 2, 1> {
+    fn create_simple_macro_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'static> {
         let keymap = [[[
             KeyAction::Single(Action::TriggerMacro(0)),
             KeyAction::Single(Action::TriggerMacro(1)),
