@@ -353,8 +353,7 @@ macro_rules! define_event_config {
 
 define_event_config!(
     // BLE events
-    ble_state_change,
-    ble_profile_change,
+    ble_status_change,
     // Connection events
     connection_change,
     // Input events
@@ -366,7 +365,7 @@ define_event_config!(
     led_indicator,
     sleep_state,
     // Power events
-    battery_state,
+    battery_status,
     battery_adc,
     charging_state,
     // Pointing device events

@@ -299,9 +299,7 @@ pub(crate) async fn run_keyboard<
                 Ok(led_indicator) => {
                     info!("Got led indicator");
                     LOCK_LED_STATES.store(led_indicator.into_bits(), core::sync::atomic::Ordering::Relaxed);
-                    publish_event(LedIndicatorEvent {
-                        indicator: led_indicator,
-                    });
+                    publish_event(LedIndicatorEvent::new(led_indicator));
                 }
                 Err(e) => {
                     error!("Read HID LED indicator error: {:?}", e);

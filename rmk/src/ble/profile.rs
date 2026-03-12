@@ -16,10 +16,11 @@ use {
 
 use super::ble_server::CCCD_TABLE_SIZE;
 use crate::NUM_BLE_PROFILE;
-use crate::ble::ACTIVE_PROFILE;
+use crate::ble::BLE_STATUS;
 use crate::channel::BLE_PROFILE_CHANNEL;
-use crate::event::{BleProfileChangeEvent, ConnectionChangeEvent, publish_event};
+use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, ConnectionType, publish_event};
 use crate::state::CONNECTION_TYPE;
+use super::{BleState, BleStatus};
 
 pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal::new();
 pub(crate) static UPDATED_CCCD_TABLE: Signal<crate::RawMutex, CccdTable<CCCD_TABLE_SIZE>> = Signal::new();
@@ -217,26 +218,28 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
         let mut buf: [u8; 128] = [0; 128];
 
-        // Load current active profile, save to `ACTIVE_PROFILE`
-        if let Ok(Some(StorageData::ActiveBleProfile(profile))) =
+        // Load current active profile, save to `BLE_STATUS`
+        let profile = if let Ok(Some(StorageData::ActiveBleProfile(profile))) =
             read_storage!(storage, &(StorageKeys::ActiveBleProfile as u32), buf)
         {
             debug!("Loaded active profile: {}", profile);
-            ACTIVE_PROFILE.store(profile, Ordering::SeqCst);
-
-            publish_event(BleProfileChangeEvent { profile });
+            profile
         } else {
             // If no saved active profile, use 0 as default
             debug!("Loaded default active profile",);
-            ACTIVE_PROFILE.store(0, Ordering::SeqCst);
-
-            publish_event(BleProfileChangeEvent { profile: 0 });
+            0
         };
+        let status = BleStatus {
+            profile,
+            state: BleState::Inactive,
+        };
+        BLE_STATUS.lock(|c| c.set(status));
+        publish_event(BleStatusChangeEvent(status));
     }
 
     /// Update bonding information in the stack according to the current active profile
     pub fn update_stack_bonds(&self) {
-        let active_profile = ACTIVE_PROFILE.load(core::sync::atomic::Ordering::SeqCst);
+        let active_profile = BLE_STATUS.lock(|c| c.get()).profile;
 
         // Remove current bonding information in the stack
         let current_bond_info = self.stack.get_bond_information();
@@ -292,7 +295,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
     /// Update CCCD table in the stack
     pub async fn update_profile_cccd_table(&mut self, table: CccdTable<CCCD_TABLE_SIZE>) {
         // Get current active profile
-        let active_profile = ACTIVE_PROFILE.load(Ordering::SeqCst);
+        let active_profile = BLE_STATUS.lock(|c| c.get()).profile;
 
         // Update profile information in memory
         if let Some(index) = self
@@ -349,15 +352,28 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
     /// Switch to the specified profile, return true if the profile is switched
     pub async fn switch_profile(&mut self, profile: u8) -> bool {
-        let current = ACTIVE_PROFILE.load(core::sync::atomic::Ordering::SeqCst);
-        if profile == current {
+        let new_status = BLE_STATUS.lock(|c| {
+            let current = c.get();
+            if current.profile == profile {
+                None
+            } else {
+                let s = BleStatus {
+                    profile,
+                    state: BleState::Inactive, // After switching profile the default state is Inactive
+                };
+                c.set(s);
+                Some(s)
+            }
+        });
+        let Some(status) = new_status else {
             return false;
-        }
-
-        ACTIVE_PROFILE.store(profile, core::sync::atomic::Ordering::SeqCst);
+        };
 
         // Update the active bonding information in the stack
         self.update_stack_bonds();
+
+        // Notify subscribers about the profile change
+        publish_event(BleStatusChangeEvent(status));
 
         #[cfg(feature = "storage")]
         FLASH_CHANNEL
@@ -365,8 +381,6 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             .await;
 
         info!("Switched to BLE profile: {}", profile);
-
-        publish_event(BleProfileChangeEvent { profile });
 
         true
     }
@@ -399,34 +413,41 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             }
                         }
                         BleProfileAction::PreviousProfile => {
-                            let mut profile = ACTIVE_PROFILE.load(Ordering::SeqCst);
-                            profile = if profile == 0 { 7 } else { profile - 1 };
+                            let mut profile = BLE_STATUS.lock(|c| c.get()).profile;
+                            profile = if profile == 0 {
+                                NUM_BLE_PROFILE as u8 - 1
+                            } else {
+                                profile - 1
+                            };
 
                             self.switch_profile(profile).await;
                         }
                         BleProfileAction::NextProfile => {
-                            let mut profile = ACTIVE_PROFILE.load(Ordering::SeqCst) + 1;
+                            let mut profile = BLE_STATUS.lock(|c| c.get()).profile + 1;
                             profile %= NUM_BLE_PROFILE as u8;
 
                             self.switch_profile(profile).await;
                         }
                         BleProfileAction::ClearProfile => {
-                            let profile = ACTIVE_PROFILE.load(Ordering::SeqCst);
+                            let profile = BLE_STATUS.lock(|c| c.get()).profile;
                             self.clear_bond(profile).await;
                         }
                         BleProfileAction::ToggleConnection => {
-                            let current = CONNECTION_TYPE.load(Ordering::SeqCst);
-                            let updated = 1 - current;
-                            CONNECTION_TYPE.store(updated, Ordering::SeqCst);
+                            let current: ConnectionType = CONNECTION_TYPE.load(Ordering::SeqCst).into();
+                            let updated = match current {
+                                ConnectionType::Usb => ConnectionType::Ble,
+                                ConnectionType::Ble => ConnectionType::Usb,
+                            };
 
-                            info!("Switching connection type to: {}", updated);
-
-                            publish_event(ConnectionChangeEvent {
-                                connection_type: updated.into(),
-                            });
+                            CONNECTION_TYPE.store(updated.into(), Ordering::SeqCst);
+                            publish_event(ConnectionChangeEvent::new(updated));
 
                             #[cfg(feature = "storage")]
-                            FLASH_CHANNEL.send(FlashOperationMessage::ConnectionType(updated)).await;
+                            FLASH_CHANNEL
+                                .send(FlashOperationMessage::ConnectionType(updated.into()))
+                                .await;
+
+                            info!("Switching connection type to: {:?}", updated);
                         }
                     }
                     #[cfg(feature = "storage")]

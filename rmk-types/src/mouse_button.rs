@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 /// Mouse buttons
 #[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
-#[derive(Eq, PartialEq, Serialize, Deserialize, postcard::experimental::max_size::MaxSize)]
+#[derive(Eq, PartialEq, Serialize, Deserialize, postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
 pub struct MouseButtons {
     #[bits(1)]
     pub button1: bool, //left

@@ -211,7 +211,7 @@ mod basic {
                                     if !__any_polled {
                                         {
                                             ::std::rt::begin_panic(
-                                                "all futures in select! were completed, \
+                                                "all futures in select! were completed,\
                     but no `complete =>` handler was provided",
                                             );
                                         }
@@ -368,7 +368,7 @@ mod reversed {
                                     if !__any_polled {
                                         {
                                             ::std::rt::begin_panic(
-                                                "all futures in select! were completed, \
+                                                "all futures in select! were completed,\
                     but no `complete =>` handler was provided",
                                             );
                                         }
@@ -572,7 +572,7 @@ mod polling {
                                     if !__any_polled {
                                         {
                                             ::std::rt::begin_panic(
-                                                "all futures in select! were completed, \
+                                                "all futures in select! were completed,\
                     but no `complete =>` handler was provided",
                                             );
                                         }
@@ -747,7 +747,7 @@ mod multi_event {
                             if !__any_polled {
                                 {
                                     ::std::rt::begin_panic(
-                                        "all futures in select! were completed, \
+                                        "all futures in select! were completed,\
                     but no `complete =>` handler was provided",
                                     );
                                 }
@@ -899,7 +899,7 @@ mod multi_event {
                                     if !__any_polled {
                                         {
                                             ::std::rt::begin_panic(
-                                                "all futures in select! were completed, \
+                                                "all futures in select! were completed,\
                     but no `complete =>` handler was provided",
                                             );
                                         }
@@ -1068,7 +1068,7 @@ mod multi_event_polling {
                             if !__any_polled {
                                 {
                                     ::std::rt::begin_panic(
-                                        "all futures in select! were completed, \
+                                        "all futures in select! were completed,\
                     but no `complete =>` handler was provided",
                                     );
                                 }
@@ -1269,7 +1269,7 @@ mod multi_event_polling {
                                     if !__any_polled {
                                         {
                                             ::std::rt::begin_panic(
-                                                "all futures in select! were completed, \
+                                                "all futures in select! were completed,\
                     but no `complete =>` handler was provided",
                                             );
                                         }
