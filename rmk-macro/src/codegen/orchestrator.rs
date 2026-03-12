@@ -265,95 +265,40 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
         .get_num_encoder();
     let total_num_encoders = num_encoders.iter().sum::<usize>();
 
-    // Generate buffer allocations for KeyMap
-    let buffer_allocs = quote! {
-        static LAYER_STATE_CELL: ::static_cell::StaticCell<[bool; NUM_LAYER]> = ::static_cell::StaticCell::new();
-        let layer_state = LAYER_STATE_CELL.init([false; NUM_LAYER]);
-        static CACHE_CELL: ::static_cell::StaticCell<[u8; ROW * COL + NUM_ENCODER * 2]> = ::static_cell::StaticCell::new();
-        let cache = CACHE_CELL.init([0u8; ROW * COL + NUM_ENCODER * 2]);
+    let keymap_data_init = if total_num_encoders == 0 {
+        quote! {
+            let mut keymap_data = ::rmk::KeymapData::new(get_default_keymap());
+        }
+    } else {
+        quote! {
+            let mut keymap_data = ::rmk::KeymapData::new_with_encoder(
+                get_default_keymap(),
+                get_default_encoder_map(),
+            );
+        }
     };
 
     if keyboard_config.get_storage_config().enabled {
-        let keymap_storage_init = if total_num_encoders == 0 {
-            // No encoder
-            quote! {
-                ::rmk::initialize_keymap_and_storage(
-                    &mut default_keymap,
-                    flash,
-                    &rmk_config.storage_config,
-                    &mut behavior_config,
-                    &per_key_config,
-                    layer_state,
-                    cache,
-                )
-            }
-        } else {
-            // Encoder exists
-            quote! {
-                ::rmk::initialize_encoder_keymap_and_storage(
-                    &mut default_keymap,
-                    &mut encoder_keymap,
-                    flash,
-                    &rmk_config.storage_config,
-                    &mut behavior_config,
-                    &per_key_config,
-                    layer_state,
-                    cache,
-                )
-            }
-        };
-        let default_encoder_keymap = if total_num_encoders == 0 {
-            quote! {}
-        } else {
-            quote! {
-                let mut encoder_keymap = get_default_encoder_map();
-            }
-        };
-        // Return the keymap and storage initialization code
         quote! {
             #initialize_positional_config
-            let mut default_keymap = get_default_keymap();
-            #default_encoder_keymap
-            #buffer_allocs
-            let (keymap, mut storage) =  #keymap_storage_init.await;
+            #keymap_data_init
+            let (keymap, mut storage) = ::rmk::initialize_keymap_and_storage(
+                &mut keymap_data,
+                flash,
+                &rmk_config.storage_config,
+                &mut behavior_config,
+                &per_key_config,
+            ).await;
         }
     } else {
-        let keymap_init = if total_num_encoders == 0 {
-            quote! {
-                ::rmk::initialize_keymap(
-                    &mut default_keymap,
-                    &mut behavior_config,
-                    &per_key_config,
-                    layer_state,
-                    cache,
-                )
-            }
-        } else {
-            quote! {
-                ::rmk::initialize_encoder_keymap(
-                    &mut default_keymap,
-                    &mut encoder_keymap,
-                    &mut behavior_config,
-                    &per_key_config,
-                    layer_state,
-                    cache,
-                )
-            }
-        };
-        let default_encoder_keymap = if total_num_encoders == 0 {
-            quote! {}
-        } else {
-            quote! {
-                let mut encoder_keymap = get_default_encoder_map();
-            }
-        };
-        // Return the keymap initialization code
         quote! {
             #initialize_positional_config
-            let mut default_keymap = get_default_keymap();
-            #default_encoder_keymap
-            #buffer_allocs
-            let keymap = #keymap_init.await;
+            #keymap_data_init
+            let keymap = ::rmk::initialize_keymap(
+                &mut keymap_data,
+                &mut behavior_config,
+                &per_key_config,
+            ).await;
         }
     }
 }

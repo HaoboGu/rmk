@@ -241,8 +241,6 @@ impl<
                 // Current sequence size, <= 28
                 let size = report.output_data[3];
                 // End of current sequence in the macro cache
-                let _end = offset + size as u16;
-
                 // The first sequence, reset the macro cache
                 if offset == 0 {
                     self.keymap.reset_macro_buffer();
@@ -253,9 +251,6 @@ impl<
                 self.keymap.write_macro_buffer(offset as usize, &report.output_data[4..4 + size as usize]);
 
                 // Then flush macros to storage
-                // #[cfg(feature = "storage")]
-                // let num_zero =
-                //     count_zeros(&self.keymap.borrow_mut().behavior.keyboard_macros.macro_sequences[0..end as usize]);
                 #[cfg(feature = "storage")]
                 {
                     let buf = self.keymap.get_macro_sequences();
@@ -347,10 +342,6 @@ fn get_position_from_offset(offset: usize, max_row: usize, max_col: usize) -> (u
     let row = current_layer_offset / max_col;
     let col = current_layer_offset % max_col;
     (row, col, layer)
-}
-
-fn count_zeros(data: &[u8]) -> usize {
-    data.iter().filter(|&&x| x == 0).count()
 }
 
 pub struct UsbVialReaderWriter<'a, 'd, D: Driver<'d>> {

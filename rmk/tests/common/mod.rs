@@ -16,6 +16,7 @@ use rmk::hid::Report;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::keymap::KeyMap;
+use rmk::KeymapData;
 use rmk::types::action::KeyAction;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{a, k, layer, lt, mo, shifted, th, wm};
@@ -162,18 +163,8 @@ pub fn wrap_keymap<'a, const R: usize, const C: usize, const L: usize>(
     config: &'static mut BehaviorConfig,
 ) -> &'a KeyMap<'static> {
     // Box::leak is acceptable in tests
-    let leaked_keymap = Box::leak(Box::new(keymap));
-    let layer_state = Box::leak(Box::new([false; L]));
-    let cache: &'static mut [u8] = Box::leak(vec![0u8; R * C].into_boxed_slice());
-
-    let keymap = block_on(KeyMap::new::<R, C, L, 0>(
-        leaked_keymap,
-        None,
-        config,
-        per_key_config,
-        layer_state,
-        cache,
-    ));
+    let data = Box::leak(Box::new(KeymapData::new(keymap)));
+    let keymap = block_on(KeyMap::new(data, config, per_key_config));
     Box::leak(Box::new(keymap))
 }
 

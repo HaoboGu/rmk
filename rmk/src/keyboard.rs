@@ -38,7 +38,7 @@ pub(crate) mod morse;
 pub(crate) mod mouse;
 pub(crate) mod oneshot;
 
-const HOLD_BUFFER_SIZE: usize = 16;
+use crate::keymap::HOLD_BUFFER_SIZE;
 
 // Timestamp of the last key action, the value is the number of seconds since the boot
 #[cfg(feature = "_ble")]
@@ -2061,22 +2061,12 @@ mod test {
         static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
         let behavior_config = BEHAVIOR_CONFIG.init(config);
 
-        // Box::leak is acceptable in tests
-        let keymap = Box::new(get_keymap());
-        let leaked_keymap = Box::leak(keymap);
-
         static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<5, 14>> = static_cell::StaticCell::new();
         let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
-        let layer_state = Box::leak(Box::new([false; 2]));
-        let cache: &'static mut [u8] = Box::leak(vec![0u8; 5 * 14].into_boxed_slice());
-        let keymap = block_on(KeyMap::new::<5, 14, 2, 0>(
-            leaked_keymap,
-            None,
-            behavior_config,
-            per_key_config,
-            layer_state,
-            cache,
-        ));
+
+        // Box::leak is acceptable in tests
+        let data = Box::leak(Box::new(crate::keymap::KeymapData::new(get_keymap())));
+        let keymap = block_on(KeyMap::new(data, behavior_config, per_key_config));
         let keymap_ref = Box::leak(Box::new(keymap));
 
         Keyboard::new(keymap_ref)

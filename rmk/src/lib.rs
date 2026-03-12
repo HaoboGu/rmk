@@ -41,10 +41,12 @@ use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 use embassy_usb::driver::Driver;
 use futures::FutureExt;
 use hid::{HidReaderTrait, RunnableHidWriter};
+pub use keymap::KeymapData;
 use keymap::KeyMap;
 use matrix::MatrixTrait;
 use processor::PollingProcessor;
-use rmk_types::action::{EncoderAction, KeyAction};
+#[cfg(all(feature = "storage", feature = "host"))]
+use rmk_types::action::EncoderAction;
 use rmk_types::led_indicator::LedIndicator;
 use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
@@ -101,108 +103,18 @@ pub mod storage;
 #[cfg(not(feature = "_no_usb"))]
 pub mod usb;
 
-pub async fn initialize_keymap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
-    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    behavior_config: &'a mut config::BehaviorConfig,
-    positional_config: &'a PositionalConfig<ROW, COL>,
-    layer_state: &'a mut [bool; NUM_LAYER],
-    cache: &'a mut [u8],
-) -> KeyMap<'a> {
-    KeyMap::new(
-        default_keymap,
-        None::<&'a mut [[EncoderAction; 0]; NUM_LAYER]>,
-        behavior_config,
-        positional_config,
-        layer_state,
-        cache,
-    )
-    .await
-}
-
-pub async fn initialize_encoder_keymap<
+pub async fn initialize_keymap<
     'a,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
     const NUM_ENCODER: usize,
 >(
-    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
+    data: &'a mut KeymapData<ROW, COL, NUM_LAYER, NUM_ENCODER>,
     behavior_config: &'a mut config::BehaviorConfig,
     positional_config: &'a PositionalConfig<ROW, COL>,
-    layer_state: &'a mut [bool; NUM_LAYER],
-    cache: &'a mut [u8],
 ) -> KeyMap<'a> {
-    KeyMap::new(
-        default_keymap,
-        Some(default_encoder_map),
-        behavior_config,
-        positional_config,
-        layer_state,
-        cache,
-    )
-    .await
-}
-
-#[cfg(feature = "storage")]
-pub async fn initialize_encoder_keymap_and_storage<
-    'a,
-    F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
->(
-    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
-    flash: F,
-    storage_config: &config::StorageConfig,
-    behavior_config: &'a mut config::BehaviorConfig,
-    positional_config: &'a PositionalConfig<ROW, COL>,
-    layer_state: &'a mut [bool; NUM_LAYER],
-    cache: &'a mut [u8],
-) -> (
-    KeyMap<'a>,
-    Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-) {
-    #[cfg(feature = "host")]
-    {
-        let mut storage = Storage::new(
-            flash,
-            default_keymap,
-            &Some(default_encoder_map),
-            storage_config,
-            behavior_config,
-        )
-        .await;
-
-        let keymap = KeyMap::new_from_storage(
-            default_keymap,
-            Some(default_encoder_map),
-            Some(&mut storage),
-            behavior_config,
-            positional_config,
-            layer_state,
-            cache,
-        )
-        .await;
-        (keymap, storage)
-    }
-
-    #[cfg(not(feature = "host"))]
-    {
-        let storage = Storage::new(flash, storage_config, &behavior_config).await;
-        let keymap = KeyMap::new(
-            default_keymap,
-            Some(default_encoder_map),
-            behavior_config,
-            positional_config,
-            layer_state,
-            cache,
-        )
-        .await;
-        (keymap, storage)
-    }
+    KeyMap::new(data, behavior_config, positional_config).await
 }
 
 #[cfg(feature = "storage")]
@@ -212,29 +124,37 @@ pub async fn initialize_keymap_and_storage<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
 >(
-    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    data: &'a mut KeymapData<ROW, COL, NUM_LAYER, NUM_ENCODER>,
     flash: F,
     storage_config: &config::StorageConfig,
     behavior_config: &'a mut config::BehaviorConfig,
     positional_config: &'a PositionalConfig<ROW, COL>,
-    layer_state: &'a mut [bool; NUM_LAYER],
-    cache: &'a mut [u8],
 ) -> (
     KeyMap<'a>,
-    Storage<F, ROW, COL, NUM_LAYER, 0>,
+    Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     #[cfg(feature = "host")]
     {
-        let mut storage = Storage::new(flash, default_keymap, &None, storage_config, behavior_config).await;
+        let mut storage = {
+            let encoder_opt: Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]> =
+                if NUM_ENCODER > 0 { Some(&mut data.encoder_map) } else { None };
+            Storage::new(
+                flash,
+                &data.keymap,
+                &encoder_opt,
+                storage_config,
+                behavior_config,
+            )
+            .await
+        };
+
         let keymap = KeyMap::new_from_storage(
-            default_keymap,
-            None::<&'a mut [[EncoderAction; 0]; NUM_LAYER]>,
+            data,
             Some(&mut storage),
             behavior_config,
             positional_config,
-            layer_state,
-            cache,
         )
         .await;
         (keymap, storage)
@@ -243,15 +163,7 @@ pub async fn initialize_keymap_and_storage<
     #[cfg(not(feature = "host"))]
     {
         let storage = Storage::new(flash, storage_config, &behavior_config).await;
-        let keymap = KeyMap::new(
-            default_keymap,
-            None::<&'a mut [[EncoderAction; 0]; NUM_LAYER]>,
-            behavior_config,
-            positional_config,
-            layer_state,
-            cache,
-        )
-        .await;
+        let keymap = KeyMap::new(data, behavior_config, positional_config).await;
         (keymap, storage)
     }
 }

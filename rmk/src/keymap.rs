@@ -1,8 +1,8 @@
 use core::cell::RefCell;
 
 use embassy_time::{Duration, Instant};
-use rmk_types::action::MorseProfile;
 use heapless::LinearMap;
+use rmk_types::action::MorseProfile;
 use rmk_types::action::{EncoderAction, KeyAction};
 #[cfg(all(feature = "storage", feature = "host"))]
 use {
@@ -10,18 +10,63 @@ use {
     embedded_storage_async::nor_flash::NorFlash,
 };
 
+use crate::MACRO_SPACE_SIZE;
 use crate::combo::Combo;
 use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, PositionalConfig};
-use crate::fork::Fork;
-use crate::morse::Morse;
 use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_event};
+use crate::fork::Fork;
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
 #[cfg(feature = "vial_lock")]
 use crate::matrix::MatrixState;
-use crate::MACRO_SPACE_SIZE;
+use crate::morse::Morse;
 
-const HOLD_BUFFER_SIZE: usize = 16;
+pub(crate) const HOLD_BUFFER_SIZE: usize = 16;
+
+/// All allocated data needed to build a [`KeyMap`].
+pub struct KeymapData<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0> {
+    /// Per-layer key actions
+    pub(crate) keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    /// Per-layer encoder actions
+    pub(crate) encoder_map: [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
+    /// Per-layer activation flags
+    layer_state: [bool; NUM_LAYER],
+    /// Layer cache for key positions
+    layer_cache: [[u8; COL]; ROW],
+    /// Layer cache for encoder directions
+    encoder_layer_cache: [[u8; 2]; NUM_ENCODER],
+}
+
+impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeymapData<ROW, COL, NUM_LAYER, 0> {
+    /// Create keymap data for a keyboard without encoders.
+    pub const fn new(keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> Self {
+        Self {
+            keymap,
+            encoder_map: [[EncoderAction::new(KeyAction::No, KeyAction::No); 0]; NUM_LAYER],
+            layer_state: [false; NUM_LAYER],
+            layer_cache: [[0; COL]; ROW],
+            encoder_layer_cache: [],
+        }
+    }
+}
+
+impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    KeymapData<ROW, COL, NUM_LAYER, NUM_ENCODER>
+{
+    /// Create keymap data for a keyboard with encoders.
+    pub const fn new_with_encoder(
+        keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+        encoder_map: [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
+    ) -> Self {
+        Self {
+            keymap,
+            encoder_map,
+            layer_state: [false; NUM_LAYER],
+            layer_cache: [[0; COL]; ROW],
+            encoder_layer_cache: [[0u8; 2]; NUM_ENCODER],
+        }
+    }
+}
 
 /// fills up the vector to its capacity
 pub(crate) fn fill_vec<T: Default + Clone, const N: usize>(vector: &mut heapless::Vec<T, N>) {
@@ -86,10 +131,6 @@ impl KeyMapInner<'_> {
         row * self.col + col
     }
 
-    #[inline]
-    fn hand_index(&self, row: usize, col: usize) -> usize {
-        row * self.col + col
-    }
 
     #[inline]
     fn encoder_cache_index(&self, id: usize, direction: usize) -> usize {
@@ -166,47 +207,17 @@ impl KeyMapInner<'_> {
             return self.get_action_at(event.pos, layer as usize);
         }
 
-        match event.pos {
-            KeyboardEventPos::Key(key_pos) => {
-                let row = key_pos.row as usize;
-                let col = key_pos.col as usize;
-                for layer_idx in (0..self.num_layer).rev() {
-                    if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
-                        let action = self.layers[self.layer_index(layer_idx, row, col)];
-                        if action == KeyAction::Transparent {
-                            continue;
-                        }
-                        self.save_layer_cache(event.pos, layer_idx as u8);
-                        return action;
-                    }
-                    if layer_idx as u8 == self.default_layer {
-                        break;
-                    }
+        for layer_idx in (0..self.num_layer).rev() {
+            if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
+                let action = self.get_action_at(event.pos, layer_idx);
+                if action == KeyAction::Transparent {
+                    continue;
                 }
+                self.save_layer_cache(event.pos, layer_idx as u8);
+                return action;
             }
-            KeyboardEventPos::RotaryEncoder(encoder_pos) => {
-                if let Some(encoders) = &self.encoders {
-                    for layer_idx in (0..self.num_layer).rev() {
-                        if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
-                            let idx = self.encoder_index(layer_idx, encoder_pos.id as usize);
-                            if let Some(encoder_action) = encoders.get(idx) {
-                                let action = match encoder_pos.direction {
-                                    Direction::Clockwise => encoder_action.clockwise(),
-                                    Direction::CounterClockwise => encoder_action.counter_clockwise(),
-                                    Direction::None => KeyAction::No,
-                                };
-                                if action == KeyAction::Transparent {
-                                    continue;
-                                }
-                                self.save_layer_cache(event.pos, layer_idx as u8);
-                                return action;
-                            }
-                        }
-                        if layer_idx as u8 == self.default_layer {
-                            break;
-                        }
-                    }
-                }
+            if layer_idx as u8 == self.default_layer {
+                break;
             }
         }
 
@@ -315,34 +326,32 @@ impl KeyMapInner<'_> {
             return;
         }
         self.layer_state[layer_num as usize] = !self.layer_state[layer_num as usize];
-        let layer = self.get_activated_layer();
-        publish_event(LayerChangeEvent { layer });
+        self.update_tri_layer();
     }
 }
 
 // ── Public KeyMap API (interior borrow hidden) ────────────────────────
 
 impl<'a> KeyMap<'a> {
-    /// Generic constructor — const generics stop here.
+    /// Flatten [`KeymapData`] and build the `KeyMap`.
     ///
-    /// Flattens typed arrays into slices stored in `KeyMapInner`.
+    /// This is the shared construction logic used by both `new` and `new_from_storage`.
     /// Uses `as_flattened_mut()` / `as_flattened()` (Rust 1.85+, no unsafe).
-    pub async fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
-        action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+    fn build<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
+        data: &'a mut KeymapData<ROW, COL, NUM_LAYER, NUM_ENCODER>,
         behavior: &'a mut BehaviorConfig,
         positional_config: &'a PositionalConfig<ROW, COL>,
-        layer_state: &'a mut [bool; NUM_LAYER],
-        cache: &'a mut [u8],
     ) -> Self {
-        assert!(cache.len() >= ROW * COL + NUM_ENCODER * 2, "cache buffer too small");
-        fill_vec(&mut behavior.fork.forks);
-        fill_vec(&mut behavior.morse.morses);
-
-        let layers = action_map.as_mut_slice().as_flattened_mut().as_flattened_mut();
-        let encoders = encoder_map.map(|e| e.as_mut_slice().as_flattened_mut());
+        let layers = data.keymap.as_mut_slice().as_flattened_mut().as_flattened_mut();
+        let encoders = if NUM_ENCODER > 0 {
+            Some(data.encoder_map.as_mut_slice().as_flattened_mut())
+        } else {
+            None
+        };
+        let layer_state = &mut data.layer_state;
+        let layer_cache = data.layer_cache.as_mut_slice().as_flattened_mut();
+        let encoder_layer_cache = data.encoder_layer_cache.as_mut_slice().as_flattened_mut();
         let hand = positional_config.hand.as_slice().as_flattened();
-        let (layer_cache, encoder_layer_cache) = cache.split_at_mut(ROW * COL);
 
         KeyMap {
             inner: RefCell::new(KeyMapInner {
@@ -366,6 +375,17 @@ impl<'a> KeyMap<'a> {
         }
     }
 
+    /// Generic constructor — const generics stop here.
+    pub async fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>(
+        data: &'a mut KeymapData<ROW, COL, NUM_LAYER, NUM_ENCODER>,
+        behavior: &'a mut BehaviorConfig,
+        positional_config: &'a PositionalConfig<ROW, COL>,
+    ) -> Self {
+        fill_vec(&mut behavior.fork.forks);
+        fill_vec(&mut behavior.morse.morses);
+        Self::build(data, behavior, positional_config)
+    }
+
     #[cfg(all(feature = "storage", feature = "host"))]
     pub async fn new_from_storage<
         F: NorFlash,
@@ -374,15 +394,11 @@ impl<'a> KeyMap<'a> {
         const NUM_LAYER: usize,
         const NUM_ENCODER: usize,
     >(
-        action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+        data: &'a mut KeymapData<ROW, COL, NUM_LAYER, NUM_ENCODER>,
         storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
         behavior: &'a mut BehaviorConfig,
         positional_config: &'a PositionalConfig<ROW, COL>,
-        layer_state: &'a mut [bool; NUM_LAYER],
-        cache: &'a mut [u8],
     ) -> Self {
-        assert!(cache.len() >= ROW * COL + NUM_ENCODER * 2, "cache buffer too small");
         fill_vec(&mut behavior.fork.forks);
         fill_vec(&mut behavior.morse.morses);
 
@@ -390,7 +406,7 @@ impl<'a> KeyMap<'a> {
         if let Some(storage) = storage
             && {
                 Ok(())
-                    .and(storage.read_keymap(action_map, &mut encoder_map).await)
+                    .and(storage.read_keymap(data).await)
                     .and(storage.read_behavior_config(behavior).await)
                     .and(
                         storage
@@ -408,32 +424,7 @@ impl<'a> KeyMap<'a> {
             reboot_keyboard();
         }
 
-        // Now flatten
-        let layers = action_map.as_mut_slice().as_flattened_mut().as_flattened_mut();
-        let encoders = encoder_map.map(|e| e.as_mut_slice().as_flattened_mut());
-        let hand = positional_config.hand.as_slice().as_flattened();
-        let (layer_cache, encoder_layer_cache) = cache.split_at_mut(ROW * COL);
-
-        KeyMap {
-            inner: RefCell::new(KeyMapInner {
-                row: ROW,
-                col: COL,
-                num_layer: NUM_LAYER,
-                num_encoder: NUM_ENCODER,
-                layers,
-                encoders,
-                layer_state,
-                default_layer: 0,
-                layer_cache,
-                encoder_layer_cache,
-                behavior,
-                hand,
-                mouse_buttons: 0,
-                timer: LinearMap::new(),
-                #[cfg(feature = "vial_lock")]
-                matrix_state: MatrixState::new(ROW, COL),
-            }),
-        }
+        Self::build(data, behavior, positional_config)
     }
 
     // ── Action resolution ──
@@ -488,7 +479,7 @@ impl<'a> KeyMap<'a> {
 
     pub(crate) fn hand_at(&self, row: usize, col: usize) -> Hand {
         let inner = self.inner.borrow();
-        let idx = inner.hand_index(row, col);
+        let idx = inner.cache_index(row, col);
         if idx < inner.hand.len() {
             inner.hand[idx]
         } else {
@@ -643,12 +634,7 @@ impl<'a> KeyMap<'a> {
         })
     }
 
-    pub(crate) fn set_encoder_clockwise(
-        &self,
-        layer: usize,
-        id: usize,
-        action: KeyAction,
-    ) -> Option<EncoderAction> {
+    pub(crate) fn set_encoder_clockwise(&self, layer: usize, id: usize, action: KeyAction) -> Option<EncoderAction> {
         let mut inner = self.inner.borrow_mut();
         let idx = inner.encoder_index(layer, id);
         if let Some(encoders) = &mut inner.encoders {
@@ -711,7 +697,9 @@ impl<'a> KeyMap<'a> {
         let mut inner = self.inner.borrow_mut();
         match value {
             Some(instant) => {
-                inner.timer.insert(pos, instant).ok();
+                if inner.timer.insert(pos, instant).is_err() {
+                    warn!("Timer buffer full, dropping timer for {:?}", pos);
+                }
             }
             None => {
                 inner.timer.remove(&pos);
