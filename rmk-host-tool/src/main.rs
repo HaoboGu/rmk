@@ -1,9 +1,11 @@
+use std::time::Instant;
+
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use nusb::{DeviceInfo, InterfaceInfo};
 use postcard_rpc::Endpoint;
 use postcard_rpc::header::VarSeqKind;
-use postcard_rpc::host_client::{HostClient, HostErr, SchemaError, SchemaReport};
+use postcard_rpc::host_client::{HostClient, HostErr, SchemaReport};
 use postcard_rpc::postcard_schema::schema::owned::OwnedNamedType;
 use postcard_rpc::standard_icd::{ERROR_PATH, PingEndpoint, WireError};
 use rmk_types::action::{Action, KeyAction};
@@ -204,7 +206,7 @@ struct SelectedDevice {
     interface_info: Option<InterfaceInfo>,
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -315,12 +317,8 @@ async fn ping(args: PingArgs) -> Result<()> {
 async fn schema(args: ConnectArgs) -> Result<()> {
     let client = connect(&args)?;
     let version = check_version(&client).await?;
-    let (mut report, schema_source) = match client.get_schema_report().await {
-        Ok(report) => (report, "device"),
-        Err(SchemaError::Comms(HostErr::Wire(WireError::UnknownKey))) => (local_schema_report(), "shared-icd"),
-        Err(SchemaError::InvalidReportData | SchemaError::LostData) => (local_schema_report(), "shared-icd"),
-        Err(err) => return Err(err).context("schema discovery failed"),
-    };
+    let mut report = local_schema_report();
+    let schema_source = "shared-icd";
 
     report.endpoints.sort_by(|a, b| a.path.cmp(&b.path));
     report.topics_in.sort_by(|a, b| a.path.cmp(&b.path));
@@ -475,6 +473,182 @@ async fn set_key(args: SetKeyArgs) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug)]
+struct DumpStats {
+    requests: u32,
+    rtt_sum_us: u64,
+    rtt_min_us: u64,
+    rtt_max_us: u64,
+    response_bytes: usize,
+}
+
+impl Default for DumpStats {
+    fn default() -> Self {
+        Self {
+            requests: 0,
+            rtt_sum_us: 0,
+            rtt_min_us: u64::MAX,
+            rtt_max_us: 0,
+            response_bytes: 0,
+        }
+    }
+}
+
+impl DumpStats {
+    fn record_request(&mut self, rtt_us: u64, response_bytes: usize) {
+        self.requests += 1;
+        self.rtt_sum_us += rtt_us;
+        self.rtt_min_us = self.rtt_min_us.min(rtt_us);
+        self.rtt_max_us = self.rtt_max_us.max(rtt_us);
+        self.response_bytes += response_bytes;
+    }
+}
+
+async fn fetch_keymap(
+    client: &HostClient<WireError>,
+    num_layers: u8,
+    num_rows: u8,
+    num_cols: u8,
+) -> Result<(Vec<KeyAction>, DumpStats)> {
+    let per_layer = usize::from(num_rows) * usize::from(num_cols);
+    let total_keys = usize::from(num_layers) * per_layer;
+    let cols = usize::from(num_cols);
+    let chunk_limit: u16 = MAX_BULK.min(u16::MAX as usize) as u16;
+
+    // Pre-compute all chunk requests upfront so we can dispatch them concurrently.
+    let mut requests: Vec<(usize, BulkRequest)> = Vec::new();
+    let mut flat = 0;
+    while flat < total_keys {
+        let layer = (flat / per_layer) as u8;
+        let row = ((flat % per_layer) / cols) as u8;
+        let col = (flat % cols) as u8;
+        let count = (total_keys - flat).min(chunk_limit as usize) as u16;
+        requests.push((flat, BulkRequest { layer, start_row: row, start_col: col, count }));
+        flat += count as usize;
+    }
+
+    // Spawn all chunks concurrently; HostClient is Clone (shares underlying channels).
+    let t0 = Instant::now();
+    let mut join_set = tokio::task::JoinSet::new();
+    for (flat, req) in requests {
+        let client = client.clone();
+        join_set.spawn(async move {
+            let t_sent_us = t0.elapsed().as_micros() as u64;
+            let result = client.send_resp::<GetKeymapBulk>(&req).await;
+            let t_recv_us = t0.elapsed().as_micros() as u64;
+            (flat, req, result, t_sent_us, t_recv_us)
+        });
+    }
+
+    // Drain in completion order then sort by flat offset.
+    let mut raw = Vec::with_capacity(join_set.len());
+    while let Some(res) = join_set.join_next().await {
+        raw.push(res.context("chunk task panicked")?);
+    }
+    raw.sort_by_key(|(flat, ..)| *flat);
+
+    // Happy path: all chunks succeeded and are non-empty.
+    if raw.iter().all(|(_, _, result, ..)| matches!(result, Ok(chunk) if !chunk.is_empty())) {
+        let mut actions = Vec::with_capacity(total_keys);
+        let mut stats = DumpStats::default();
+        for (flat, req, result, t_sent_us, t_recv_us) in raw {
+            let chunk = result.unwrap();
+            let (layer, row, col, count) = (req.layer, req.start_row, req.start_col, req.count);
+            let rtt_us = t_recv_us - t_sent_us;
+            stats.record_request(rtt_us, 4 + chunk.len() * 2);
+            eprintln!(
+                "  [bulk @{flat}] layer={layer} row={row} col={col} count={count} got={} sent={:.2}ms recv={:.2}ms rtt={:.2}ms",
+                chunk.len(),
+                t_sent_us as f64 / 1000.0,
+                t_recv_us as f64 / 1000.0,
+                rtt_us as f64 / 1000.0,
+            );
+            actions.extend_from_slice(&chunk);
+        }
+        return Ok((actions, stats));
+    }
+
+    // Fallback: sequential fetch with SerFailed backoff and empty-chunk retries.
+    eprintln!("  [bulk] concurrent fetch had errors, falling back to sequential...");
+    let mut actions = Vec::with_capacity(total_keys);
+    let mut stats = DumpStats::default();
+    let mut chunk_limit: u16 = MAX_BULK.min(u16::MAX as usize) as u16;
+    let mut empty_retries = 0u32;
+
+    while actions.len() < total_keys {
+        let flat = actions.len();
+        let layer = (flat / per_layer) as u8;
+        let row = ((flat % per_layer) / cols) as u8;
+        let col = (flat % cols) as u8;
+        let count = (total_keys - flat).min(chunk_limit as usize) as u16;
+        let t_req = Instant::now();
+        match client
+            .send_resp::<GetKeymapBulk>(&BulkRequest {
+                layer,
+                start_row: row,
+                start_col: col,
+                count,
+            })
+            .await
+        {
+            Ok(chunk) => {
+                let rtt_us = t_req.elapsed().as_micros() as u64;
+                stats.record_request(rtt_us, 4 + chunk.len() * 2);
+                eprintln!(
+                    "  [bulk @{flat}] layer={layer} row={row} col={col} count={count} got={} rtt={:.2}ms",
+                    chunk.len(),
+                    rtt_us as f64 / 1000.0,
+                );
+                if chunk.is_empty() {
+                    empty_retries += 1;
+                    if empty_retries <= 3 {
+                        eprintln!("  [bulk @{flat}] empty chunk, retrying ({empty_retries}/3)...");
+                        continue;
+                    }
+                    bail!(
+                        "firmware returned empty chunk at key {}/{} (layer={layer} row={row} col={col}) after retries",
+                        actions.len(),
+                        total_keys
+                    );
+                }
+                empty_retries = 0;
+                actions.extend_from_slice(&chunk);
+            }
+            Err(HostErr::Wire(WireError::SerFailed)) if count > 1 => {
+                let new_limit = count.div_ceil(2).max(1);
+                eprintln!("  [bulk @{flat}] shrink count from {count} to {new_limit} after SerFailed");
+                chunk_limit = new_limit;
+            }
+            Err(HostErr::Wire(WireError::SerFailed)) => {
+                bail!("bulk @{flat}: serialization failed even at count={count}");
+            }
+            Err(err) => {
+                return Err(anyhow!("{err:?}")).context("GetKeymapBulk request failed");
+            }
+        }
+    }
+
+    Ok((actions, stats))
+}
+
+fn print_keymap(actions: &[KeyAction], num_layers: u8, num_rows: u8, num_cols: u8) {
+    let total_per_layer = usize::from(num_rows) * usize::from(num_cols);
+    for layer in 0..usize::from(num_layers) {
+        println!("\n=== Layer {} ===", layer);
+        let start = layer * total_per_layer;
+        let end = start + total_per_layer;
+        for (index, action) in actions[start..end].iter().enumerate() {
+            if index % usize::from(num_cols) == 0 {
+                print!("  row {:2}: ", index / usize::from(num_cols));
+            }
+            print!("{:?} ", action);
+            if (index + 1) % usize::from(num_cols) == 0 {
+                println!();
+            }
+        }
+    }
+}
+
 async fn dump_keymap(args: ConnectArgs) -> Result<()> {
     let client = connect(&args)?;
     check_version(&client).await?;
@@ -498,42 +672,45 @@ async fn dump_keymap(args: ConnectArgs) -> Result<()> {
         caps.num_layers, caps.num_rows, caps.num_cols
     );
 
-    let num_cols = caps.num_cols as u16;
-    for layer in 0..caps.num_layers {
-        println!("\n=== Layer {} ===", layer);
-        let total = caps.num_rows as u16 * num_cols;
-        let mut fetched: u16 = 0;
+    let t_start = Instant::now();
+    let (actions, stats) = fetch_keymap(&client, caps.num_layers, caps.num_rows, caps.num_cols).await?;
 
-        while fetched < total {
-            let row = (fetched / num_cols) as u8;
-            let col = (fetched % num_cols) as u8;
-            let count = ((total - fetched).min(MAX_BULK as u16)) as u8;
-            let actions = client
-                .send_resp::<GetKeymapBulk>(&BulkRequest {
-                    layer,
-                    start_row: row,
-                    start_col: col,
-                    count,
-                })
-                .await
-                .context("GetKeymapBulk request failed")?;
+    print_keymap(&actions, caps.num_layers, caps.num_rows, caps.num_cols);
 
-            if actions.is_empty() {
-                break;
-            }
-
-            for action in actions.iter() {
-                if fetched % num_cols == 0 {
-                    print!("  row {:2}: ", fetched / num_cols);
-                }
-                print!("{:?} ", action);
-                fetched += 1;
-                if fetched % num_cols == 0 {
-                    println!();
-                }
-            }
-        }
-    }
+    let elapsed = t_start.elapsed();
+    let elapsed_ms = elapsed.as_secs_f64() * 1000.0;
+    let avg_rtt_ms = if stats.requests > 0 {
+        stats.rtt_sum_us as f64 / stats.requests as f64 / 1000.0
+    } else {
+        0.0
+    };
+    let throughput_kbps = if elapsed_ms > 0.0 {
+        stats.response_bytes as f64 / elapsed.as_secs_f64() / 1024.0
+    } else {
+        0.0
+    };
+    eprintln!("\n--- Performance ---");
+    eprintln!(
+        "  layers: {}, keys: {}, requests: {}",
+        caps.num_layers,
+        actions.len(),
+        stats.requests
+    );
+    eprintln!("  elapsed: {:.2}ms", elapsed_ms);
+    eprintln!(
+        "  rtt: avg={:.2}ms  min={:.2}ms  max={:.2}ms",
+        avg_rtt_ms,
+        if stats.requests > 0 {
+            stats.rtt_min_us as f64 / 1000.0
+        } else {
+            0.0
+        },
+        stats.rtt_max_us as f64 / 1000.0,
+    );
+    eprintln!(
+        "  throughput: ~{:.1} KB/s ({} response bytes)",
+        throughput_kbps, stats.response_bytes
+    );
 
     Ok(())
 }

@@ -36,7 +36,7 @@ use crate::led_indicator::LedIndicator;
 pub const MAX_UNLOCK_KEYS: usize = 2;
 
 /// Maximum number of key actions in a bulk get/set operation.
-pub const MAX_BULK: usize = 32;
+pub const MAX_BULK: usize = 512;
 
 /// Maximum number of combo input keys in a protocol combo config.
 pub const MAX_COMBO_KEYS: usize = 8;
@@ -363,7 +363,7 @@ mod tests {
 
     #[test]
     fn round_trip_protocol_version() {
-        round_trip(&ProtocolVersion { major: 1, minor: 0 });
+        round_trip(&ProtocolVersion { major: 1, minor: 1 });
         round_trip(&ProtocolVersion { major: 255, minor: 255 });
     }
 

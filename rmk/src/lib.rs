@@ -24,6 +24,8 @@ pub(crate) mod fmt;
 use core::future::Future;
 use core::sync::atomic::Ordering;
 
+#[cfg(feature = "host")]
+use crate::host::HostService;
 #[cfg(feature = "_ble")]
 use bt_hci::{
     cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy},
@@ -41,8 +43,8 @@ use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 use embassy_usb::driver::Driver;
 use futures::FutureExt;
 use hid::{HidReaderTrait, RunnableHidWriter};
-pub use keymap::KeymapData;
 use keymap::KeyMap;
+pub use keymap::KeymapData;
 use matrix::MatrixTrait;
 use processor::PollingProcessor;
 #[cfg(all(feature = "storage", feature = "host"))]
@@ -51,8 +53,6 @@ use rmk_types::led_indicator::LedIndicator;
 use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
 pub use trouble_host::prelude::*;
-#[cfg(feature = "host")]
-use crate::host::HostService;
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
     crate::light::UsbLedReader,
@@ -129,32 +129,19 @@ pub async fn initialize_keymap_and_storage<
     storage_config: &config::StorageConfig,
     behavior_config: &'a mut config::BehaviorConfig,
     positional_config: &'a PositionalConfig<ROW, COL>,
-) -> (
-    KeyMap<'a>,
-    Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-) {
+) -> (KeyMap<'a>, Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>) {
     #[cfg(feature = "host")]
     {
         let mut storage = {
-            let encoder_opt: Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]> =
-                if NUM_ENCODER > 0 { Some(&mut data.encoder_map) } else { None };
-            Storage::new(
-                flash,
-                &data.keymap,
-                &encoder_opt,
-                storage_config,
-                behavior_config,
-            )
-            .await
+            let encoder_opt: Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]> = if NUM_ENCODER > 0 {
+                Some(&mut data.encoder_map)
+            } else {
+                None
+            };
+            Storage::new(flash, &data.keymap, &encoder_opt, storage_config, behavior_config).await
         };
 
-        let keymap = KeyMap::new_from_storage(
-            data,
-            Some(&mut storage),
-            behavior_config,
-            positional_config,
-        )
-        .await;
+        let keymap = KeyMap::new_from_storage(data, Some(&mut storage), behavior_config, positional_config).await;
         (keymap, storage)
     }
 

@@ -3,9 +3,13 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 use embassy_sync::blocking_mutex::Mutex;
 
+#[cfg(feature = "host")]
+use crate::keymap::KeyMap;
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join;
+#[cfg(any(not(feature = "_no_usb"), feature = "passkey_entry"))]
+use embassy_futures::select::Either;
 use embassy_futures::select::{Either3, select, select3};
 use embassy_time::{Duration, Timer, with_timeout};
 use rand_core::{CryptoRng, RngCore};
@@ -13,8 +17,6 @@ use rmk_types::led_indicator::LedIndicator;
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
-#[cfg(feature = "host")]
-use crate::keymap::KeyMap;
 #[cfg(not(feature = "_no_usb"))]
 use {
     crate::descriptor::{CompositeReport, KeyboardReport},
@@ -32,8 +34,6 @@ use {
     crate::{read_storage, state::CONNECTION_TYPE},
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
 };
-#[cfg(any(not(feature = "_no_usb"), feature = "passkey_entry"))]
-use embassy_futures::select::Either;
 
 use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
@@ -42,11 +42,11 @@ use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
+use crate::event::ConnectionType;
 use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, publish_event};
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
-use crate::event::ConnectionType;
 use crate::state::ConnectionState;
 #[cfg(feature = "usb_log")]
 use crate::usb::add_usb_logger;
@@ -72,7 +72,10 @@ pub static BLE_STATUS: Mutex<crate::RawMutex, Cell<BleStatus>> = Mutex::new(Cell
 /// Update the BLE state (preserving current profile) and publish an event.
 pub(crate) fn set_ble_state(state: BleState) {
     let status = BLE_STATUS.lock(|c| {
-        let s = BleStatus { profile: c.get().profile, state };
+        let s = BleStatus {
+            profile: c.get().profile,
+            state,
+        };
         c.set(s);
         s
     });

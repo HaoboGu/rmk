@@ -24,10 +24,7 @@ mod vial;
 #[cfg(feature = "vial_lock")]
 mod vial_lock;
 
-pub(crate) struct VialService<
-    'a,
-    RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>,
-> {
+pub(crate) struct VialService<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> {
     // VialService holds a reference of keymap, for updating
     keymap: &'a KeyMap<'a>,
 
@@ -42,18 +39,10 @@ pub(crate) struct VialService<
     pub(crate) reader_writer: RW,
 }
 
-impl<
-    'a,
-    RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>,
-> VialService<'a, RW>
-{
+impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> VialService<'a, RW> {
     // VialService::new() should be called only once.
     // Otherwise the `vial_buf.init()` will panic.
-    pub(crate) fn new(
-        keymap: &'a KeyMap<'a>,
-        vial_config: VialConfig<'static>,
-        reader_writer: RW,
-    ) -> Self {
+    pub(crate) fn new(keymap: &'a KeyMap<'a>, vial_config: VialConfig<'static>, reader_writer: RW) -> Self {
         Self {
             keymap,
             vial_config,
@@ -90,11 +79,7 @@ impl<
         Ok(())
     }
 
-    async fn process_via_packet(
-        &mut self,
-        report: &mut ViaReport,
-        keymap: &KeyMap<'_>,
-    ) {
+    async fn process_via_packet(&mut self, report: &mut ViaReport, keymap: &KeyMap<'_>) {
         let command_id = report.output_data[0];
 
         // `report.input_data` is initialized using `report.output_data`
@@ -161,8 +146,7 @@ impl<
                 let layer = report.output_data[1] as usize;
                 let row = report.output_data[2] as usize;
                 let col = report.output_data[3] as usize;
-                let action = keymap
-                    .get_action_at(KeyboardEventPos::key_pos(col as u8, row as u8), layer);
+                let action = keymap.get_action_at(KeyboardEventPos::key_pos(col as u8, row as u8), layer);
                 let keycode = to_via_keycode(action);
                 info!("Getting keycode: {:02X} at ({},{}), layer {}", keycode, row, col, layer);
                 BigEndian::write_u16(&mut report.input_data[4..6], keycode);
@@ -177,8 +161,7 @@ impl<
                     "Setting keycode: 0x{:02X} at ({},{}), layer {} as {:?}",
                     keycode, row, col, layer, action
                 );
-                keymap
-                    .set_action_at(KeyboardEventPos::key_pos(col, row), layer as usize, action);
+                keymap.set_action_at(KeyboardEventPos::key_pos(col, row), layer as usize, action);
                 #[cfg(feature = "storage")]
                 FLASH_CHANNEL
                     .send(FlashOperationMessage::HostMessage(KeymapData::KeymapKey(KeymapKey {
@@ -226,7 +209,8 @@ impl<
                 let offset = BigEndian::read_u16(&report.output_data[1..3]) as usize;
                 let size = report.output_data[3] as usize;
                 if size <= 28 {
-                    self.keymap.read_macro_buffer(offset, &mut report.input_data[4..4 + size]);
+                    self.keymap
+                        .read_macro_buffer(offset, &mut report.input_data[4..4 + size]);
                     debug!("Get macro buffer: offset: {}, data: {:?}", offset, report.input_data);
                 } else {
                     report.input_data[0] = 0xFF;
@@ -245,7 +229,8 @@ impl<
 
                 // Update macro cache
                 info!("Setting macro buffer, offset: {}, size: {}", offset, size);
-                self.keymap.write_macro_buffer(offset as usize, &report.output_data[4..4 + size as usize]);
+                self.keymap
+                    .write_macro_buffer(offset as usize, &report.output_data[4..4 + size as usize]);
 
                 // Then flush macros to storage
                 #[cfg(feature = "storage")]
@@ -297,14 +282,14 @@ impl<
                         offset, row, col, layer
                     );
                     #[cfg(feature = "storage")]
-                    if let Err(_e) = FLASH_CHANNEL.try_send(FlashOperationMessage::HostMessage(
-                        KeymapData::KeymapKey(KeymapKey {
+                    if let Err(_e) =
+                        FLASH_CHANNEL.try_send(FlashOperationMessage::HostMessage(KeymapData::KeymapKey(KeymapKey {
                             layer: layer as u8,
                             col: col as u8,
                             row: row as u8,
                             action,
-                        }),
-                    )) {
+                        })))
+                    {
                         error!("Send keymap setting command error")
                     }
                 }
@@ -382,10 +367,8 @@ impl<'d, D: Driver<'d>> HidReaderTrait for UsbVialReaderWriter<'_, 'd, D> {
     }
 }
 
-impl<
-    'a,
-    RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>,
-> crate::host::HostService for VialService<'a, RW>
+impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> crate::host::HostService
+    for VialService<'a, RW>
 {
     async fn run(&mut self) {
         VialService::run(self).await;

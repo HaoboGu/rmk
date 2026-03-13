@@ -18,20 +18,20 @@ compile_error!("`host` requires enabling either `vial` or `rmk_protocol`.");
 #[cfg(all(feature = "rmk_protocol", feature = "_ble", feature = "_no_usb"))]
 compile_error!("`rmk_protocol` over BLE-only (no USB) is not yet supported.");
 
-#[cfg(all(feature = "host", not(feature = "_no_usb")))]
-use embassy_usb::{driver::Driver, Builder};
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
-use embassy_sync::mutex::Mutex;
-#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
-use {crate::descriptor::ViaReport, embassy_usb::class::hid::HidReaderWriter};
-#[cfg(feature = "host")]
-use crate::{config::RmkConfig, keymap::KeyMap};
 #[cfg(feature = "vial")]
 use crate::config::VialConfig;
 #[cfg(feature = "host")]
 use crate::hid::{HidReaderTrait, HidWriterTrait};
+#[cfg(feature = "host")]
+use crate::{config::RmkConfig, keymap::KeyMap};
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
+use embassy_sync::mutex::Mutex;
+#[cfg(all(feature = "host", not(feature = "_no_usb")))]
+use embassy_usb::{Builder, driver::Driver};
 #[cfg(all(feature = "host", feature = "_ble"))]
 use trouble_host::prelude::{GattConnection, PacketPool};
+#[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
+use {crate::descriptor::ViaReport, embassy_usb::class::hid::HidReaderWriter};
 
 pub(crate) trait HostService {
     async fn run(&mut self);
@@ -83,9 +83,7 @@ where
 }
 
 #[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "vial"))]
-pub(crate) struct UsbHostService<'s, 'a, 'd, D>(
-    via::VialService<'a, via::UsbVialReaderWriter<'s, 'd, D>>,
-)
+pub(crate) struct UsbHostService<'s, 'a, 'd, D>(via::VialService<'a, via::UsbVialReaderWriter<'s, 'd, D>>)
 where
     D: Driver<'d>;
 
@@ -119,11 +117,7 @@ where
 
 #[cfg(all(feature = "host", not(feature = "_no_usb"), feature = "rmk_protocol"))]
 pub(crate) struct UsbHostService<'s, 'a, 'd, D>(
-    protocol::ProtocolService<
-        'a,
-        protocol::transport::UsbBulkTx<'s, 'd, D>,
-        protocol::transport::UsbBulkRx<'s, 'd, D>,
-    >,
+    protocol::ProtocolService<'a, protocol::transport::UsbBulkTx<'s, 'd, D>, protocol::transport::UsbBulkRx<'s, 'd, D>>,
 )
 where
     D: Driver<'d>;

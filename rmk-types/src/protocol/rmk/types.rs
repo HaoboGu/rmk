@@ -15,7 +15,7 @@ pub struct ProtocolVersion {
 
 impl ProtocolVersion {
     /// Current protocol version for this firmware release.
-    pub const CURRENT: Self = Self { major: 1, minor: 0 };
+    pub const CURRENT: Self = Self { major: 1, minor: 1 };
 
     /// Check if this version is backward-compatible with another.
     /// Versions are compatible if they share the same major version and

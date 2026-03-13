@@ -30,19 +30,11 @@ pub(crate) struct ProtocolContext<'a> {
 // System handlers
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn get_version(
-    _ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    _req: (),
-) -> ProtocolVersion {
+pub(crate) async fn get_version(_ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, _req: ()) -> ProtocolVersion {
     ProtocolVersion::CURRENT
 }
 
-pub(crate) async fn get_capabilities(
-    ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    _req: (),
-) -> DeviceCapabilities {
+pub(crate) async fn get_capabilities(ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, _req: ()) -> DeviceCapabilities {
     let (num_rows, num_cols, num_layers) = ctx.keymap.get_keymap_config();
     let num_encoders = ctx.keymap.num_encoder();
 
@@ -67,11 +59,7 @@ pub(crate) async fn get_capabilities(
     }
 }
 
-pub(crate) async fn get_lock_status(
-    ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    _req: (),
-) -> LockStatus {
+pub(crate) async fn get_lock_status(ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, _req: ()) -> LockStatus {
     LockStatus {
         locked: ctx.locked,
         awaiting_keys: false,
@@ -79,11 +67,7 @@ pub(crate) async fn get_lock_status(
     }
 }
 
-pub(crate) async fn unlock_request(
-    ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    _req: (),
-) -> UnlockChallenge {
+pub(crate) async fn unlock_request(ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, _req: ()) -> UnlockChallenge {
     // TODO: implement a physical key challenge.
     ctx.locked = false;
     UnlockChallenge {
@@ -91,19 +75,11 @@ pub(crate) async fn unlock_request(
     }
 }
 
-pub(crate) async fn lock_request(
-    ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    _req: (),
-) -> () {
+pub(crate) async fn lock_request(ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, _req: ()) -> () {
     ctx.locked = true;
 }
 
-pub(crate) async fn reboot(
-    ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    _req: (),
-) -> RmkResult {
+pub(crate) async fn reboot(ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, _req: ()) -> RmkResult {
     if ctx.locked {
         return Err(RmkError::Locked);
     }
@@ -111,11 +87,7 @@ pub(crate) async fn reboot(
     Ok(()) // unreachable on embedded
 }
 
-pub(crate) async fn bootloader_jump(
-    ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    _req: (),
-) -> RmkResult {
+pub(crate) async fn bootloader_jump(ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, _req: ()) -> RmkResult {
     if ctx.locked {
         return Err(RmkError::Locked);
     }
@@ -123,11 +95,7 @@ pub(crate) async fn bootloader_jump(
     Ok(()) // unreachable on embedded
 }
 
-pub(crate) async fn storage_reset(
-    ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    mode: StorageResetMode,
-) -> RmkResult {
+pub(crate) async fn storage_reset(ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, mode: StorageResetMode) -> RmkResult {
     if ctx.locked {
         return Err(RmkError::Locked);
     }
@@ -166,11 +134,7 @@ pub(crate) async fn get_key_action(
     ctx.keymap.get_action_at(event_pos, pos.layer as usize)
 }
 
-pub(crate) async fn set_key_action(
-    ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    req: SetKeyRequest,
-) -> RmkResult {
+pub(crate) async fn set_key_action(ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, req: SetKeyRequest) -> RmkResult {
     if ctx.locked {
         return Err(RmkError::Locked);
     }
@@ -199,26 +163,11 @@ pub(crate) async fn get_keymap_bulk(
     req: BulkRequest,
 ) -> BulkKeyActions {
     let (row_count, col_count, layer_count) = ctx.keymap.get_keymap_config();
-    let mut actions: BulkKeyActions = heapless::Vec::new();
-    let mut row = req.start_row as usize;
-    let mut col = req.start_col as usize;
-    let layer = req.layer as usize;
     let count = (req.count as usize).min(MAX_BULK);
-    if layer < layer_count && row < row_count && col < col_count {
-        for _ in 0..count {
-            if row >= row_count {
-                break;
-            }
-            let action = ctx.keymap.get_action_at(KeyboardEventPos::key_pos(col as u8, row as u8), layer);
-            if actions.push(action).is_err() {
-                break;
-            }
-            col += 1;
-            if col >= col_count {
-                col = 0;
-                row += 1;
-            }
-        }
+    let mut actions: BulkKeyActions = heapless::Vec::new();
+    let (l, r, c) = (req.layer as usize, req.start_row as usize, req.start_col as usize);
+    if l < layer_count && r < row_count && c < col_count {
+        ctx.keymap.get_actions_bulk(l, r, c, count, &mut actions);
     }
     actions
 }
@@ -265,28 +214,16 @@ pub(crate) async fn set_keymap_bulk(
     Ok(())
 }
 
-pub(crate) async fn get_layer_count(
-    ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    _req: (),
-) -> u8 {
+pub(crate) async fn get_layer_count(ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, _req: ()) -> u8 {
     let (_, _, num_layer) = ctx.keymap.get_keymap_config();
     num_layer as u8
 }
 
-pub(crate) async fn get_default_layer(
-    ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    _req: (),
-) -> u8 {
+pub(crate) async fn get_default_layer(ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, _req: ()) -> u8 {
     ctx.keymap.get_default_layer()
 }
 
-pub(crate) async fn set_default_layer(
-    ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    layer: u8,
-) -> RmkResult {
+pub(crate) async fn set_default_layer(ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, layer: u8) -> RmkResult {
     if ctx.locked {
         return Err(RmkError::Locked);
     }
@@ -300,11 +237,7 @@ pub(crate) async fn set_default_layer(
     Ok(())
 }
 
-pub(crate) async fn reset_keymap(
-    ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    _req: (),
-) -> RmkResult {
+pub(crate) async fn reset_keymap(ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, _req: ()) -> RmkResult {
     if ctx.locked {
         return Err(RmkError::Locked);
     }
@@ -320,11 +253,7 @@ pub(crate) async fn reset_keymap(
 // Connection / Status handlers
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn get_connection_info(
-    _ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    _req: (),
-) -> ConnectionInfo {
+pub(crate) async fn get_connection_info(_ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, _req: ()) -> ConnectionInfo {
     #[cfg(feature = "_ble")]
     let ble_status = crate::ble::BLE_STATUS.lock(|c| c.get());
     #[cfg(not(feature = "_ble"))]
@@ -337,19 +266,11 @@ pub(crate) async fn get_connection_info(
     }
 }
 
-pub(crate) async fn get_current_layer(
-    ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    _req: (),
-) -> u8 {
+pub(crate) async fn get_current_layer(ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, _req: ()) -> u8 {
     ctx.keymap.get_activated_layer()
 }
 
-pub(crate) async fn get_matrix_state(
-    ctx: &mut ProtocolContext<'_>,
-    _hdr: VarHeader,
-    _req: (),
-) -> MatrixState {
+pub(crate) async fn get_matrix_state(ctx: &mut ProtocolContext<'_>, _hdr: VarHeader, _req: ()) -> MatrixState {
     let (row_count, col_count, _) = ctx.keymap.get_keymap_config();
     let bitmap_len = row_count * col_count.div_ceil(8);
     let mut raw = [0u8; MAX_MATRIX_BITMAP_SIZE];

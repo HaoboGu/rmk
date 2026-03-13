@@ -1,6 +1,7 @@
 use core::fmt::{Arguments, Write};
 
 use embassy_futures::select::{Either, select};
+use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
 use embassy_time::Timer;
@@ -8,20 +9,80 @@ use embassy_usb::driver::{Driver, Endpoint, EndpointError, EndpointIn, EndpointO
 use embassy_usb::{Builder, msos};
 use postcard_rpc::Topic;
 use postcard_rpc::header::{VarHeader, VarKey, VarKeyKind, VarSeq};
-use postcard_rpc::server::{WireRx, WireRxErrorKind, WireTx, WireTxErrorKind};
+use postcard_rpc::server::{AsWireTxErrorKind, WireRx, WireRxErrorKind, WireTx, WireTxErrorKind};
 use postcard_rpc::standard_icd::LoggingTopic;
 use serde::Serialize;
 
 use crate::RawMutex;
 
 pub(crate) const USB_BULK_PACKET_SIZE: usize = 64;
-// Largest non-schema response is BulkKeyActions (~362 bytes).
-// 512 provides comfortable headroom for all normal endpoint responses.
-pub(crate) const TX_BUF_SIZE: usize = 512;
+// MAX_BULK=512 keys × ~2 bytes avg serialized = ~1040B; 1024 fits typical keymap responses.
+pub(crate) const TX_BUF_SIZE: usize = 1024;
+/// Depth of the TX frame queue used by `QueuingTx` to decouple dispatch from USB writes.
+pub(crate) const TX_QUEUE_DEPTH: usize = 4;
 // Per-packet timeout acts as a watchdog, not a hard deadline.
 // 50ms per packet gives ~1.6s for a full 2048-byte frame, which is generous
 // enough to accommodate scheduling jitter on resource-constrained MCUs.
 const TX_TIMEOUT_MS_PER_PACKET: usize = 50;
+
+/// A pre-serialized frame ready to be written to the USB endpoint.
+pub(crate) struct TxFrame {
+    pub buf: [u8; TX_BUF_SIZE],
+    pub len: usize,
+}
+
+/// A `WireTx` implementation that serializes responses into [`TxFrame`]s and
+/// enqueues them on a bounded channel, decoupling the dispatch loop from USB
+/// write latency.
+///
+/// The inner `Tx` is still used directly for `send_raw`, `send_log_str`, and
+/// `send_log_fmt` (these are small/infrequent and bypass the queue).
+#[derive(Clone, Copy)]
+pub(crate) struct QueuingTx<'a, Tx: Copy> {
+    inner: Tx,
+    channel: &'a Channel<RawMutex, TxFrame, TX_QUEUE_DEPTH>,
+}
+
+impl<'a, Tx: Copy> QueuingTx<'a, Tx> {
+    pub(crate) fn new(inner: Tx, channel: &'a Channel<RawMutex, TxFrame, TX_QUEUE_DEPTH>) -> Self {
+        Self { inner, channel }
+    }
+}
+
+impl<Tx: WireTx + Copy> WireTx for QueuingTx<'_, Tx> {
+    type Error = WireTxErrorKind;
+
+    async fn send<T: Serialize + ?Sized>(&self, hdr: VarHeader, msg: &T) -> Result<(), Self::Error> {
+        let mut frame = TxFrame { buf: [0u8; TX_BUF_SIZE], len: 0 };
+        let (hdr_used, remain) = hdr.write_to_slice(&mut frame.buf).ok_or_else(|| {
+            warn!("[qtx] header too large for frame buffer");
+            WireTxErrorKind::Other
+        })?;
+        let bdy_used = postcard::to_slice(msg, remain).map_err(|_| {
+            warn!("[qtx] body serialization failed (buffer too small)");
+            WireTxErrorKind::Other
+        })?;
+        frame.len = hdr_used.len() + bdy_used.len();
+        self.channel.send(frame).await;
+        Ok(())
+    }
+
+    async fn wait_connection(&self) {
+        self.inner.wait_connection().await
+    }
+
+    async fn send_raw(&self, buf: &[u8]) -> Result<(), Self::Error> {
+        self.inner.send_raw(buf).await.map_err(|e| e.as_kind())
+    }
+
+    async fn send_log_str(&self, kkind: VarKeyKind, s: &str) -> Result<(), Self::Error> {
+        self.inner.send_log_str(kkind, s).await.map_err(|e| e.as_kind())
+    }
+
+    async fn send_log_fmt<'b>(&self, kkind: VarKeyKind, args: Arguments<'b>) -> Result<(), Self::Error> {
+        self.inner.send_log_fmt(kkind, args).await.map_err(|e| e.as_kind())
+    }
+}
 const RMK_WINUSB_GUIDS: &[&str] = &["{533E7A32-4C6B-49F8-8C5B-60D2D784F2C6}"];
 
 pub(crate) struct UsbBulkTxState<'d, D: Driver<'d>> {
@@ -300,7 +361,9 @@ async fn send_buf(ep_in: &mut impl EndpointIn, out: &[u8], pending_frame: &mut b
     // If a previous send was interrupted mid-frame, send a ZLP to cleanly
     // terminate it so the host can detect the frame boundary.
     if *pending_frame {
+        warn!("[tx] cleanup ZLP for pending_frame");
         if ep_in.write(&[]).await.is_err() {
+            warn!("[tx] cleanup ZLP failed (disconnected)");
             return Err(WireTxErrorKind::ConnectionClosed);
         }
         *pending_frame = false;
@@ -315,6 +378,7 @@ async fn send_buf(ep_in: &mut impl EndpointIn, out: &[u8], pending_frame: &mut b
     let frames = out.len().div_ceil(USB_BULK_PACKET_SIZE);
     // Minimum 100ms timeout to account for scheduling jitter + possible ZLP
     let timeout_ms = (frames * TX_TIMEOUT_MS_PER_PACKET).max(100);
+    debug!("[tx] sending {}B ({}pkts, {}ms timeout)", out.len(), frames, timeout_ms);
 
     let send_fut = async {
         for chunk in out.chunks(USB_BULK_PACKET_SIZE) {
@@ -335,13 +399,19 @@ async fn send_buf(ep_in: &mut impl EndpointIn, out: &[u8], pending_frame: &mut b
             *pending_frame = false;
             Ok(())
         }
-        Either::First(Err(e)) => Err(e),
+        Either::First(Err(e)) => {
+            warn!("[tx] send failed (disconnected)");
+            Err(e)
+        }
         Either::Second(()) => {
             // Embassy-usb endpoint writes are NOT cancel-safe. pending_frame
             // stays true so the next send emits a ZLP to terminate the aborted
-            // transfer. Returning ConnectionClosed breaks the dispatch loop,
-            // which re-enters wait_connection() and waits for a USB bus reset.
-            Err(WireTxErrorKind::ConnectionClosed)
+            // transfer. Return Timeout (not ConnectionClosed) so the dispatch
+            // loop can continue — the cleanup ZLP on the next send will
+            // recover the USB state. If the endpoint is truly disconnected,
+            // the ZLP write will fail with ConnectionClosed instead.
+            warn!("[tx] TIMEOUT after {}ms ({}B, {}pkts)", timeout_ms, out.len(), frames);
+            Err(WireTxErrorKind::Timeout)
         }
     }
 }
@@ -650,7 +720,7 @@ mod tests {
         let mut pending_frame = false;
 
         let err = block_on(async { send_buf(&mut ep_in, &[7], &mut pending_frame).await.unwrap_err() });
-        assert!(matches!(err, WireTxErrorKind::ConnectionClosed));
+        assert!(matches!(err, WireTxErrorKind::Timeout));
         assert!(pending_frame);
 
         block_on(async {

@@ -10,9 +10,7 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
 use futures::join;
-use rmk::ble::passkey::{
-    PASSKEY_RESPONSE, begin_passkey_entry_session, end_passkey_entry_session,
-};
+use rmk::ble::passkey::{PASSKEY_RESPONSE, begin_passkey_entry_session, end_passkey_entry_session};
 use rmk::channel::KEYBOARD_REPORT_CHANNEL;
 use rmk::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEvent};
 use rmk::input_device::Runnable;
@@ -43,11 +41,14 @@ async fn run_passkey_test<'a>(
     join!(
         // Run keyboard until the passkey test logic is done
         async {
-            match select(Timer::after(max_timeout), select(keyboard.run(), async {
-                while !*TEST_DONE.lock().await {
-                    Timer::after(Duration::from_millis(50)).await;
-                }
-            }))
+            match select(
+                Timer::after(max_timeout),
+                select(keyboard.run(), async {
+                    while !*TEST_DONE.lock().await {
+                        Timer::after(Duration::from_millis(50)).await;
+                    }
+                }),
+            )
             .await
             {
                 Either::First(_) => panic!("ERROR: test timeout reached"),
@@ -90,10 +91,7 @@ async fn run_passkey_test<'a>(
                     // Good — no reports sent
                 }
                 Either::Second(report) => {
-                    panic!(
-                        "Unexpected keyboard report sent during passkey mode: {:?}",
-                        report
-                    );
+                    panic!("Unexpected keyboard report sent during passkey mode: {:?}", report);
                 }
             }
 

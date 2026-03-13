@@ -25,16 +25,16 @@ pub struct SetKeyRequest {
 
 /// Request payload for bulk keymap operations.
 ///
-/// The `count` field is clamped to [`MAX_BULK`](super::MAX_BULK) (32) by the
-/// firmware. Requesting more than `MAX_BULK` keys will return at most 32.
+/// The `count` field is clamped to [`MAX_BULK`](super::MAX_BULK) (512) by the
+/// firmware. Requesting more than `MAX_BULK` keys will return at most 512.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct BulkRequest {
     pub layer: u8,
     pub start_row: u8,
     pub start_col: u8,
-    /// Number of key actions to retrieve. Clamped to `MAX_BULK` (32).
-    pub count: u8,
+    /// Number of key actions to retrieve. Clamped to `MAX_BULK` (512).
+    pub count: u16,
 }
 
 /// Response type for bulk keymap operations.

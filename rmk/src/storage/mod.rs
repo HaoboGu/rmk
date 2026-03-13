@@ -235,8 +235,7 @@ macro_rules! ser_storage_variant {
 macro_rules! deser_storage_variant {
     ($buffer:expr, $variant:ident) => {{
         let (data, unused) =
-            postcard::take_from_bytes(&$buffer[1..])
-                .map_err($crate::storage::postcard_error_to_serialization_error)?;
+            postcard::take_from_bytes(&$buffer[1..]).map_err($crate::storage::postcard_error_to_serialization_error)?;
         let size = $buffer.len() - unused.len();
         Ok((Self::$variant(data), size))
     }};
@@ -260,7 +259,9 @@ impl StorageData {
             #[cfg(feature = "host")]
             Self::HostData(d) => match d {
                 KeymapData::Macro(_) => StorageKeys::MacroData as u32,
-                KeymapData::KeymapKey(_) => panic!("KeymapKey uses a computed key; use get_keymap_key() instead of StorageData::key()"),
+                KeymapData::KeymapKey(_) => {
+                    panic!("KeymapKey uses a computed key; use get_keymap_key() instead of StorageData::key()")
+                }
                 KeymapData::Encoder(_) => StorageKeys::EncoderKeys as u32,
                 KeymapData::Combo(_, _) => StorageKeys::ComboData as u32,
                 KeymapData::Fork(_, _) => StorageKeys::ForkData as u32,
@@ -340,7 +341,6 @@ pub(crate) struct LayoutConfig {
     layout_option: u32,
 }
 
-
 pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
     embassy_embedded_hal::adapter::BlockingAsync::new(flash)
 }
@@ -388,7 +388,11 @@ macro_rules! update_storage_field {
                     .await
             }
             Ok(None) => {
-                warn!("update_storage_field: key {} not found in storage, skipping update of {}", stringify!($key), stringify!($field));
+                warn!(
+                    "update_storage_field: key {} not found in storage, skipping update of {}",
+                    stringify!($key),
+                    stringify!($field)
+                );
                 Ok(())
             }
             Ok(Some(_)) => {

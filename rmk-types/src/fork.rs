@@ -75,14 +75,7 @@ impl ForkStateBits {
 /// state and outputs either `positive_output` (conditions met) or
 /// `negative_output` (conditions not met).
 #[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    serde::Serialize,
-    serde::Deserialize,
-    postcard::experimental::max_size::MaxSize,
+    Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, postcard::experimental::max_size::MaxSize,
 )]
 #[cfg_attr(feature = "protocol", derive(postcard_schema::Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

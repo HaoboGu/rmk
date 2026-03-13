@@ -6,8 +6,8 @@ use std::{env, fs};
 
 use const_gen::*;
 use rmk_config::{
-    BleConfig, KeyboardTomlConfig, RmkConstantsConfig, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS,
-    MIN_PASSKEY_ENTRY_TIMEOUT_SECS,
+    BleConfig, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS, KeyboardTomlConfig, MIN_PASSKEY_ENTRY_TIMEOUT_SECS,
+    RmkConstantsConfig,
 };
 
 fn main() {
@@ -87,7 +87,8 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
 
     // Add event channel constants
     // Note: default values are loaded from event_default.toml via config crate
-    let (ble_status_change_size, ble_status_change_pubs, ble_status_change_subs) = events.ble_status_change.into_values();
+    let (ble_status_change_size, ble_status_change_pubs, ble_status_change_subs) =
+        events.ble_status_change.into_values();
     let (connection_change_size, connection_change_pubs, connection_change_subs) =
         events.connection_change.into_values();
     let (modifier_size, modifier_pubs, modifier_subs) = events.modifier.into_values();
@@ -249,7 +250,8 @@ fn hash_input_path(hasher: &mut crc32fast::Hasher, path: &Path, root: &Path) {
     let relative_path = path.strip_prefix(root).unwrap_or(path);
     hash_str(hasher, &relative_path.display().to_string());
 
-    let bytes = fs::read(path).unwrap_or_else(|err| panic!("Failed to read build hash input {}: {err}", path.display()));
+    let bytes =
+        fs::read(path).unwrap_or_else(|err| panic!("Failed to read build hash input {}: {err}", path.display()));
     hasher.update(&bytes);
     hasher.update(&[0]);
 }
