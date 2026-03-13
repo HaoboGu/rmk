@@ -214,6 +214,9 @@ _esp_ble = ["_ble", "dep:esp-hal"]
 ## Enable feature if you want to use RP2040W with BLE.
 pico_w_ble = ["_ble", "dep:embassy-rp"]
 
+## Public opt-in for BLE passkey entry UI behavior. Chip features still select the BLE backend.
+passkey_entry = ["_ble"]
+
 ## Enable feature if you want to use trouble BLE stack
 _ble = ["dep:trouble-host", "dep:rand_core", "dep:bt-hci", "storage"]
 

@@ -6,6 +6,7 @@ use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use rmk_types::action::MorseProfile;
+use rmk_types::config::BehaviorConfig;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{MapConfig, MapStorage, SerializationError, Value};
@@ -339,24 +340,6 @@ pub(crate) struct LayoutConfig {
     layout_option: u32,
 }
 
-#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, postcard::experimental::max_size::MaxSize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) struct BehaviorConfig {
-    // The prior-idle-time in ms used for in flow tap
-    pub(crate) prior_idle_time: u16,
-    // Default morse profile containing mode, timeouts, and unilateral_tap settings
-    pub(crate) morse_default_profile: MorseProfile,
-
-    // Timeout time for combos
-    pub(crate) combo_timeout: u16,
-    // Timeout time for one-shot keys
-    pub(crate) one_shot_timeout: u16,
-    // Interval for tap actions
-    pub(crate) tap_interval: u16,
-    // Interval for tapping capslock.
-    // macOS has special processing of capslock, when tapping capslock, the tap interval should be another value
-    pub(crate) tap_capslock_interval: u16,
-}
 
 pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
     embassy_embedded_hal::adapter::BlockingAsync::new(flash)

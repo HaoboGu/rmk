@@ -50,7 +50,7 @@
 | l | Define connection/status types: `ConnectionInfo`, `MatrixState`, `SplitStatus` | [x] | In `status.rs`; `ConnectionType` in `rmk-types/src/connection.rs`, `BatteryStatus` in `rmk-types/src/battery.rs`, `BleStatus` in `rmk-types/src/ble.rs` |
 | m | Define macro types: `MacroInfo`, `MacroData` | [x] | In `config.rs` |
 | n | Define combo/morse/fork config types: `ComboConfig`, `MorseConfig`, `ForkConfig` (or reuse existing types from rmk-types) | [x] | In `config.rs`; `ForkStateBits` shared in `rmk-types/src/fork.rs` |
-| o | Define protocol-facing `BehaviorConfig` (or directly reuse existing `BehaviorConfig` from `rmk` crate) | [x] | In `config.rs`; combo_timeout_ms, oneshot_timeout_ms, tap_interval_ms, tap_tolerance |
+| o | Define protocol-facing `BehaviorConfig` (or directly reuse existing `BehaviorConfig` from `rmk` crate) | [x] | In `config.rs`; combo_timeout_ms, oneshot_timeout_ms, tap_interval_ms |
 
 ### Step 1.4 — Define `endpoints!()` and `topics!()` declarations
 

@@ -25,6 +25,7 @@ use crate::action::{EncoderAction, KeyAction};
 use crate::battery::BatteryStatus;
 use crate::ble::BleStatus;
 use crate::connection::ConnectionType;
+use crate::fork::Fork;
 use crate::led_indicator::LedIndicator;
 
 // ---------------------------------------------------------------------------
@@ -125,7 +126,7 @@ endpoints! {
     omit_std = true;
     | EndpointTy | RequestTy      | ResponseTy | Path        |
     | ---------- | ---------      | ---------- | ----        |
-    | GetFork    | u8             | ForkConfig | "fork/get"  |
+    | GetFork    | u8             | Fork       | "fork/get"  |
     | SetFork    | SetForkRequest | RmkResult  | "fork/set"  |
     | ResetForks | ()             | RmkResult  | "fork/reset"|
 }
@@ -257,7 +258,7 @@ mod tests {
     use crate::action::MorseProfile;
     use crate::battery::ChargeState;
     use crate::ble::BleState;
-    use crate::fork::ForkStateBits;
+    use crate::fork::{Fork, ForkStateBits};
     use crate::led_indicator::LedIndicator;
     use crate::modifier::ModifierCombination;
     use crate::mouse_button::MouseButtons;
@@ -518,9 +519,7 @@ mod tests {
     fn round_trip_matrix_state() {
         let mut bitmap = heapless::Vec::new();
         bitmap.extend_from_slice(&[0b0000_0101, 0x00, 0b0010_0000]).unwrap();
-        round_trip(&MatrixState {
-            pressed_bitmap: bitmap,
-        });
+        round_trip(&MatrixState { pressed_bitmap: bitmap });
     }
 
     #[test]
@@ -568,8 +567,8 @@ mod tests {
     }
 
     #[test]
-    fn round_trip_fork_config() {
-        round_trip(&ForkConfig {
+    fn round_trip_fork() {
+        round_trip(&Fork {
             trigger: KeyAction::No,
             negative_output: KeyAction::No,
             positive_output: KeyAction::No,
@@ -591,10 +590,12 @@ mod tests {
     #[test]
     fn round_trip_behavior_config() {
         round_trip(&BehaviorConfig {
-            combo_timeout_ms: 50,
-            oneshot_timeout_ms: 500,
-            tap_interval_ms: 200,
-            tap_tolerance: 3,
+            prior_idle_time: 0,
+            morse_default_profile: MorseProfile::const_default(),
+            combo_timeout: 50,
+            one_shot_timeout: 500,
+            tap_interval: 200,
+            tap_capslock_interval: 200,
         });
     }
 
@@ -692,7 +693,7 @@ mod tests {
     fn round_trip_set_fork_request() {
         round_trip(&SetForkRequest {
             index: 1,
-            config: ForkConfig {
+            config: Fork {
                 trigger: KeyAction::No,
                 negative_output: KeyAction::No,
                 positive_output: KeyAction::No,

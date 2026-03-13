@@ -390,15 +390,15 @@ macro_rules! define_dispatch {
                 &TP_OUT_KEYS,
             ]);
             pub const NEEDED_SZ: usize = const {
-                assert!(
+                core::assert!(
                     a_is_subset_of_b(EP_HANDLER_IN_KEYS, &EP_IN_KEYS),
                     "All listed endpoint handlers must be listed in endpoints->list! Missing Requst Type found!",
                 );
-                assert!(
+                core::assert!(
                     a_is_subset_of_b(EP_HANDLER_OUT_KEYS, &EP_OUT_KEYS),
                     "All listed endpoint handlers must be listed in endpoints->list! Missing Response Type found!",
                 );
-                assert!(
+                core::assert!(
                     a_is_subset_of_b(TP_HANDLER_IN_KEYS, &TP_IN_KEYS),
                     "All listed endpoint handlers must be listed in endpoints->list! Missing Response Type found!",
                 );
@@ -429,7 +429,7 @@ macro_rules! define_dispatch {
                     while j < len {
                         let a = u64::from_le_bytes(ALL_DISPATCH_KEYS[i].to_bytes());
                         let b = u64::from_le_bytes(ALL_DISPATCH_KEYS[j].to_bytes());
-                        assert!(a != b, "Caught duplicate items. Is `omit_std` set? This is likely a bug in your code. See https://github.com/jamesmunns/postcard-rpc/issues/135.");
+                        core::assert!(a != b, "Caught duplicate items. Is `omit_std` set? This is likely a bug in your code. See https://github.com/jamesmunns/postcard-rpc/issues/135.");
                         j += 1;
                     }
                     i += 1;
@@ -491,7 +491,7 @@ macro_rules! define_dispatch {
                                 2 => ::postcard_rpc::header::VarKeyKind::Key2,
                                 4 => ::postcard_rpc::header::VarKeyKind::Key4,
                                 8 => ::postcard_rpc::header::VarKeyKind::Key8,
-                                _ => unreachable!(),
+                                _ => core::unreachable!(),
                             }
                         }
                     };

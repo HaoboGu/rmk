@@ -2,8 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{ComboConfig, ForkConfig, MacroData, MorseConfig};
+use super::{ComboConfig, MacroData, MorseConfig};
 use crate::action::EncoderAction;
+use crate::fork::Fork;
 
 /// Request payload for `GetEncoderAction`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
@@ -51,5 +52,5 @@ pub struct SetMorseRequest {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SetForkRequest {
     pub index: u8,
-    pub config: ForkConfig,
+    pub config: Fork,
 }

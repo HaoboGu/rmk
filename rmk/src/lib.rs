@@ -52,7 +52,7 @@ use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
 pub use trouble_host::prelude::*;
 #[cfg(feature = "host")]
-use {crate::descriptor::ViaReport, crate::hid::HidWriterTrait, crate::host::run_host_communicate_task};
+use crate::host::HostService;
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
     crate::light::UsbLedReader,
@@ -63,8 +63,6 @@ pub use {embassy_futures, futures, heapless, rmk_macro as macros, rmk_types as t
 use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 
 use crate::config::PositionalConfig;
-#[cfg(feature = "vial")]
-use crate::config::VialConfig;
 use crate::event::{LedIndicatorEvent, publish_event};
 use crate::keyboard::LOCK_LED_STATES;
 use crate::state::ConnectionState;
@@ -208,7 +206,7 @@ pub async fn run_rmk<
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
         let mut other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
         #[cfg(feature = "host")]
-        let mut host_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
+        let mut host_transport = crate::host::UsbHostTransport::new(&mut usb_builder);
 
         let (mut keyboard_reader, mut keyboard_writer) = keyboard_reader_writer.split();
 
@@ -247,11 +245,7 @@ pub async fn run_rmk<
                     #[cfg(feature = "storage")]
                     storage,
                     #[cfg(feature = "host")]
-                    keymap,
-                    #[cfg(feature = "vial")]
-                    crate::host::UsbHostReaderWriter::new(&mut host_reader_writer),
-                    #[cfg(feature = "vial")]
-                    rmk_config.vial_config,
+                    crate::host::UsbHostService::new(keymap, &mut host_transport, &rmk_config),
                     usb_task,
                     UsbLedReader::new(&mut keyboard_reader),
                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
@@ -270,22 +264,17 @@ pub async fn run_rmk<
 // Due to https://github.com/rust-lang/rust/issues/62958, storage/host struct is used now.
 // The corresponding future(commented) will be used after the issue is fixed.
 pub(crate) async fn run_keyboard<
-    #[cfg(feature = "host")] 'a,
     R: HidReaderTrait<ReportType = LedIndicator>,
     W: RunnableHidWriter,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    #[cfg(feature = "vial")] Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
+    #[cfg(feature = "host")] H: HostService,
     #[cfg(feature = "storage")] const ROW: usize,
     #[cfg(feature = "storage")] const COL: usize,
     #[cfg(feature = "storage")] const NUM_LAYER: usize,
     #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
-    // #[cfg(feature = "storage")] storage_task: impl Future<Output = ()>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-    // #[cfg(feature = "host")] host_task: impl Future<Output = ()>,
-    #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
-    #[cfg(feature = "vial")] reader_writer: Rw,
-    #[cfg(feature = "vial")] vial_config: VialConfig<'static>,
+    #[cfg(feature = "host")] mut host_service: H,
     communication_fut: impl Future<Output = ()>,
     mut led_reader: R,
     mut keyboard_writer: W,
@@ -309,12 +298,8 @@ pub(crate) async fn run_keyboard<
         }
     };
 
-    #[cfg(feature = "vial")]
-    let host_fut = run_host_communicate_task(
-        keymap,
-        reader_writer,
-        vial_config,
-    );
+    #[cfg(feature = "host")]
+    let host_fut = host_service.run();
     #[cfg(feature = "storage")]
     let storage_fut = storage.run();
 
@@ -322,7 +307,7 @@ pub(crate) async fn run_keyboard<
 
     #[cfg(feature = "storage")]
     let storage_task = core::pin::pin!(storage_fut.fuse());
-    #[cfg(feature = "vial")]
+    #[cfg(feature = "host")]
     let host_task = core::pin::pin!(host_fut.fuse());
     let mut communication_task = core::pin::pin!(communication_fut.fuse());
     let mut led_task = core::pin::pin!(led_fut.fuse());
@@ -333,7 +318,7 @@ pub(crate) async fn run_keyboard<
         _ = with_feature!("storage", storage_task) => error!("Storage task has ended"),
         _ = wpm_processor.polling_loop().fuse() => error!("WPM Processor task ended"),
         _ = led_task => error!("Led task has ended"),
-        _ = with_feature!("vial", host_task) => error!("Host task ended"),
+        _ = with_feature!("host", host_task) => error!("Host task ended"),
         _ = writer_task => error!("Writer task has ended"),
     };
 

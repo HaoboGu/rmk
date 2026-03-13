@@ -14,9 +14,7 @@ use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
 #[cfg(feature = "host")]
-use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap};
-#[cfg(all(feature = "vial", not(feature = "_no_usb")))]
-use {crate::descriptor::ViaReport, crate::host::UsbHostReaderWriter};
+use crate::keymap::KeyMap;
 #[cfg(not(feature = "_no_usb"))]
 use {
     crate::descriptor::{CompositeReport, KeyboardReport},
@@ -152,7 +150,7 @@ pub(crate) async fn run_ble<
     };
 
     #[cfg(all(not(feature = "_no_usb"), feature = "host"))]
-    let mut host_reader_writer = add_usb_reader_writer!(&mut _usb_builder, ViaReport, 32, 32);
+    let mut host_transport = crate::host::UsbHostTransport::new(&mut _usb_builder);
 
     // Optional usb logger initialization
     #[cfg(all(feature = "usb_log", not(feature = "_no_usb")))]
@@ -291,11 +289,7 @@ pub(crate) async fn run_ble<
                                     #[cfg(feature = "storage")]
                                     storage,
                                     #[cfg(feature = "host")]
-                                    keymap,
-                                    #[cfg(feature = "vial")]
-                                    UsbHostReaderWriter::new(&mut host_reader_writer),
-                                    #[cfg(feature = "vial")]
-                                    rmk_config.vial_config,
+                                    crate::host::UsbHostService::new(keymap, &mut host_transport, &rmk_config),
                                     USB_SUSPENDED.wait(),
                                     UsbLedReader::new(&mut keyboard_reader),
                                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
@@ -349,11 +343,7 @@ pub(crate) async fn run_ble<
                             #[cfg(feature = "storage")]
                             storage,
                             #[cfg(feature = "host")]
-                            keymap,
-                            #[cfg(feature = "vial")]
-                            UsbHostReaderWriter::new(&mut host_reader_writer),
-                            #[cfg(feature = "vial")]
-                            rmk_config.vial_config,
+                            crate::host::UsbHostService::new(keymap, &mut host_transport, &rmk_config),
                             core::future::pending::<()>(), // Run forever until BLE connected
                             UsbLedReader::new(&mut keyboard_reader),
                             UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
@@ -492,11 +482,11 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let output_keyboard = server.hid_service.output_keyboard;
     let hid_control_point = server.hid_service.hid_control_point;
     let input_keyboard = server.hid_service.input_keyboard;
-    #[cfg(feature = "host")]
+    #[cfg(feature = "vial")]
     let output_host = server.host_service.output_data;
-    #[cfg(feature = "host")]
+    #[cfg(feature = "vial")]
     let input_host = server.host_service.input_data;
-    #[cfg(feature = "host")]
+    #[cfg(feature = "vial")]
     let host_control_point = server.host_service.hid_control_point;
     let battery_level = server.battery_service.level;
     let mouse = server.composite_service.mouse_report;
@@ -585,7 +575,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 }
                             }
                         } else {
-                            #[cfg(feature = "host")]
+                            #[cfg(feature = "vial")]
                             if event.handle() == output_host.handle {
                                 debug!("Got host packet: {:?}", event.data());
                                 if event.data().len() == 32 {
@@ -615,7 +605,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             } else {
                                 debug!("Write GATT Event to Unknown: {:?}", event.handle());
                             }
-                            #[cfg(not(feature = "host"))]
+                            #[cfg(not(feature = "vial"))]
                             debug!("Write GATT Event to Unknown: {:?}", event.handle());
                         }
 
@@ -902,7 +892,7 @@ async fn run_ble_keyboard<
 ) {
     let ble_hid_server = BleHidServer::new(server, conn);
     #[cfg(feature = "host")]
-    let ble_host_server = BleHostServer::new(server, conn);
+    let mut ble_host_service = crate::host::BleHostService::new(keymap, server, conn, rmk_config);
     let ble_led_reader = BleLedReader {};
     let mut ble_battery_server = BleBatteryServer::new(server, conn);
 
@@ -936,11 +926,7 @@ async fn run_ble_keyboard<
         #[cfg(feature = "storage")]
         storage,
         #[cfg(feature = "host")]
-        keymap,
-        #[cfg(feature = "host")]
-        ble_host_server,
-        #[cfg(feature = "vial")]
-        rmk_config.vial_config,
+        ble_host_service,
         communication_task,
         ble_led_reader,
         ble_hid_server,

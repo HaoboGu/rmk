@@ -162,13 +162,12 @@ impl<'d, D: Driver<'d>> WireTx for UsbBulkTx<'_, 'd, D> {
         // ep_out becomes enabled, so topic publishers won't deadlock.
         self.connected.wait().await;
 
-        // After reconnection, lock the mutex to reset endpoint state.
-        // ep_in.wait_enabled() ensures the hardware endpoint is ready
-        // (it returns immediately if already enabled — the signal guarantees
-        // USB is up). Clearing pending_frame prevents a stale ZLP.
+        // After reconnection, lock the mutex and wait until the IN endpoint is
+        // ready. This path also runs after TX timeouts, where the endpoint may
+        // still be enabled; pending_frame must survive so the next send can
+        // terminate the aborted frame with a cleanup ZLP.
         let mut inner = self.inner.lock().await;
         inner.ep_in.wait_enabled().await;
-        inner.pending_frame = false;
     }
 
     async fn send<T: Serialize + ?Sized>(&self, hdr: VarHeader, msg: &T) -> Result<(), Self::Error> {
@@ -379,5 +378,298 @@ impl Write for SliceWriter<'_> {
         } else {
             Ok(())
         }
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod tests {
+    use core::future::pending;
+    use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex as StdMutex};
+
+    use embassy_futures::block_on;
+    use embassy_usb::driver::{
+        Bus, ControlPipe, Direction, EndpointAddress, EndpointAllocError, EndpointInfo, EndpointType, Event,
+        Unsupported,
+    };
+
+    use super::*;
+    use crate::RawMutex;
+
+    #[derive(Clone, Copy)]
+    enum WriteBehavior {
+        Ok,
+        PendingForever,
+        Disabled,
+    }
+
+    #[derive(Default)]
+    struct FakeEndpointState {
+        writes: Vec<Vec<u8>>,
+        wait_enabled_calls: usize,
+        write_behaviors: VecDeque<WriteBehavior>,
+    }
+
+    #[derive(Clone)]
+    struct FakeEndpointIn {
+        info: EndpointInfo,
+        state: Arc<StdMutex<FakeEndpointState>>,
+    }
+
+    impl FakeEndpointIn {
+        fn new(write_behaviors: impl IntoIterator<Item = WriteBehavior>) -> Self {
+            let mut state = FakeEndpointState::default();
+            state.write_behaviors.extend(write_behaviors);
+            Self {
+                info: EndpointInfo {
+                    addr: EndpointAddress::from_parts(1, Direction::In),
+                    ep_type: EndpointType::Bulk,
+                    max_packet_size: USB_BULK_PACKET_SIZE as u16,
+                    interval_ms: 0,
+                },
+                state: Arc::new(StdMutex::new(state)),
+            }
+        }
+
+        fn writes(&self) -> Vec<Vec<u8>> {
+            self.state.lock().unwrap().writes.clone()
+        }
+
+        fn wait_enabled_calls(&self) -> usize {
+            self.state.lock().unwrap().wait_enabled_calls
+        }
+    }
+
+    impl Endpoint for FakeEndpointIn {
+        fn info(&self) -> &EndpointInfo {
+            &self.info
+        }
+
+        async fn wait_enabled(&mut self) {
+            self.state.lock().unwrap().wait_enabled_calls += 1;
+        }
+    }
+
+    impl EndpointIn for FakeEndpointIn {
+        async fn write(&mut self, buf: &[u8]) -> Result<(), EndpointError> {
+            let behavior = {
+                let mut state = self.state.lock().unwrap();
+                state.writes.push(buf.to_vec());
+                state.write_behaviors.pop_front().unwrap_or(WriteBehavior::Ok)
+            };
+
+            match behavior {
+                WriteBehavior::Ok => Ok(()),
+                WriteBehavior::PendingForever => pending::<Result<(), EndpointError>>().await,
+                WriteBehavior::Disabled => Err(EndpointError::Disabled),
+            }
+        }
+    }
+
+    struct FakeEndpointOut {
+        info: EndpointInfo,
+    }
+
+    impl Default for FakeEndpointOut {
+        fn default() -> Self {
+            Self {
+                info: EndpointInfo {
+                    addr: EndpointAddress::from_parts(1, Direction::Out),
+                    ep_type: EndpointType::Bulk,
+                    max_packet_size: USB_BULK_PACKET_SIZE as u16,
+                    interval_ms: 0,
+                },
+            }
+        }
+    }
+
+    impl Endpoint for FakeEndpointOut {
+        fn info(&self) -> &EndpointInfo {
+            &self.info
+        }
+
+        async fn wait_enabled(&mut self) {
+            panic!("FakeEndpointOut::wait_enabled should not be called in transport tests");
+        }
+    }
+
+    impl EndpointOut for FakeEndpointOut {
+        async fn read(&mut self, _buf: &mut [u8]) -> Result<usize, EndpointError> {
+            panic!("FakeEndpointOut::read should not be called in transport tests");
+        }
+    }
+
+    struct FakeControlPipe;
+
+    impl ControlPipe for FakeControlPipe {
+        fn max_packet_size(&self) -> usize {
+            USB_BULK_PACKET_SIZE
+        }
+
+        async fn setup(&mut self) -> [u8; 8] {
+            panic!("FakeControlPipe::setup should not be called in transport tests");
+        }
+
+        async fn data_out(&mut self, _buf: &mut [u8], _first: bool, _last: bool) -> Result<usize, EndpointError> {
+            panic!("FakeControlPipe::data_out should not be called in transport tests");
+        }
+
+        async fn data_in(&mut self, _data: &[u8], _first: bool, _last: bool) -> Result<(), EndpointError> {
+            panic!("FakeControlPipe::data_in should not be called in transport tests");
+        }
+
+        async fn accept(&mut self) {
+            panic!("FakeControlPipe::accept should not be called in transport tests");
+        }
+
+        async fn reject(&mut self) {
+            panic!("FakeControlPipe::reject should not be called in transport tests");
+        }
+
+        async fn accept_set_address(&mut self, _addr: u8) {
+            panic!("FakeControlPipe::accept_set_address should not be called in transport tests");
+        }
+    }
+
+    struct FakeBus;
+
+    impl Bus for FakeBus {
+        async fn enable(&mut self) {
+            panic!("FakeBus::enable should not be called in transport tests");
+        }
+
+        async fn disable(&mut self) {
+            panic!("FakeBus::disable should not be called in transport tests");
+        }
+
+        async fn poll(&mut self) -> Event {
+            panic!("FakeBus::poll should not be called in transport tests");
+        }
+
+        fn endpoint_set_enabled(&mut self, _ep_addr: EndpointAddress, _enabled: bool) {
+            panic!("FakeBus::endpoint_set_enabled should not be called in transport tests");
+        }
+
+        fn endpoint_set_stalled(&mut self, _ep_addr: EndpointAddress, _stalled: bool) {
+            panic!("FakeBus::endpoint_set_stalled should not be called in transport tests");
+        }
+
+        fn endpoint_is_stalled(&mut self, _ep_addr: EndpointAddress) -> bool {
+            panic!("FakeBus::endpoint_is_stalled should not be called in transport tests");
+        }
+
+        async fn remote_wakeup(&mut self) -> Result<(), Unsupported> {
+            panic!("FakeBus::remote_wakeup should not be called in transport tests");
+        }
+    }
+
+    struct FakeDriver;
+
+    impl<'a> Driver<'a> for FakeDriver {
+        type EndpointOut = FakeEndpointOut;
+        type EndpointIn = FakeEndpointIn;
+        type ControlPipe = FakeControlPipe;
+        type Bus = FakeBus;
+
+        fn alloc_endpoint_out(
+            &mut self,
+            _ep_type: EndpointType,
+            _ep_addr: Option<EndpointAddress>,
+            _max_packet_size: u16,
+            _interval_ms: u8,
+        ) -> Result<Self::EndpointOut, EndpointAllocError> {
+            panic!("FakeDriver::alloc_endpoint_out should not be called in transport tests");
+        }
+
+        fn alloc_endpoint_in(
+            &mut self,
+            _ep_type: EndpointType,
+            _ep_addr: Option<EndpointAddress>,
+            _max_packet_size: u16,
+            _interval_ms: u8,
+        ) -> Result<Self::EndpointIn, EndpointAllocError> {
+            panic!("FakeDriver::alloc_endpoint_in should not be called in transport tests");
+        }
+
+        fn start(self, _control_max_packet_size: u16) -> (Self::Bus, Self::ControlPipe) {
+            panic!("FakeDriver::start should not be called in transport tests");
+        }
+    }
+
+    #[test]
+    fn wait_connection_preserves_pending_frame() {
+        let ep_in = FakeEndpointIn::new([]);
+        let inner = Mutex::<RawMutex, UsbBulkTxState<'static, FakeDriver>>::new(UsbBulkTxState::new(ep_in.clone()));
+        let connected = Signal::<RawMutex, ()>::new();
+        let tx = UsbBulkTx::new(&inner, &connected);
+
+        block_on(async {
+            {
+                let mut state = inner.lock().await;
+                state.pending_frame = true;
+            }
+            connected.signal(());
+            tx.wait_connection().await;
+
+            let state = inner.lock().await;
+            assert!(state.pending_frame);
+        });
+
+        assert_eq!(ep_in.wait_enabled_calls(), 1);
+    }
+
+    #[test]
+    fn send_buf_emits_cleanup_zlp_for_pending_frame() {
+        let mut ep_in = FakeEndpointIn::new([]);
+        let mut pending_frame = true;
+
+        block_on(async {
+            send_buf(&mut ep_in, &[1, 2, 3], &mut pending_frame).await.unwrap();
+        });
+
+        assert_eq!(ep_in.writes(), vec![vec![], vec![1, 2, 3]]);
+        assert!(!pending_frame);
+    }
+
+    #[test]
+    fn send_buf_skips_cleanup_zlp_for_clean_frame() {
+        let mut ep_in = FakeEndpointIn::new([]);
+        let mut pending_frame = false;
+
+        block_on(async {
+            send_buf(&mut ep_in, &[4, 5, 6], &mut pending_frame).await.unwrap();
+        });
+
+        assert_eq!(ep_in.writes(), vec![vec![4, 5, 6]]);
+        assert!(!pending_frame);
+    }
+
+    #[test]
+    fn timeout_keeps_pending_frame_for_next_send() {
+        let mut ep_in = FakeEndpointIn::new([WriteBehavior::PendingForever, WriteBehavior::Ok, WriteBehavior::Ok]);
+        let mut pending_frame = false;
+
+        let err = block_on(async { send_buf(&mut ep_in, &[7], &mut pending_frame).await.unwrap_err() });
+        assert!(matches!(err, WireTxErrorKind::ConnectionClosed));
+        assert!(pending_frame);
+
+        block_on(async {
+            send_buf(&mut ep_in, &[8, 9], &mut pending_frame).await.unwrap();
+        });
+
+        assert_eq!(ep_in.writes(), vec![vec![7], vec![], vec![8, 9]]);
+        assert!(!pending_frame);
+    }
+
+    #[test]
+    fn cleanup_zlp_failure_surfaces_connection_closed() {
+        let mut ep_in = FakeEndpointIn::new([WriteBehavior::Disabled]);
+        let mut pending_frame = true;
+
+        let err = block_on(async { send_buf(&mut ep_in, &[1], &mut pending_frame).await.unwrap_err() });
+
+        assert!(matches!(err, WireTxErrorKind::ConnectionClosed));
+        assert_eq!(ep_in.writes(), vec![vec![]]);
+        assert!(pending_frame);
     }
 }
