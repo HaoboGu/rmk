@@ -10,8 +10,8 @@ use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 use {
     crate::event::{BatteryStatusEvent, ChargingStateEvent, EventSubscriber},
     crate::storage::Storage,
-    rmk_types::battery::BatteryStatus,
     embedded_storage_async::nor_flash::NorFlash,
+    rmk_types::battery::BatteryStatus,
     trouble_host::prelude::*,
 };
 

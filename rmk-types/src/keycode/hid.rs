@@ -11,7 +11,7 @@ use crate::modifier::ModifierCombination;
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, FromRepr)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard_schema::Schema)]
+#[cfg_attr(feature = "protocol", derive(postcard_schema::Schema))]
 pub enum HidKeyCode {
     /// Reserved, no-key.
     No = 0x0000,

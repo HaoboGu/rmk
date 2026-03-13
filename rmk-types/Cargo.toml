@@ -14,18 +14,21 @@ defmt = { version = "1.0", optional = true }
 
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive"] }
-postcard-schema = { version = "0.2", default-features = false, features = ["derive", "heapless-v0_9"] }
-postcard-rpc = { version = "0.12", default-features = false }
-heapless = { version = "0.9", default-features = false, features = ["serde"] }
+postcard-schema = { version = "0.2", default-features = false, features = ["derive", "heapless-v0_9"], optional = true }
+postcard-rpc = { version = "0.12", default-features = false, optional = true }
+heapless = { version = "0.9", default-features = false, features = ["serde"], optional = true }
 strum = { version = "0.28", default-features = false, features = ["derive"] }
 
 bitfield-struct = "0.12"
 
 [features]
 default = []
+## Enable RMK protocol ICD types, endpoints, and topics (pulls in postcard-schema, postcard-rpc, heapless)
+protocol = ["dep:postcard-schema", "dep:postcard-rpc", "dep:heapless"]
 defmt = [
     "dep:defmt",
     "postcard/defmt",
+    "heapless?/defmt",
 ]
 # Feature for proc-macro code generation only, not included in firmware
 _codegen = []

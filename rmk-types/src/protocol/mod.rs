@@ -6,5 +6,6 @@
 //! - [`vial`] - Vial protocol implementation
 //! - [`rmk`] - RMK native protocol ICD (endpoint/topic definitions and types)
 
+#[cfg(feature = "protocol")]
 pub mod rmk;
 pub mod vial;
