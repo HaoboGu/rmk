@@ -3,7 +3,7 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::{ChipSeries, KeyboardTomlConfig, StorageConfig};
+use rmk_config::{ChipSeries, KeyboardTomlConfig, LayoutConfig, StorageConfig};
 
 pub(crate) fn expand_flash_init(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
     if !keyboard_config.get_storage_config().enabled {
@@ -13,7 +13,11 @@ pub(crate) fn expand_flash_init(keyboard_config: &KeyboardTomlConfig) -> TokenSt
             // let flash = ::rmk::DummyFlash::new();
         };
     }
-    let mut flash_init = expand_storage_config(&keyboard_config.get_storage_config());
+    let (layout, _) = keyboard_config.get_layout_config().unwrap();
+    let board = keyboard_config.get_board_config().unwrap();
+    let num_encoder: usize = board.get_num_encoder().iter().sum();
+    let mut flash_init =
+        expand_storage_config(&keyboard_config.get_storage_config(), &layout, num_encoder);
     let chip = keyboard_config.get_chip_model().unwrap();
     let communication = keyboard_config.get_communication_config().unwrap();
     flash_init.extend(
@@ -54,17 +58,35 @@ pub(crate) fn expand_flash_init(keyboard_config: &KeyboardTomlConfig) -> TokenSt
     flash_init
 }
 
-fn expand_storage_config(storage_config: &StorageConfig) -> TokenStream2 {
+/// Compute a FNV-1a hash of the layout structure dimensions.
+/// When the layout structure changes (rows, cols, layers, encoders),
+/// the hash changes and storage is automatically re-initialized.
+fn compute_layout_hash(layout: &LayoutConfig, num_encoder: usize) -> u32 {
+    let mut hash: u32 = 0x811c_9dc5; // FNV-1a offset basis
+    for byte in [layout.rows, layout.cols, layout.layers, num_encoder as u8] {
+        hash ^= byte as u32;
+        hash = hash.wrapping_mul(0x0100_0193); // FNV-1a prime
+    }
+    hash
+}
+
+fn expand_storage_config(
+    storage_config: &StorageConfig,
+    layout: &LayoutConfig,
+    num_encoder: usize,
+) -> TokenStream2 {
     let num_sectors = storage_config.num_sectors.unwrap_or(2);
     let start_addr = storage_config.start_addr.unwrap_or(0);
     let clear_storage = storage_config.clear_storage.unwrap_or(false);
     let clear_layout = storage_config.clear_layout.unwrap_or(false);
+    let layout_hash = compute_layout_hash(layout, num_encoder);
     quote! {
         let storage_config = ::rmk::config::StorageConfig {
             num_sectors: #num_sectors,
             start_addr: #start_addr,
             clear_storage: #clear_storage,
-            clear_layout: #clear_layout
+            clear_layout: #clear_layout,
+            layout_hash: #layout_hash,
         };
     }
 }

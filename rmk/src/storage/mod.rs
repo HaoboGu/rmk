@@ -18,10 +18,10 @@ use {
 #[cfg(feature = "_ble")]
 use crate::ble::profile::ProfileInfo;
 use crate::channel::FLASH_CHANNEL;
+use crate::config;
 use crate::config::StorageConfig;
 #[cfg(all(feature = "_ble", feature = "split"))]
 use crate::split::ble::PeerAddress;
-use crate::{BUILD_HASH, config};
 
 /// Signal to synchronize the flash operation status, usually used outside of the flash task.
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
@@ -349,7 +349,10 @@ impl Value<'_> for StorageData {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LocalStorageConfig {
     enable: bool,
-    build_hash: u32,
+    /// Hash of the layout structure (rows, cols, layers, num_encoder).
+    /// When this doesn't match the current firmware's layout_hash,
+    /// storage is automatically re-initialized.
+    layout_hash: u32,
 }
 
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, postcard::experimental::max_size::MaxSize)]
@@ -479,7 +482,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         };
 
         // Check whether keymap and configs have been storaged in flash
-        if !storage.check_enable().await || storage_config.clear_storage {
+        if !storage.check_enable(storage_config.layout_hash).await || storage_config.clear_storage {
             // Clear storage first
             debug!("Clearing storage!");
             let _ = storage.flash.erase_all().await;
@@ -492,6 +495,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     #[cfg(feature = "host")]
                     encoder_map,
                     behavior_config,
+                    storage_config.layout_hash,
                 )
                 .await
                 .is_err()
@@ -504,7 +508,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         &(StorageKeys::StorageConfig as u32),
                         &StorageData::StorageConfig(LocalStorageConfig {
                             enable: false,
-                            build_hash: BUILD_HASH,
+                            layout_hash: storage_config.layout_hash,
                         }),
                     )
                     .await
@@ -709,11 +713,12 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         #[cfg(feature = "host")] keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         #[cfg(feature = "host")] encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         behavior: &config::BehaviorConfig,
+        layout_hash: u32,
     ) -> Result<(), ()> {
-        // Save storage config
+        // Save storage config with layout hash for compatibility detection
         let storage_config = StorageData::StorageConfig(LocalStorageConfig {
             enable: true,
-            build_hash: BUILD_HASH,
+            layout_hash,
         });
         self.flash
             .store_item(&mut self.buffer, &storage_config.key(), &storage_config)
@@ -867,15 +872,20 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         Ok(())
     }
 
-    async fn check_enable(&mut self) -> bool {
+    async fn check_enable(&mut self, layout_hash: u32) -> bool {
         if let Ok(Some(StorageData::StorageConfig(config))) = self
             .flash
             .fetch_item(&mut self.buffer, &(StorageKeys::StorageConfig as u32))
             .await
         {
-            // if config.enable && config.build_hash == BUILD_HASH {
-            if config.enable {
+            if config.enable && config.layout_hash == layout_hash {
                 return true;
+            }
+            if config.enable && config.layout_hash != layout_hash {
+                info!(
+                    "Layout hash changed (stored: {:#010x}, current: {:#010x}), re-initializing storage",
+                    config.layout_hash, layout_hash
+                );
             }
         }
         false
