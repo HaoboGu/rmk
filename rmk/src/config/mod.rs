@@ -169,6 +169,11 @@ pub struct StorageConfig {
     pub num_sectors: u8,
     pub clear_storage: bool,
     pub clear_layout: bool,
+    /// Hash of the layout structure (rows, cols, layers, num_encoder).
+    /// When this changes between firmware builds, storage is automatically
+    /// re-initialized so that stale keymap data from a previous layout
+    /// does not persist.
+    pub layout_hash: u32,
 }
 
 impl Default for StorageConfig {
@@ -178,6 +183,7 @@ impl Default for StorageConfig {
             num_sectors: 2,
             clear_storage: false,
             clear_layout: false,
+            layout_hash: 0,
         }
     }
 }
