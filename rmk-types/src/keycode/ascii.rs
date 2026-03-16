@@ -2,9 +2,9 @@
 
 use super::hid::HidKeyCode;
 
-/// Convert a ascii chat to keycode
-/// bool, if the keycode should be shifted
-/// assumes en-us keyboard mapping
+/// Convert an ascii char to keycode.
+/// Returns (keycode, shifted) where shifted indicates if Shift is needed.
+/// Assumes en-us keyboard mapping.
 pub fn from_ascii(ascii: u8) -> (HidKeyCode, bool) {
     match ascii {
         b'0' => (HidKeyCode::Kc0, false),
@@ -111,8 +111,8 @@ pub fn from_ascii(ascii: u8) -> (HidKeyCode, bool) {
     }
 }
 
-/// Convert a ascii chat to keycode
-/// assumes en-us keyboard mapping
+/// Convert an ascii char to keycode.
+/// Assumes en-us keyboard mapping.
 pub fn to_ascii(keycode: HidKeyCode, shifted: bool) -> u8 {
     match (keycode, shifted) {
         (HidKeyCode::Kc0, false) => b'0',
@@ -201,8 +201,8 @@ pub fn to_ascii(keycode: HidKeyCode, shifted: bool) -> u8 {
         (HidKeyCode::Quote, true) => b'"',
         (HidKeyCode::Grave, false) => b'`',
         (HidKeyCode::Grave, true) => b'~',
-        (HidKeyCode::Backslash, true) => b'\\',
-        (HidKeyCode::Backslash, false) => b'|',
+        (HidKeyCode::Backslash, false) => b'\\',
+        (HidKeyCode::Backslash, true) => b'|',
         (HidKeyCode::Comma, false) => b',',
         (HidKeyCode::Comma, true) => b'<',
         (HidKeyCode::Dot, false) => b'.',
@@ -215,7 +215,8 @@ pub fn to_ascii(keycode: HidKeyCode, shifted: bool) -> u8 {
         (HidKeyCode::Backspace, false) => b'\x08',
         (HidKeyCode::Escape, false) => b'\x1B',
         (HidKeyCode::Delete, false) => b'\x7F',
-        // not supported keycodes
-        (_, _) => b'X',
+        // Unsupported keycodes return NUL (0x00) to avoid ambiguity with
+        // valid keycodes like 'X' (which is a real shifted key on row 2).
+        (_, _) => 0,
     }
 }

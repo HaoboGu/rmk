@@ -4,8 +4,8 @@ use usbd_hid::descriptor::SerializedDescriptor;
 
 use super::battery_service::BatteryService;
 use super::device_info::DeviceConfigurationService;
-#[cfg(feature = "host")]
-use super::host_service::HostService;
+#[cfg(feature = "vial")]
+use super::host_gatt::HostGattService;
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::descriptor::{CompositeReport, CompositeReportType, KeyboardReport};
 use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
@@ -14,22 +14,22 @@ use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
 pub(crate) const CCCD_TABLE_SIZE: usize = _CCCD_TABLE_SIZE;
 
 // GATT Server definition
-// NOTE: ideally we would conditionally add the `via_service` member, based on the
+// NOTE: ideally we would conditionally add the `host_gatt` member, based on the
 // `vial` feature flag. But when doing that, rust still compiles the member as if
 // the flag was on, for some reason. I suspect it might have something to do with
 // the `gatt_server` macro, but I'm not sure. So we need 2 versions of the Server
 // struct, one with vial support, and one without.
-#[cfg(feature = "host")]
+#[cfg(feature = "vial")]
 #[gatt_server]
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
     pub(crate) hid_service: HidService,
-    pub(crate) host_service: HostService,
+    pub(crate) host_gatt: HostGattService,
     pub(crate) composite_service: CompositeService,
     pub(crate) device_config_service: DeviceConfigurationService,
 }
 
-#[cfg(not(feature = "host"))]
+#[cfg(not(feature = "vial"))]
 #[gatt_server]
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,

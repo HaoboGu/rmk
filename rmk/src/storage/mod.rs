@@ -6,6 +6,7 @@ use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use rmk_types::action::MorseProfile;
+use rmk_types::config::BehaviorConfig;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{MapConfig, MapStorage, SerializationError, Value};
@@ -43,17 +44,20 @@ pub(crate) enum FlashOperationMessage {
     PeerAddress(PeerAddress),
     // Clear the storage
     Reset,
-    // Clear the layout info
+    // Clear the storage and reboot
+    ResetAndReboot,
+    // Clear the layout info and reboot
     ResetLayout,
-    // Clear info of given slot number
+    // Clear info of given slot number (only meaningful with BLE, handled by the
+    // `#[cfg(not(feature = "_ble"))] _` catch-all when BLE is disabled)
     ClearSlot(u8),
     // Layout option
     LayoutOptions(u32),
     // Default layer number
     DefaultLayer(u8),
-    // Vial Flash Message
+    // Host protocol flash message (used by both Vial and RMK protocol)
     #[cfg(feature = "host")]
-    VialMessage(KeymapData),
+    HostMessage(KeymapData),
     // Current saved connection type
     ConnectionType(u8),
     // Timeout time for combos
@@ -139,7 +143,7 @@ pub(crate) enum StorageData {
     BehaviorConfig(BehaviorConfig),
     ConnectionType(u8),
     #[cfg(feature = "host")]
-    VialData(KeymapData),
+    HostData(KeymapData),
     #[cfg(all(feature = "_ble", feature = "split"))]
     PeerAddress(PeerAddress),
     #[cfg(feature = "_ble")]
@@ -225,6 +229,18 @@ macro_rules! ser_storage_variant {
     }};
 }
 
+/// Macro to deserialize standard variants: skip key byte, postcard-deserialize data.
+/// Counterpart to [`ser_storage_variant!`].
+#[macro_export]
+macro_rules! deser_storage_variant {
+    ($buffer:expr, $variant:ident) => {{
+        let (data, unused) =
+            postcard::take_from_bytes(&$buffer[1..]).map_err($crate::storage::postcard_error_to_serialization_error)?;
+        let size = $buffer.len() - unused.len();
+        Ok((Self::$variant(data), size))
+    }};
+}
+
 // Helper methods for StorageData
 impl StorageData {
     /// Get the StorageKey for this variant (used as the first byte in stored data)
@@ -241,9 +257,11 @@ impl StorageData {
             #[cfg(feature = "_ble")]
             Self::ActiveBleProfile(_) => StorageKeys::ActiveBleProfile as u32,
             #[cfg(feature = "host")]
-            Self::VialData(d) => match d {
+            Self::HostData(d) => match d {
                 KeymapData::Macro(_) => StorageKeys::MacroData as u32,
-                KeymapData::KeymapKey(_) => panic!("Error"),
+                KeymapData::KeymapKey(_) => {
+                    panic!("KeymapKey uses a computed key; use get_keymap_key() instead of StorageData::key()")
+                }
                 KeymapData::Encoder(_) => StorageKeys::EncoderKeys as u32,
                 KeymapData::Combo(_, _) => StorageKeys::ComboData as u32,
                 KeymapData::Fork(_, _) => StorageKeys::ForkData as u32,
@@ -271,7 +289,7 @@ impl Value<'_> for StorageData {
             #[cfg(feature = "_ble")]
             Self::ActiveBleProfile(d) => ser_storage_variant!(buffer, StorageKeys::ActiveBleProfile, d),
             #[cfg(feature = "host")]
-            Self::VialData(vial_data) => vial_data.serialize_into(buffer),
+            Self::HostData(host_data) => host_data.serialize_into(buffer),
         }
     }
 
@@ -286,51 +304,16 @@ impl Value<'_> for StorageData {
         let key = StorageKeys::from_u8(buffer[0]).ok_or(SerializationError::InvalidFormat)?;
 
         match key {
-            StorageKeys::StorageConfig => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::StorageConfig(data), size))
-            }
-            StorageKeys::LayoutConfig => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::LayoutConfig(data), size))
-            }
-            StorageKeys::BehaviorConfig => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::BehaviorConfig(data), size))
-            }
-            StorageKeys::ConnectionType => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::ConnectionType(data), size))
-            }
+            StorageKeys::StorageConfig => deser_storage_variant!(buffer, StorageConfig),
+            StorageKeys::LayoutConfig => deser_storage_variant!(buffer, LayoutConfig),
+            StorageKeys::BehaviorConfig => deser_storage_variant!(buffer, BehaviorConfig),
+            StorageKeys::ConnectionType => deser_storage_variant!(buffer, ConnectionType),
             #[cfg(all(feature = "_ble", feature = "split"))]
-            StorageKeys::PeerAddress => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::PeerAddress(data), size))
-            }
+            StorageKeys::PeerAddress => deser_storage_variant!(buffer, PeerAddress),
             #[cfg(feature = "_ble")]
-            StorageKeys::BleBondInfo => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::BondInfo(data), size))
-            }
+            StorageKeys::BleBondInfo => deser_storage_variant!(buffer, BondInfo),
             #[cfg(feature = "_ble")]
-            StorageKeys::ActiveBleProfile => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::ActiveBleProfile(data), size))
-            }
+            StorageKeys::ActiveBleProfile => deser_storage_variant!(buffer, ActiveBleProfile),
             #[cfg(feature = "host")]
             StorageKeys::KeymapConfig
             | StorageKeys::MacroData
@@ -338,8 +321,7 @@ impl Value<'_> for StorageData {
             | StorageKeys::EncoderKeys
             | StorageKeys::ForkData
             | StorageKeys::MorseData => {
-                // VialData keys handled by KeymapData
-                KeymapData::deserialize_from(buffer).map(|(data, size)| (Self::VialData(data), size))
+                KeymapData::deserialize_from(buffer).map(|(data, size)| (Self::HostData(data), size))
             }
         }
     }
@@ -357,25 +339,6 @@ pub(crate) struct LocalStorageConfig {
 pub(crate) struct LayoutConfig {
     default_layer: u8,
     layout_option: u32,
-}
-
-#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, postcard::experimental::max_size::MaxSize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) struct BehaviorConfig {
-    // The prior-idle-time in ms used for in flow tap
-    pub(crate) prior_idle_time: u16,
-    // Default morse profile containing mode, timeouts, and unilateral_tap settings
-    pub(crate) morse_default_profile: MorseProfile,
-
-    // Timeout time for combos
-    pub(crate) combo_timeout: u16,
-    // Timeout time for one-shot keys
-    pub(crate) one_shot_timeout: u16,
-    // Interval for tap actions
-    pub(crate) tap_interval: u16,
-    // Interval for tapping capslock.
-    // macOS has special processing of capslock, when tapping capslock, the tap interval should be another value
-    pub(crate) tap_capslock_interval: u16,
 }
 
 pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
@@ -412,14 +375,31 @@ pub struct Storage<
 
 /// Read out storage config, update and then save back.
 /// This macro applies to only some of the configs.
+///
+/// If the key is not yet stored, a warning is logged and the field is not
+/// persisted. This prevents silent data loss when the storage entry has not
+/// been initialised yet.
 macro_rules! update_storage_field {
     ($f: expr, $buf: expr, $key:ident, $field:ident) => {
-        if let Ok(Some(StorageData::$key(mut saved))) = $f.fetch_item($buf, &(StorageKeys::$key as u32)).await {
-            saved.$field = $field;
-            $f.store_item($buf, &(StorageKeys::$key as u32), &StorageData::$key(saved))
-                .await
-        } else {
-            Ok(())
+        match $f.fetch_item($buf, &(StorageKeys::$key as u32)).await {
+            Ok(Some(StorageData::$key(mut saved))) => {
+                saved.$field = $field;
+                $f.store_item($buf, &(StorageKeys::$key as u32), &StorageData::$key(saved))
+                    .await
+            }
+            Ok(None) => {
+                warn!(
+                    "update_storage_field: key {} not found in storage, skipping update of {}",
+                    stringify!($key),
+                    stringify!($field)
+                );
+                Ok(())
+            }
+            Ok(Some(_)) => {
+                error!("update_storage_field: unexpected variant for key {}", stringify!($key));
+                Ok(())
+            }
+            Err(e) => Err(e),
         }
     };
 }
@@ -532,33 +512,43 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     update_storage_field!(&mut self.flash, &mut self.buffer, LayoutConfig, layout_option)
                 }
                 FlashOperationMessage::Reset => self.flash.erase_all().await,
-                FlashOperationMessage::ResetLayout => {
-                    info!("Ignoring ResetLayout at runtime (handled at startup via clear_layout).");
-                    Ok(())
+                msg @ (FlashOperationMessage::ResetAndReboot | FlashOperationMessage::ResetLayout) => {
+                    // ResetLayout falls back to full erase (layout-only not yet
+                    // available at runtime). A proper implementation requires
+                    // passing the default keymap into the storage task.
+                    if matches!(msg, FlashOperationMessage::ResetLayout) {
+                        warn!("ResetLayout: falling back to full erase");
+                    }
+                    info!("Erasing storage and rebooting...");
+                    if let Err(e) = self.flash.erase_all().await {
+                        print_storage_error::<F>(e);
+                    }
+                    crate::boot::reboot_keyboard();
+                    Ok(()) // unreachable on embedded
                 }
                 FlashOperationMessage::DefaultLayer(default_layer) => {
                     // Read out layout options, update layer option and save back
                     update_storage_field!(&mut self.flash, &mut self.buffer, LayoutConfig, default_layer)
                 }
                 #[cfg(feature = "host")]
-                FlashOperationMessage::VialMessage(vial_data) => match vial_data {
+                FlashOperationMessage::HostMessage(host_data) => match host_data {
                     KeymapData::Macro(macro_data) => {
                         info!("Saving keyboard macro data");
                         self.flash
                             .store_item(
                                 &mut self.buffer,
                                 &(StorageKeys::MacroData as u32),
-                                &StorageData::VialData(KeymapData::Macro(macro_data)),
+                                &StorageData::HostData(KeymapData::Macro(macro_data)),
                             )
                             .await
                     }
                     KeymapData::KeymapKey(keymap_key) => {
                         let key = get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key);
-                        let data = StorageData::VialData(KeymapData::KeymapKey(keymap_key));
+                        let data = StorageData::HostData(KeymapData::KeymapKey(keymap_key));
                         self.flash.store_item(&mut self.buffer, &key, &data).await
                     }
                     KeymapData::Encoder(encoder_config) => {
-                        let data = StorageData::VialData(KeymapData::Encoder(encoder_config));
+                        let data = StorageData::HostData(KeymapData::Encoder(encoder_config));
                         let key = get_encoder_config_key::<NUM_ENCODER>(encoder_config.idx, encoder_config.layer);
                         self.flash.store_item(&mut self.buffer, &key, &data).await
                     }
@@ -568,7 +558,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                             .store_item(
                                 &mut self.buffer,
                                 &key,
-                                &StorageData::VialData(KeymapData::Combo(idx, config)),
+                                &StorageData::HostData(KeymapData::Combo(idx, config)),
                             )
                             .await
                     }
@@ -577,7 +567,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                             .store_item(
                                 &mut self.buffer,
                                 &get_fork_key(idx),
-                                &StorageData::VialData(KeymapData::Fork(idx, fork)),
+                                &StorageData::HostData(KeymapData::Fork(idx, fork)),
                             )
                             .await
                     }
@@ -586,7 +576,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                             .store_item(
                                 &mut self.buffer,
                                 &get_morse_key(id),
-                                &StorageData::VialData(KeymapData::Morse(id, morse)),
+                                &StorageData::HostData(KeymapData::Morse(id, morse)),
                             )
                             .await
                     }
@@ -668,6 +658,12 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 FlashOperationMessage::MorseDefaultProfile(morse_default_profile) => {
                     update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, morse_default_profile)
                 }
+                // When BLE is disabled, BLE-only variants (ClearSlot, ProfileInfo,
+                // ActiveBleProfile, PeerAddress) are either not compiled or not
+                // meaningful. This catch-all handles them safely.
+                // NOTE: if new FlashOperationMessage variants are added, ensure
+                // they have explicit match arms above — this catch-all should
+                // only cover BLE-gated variants.
                 #[cfg(not(feature = "_ble"))]
                 _ => Ok(()),
             } {
@@ -760,7 +756,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         .store_item(
                             &mut self.buffer,
                             &get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key),
-                            &StorageData::VialData(KeymapData::KeymapKey(keymap_key)),
+                            &StorageData::HostData(KeymapData::KeymapKey(keymap_key)),
                         )
                         .await
                         .map_err(|e| print_storage_error::<F>(e))?;
@@ -784,7 +780,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         .store_item(
                             &mut self.buffer,
                             &get_encoder_config_key::<NUM_ENCODER>(encoder.idx, encoder.layer),
-                            &StorageData::VialData(KeymapData::Encoder(encoder)),
+                            &StorageData::HostData(KeymapData::Encoder(encoder)),
                         )
                         .await
                         .map_err(|e| print_storage_error::<F>(e))?;
@@ -837,7 +833,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         .store_item(
                             &mut self.buffer,
                             &get_keymap_key::<ROW, COL, NUM_LAYER>(&keymap_key),
-                            &StorageData::VialData(KeymapData::KeymapKey(keymap_key)),
+                            &StorageData::HostData(KeymapData::KeymapKey(keymap_key)),
                         )
                         .await?;
                 }
@@ -853,7 +849,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         .store_item(
                             &mut self.buffer,
                             &get_encoder_config_key::<NUM_ENCODER>(idx as u8, layer as u8),
-                            &StorageData::VialData(KeymapData::Encoder(EncoderKeymap {
+                            &StorageData::HostData(KeymapData::Encoder(EncoderKeymap {
                                 idx: idx as u8,
                                 layer: layer as u8,
                                 action: *action,
@@ -873,8 +869,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .fetch_item(&mut self.buffer, &(StorageKeys::StorageConfig as u32))
             .await
         {
-            // if config.enable && config.build_hash == BUILD_HASH {
-            if config.enable {
+            if config.enable && config.build_hash == BUILD_HASH {
                 return true;
             }
         }

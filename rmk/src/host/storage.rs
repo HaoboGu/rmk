@@ -11,7 +11,7 @@ use crate::storage::{
     Storage, StorageData, StorageKeys, get_combo_key, get_fork_key, get_morse_key,
     postcard_error_to_serialization_error, print_storage_error,
 };
-use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, ser_storage_variant};
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, deser_storage_variant, ser_storage_variant};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -113,18 +113,8 @@ impl Value<'_> for KeymapData {
                 macro_data.copy_from_slice(&buffer[1..1 + MACRO_SPACE_SIZE]);
                 Ok((Self::Macro(macro_data), MACRO_SPACE_SIZE + 1))
             }
-            StorageKeys::KeymapConfig => {
-                let (keymap_key, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::KeymapKey(keymap_key), size))
-            }
-            StorageKeys::EncoderKeys => {
-                let (encoder, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::Encoder(encoder), size))
-            }
+            StorageKeys::KeymapConfig => deser_storage_variant!(buffer, KeymapKey),
+            StorageKeys::EncoderKeys => deser_storage_variant!(buffer, Encoder),
             StorageKeys::ComboData => {
                 let ((idx, combo), unused): ((u8, ComboConfig), _) =
                     postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
@@ -169,7 +159,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .map_err(|e| print_storage_error::<F>(e))?
         {
             match item {
-                StorageData::VialData(KeymapData::KeymapKey(key)) => {
+                StorageData::HostData(KeymapData::KeymapKey(key)) => {
                     let layer = key.layer as usize;
                     let row = key.row as usize;
                     let col = key.col as usize;
@@ -177,7 +167,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         data.keymap[layer][row][col] = key.action;
                     }
                 }
-                StorageData::VialData(KeymapData::Encoder(encoder)) => {
+                StorageData::HostData(KeymapData::Encoder(encoder)) => {
                     let idx = encoder.idx as usize;
                     let layer = encoder.layer as usize;
                     if layer < NUM_LAYER && idx < NUM_ENCODER {
@@ -198,7 +188,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .await
             .map_err(|e| print_storage_error::<F>(e))?;
 
-        if let Some(StorageData::VialData(KeymapData::Macro(data))) = read_data {
+        if let Some(StorageData::HostData(KeymapData::Macro(data))) = read_data {
             macro_cache.copy_from_slice(&data);
         }
 
@@ -216,7 +206,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 .await
                 .map_err(|e| print_storage_error::<F>(e))?;
 
-            if let Some(StorageData::VialData(KeymapData::Combo(_idx, config))) = read_data {
+            if let Some(StorageData::HostData(KeymapData::Combo(_idx, config))) = read_data {
                 debug!("Read combo config: {:?}", config);
                 *item = Some(Combo::new(config));
             }
@@ -234,7 +224,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 .await
                 .map_err(|e| print_storage_error::<F>(e))?;
 
-            if let Some(StorageData::VialData(KeymapData::Fork(_idx, fork))) = read_data {
+            if let Some(StorageData::HostData(KeymapData::Fork(_idx, fork))) = read_data {
                 *item = fork;
             }
         }
@@ -251,7 +241,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 .await
                 .map_err(|e| print_storage_error::<F>(e))?;
 
-            if let Some(StorageData::VialData(KeymapData::Morse(_, morse))) = read_data {
+            if let Some(StorageData::HostData(KeymapData::Morse(_, morse))) = read_data {
                 *item = morse;
             }
         }
@@ -281,7 +271,7 @@ mod tests {
 
         // Serialization
         let mut buffer = [0u8; 64];
-        let storage_data = StorageData::VialData(KeymapData::Morse(0, morse.clone()));
+        let storage_data = StorageData::HostData(KeymapData::Morse(0, morse.clone()));
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
         // Deserialization
@@ -289,7 +279,7 @@ mod tests {
 
         // Validation
         match deserialized_data {
-            (StorageData::VialData(KeymapData::Morse(_, deserialized_morse)), _) => {
+            (StorageData::HostData(KeymapData::Morse(_, deserialized_morse)), _) => {
                 // actions
                 assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
                 for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
@@ -311,7 +301,7 @@ mod tests {
 
         // Serialization
         let mut buffer = [0u8; 64];
-        let storage_data = StorageData::VialData(KeymapData::Morse(0, morse.clone()));
+        let storage_data = StorageData::HostData(KeymapData::Morse(0, morse.clone()));
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
         // Deserialization
@@ -319,7 +309,7 @@ mod tests {
 
         // Validation
         match deserialized_data {
-            (StorageData::VialData(KeymapData::Morse(_, deserialized_morse)), _) => {
+            (StorageData::HostData(KeymapData::Morse(_, deserialized_morse)), _) => {
                 // actions
                 assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
                 for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
@@ -364,7 +354,7 @@ mod tests {
 
         // Serialization
         let mut buffer = [0u8; 64];
-        let storage_data = StorageData::VialData(KeymapData::Morse(0, morse.clone()));
+        let storage_data = StorageData::HostData(KeymapData::Morse(0, morse.clone()));
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
         // Deserialization
@@ -372,7 +362,7 @@ mod tests {
 
         // Validation
         match deserialized_data {
-            (StorageData::VialData(KeymapData::Morse(_, deserialized_morse)), _) => {
+            (StorageData::HostData(KeymapData::Morse(_, deserialized_morse)), _) => {
                 // actions
                 assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
                 for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {

@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+#[cfg(feature = "vial")]
 mod vial;
 #[macro_use]
 mod macros;
@@ -23,9 +24,9 @@ use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::builtin_processor::led_indicator::KeyboardIndicatorProcessor;
-use rmk::config::{
-    BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
-};
+use rmk::config::{BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig};
+#[cfg(feature = "vial")]
+use rmk::config::VialConfig;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::event::*;
 use rmk::futures::future::{join4, join5};
@@ -39,6 +40,7 @@ use rmk::split::ble::central::{read_peripheral_addresses, scan_peripherals};
 use rmk::split::central::run_peripheral_manager;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
+#[cfg(feature = "vial")]
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
 
@@ -169,6 +171,7 @@ async fn main(spawner: Spawner) {
         product_name: "RMK Keyboard",
         serial_number: "vial:f64c2b3c:000001",
     };
+    #[cfg(feature = "vial")]
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]);
     let ble_battery_config = BleBatteryConfig::new(Some(is_charging_pin), true, None, false);
     let storage_config = StorageConfig {
@@ -178,6 +181,7 @@ async fn main(spawner: Spawner) {
     };
     let rmk_config = RmkConfig {
         device_config: keyboard_device_config,
+        #[cfg(feature = "vial")]
         vial_config,
         ble_battery_config,
         storage_config,
@@ -266,7 +270,14 @@ async fn main(spawner: Spawner) {
         keyboard.run(),
         join5(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
-            run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+            run_rmk(
+                #[cfg(any(feature = "vial", feature = "rmk_protocol"))]
+                &keymap,
+                driver,
+                &stack,
+                &mut storage,
+                rmk_config,
+            ),
             scan_peripherals(&stack, &peripheral_addrs),
             capslock_led.run(),
             peripheral_battery_monitor.run(),

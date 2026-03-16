@@ -15,12 +15,12 @@ use {
 };
 
 use super::ble_server::CCCD_TABLE_SIZE;
+use super::{BleState, BleStatus};
 use crate::NUM_BLE_PROFILE;
 use crate::ble::BLE_STATUS;
 use crate::channel::BLE_PROFILE_CHANNEL;
 use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, ConnectionType, publish_event};
 use crate::state::CONNECTION_TYPE;
-use super::{BleState, BleStatus};
 
 pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal::new();
 pub(crate) static UPDATED_CCCD_TABLE: Signal<crate::RawMutex, CccdTable<CCCD_TABLE_SIZE>> = Signal::new();
@@ -435,8 +435,9 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                         BleProfileAction::ToggleConnection => {
                             let current: ConnectionType = CONNECTION_TYPE.load(Ordering::SeqCst).into();
                             let updated = match current {
-                                ConnectionType::Usb => ConnectionType::Ble,
                                 ConnectionType::Ble => ConnectionType::Usb,
+                                // Usb and any future unknown variant toggle to Ble
+                                _ => ConnectionType::Ble,
                             };
 
                             CONNECTION_TYPE.store(updated.into(), Ordering::SeqCst);

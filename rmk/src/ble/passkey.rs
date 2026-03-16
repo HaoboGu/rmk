@@ -69,7 +69,7 @@ impl PasskeyEntryState {
         }
     }
 
-    pub fn is_active(&self) ->  bool {
+    pub fn is_active(&self) -> bool {
         self.active
     }
 
@@ -203,167 +203,200 @@ pub fn hid_keycode_to_digit(k: HidKeyCode) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
-use super::*;
-use embassy_futures::block_on;
+    use super::*;
+    use embassy_futures::block_on;
 
-#[test]
-fn test_passkey_entry_state_basic() {
-    let mut state = PasskeyEntryState::new();
-    assert_eq!(state.digit_count(), 0);
-    assert!(!state.is_complete());
+    #[test]
+    fn test_passkey_entry_state_basic() {
+        let mut state = PasskeyEntryState::new();
+        assert_eq!(state.digit_count(), 0);
+        assert!(!state.is_complete());
 
-    // Add digits 1-6
-    for d in 1..=6 {
-        assert!(state.add_digit(d));
+        // Add digits 1-6
+        for d in 1..=6 {
+            assert!(state.add_digit(d));
+        }
+        assert!(state.is_complete());
+        assert_eq!(state.to_passkey(), 123456);
+
+        // Can't add 7th digit
+        assert!(!state.add_digit(7));
+        assert_eq!(state.to_passkey(), 123456);
     }
-    assert!(state.is_complete());
-    assert_eq!(state.to_passkey(), 123456);
 
-    // Can't add 7th digit
-    assert!(!state.add_digit(7));
-    assert_eq!(state.to_passkey(), 123456);
-}
+    #[test]
+    fn test_passkey_entry_state_remove() {
+        let mut state = PasskeyEntryState::new();
+        assert!(!state.remove_digit()); // empty
 
-#[test]
-fn test_passkey_entry_state_remove() {
-    let mut state = PasskeyEntryState::new();
-    assert!(!state.remove_digit()); // empty
+        state.add_digit(1);
+        state.add_digit(2);
+        state.add_digit(3);
+        assert_eq!(state.to_passkey(), 123);
 
-    state.add_digit(1);
-    state.add_digit(2);
-    state.add_digit(3);
-    assert_eq!(state.to_passkey(), 123);
-
-    assert!(state.remove_digit());
-    assert_eq!(state.to_passkey(), 12);
-    assert_eq!(state.digit_count(), 2);
-}
-
-#[test]
-fn test_passkey_entry_state_reset() {
-    let mut state = PasskeyEntryState::new();
-    state.add_digit(9);
-    state.add_digit(8);
-    state.reset();
-    assert_eq!(state.digit_count(), 0);
-    assert_eq!(state.to_passkey(), 0);
-}
-
-#[test]
-fn test_passkey_with_zeros() {
-    let mut state = PasskeyEntryState::new();
-    // 007890
-    state.add_digit(0);
-    state.add_digit(0);
-    state.add_digit(7);
-    state.add_digit(8);
-    state.add_digit(9);
-    state.add_digit(0);
-    assert_eq!(state.to_passkey(), 7890);
-}
-
-#[test]
-fn test_handle_key_digit() {
-    let mut state = PasskeyEntryState::new();
-    assert_eq!(state.handle_key(HidKeyCode::Kc1), PasskeyAction::DigitAdded(1));
-    assert_eq!(state.handle_key(HidKeyCode::Kp5), PasskeyAction::DigitAdded(5));
-    assert_eq!(state.digit_count(), 2);
-}
-
-#[test]
-fn test_handle_key_submit() {
-    let mut state = PasskeyEntryState::new();
-    for d in [HidKeyCode::Kc1, HidKeyCode::Kc2, HidKeyCode::Kc3, HidKeyCode::Kc4, HidKeyCode::Kc5, HidKeyCode::Kc6] {
-        state.handle_key(d);
+        assert!(state.remove_digit());
+        assert_eq!(state.to_passkey(), 12);
+        assert_eq!(state.digit_count(), 2);
     }
-    assert_eq!(state.handle_key(HidKeyCode::Enter), PasskeyAction::Submitted(123456));
-    assert_eq!(state.digit_count(), 0); // reset after submit
-}
 
-#[test]
-fn test_handle_key_incomplete() {
-    let mut state = PasskeyEntryState::new();
-    state.handle_key(HidKeyCode::Kc1);
-    assert_eq!(state.handle_key(HidKeyCode::Enter), PasskeyAction::Incomplete);
-}
-
-#[test]
-fn test_handle_key_cancel() {
-    let mut state = PasskeyEntryState::new();
-    state.handle_key(HidKeyCode::Kc1);
-    state.handle_key(HidKeyCode::Kc2);
-    assert_eq!(state.handle_key(HidKeyCode::Escape), PasskeyAction::Cancelled);
-    assert_eq!(state.digit_count(), 0);
-}
-
-#[test]
-fn test_handle_key_backspace() {
-    let mut state = PasskeyEntryState::new();
-    state.handle_key(HidKeyCode::Kc1);
-    state.handle_key(HidKeyCode::Kc2);
-    assert_eq!(state.handle_key(HidKeyCode::Backspace), PasskeyAction::Backspaced);
-    assert_eq!(state.digit_count(), 1);
-    // Backspace on empty
-    state.handle_key(HidKeyCode::Backspace);
-    assert_eq!(state.handle_key(HidKeyCode::Backspace), PasskeyAction::Ignored);
-}
-
-#[test]
-fn test_handle_key_buffer_full() {
-    let mut state = PasskeyEntryState::new();
-    for d in [HidKeyCode::Kc1, HidKeyCode::Kc2, HidKeyCode::Kc3, HidKeyCode::Kc4, HidKeyCode::Kc5, HidKeyCode::Kc6] {
-        state.handle_key(d);
+    #[test]
+    fn test_passkey_entry_state_reset() {
+        let mut state = PasskeyEntryState::new();
+        state.add_digit(9);
+        state.add_digit(8);
+        state.reset();
+        assert_eq!(state.digit_count(), 0);
+        assert_eq!(state.to_passkey(), 0);
     }
-    assert_eq!(state.handle_key(HidKeyCode::Kc7), PasskeyAction::BufferFull);
-}
 
-#[test]
-fn test_handle_key_ignored() {
-    let mut state = PasskeyEntryState::new();
-    assert_eq!(state.handle_key(HidKeyCode::A), PasskeyAction::Ignored);
-}
-
-#[test]
-fn test_handle_key_kp_enter() {
-    let mut state = PasskeyEntryState::new();
-    for d in [HidKeyCode::Kp1, HidKeyCode::Kp2, HidKeyCode::Kp3, HidKeyCode::Kp4, HidKeyCode::Kp5, HidKeyCode::Kp6] {
-        state.handle_key(d);
+    #[test]
+    fn test_passkey_with_zeros() {
+        let mut state = PasskeyEntryState::new();
+        // 007890
+        state.add_digit(0);
+        state.add_digit(0);
+        state.add_digit(7);
+        state.add_digit(8);
+        state.add_digit(9);
+        state.add_digit(0);
+        assert_eq!(state.to_passkey(), 7890);
     }
-    assert_eq!(state.handle_key(HidKeyCode::KpEnter), PasskeyAction::Submitted(123456));
-}
 
-#[test]
-fn test_hid_keycode_to_digit_all() {
-    let keycodes = [
-        (HidKeyCode::Kc0, 0), (HidKeyCode::Kc1, 1), (HidKeyCode::Kc2, 2),
-        (HidKeyCode::Kc3, 3), (HidKeyCode::Kc4, 4), (HidKeyCode::Kc5, 5),
-        (HidKeyCode::Kc6, 6), (HidKeyCode::Kc7, 7), (HidKeyCode::Kc8, 8),
-        (HidKeyCode::Kc9, 9),
-        (HidKeyCode::Kp0, 0), (HidKeyCode::Kp1, 1), (HidKeyCode::Kp2, 2),
-        (HidKeyCode::Kp3, 3), (HidKeyCode::Kp4, 4), (HidKeyCode::Kp5, 5),
-        (HidKeyCode::Kp6, 6), (HidKeyCode::Kp7, 7), (HidKeyCode::Kp8, 8),
-        (HidKeyCode::Kp9, 9),
-    ];
-    for (kc, expected) in keycodes {
-        assert_eq!(hid_keycode_to_digit(kc), Some(expected), "Failed for {:?}", kc);
+    #[test]
+    fn test_handle_key_digit() {
+        let mut state = PasskeyEntryState::new();
+        assert_eq!(state.handle_key(HidKeyCode::Kc1), PasskeyAction::DigitAdded(1));
+        assert_eq!(state.handle_key(HidKeyCode::Kp5), PasskeyAction::DigitAdded(5));
+        assert_eq!(state.digit_count(), 2);
     }
-    assert_eq!(hid_keycode_to_digit(HidKeyCode::A), None);
-}
 
-#[test]
-fn test_passkey_session_begin_order_allows_immediate_response() {
-    // Simulate stale data from a previous session.
-    PASSKEY_RESPONSE.signal(Some(111111));
+    #[test]
+    fn test_handle_key_submit() {
+        let mut state = PasskeyEntryState::new();
+        for d in [
+            HidKeyCode::Kc1,
+            HidKeyCode::Kc2,
+            HidKeyCode::Kc3,
+            HidKeyCode::Kc4,
+            HidKeyCode::Kc5,
+            HidKeyCode::Kc6,
+        ] {
+            state.handle_key(d);
+        }
+        assert_eq!(state.handle_key(HidKeyCode::Enter), PasskeyAction::Submitted(123456));
+        assert_eq!(state.digit_count(), 0); // reset after submit
+    }
 
-    begin_passkey_entry_session();
-    assert!(PASSKEY_ENTRY_MODE.load(Ordering::Acquire));
+    #[test]
+    fn test_handle_key_incomplete() {
+        let mut state = PasskeyEntryState::new();
+        state.handle_key(HidKeyCode::Kc1);
+        assert_eq!(state.handle_key(HidKeyCode::Enter), PasskeyAction::Incomplete);
+    }
 
-    // Simulate immediate keyboard response right after session begin.
-    PASSKEY_RESPONSE.signal(Some(222222));
-    let got = block_on(async { PASSKEY_RESPONSE.wait().await });
-    assert_eq!(got, Some(222222));
+    #[test]
+    fn test_handle_key_cancel() {
+        let mut state = PasskeyEntryState::new();
+        state.handle_key(HidKeyCode::Kc1);
+        state.handle_key(HidKeyCode::Kc2);
+        assert_eq!(state.handle_key(HidKeyCode::Escape), PasskeyAction::Cancelled);
+        assert_eq!(state.digit_count(), 0);
+    }
 
-    end_passkey_entry_session();
-    assert!(!PASSKEY_ENTRY_MODE.load(Ordering::Acquire));
-}
+    #[test]
+    fn test_handle_key_backspace() {
+        let mut state = PasskeyEntryState::new();
+        state.handle_key(HidKeyCode::Kc1);
+        state.handle_key(HidKeyCode::Kc2);
+        assert_eq!(state.handle_key(HidKeyCode::Backspace), PasskeyAction::Backspaced);
+        assert_eq!(state.digit_count(), 1);
+        // Backspace on empty
+        state.handle_key(HidKeyCode::Backspace);
+        assert_eq!(state.handle_key(HidKeyCode::Backspace), PasskeyAction::Ignored);
+    }
+
+    #[test]
+    fn test_handle_key_buffer_full() {
+        let mut state = PasskeyEntryState::new();
+        for d in [
+            HidKeyCode::Kc1,
+            HidKeyCode::Kc2,
+            HidKeyCode::Kc3,
+            HidKeyCode::Kc4,
+            HidKeyCode::Kc5,
+            HidKeyCode::Kc6,
+        ] {
+            state.handle_key(d);
+        }
+        assert_eq!(state.handle_key(HidKeyCode::Kc7), PasskeyAction::BufferFull);
+    }
+
+    #[test]
+    fn test_handle_key_ignored() {
+        let mut state = PasskeyEntryState::new();
+        assert_eq!(state.handle_key(HidKeyCode::A), PasskeyAction::Ignored);
+    }
+
+    #[test]
+    fn test_handle_key_kp_enter() {
+        let mut state = PasskeyEntryState::new();
+        for d in [
+            HidKeyCode::Kp1,
+            HidKeyCode::Kp2,
+            HidKeyCode::Kp3,
+            HidKeyCode::Kp4,
+            HidKeyCode::Kp5,
+            HidKeyCode::Kp6,
+        ] {
+            state.handle_key(d);
+        }
+        assert_eq!(state.handle_key(HidKeyCode::KpEnter), PasskeyAction::Submitted(123456));
+    }
+
+    #[test]
+    fn test_hid_keycode_to_digit_all() {
+        let keycodes = [
+            (HidKeyCode::Kc0, 0),
+            (HidKeyCode::Kc1, 1),
+            (HidKeyCode::Kc2, 2),
+            (HidKeyCode::Kc3, 3),
+            (HidKeyCode::Kc4, 4),
+            (HidKeyCode::Kc5, 5),
+            (HidKeyCode::Kc6, 6),
+            (HidKeyCode::Kc7, 7),
+            (HidKeyCode::Kc8, 8),
+            (HidKeyCode::Kc9, 9),
+            (HidKeyCode::Kp0, 0),
+            (HidKeyCode::Kp1, 1),
+            (HidKeyCode::Kp2, 2),
+            (HidKeyCode::Kp3, 3),
+            (HidKeyCode::Kp4, 4),
+            (HidKeyCode::Kp5, 5),
+            (HidKeyCode::Kp6, 6),
+            (HidKeyCode::Kp7, 7),
+            (HidKeyCode::Kp8, 8),
+            (HidKeyCode::Kp9, 9),
+        ];
+        for (kc, expected) in keycodes {
+            assert_eq!(hid_keycode_to_digit(kc), Some(expected), "Failed for {:?}", kc);
+        }
+        assert_eq!(hid_keycode_to_digit(HidKeyCode::A), None);
+    }
+
+    #[test]
+    fn test_passkey_session_begin_order_allows_immediate_response() {
+        // Simulate stale data from a previous session.
+        PASSKEY_RESPONSE.signal(Some(111111));
+
+        begin_passkey_entry_session();
+        assert!(PASSKEY_ENTRY_MODE.load(Ordering::Acquire));
+
+        // Simulate immediate keyboard response right after session begin.
+        PASSKEY_RESPONSE.signal(Some(222222));
+        let got = block_on(async { PASSKEY_RESPONSE.wait().await });
+        assert_eq!(got, Some(222222));
+
+        end_passkey_entry_session();
+        assert!(!PASSKEY_ENTRY_MODE.load(Ordering::Acquire));
+    }
 }
