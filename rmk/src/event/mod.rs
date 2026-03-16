@@ -27,7 +27,7 @@ mod input;
 mod split;
 mod state;
 
-pub use action::UserAction;
+pub use action::ActionEvent;
 pub use battery::{BatteryAdcEvent, BatteryStateEvent, ChargingStateEvent};
 #[cfg(feature = "_ble")]
 pub use connection::{BleProfileChangeEvent, BleStateChangeEvent};
@@ -63,6 +63,9 @@ pub trait EventSubscriber {
 /// Trait for events that can be published.
 pub trait PublishableEvent: Clone + Send {
     type Publisher: EventPublisher<Event = Self>;
+    /// If this is true, `publish_event` will not do anything.
+    /// This is used for events that are not subscribed to by anything, to exclude the publishing from compiled code.
+    const PUBLISH_IS_NOOP: bool;
 
     fn publisher() -> Self::Publisher;
 }
@@ -168,12 +171,16 @@ impl<'a, M: RawMutex, T: Clone, const N: usize> EventSubscriber for channel::Rec
 ///
 /// Example: `publish_event(KeyboardEvent::key(0, 0, true))`
 pub fn publish_event<E: PublishableEvent>(e: E) {
-    E::publisher().publish(e);
+    if !E::PUBLISH_IS_NOOP {
+        E::publisher().publish(e);
+    }
 }
 
 /// Publish an event with backpressure (waits if buffer full)
 ///
 /// Example: `publish_event_async(KeyboardEvent::key(0, 0, true)).await`
 pub async fn publish_event_async<E: AsyncPublishableEvent>(e: E) {
-    E::publisher_async().publish_async(e).await;
+    if !E::PUBLISH_IS_NOOP {
+        E::publisher_async().publish_async(e).await;
+    }
 }

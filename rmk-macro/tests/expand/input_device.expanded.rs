@@ -79,6 +79,9 @@ impl ::rmk::event::EventPublisher for NrfAdcEventPublisher {
 }
 impl ::rmk::event::PublishableEvent for NrfAdcEvent {
     type Publisher = NrfAdcEventPublisher;
+    const PUBLISH_IS_NOOP: bool = true
+        && (<PointingEvent as ::rmk::event::PublishableEvent>::PUBLISH_IS_NOOP)
+        && (<BatteryEvent as ::rmk::event::PublishableEvent>::PUBLISH_IS_NOOP);
     fn publisher() -> Self::Publisher {
         NrfAdcEventPublisher
     }

@@ -40,6 +40,7 @@ impl ::rmk::event::PublishableEvent for BatteryEvent {
         BatteryEvent,
         { 8 },
     >;
+    const PUBLISH_IS_NOOP: bool = false;
     fn publisher() -> Self::Publisher {
         BATTERY_EVENT_EVENT_CHANNEL.sender()
     }
@@ -110,6 +111,7 @@ impl ::rmk::event::PublishableEvent for PointingEvent {
         PointingEvent,
         { 8 },
     >;
+    const PUBLISH_IS_NOOP: bool = false;
     fn publisher() -> Self::Publisher {
         POINTING_EVENT_EVENT_CHANNEL.sender()
     }
@@ -163,6 +165,9 @@ impl ::rmk::event::EventPublisher for MultiSensorEventPublisher {
 }
 impl ::rmk::event::PublishableEvent for MultiSensorEvent {
     type Publisher = MultiSensorEventPublisher;
+    const PUBLISH_IS_NOOP: bool = true
+        && (<BatteryEvent as ::rmk::event::PublishableEvent>::PUBLISH_IS_NOOP)
+        && (<PointingEvent as ::rmk::event::PublishableEvent>::PUBLISH_IS_NOOP);
     fn publisher() -> Self::Publisher {
         MultiSensorEventPublisher
     }
