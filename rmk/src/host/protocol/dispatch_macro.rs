@@ -182,90 +182,91 @@ macro_rules! define_dispatch {
     //////////////////////////////////////////////////////////////////////////////
     // @strip_generics TT-MUNCHER
     //
-    // Processes raw generic params from [...] into three lists:
-    //   decl_gen  - declaration form (with bounds): 'a, Tx: WireTx, const ROW: usize,
-    //   use_gen   - usage form (names only):        'a, Tx, ROW,
-    //   phantom   - PhantomData entries:             &'a (), Tx,
+    // Processes raw generic params from [...] into four lists:
+    //   alias_gen - declaration form for the public alias: 'a, Tx, const ROW: usize,
+    //   impl_gen  - declaration form for the hidden impl:  'a, Tx: WireTx, const ROW: usize,
+    //   use_gen   - usage form (names only):               'a, Tx, ROW,
+    //   phantom   - PhantomData entries:                    &'a (), Tx,
     //////////////////////////////////////////////////////////////////////////////
 
     // Done: no more tokens
-    (@strip_generics [$($cb:tt)*] [$($decl:tt)*] [$($use:tt)*] [$($phantom:tt)*]) => {
-        $crate::define_dispatch! { @main [$($cb)*] [$($decl)*] [$($use)*] [$($phantom)*] }
+    (@strip_generics [$($cb:tt)*] [$($alias:tt)*] [$($impl:tt)*] [$($use:tt)*] [$($phantom:tt)*]) => {
+        $crate::define_dispatch! { @main [$($cb)*] [$($alias)*] [$($impl)*] [$($use)*] [$($phantom)*] }
     };
 
     // Lifetime with trailing comma and more
-    (@strip_generics [$($cb:tt)*] [$($d:tt)*] [$($u:tt)*] [$($p:tt)*]
+    (@strip_generics [$($cb:tt)*] [$($a:tt)*] [$($i:tt)*] [$($u:tt)*] [$($p:tt)*]
         $lt:lifetime , $($rest:tt)*
     ) => {
         $crate::define_dispatch! { @strip_generics [$($cb)*]
-            [$($d)* $lt,]  [$($u)* $lt,]  [$($p)* & $lt (),]
+            [$($a)* $lt,]  [$($i)* $lt,]  [$($u)* $lt,]  [$($p)* & $lt (),]
             $($rest)*
         }
     };
 
     // Lifetime, last param (no trailing comma)
-    (@strip_generics [$($cb:tt)*] [$($d:tt)*] [$($u:tt)*] [$($p:tt)*]
+    (@strip_generics [$($cb:tt)*] [$($a:tt)*] [$($i:tt)*] [$($u:tt)*] [$($p:tt)*]
         $lt:lifetime
     ) => {
         $crate::define_dispatch! { @strip_generics [$($cb)*]
-            [$($d)* $lt,]  [$($u)* $lt,]  [$($p)* & $lt (),]
+            [$($a)* $lt,]  [$($i)* $lt,]  [$($u)* $lt,]  [$($p)* & $lt (),]
         }
     };
 
     // Const generic with trailing comma and more
-    (@strip_generics [$($cb:tt)*] [$($d:tt)*] [$($u:tt)*] [$($p:tt)*]
+    (@strip_generics [$($cb:tt)*] [$($a:tt)*] [$($i:tt)*] [$($u:tt)*] [$($p:tt)*]
         const $name:ident : $ty:ty , $($rest:tt)*
     ) => {
         $crate::define_dispatch! { @strip_generics [$($cb)*]
-            [$($d)* const $name: $ty,]  [$($u)* $name,]  [$($p)*]
+            [$($a)* const $name: $ty,]  [$($i)* const $name: $ty,]  [$($u)* $name,]  [$($p)*]
             $($rest)*
         }
     };
 
     // Const generic, last param
-    (@strip_generics [$($cb:tt)*] [$($d:tt)*] [$($u:tt)*] [$($p:tt)*]
+    (@strip_generics [$($cb:tt)*] [$($a:tt)*] [$($i:tt)*] [$($u:tt)*] [$($p:tt)*]
         const $name:ident : $ty:ty
     ) => {
         $crate::define_dispatch! { @strip_generics [$($cb)*]
-            [$($d)* const $name: $ty,]  [$($u)* $name,]  [$($p)*]
+            [$($a)* const $name: $ty,]  [$($i)* const $name: $ty,]  [$($u)* $name,]  [$($p)*]
         }
     };
 
     // Type param with trait bound, trailing comma and more
-    (@strip_generics [$($cb:tt)*] [$($d:tt)*] [$($u:tt)*] [$($p:tt)*]
+    (@strip_generics [$($cb:tt)*] [$($a:tt)*] [$($i:tt)*] [$($u:tt)*] [$($p:tt)*]
         $name:ident : $bound:path , $($rest:tt)*
     ) => {
         $crate::define_dispatch! { @strip_generics [$($cb)*]
-            [$($d)* $name: $bound,]  [$($u)* $name,]  [$($p)* $name,]
+            [$($a)* $name,]  [$($i)* $name: $bound,]  [$($u)* $name,]  [$($p)* $name,]
             $($rest)*
         }
     };
 
     // Type param with trait bound, last param
-    (@strip_generics [$($cb:tt)*] [$($d:tt)*] [$($u:tt)*] [$($p:tt)*]
+    (@strip_generics [$($cb:tt)*] [$($a:tt)*] [$($i:tt)*] [$($u:tt)*] [$($p:tt)*]
         $name:ident : $bound:path
     ) => {
         $crate::define_dispatch! { @strip_generics [$($cb)*]
-            [$($d)* $name: $bound,]  [$($u)* $name,]  [$($p)* $name,]
+            [$($a)* $name,]  [$($i)* $name: $bound,]  [$($u)* $name,]  [$($p)* $name,]
         }
     };
 
     // Bare type param, trailing comma and more
-    (@strip_generics [$($cb:tt)*] [$($d:tt)*] [$($u:tt)*] [$($p:tt)*]
+    (@strip_generics [$($cb:tt)*] [$($a:tt)*] [$($i:tt)*] [$($u:tt)*] [$($p:tt)*]
         $name:ident , $($rest:tt)*
     ) => {
         $crate::define_dispatch! { @strip_generics [$($cb)*]
-            [$($d)* $name,]  [$($u)* $name,]  [$($p)* $name,]
+            [$($a)* $name,]  [$($i)* $name,]  [$($u)* $name,]  [$($p)* $name,]
             $($rest)*
         }
     };
 
     // Bare type param, last param
-    (@strip_generics [$($cb:tt)*] [$($d:tt)*] [$($u:tt)*] [$($p:tt)*]
+    (@strip_generics [$($cb:tt)*] [$($a:tt)*] [$($i:tt)*] [$($u:tt)*] [$($p:tt)*]
         $name:ident
     ) => {
         $crate::define_dispatch! { @strip_generics [$($cb)*]
-            [$($d)* $name,]  [$($u)* $name,]  [$($p)* $name,]
+            [$($a)* $name,]  [$($i)* $name,]  [$($u)* $name,]  [$($p)* $name,]
         }
     };
 
@@ -285,7 +286,8 @@ macro_rules! define_dispatch {
             ($($topic_in:ty | $tp_flavor:tt | $tp_handler:ident)*);
             $topic_out_list:path;
         ]
-        [$($decl_gen:tt)*]
+        [$($alias_gen:tt)*]
+        [$($impl_gen:tt)*]
         [$($use_gen:tt)*]
         [$($phantom:tt)*]
     ) => {
@@ -451,19 +453,19 @@ macro_rules! define_dispatch {
         // macro-time capabilities. I'm very open to other suggestions that achieve the
         // same outcome.
         #[doc=concat!("This defines the postcard-rpc app implementation for ", stringify!($app_name))]
-        pub type $app_name<$($decl_gen)*> = impls::$app_name<$($use_gen)* { sizer::NEEDED_SZ }>;
+        pub type $app_name<$($alias_gen)*> = impls::$app_name<$($use_gen)* { sizer::NEEDED_SZ }>;
 
         mod impls {
             use super::*;
 
-            pub struct $app_name<$($decl_gen)* const N: usize> {
+            pub struct $app_name<$($impl_gen)* const N: usize> {
                 pub context: $context_ty,
                 pub spawn: $spawn_impl,
                 pub device_map: &'static ::postcard_rpc::DeviceMap,
                 _phantom: core::marker::PhantomData<($($phantom)*)>,
             }
 
-            impl<$($decl_gen)* const N: usize> $app_name<$($use_gen)* N> {
+            impl<$($impl_gen)* const N: usize> $app_name<$($use_gen)* N> {
                 /// Create a new instance of the dispatcher
                 pub fn new(
                     context: $context_ty,
@@ -505,28 +507,28 @@ macro_rules! define_dispatch {
             }
 
             $crate::define_dispatch! {
-                @matcher [$($decl_gen)*] [$($use_gen)*]
+                @matcher [$($impl_gen)*] [$($use_gen)*]
                 1 $app_name $tx_impl; $spawn_fn ::postcard_rpc::Key1; ::postcard_rpc::header::VarKeyKind::Key1;
                 REQ_KEY1 / TOPIC_KEY1 = u8;
                 ($($endpoint | $ep_flavor | $ep_handler)*)
                 ($($topic_in | $tp_flavor | $tp_handler)*)
             }
             $crate::define_dispatch! {
-                @matcher [$($decl_gen)*] [$($use_gen)*]
+                @matcher [$($impl_gen)*] [$($use_gen)*]
                 2 $app_name $tx_impl; $spawn_fn ::postcard_rpc::Key2; ::postcard_rpc::header::VarKeyKind::Key2;
                 REQ_KEY2 / TOPIC_KEY2 = [u8; 2];
                 ($($endpoint | $ep_flavor | $ep_handler)*)
                 ($($topic_in | $tp_flavor | $tp_handler)*)
             }
             $crate::define_dispatch! {
-                @matcher [$($decl_gen)*] [$($use_gen)*]
+                @matcher [$($impl_gen)*] [$($use_gen)*]
                 4 $app_name $tx_impl; $spawn_fn ::postcard_rpc::Key4; ::postcard_rpc::header::VarKeyKind::Key4;
                 REQ_KEY4 / TOPIC_KEY4 = [u8; 4];
                 ($($endpoint | $ep_flavor | $ep_handler)*)
                 ($($topic_in | $tp_flavor | $tp_handler)*)
             }
             $crate::define_dispatch! {
-                @matcher [$($decl_gen)*] [$($use_gen)*]
+                @matcher [$($impl_gen)*] [$($use_gen)*]
                 8 $app_name $tx_impl; $spawn_fn ::postcard_rpc::Key; ::postcard_rpc::header::VarKeyKind::Key8;
                 REQ_KEY / TOPIC_KEY = [u8; 8];
                 ($($endpoint | $ep_flavor | $ep_handler)*)
@@ -581,7 +583,7 @@ macro_rules! define_dispatch {
                 ($($topic_in | $tp_flavor | $tp_handler)*);
                 $topic_out_list;
             ]
-            [] [] []
+            [] [] [] []
             $($raw_gen)*
         }
     };
@@ -620,7 +622,7 @@ macro_rules! define_dispatch {
                 ();
                 $topic_out_list;
             ]
-            [] [] []
+            [] [] [] []
             $($raw_gen)*
         }
     };
@@ -661,7 +663,7 @@ macro_rules! define_dispatch {
                 ($($topic_in | $tp_flavor | $tp_handler)*);
                 $topic_out_list;
             ]
-            [] [] []
+            [] [] [] []
             $($raw_gen)*
         }
     };
@@ -698,7 +700,7 @@ macro_rules! define_dispatch {
                 ();
                 $topic_out_list;
             ]
-            [] [] []
+            [] [] [] []
             $($raw_gen)*
         }
     };
@@ -741,7 +743,7 @@ macro_rules! define_dispatch {
                 ($($topic_in | $tp_flavor | $tp_handler)*);
                 $topic_out_list;
             ]
-            [] [] []
+            [] [] [] []
         }
     };
 
@@ -781,7 +783,7 @@ macro_rules! define_dispatch {
                 ($($topic_in | $tp_flavor | $tp_handler)*);
                 $topic_out_list;
             ]
-            [] [] []
+            [] [] [] []
         }
     };
 }

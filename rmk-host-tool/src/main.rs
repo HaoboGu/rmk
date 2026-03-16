@@ -51,6 +51,8 @@ enum Command {
     SetDefaultLayer(SetDefaultLayerArgs),
     /// Reboot the device.
     Reboot(DestructiveArgs),
+    /// Jump to the device bootloader.
+    BootloaderJump(DestructiveArgs),
     /// Reset keymap to defaults (erases storage and reboots).
     ResetKeymap(DestructiveArgs),
     /// Reset storage (erases storage and reboots).
@@ -222,6 +224,7 @@ async fn main() -> Result<()> {
         Command::GetDefaultLayer(args) => get_default_layer(args).await,
         Command::SetDefaultLayer(args) => set_default_layer(args).await,
         Command::Reboot(args) => reboot(args).await,
+        Command::BootloaderJump(args) => bootloader_jump(args).await,
         Command::ResetKeymap(args) => reset_keymap(args).await,
         Command::StorageReset(args) => storage_reset(args).await,
     }
@@ -763,6 +766,16 @@ async fn reboot(args: DestructiveArgs) -> Result<()> {
     check_version(&client).await?;
     ensure_unlocked(&client).await?;
     handle_reboot_response(client.send_resp::<Reboot>(&()).await, "Reboot")
+}
+
+async fn bootloader_jump(args: DestructiveArgs) -> Result<()> {
+    if !args.yes {
+        confirm_destructive("This will reboot the keyboard into bootloader mode.")?;
+    }
+    let client = connect(&args.connect)?;
+    check_version(&client).await?;
+    ensure_unlocked(&client).await?;
+    handle_reboot_response(client.send_resp::<BootloaderJump>(&()).await, "BootloaderJump")
 }
 
 async fn reset_keymap(args: DestructiveArgs) -> Result<()> {

@@ -53,7 +53,10 @@ impl<Tx: WireTx + Copy> WireTx for QueuingTx<'_, Tx> {
     type Error = WireTxErrorKind;
 
     async fn send<T: Serialize + ?Sized>(&self, hdr: VarHeader, msg: &T) -> Result<(), Self::Error> {
-        let mut frame = TxFrame { buf: [0u8; TX_BUF_SIZE], len: 0 };
+        let mut frame = TxFrame {
+            buf: [0u8; TX_BUF_SIZE],
+            len: 0,
+        };
         let (hdr_used, remain) = hdr.write_to_slice(&mut frame.buf).ok_or_else(|| {
             warn!("[qtx] header too large for frame buffer");
             WireTxErrorKind::Other

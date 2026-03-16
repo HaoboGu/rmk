@@ -24,8 +24,11 @@ mod vial;
 #[cfg(feature = "vial_lock")]
 mod vial_lock;
 
-pub(crate) struct VialService<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> {
-    // VialService holds a reference of keymap, for updating
+pub(crate) struct ViaHostService<
+    'a,
+    RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>,
+> {
+    // ViaHostService holds a reference of keymap, for updating
     keymap: &'a KeyMap<'a>,
 
     // Vial config
@@ -39,8 +42,8 @@ pub(crate) struct VialService<'a, RW: HidWriterTrait<ReportType = ViaReport> + H
     pub(crate) reader_writer: RW,
 }
 
-impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> VialService<'a, RW> {
-    // VialService::new() should be called only once.
+impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> ViaHostService<'a, RW> {
+    // ViaHostService::new() should be called only once.
     // Otherwise the `vial_buf.init()` will panic.
     pub(crate) fn new(keymap: &'a KeyMap<'a>, vial_config: VialConfig<'static>, reader_writer: RW) -> Self {
         Self {
@@ -368,9 +371,9 @@ impl<'d, D: Driver<'d>> HidReaderTrait for UsbVialReaderWriter<'_, 'd, D> {
 }
 
 impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> crate::host::HostService
-    for VialService<'a, RW>
+    for ViaHostService<'a, RW>
 {
     async fn run(&mut self) {
-        VialService::run(self).await;
+        ViaHostService::run(self).await;
     }
 }

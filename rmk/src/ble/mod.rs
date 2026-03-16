@@ -55,7 +55,7 @@ pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;
 #[cfg(feature = "host")]
-pub(crate) mod host_service;
+pub(crate) mod host_gatt;
 pub(crate) mod led;
 #[cfg(feature = "passkey_entry")]
 pub mod passkey;
@@ -485,12 +485,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let output_keyboard = server.hid_service.output_keyboard;
     let hid_control_point = server.hid_service.hid_control_point;
     let input_keyboard = server.hid_service.input_keyboard;
-    #[cfg(feature = "vial")]
-    let output_host = server.host_service.output_data;
-    #[cfg(feature = "vial")]
-    let input_host = server.host_service.input_data;
-    #[cfg(feature = "vial")]
-    let host_control_point = server.host_service.hid_control_point;
     let battery_level = server.battery_service.level;
     let mouse = server.composite_service.mouse_report;
     let media = server.composite_service.media_report;
@@ -579,34 +573,12 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             }
                         } else {
                             #[cfg(feature = "vial")]
-                            if event.handle() == output_host.handle {
-                                debug!("Got host packet: {:?}", event.data());
-                                if event.data().len() == 32 {
-                                    use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;
-
-                                    let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
-                                    HOST_GUI_INPUT_CHANNEL.send(data).await;
-                                } else {
-                                    warn!("Wrong host packet data: {:?}", event.data());
+                            match crate::ble::host_gatt::handle_gatt_write(server, event.handle(), event.data()).await {
+                                crate::ble::host_gatt::HostGattWriteResult::Handled => {}
+                                crate::ble::host_gatt::HostGattWriteResult::CccdUpdated => cccd_updated = true,
+                                crate::ble::host_gatt::HostGattWriteResult::NotHandled => {
+                                    debug!("Write GATT Event to Unknown: {:?}", event.handle());
                                 }
-                            } else if event.handle() == input_host.cccd_handle.expect("No CCCD for input host") {
-                                // CCCD write event
-                                cccd_updated = true;
-                            } else if event.handle() == host_control_point.handle {
-                                info!("Write GATT Event to Control Point: {:?}", event.handle());
-                                #[cfg(feature = "split")]
-                                if event.data().len() == 1 {
-                                    let data = event.data()[0];
-                                    if data == 0 {
-                                        // Enter sleep mode
-                                        CENTRAL_SLEEP.signal(true);
-                                    } else if data == 1 {
-                                        // Wake up
-                                        CENTRAL_SLEEP.signal(false);
-                                    }
-                                }
-                            } else {
-                                debug!("Write GATT Event to Unknown: {:?}", event.handle());
                             }
                             #[cfg(not(feature = "vial"))]
                             debug!("Write GATT Event to Unknown: {:?}", event.handle());
@@ -895,7 +867,7 @@ async fn run_ble_keyboard<
 ) {
     let ble_hid_server = BleHidServer::new(server, conn);
     #[cfg(feature = "host")]
-    let mut ble_host_service = crate::host::BleHostService::new(keymap, server, conn, rmk_config);
+    let ble_host_service = crate::host::BleHostService::new(keymap, server, conn, rmk_config);
     let ble_led_reader = BleLedReader {};
     let mut ble_battery_server = BleBatteryServer::new(server, conn);
 
