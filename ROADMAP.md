@@ -44,7 +44,7 @@
 | f | Define `LockStatus { locked: bool, awaiting_keys: bool, remaining_keys: u8 }` | [x] | In `types.rs` |
 | g | Define `UnlockChallenge { key_positions: Vec<(u8, u8), MAX_UNLOCK_KEYS> }` with `MAX_UNLOCK_KEYS = 2` | [x] | In `types.rs` |
 | h | Define `KeyPosition { layer: u8, row: u8, col: u8 }` | [x] | In `keymap.rs` |
-| i | Define `BulkRequest { layer: u8, start_row: u8, start_col: u8, count: u8 }` with `MAX_BULK = 32` | [x] | In `keymap.rs` |
+| i | Define `BulkRequest { layer: u8, start_row: u8, start_col: u8, count: u16 }` with `MAX_BULK = 512` | [x] | In `keymap.rs` |
 | j | Define `StorageResetMode` enum (`Full`, `LayoutOnly`) | [x] | In `types.rs` |
 | k | Topic payload types simplified: topics use raw types (`u8`, `u16`, `bool`, `BatteryStatus`, `BleStatus`, `ConnectionType`, `LedIndicator`) instead of wrapper structs | [x] | Simpler than original plan; wrapper structs (`LayerChangePayload`, etc.) unnecessary since `impl_payload_wrapper!` already provides conversions |
 | l | Define connection/status types: `ConnectionInfo`, `MatrixState`, `SplitStatus` | [x] | In `status.rs`; `ConnectionType` in `rmk-types/src/connection.rs`, `BatteryStatus` in `rmk-types/src/battery.rs`, `BleStatus` in `rmk-types/src/ble.rs` |
