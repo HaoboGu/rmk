@@ -19,6 +19,7 @@ use embassy_sync::blocking_mutex::raw::RawMutex;
 use embassy_sync::pubsub::{ImmediatePublisher, Publisher, Subscriber};
 use embassy_sync::{channel, watch};
 
+mod action;
 mod battery;
 mod connection;
 mod input;
@@ -26,6 +27,7 @@ mod input;
 mod split;
 mod state;
 
+pub use action::UserAction;
 pub use battery::{BatteryAdcEvent, BatteryStateEvent, ChargingStateEvent};
 #[cfg(feature = "_ble")]
 pub use connection::{BleProfileChangeEvent, BleStateChangeEvent};

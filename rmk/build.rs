@@ -7,8 +7,8 @@ use std::{env, fs};
 
 use const_gen::*;
 use rmk_config::{
-    BleConfig, KeyboardTomlConfig, RmkConstantsConfig, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS,
-    MIN_PASSKEY_ENTRY_TIMEOUT_SECS,
+    BleConfig, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS, KeyboardTomlConfig, MIN_PASSKEY_ENTRY_TIMEOUT_SECS,
+    RmkConstantsConfig,
 };
 
 fn main() {
@@ -110,6 +110,7 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
     let (peripheral_battery_size, peripheral_battery_pubs, peripheral_battery_subs) =
         events.peripheral_battery.into_values();
     let (clear_peer_size, clear_peer_pubs, clear_peer_subs) = events.clear_peer.into_values();
+    let (user_action_size, user_action_pubs, user_action_subs) = events.user_action.into_values();
 
     constant_strs.extend([
         // BLE events
@@ -170,6 +171,10 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) CLEAR_PEER_EVENT_CHANNEL_SIZE = clear_peer_size),
         const_declaration!(pub(crate) CLEAR_PEER_EVENT_PUB_SIZE = clear_peer_pubs),
         const_declaration!(pub(crate) CLEAR_PEER_EVENT_SUB_SIZE = clear_peer_subs),
+        // Action events
+        const_declaration!(pub(crate) USER_ACTION_EVENT_CHANNEL_SIZE = user_action_size),
+        const_declaration!(pub(crate) USER_ACTION_EVENT_PUB_SIZE = user_action_pubs),
+        const_declaration!(pub(crate) USER_ACTION_EVENT_SUB_SIZE = user_action_subs),
     ]);
 
     constant_strs
