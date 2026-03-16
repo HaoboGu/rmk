@@ -8,6 +8,7 @@ use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
 use futures::join;
 use log::debug;
+use rmk::KeymapData;
 use rmk::channel::KEYBOARD_REPORT_CHANNEL;
 use rmk::config::{BehaviorConfig, PositionalConfig};
 use rmk::descriptor::KeyboardReport;

@@ -30,6 +30,7 @@
 pub mod action;
 pub mod battery;
 pub mod ble;
+pub mod config;
 pub mod connection;
 pub mod constants;
 pub mod fork;

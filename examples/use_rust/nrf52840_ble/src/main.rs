@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+#[cfg(feature = "vial")]
 mod vial;
 #[macro_use]
 mod macros;
@@ -23,9 +24,9 @@ use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
-use rmk::config::{
-    BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
-};
+use rmk::config::{BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig};
+#[cfg(feature = "vial")]
+use rmk::config::VialConfig;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join4;
 use rmk::input_device::Runnable;
@@ -36,6 +37,7 @@ use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
+#[cfg(feature = "vial")]
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
 
@@ -64,6 +66,7 @@ const L2CAP_RXQ: u8 = 3;
 /// Size of L2CAP packets
 const L2CAP_MTU: usize = 251;
 
+#[cfg(feature = "vial")]
 const UNLOCK_KEYS: &[(u8, u8)] = &[(0, 0), (0, 1)];
 
 fn build_sdc<'d, const N: usize>(
@@ -163,6 +166,7 @@ async fn main(spawner: Spawner) {
         product_name: "RMK Keyboard",
         serial_number: "vial:f64c2b3c:000001",
     };
+    #[cfg(feature = "vial")]
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, UNLOCK_KEYS);
     let ble_battery_config = BleBatteryConfig::new(Some(is_charging_pin), true, None, false);
     let storage_config = StorageConfig {
@@ -172,6 +176,7 @@ async fn main(spawner: Spawner) {
     };
     let rmk_config = RmkConfig {
         device_config: keyboard_device_config,
+        #[cfg(feature = "vial")]
         vial_config,
         ble_battery_config,
         storage_config,
@@ -216,7 +221,14 @@ async fn main(spawner: Spawner) {
             batt_proc
         },
         keyboard.run(), // Keyboard is special
-        run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+        run_rmk(
+            #[cfg(any(feature = "vial", feature = "rmk_protocol"))]
+            &keymap,
+            driver,
+            &stack,
+            &mut storage,
+            rmk_config,
+        ),
     )
     .await;
 }

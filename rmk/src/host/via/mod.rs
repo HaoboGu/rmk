@@ -24,14 +24,17 @@ mod vial;
 #[cfg(feature = "vial_lock")]
 mod vial_lock;
 
-pub(crate) struct VialService<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> {
-    // VialService holds a reference of keymap, for updating
+pub(crate) struct ViaHostService<
+    'a,
+    RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>,
+> {
+    // ViaHostService holds a reference of keymap, for updating
     keymap: &'a KeyMap<'a>,
 
     // Vial config
     vial_config: VialConfig<'static>,
 
-    // Vail lock instance
+    // Vial lock instance
     #[cfg(feature = "vial_lock")]
     locker: vial_lock::VialLock<'a>,
 
@@ -39,8 +42,8 @@ pub(crate) struct VialService<'a, RW: HidWriterTrait<ReportType = ViaReport> + H
     pub(crate) reader_writer: RW,
 }
 
-impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> VialService<'a, RW> {
-    // VialService::new() should be called only once.
+impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> ViaHostService<'a, RW> {
+    // ViaHostService::new() should be called only once.
     // Otherwise the `vial_buf.init()` will panic.
     pub(crate) fn new(keymap: &'a KeyMap<'a>, vial_config: VialConfig<'static>, reader_writer: RW) -> Self {
         Self {
@@ -57,7 +60,7 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
             match self.process().await {
                 Ok(_) => continue,
                 Err(e) => {
-                    if ConnectionState::Disconnected == ConnectionState::from(&CONNECTION_STATE) {
+                    if ConnectionState::Disconnected == ConnectionState::from_atomic(&CONNECTION_STATE) {
                         Timer::after_millis(1000).await;
                     } else {
                         error!("Process vial error: {:?}", e);
@@ -104,17 +107,14 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
                         }
                         ViaKeyboardInfo::SwitchMatrixState => {
                             #[cfg(feature = "vial_lock")]
-                            {
-                                #[cfg(not(feature = "vial_lock"))]
-                                {
-                                    self.keymap.read_matrix_state(&mut report.input_data[2..]);
-                                    error!("It is not secure to use matrix tester without vial lock");
-                                }
+                            if self.locker.is_unlocked() {
+                                self.keymap.read_matrix_state(&mut report.input_data[2..]);
+                            }
 
-                                #[cfg(feature = "vial_lock")]
-                                if self.locker.is_unlocked() {
-                                    self.keymap.read_matrix_state(&mut report.input_data[2..]);
-                                }
+                            #[cfg(all(feature = "host_security", not(feature = "vial_lock")))]
+                            {
+                                self.keymap.read_matrix_state(&mut report.input_data[2..]);
+                                error!("It is not secure to use matrix tester without vial lock");
                             }
                         }
                         ViaKeyboardInfo::FirmwareVersion => {
@@ -142,7 +142,7 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
                         }
                         _ => (),
                     },
-                    Err(e) => error!("Invalid subcommand: {} of GetKeyboardValue", e),
+                    Err(e) => error!("Invalid subcommand: {} of SetKeyboardValue", e),
                 }
             }
             ViaCommand::DynamicKeymapGetKeyCode => {
@@ -167,7 +167,7 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
                 keymap.set_action_at(KeyboardEventPos::key_pos(col, row), layer as usize, action);
                 #[cfg(feature = "storage")]
                 FLASH_CHANNEL
-                    .send(FlashOperationMessage::VialMessage(KeymapData::KeymapKey(KeymapKey {
+                    .send(FlashOperationMessage::HostMessage(KeymapData::KeymapKey(KeymapKey {
                         layer,
                         col,
                         row,
@@ -240,7 +240,7 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
                 {
                     let buf = self.keymap.get_macro_sequences();
                     FLASH_CHANNEL
-                        .send(FlashOperationMessage::VialMessage(KeymapData::Macro(buf)))
+                        .send(FlashOperationMessage::HostMessage(KeymapData::Macro(buf)))
                         .await;
                     info!("Flush macros to storage")
                 }
@@ -286,7 +286,7 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
                     );
                     #[cfg(feature = "storage")]
                     if let Err(_e) =
-                        FLASH_CHANNEL.try_send(FlashOperationMessage::VialMessage(KeymapData::KeymapKey(KeymapKey {
+                        FLASH_CHANNEL.try_send(FlashOperationMessage::HostMessage(KeymapData::KeymapKey(KeymapKey {
                             layer: layer as u8,
                             col: col as u8,
                             row: row as u8,
@@ -367,5 +367,13 @@ impl<'d, D: Driver<'d>> HidReaderTrait for UsbVialReaderWriter<'_, 'd, D> {
             .map_err(HidError::UsbReadError)?;
 
         Ok(read_report)
+    }
+}
+
+impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> crate::host::HostService
+    for ViaHostService<'a, RW>
+{
+    async fn run(&mut self) {
+        ViaHostService::run(self).await;
     }
 }

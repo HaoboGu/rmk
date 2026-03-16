@@ -352,7 +352,7 @@ pub(crate) async fn process_vial<'a>(
                         if let Some(m) = keymap.get_morse(morse_idx) {
                             // Save to storage
                             FLASH_CHANNEL
-                                .send(FlashOperationMessage::VialMessage(KeymapData::Morse(
+                                .send(FlashOperationMessage::HostMessage(KeymapData::Morse(
                                     morse_idx as u8,
                                     m,
                                 )))
@@ -430,7 +430,7 @@ pub(crate) async fn process_vial<'a>(
 
                         if let Some((actions, output)) = result {
                             FLASH_CHANNEL
-                                .send(FlashOperationMessage::VialMessage(KeymapData::Combo(
+                                .send(FlashOperationMessage::HostMessage(KeymapData::Combo(
                                     combo_idx as u8,
                                     ComboConfig {
                                         actions,
@@ -499,7 +499,7 @@ pub(crate) async fn process_vial<'a>(
                 // Save the encoder action to the storage
                 use crate::host::storage::EncoderKeymap;
                 FLASH_CHANNEL
-                    .send(FlashOperationMessage::VialMessage(KeymapData::Encoder(EncoderKeymap {
+                    .send(FlashOperationMessage::HostMessage(KeymapData::Encoder(EncoderKeymap {
                         idx: index,
                         layer,
                         action: encoder,
@@ -534,13 +534,13 @@ mod tests {
         let combo_idx: u8 = 20;
 
         let mut buffer = [0u8; 64]; // Increased buffer size for idx + combo config
-        let storage_data = StorageData::VialData(KeymapData::Combo(combo_idx, combo_config));
+        let storage_data = StorageData::HostData(KeymapData::Combo(combo_idx, combo_config));
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
         // Deserialization
         let deserialized_data = StorageData::deserialize_from(&buffer[..serialized_size]).unwrap();
         // Validation
         match deserialized_data {
-            (StorageData::VialData(KeymapData::Combo(idx, deserialized_config)), _) => {
+            (StorageData::HostData(KeymapData::Combo(idx, deserialized_config)), _) => {
                 assert_eq!(idx, combo_idx);
                 // actions
                 assert_eq!(deserialized_config.actions.len(), combo_config.actions.len());

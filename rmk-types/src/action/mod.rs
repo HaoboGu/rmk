@@ -26,7 +26,8 @@ use crate::modifier::ModifierCombination;
 /// It can be a single action like triggering a key, or a composite keyboard action like tap/hold
 #[derive(Debug, Copy, Clone, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
+#[derive(postcard::experimental::max_size::MaxSize)]
+#[cfg_attr(feature = "protocol", derive(postcard_schema::Schema))]
 pub enum KeyAction {
     /// No action
     No,
@@ -83,7 +84,8 @@ impl PartialEq for KeyAction {
 /// A single basic action that a keyboard can execute.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
+#[derive(postcard::experimental::max_size::MaxSize)]
+#[cfg_attr(feature = "protocol", derive(postcard_schema::Schema))]
 pub enum Action {
     /// Default action, no action.
     No,

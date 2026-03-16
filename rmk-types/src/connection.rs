@@ -1,11 +1,12 @@
 //! Shared connection type definitions used across RMK crates.
 
 use postcard::experimental::max_size::MaxSize;
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 /// Connection type for the keyboard.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema, MaxSize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "protocol", derive(postcard_schema::Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ConnectionType {
     Usb,
@@ -20,7 +21,11 @@ impl From<u8> for ConnectionType {
         match value {
             0 => ConnectionType::Usb,
             1 => ConnectionType::Ble,
-            _ => ConnectionType::Usb,
+            _other => {
+                #[cfg(feature = "defmt")]
+                defmt::warn!("Unknown ConnectionType value {}, falling back to USB", _other);
+                ConnectionType::Usb
+            }
         }
     }
 }

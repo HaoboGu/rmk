@@ -1,80 +1,8 @@
-use postcard::experimental::max_size::MaxSize;
+pub use rmk_types::fork::Fork;
+pub use rmk_types::fork::ForkStateBits as StateBits;
+
 use rmk_types::action::KeyAction;
 use rmk_types::modifier::ModifierCombination;
-pub use rmk_types::fork::ForkStateBits as StateBits;
-use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Fork {
-    pub(crate) trigger: KeyAction,
-    pub(crate) negative_output: KeyAction,
-    pub(crate) positive_output: KeyAction,
-    pub(crate) match_any: StateBits,
-    pub(crate) match_none: StateBits,
-    pub(crate) kept_modifiers: ModifierCombination,
-    pub(crate) bindable: bool,
-}
-
-impl Default for Fork {
-    fn default() -> Self {
-        Self::empty()
-    }
-}
-
-impl Fork {
-    pub fn new(
-        trigger: KeyAction,
-        negative_output: KeyAction,
-        positive_output: KeyAction,
-        match_any: StateBits,
-        match_none: StateBits,
-        kept_modifiers: ModifierCombination,
-        bindable: bool,
-    ) -> Self {
-        Self {
-            trigger,
-            negative_output,
-            positive_output,
-            match_any,
-            match_none,
-            kept_modifiers,
-            bindable,
-        }
-    }
-
-    pub fn new_ex(
-        trigger: KeyAction,
-        negative_output: KeyAction,
-        positive_output: KeyAction,
-        match_any: StateBits,
-        match_none: StateBits,
-        kept: StateBits,
-        bindable: bool,
-    ) -> Self {
-        Self {
-            trigger,
-            negative_output,
-            positive_output,
-            match_any,
-            match_none,
-            kept_modifiers: kept.modifiers,
-            bindable,
-        }
-    }
-
-    pub fn empty() -> Self {
-        Self::new(
-            KeyAction::No,
-            KeyAction::No,
-            KeyAction::No,
-            StateBits::default(),
-            StateBits::default(),
-            ModifierCombination::default(),
-            false,
-        )
-    }
-}
 
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

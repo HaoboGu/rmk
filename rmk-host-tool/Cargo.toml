@@ -1,0 +1,16 @@
+[package]
+name = "rmk-host-tool"
+version = "0.1.0"
+edition = "2024"
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Host-side USB handshake tool for RMK protocol"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4.5", features = ["derive"] }
+nusb = "0.1"
+postcard-rpc = { version = "0.12", features = ["raw-nusb"] }
+rmk-types = { path = "../rmk-types", features = ["protocol"] }
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }

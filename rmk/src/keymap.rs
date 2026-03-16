@@ -475,6 +475,10 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().get_keymap_config()
     }
 
+    pub(crate) fn num_encoder(&self) -> usize {
+        self.inner.borrow().num_encoder
+    }
+
     pub(crate) fn hand_at(&self, row: usize, col: usize) -> Hand {
         let inner = self.inner.borrow();
         let idx = inner.cache_index(row, col);
@@ -602,6 +606,40 @@ impl<'a> KeyMap<'a> {
 
     pub(crate) fn set_mouse_buttons(&self, buttons: u8) {
         self.inner.borrow_mut().mouse_buttons = buttons;
+    }
+
+    // ── Bulk sequential access (for RMK protocol GetKeymapBulk) ──
+
+    /// Read up to `count` key actions starting at (`start_layer`, `start_row`, `start_col`),
+    /// advancing col → row → layer. Acquires the `RefCell` borrow once for all keys.
+    pub(crate) fn get_actions_bulk<const N: usize>(
+        &self,
+        start_layer: usize,
+        start_row: usize,
+        start_col: usize,
+        count: usize,
+        out: &mut heapless::Vec<KeyAction, N>,
+    ) {
+        let inner = self.inner.borrow();
+        let (rows, cols, layers) = (inner.row, inner.col, inner.num_layer);
+        let (mut l, mut r, mut c) = (start_layer, start_row, start_col);
+        for _ in 0..count {
+            if l >= layers {
+                break;
+            }
+            if out.push(inner.layers[inner.layer_index(l, r, c)]).is_err() {
+                break;
+            }
+            c += 1;
+            if c >= cols {
+                c = 0;
+                r += 1;
+            }
+            if r >= rows {
+                r = 0;
+                l += 1;
+            }
+        }
     }
 
     // ── Bulk flat access (for Vial DynamicKeymapGetBuffer/SetBuffer) ──

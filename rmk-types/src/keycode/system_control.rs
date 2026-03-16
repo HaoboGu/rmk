@@ -10,7 +10,7 @@ use super::hid::HidKeyCode;
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard_schema::Schema)]
+#[cfg_attr(feature = "protocol", derive(postcard_schema::Schema))]
 pub enum SystemControlKey {
     No = 0x00,
     PowerDown = 0x81,
