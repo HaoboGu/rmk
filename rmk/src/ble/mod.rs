@@ -585,7 +585,8 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 if event.data().len() == 32 {
                                     use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;
 
-                                    let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
+                                    let mut data = [0u8; 32];
+                                    data.copy_from_slice(event.data());
                                     HOST_GUI_INPUT_CHANNEL.send(data).await;
                                 } else {
                                     warn!("Wrong host packet data: {:?}", event.data());
