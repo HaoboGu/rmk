@@ -6,6 +6,7 @@ use core::sync::atomic::Ordering;
 use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
 use embassy_futures::select::{Either3, select3};
 use embassy_sync::signal::Signal;
+use rmk_types::ble::{BleState, BleStatus};
 use trouble_host::prelude::*;
 use trouble_host::{BondInformation, LongTermKey};
 #[cfg(feature = "storage")]
@@ -15,10 +16,10 @@ use {
 };
 
 use super::ble_server::CCCD_TABLE_SIZE;
+use super::{get_current_profile, set_ble_status};
 use crate::NUM_BLE_PROFILE;
-use crate::ble::ACTIVE_PROFILE;
 use crate::channel::BLE_PROFILE_CHANNEL;
-use crate::event::{BleProfileChangeEvent, ConnectionChangeEvent, ConnectionType, publish_event};
+use crate::event::{ConnectionChangeEvent, ConnectionType, publish_event};
 use crate::state::CONNECTION_TYPE;
 
 pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal::new();
@@ -217,26 +218,26 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
         let mut buf: [u8; 128] = [0; 128];
 
-        // Load current active profile, save to `ACTIVE_PROFILE`
-        if let Ok(Some(StorageData::ActiveBleProfile(profile))) =
+        // Load current active profile, save to `BLE_STATUS`
+        let profile = if let Ok(Some(StorageData::ActiveBleProfile(profile))) =
             read_storage!(storage, &(StorageKeys::ActiveBleProfile as u32), buf)
         {
             debug!("Loaded active profile: {}", profile);
-            ACTIVE_PROFILE.store(profile, Ordering::SeqCst);
-
-            publish_event(BleProfileChangeEvent { profile });
+            profile
         } else {
             // If no saved active profile, use 0 as default
             debug!("Loaded default active profile",);
-            ACTIVE_PROFILE.store(0, Ordering::SeqCst);
-
-            publish_event(BleProfileChangeEvent { profile: 0 });
+            0
         };
+        set_ble_status(BleStatus {
+            profile,
+            state: BleState::Inactive,
+        });
     }
 
     /// Update bonding information in the stack according to the current active profile
     pub fn update_stack_bonds(&self) {
-        let active_profile = ACTIVE_PROFILE.load(core::sync::atomic::Ordering::SeqCst);
+        let active_profile = get_current_profile();
 
         // Remove current bonding information in the stack
         let current_bond_info = self.stack.get_bond_information();
@@ -292,7 +293,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
     /// Update CCCD table in the stack
     pub async fn update_profile_cccd_table(&mut self, table: CccdTable<CCCD_TABLE_SIZE>) {
         // Get current active profile
-        let active_profile = ACTIVE_PROFILE.load(Ordering::SeqCst);
+        let active_profile = get_current_profile();
 
         // Update profile information in memory
         if let Some(index) = self
@@ -349,12 +350,15 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
     /// Switch to the specified profile, return true if the profile is switched
     pub async fn switch_profile(&mut self, profile: u8) -> bool {
-        let current = ACTIVE_PROFILE.load(core::sync::atomic::Ordering::SeqCst);
+        let current = get_current_profile();
         if profile == current {
             return false;
         }
 
-        ACTIVE_PROFILE.store(profile, core::sync::atomic::Ordering::SeqCst);
+        set_ble_status(BleStatus {
+            profile,
+            state: BleState::Inactive,
+        });
 
         // Update the active bonding information in the stack
         self.update_stack_bonds();
@@ -365,8 +369,6 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             .await;
 
         info!("Switched to BLE profile: {}", profile);
-
-        publish_event(BleProfileChangeEvent { profile });
 
         true
     }
@@ -399,7 +401,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             }
                         }
                         BleProfileAction::PreviousProfile => {
-                            let mut profile = ACTIVE_PROFILE.load(Ordering::SeqCst);
+                            let mut profile = get_current_profile();
                             profile = if profile == 0 {
                                 NUM_BLE_PROFILE as u8 - 1
                             } else {
@@ -409,13 +411,13 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             self.switch_profile(profile).await;
                         }
                         BleProfileAction::NextProfile => {
-                            let mut profile = ACTIVE_PROFILE.load(Ordering::SeqCst) + 1;
+                            let mut profile = get_current_profile() + 1;
                             profile %= NUM_BLE_PROFILE as u8;
 
                             self.switch_profile(profile).await;
                         }
                         BleProfileAction::ClearProfile => {
-                            let profile = ACTIVE_PROFILE.load(Ordering::SeqCst);
+                            let profile = get_current_profile();
                             self.clear_bond(profile).await;
                         }
                         BleProfileAction::ToggleConnection => {

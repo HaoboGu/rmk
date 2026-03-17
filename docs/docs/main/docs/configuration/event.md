@@ -64,8 +64,7 @@ peripheral_battery.subs = 4
 | `battery_state` | `BatteryStateEvent` | subs=4 |
 | **Connection Events** | | |
 | `connection_change` | `ConnectionChangeEvent` | |
-| `ble_state_change` | `BleStateChangeEvent` | |
-| `ble_profile_change` | `BleProfileChangeEvent` | |
+| `ble_status_change` | `BleStatusChangeEvent` | pubs=2 |
 | **Split Events** | | |
 | `peripheral_connected` | `PeripheralConnectedEvent` | |
 | `central_connected` | `CentralConnectedEvent` | |

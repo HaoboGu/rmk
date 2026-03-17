@@ -64,3 +64,7 @@ Config is loaded in three layers (later overrides earlier): `event_default.toml`
 `build.rs` reads only the `[rmk]` and `[event]` sections, then emits `constants.rs` as Rust `const` items. The full `KeyboardTomlConfig` struct in `rmk-config/src/lib.rs` is the authoritative reference for all available fields and their defaults.
 
 `[event]` tunes per-event pub/sub channel sizes (`channel_size`, `pubs`, `subs`). All event names and their defaults live in `rmk-config/src/default_config/event_default.toml`.
+
+## Rules
+
+- Don't use `pub use` for convenient usage **within** the crate
