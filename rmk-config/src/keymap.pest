@@ -14,6 +14,9 @@ strict_identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 loose_identifier = @{ (!( "(" | ")" | "," | "@" | WHITESPACE ) ~ ANY)+ }
 
 keycode_name = @{ loose_identifier }
+// `,` is also a valid key alias (Comma), but we only allow it in
+// contexts where it won't conflict with argument separators.
+symbol_keycode = @{ "," }
 profile_name = { strict_identifier }
 
 // Number (for layer indices)
@@ -39,7 +42,7 @@ modifier_combination = { modifier_name ~ ("|" ~ modifier_name)* }
 // --- Main Action Rules ---
 
 // Rule 0: Simple Keycode (must come after more specific rules)
-simple_keycode = { keycode_name }
+simple_keycode = { keycode_name | symbol_keycode }
 
 // Rule 2: No Key
 no_action = @{ ^"No" ~ !(ASCII_ALPHANUMERIC) } // Case-insensitive "No" not followed by alphanumeric
@@ -91,7 +94,7 @@ mt_action = { ^"MT" ~ "(" ~ keycode_name ~ "," ~ modifier_combination ~ ("," ~ p
 th_action = { ^"TH" ~ "(" ~ keycode_name ~ "," ~ keycode_name ~ ("," ~ profile_name)? ~ ")" }
 
 // Rule 7: SHIFTED(key)
-shifted_action = { ^"SHIFTED" ~ "(" ~ keycode_name ~ ")" }
+shifted_action = { ^"SHIFTED" ~ "(" ~ simple_keycode ~ ")" }
 
 // Rule 8: TD(n)/MORSE(n) - Morse index (in Vial its simplest form is known as "Tap Dance", so the TD name is used)
 morse_action = { (^"TD" | ^"MORSE") ~ "(" ~ number ~ ")" }

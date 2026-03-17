@@ -572,12 +572,17 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 }
                             }
                         } else {
-                            #[cfg(feature = "vial")]
-                            match crate::ble::host_gatt::handle_gatt_write(server, event.handle(), event.data()).await {
-                                crate::ble::host_gatt::HostGattWriteResult::Handled => {}
-                                crate::ble::host_gatt::HostGattWriteResult::CccdUpdated => cccd_updated = true,
-                                crate::ble::host_gatt::HostGattWriteResult::NotHandled => {
-                                    debug!("Write GATT Event to Unknown: {:?}", event.handle());
+                            #[cfg(feature = "host")]
+                            if event.handle() == output_host.handle {
+                                debug!("Got host packet: {:?}", event.data());
+                                if event.data().len() == 32 {
+                                    use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;
+
+                                    let mut data = [0u8; 32];
+                                    data.copy_from_slice(event.data());
+                                    HOST_GUI_INPUT_CHANNEL.send(data).await;
+                                } else {
+                                    warn!("Wrong host packet data: {:?}", event.data());
                                 }
                             }
                             #[cfg(not(feature = "vial"))]
