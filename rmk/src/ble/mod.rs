@@ -10,6 +10,7 @@ use embassy_futures::select::{Either3, select, select3};
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_time::{Duration, Timer, with_timeout};
 use rand_core::{CryptoRng, RngCore};
+use rmk_types::ble::{BleState, BleStatus};
 use rmk_types::led_indicator::LedIndicator;
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
@@ -61,13 +62,16 @@ pub(crate) mod led;
 pub mod passkey;
 pub(crate) mod profile;
 
-pub use rmk_types::ble::{BleState, BleStatus};
-
 /// Global BLE status: tracks the active profile and current BLE state.
 pub static BLE_STATUS: Mutex<crate::RawMutex, Cell<BleStatus>> = Mutex::new(Cell::new(BleStatus {
     profile: 0,
     state: BleState::Inactive,
 }));
+
+/// Get current profile number
+pub(crate) fn get_current_profile() -> u8 {
+    BLE_STATUS.lock(|c| c.get().profile)
+}
 
 /// Update the BLE status and publish an event.
 pub(crate) fn set_ble_status(status: BleStatus) {
@@ -77,14 +81,9 @@ pub(crate) fn set_ble_status(status: BleStatus) {
 
 /// Update the BLE state while preserving the current profile.
 pub(crate) fn set_ble_state(state: BleState) {
-    let status = BLE_STATUS.lock(|c| {
-        let status = BleStatus {
-            profile: c.get().profile,
-            state,
-        };
-        c.set(status);
-        status
-    });
+    let profile = get_current_profile();
+    let status = BleStatus { profile, state };
+    set_ble_status(status);
     publish_event(BleStatusChangeEvent(status));
 }
 
@@ -523,7 +522,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
             }
             GattConnectionEvent::PairingComplete { security_level, bond } => {
                 info!("[gatt] pairing complete: {:?}", security_level);
-                let profile = BLE_STATUS.lock(|c| c.get()).profile;
+                let profile = get_current_profile();
                 if let Some(bond_info) = bond {
                     let profile_info = ProfileInfo {
                         slot_num: profile,
@@ -915,9 +914,7 @@ async fn run_ble_keyboard<
 
     // Load CCCD table from storage
     #[cfg(feature = "storage")]
-    if let Ok(Some(bond_info)) = storage
-        .read_trouble_bond_info(BLE_STATUS.lock(|c| c.get()).profile)
-        .await
+    if let Ok(Some(bond_info)) = storage.read_trouble_bond_info(get_current_profile()).await
         && bond_info.info.identity.match_identity(&conn.raw().peer_identity())
     {
         info!("Loading CCCD table from storage: {:?}", bond_info.cccd_table);

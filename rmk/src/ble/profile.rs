@@ -6,6 +6,7 @@ use core::sync::atomic::Ordering;
 use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
 use embassy_futures::select::{Either3, select3};
 use embassy_sync::signal::Signal;
+use rmk_types::ble::{BleState, BleStatus};
 use trouble_host::prelude::*;
 use trouble_host::{BondInformation, LongTermKey};
 #[cfg(feature = "storage")]
@@ -15,7 +16,7 @@ use {
 };
 
 use super::ble_server::CCCD_TABLE_SIZE;
-use super::{BLE_STATUS, BleState, BleStatus, set_ble_status};
+use super::{get_current_profile, set_ble_status};
 use crate::NUM_BLE_PROFILE;
 use crate::channel::BLE_PROFILE_CHANNEL;
 use crate::event::{ConnectionChangeEvent, ConnectionType, publish_event};
@@ -236,7 +237,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
     /// Update bonding information in the stack according to the current active profile
     pub fn update_stack_bonds(&self) {
-        let active_profile = BLE_STATUS.lock(|c| c.get()).profile;
+        let active_profile = get_current_profile();
 
         // Remove current bonding information in the stack
         let current_bond_info = self.stack.get_bond_information();
@@ -292,7 +293,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
     /// Update CCCD table in the stack
     pub async fn update_profile_cccd_table(&mut self, table: CccdTable<CCCD_TABLE_SIZE>) {
         // Get current active profile
-        let active_profile = BLE_STATUS.lock(|c| c.get()).profile;
+        let active_profile = get_current_profile();
 
         // Update profile information in memory
         if let Some(index) = self
@@ -349,7 +350,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
     /// Switch to the specified profile, return true if the profile is switched
     pub async fn switch_profile(&mut self, profile: u8) -> bool {
-        let current = BLE_STATUS.lock(|c| c.get()).profile;
+        let current = get_current_profile();
         if profile == current {
             return false;
         }
@@ -400,7 +401,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             }
                         }
                         BleProfileAction::PreviousProfile => {
-                            let mut profile = BLE_STATUS.lock(|c| c.get()).profile;
+                            let mut profile = get_current_profile();
                             profile = if profile == 0 {
                                 NUM_BLE_PROFILE as u8 - 1
                             } else {
@@ -410,13 +411,13 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             self.switch_profile(profile).await;
                         }
                         BleProfileAction::NextProfile => {
-                            let mut profile = BLE_STATUS.lock(|c| c.get()).profile + 1;
+                            let mut profile = get_current_profile() + 1;
                             profile %= NUM_BLE_PROFILE as u8;
 
                             self.switch_profile(profile).await;
                         }
                         BleProfileAction::ClearProfile => {
-                            let profile = BLE_STATUS.lock(|c| c.get()).profile;
+                            let profile = get_current_profile();
                             self.clear_bond(profile).await;
                         }
                         BleProfileAction::ToggleConnection => {
