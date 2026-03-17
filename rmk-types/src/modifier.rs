@@ -7,6 +7,7 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
 use postcard::experimental::max_size::MaxSize;
+use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 /// The bit representation of the modifier combination.
@@ -30,6 +31,14 @@ pub struct ModifierCombination {
     pub right_alt: bool,
     #[bits(1)]
     pub right_gui: bool,
+}
+
+impl Schema for ModifierCombination {
+    const SCHEMA: &'static postcard_schema::schema::NamedType =
+        &postcard_schema::schema::NamedType {
+            name: "ModifierCombination",
+            ty: &postcard_schema::schema::DataModelType::U8,
+        };
 }
 
 impl BitOr for ModifierCombination {

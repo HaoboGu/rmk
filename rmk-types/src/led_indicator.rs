@@ -5,6 +5,7 @@
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
+use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 /// Indicators defined in the HID spec 11.1
@@ -33,6 +34,14 @@ pub struct LedIndicator {
     pub kana: bool,
     #[bits(3)]
     _reserved: u8,
+}
+
+impl Schema for LedIndicator {
+    const SCHEMA: &'static postcard_schema::schema::NamedType =
+        &postcard_schema::schema::NamedType {
+            name: "LedIndicator",
+            ty: &postcard_schema::schema::DataModelType::U8,
+        };
 }
 
 impl BitOr for LedIndicator {
