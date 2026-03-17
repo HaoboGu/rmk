@@ -1,16 +1,14 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::Duration;
 use rmk_types::action::{KeyAction, MorseMode};
-use rmk_types::protocol::vial::{
-    SettingKey, VIAL_COMBO_MAX_LENGTH, VIAL_EP_SIZE, VIAL_PROTOCOL_VERSION, VialCommand, VialDynamic,
-};
+use rmk_types::constants::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, MORSE_MAX_NUM};
+use rmk_types::protocol::vial::{SettingKey, VIAL_EP_SIZE, VIAL_PROTOCOL_VERSION, VialCommand, VialDynamic};
 
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
-use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, TAP};
-use crate::{COMBO_MAX_NUM, MORSE_MAX_NUM};
+use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, Morse, TAP};
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, host::storage::KeymapData, storage::FlashOperationMessage};
 
@@ -341,7 +339,7 @@ pub(crate) async fn process_vial<'a>(
                         let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
 
                         // Update the morse in keymap
-                        keymap.with_morse_mut(morse_idx, |morse| {
+                        keymap.with_morse_mut(morse_idx, |morse: &mut Morse| {
                             morse.put(TAP, tap.to_action());
                             morse.put(DOUBLE_TAP, double_tap.to_action());
                             morse.put(HOLD, hold.to_action());
@@ -370,7 +368,7 @@ pub(crate) async fn process_vial<'a>(
                     keymap.with_combos(|combos| {
                         if let Some(Some(combo)) = combos.get(combo_idx) {
                             // Combo components
-                            for i in 0..VIAL_COMBO_MAX_LENGTH {
+                            for i in 0..COMBO_MAX_LENGTH {
                                 LittleEndian::write_u16(
                                     &mut report.input_data[1 + i * 2..3 + i * 2],
                                     to_via_keycode(*combo.config.actions.get(i).unwrap_or(&KeyAction::No)),
@@ -378,11 +376,11 @@ pub(crate) async fn process_vial<'a>(
                             }
                             // Combo output
                             LittleEndian::write_u16(
-                                &mut report.input_data[1 + VIAL_COMBO_MAX_LENGTH * 2..3 + VIAL_COMBO_MAX_LENGTH * 2],
+                                &mut report.input_data[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
                                 to_via_keycode(combo.config.output),
                             );
                         } else {
-                            report.input_data[1..3 + VIAL_COMBO_MAX_LENGTH * 2].fill(0);
+                            report.input_data[1..3 + COMBO_MAX_LENGTH * 2].fill(0);
                         }
                     });
                 }
@@ -392,7 +390,6 @@ pub(crate) async fn process_vial<'a>(
 
                     #[cfg(feature = "storage")]
                     {
-                        use crate::COMBO_MAX_LENGTH;
                         use crate::combo::{Combo, ComboConfig};
                         let combo_idx = report.output_data[3] as usize;
                         let result = keymap.with_combos_mut(|combos| {
@@ -402,7 +399,7 @@ pub(crate) async fn process_vial<'a>(
 
                             let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
                             let mut n: usize = 0;
-                            for i in 0..VIAL_COMBO_MAX_LENGTH {
+                            for i in 0..COMBO_MAX_LENGTH {
                                 let action =
                                     from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
                                 if !action.is_empty() {
@@ -415,7 +412,7 @@ pub(crate) async fn process_vial<'a>(
                                 }
                             }
                             let output = from_via_keycode(LittleEndian::read_u16(
-                                &report.output_data[4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
+                                &report.output_data[4 + COMBO_MAX_LENGTH * 2..6 + COMBO_MAX_LENGTH * 2],
                             ));
                             combos[combo_idx] =
                                 if !actions.iter().any(|&x| x != KeyAction::No) && output == KeyAction::No {
