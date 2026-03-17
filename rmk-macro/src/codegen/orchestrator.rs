@@ -247,8 +247,13 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
 
     let initialize_positional_config = if key_info.is_empty()
         || key_info.iter().all(|row| {
-            row.iter()
-                .all(|key| key.hand != 'L' && key.hand != 'l' && key.hand != 'R' && key.hand != 'r' && key.hand != '*')
+            row.iter().all(|key| {
+                key.hand != 'L'
+                    && key.hand != 'l'
+                    && key.hand != 'R'
+                    && key.hand != 'r'
+                    && key.hand != '*'
+            })
         })
         || key_info.len() != row
         || key_info[0].len() != col

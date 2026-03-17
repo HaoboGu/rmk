@@ -16,10 +16,9 @@ use rmk::hid::Report;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::keymap::KeyMap;
-use rmk::KeymapData;
 use rmk::types::action::KeyAction;
 use rmk::types::modifier::ModifierCombination;
-use rmk::{a, k, layer, lt, mo, shifted, th, wm};
+use rmk::{KeymapData, a, k, layer, lt, mo, shifted, th, wm};
 
 // Init logger for tests
 #[ctor::ctor]

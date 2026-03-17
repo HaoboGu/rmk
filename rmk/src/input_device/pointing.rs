@@ -269,10 +269,7 @@ pub struct PointingProcessor<'a> {
 
 impl<'a> PointingProcessor<'a> {
     /// Create a new pointing processor with default settings
-    pub fn new(
-        keymap: &'a KeyMap<'a>,
-        config: PointingProcessorConfig,
-    ) -> Self {
+    pub fn new(keymap: &'a KeyMap<'a>, config: PointingProcessorConfig) -> Self {
         Self { keymap, config }
     }
 

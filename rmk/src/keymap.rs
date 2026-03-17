@@ -2,8 +2,7 @@ use core::cell::RefCell;
 
 use embassy_time::{Duration, Instant};
 use heapless::LinearMap;
-use rmk_types::action::MorseProfile;
-use rmk_types::action::{EncoderAction, KeyAction};
+use rmk_types::action::{EncoderAction, KeyAction, MorseProfile};
 #[cfg(all(feature = "storage", feature = "host"))]
 use {
     crate::{boot::reboot_keyboard, storage::Storage},
@@ -130,7 +129,6 @@ impl KeyMapInner<'_> {
     fn cache_index(&self, row: usize, col: usize) -> usize {
         row * self.col + col
     }
-
 
     #[inline]
     fn encoder_cache_index(&self, id: usize, direction: usize) -> usize {

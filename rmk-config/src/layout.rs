@@ -600,13 +600,7 @@ mod tests {
 
     #[test]
     fn test_multi_arg_actions_reject_symbol_comma_as_key_argument() {
-        let invalid_cases = [
-            "TH(A, ,)",
-            "TH(, ,)",
-            "WM(, LShift)",
-            "LT(1, ,)",
-            "MT(, LShift)",
-        ];
+        let invalid_cases = ["TH(A, ,)", "TH(, ,)", "WM(, LShift)", "LT(1, ,)", "MT(, LShift)"];
 
         for input in invalid_cases {
             let result = ConfigParser::parse(Rule::key_map, input);

@@ -100,7 +100,12 @@ fn expand_morse(morse: &Option<MorsesConfig>) -> proc_macro2::TokenStream {
             permissive_hold: config.permissive_hold,
             hold_on_other_press: config.hold_on_other_press,
             normal_mode: config.normal_mode,
-            hold_timeout: Some(config.hold_timeout.clone().unwrap_or(default_timeout.clone())),
+            hold_timeout: Some(
+                config
+                    .hold_timeout
+                    .clone()
+                    .unwrap_or(default_timeout.clone()),
+            ),
             gap_timeout: Some(config.gap_timeout.clone().unwrap_or(default_timeout)),
         });
 
