@@ -11,6 +11,7 @@ const EVENT_DEFAULT_CONFIG: &str = include_str!("default_config/event_default.to
 pub mod chip;
 pub mod communication;
 pub mod keyboard;
+pub mod resolved;
 #[rustfmt::skip]
 pub mod usb_interrupt_map;
 pub mod behavior;
@@ -24,7 +25,6 @@ pub mod storage;
 pub use board::{BoardConfig, UniBodyConfig};
 pub use chip::{ChipModel, ChipSeries};
 pub use communication::{CommunicationConfig, UsbInfo};
-pub use keyboard::Basic;
 pub use keycode_alias::KEYCODE_ALIAS;
 
 /// Configurations for RMK keyboard.
@@ -49,7 +49,7 @@ pub struct KeyboardTomlConfig {
     /// Storage config
     storage: Option<StorageConfig>,
     /// Ble config
-    pub ble: Option<BleConfig>,
+    pub(crate) ble: Option<BleConfig>,
     /// Chip-specific configs (e.g., [chip.nrf52840])
     chip: Option<HashMap<String, ChipConfig>>,
     /// Dependency config
@@ -61,15 +61,15 @@ pub struct KeyboardTomlConfig {
     /// Output Pin config
     output: Option<Vec<OutputConfig>>,
     /// Set host configurations
-    pub host: Option<HostConfig>,
+    pub(crate) host: Option<HostConfig>,
     /// RMK config constants
     #[serde(default)]
-    pub rmk: RmkConstantsConfig,
+    pub(crate) rmk: RmkConstantsConfig,
     /// Event channel configuration
     /// Default values are loaded from event_default.toml in new_from_toml_path()
     /// build.rs also loads event defaults via new_from_toml_path_with_event_defaults()
     #[serde(default)]
-    pub event: EventConfig,
+    pub(crate) event: EventConfig,
 }
 
 impl KeyboardTomlConfig {
@@ -174,7 +174,7 @@ impl KeyboardTomlConfig {
 #[serde_inline_default]
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RmkConstantsConfig {
+pub(crate) struct RmkConstantsConfig {
     /// Mouse key interval (ms) - controls mouse movement speed
     #[serde_inline_default(20)]
     pub mouse_key_interval: u16,
@@ -216,7 +216,7 @@ pub struct RmkConstantsConfig {
     #[serde_inline_default(4)]
     pub flash_channel_size: usize,
     /// The number of the split peripherals
-    #[serde_inline_default(1)]
+    #[serde_inline_default(0)]
     pub split_peripherals_num: usize,
     /// The number of available BLE profiles
     #[serde_inline_default(3)]
@@ -545,7 +545,7 @@ pub struct KeyInfo {
 /// Configurations for actions behavior
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct BehaviorConfig {
+pub(crate) struct BehaviorConfig {
     pub tri_layer: Option<TriLayerConfig>,
     pub one_shot: Option<OneShotConfig>,
     pub combo: Option<CombosConfig>,
@@ -558,7 +558,7 @@ pub struct BehaviorConfig {
 /// Per Key configurations profiles for morse, tap-hold, etc.
 /// overrides the defaults given in TapHoldConfig
 #[derive(Clone, Debug, Deserialize, Default)]
-pub struct MorseProfile {
+pub(crate) struct MorseProfile {
     /// if true, tap-hold key will always send tap action when tapped with the same hand only
     pub unilateral_tap: Option<bool>,
 
@@ -578,7 +578,7 @@ pub struct MorseProfile {
 /// Configurations for tri layer
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct TriLayerConfig {
+pub(crate) struct TriLayerConfig {
     pub upper: u8,
     pub lower: u8,
     pub adjust: u8,
@@ -587,21 +587,21 @@ pub struct TriLayerConfig {
 /// Configurations for one shot
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct OneShotConfig {
+pub(crate) struct OneShotConfig {
     pub timeout: Option<DurationMillis>,
 }
 
 /// Configurations for combos
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct CombosConfig {
+pub(crate) struct CombosConfig {
     pub combos: Vec<ComboConfig>,
     pub timeout: Option<DurationMillis>,
 }
 
 /// Configurations for combo
 #[derive(Clone, Debug, Deserialize)]
-pub struct ComboConfig {
+pub(crate) struct ComboConfig {
     pub actions: Vec<String>,
     pub output: String,
     pub layer: Option<u8>,
@@ -610,13 +610,13 @@ pub struct ComboConfig {
 /// Configurations for macros
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct MacrosConfig {
+pub(crate) struct MacrosConfig {
     pub macros: Vec<MacroConfig>,
 }
 
 /// Configurations for macro
 #[derive(Clone, Debug, Deserialize)]
-pub struct MacroConfig {
+pub(crate) struct MacroConfig {
     pub operations: Vec<MacroOperation>,
 }
 
@@ -634,14 +634,14 @@ pub enum MacroOperation {
 /// Configurations for forks
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ForksConfig {
+pub(crate) struct ForksConfig {
     pub forks: Vec<ForkConfig>,
 }
 
 /// Configurations for fork
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ForkConfig {
+pub(crate) struct ForkConfig {
     pub trigger: String,
     pub negative_output: String,
     pub positive_output: String,
@@ -654,7 +654,7 @@ pub struct ForkConfig {
 /// Configurations for morse keys
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct MorsesConfig {
+pub(crate) struct MorsesConfig {
     pub enable_flow_tap: Option<bool>, //default: false
     /// used in permissive_hold mode
     pub prior_idle_time: Option<DurationMillis>,
@@ -684,7 +684,7 @@ pub struct MorsesConfig {
 /// Configurations for morse
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct MorseConfig {
+pub(crate) struct MorseConfig {
     // name of morse profile (to address BehaviorConfig::morse.profiles[self.profile])
     pub profile: Option<String>,
 
@@ -703,7 +703,7 @@ pub struct MorseConfig {
 /// Configurations for morse action pairs
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct MorseActionPair {
+pub(crate) struct MorseActionPair {
     pub pattern: String, // for example morse code of "B": "-..." or "_..." or "1000"
     pub action: String,  // "B"
 }

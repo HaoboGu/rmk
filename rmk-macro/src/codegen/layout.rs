@@ -3,39 +3,33 @@ use std::collections::HashMap;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::{KeyboardTomlConfig, MorseProfile};
+use rmk_config::resolved::{Behavior, Layout, MorseProfileResolved};
 
 use super::action_parser::parse_key;
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
 /// Also add `get_default_encoder_map`
-pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
-    let profiles = &keyboard_config
-        .get_behavior_config()
-        .unwrap()
+pub(crate) fn expand_default_keymap(layout: &Layout, behavior: &Behavior) -> TokenStream2 {
+    let profiles: Option<HashMap<String, MorseProfileResolved>> = behavior
         .morse
-        .and_then(|m| m.profiles);
-    let num_encoder = keyboard_config
-        .get_board_config()
-        .unwrap()
-        .get_num_encoder()
-        .iter()
-        .sum();
+        .as_ref()
+        .map(|m| m.profiles.clone())
+        .filter(|p| !p.is_empty());
 
-    let (layout, _) = keyboard_config.get_layout_config().unwrap();
+    let num_encoder: usize = layout.encoder_counts.iter().sum();
 
     let mut layers = vec![];
     let mut encoder_map = vec![];
 
     for layer in &layout.keymap {
-        layers.push(expand_layer(layer.clone(), profiles));
+        layers.push(expand_layer(layer.clone(), &profiles));
     }
 
     for encoder_layer in &layout.encoder_map {
         encoder_map.push(expand_encoder_layer(
             encoder_layer.clone(),
             num_encoder,
-            profiles,
+            &profiles,
         ));
     }
     encoder_map.resize(
@@ -57,7 +51,7 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> Tok
 /// Expand a layer for keymap
 fn expand_layer(
     layer: Vec<Vec<String>>,
-    profiles: &Option<HashMap<String, MorseProfile>>,
+    profiles: &Option<HashMap<String, MorseProfileResolved>>,
 ) -> TokenStream2 {
     let mut rows = vec![];
     for row in layer {
@@ -67,7 +61,10 @@ fn expand_layer(
 }
 
 /// Expand a row for keymap
-fn expand_row(row: Vec<String>, profiles: &Option<HashMap<String, MorseProfile>>) -> TokenStream2 {
+fn expand_row(
+    row: Vec<String>,
+    profiles: &Option<HashMap<String, MorseProfileResolved>>,
+) -> TokenStream2 {
     let mut keys = vec![];
     for key in row {
         keys.push(parse_key(key, profiles));
@@ -79,7 +76,7 @@ fn expand_row(row: Vec<String>, profiles: &Option<HashMap<String, MorseProfile>>
 fn expand_encoder_layer(
     encoder_layer: Vec<[String; 2]>,
     num_encoder: usize,
-    profiles: &Option<HashMap<String, MorseProfile>>,
+    profiles: &Option<HashMap<String, MorseProfileResolved>>,
 ) -> TokenStream2 {
     let mut encoders = vec![];
 

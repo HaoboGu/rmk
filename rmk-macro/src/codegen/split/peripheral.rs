@@ -218,7 +218,8 @@ fn expand_split_peripheral(
     let mut chip_init = expand_chip_init(keyboard_config, Some(id), &item_mod);
     if split_config.connection == "ble" {
         // Add storage when using BLE split
-        let flash_init = expand_flash_init(keyboard_config);
+        let hw = keyboard_config.hardware().unwrap();
+        let flash_init = expand_flash_init(&hw);
         chip_init.extend(quote! {
             #flash_init
             let mut storage = ::rmk::storage::new_storage_for_split_peripheral(flash, storage_config).await;
