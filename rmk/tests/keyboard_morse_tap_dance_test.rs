@@ -77,20 +77,22 @@ fn create_early_fire_keyboard() -> Keyboard<'static> {
 
     let behavior_config = BehaviorConfig {
         morse: MorsesConfig {
-            morses: Vec::from_slice(&[Morse::new_from_vial(
-                Action::Key(KeyCode::Hid(HidKeyCode::Enter)),
-                Action::Key(KeyCode::Hid(HidKeyCode::B)),
-                Action::Key(KeyCode::Hid(HidKeyCode::Enter)),
-                Action::No,
-                MorseProfile::const_default(),
-            ),
-            Morse::new_from_vial(
-                Action::Key(KeyCode::Hid(HidKeyCode::E)),
-                Action::Key(KeyCode::Hid(HidKeyCode::LShift)),
-                Action::Key(KeyCode::Hid(HidKeyCode::E)),
-                Action::No,
-                MorseProfile::const_default(),
-            )])
+            morses: Vec::from_slice(&[
+                Morse::new_from_vial(
+                    Action::Key(KeyCode::Hid(HidKeyCode::Enter)),
+                    Action::Key(KeyCode::Hid(HidKeyCode::B)),
+                    Action::Key(KeyCode::Hid(HidKeyCode::Enter)),
+                    Action::No,
+                    MorseProfile::const_default(),
+                ),
+                Morse::new_from_vial(
+                    Action::Key(KeyCode::Hid(HidKeyCode::E)),
+                    Action::Key(KeyCode::Hid(HidKeyCode::LShift)),
+                    Action::Key(KeyCode::Hid(HidKeyCode::E)),
+                    Action::No,
+                    MorseProfile::const_default(),
+                ),
+            ])
             .unwrap(),
             enable_flow_tap: false,
             default_profile: MorseProfile::new(
@@ -115,10 +117,7 @@ fn create_early_fire_keyboard() -> Keyboard<'static> {
 ///   td!(0): tap=A, hold=B, hold_after_tap=C, double_tap=D
 ///   Normal keys: k!(E) at (0,1), k!(F) at (0,2)
 fn create_permissive_hold_keyboard() -> Keyboard<'static> {
-    let keymap = [
-        [[td!(0), k!(E), k!(F), k!(A)]],
-        [[k!(Kp1), k!(Kp2), k!(Kp3), k!(Kp4)]],
-    ];
+    let keymap = [[[td!(0), k!(E), k!(F), k!(A)]], [[k!(Kp1), k!(Kp2), k!(Kp3), k!(Kp4)]]];
 
     let behavior_config = BehaviorConfig {
         morse: MorsesConfig {

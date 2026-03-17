@@ -20,6 +20,7 @@ pub enum LedIndicatorType {
 
 #[bitfield(u8, defmt = cfg(feature = "defmt"))]
 #[derive(Eq, PartialEq, Serialize, Deserialize, postcard::experimental::max_size::MaxSize)]
+#[cfg_attr(feature = "protocol", derive(postcard_schema::Schema))]
 pub struct LedIndicator {
     #[bits(1)]
     pub num_lock: bool,

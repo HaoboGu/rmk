@@ -1,14 +1,13 @@
 #[path = "./build_common.rs"]
 mod common;
 
-use std::path::Path;
-use std::process::Command;
+use std::path::{Path, PathBuf};
 use std::{env, fs};
 
 use const_gen::*;
 use rmk_config::{
-    BleConfig, KeyboardTomlConfig, RmkConstantsConfig, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS,
-    MIN_PASSKEY_ENTRY_TIMEOUT_SECS,
+    BleConfig, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS, KeyboardTomlConfig, MIN_PASSKEY_ENTRY_TIMEOUT_SECS,
+    RmkConstantsConfig,
 };
 
 fn main() {
@@ -16,9 +15,8 @@ fn main() {
     let mut cfgs = common::CfgSet::new();
     common::set_target_cfgs(&mut cfgs);
 
-    // Ensure build.rs is re-run when files change
-    // println!("cargo:rerun-if-changed=.git/HEAD");
-    println!("cargo:rerun-if-changed=build.rs");
+    // Environment-driven config inputs are tracked here. Source files that
+    // contribute to BUILD_HASH are tracked inside `compute_build_hash()`.
     println!("cargo:rerun-if-env-changed=KEYBOARD_TOML_PATH");
     println!("cargo:rerun-if-env-changed=VIAL_JSON_PATH");
 
@@ -47,7 +45,7 @@ fn main() {
 }
 
 fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventConfig, ble: Option<BleConfig>) -> String {
-    // Compute build hash according to the latest git commit
+    // Compute a deterministic build hash from stable inputs only.
     let build_hash = compute_build_hash();
     // Add other constants
     let mut constant_strs = vec![
@@ -56,6 +54,7 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) COMBO_MAX_NUM = constants.combo_max_num),
         const_declaration!(pub(crate) COMBO_MAX_LENGTH = constants.combo_max_length),
         const_declaration!(pub(crate) MACRO_SPACE_SIZE = constants.macro_space_size),
+        const_declaration!(pub(crate) MACRO_MAX_NUM = constants.macro_max_num),
         const_declaration!(pub(crate) FORK_MAX_NUM = constants.fork_max_num),
         const_declaration!(pub(crate) DEBOUNCE_THRESHOLD = constants.debounce_time),
         const_declaration!(pub(crate) REPORT_CHANNEL_SIZE = constants.report_channel_size),
@@ -88,9 +87,8 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
 
     // Add event channel constants
     // Note: default values are loaded from event_default.toml via config crate
-    let (ble_state_change_size, ble_state_change_pubs, ble_state_change_subs) = events.ble_state_change.into_values();
-    let (ble_profile_change_size, ble_profile_change_pubs, ble_profile_change_subs) =
-        events.ble_profile_change.into_values();
+    let (ble_status_change_size, ble_status_change_pubs, ble_status_change_subs) =
+        events.ble_status_change.into_values();
     let (connection_change_size, connection_change_pubs, connection_change_subs) =
         events.connection_change.into_values();
     let (modifier_size, modifier_pubs, modifier_subs) = events.modifier.into_values();
@@ -99,7 +97,7 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
     let (wpm_update_size, wpm_update_pubs, wpm_update_subs) = events.wpm_update.into_values();
     let (led_indicator_size, led_indicator_pubs, led_indicator_subs) = events.led_indicator.into_values();
     let (sleep_state_size, sleep_state_pubs, sleep_state_subs) = events.sleep_state.into_values();
-    let (battery_state_size, battery_state_pubs, battery_state_subs) = events.battery_state.into_values();
+    let (battery_status_size, battery_status_pubs, battery_status_subs) = events.battery_status.into_values();
     let (battery_adc_size, battery_adc_pubs, battery_adc_subs) = events.battery_adc.into_values();
     let (charging_state_size, charging_state_pubs, charging_state_subs) = events.charging_state.into_values();
     let (pointing_size, pointing_pubs, pointing_subs) = events.pointing.into_values();
@@ -113,12 +111,9 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
 
     constant_strs.extend([
         // BLE events
-        const_declaration!(pub(crate) BLE_STATE_CHANGE_EVENT_CHANNEL_SIZE = ble_state_change_size),
-        const_declaration!(pub(crate) BLE_STATE_CHANGE_EVENT_PUB_SIZE = ble_state_change_pubs),
-        const_declaration!(pub(crate) BLE_STATE_CHANGE_EVENT_SUB_SIZE = ble_state_change_subs),
-        const_declaration!(pub(crate) BLE_PROFILE_CHANGE_EVENT_CHANNEL_SIZE = ble_profile_change_size),
-        const_declaration!(pub(crate) BLE_PROFILE_CHANGE_EVENT_PUB_SIZE = ble_profile_change_pubs),
-        const_declaration!(pub(crate) BLE_PROFILE_CHANGE_EVENT_SUB_SIZE = ble_profile_change_subs),
+        const_declaration!(pub(crate) BLE_STATUS_CHANGE_EVENT_CHANNEL_SIZE = ble_status_change_size),
+        const_declaration!(pub(crate) BLE_STATUS_CHANGE_EVENT_PUB_SIZE = ble_status_change_pubs),
+        const_declaration!(pub(crate) BLE_STATUS_CHANGE_EVENT_SUB_SIZE = ble_status_change_subs),
         // Connection events
         const_declaration!(pub(crate) CONNECTION_CHANGE_EVENT_CHANNEL_SIZE = connection_change_size),
         const_declaration!(pub(crate) CONNECTION_CHANGE_EVENT_PUB_SIZE = connection_change_pubs),
@@ -144,9 +139,9 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub(crate) SLEEP_STATE_EVENT_PUB_SIZE = sleep_state_pubs),
         const_declaration!(pub(crate) SLEEP_STATE_EVENT_SUB_SIZE = sleep_state_subs),
         // Power events
-        const_declaration!(pub(crate) BATTERY_STATE_EVENT_CHANNEL_SIZE = battery_state_size),
-        const_declaration!(pub(crate) BATTERY_STATE_EVENT_PUB_SIZE = battery_state_pubs),
-        const_declaration!(pub(crate) BATTERY_STATE_EVENT_SUB_SIZE = battery_state_subs),
+        const_declaration!(pub(crate) BATTERY_STATUS_EVENT_CHANNEL_SIZE = battery_status_size),
+        const_declaration!(pub(crate) BATTERY_STATUS_EVENT_PUB_SIZE = battery_status_pubs),
+        const_declaration!(pub(crate) BATTERY_STATUS_EVENT_SUB_SIZE = battery_status_subs),
         const_declaration!(pub(crate) BATTERY_ADC_EVENT_CHANNEL_SIZE = battery_adc_size),
         const_declaration!(pub(crate) BATTERY_ADC_EVENT_PUB_SIZE = battery_adc_pubs),
         const_declaration!(pub(crate) BATTERY_ADC_EVENT_SUB_SIZE = battery_adc_subs),
@@ -180,26 +175,88 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
 }
 
 fn compute_build_hash() -> u32 {
-    // Get the short hash of the latest Git commit. Use "unknown" if it fails
-    let commit_id = Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
-        .output()
-        .ok()
-        .and_then(|output| {
-            if output.status.success() {
-                Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(|| "unknown".to_string());
-
-    // Get and format current local time
-    let now = chrono::Local::now();
-
-    // Combine data and compute CRC32
-    let combined = format!("{commit_id}_{now}");
     let mut hasher = crc32fast::Hasher::new();
-    hasher.update(combined.as_bytes());
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"));
+
+    hash_str(&mut hasher, "rmk-build-hash-v2");
+    hash_str(&mut hasher, &env::var("TARGET").unwrap_or_default());
+
+    let mut feature_names = env::vars()
+        .filter_map(|(key, value)| (key.starts_with("CARGO_FEATURE_") && value == "1").then_some(key))
+        .collect::<Vec<_>>();
+    feature_names.sort();
+    for feature_name in feature_names {
+        hash_str(&mut hasher, &feature_name);
+    }
+
+    hash_workspace_crate(&mut hasher, &manifest_dir);
+    hash_optional_input_path(&mut hasher, &manifest_dir.join("build_common.rs"), &manifest_dir);
+
+    if let Some(workspace_dir) = manifest_dir.parent() {
+        for crate_name in ["rmk-config", "rmk-macro", "rmk-types"] {
+            hash_workspace_crate(&mut hasher, &workspace_dir.join(crate_name));
+        }
+    }
+
+    if let Ok(toml_path) = env::var("KEYBOARD_TOML_PATH") {
+        let toml_path = PathBuf::from(toml_path);
+        let root = toml_path.parent().unwrap_or_else(|| Path::new("."));
+        hash_input_path(&mut hasher, &toml_path, root);
+    }
+
+    if let Ok(vial_json_path) = env::var("VIAL_JSON_PATH") {
+        let vial_json_path = PathBuf::from(vial_json_path);
+        let root = vial_json_path.parent().unwrap_or_else(|| Path::new("."));
+        hash_input_path(&mut hasher, &vial_json_path, root);
+    }
+
     hasher.finalize()
+}
+
+fn hash_workspace_crate(hasher: &mut crc32fast::Hasher, crate_dir: &Path) {
+    hash_optional_input_path(hasher, &crate_dir.join("Cargo.toml"), crate_dir);
+    hash_optional_input_path(hasher, &crate_dir.join("build.rs"), crate_dir);
+    hash_optional_input_path(hasher, &crate_dir.join("src"), crate_dir);
+}
+
+fn hash_optional_input_path(hasher: &mut crc32fast::Hasher, path: &Path, root: &Path) {
+    if path.exists() {
+        hash_input_path(hasher, path, root);
+    }
+}
+
+fn hash_input_path(hasher: &mut crc32fast::Hasher, path: &Path, root: &Path) {
+    println!("cargo:rerun-if-changed={}", path.display());
+
+    if path.is_dir() {
+        let mut entries = fs::read_dir(path)
+            .unwrap_or_else(|err| panic!("Failed to read build hash input directory {}: {err}", path.display()))
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .collect::<Vec<_>>();
+        entries.sort();
+
+        for entry in entries {
+            hash_input_path(hasher, &entry, root);
+        }
+        return;
+    }
+
+    if !path.is_file() {
+        hash_str(hasher, "missing");
+        hash_str(hasher, &path.display().to_string());
+        return;
+    }
+
+    let relative_path = path.strip_prefix(root).unwrap_or(path);
+    hash_str(hasher, &relative_path.display().to_string());
+
+    let bytes =
+        fs::read(path).unwrap_or_else(|err| panic!("Failed to read build hash input {}: {err}", path.display()));
+    hasher.update(&bytes);
+    hasher.update(&[0]);
+}
+
+fn hash_str(hasher: &mut crc32fast::Hasher, value: &str) {
+    hasher.update(value.as_bytes());
+    hasher.update(&[0]);
 }

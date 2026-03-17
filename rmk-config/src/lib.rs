@@ -200,6 +200,9 @@ pub struct RmkConstantsConfig {
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_max_patterns_per_key")]
     pub max_patterns_per_key: usize,
+    /// Maximum number of macros the keyboard can store
+    #[serde_inline_default(32)]
+    pub macro_max_num: usize,
     /// Macro space size in bytes for storing sequences
     #[serde_inline_default(256)]
     pub macro_space_size: usize,
@@ -215,8 +218,8 @@ pub struct RmkConstantsConfig {
     /// Flash channel size
     #[serde_inline_default(4)]
     pub flash_channel_size: usize,
-    /// The number of the split peripherals
-    #[serde_inline_default(1)]
+    /// The number of the split peripherals (0 = non-split keyboard)
+    #[serde_inline_default(0)]
     pub split_peripherals_num: usize,
     /// The number of available BLE profiles
     #[serde_inline_default(3)]
@@ -281,6 +284,7 @@ impl Default for RmkConstantsConfig {
             fork_max_num: 8,
             morse_max_num: 8,
             max_patterns_per_key: 8,
+            macro_max_num: 32,
             macro_space_size: 256,
             debounce_time: 20,
             report_channel_size: 16,
@@ -353,8 +357,7 @@ macro_rules! define_event_config {
 
 define_event_config!(
     // BLE events
-    ble_state_change,
-    ble_profile_change,
+    ble_status_change,
     // Connection events
     connection_change,
     // Input events
@@ -366,7 +369,7 @@ define_event_config!(
     led_indicator,
     sleep_state,
     // Power events
-    battery_state,
+    battery_status,
     battery_adc,
     charging_state,
     // Pointing device events

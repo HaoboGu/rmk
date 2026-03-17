@@ -567,7 +567,7 @@ async fn sleep_manager_task<
             update_conn_params(stack, conn, &conn_params).await;
             SLEEPING_STATE.store(true, Ordering::Release);
 
-            publish_event(SleepStateEvent { sleeping: true });
+            publish_event(SleepStateEvent::new(true));
         } else {
             // Wait for activity to wake up (false signal means activity/wakeup)
             let signal_value = CENTRAL_SLEEP.wait().await;
@@ -575,7 +575,7 @@ async fn sleep_manager_task<
                 info!("Waking up from sleep mode due to activity");
                 SLEEPING_STATE.store(false, Ordering::Release);
 
-                publish_event(SleepStateEvent { sleeping: false });
+                publish_event(SleepStateEvent::new(false));
 
                 // Restore normal connection parameters
                 update_conn_params(stack, conn, &defaul_central_conn_param()).await;

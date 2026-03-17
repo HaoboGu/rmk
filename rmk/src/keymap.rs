@@ -17,7 +17,7 @@ use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_ev
 use crate::fork::Fork;
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
-#[cfg(feature = "vial_lock")]
+#[cfg(feature = "host_security")]
 use crate::matrix::MatrixState;
 use crate::morse::Morse;
 
@@ -108,8 +108,8 @@ struct KeyMapInner<'a> {
     mouse_buttons: u8,
     /// Timer for held keys (bounded by hold buffer size)
     timer: LinearMap<KeyboardEventPos, Instant, HOLD_BUFFER_SIZE>,
-    /// Matrix state for vial lock
-    #[cfg(feature = "vial_lock")]
+    /// Matrix state for host security (shared between vial_lock and rmk_protocol)
+    #[cfg(feature = "host_security")]
     matrix_state: MatrixState,
 }
 
@@ -130,7 +130,6 @@ impl KeyMapInner<'_> {
     fn cache_index(&self, row: usize, col: usize) -> usize {
         row * self.col + col
     }
-
 
     #[inline]
     fn encoder_cache_index(&self, id: usize, direction: usize) -> usize {
@@ -280,7 +279,7 @@ impl KeyMapInner<'_> {
         if self.num_layer > 3 {
             self.layer_state[3] = self.layer_state[1] && self.layer_state[2];
             let layer = self.get_activated_layer();
-            publish_event(LayerChangeEvent { layer });
+            publish_event(LayerChangeEvent::new(layer));
         }
     }
 
@@ -290,7 +289,7 @@ impl KeyMapInner<'_> {
                 self.layer_state[tri_layer[0] as usize] && self.layer_state[tri_layer[1] as usize];
         }
         let layer = self.get_activated_layer();
-        publish_event(LayerChangeEvent { layer });
+        publish_event(LayerChangeEvent::new(layer));
     }
 
     fn activate_layer(&mut self, layer_num: u8) {
@@ -369,7 +368,7 @@ impl<'a> KeyMap<'a> {
                 hand,
                 mouse_buttons: 0,
                 timer: LinearMap::new(),
-                #[cfg(feature = "vial_lock")]
+                #[cfg(feature = "host_security")]
                 matrix_state: MatrixState::new(ROW, COL),
             }),
         }
@@ -475,6 +474,10 @@ impl<'a> KeyMap<'a> {
 
     pub(crate) fn get_keymap_config(&self) -> (usize, usize, usize) {
         self.inner.borrow().get_keymap_config()
+    }
+
+    pub(crate) fn num_encoder(&self) -> usize {
+        self.inner.borrow().num_encoder
     }
 
     pub(crate) fn hand_at(&self, row: usize, col: usize) -> Hand {
@@ -606,6 +609,40 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow_mut().mouse_buttons = buttons;
     }
 
+    // ── Bulk sequential access (for RMK protocol GetKeymapBulk) ──
+
+    /// Read up to `count` key actions starting at (`start_layer`, `start_row`, `start_col`),
+    /// advancing col → row → layer. Acquires the `RefCell` borrow once for all keys.
+    pub(crate) fn get_actions_bulk<const N: usize>(
+        &self,
+        start_layer: usize,
+        start_row: usize,
+        start_col: usize,
+        count: usize,
+        out: &mut heapless::Vec<KeyAction, N>,
+    ) {
+        let inner = self.inner.borrow();
+        let (rows, cols, layers) = (inner.row, inner.col, inner.num_layer);
+        let (mut l, mut r, mut c) = (start_layer, start_row, start_col);
+        for _ in 0..count {
+            if l >= layers {
+                break;
+            }
+            if out.push(inner.layers[inner.layer_index(l, r, c)]).is_err() {
+                break;
+            }
+            c += 1;
+            if c >= cols {
+                c = 0;
+                r += 1;
+            }
+            if r >= rows {
+                r = 0;
+                l += 1;
+            }
+        }
+    }
+
     // ── Bulk flat access (for Vial DynamicKeymapGetBuffer/SetBuffer) ──
 
     pub(crate) fn get_action_by_flat_index(&self, index: usize) -> KeyAction {
@@ -711,19 +748,19 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().timer.get(&pos).copied()
     }
 
-    // ── Matrix state (vial_lock) ──
+    // ── Matrix state (host_security) ──
 
-    #[cfg(feature = "vial_lock")]
+    #[cfg(feature = "host_security")]
     pub(crate) fn update_matrix_state(&self, event: &KeyboardEvent) {
         self.inner.borrow_mut().matrix_state.update(event);
     }
 
-    #[cfg(feature = "vial_lock")]
+    #[cfg(feature = "host_security")]
     pub(crate) fn read_matrix_state(&self, target: &mut [u8]) {
         self.inner.borrow().matrix_state.read_all(target);
     }
 
-    #[cfg(feature = "vial_lock")]
+    #[cfg(feature = "host_security")]
     pub(crate) fn read_matrix_key(&self, row: u8, col: u8) -> bool {
         self.inner.borrow().matrix_state.read(row, col)
     }

@@ -1,17 +1,13 @@
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
+use rmk_types::connection::ConnectionType;
+
 /// Current connection type:
 /// - 0: USB
 /// - 1: BLE
 /// - Other: reserved
 pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
 pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
-
-/// Current default connection type
-pub enum ConnectionType {
-    Usb = 0,
-    Ble = 1,
-}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConnectionState {
@@ -20,30 +16,11 @@ pub enum ConnectionState {
 }
 
 impl ConnectionState {
-    pub(crate) fn from(state: &AtomicBool) -> Self {
+    pub(crate) fn from_atomic(state: &AtomicBool) -> Self {
         if state.load(Ordering::Acquire) {
             Self::Connected
         } else {
             Self::Disconnected
-        }
-    }
-}
-
-impl From<u8> for ConnectionType {
-    fn from(value: u8) -> Self {
-        match value {
-            0 => ConnectionType::Usb,
-            1 => ConnectionType::Ble,
-            _ => unreachable!("Invalid connection type"),
-        }
-    }
-}
-
-impl From<ConnectionType> for u8 {
-    fn from(conn_type: ConnectionType) -> u8 {
-        match conn_type {
-            ConnectionType::Usb => 0,
-            ConnectionType::Ble => 1,
         }
     }
 }
