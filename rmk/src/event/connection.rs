@@ -2,13 +2,12 @@
 //!
 //! This module contains all connection-related events:
 //! - Connection type change events (USB/BLE)
-//! - BLE state change events
-//! - BLE profile change events
+//! - BLE status change events
 
 use rmk_macro::event;
 
 #[cfg(feature = "_ble")]
-use crate::ble::BleState;
+use rmk_types::ble::BleStatus;
 
 // ============================================================================
 // Connection Type Events
@@ -52,28 +51,9 @@ pub struct ConnectionChangeEvent {
 // BLE Connection Events
 // ============================================================================
 
-/// BLE state changed event
+/// BLE status changed event
 #[cfg(feature = "_ble")]
-#[event(channel_size = crate::BLE_STATE_CHANGE_EVENT_CHANNEL_SIZE, pubs = crate::BLE_STATE_CHANGE_EVENT_PUB_SIZE, subs = crate::BLE_STATE_CHANGE_EVENT_SUB_SIZE)]
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct BleStateChangeEvent {
-    pub profile: u8,
-    pub state: BleState,
-}
-
-#[cfg(feature = "_ble")]
-impl BleStateChangeEvent {
-    pub fn new(profile: u8, state: BleState) -> Self {
-        Self { profile, state }
-    }
-}
-
-/// BLE profile changed event
-#[cfg(feature = "_ble")]
-#[event(channel_size = crate::BLE_PROFILE_CHANGE_EVENT_CHANNEL_SIZE, pubs = crate::BLE_PROFILE_CHANGE_EVENT_PUB_SIZE, subs = crate::BLE_PROFILE_CHANGE_EVENT_SUB_SIZE)]
+#[event(channel_size = crate::BLE_STATUS_CHANGE_EVENT_CHANNEL_SIZE, pubs = crate::BLE_STATUS_CHANGE_EVENT_PUB_SIZE, subs = crate::BLE_STATUS_CHANGE_EVENT_SUB_SIZE)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct BleProfileChangeEvent {
-    pub profile: u8,
-}
+pub struct BleStatusChangeEvent(pub BleStatus);

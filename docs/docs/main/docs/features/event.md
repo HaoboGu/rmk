@@ -44,8 +44,7 @@ RMK provides built-in event types organized by category:
 
 **Connection Events** (`rmk::event::connection`):
 - `ConnectionChangeEvent` - Connection type changed (USB/BLE)
-- `BleStateChangeEvent` - BLE connection state changed (when BLE is enabled)
-- `BleProfileChangeEvent` - BLE profile switched (when BLE is enabled)
+- `BleStatusChangeEvent` - BLE profile or connection state changed (when BLE is enabled)
 
 **Split Keyboard Events** (`rmk::event::split`, when split is enabled):
 - `PeripheralConnectedEvent` - Peripheral connection state changed
