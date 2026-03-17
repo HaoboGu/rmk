@@ -2,8 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use config::{Config, File, FileFormat};
-use serde::{Deserialize as SerdeDeserialize, de};
-use serde_derive::Deserialize;
+use serde::{Deserialize, de};
 use serde_inline_default::serde_inline_default;
 
 /// Event channel default configuration
@@ -50,7 +49,7 @@ pub struct KeyboardTomlConfig {
     /// Storage config
     storage: Option<StorageConfig>,
     /// Ble config
-    ble: Option<BleConfig>,
+    pub ble: Option<BleConfig>,
     /// Chip-specific configs (e.g., [chip.nrf52840])
     chip: Option<HashMap<String, ChipConfig>>,
     /// Dependency config
@@ -231,7 +230,7 @@ fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
 where
     D: de::Deserializer<'de>,
 {
-    let value = SerdeDeserialize::deserialize(deserializer)?;
+    let value = Deserialize::deserialize(deserializer)?;
     if value > 256 {
         panic!("❌ Parse `keyboard.toml` error: combo_max_num must be between 0 and 256, got {value}");
     }
@@ -242,7 +241,7 @@ fn check_morse_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
 where
     D: de::Deserializer<'de>,
 {
-    let value = SerdeDeserialize::deserialize(deserializer)?;
+    let value = Deserialize::deserialize(deserializer)?;
     if value > 256 {
         panic!("❌ Parse `keyboard.toml` error: morse_max_num must be between 0 and 256, got {value}");
     }
@@ -253,7 +252,7 @@ fn check_max_patterns_per_key<'de, D>(deserializer: D) -> Result<usize, D::Error
 where
     D: de::Deserializer<'de>,
 {
-    let value = SerdeDeserialize::deserialize(deserializer)?;
+    let value = Deserialize::deserialize(deserializer)?;
     if !(4..=65536).contains(&value) {
         panic!("❌ Parse `keyboard.toml` error: max_patterns_per_key must be between 4 and 65536, got {value}");
     }
@@ -264,7 +263,7 @@ fn check_fork_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
 where
     D: de::Deserializer<'de>,
 {
-    let value = SerdeDeserialize::deserialize(deserializer)?;
+    let value = Deserialize::deserialize(deserializer)?;
     if value > 256 {
         panic!("❌ Parse `keyboard.toml` error: fork_max_num must be between 0 and 256, got {value}");
     }
@@ -472,7 +471,15 @@ pub struct BleConfig {
     pub adc_divider_total: Option<u32>,
     pub default_tx_power: Option<i8>,
     pub use_2m_phy: Option<bool>,
+    pub passkey_entry: Option<bool>,
+    pub passkey_entry_timeout: Option<u32>,
 }
+
+/// Default passkey entry timeout in seconds.
+pub const DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS: u32 = 120;
+
+/// Minimum passkey entry timeout in seconds.
+pub const MIN_PASSKEY_ENTRY_TIMEOUT_SECS: u32 = 30;
 
 /// Config for chip-specific settings
 #[derive(Clone, Default, Debug, Deserialize)]

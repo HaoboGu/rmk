@@ -1,4 +1,4 @@
-import { useDark } from 'rspress/runtime'
+import { useDark } from '@rspress/core/runtime'
 
 const langBadge = (name: string, defaultIcon: string, darkIcon?: string) => () => {
   return (

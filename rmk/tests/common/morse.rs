@@ -9,7 +9,7 @@ use rmk::{k, lt, mt, td};
 
 use crate::common::wrap_keymap;
 
-pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'static, 1, 5, 2> {
+pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'static> {
     let keymap = [
         [[
             k!(A),
@@ -71,7 +71,7 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard
     Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
 
-pub fn create_morse_keyboard(behavior_config: BehaviorConfig, hand: [[Hand; 5]; 1]) -> Keyboard<'static, 1, 5, 2> {
+pub fn create_morse_keyboard(behavior_config: BehaviorConfig, hand: [[Hand; 5]; 1]) -> Keyboard<'static> {
     let keymap = [
         [[
             k!(A),

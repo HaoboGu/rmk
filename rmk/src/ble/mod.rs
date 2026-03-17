@@ -11,7 +11,7 @@ use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
 #[cfg(feature = "host")]
-use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap, core::cell::RefCell};
+use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap};
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
 use {crate::descriptor::ViaReport, crate::host::UsbHostReaderWriter};
 #[cfg(not(feature = "_no_usb"))]
@@ -22,7 +22,7 @@ use {
     crate::usb::UsbKeyboardWriter,
     crate::usb::{USB_ENABLED, USB_REMOTE_WAKEUP, USB_SUSPENDED},
     crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder},
-    embassy_futures::select::{Either, Either4, select4},
+    embassy_futures::select::{Either4, select4},
     embassy_usb::driver::Driver,
 };
 #[cfg(feature = "storage")]
@@ -31,6 +31,8 @@ use {
     crate::{read_storage, state::CONNECTION_TYPE},
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
 };
+#[cfg(any(not(feature = "_no_usb"), feature = "passkey_entry"))]
+use embassy_futures::select::Either;
 
 use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
@@ -53,6 +55,8 @@ pub(crate) mod device_info;
 #[cfg(feature = "host")]
 pub(crate) mod host_service;
 pub(crate) mod led;
+#[cfg(feature = "passkey_entry")]
+pub mod passkey;
 pub(crate) mod profile;
 
 #[derive(Clone, Copy, Debug)]
@@ -94,9 +98,16 @@ pub async fn build_ble_stack<
     resources: &'a mut HostResources<P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX>,
 ) -> Stack<'a, C, P> {
     // Initialize trouble host stack
-    trouble_host::new(controller, resources)
+    let builder = trouble_host::new(controller, resources)
         .set_random_address(Address::random(host_address))
-        .set_random_generator_seed(random_generator)
+        .set_random_generator_seed(random_generator);
+
+    #[cfg(feature = "passkey_entry")]
+    if crate::PASSKEY_ENTRY_ENABLED {
+        builder.set_io_capabilities(IoCapabilities::KeyboardOnly);
+    }
+
+    builder
 }
 
 /// Run the BLE stack.
@@ -106,12 +117,12 @@ pub(crate) async fn run_ble<
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    #[cfg(any(feature = "storage", feature = "host"))] const ROW: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const COL: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_LAYER: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_ENCODER: usize,
+    #[cfg(feature = "storage")] const ROW: usize,
+    #[cfg(feature = "storage")] const COL: usize,
+    #[cfg(feature = "storage")] const NUM_LAYER: usize,
+    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
-    #[cfg(feature = "host")] keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
@@ -574,7 +585,8 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 if event.data().len() == 32 {
                                     use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;
 
-                                    let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
+                                    let mut data = [0u8; 32];
+                                    data.copy_from_slice(event.data());
                                     HOST_GUI_INPUT_CHANNEL.send(data).await;
                                 } else {
                                     warn!("Wrong host packet data: {:?}", event.data());
@@ -609,6 +621,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         }
                     }
                     GattEvent::Other(_) => None,
+                    GattEvent::NotAllowed(_) => None,
                 };
 
                 // This step is also performed at drop(), but writing it explicitly is necessary
@@ -653,17 +666,12 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                     supervision_timeout.as_millis()
                 );
             }
-            GattConnectionEvent::RequestConnectionParams {
-                min_connection_interval,
-                max_connection_interval,
-                max_latency,
-                supervision_timeout,
-            } => info!(
+            GattConnectionEvent::RequestConnectionParams(req) => info!(
                 "[gatt] RequestConnectionParams: interval: ({:?}, {:?})ms, {:?}, {:?}ms",
-                min_connection_interval.as_millis(),
-                max_connection_interval.as_millis(),
-                max_latency,
-                supervision_timeout.as_millis(),
+                req.params().min_connection_interval.as_millis(),
+                req.params().max_connection_interval.as_millis(),
+                req.params().max_latency,
+                req.params().supervision_timeout.as_millis(),
             ),
             GattConnectionEvent::DataLengthUpdated {
                 max_tx_octets,
@@ -681,7 +689,52 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
             }
             GattConnectionEvent::PassKeyDisplay(pass_key) => info!("[gatt] PassKeyDisplay: {:?}", pass_key),
             GattConnectionEvent::PassKeyConfirm(pass_key) => info!("[gatt] PassKeyConfirm: {:?}", pass_key),
-            GattConnectionEvent::PassKeyInput => warn!("[gatt] PassKeyInput event, should not happen"),
+            GattConnectionEvent::PassKeyInput => {
+                #[cfg(feature = "passkey_entry")]
+                if crate::PASSKEY_ENTRY_ENABLED {
+                    use crate::ble::passkey::{
+                        PASSKEY_RESPONSE, begin_passkey_entry_session, end_passkey_entry_session,
+                    };
+
+                    info!("[gatt] PassKeyInput: entering passkey entry mode");
+                    begin_passkey_entry_session();
+
+                    // Wait with configurable timeout
+                    match embassy_time::with_timeout(
+                        Duration::from_secs(crate::PASSKEY_ENTRY_TIMEOUT_SECS as u64),
+                        PASSKEY_RESPONSE.wait(),
+                    )
+                    .await
+                    {
+                        Ok(Some(passkey)) => {
+                            end_passkey_entry_session();
+                            info!("[gatt] Passkey entered: submitting");
+                            if let Err(e) = conn.raw().pass_key_input(passkey) {
+                                error!("[gatt] pass_key_input error: {:?}", e);
+                            }
+                        }
+                        Ok(None) => {
+                            end_passkey_entry_session();
+                            info!("[gatt] Passkey entry cancelled");
+                            if let Err(e) = conn.raw().pass_key_cancel() {
+                                error!("[gatt] pass_key_cancel error: {:?}", e);
+                            }
+                        }
+                        Err(_) => {
+                            end_passkey_entry_session();
+                            warn!("[gatt] Passkey entry timeout");
+                            let _ = conn.raw().pass_key_cancel();
+                        }
+                    }
+                } else {
+                    warn!("[gatt] PassKeyInput: disabled in config, cancelling pairing, this shouldn't happen");
+                    if let Err(e) = conn.raw().pass_key_cancel() {
+                        error!("[gatt] pass_key_cancel error: {:?}", e);
+                    }
+                }
+                #[cfg(not(feature = "passkey_entry"))]
+                warn!("[gatt] PassKeyInput event, should not happen")
+            }
         }
 
         // Publish the BLE connected event
@@ -790,7 +843,7 @@ pub(crate) async fn set_conn_params<
     update_conn_params(
         stack,
         conn.raw(),
-        &ConnectParams {
+        &RequestedConnParams {
             min_connection_interval: Duration::from_millis(15),
             max_connection_interval: Duration::from_millis(15),
             max_latency: 30,
@@ -807,7 +860,7 @@ pub(crate) async fn set_conn_params<
     update_conn_params(
         stack,
         conn.raw(),
-        &ConnectParams {
+        &RequestedConnParams {
             min_connection_interval: Duration::from_micros(7500),
             max_connection_interval: Duration::from_micros(7500),
             max_latency: 30,
@@ -831,15 +884,15 @@ async fn run_ble_keyboard<
     'd,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    #[cfg(any(feature = "storage", feature = "host"))] const ROW: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const COL: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_LAYER: usize,
-    #[cfg(any(feature = "storage", feature = "host"))] const NUM_ENCODER: usize,
+    #[cfg(feature = "storage")] const ROW: usize,
+    #[cfg(feature = "storage")] const COL: usize,
+    #[cfg(feature = "storage")] const NUM_LAYER: usize,
+    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
     server: &'b Server<'_>,
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     stack: &Stack<'_, C, DefaultPacketPool>,
-    #[cfg(feature = "host")] keymap: &'c RefCell<KeyMap<'c, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "host")] keymap: &'c KeyMap<'c>,
     #[cfg(feature = "host")] rmk_config: &'d mut RmkConfig<'static>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
@@ -929,7 +982,7 @@ pub(crate) async fn update_conn_params<
 >(
     stack: &Stack<'a, C, P>,
     conn: &Connection<'b, P>,
-    params: &ConnectParams,
+    params: &RequestedConnParams,
 ) {
     loop {
         match conn.update_connection_params(stack, params).await {

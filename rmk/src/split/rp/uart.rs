@@ -21,6 +21,7 @@ use embedded_io_async::{ErrorType, Read, Write};
 use fixed::traits::ToFixed;
 use rp_pac::io::vals::Oeover;
 
+#[derive(Clone, Copy)]
 pub struct IrqBinding;
 unsafe impl<PIO: Instance> Binding<PIO::Interrupt, InterruptHandler<PIO>> for IrqBinding {}
 
@@ -483,20 +484,44 @@ impl<PIO: Instance + UartPioAccess> Handler<PIO::Interrupt> for UartInterruptHan
 
 impl<'a, PIO: Instance + UartPioAccess> Read for BufferedUart<'a, PIO> {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        self.read_buffer(buf).await
+        self.read_buffer(buf).await.map_err(|e| e.into())
     }
 }
 
 impl<'a, PIO: Instance + UartPioAccess> Write for BufferedUart<'a, PIO> {
     async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        self.write_buffer(buf).await
+        self.write_buffer(buf).await.map_err(|e| e.into())
     }
 
     async fn flush(&mut self) -> Result<(), Self::Error> {
-        self.flush().await
+        self.flush().await.map_err(|e| e.into())
+    }
+}
+
+#[derive(Debug)]
+// TODO: Remove NewError after embassy-rp updates to embedded-io-async 0.7
+pub struct NewError(Error);
+
+impl core::fmt::Display for NewError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
+impl core::error::Error for NewError {}
+
+impl embedded_io_async::Error for NewError {
+    fn kind(&self) -> embedded_io_async::ErrorKind {
+        embedded_io_async::ErrorKind::Other
+    }
+}
+
+impl From<embassy_rp::uart::Error> for NewError {
+    fn from(value: embassy_rp::uart::Error) -> Self {
+        Self(value)
     }
 }
 
 impl<'a, PIO: Instance + UartPioAccess> ErrorType for BufferedUart<'a, PIO> {
-    type Error = Error;
+    type Error = NewError;
 }

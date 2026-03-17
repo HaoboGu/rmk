@@ -253,65 +253,51 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
         || key_info.len() != row
         || key_info[0].len() != col
     {
-        quote! { let mut per_key_config = ::rmk::config::PositionalConfig::default(); }
+        quote! { let per_key_config = ::rmk::config::PositionalConfig::default(); }
     } else {
         let key_info_config = expand_key_info(&key_info);
-        quote! { let mut per_key_config = ::rmk::config::PositionalConfig::new(#key_info_config); }
+        quote! { let per_key_config = ::rmk::config::PositionalConfig::new(#key_info_config); }
+    };
+
+    let num_encoders = keyboard_config
+        .get_board_config()
+        .unwrap()
+        .get_num_encoder();
+    let total_num_encoders = num_encoders.iter().sum::<usize>();
+
+    let keymap_data_init = if total_num_encoders == 0 {
+        quote! {
+            let mut keymap_data = ::rmk::KeymapData::new(get_default_keymap());
+        }
+    } else {
+        quote! {
+            let mut keymap_data = ::rmk::KeymapData::new_with_encoder(
+                get_default_keymap(),
+                get_default_encoder_map(),
+            );
+        }
     };
 
     if keyboard_config.get_storage_config().enabled {
-        let num_encoders = keyboard_config
-            .get_board_config()
-            .unwrap()
-            .get_num_encoder();
-        let total_num_encoders = num_encoders.iter().sum::<usize>();
-        let keymap_storage_init = if total_num_encoders == 0 {
-            // No encoder
-            quote! {
-                ::rmk::initialize_keymap_and_storage(
-                    &mut default_keymap,
-                    flash,
-                    &rmk_config.storage_config,
-                    &mut behavior_config,
-                    &mut per_key_config
-                )
-            }
-        } else {
-            // Encoder exists
-            quote! {
-                ::rmk::initialize_encoder_keymap_and_storage(
-                    &mut default_keymap,
-                    &mut encoder_keymap,
-                    flash,
-                    &rmk_config.storage_config,
-                    &mut behavior_config,
-                    &mut per_key_config
-                )
-            }
-        };
-        let default_encoder_keymap = if total_num_encoders == 0 {
-            quote! {}
-        } else {
-            quote! {
-                let mut encoder_keymap = get_default_encoder_map();
-            }
-        };
-        // Return the keymap and storage initialization code
         quote! {
             #initialize_positional_config
-            let mut default_keymap = get_default_keymap();
-            #default_encoder_keymap
-            let (keymap, mut storage) =  #keymap_storage_init.await;
+            #keymap_data_init
+            let (keymap, mut storage) = ::rmk::initialize_keymap_and_storage(
+                &mut keymap_data,
+                flash,
+                &rmk_config.storage_config,
+                &mut behavior_config,
+                &per_key_config,
+            ).await;
         }
     } else {
-        // Return the keymap initialization code
         quote! {
             #initialize_positional_config
-            let mut default_keymap = get_default_keymap();
-            let keymap =  ::rmk::initialize_keymap(
-                &mut default_keymap,
+            #keymap_data_init
+            let keymap = ::rmk::initialize_keymap(
+                &mut keymap_data,
                 &mut behavior_config,
-                &mut per_key_config
+                &per_key_config,
             ).await;
         }
     }

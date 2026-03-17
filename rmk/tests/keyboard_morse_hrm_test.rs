@@ -19,7 +19,7 @@ use crate::common::wrap_keymap;
 use crate::common::morse::create_morse_keyboard;
 use crate::common::{KC_LGUI, KC_LSHIFT};
 
-fn create_hrm_keyboard() -> Keyboard<'static, 1, 5, 2> {
+fn create_hrm_keyboard() -> Keyboard<'static> {
     let hand = [[Hand::Left, Hand::Left, Hand::Right, Hand::Right, Hand::Right]];
     create_morse_keyboard(
         BehaviorConfig {
@@ -41,7 +41,7 @@ fn create_hrm_keyboard() -> Keyboard<'static, 1, 5, 2> {
     )
 }
 
-fn create_hrm_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
+fn create_hrm_keyboard_with_combo() -> Keyboard<'static> {
     let combo_key = KeyAction::TapHold(
         Action::Key(KeyCode::Hid(HidKeyCode::B)),
         Action::Modifier(ModifierCombination::LSHIFT),
@@ -97,7 +97,7 @@ fn create_hrm_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
     )
 }
 
-fn create_release_remap_keyboard(morse_mode: MorseMode) -> Keyboard<'static, 1, 3, 2> {
+fn create_release_remap_keyboard(morse_mode: MorseMode) -> Keyboard<'static> {
     let keymap = [
         [[mo!(1), a!(No), k!(A)]],
         [[a!(Transparent), k!(B), a!(Transparent)]],

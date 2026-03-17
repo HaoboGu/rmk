@@ -106,6 +106,10 @@ pub enum KeyState {
     /// The data represents the already completed morse pattern
     Released(MorsePattern),
 
+    /// After a tap has been fired early (early fire optimization), but the key
+    /// remains in the buffer to allow hold_after_tap continuation.
+    EarlyFired(MorsePattern),
+
     /// The corresponding action is already executed (so the Pressed HID report is sent),
     /// but the release HID report is not sent yet (will be sent only when the corresponding
     /// key is really released).

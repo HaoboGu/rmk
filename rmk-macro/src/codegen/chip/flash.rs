@@ -15,6 +15,7 @@ pub(crate) fn expand_flash_init(keyboard_config: &KeyboardTomlConfig) -> TokenSt
     }
     let mut flash_init = expand_storage_config(&keyboard_config.get_storage_config());
     let chip = keyboard_config.get_chip_model().unwrap();
+    let communication = keyboard_config.get_communication_config().unwrap();
     flash_init.extend(
     match chip.series {
             ChipSeries::Stm32 => {
@@ -27,10 +28,23 @@ pub(crate) fn expand_flash_init(keyboard_config: &KeyboardTomlConfig) -> TokenSt
                     let flash = ::nrf_mpsl::Flash::take(mpsl, p.NVMC);
                 }
             }
-            ChipSeries::Rp2040 => quote! {
-                const FLASH_SIZE: usize = 2 * 1024 * 1024;
-                let flash = ::embassy_rp::flash::Flash::<_, ::embassy_rp::flash::Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH1);
-            },
+            ChipSeries::Rp2040 => {
+                if communication.ble_enabled() {
+                    quote! {
+                        const FLASH_SIZE: usize = 2 * 1024 * 1024;
+                        let flash = ::embassy_rp::flash::Flash::<_, ::embassy_rp::flash::Async, FLASH_SIZE>::new(
+                            p.FLASH,
+                            p.DMA_CH1,
+                            Irqs,
+                        );
+                    }
+                } else {
+                    quote! {
+                        const FLASH_SIZE: usize = 2 * 1024 * 1024;
+                        let flash = ::embassy_rp::flash::Flash::<_, ::embassy_rp::flash::Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH1);
+                    }
+                }
+            }
             ChipSeries::Esp32 => quote! {
                 let flash = ::rmk::storage::async_flash_wrapper(::esp_storage::FlashStorage::new(p.FLASH));
             },

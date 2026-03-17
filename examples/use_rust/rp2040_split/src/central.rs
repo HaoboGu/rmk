@@ -23,7 +23,8 @@ use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
 use rmk::split::central::run_peripheral_manager;
-use rmk::{initialize_keymap_and_storage, run_all, run_rmk};
+use rmk::split::rp::BufferedUartWrapper;
+use rmk::{initialize_keymap_and_storage, KeymapData, run_all, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -72,19 +73,19 @@ async fn main(_spawner: Spawner) {
     let tx_buf = &mut TX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
     static RX_BUF: StaticCell<[u8; SPLIT_MESSAGE_MAX_SIZE]> = StaticCell::new();
     let rx_buf = &mut RX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
-    let uart_receiver = BufferedUart::new(p.UART0, p.PIN_0, p.PIN_1, Irqs, tx_buf, rx_buf, uart::Config::default());
+    let uart_receiver = BufferedUartWrapper(BufferedUart::new(p.UART0, p.PIN_0, p.PIN_1, Irqs, tx_buf, rx_buf, uart::Config::default()));
 
     // Initialize the storage and keymap
-    let mut default_keymap = keymap::get_default_keymap();
+    let mut keymap_data = KeymapData::new(keymap::get_default_keymap());
     let mut behavior_config = BehaviorConfig::default();
     let storage_config = StorageConfig::default();
-    let mut per_key_config = PositionalConfig::default();
+    let per_key_config = PositionalConfig::default();
     let (keymap, mut storage) = initialize_keymap_and_storage(
-        &mut default_keymap,
+        &mut keymap_data,
         flash,
         &storage_config,
         &mut behavior_config,
-        &mut per_key_config,
+        &per_key_config,
     )
     .await;
 

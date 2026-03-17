@@ -843,8 +843,8 @@ pub fn to_ascii(keycode: HidKeyCode, shifted: bool) -> u8 {
         (HidKeyCode::Quote, true) => b'"',
         (HidKeyCode::Grave, false) => b'`',
         (HidKeyCode::Grave, true) => b'~',
-        (HidKeyCode::Backslash, true) => b'\\',
-        (HidKeyCode::Backslash, false) => b'|',
+        (HidKeyCode::Backslash, false) => b'\\',
+        (HidKeyCode::Backslash, true) => b'|',
         (HidKeyCode::Comma, false) => b',',
         (HidKeyCode::Comma, true) => b'<',
         (HidKeyCode::Dot, false) => b'.',
@@ -857,7 +857,7 @@ pub fn to_ascii(keycode: HidKeyCode, shifted: bool) -> u8 {
         (HidKeyCode::Backspace, false) => b'\x08',
         (HidKeyCode::Escape, false) => b'\x1B',
         (HidKeyCode::Delete, false) => b'\x7F',
-        // not supported keycodes
-        (_, _) => b'X',
+        // Unsupported keycodes return NUL to avoid colliding with a real key.
+        (_, _) => 0,
     }
 }
