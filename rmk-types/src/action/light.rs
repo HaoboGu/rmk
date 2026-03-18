@@ -3,11 +3,11 @@
 use postcard::experimental::max_size::MaxSize;
 #[cfg(feature = "rmk_protocol")]
 use postcard_schema::Schema;
+use serde::{Deserialize, Serialize};
 
 /// Actions for controlling lights
-#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(MaxSize)]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "_codegen", derive(strum::VariantNames))]
 pub enum LightAction {

@@ -3,14 +3,14 @@
 use postcard::experimental::max_size::MaxSize;
 #[cfg(feature = "rmk_protocol")]
 use postcard_schema::Schema;
+use serde::{Deserialize, Serialize};
 
 use super::{Action, MorseProfile};
 
 /// A KeyAction is the action at a keyboard position, stored in keymap.
 /// It can be a single action like triggering a key, or a composite keyboard action like tap/hold
-#[derive(Debug, Copy, Clone, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Copy, Clone, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(MaxSize)]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub enum KeyAction {
     /// No action

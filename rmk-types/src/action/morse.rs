@@ -3,11 +3,11 @@
 use postcard::experimental::max_size::MaxSize;
 #[cfg(feature = "rmk_protocol")]
 use postcard_schema::Schema;
+use serde::{Deserialize, Serialize};
 
 /// Mode for morse key behavior
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(MaxSize)]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[repr(u8)]
 pub enum MorseMode {
@@ -23,9 +23,8 @@ pub enum MorseMode {
 
 /// Configuration for morse, tap dance and tap-hold
 /// to save some RAM space, manually packed into 32 bits
-#[derive(PartialEq, Eq, Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(MaxSize)]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub struct MorseProfile(u32);
 

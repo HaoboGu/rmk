@@ -26,14 +26,14 @@ pub use morse::{MorseMode, MorseProfile};
 use postcard::experimental::max_size::MaxSize;
 #[cfg(feature = "rmk_protocol")]
 use postcard_schema::Schema;
+use serde::{Deserialize, Serialize};
 
 use crate::keycode::{KeyCode, SpecialKey};
 use crate::modifier::ModifierCombination;
 
 /// A single basic action that a keyboard can execute.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(MaxSize)]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub enum Action {
     /// Default action, no action.
