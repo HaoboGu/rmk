@@ -282,17 +282,8 @@ fn generate_stm32_exti_interrupts(keyboard_config: &KeyboardTomlConfig) -> Token
 
     // Collect all row pins from the matrix configuration
     let row_pins: Vec<String> = match &board {
-        BoardConfig::UniBody(unibody) => unibody
-            .matrix
-            .row_pins
-            .clone()
-            .unwrap_or_default(),
-        BoardConfig::Split(split) => split
-            .central
-            .matrix
-            .row_pins
-            .clone()
-            .unwrap_or_default(),
+        BoardConfig::UniBody(unibody) => unibody.matrix.row_pins.clone().unwrap_or_default(),
+        BoardConfig::Split(split) => split.central.matrix.row_pins.clone().unwrap_or_default(),
     };
 
     // Extract pin numbers and determine required EXTI interrupts

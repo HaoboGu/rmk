@@ -7,10 +7,7 @@ use crate::hid::Report;
 use crate::keymap::KeyMap;
 
 #[processor(subscribe = [PointingEvent])]
-pub struct JoystickProcessor<
-    'a,
-    const N: usize,
-> {
+pub struct JoystickProcessor<'a, const N: usize> {
     transform: [[i16; N]; N],
     bias: [i16; N],
     keymap: &'a KeyMap<'a>,
@@ -19,12 +16,7 @@ pub struct JoystickProcessor<
 }
 
 impl<'a, const N: usize> JoystickProcessor<'a, N> {
-    pub fn new(
-        transform: [[i16; N]; N],
-        bias: [i16; N],
-        resolution: u16,
-        keymap: &'a KeyMap<'a>,
-    ) -> Self {
+    pub fn new(transform: [[i16; N]; N], bias: [i16; N], resolution: u16, keymap: &'a KeyMap<'a>) -> Self {
         Self {
             transform,
             bias,

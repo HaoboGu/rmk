@@ -1,0 +1,51 @@
+name: Format
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["examples/**", "rmk/**", "rmk-macro/**", "rmk-config/**", "rmk-types/**"]
+  pull_request:
+    branches: ["main"]
+    paths: ["examples/**", "rmk/**", "rmk-macro/**", "rmk-config/**", "rmk-types/**"]
+  workflow_dispatch:
+
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  format:
+    name: Check formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install nightly --component rustfmt
+      - name: Check format for crates
+        run: |
+          cd rmk && cargo +nightly fmt --check && cd ..
+          cd rmk-macro && cargo +nightly fmt --check && cd ..
+          cd rmk-config && cargo +nightly fmt --check && cd ..
+          cd rmk-types && cargo +nightly fmt --check && cd ..
+      - name: Check format for use_rust examples
+        run: |
+          for dir in examples/use_rust/*/; do
+            if [ -d "$dir" ] && [ -d "$dir/src" ]; then
+              echo "Checking $dir"
+              cd "$dir"
+              cargo +nightly fmt --check
+              cd ../../..
+            fi
+          done
+      - name: Check format for use_config examples
+        run: |
+          for dir in examples/use_config/*/; do
+            if [ -d "$dir" ] && [ -d "$dir/src" ]; then
+              echo "Checking $dir"
+              cd "$dir"
+              cargo +nightly fmt --check
+              cd ../../..
+            fi
+          done

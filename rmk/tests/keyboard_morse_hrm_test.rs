@@ -6,18 +6,16 @@ pub mod common;
 use embassy_time::Duration;
 use rmk::combo::{Combo, ComboConfig};
 use rmk::config::{BehaviorConfig, CombosConfig, Hand, MorsesConfig, PositionalConfig};
-use rmk::k;
 use rmk::keyboard::Keyboard;
-use rmk::{a, mo, mt};
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
+use rmk::{a, k, mo, mt};
 use rmk_types::action::{MorseMode, MorseProfile};
 use rusty_fork::rusty_fork_test;
 
-use crate::common::wrap_keymap;
 use crate::common::morse::create_morse_keyboard;
-use crate::common::{KC_LGUI, KC_LSHIFT};
+use crate::common::{KC_LGUI, KC_LSHIFT, wrap_keymap};
 
 fn create_hrm_keyboard() -> Keyboard<'static> {
     let hand = [[Hand::Left, Hand::Left, Hand::Right, Hand::Right, Hand::Right]];
@@ -98,20 +96,12 @@ fn create_hrm_keyboard_with_combo() -> Keyboard<'static> {
 }
 
 fn create_release_remap_keyboard(morse_mode: MorseMode) -> Keyboard<'static> {
-    let keymap = [
-        [[mo!(1), a!(No), k!(A)]],
-        [[a!(Transparent), k!(B), a!(Transparent)]],
-    ];
+    let keymap = [[[mo!(1), a!(No), k!(A)]], [[a!(Transparent), k!(B), a!(Transparent)]]];
 
     let behavior_config = BehaviorConfig {
         morse: MorsesConfig {
             enable_flow_tap: false,
-            default_profile: MorseProfile::new(
-                Some(false),
-                Some(morse_mode),
-                Some(250u16),
-                Some(250u16),
-            ),
+            default_profile: MorseProfile::new(Some(false), Some(morse_mode), Some(250u16), Some(250u16)),
             ..Default::default()
         },
         ..BehaviorConfig::default()

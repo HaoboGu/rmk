@@ -954,8 +954,9 @@ async fn run_ble_keyboard<
 
 #[cfg(test)]
 mod tests {
-    use super::{BLE_STATUS, BleState, BleStatus, set_ble_state, set_ble_status};
     use std::sync::{Mutex, OnceLock};
+
+    use super::{BLE_STATUS, BleState, BleStatus, set_ble_state, set_ble_status};
 
     fn ble_status_test_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
