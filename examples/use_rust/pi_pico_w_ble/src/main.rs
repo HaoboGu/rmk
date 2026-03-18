@@ -10,6 +10,7 @@ mod vial;
 use bt_hci::controller::ExternalController;
 use cyw43::aligned_bytes;
 use cyw43_pio::PioSpi;
+use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_rp::clocks::RoscRng;
@@ -18,7 +19,9 @@ use embassy_rp::gpio::{Input, Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, DMA_CH1, PIO0, USB};
 use embassy_rp::pio::{self, Pio};
 use embassy_rp::usb::{self, Driver};
+use embassy_time as _;
 use keymap::{COL, ROW};
+use panic_probe as _;
 use rand::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
@@ -30,7 +33,6 @@ use rmk::matrix::Matrix;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
-use {defmt_rtt as _, embassy_time as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => usb::InterruptHandler<USB>;

@@ -43,7 +43,7 @@ impl WpmProcessor {
 
         if avg_wpm != self.wpm {
             self.wpm = avg_wpm;
-            publish_event(WpmUpdateEvent { wpm: self.wpm });
+            publish_event(WpmUpdateEvent::new(self.wpm));
         }
 
         self.keys_pressed = 0;

@@ -5,11 +5,17 @@
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
+use postcard::experimental::max_size::MaxSize;
+#[cfg(feature = "rmk_protocol")]
+use postcard_schema::{
+    Schema,
+    schema::{DataModelType, NamedType},
+};
 use serde::{Deserialize, Serialize};
 
 /// Mouse buttons
 #[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
-#[derive(Eq, PartialEq, Serialize, Deserialize, postcard::experimental::max_size::MaxSize)]
+#[derive(Eq, PartialEq, Serialize, Deserialize, MaxSize)]
 pub struct MouseButtons {
     #[bits(1)]
     pub button1: bool, //left
@@ -92,4 +98,12 @@ impl MouseButtons {
             .with_button7(button7)
             .with_button8(button8)
     }
+}
+
+#[cfg(feature = "rmk_protocol")]
+impl Schema for MouseButtons {
+    const SCHEMA: &'static NamedType = &NamedType {
+        name: "MouseButtons",
+        ty: &DataModelType::U8,
+    };
 }

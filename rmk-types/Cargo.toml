@@ -14,6 +14,9 @@ defmt = { version = "1.0", optional = true }
 
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive"] }
+postcard-schema = { version = "0.2", default-features = false, features = ["derive", "heapless-v0_9"], optional = true }
+postcard-rpc = { version = "0.12", default-features = false, optional = true }
+heapless = { version = "0.9", default-features = false, features = ["serde"] }
 strum = { version = "0.28", default-features = false, features = ["derive"] }
 
 bitfield-struct = "0.12"
@@ -31,6 +34,8 @@ defmt = [
 ]
 # Feature for proc-macro code generation only, not included in firmware
 _codegen = []
+# Feature for RMK native protocol schema/endpoint support
+rmk_protocol = ["dep:postcard-rpc", "dep:postcard-schema"]
 # Build-time only features: forwarded from rmk to control constant generation in build.rs
 split = []
 passkey_entry = []

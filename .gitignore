@@ -14,6 +14,7 @@ node_modules
 rmk/Cargo.lock
 rmk-macro/Cargo.lock
 rmk-config/Cargo.lock
+rmk-types/Cargo.lock
 
 # esp idf build files
 .embuild

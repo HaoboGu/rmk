@@ -430,9 +430,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
                             info!("Switching connection type to: {:?}", updated);
 
-                            publish_event(ConnectionChangeEvent {
-                                connection_type: updated,
-                            });
+                            publish_event(ConnectionChangeEvent::new(updated));
 
                             #[cfg(feature = "storage")]
                             FLASH_CHANNEL

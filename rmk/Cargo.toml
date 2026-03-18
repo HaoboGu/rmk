@@ -42,6 +42,7 @@ sequential-storage = "7.0"
 defmt = { version = "1.0", optional = true }
 log = { version = "0.4", optional = true }
 byteorder = { version = "1", default-features = false, optional = true }
+postcard-rpc = { version = "0.12", optional = true }
 ssmarshal = { version = "1.0", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive"] }
@@ -110,7 +111,13 @@ host = ["dep:byteorder"]
 vial = ["host"]
 
 ## Enable vial lock feature
-vial_lock = ["vial"]
+vial_lock = ["vial", "host_security"]
+
+## Enable physical key unlock and matrix state tracking (shared between vial_lock and rmk_protocol)
+host_security = []
+
+## Enable RMK protocol support (new protocol, mutually exclusive with vial)
+rmk_protocol = ["host", "host_security", "dep:postcard-rpc", "rmk-types/rmk_protocol"]
 
 ## Enable the storage. The storage is optional to save memory
 storage = [

@@ -7,6 +7,7 @@ mod macros;
 use bt_hci::controller::ExternalController;
 use cyw43::aligned_bytes;
 use cyw43_pio::PioSpi;
+use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_rp::clocks::RoscRng;
@@ -14,6 +15,8 @@ use embassy_rp::flash::{Async, Flash};
 use embassy_rp::gpio::{Input, Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, DMA_CH1, PIO0};
 use embassy_rp::pio::{self, Pio};
+use embassy_time as _;
+use panic_probe as _;
 use rand::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::config::StorageConfig;
@@ -24,7 +27,6 @@ use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
 use rmk::{HostResources, run_all};
 use static_cell::StaticCell;
-use {defmt_rtt as _, embassy_time as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     PIO0_IRQ_0 => pio::InterruptHandler<PIO0>;

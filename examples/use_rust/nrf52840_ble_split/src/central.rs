@@ -7,6 +7,7 @@ mod macros;
 mod keymap;
 
 use defmt::{info, unwrap};
+use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Output};
 use embassy_nrf::interrupt::{self, InterruptExt};
@@ -19,6 +20,7 @@ use embassy_nrf::{Peri, bind_interrupts, rng, usb};
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
+use panic_probe as _;
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
@@ -40,7 +42,6 @@ use rmk::split::central::run_peripheral_manager;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
-use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     USBD => usb::InterruptHandler<USBD>;
@@ -237,18 +238,18 @@ async fn main(spawner: Spawner) {
     use rmk::event::PeripheralBatteryEvent;
     use rmk::macros::processor;
 
-    #[processor(subscribe = [PeripheralBatteryEvent, BatteryStateEvent, LayerChangeEvent])]
+    #[processor(subscribe = [PeripheralBatteryEvent, BatteryStatusEvent, LayerChangeEvent])]
     struct PeripheralBatteryMonitor {}
 
     impl PeripheralBatteryMonitor {
         async fn on_peripheral_battery_event(&mut self, event: PeripheralBatteryEvent) {
             info!("Peripheral {} battery status: {:?}", event.id, event);
         }
-        async fn on_battery_state_event(&mut self, event: BatteryStateEvent) {
+        async fn on_battery_status_event(&mut self, event: BatteryStatusEvent) {
             info!("Central battery status: {:?}", event);
         }
         async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
-            info!("Layer changed to: {}", event.layer);
+            info!("Layer changed to: {}", event.0);
         }
     }
 
