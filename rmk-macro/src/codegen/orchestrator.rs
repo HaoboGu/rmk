@@ -1,8 +1,9 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::{
-    BoardConfig, ChipSeries, KeyInfo, KeyboardTomlConfig, MatrixConfig, MatrixType, UniBodyConfig,
+use rmk_config::resolved::hardware::{
+    BoardConfig, ChipSeries, KeyInfo, MatrixConfig, MatrixType, UniBodyConfig,
 };
+use rmk_config::resolved::{Behavior, Hardware, Host, Identity, Layout};
 
 use super::behavior::expand_behavior_config;
 use super::chip::bind_interrupt::expand_bind_interrupt;
@@ -27,11 +28,12 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
 
     let keyboard_config = read_keyboard_toml_config();
 
-    // Resolve types
-    let identity = keyboard_config.identity();
-    let hardware = keyboard_config.hardware().unwrap();
-    let behavior = keyboard_config.behavior().unwrap();
-    let layout = keyboard_config.layout().unwrap();
+    // Resolve types from keyboard.toml
+    let identity = keyboard_config.identity().expect("failed to resolve identity config");
+    let host = keyboard_config.host();
+    let hardware = keyboard_config.hardware().expect("failed to resolve hardware config");
+    let behavior = keyboard_config.behavior().expect("failed to resolve behavior config");
+    let layout = keyboard_config.layout().expect("failed to resolve layout config");
 
     // Check "storage" feature gate (one-way: config requests, features provide)
     if hardware.storage.is_some() && !is_feature_enabled(&rmk_features, "storage") {
@@ -41,17 +43,17 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
     }
 
     // Check "vial" feature gate (one-way)
-    if hardware.host.vial_enabled && !is_feature_enabled(&rmk_features, "vial") {
+    if host.vial_enabled && !is_feature_enabled(&rmk_features, "vial") {
         panic!("vial is enabled in keyboard.toml but the \"vial\" Cargo feature is not enabled");
     }
 
     // Generate imports and statics
     let imports_and_statics =
-        expand_imports_and_constants(&keyboard_config, &identity, &hardware, &behavior, &layout);
+        expand_imports_and_constants(&identity, &host, &hardware, &behavior, &layout);
 
     // Generate main function body
     let main_function = expand_main(
-        &keyboard_config,
+        &host,
         &hardware,
         &behavior,
         &layout,
@@ -67,23 +69,24 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
 }
 
 pub(crate) fn expand_imports_and_constants(
-    _config: &KeyboardTomlConfig,
-    identity: &rmk_config::resolved::Identity,
-    hardware: &rmk_config::resolved::Hardware,
-    behavior: &rmk_config::resolved::Behavior,
-    layout: &rmk_config::resolved::Layout,
+    identity: &Identity,
+    host: &Host,
+    hardware: &Hardware,
+    behavior: &Behavior,
+    layout: &Layout,
 ) -> TokenStream2 {
     // Generate keyboard info and number of rows/cols/layers
-    let keyboard_info_static_var = expand_keyboard_info(identity, layout, hardware);
+    let keyboard_info_static_var = expand_keyboard_info(identity, layout);
     // Generate default keymap
     let default_keymap = expand_default_keymap(layout, behavior);
     // Generate vial config
-    let vial_static_var = expand_vial_config(hardware);
+    let vial_static_var = expand_vial_config(host);
 
     // Generate extra imports, panic handler and logger
     let imports = match hardware.chip.series {
         ChipSeries::Esp32 => quote! {
-            use {esp_alloc as _, esp_backtrace as _};
+            use esp_alloc as _;
+            use esp_backtrace as _;
             ::esp_bootloader_esp_idf::esp_app_desc!();
         },
         _ => {
@@ -121,38 +124,39 @@ pub(crate) fn expand_imports_and_constants(
 }
 
 fn expand_main(
-    keyboard_config: &KeyboardTomlConfig,
-    hardware: &rmk_config::resolved::Hardware,
-    behavior: &rmk_config::resolved::Behavior,
-    layout: &rmk_config::resolved::Layout,
+    host: &Host,
+    hardware: &Hardware,
+    behavior: &Behavior,
+    layout: &Layout,
     item_mod: syn::ItemMod,
     rmk_features: &Option<Vec<String>>,
 ) -> TokenStream2 {
     // Expand components of main function
     let imports = expand_custom_imports(&item_mod);
-    let bind_interrupt = expand_bind_interrupt(keyboard_config, &item_mod);
-    let chip_init = expand_chip_init(keyboard_config, None, &item_mod);
-    let usb_init = expand_usb_init(keyboard_config, &item_mod);
+    let bind_interrupt = expand_bind_interrupt(hardware, &item_mod);
+    let chip_init = expand_chip_init(hardware, None, &item_mod);
+    let usb_init = expand_usb_init(hardware, &item_mod);
     let flash_init = expand_flash_init(hardware);
     let behavior_config = expand_behavior_config(behavior);
     let matrix_config = expand_matrix_config(hardware, rmk_features);
     let output_config = expand_output_config(hardware);
     let (ble_config, set_ble_config) = expand_ble_config(hardware);
-    let keymap_and_storage = expand_keymap_and_storage(keyboard_config, layout);
-    let split_central_config = expand_split_central_config(keyboard_config);
-    let (input_device_config, devices, processors) = expand_input_device_config(keyboard_config);
-    let matrix_and_keyboard = expand_matrix_and_keyboard_init(keyboard_config);
+    let keymap_and_storage = expand_keymap_and_storage(hardware, layout);
+    let split_central_config = expand_split_central_config(hardware);
+    let (input_device_config, devices, processors) = expand_input_device_config(hardware);
+    let matrix_and_keyboard = expand_matrix_and_keyboard_init(hardware);
     let (registered_processor_initializers, registered_processors) =
-        expand_registered_processor_init(keyboard_config, &item_mod);
+        expand_registered_processor_init(hardware, &item_mod);
     let run_rmk = expand_rmk_entry(
-        keyboard_config,
+        hardware,
+        host,
         &item_mod,
         devices,
         processors,
         registered_processors,
     );
 
-    let vial_config = if hardware.host.vial_enabled {
+    let vial_config = if host.vial_enabled {
         quote! { vial_config: VIAL_CONFIG,}
     } else {
         quote! {}
@@ -246,8 +250,8 @@ fn expand_main(
 
 // TODO: move this function to a separate folder
 pub(crate) fn expand_keymap_and_storage(
-    keyboard_config: &KeyboardTomlConfig,
-    layout: &rmk_config::resolved::Layout,
+    hardware: &Hardware,
+    layout: &Layout,
 ) -> TokenStream2 {
     let row = layout.rows as usize;
     let col = layout.cols as usize;
@@ -286,7 +290,7 @@ pub(crate) fn expand_keymap_and_storage(
         }
     };
 
-    if keyboard_config.get_storage_config().enabled {
+    if hardware.storage.is_some() {
         quote! {
             #initialize_positional_config
             #keymap_data_init
@@ -311,10 +315,8 @@ pub(crate) fn expand_keymap_and_storage(
     }
 }
 
-pub(crate) fn expand_matrix_and_keyboard_init(
-    keyboard_config: &KeyboardTomlConfig,
-) -> TokenStream2 {
-    let matrix = match keyboard_config.get_board_config().unwrap() {
+pub(crate) fn expand_matrix_and_keyboard_init(hardware: &Hardware) -> TokenStream2 {
+    let matrix = match &hardware.board {
         BoardConfig::UniBody(UniBodyConfig {
             matrix: matrix_config,
             input_device: _,

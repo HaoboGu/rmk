@@ -622,10 +622,10 @@ pub(crate) struct MacroConfig {
     pub operations: Vec<MacroOperation>,
 }
 
-/// Macro operations
+/// Macro operations (TOML deserialization type — resolved equivalent is in `resolved::behavior`)
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "operation", rename_all = "lowercase")]
-pub enum MacroOperation {
+pub(crate) enum MacroOperation {
     Tap { keycode: String },
     Down { keycode: String },
     Up { keycode: String },

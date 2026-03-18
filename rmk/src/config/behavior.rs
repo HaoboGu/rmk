@@ -20,7 +20,7 @@ pub struct BehaviorConfig {
     pub mouse_key: MouseKeyConfig,
 }
 
-/// Configurations for morse behavior
+/// Configurations for tap behavior
 #[derive(Clone, Copy, Debug)]
 pub struct TapConfig {
     // TODO: Use `Duration` instead?

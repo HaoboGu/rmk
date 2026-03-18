@@ -3,8 +3,8 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::ChipSeries;
 use rmk_config::resolved::Hardware;
+use rmk_config::resolved::hardware::ChipSeries;
 
 pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
     if hardware.storage.is_none() {

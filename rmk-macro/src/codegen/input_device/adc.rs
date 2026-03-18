@@ -1,5 +1,5 @@
 use quote::{format_ident, quote};
-use rmk_config::{BleConfig, ChipSeries, JoystickConfig};
+use rmk_config::resolved::hardware::{BleConfig, ChipSeries, JoystickConfig};
 
 use super::Initializer;
 

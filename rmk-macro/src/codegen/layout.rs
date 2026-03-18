@@ -3,14 +3,15 @@ use std::collections::HashMap;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::resolved::{Behavior, Layout, MorseProfileResolved};
+use rmk_config::resolved::behavior::MorseProfile;
+use rmk_config::resolved::{Behavior, Layout};
 
 use super::action_parser::parse_key;
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
 /// Also add `get_default_encoder_map`
 pub(crate) fn expand_default_keymap(layout: &Layout, behavior: &Behavior) -> TokenStream2 {
-    let profiles: Option<HashMap<String, MorseProfileResolved>> = behavior
+    let profiles: Option<HashMap<String, MorseProfile>> = behavior
         .morse
         .as_ref()
         .map(|m| m.profiles.clone())
@@ -51,7 +52,7 @@ pub(crate) fn expand_default_keymap(layout: &Layout, behavior: &Behavior) -> Tok
 /// Expand a layer for keymap
 fn expand_layer(
     layer: Vec<Vec<String>>,
-    profiles: &Option<HashMap<String, MorseProfileResolved>>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> TokenStream2 {
     let mut rows = vec![];
     for row in layer {
@@ -61,10 +62,7 @@ fn expand_layer(
 }
 
 /// Expand a row for keymap
-fn expand_row(
-    row: Vec<String>,
-    profiles: &Option<HashMap<String, MorseProfileResolved>>,
-) -> TokenStream2 {
+fn expand_row(row: Vec<String>, profiles: &Option<HashMap<String, MorseProfile>>) -> TokenStream2 {
     let mut keys = vec![];
     for key in row {
         keys.push(parse_key(key, profiles));
@@ -76,7 +74,7 @@ fn expand_row(
 fn expand_encoder_layer(
     encoder_layer: Vec<[String; 2]>,
     num_encoder: usize,
-    profiles: &Option<HashMap<String, MorseProfileResolved>>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> TokenStream2 {
     let mut encoders = vec![];
 

@@ -1,4 +1,4 @@
-/// Configurations for usb
+/// Keyboard device identity for USB descriptors and BLE advertising
 #[derive(Clone, Copy, Debug)]
 pub struct DeviceConfig<'a> {
     /// Vender id

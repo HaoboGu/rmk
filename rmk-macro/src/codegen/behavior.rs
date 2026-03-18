@@ -3,8 +3,9 @@
 use std::collections::HashMap;
 
 use quote::quote;
-use rmk_config::resolved::{
-    Behavior, Combos, Forks, Macros, Morse, MorseActionPairResolved, MorseKey, MorseProfileResolved,
+use rmk_config::resolved::Behavior;
+use rmk_config::resolved::behavior::{
+    Combos, Forks, MacroOperation, Macros, Morse, MorseActionPair, MorseKey, MorseProfile,
 };
 
 use super::action_parser::{expand_profile, expand_profile_name, get_key_with_alias, parse_key};
@@ -38,8 +39,8 @@ fn expand_one_shot(one_shot_timeout_ms: &Option<u64>) -> proc_macro2::TokenStrea
 }
 
 fn expand_morse_action_pair(
-    action_pair: &MorseActionPairResolved,
-    profiles: &Option<HashMap<String, MorseProfileResolved>>,
+    action_pair: &MorseActionPair,
+    profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> proc_macro2::TokenStream {
     let mut pattern = 0b1u16;
     for ch in action_pair.pattern.chars() {
@@ -57,8 +58,8 @@ fn expand_morse_action_pair(
 }
 
 fn expand_morse_actions(
-    actions: &[MorseActionPairResolved],
-    profiles: &Option<HashMap<String, MorseProfileResolved>>,
+    actions: &[MorseActionPair],
+    profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> proc_macro2::TokenStream {
     if !actions.is_empty() {
         let action_pair_def = actions
@@ -106,7 +107,7 @@ fn expand_morse(morse: &Option<Morse>) -> proc_macro2::TokenStream {
 
 fn expand_combos(
     combos: &Option<Combos>,
-    profiles: &Option<HashMap<String, MorseProfileResolved>>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> proc_macro2::TokenStream {
     let default = quote! { ::core::default::Default::default() };
     match combos {
@@ -156,23 +157,23 @@ fn expand_macros(macros: &Option<Macros>) -> proc_macro2::TokenStream {
         Some(macros) => {
             let macros_def = macros.macros.iter().map(|m| {
                 let operations = m.operations.iter().map(|op| match op {
-                    rmk_config::MacroOperation::Tap { keycode } => {
+                    MacroOperation::Tap { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
                         quote! { ::rmk::keyboard_macros::MacroOperation::Tap(::rmk::types::keycode::KeyCode::#key).into_iter() }
                     }
-                    rmk_config::MacroOperation::Down { keycode } => {
+                    MacroOperation::Down { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
                         quote! { ::rmk::keyboard_macros::MacroOperation::Press(::rmk::types::keycode::KeyCode::#key).into_iter() }
                     }
-                    rmk_config::MacroOperation::Up { keycode } => {
+                    MacroOperation::Up { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
                         quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::types::keycode::KeyCode::#key).into_iter() }
                     }
-                    rmk_config::MacroOperation::Delay { duration } => {
-                        let millis = duration.0 as u16;
+                    MacroOperation::Delay { duration_ms } => {
+                        let millis = *duration_ms as u16;
                         quote! { ::rmk::keyboard_macros::MacroOperation::Delay(#millis).into_iter() }
                     }
-                    rmk_config::MacroOperation::Text { text } => {
+                    MacroOperation::Text { text } => {
                         quote! { ::rmk::keyboard_macros::to_macro_sequence(#text).into_iter() }
                     }
                 });
@@ -188,7 +189,7 @@ fn expand_macros(macros: &Option<Macros>) -> proc_macro2::TokenStream {
 
 fn expand_morses(
     morses: &[MorseKey],
-    profiles: &Option<HashMap<String, MorseProfileResolved>>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> proc_macro2::TokenStream {
     if morses.is_empty() {
         return quote! {};
@@ -399,7 +400,7 @@ fn parse_state_combination(states_str: &str) -> StateBitsMacro {
 
 fn expand_forks(
     forks: &Option<Forks>,
-    profiles: &Option<HashMap<String, MorseProfileResolved>>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> proc_macro2::TokenStream {
     let default = quote! { ::core::default::Default::default() };
     match forks {

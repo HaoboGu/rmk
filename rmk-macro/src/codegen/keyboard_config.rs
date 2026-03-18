@@ -1,6 +1,6 @@
 use quote::quote;
 use rmk_config::KeyboardTomlConfig;
-use rmk_config::resolved::{Hardware, Identity, Layout};
+use rmk_config::resolved::{Host, Identity, Layout};
 
 pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
     // Get the path of the keyboard config file from the environment variable
@@ -13,7 +13,6 @@ pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
 pub(crate) fn expand_keyboard_info(
     identity: &Identity,
     layout: &Layout,
-    hardware: &Hardware,
 ) -> proc_macro2::TokenStream {
     let pid = identity.product_id;
     let vid = identity.vendor_id;
@@ -26,7 +25,6 @@ pub(crate) fn expand_keyboard_info(
     let num_layer = layout.layers as usize;
     let num_encoder = &layout.encoder_counts;
     let total_num_encoder: usize = num_encoder.iter().sum();
-    let _ = hardware; // hardware available for future use
     quote! {
         pub(crate) const COL: usize = #num_col;
         pub(crate) const ROW: usize = #num_row;
@@ -42,13 +40,12 @@ pub(crate) fn expand_keyboard_info(
     }
 }
 
-pub(crate) fn expand_vial_config(hardware: &Hardware) -> proc_macro2::TokenStream {
-    if !hardware.host.vial_enabled {
+pub(crate) fn expand_vial_config(host: &Host) -> proc_macro2::TokenStream {
+    if !host.vial_enabled {
         return quote! {};
     }
-    let unlock_keys = if !hardware.host.unlock_keys.is_empty() {
-        let keys_expr = hardware
-            .host
+    let unlock_keys = if !host.unlock_keys.is_empty() {
+        let keys_expr = host
             .unlock_keys
             .iter()
             .map(|key| {

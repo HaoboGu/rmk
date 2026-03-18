@@ -1,6 +1,6 @@
-pub mod behavior;
+mod behavior;
 #[cfg(feature = "_ble")]
-mod ble;
+mod ble_battery;
 mod device;
 mod positional;
 mod storage;
@@ -11,7 +11,7 @@ pub use behavior::{
     TapConfig,
 };
 #[cfg(feature = "_ble")]
-pub use ble::BleBatteryConfig;
+pub use ble_battery::BleBatteryConfig;
 pub use device::DeviceConfig;
 pub use positional::{Hand, PositionalConfig};
 pub use storage::StorageConfig;

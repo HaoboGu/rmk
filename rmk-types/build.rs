@@ -20,7 +20,9 @@ fn main() {
         toml::from_str("").expect("Failed to parse empty keyboard config\n")
     };
 
-    let bc = config.build_constants();
+    let bc = config
+        .build_constants()
+        .unwrap_or_else(|err| panic!("Failed to resolve build constants: {err}"));
     let output = generate_constants(&bc);
 
     // Write to constants.rs file

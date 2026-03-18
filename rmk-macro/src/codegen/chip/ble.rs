@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::resolved::Hardware;
-use rmk_config::{ChipSeries, CommunicationConfig};
+use rmk_config::resolved::hardware::{ChipSeries, CommunicationConfig};
 
 // Default implementations of ble configuration.
 // Because ble configuration in `config` is enabled by a feature gate, so this function returns two TokenStreams.

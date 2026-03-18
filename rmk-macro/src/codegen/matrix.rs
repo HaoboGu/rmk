@@ -2,7 +2,7 @@
 //!
 use quote::quote;
 use rmk_config::resolved::Hardware;
-use rmk_config::{BoardConfig, ChipSeries, MatrixType, UniBodyConfig};
+use rmk_config::resolved::hardware::{BoardConfig, ChipSeries, MatrixType, UniBodyConfig};
 
 use super::chip::gpio::{
     convert_direct_pins_to_initializers, convert_input_pins_to_initializers,

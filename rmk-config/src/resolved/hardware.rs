@@ -1,6 +1,18 @@
-use crate::{BoardConfig, ChipConfig, ChipModel, CommunicationConfig, DependencyConfig, LightConfig, OutputConfig};
+// Re-export domain types that are already in their final resolved form after
+// the 3-layer merge. Consumers should import these from `resolved::hardware`
+// rather than from the crate root, so the resolved module is the single public API.
+pub use crate::{
+    BleConfig, BoardConfig, ChipConfig, ChipModel, ChipSeries, CommunicationConfig,
+    DependencyConfig, EncoderConfig, EncoderResolution, InputDeviceConfig, JoystickConfig,
+    LightConfig, MatrixConfig, MatrixType, OutputConfig, PinConfig, Pmw33xxConfig, Pmw33xxType,
+    KeyInfo, Pmw3610Config, SerialConfig, SplitBoardConfig, SplitConfig, UniBodyConfig,
+};
 
 /// Complete hardware configuration for init code generation.
+///
+/// Some fields (`chip_config`, `communication`, `board`, `light`, `output`, `dependency`)
+/// are passed through as domain types that are already in their final form after
+/// the 3-layer TOML merge — no further resolution is needed.
 pub struct Hardware {
     pub chip: ChipModel,
     pub chip_config: ChipConfig,
@@ -10,7 +22,6 @@ pub struct Hardware {
     pub light: LightConfig,
     pub output: Vec<OutputConfig>,
     pub dependency: DependencyConfig,
-    pub host: Host,
 }
 
 /// Resolved storage hardware config (None when storage disabled).
@@ -19,12 +30,6 @@ pub struct Storage {
     pub num_sectors: u8,
     pub clear_storage: bool,
     pub clear_layout: bool,
-}
-
-/// Resolved host tool configuration.
-pub struct Host {
-    pub vial_enabled: bool,
-    pub unlock_keys: Vec<[u8; 2]>,
 }
 
 impl crate::KeyboardTomlConfig {
@@ -48,11 +53,6 @@ impl crate::KeyboardTomlConfig {
         let light = self.get_light_config();
         let output = self.get_output_config()?;
         let dependency = self.get_dependency_config();
-        let host_toml = self.get_host_config();
-        let host = Host {
-            vial_enabled: host_toml.vial_enabled,
-            unlock_keys: host_toml.unlock_keys.unwrap_or_default(),
-        };
         Ok(Hardware {
             chip,
             chip_config,
@@ -62,7 +62,6 @@ impl crate::KeyboardTomlConfig {
             light,
             output,
             dependency,
-            host,
         })
     }
 }

@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-pub use crate::MacroOperation;
-
 /// Resolved behavioral configuration.
 pub struct Behavior {
     pub tri_layer: Option<[u8; 3]>,
@@ -31,6 +29,16 @@ pub struct Macro {
     pub operations: Vec<MacroOperation>,
 }
 
+/// Resolved macro operation — all durations are plain milliseconds.
+#[derive(Clone, Debug)]
+pub enum MacroOperation {
+    Tap { keycode: String },
+    Down { keycode: String },
+    Up { keycode: String },
+    Delay { duration_ms: u64 },
+    Text { text: String },
+}
+
 pub struct Forks {
     pub forks: Vec<Fork>,
 }
@@ -48,13 +56,13 @@ pub struct Fork {
 pub struct Morse {
     pub enable_flow_tap: bool,
     pub prior_idle_time_ms: u64,
-    pub default_profile: MorseProfileResolved,
-    pub profiles: HashMap<String, MorseProfileResolved>,
+    pub default_profile: MorseProfile,
+    pub profiles: HashMap<String, MorseProfile>,
     pub morses: Vec<MorseKey>,
 }
 
 #[derive(Clone)]
-pub struct MorseProfileResolved {
+pub struct MorseProfile {
     pub unilateral_tap: Option<bool>,
     pub permissive_hold: Option<bool>,
     pub hold_on_other_press: Option<bool>,
@@ -71,10 +79,10 @@ pub struct MorseKey {
     pub double_tap: Option<String>,
     pub tap_actions: Option<Vec<String>>,
     pub hold_actions: Option<Vec<String>>,
-    pub morse_actions: Option<Vec<MorseActionPairResolved>>,
+    pub morse_actions: Option<Vec<MorseActionPair>>,
 }
 
-pub struct MorseActionPairResolved {
+pub struct MorseActionPair {
     pub pattern: String,
     pub action: String,
 }
@@ -106,7 +114,11 @@ impl crate::KeyboardTomlConfig {
                 .macros
                 .into_iter()
                 .map(|mc| Macro {
-                    operations: mc.operations,
+                    operations: mc
+                        .operations
+                        .into_iter()
+                        .map(resolve_macro_operation)
+                        .collect(),
                 })
                 .collect(),
         });
@@ -136,13 +148,13 @@ impl crate::KeyboardTomlConfig {
                 .map(|(name, p)| (name, resolve_morse_profile(&p)))
                 .collect();
 
-            let default_profile = MorseProfileResolved {
+            let default_profile = MorseProfile {
                 unilateral_tap: m.unilateral_tap,
                 permissive_hold: m.permissive_hold,
                 hold_on_other_press: m.hold_on_other_press,
                 normal_mode: m.normal_mode,
-                hold_timeout_ms: Some(m.hold_timeout.clone().map(|t| t.0).unwrap_or(250)),
-                gap_timeout_ms: Some(m.gap_timeout.clone().map(|t| t.0).unwrap_or(250)),
+                hold_timeout_ms: Some(m.hold_timeout.as_ref().map(|t| t.0).unwrap_or(250)),
+                gap_timeout_ms: Some(m.gap_timeout.as_ref().map(|t| t.0).unwrap_or(250)),
             };
 
             let morses = m
@@ -160,7 +172,7 @@ impl crate::KeyboardTomlConfig {
                     morse_actions: mk.morse_actions.map(|pairs| {
                         pairs
                             .into_iter()
-                            .map(|p| MorseActionPairResolved {
+                            .map(|p| MorseActionPair {
                                 pattern: p.pattern,
                                 action: p.action,
                             })
@@ -189,8 +201,20 @@ impl crate::KeyboardTomlConfig {
     }
 }
 
-fn resolve_morse_profile(p: &crate::MorseProfile) -> MorseProfileResolved {
-    MorseProfileResolved {
+fn resolve_macro_operation(op: crate::MacroOperation) -> MacroOperation {
+    match op {
+        crate::MacroOperation::Tap { keycode } => MacroOperation::Tap { keycode },
+        crate::MacroOperation::Down { keycode } => MacroOperation::Down { keycode },
+        crate::MacroOperation::Up { keycode } => MacroOperation::Up { keycode },
+        crate::MacroOperation::Delay { duration } => MacroOperation::Delay {
+            duration_ms: duration.0,
+        },
+        crate::MacroOperation::Text { text } => MacroOperation::Text { text },
+    }
+}
+
+fn resolve_morse_profile(p: &crate::MorseProfile) -> MorseProfile {
+    MorseProfile {
         unilateral_tap: p.unilateral_tap,
         permissive_hold: p.permissive_hold,
         hold_on_other_press: p.hold_on_other_press,

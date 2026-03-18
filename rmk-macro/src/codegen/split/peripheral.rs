@@ -1,9 +1,10 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::{
+use rmk_config::resolved::hardware::{
     BleConfig, BoardConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig,
-    KeyboardTomlConfig, MatrixType, SplitBoardConfig, SplitConfig,
+    MatrixType, SplitBoardConfig, SplitConfig,
 };
+use rmk_config::resolved::Hardware;
 use syn::ItemMod;
 
 use super::central::expand_serial_init;
@@ -34,15 +35,18 @@ pub(crate) fn parse_split_peripheral_mod(
     }
 
     let toml_config = read_keyboard_toml_config();
+    let hardware = toml_config.hardware().expect("failed to resolve hardware config");
 
-    let main_function = expand_split_peripheral(id, &toml_config, item_mod, &rmk_features);
-    let chip = toml_config.get_chip_model().unwrap();
+    let main_function = expand_split_peripheral(id, &hardware, item_mod, &rmk_features);
 
-    let bind_interrupts = expand_bind_interrupt_for_split_peripheral(&chip, &toml_config, id);
+    let bind_interrupts =
+        expand_bind_interrupt_for_split_peripheral(&hardware.chip, &hardware, id);
 
+    let chip = &hardware.chip;
     let main_function_sig = if chip.series == ChipSeries::Esp32 {
         quote! {
-            use {esp_alloc as _, esp_backtrace as _};
+            use esp_alloc as _;
+            use esp_backtrace as _;
             ::esp_bootloader_esp_idf::esp_app_desc!();
             #[esp_rtos::main]
             async fn main(_s: ::embassy_executor::Spawner)
@@ -68,10 +72,10 @@ pub(crate) fn parse_split_peripheral_mod(
 
 fn expand_bind_interrupt_for_split_peripheral(
     chip: &ChipModel,
-    keyboard_config: &KeyboardTomlConfig,
+    hardware: &Hardware,
     peripheral_id: usize,
 ) -> TokenStream2 {
-    let communication = keyboard_config.get_communication_config().unwrap();
+    let communication = &hardware.communication;
     match chip.series {
         ChipSeries::Nrf52 => {
             let ble_config = communication.get_ble_config().unwrap();
@@ -87,8 +91,7 @@ fn expand_bind_interrupt_for_split_peripheral(
             };
 
             // Extract PMW33xx configuration
-            let board = keyboard_config.get_board_config().unwrap();
-            let split_config = match &board {
+            let split_config = match &hardware.board {
                 BoardConfig::Split(split_config) => split_config,
                 _ => panic!("Expected split configuration"),
             };
@@ -196,13 +199,12 @@ fn expand_bind_interrupt_for_split_peripheral(
 
 fn expand_split_peripheral(
     id: usize,
-    keyboard_config: &KeyboardTomlConfig,
+    hardware: &Hardware,
     item_mod: ItemMod,
     rmk_features: &Option<Vec<String>>,
 ) -> TokenStream2 {
     // Check whether keyboard.toml contains split section
-    let board_config = keyboard_config.get_board_config().unwrap();
-    let split_config = match &board_config {
+    let split_config = match &hardware.board {
         BoardConfig::Split(split) => split,
         _ => {
             panic!("No `split` field in `keyboard.toml`");
@@ -215,11 +217,10 @@ fn expand_split_peripheral(
         .expect("Missing peripheral config");
 
     let imports = expand_custom_imports(&item_mod);
-    let mut chip_init = expand_chip_init(keyboard_config, Some(id), &item_mod);
+    let mut chip_init = expand_chip_init(hardware, Some(id), &item_mod);
     if split_config.connection == "ble" {
         // Add storage when using BLE split
-        let hw = keyboard_config.hardware().unwrap();
-        let flash_init = expand_flash_init(&hw);
+        let flash_init = expand_flash_init(hardware);
         chip_init.extend(quote! {
             #flash_init
             let mut storage = ::rmk::storage::new_storage_for_split_peripheral(flash, storage_config).await;
@@ -232,12 +233,12 @@ fn expand_split_peripheral(
 
     // Matrix config
     let async_matrix = is_feature_enabled(rmk_features, "async_matrix");
-    let chip = keyboard_config.get_chip_model().unwrap();
+    let chip = &hardware.chip;
     let mut matrix_config = proc_macro2::TokenStream::new();
     match &peripheral_config.matrix.matrix_type {
         MatrixType::normal => {
             matrix_config.extend(expand_matrix_input_output_pins(
-                &chip,
+                chip,
                 peripheral_config
                     .matrix
                     .row_pins
@@ -263,7 +264,7 @@ fn expand_split_peripheral(
         }
         MatrixType::direct_pin => {
             matrix_config.extend(expand_matrix_direct_pins(
-                &chip,
+                chip,
                 peripheral_config
                     .matrix
                     .direct_pins
@@ -286,11 +287,11 @@ fn expand_split_peripheral(
     }
 
     let output_config =
-        expand_output_initialization(peripheral_config.output.clone().unwrap_or_default(), &chip);
+        expand_output_initialization(peripheral_config.output.clone().unwrap_or_default(), chip);
 
     // Get peripheral device and processor configuration
     let (device_initialization, devices, processors) =
-        expand_peripheral_input_device_config(id, keyboard_config);
+        expand_peripheral_input_device_config(id, hardware);
 
     let needs_keymap = peripheral_config
         .input_device
@@ -318,7 +319,7 @@ fn expand_split_peripheral(
 
     // Add processor support for peripherals
     let (registered_processor_initializers, registered_processors) =
-        expand_registered_processor_init(keyboard_config, &item_mod);
+        expand_registered_processor_init(hardware, &item_mod);
 
     // Import Runnable trait so processor.run() calls compile
     let processor_import = if !registered_processors.is_empty() {
@@ -329,7 +330,7 @@ fn expand_split_peripheral(
 
     let run_rmk_peripheral = expand_split_peripheral_entry(
         id,
-        &chip,
+        chip,
         split_config,
         peripheral_config,
         devices,
@@ -437,25 +438,25 @@ fn expand_split_peripheral_entry(
 /// Returns (device initializations, device_names, processor_names)
 pub(crate) fn expand_peripheral_input_device_config(
     id: usize,
-    keyboard_config: &KeyboardTomlConfig,
+    hardware: &Hardware,
 ) -> (TokenStream2, Vec<TokenStream2>, Vec<TokenStream2>) {
     let mut initializations = TokenStream2::new();
     let mut devices = Vec::new();
     let mut processors = Vec::new();
 
-    let communication = keyboard_config.get_communication_config().unwrap();
-    let ble_config = match &communication {
+    let communication = &hardware.communication;
+    let ble_config = match communication {
         CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => {
             Some(ble_config.clone())
         }
         _ => None,
     };
-    let board = keyboard_config.get_board_config().unwrap();
-    let chip = keyboard_config.get_chip_model().unwrap();
+    let board = &hardware.board;
+    let chip = &hardware.chip;
 
     // Create peripheral-specific BLE config for battery
     // Only use peripheral's own battery config, do NOT fallback to top-level BLE config
-    let peripheral_ble_config = match &board {
+    let peripheral_ble_config = match board {
         BoardConfig::Split(split_config) => {
             let peripheral_board = &split_config.peripheral[id];
             // If peripheral has battery config, create a BleConfig with those settings
@@ -475,7 +476,7 @@ pub(crate) fn expand_peripheral_input_device_config(
     };
 
     // generate ADC configuration
-    let (adc_devices, adc_processors) = match &board {
+    let (adc_devices, adc_processors) = match board {
         BoardConfig::Split(split_config) => expand_adc_device(
             split_config.peripheral[id]
                 .input_device
@@ -502,13 +503,10 @@ pub(crate) fn expand_peripheral_input_device_config(
     }
 
     // generate encoder configuration, processors are ignored
-    let num_encoders = keyboard_config
-        .get_board_config()
-        .unwrap()
-        .get_num_encoder();
+    let num_encoders = hardware.board.get_num_encoder();
     // The num_encoders[0] is always the number of encoders on the central, so the offset is the sum of num_encoders[0..id + 1], where id is the index of the peripheral
     let encoder_id_offset = num_encoders[0..id + 1].iter().sum::<usize>();
-    let (encoder_devices, _encoder_processors) = match &board {
+    let (encoder_devices, _encoder_processors) = match board {
         BoardConfig::Split(split_config) => expand_encoder_device(
             encoder_id_offset,
             split_config.peripheral[id]
@@ -517,7 +515,7 @@ pub(crate) fn expand_peripheral_input_device_config(
                 .unwrap_or(InputDeviceConfig::default())
                 .encoder
                 .unwrap_or(Vec::new()),
-            &chip,
+            chip,
         ),
         _ => (vec![], vec![]),
     };
@@ -529,7 +527,7 @@ pub(crate) fn expand_peripheral_input_device_config(
     }
 
     // generate PMW3610 configuration
-    let (pmw3610_devices, _pmw3610_processors) = match &board {
+    let (pmw3610_devices, _pmw3610_processors) = match board {
         BoardConfig::Split(split_config) => expand_pmw3610_device(
             split_config.peripheral[id]
                 .input_device
@@ -537,7 +535,7 @@ pub(crate) fn expand_peripheral_input_device_config(
                 .unwrap_or(InputDeviceConfig::default())
                 .pmw3610
                 .unwrap_or(Vec::new()),
-            &chip,
+            chip,
         ),
         _ => (vec![], vec![]),
     };
@@ -549,7 +547,7 @@ pub(crate) fn expand_peripheral_input_device_config(
     }
 
     // generate PMW33xx configuration
-    let (pmw33xx_devices, _pmw33xx_processors) = match &board {
+    let (pmw33xx_devices, _pmw33xx_processors) = match board {
         BoardConfig::Split(split_config) => expand_pmw33xx_device(
             split_config.peripheral[id]
                 .input_device
@@ -557,7 +555,7 @@ pub(crate) fn expand_peripheral_input_device_config(
                 .unwrap_or(InputDeviceConfig::default())
                 .pmw33xx
                 .unwrap_or(Vec::new()),
-            &chip,
+            chip,
         ),
         _ => (vec![], vec![]),
     };

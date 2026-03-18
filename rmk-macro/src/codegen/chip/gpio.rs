@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use rmk_config::resolved::Hardware;
-use rmk_config::{ChipModel, ChipSeries, OutputConfig};
+use rmk_config::resolved::hardware::{ChipModel, ChipSeries, OutputConfig};
 
 pub(crate) fn convert_output_pins_to_initializers(
     chip: &ChipModel,

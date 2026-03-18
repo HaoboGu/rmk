@@ -7,8 +7,8 @@ use std::collections::HashMap;
 
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
-use rmk_config::KEYCODE_ALIAS;
-use rmk_config::resolved::MorseProfileResolved;
+use rmk_config::resolved::KEYCODE_ALIAS;
+use rmk_config::resolved::behavior::MorseProfile;
 use strum::VariantNames;
 
 struct ModifierCombinationMacro {
@@ -84,7 +84,7 @@ fn parse_modifiers(modifiers_str: &str) -> ModifierCombinationMacro {
     combination
 }
 
-pub(crate) fn expand_profile(profile: &MorseProfileResolved) -> proc_macro2::TokenStream {
+pub(crate) fn expand_profile(profile: &MorseProfile) -> proc_macro2::TokenStream {
     let mode = if let Some(enable) = profile.permissive_hold
         && enable
     {
@@ -128,7 +128,7 @@ pub(crate) fn expand_profile(profile: &MorseProfileResolved) -> proc_macro2::Tok
 
 pub(crate) fn expand_profile_name(
     profile_name: &str,
-    profiles: &Option<HashMap<String, MorseProfileResolved>>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> proc_macro2::TokenStream {
     if let Some(profiles) = profiles {
         if let Some(profile) = profiles.get(profile_name) {
@@ -151,7 +151,7 @@ pub(crate) fn expand_profile_name(
 /// Parse the key string at a single position
 pub(crate) fn parse_key(
     key: String,
-    profiles: &Option<HashMap<String, MorseProfileResolved>>,
+    profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> TokenStream2 {
     if !key.is_empty() && (key.trim_start_matches("_").is_empty() || key.to_lowercase() == "trns") {
         return quote! { ::rmk::a!(Transparent) };
