@@ -95,6 +95,7 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
     let (peripheral_battery_size, peripheral_battery_pubs, peripheral_battery_subs) =
         events.peripheral_battery.into_values();
     let (clear_peer_size, clear_peer_pubs, clear_peer_subs) = events.clear_peer.into_values();
+    let (action_size, action_pubs, action_subs) = events.action.into_values();
 
     constant_strs.extend([
         // BLE events
@@ -152,6 +153,10 @@ fn get_constants_str(constants: RmkConstantsConfig, events: rmk_config::EventCon
         const_declaration!(pub CLEAR_PEER_EVENT_CHANNEL_SIZE = clear_peer_size),
         const_declaration!(pub CLEAR_PEER_EVENT_PUB_SIZE = clear_peer_pubs),
         const_declaration!(pub CLEAR_PEER_EVENT_SUB_SIZE = clear_peer_subs),
+        // Action events
+        const_declaration!(pub ACTION_EVENT_CHANNEL_SIZE = action_size),
+        const_declaration!(pub ACTION_EVENT_PUB_SIZE = action_pubs),
+        const_declaration!(pub ACTION_EVENT_SUB_SIZE = action_subs),
     ]);
 
     constant_strs

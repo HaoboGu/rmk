@@ -49,6 +49,7 @@ pub fn event_derive_impl(input: TokenStream) -> TokenStream {
     let mut async_publish_arms = Vec::new();
     let mut publish_arms = Vec::new();
     let mut from_impls = Vec::new();
+    let mut publish_is_noop_expr = quote!(true);
 
     for variant in &data_enum.variants {
         let variant_name = &variant.ident;
@@ -86,6 +87,10 @@ pub fn event_derive_impl(input: TokenStream) -> TokenStream {
                 }
             }
         });
+
+        publish_is_noop_expr = quote! {
+            #publish_is_noop_expr && (<#inner_type as ::rmk::event::PublishableEvent>::PUBLISH_IS_NOOP)
+        };
     }
 
     let has_generics = !input.generics.params.is_empty();
@@ -135,6 +140,7 @@ pub fn event_derive_impl(input: TokenStream) -> TokenStream {
 
         impl #impl_generics ::rmk::event::PublishableEvent for #enum_name #ty_generics #where_clause {
             type Publisher = #publisher_name #ty_generics;
+            const PUBLISH_IS_NOOP: bool = #publish_is_noop_expr;
 
             fn publisher() -> Self::Publisher {
                 #publisher_ctor

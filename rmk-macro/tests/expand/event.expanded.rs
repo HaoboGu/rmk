@@ -55,6 +55,7 @@ mod mpsc {
             KeyboardEvent,
             { 16 },
         >;
+        const PUBLISH_IS_NOOP: bool = false;
         fn publisher() -> Self::Publisher {
             KEYBOARD_EVENT_EVENT_CHANNEL.sender()
         }
@@ -136,6 +137,7 @@ mod pubsub {
             { 8 },
             { 2 },
         >;
+        const PUBLISH_IS_NOOP: bool = 8 == 0;
         fn publisher() -> Self::Publisher {
             LED_INDICATOR_EVENT_EVENT_CHANNEL.immediate_publisher()
         }
@@ -216,6 +218,7 @@ mod tuple_struct {
             BatteryAdcEvent,
             { 8 },
         >;
+        const PUBLISH_IS_NOOP: bool = false;
         fn publisher() -> Self::Publisher {
             BATTERY_ADC_EVENT_EVENT_CHANNEL.sender()
         }
@@ -287,6 +290,7 @@ mod default_size {
             LayerChangeEvent,
             { 8 },
         >;
+        const PUBLISH_IS_NOOP: bool = false;
         fn publisher() -> Self::Publisher {
             LAYER_CHANGE_EVENT_EVENT_CHANNEL.sender()
         }
