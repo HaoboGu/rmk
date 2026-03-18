@@ -5,12 +5,14 @@
 mod macros;
 
 use defmt::*;
+use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_rp::gpio::{Input, Output};
 use embassy_rp::peripherals::{UART0, USB};
 use embassy_rp::uart::{self, BufferedUart};
 use embassy_rp::usb::InterruptHandler;
+use panic_probe as _;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join;
 use rmk::matrix::Matrix;
@@ -19,7 +21,6 @@ use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::split::rp::BufferedUartWrapper;
 use static_cell::StaticCell;
-use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;

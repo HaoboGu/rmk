@@ -23,7 +23,6 @@ pub use key_action::KeyAction;
 pub use keyboard::KeyboardAction;
 pub use light::LightAction;
 pub use morse::{MorseMode, MorseProfile};
-
 use postcard::experimental::max_size::MaxSize;
 #[cfg(feature = "rmk_protocol")]
 use postcard_schema::Schema;
