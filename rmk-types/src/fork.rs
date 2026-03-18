@@ -2,23 +2,17 @@
 
 use core::ops::{BitAnd, BitOr, Not};
 
+use postcard::experimental::max_size::MaxSize;
+#[cfg(feature = "rmk_protocol")]
+use postcard_schema::Schema;
+
 use crate::led_indicator::LedIndicator;
 use crate::modifier::ModifierCombination;
 use crate::mouse_button::MouseButtons;
 
 /// Bitset state used by fork matching logic.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Default,
-    serde::Serialize,
-    serde::Deserialize,
-    postcard::experimental::max_size::MaxSize,
-    postcard_schema::Schema,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize, MaxSize)]
+#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct StateBits {
     pub modifiers: ModifierCombination,

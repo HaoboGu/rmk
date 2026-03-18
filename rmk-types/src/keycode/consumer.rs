@@ -1,5 +1,8 @@
 //! Consumer page keycodes.
 
+use postcard::experimental::max_size::MaxSize;
+#[cfg(feature = "rmk_protocol")]
+use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use super::hid::HidKeyCode;
@@ -10,7 +13,7 @@ use super::hid::HidKeyCode;
 #[repr(u16)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard_schema::Schema)]
+#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub enum ConsumerKey {
     No = 0x00,
     // 15.5 Display Controls
@@ -72,7 +75,7 @@ pub enum ConsumerKey {
     AcSoftKeyLeft = 0x2A0,
 }
 
-impl ::postcard::experimental::max_size::MaxSize for ConsumerKey {
+impl MaxSize for ConsumerKey {
     const POSTCARD_MAX_SIZE: usize = 3usize;
 }
 

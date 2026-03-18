@@ -1,11 +1,16 @@
 //! Rotary encoder actions.
 
+use postcard::experimental::max_size::MaxSize;
+#[cfg(feature = "rmk_protocol")]
+use postcard_schema::Schema;
+
 use super::KeyAction;
 
 /// EncoderAction is the action at a encoder position, stored in encoder_map.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
+#[derive(MaxSize)]
+#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub struct EncoderAction {
     clockwise: KeyAction,
     counter_clockwise: KeyAction,

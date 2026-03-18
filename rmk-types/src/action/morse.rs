@@ -1,9 +1,14 @@
 //! Morse key configuration.
 
+use postcard::experimental::max_size::MaxSize;
+#[cfg(feature = "rmk_protocol")]
+use postcard_schema::Schema;
+
 /// Mode for morse key behavior
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
+#[derive(MaxSize)]
+#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[repr(u8)]
 pub enum MorseMode {
     /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
@@ -20,7 +25,8 @@ pub enum MorseMode {
 /// to save some RAM space, manually packed into 32 bits
 #[derive(PartialEq, Eq, Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
+#[derive(MaxSize)]
+#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub struct MorseProfile(u32);
 
 impl MorseProfile {
@@ -165,5 +171,52 @@ impl From<u32> for MorseProfile {
 impl From<MorseProfile> for u32 {
     fn from(val: MorseProfile) -> Self {
         val.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_morse_profile_timeout_setters() {
+        // Test with all fields set to verify bit field isolation
+        let mut profile = MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(1000), Some(2000));
+
+        // Verify initial state
+        assert_eq!(profile.hold_timeout_ms(), Some(1000));
+        assert_eq!(profile.gap_timeout_ms(), Some(2000));
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
+
+        // Test set_hold_timeout_ms - should not affect other fields
+        profile.set_hold_timeout_ms(1500);
+        assert_eq!(profile.hold_timeout_ms(), Some(1500));
+        assert_eq!(profile.gap_timeout_ms(), Some(2000));
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
+
+        // Test set_gap_timeout_ms - should not affect other fields (critical for unilateral_tap)
+        profile.set_gap_timeout_ms(2500);
+        assert_eq!(profile.hold_timeout_ms(), Some(1500));
+        assert_eq!(profile.gap_timeout_ms(), Some(2500));
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
+
+        // Test maximum values (14 bits = 0x3FFF)
+        profile.set_hold_timeout_ms(0x3FFF);
+        profile.set_gap_timeout_ms(0x3FFF);
+        assert_eq!(profile.hold_timeout_ms(), Some(0x3FFF));
+        assert_eq!(profile.gap_timeout_ms(), Some(0x3FFF));
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
+
+        // Test zero values (should return None)
+        profile.set_hold_timeout_ms(0);
+        profile.set_gap_timeout_ms(0);
+        assert_eq!(profile.hold_timeout_ms(), None);
+        assert_eq!(profile.gap_timeout_ms(), None);
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
     }
 }

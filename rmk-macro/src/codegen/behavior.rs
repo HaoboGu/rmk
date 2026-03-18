@@ -374,7 +374,7 @@ impl quote::ToTokens for StateBitsMacro {
         let button8 = self.mouse_button8;
 
         tokens.extend(quote! {
-            ::rmk::fork::StateBits::new_from(
+            ::rmk::types::fork::StateBits::new_from(
                 ::rmk::types::modifier::ModifierCombination::new_from_vals(#left_ctrl, #left_shift, #left_alt, #left_gui, #right_ctrl, #right_shift, #right_alt, #right_gui),
                 ::rmk::types::led_indicator::LedIndicator::new_from(#num_lock, #caps_lock, #scroll_lock, #compose, #kana),
                 ::rmk::types::mouse_button::MouseButtons::new_from(#button1, #button2, #button3, #button4, #button5, #button6, #button7, #button8))

@@ -1,12 +1,13 @@
 //! Core protocol types.
 
 use heapless::Vec;
+use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use super::MAX_UNLOCK_KEYS;
 
 /// Protocol version advertised during the connection handshake.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct ProtocolVersion {
     pub major: u8,
     pub minor: u8,
@@ -18,7 +19,7 @@ impl ProtocolVersion {
 }
 
 /// Device capabilities discovered during the connection handshake.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct DeviceCapabilities {
     pub num_layers: u8,
     pub num_rows: u8,
@@ -39,7 +40,7 @@ pub struct DeviceCapabilities {
 }
 
 /// Protocol-level error type returned by write operations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub enum RmkError {
     /// Valid endpoint but bad parameter values.
     InvalidParameter,
@@ -57,7 +58,7 @@ pub enum RmkError {
 pub type RmkResult = Result<(), RmkError>;
 
 /// Current lock/unlock state of the device.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct LockStatus {
     pub locked: bool,
     pub awaiting_keys: bool,
@@ -65,13 +66,13 @@ pub struct LockStatus {
 }
 
 /// Challenge returned by the Unlock endpoint containing physical key positions to press.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct UnlockChallenge {
     pub key_positions: Vec<(u8, u8), MAX_UNLOCK_KEYS>,
 }
 
 /// Storage reset mode for the `StorageReset` endpoint.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub enum StorageResetMode {
     /// Reset all stored data.
     Full,

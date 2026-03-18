@@ -1,9 +1,14 @@
 //! Light control actions.
 
+use postcard::experimental::max_size::MaxSize;
+#[cfg(feature = "rmk_protocol")]
+use postcard_schema::Schema;
+
 /// Actions for controlling lights
 #[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(postcard::experimental::max_size::MaxSize, postcard_schema::Schema)]
+#[derive(MaxSize)]
+#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "_codegen", derive(strum::VariantNames))]
 pub enum LightAction {
     BacklightOn,

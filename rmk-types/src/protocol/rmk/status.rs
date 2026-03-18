@@ -1,11 +1,13 @@
 //! Connection and status protocol types.
 
+use heapless::Vec;
+use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::connection::ConnectionType;
 
 /// Current connection information.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ConnectionInfo {
     pub connection_type: ConnectionType,
@@ -21,14 +23,14 @@ pub const MAX_MATRIX_BITMAP_SIZE: usize = 30;
 /// Current matrix key-press state as a bitmap.
 /// Bit ordering: row-major, bit 0 = col 0, bit 1 = col 1, etc.
 /// Total meaningful bytes = num_rows * ceil(num_cols / 8).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MatrixState {
-    pub pressed_bitmap: heapless::Vec<u8, MAX_MATRIX_BITMAP_SIZE>,
+    pub pressed_bitmap: Vec<u8, MAX_MATRIX_BITMAP_SIZE>,
 }
 
 /// Split keyboard peripheral status.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SplitStatus {
     pub num_peripherals: u8,
