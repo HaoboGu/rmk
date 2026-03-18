@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{MAX_COMBO_KEYS, MAX_MORSE_PATTERNS};
 use crate::action::{KeyAction, MorseProfile};
-use crate::fork::ForkStateBits;
+use crate::fork::StateBits;
 use crate::modifier::ModifierCombination;
 
 /// Protocol-facing morse/tap-dance configuration.
@@ -30,8 +30,8 @@ pub struct ForkConfig {
     pub trigger: KeyAction,
     pub negative_output: KeyAction,
     pub positive_output: KeyAction,
-    pub match_any: ForkStateBits,
-    pub match_none: ForkStateBits,
+    pub match_any: StateBits,
+    pub match_none: StateBits,
     pub kept_modifiers: ModifierCombination,
     pub bindable: bool,
 }

@@ -247,7 +247,7 @@ mod tests {
     use crate::action::MorseProfile;
     use crate::battery::ChargeState;
     use crate::ble::BleState;
-    use crate::fork::ForkStateBits;
+    use crate::fork::StateBits;
     use crate::led_indicator::LedIndicator;
     use crate::modifier::ModifierCombination;
     use crate::mouse_button::MouseButtons;
@@ -557,12 +557,12 @@ mod tests {
             trigger: KeyAction::No,
             negative_output: KeyAction::No,
             positive_output: KeyAction::No,
-            match_any: ForkStateBits {
+            match_any: StateBits {
                 modifiers: ModifierCombination::new(),
                 leds: LedIndicator::new(),
                 mouse: MouseButtons::new(),
             },
-            match_none: ForkStateBits {
+            match_none: StateBits {
                 modifiers: ModifierCombination::new(),
                 leds: LedIndicator::new(),
                 mouse: MouseButtons::new(),

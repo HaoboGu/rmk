@@ -729,10 +729,11 @@ impl<'a> KeyMap<'a> {
 
 #[cfg(test)]
 mod test {
+    use rmk_types::fork::StateBits;
     use rmk_types::modifier::ModifierCombination;
 
     use crate::combo::{Combo, ComboConfig};
-    use crate::fork::{Fork, StateBits};
+    use crate::fork::Fork;
     use crate::keymap::fill_vec;
     use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
 

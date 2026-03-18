@@ -61,7 +61,7 @@ pub(crate) mod led;
 pub mod passkey;
 pub(crate) mod profile;
 
-pub use rmk_types::ble::{BleState, BleStatus};
+use rmk_types::ble::{BleState, BleStatus};
 
 /// Global BLE status: tracks the active profile and current BLE state.
 pub static BLE_STATUS: Mutex<crate::RawMutex, Cell<BleStatus>> = Mutex::new(Cell::new(BleStatus {

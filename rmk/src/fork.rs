@@ -1,6 +1,6 @@
 use postcard::experimental::max_size::MaxSize;
 use rmk_types::action::KeyAction;
-pub use rmk_types::fork::ForkStateBits as StateBits;
+use rmk_types::fork::StateBits;
 use rmk_types::modifier::ModifierCombination;
 use serde::{Deserialize, Serialize};
 
