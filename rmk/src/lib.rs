@@ -15,8 +15,10 @@
 // Re-export self as ::rmk for macro-generated code to work both inside and outside the crate
 extern crate self as rmk;
 
-// Include generated constants
 include!(concat!(env!("OUT_DIR"), "/constants.rs"));
+
+// TODO: re-export to `constants`?
+pub(crate) use rmk_types::constants::*;
 
 // This mod MUST go first, so that the others see its macros.
 pub(crate) mod fmt;
@@ -41,8 +43,8 @@ use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 use embassy_usb::driver::Driver;
 use futures::FutureExt;
 use hid::{HidReaderTrait, RunnableHidWriter};
-pub use keymap::KeymapData;
 use keymap::KeyMap;
+pub use keymap::KeymapData;
 use matrix::MatrixTrait;
 use processor::PollingProcessor;
 #[cfg(all(feature = "storage", feature = "host"))]
@@ -131,32 +133,19 @@ pub async fn initialize_keymap_and_storage<
     storage_config: &config::StorageConfig,
     behavior_config: &'a mut config::BehaviorConfig,
     positional_config: &'a PositionalConfig<ROW, COL>,
-) -> (
-    KeyMap<'a>,
-    Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-) {
+) -> (KeyMap<'a>, Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>) {
     #[cfg(feature = "host")]
     {
         let mut storage = {
-            let encoder_opt: Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]> =
-                if NUM_ENCODER > 0 { Some(&mut data.encoder_map) } else { None };
-            Storage::new(
-                flash,
-                &data.keymap,
-                &encoder_opt,
-                storage_config,
-                behavior_config,
-            )
-            .await
+            let encoder_opt: Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]> = if NUM_ENCODER > 0 {
+                Some(&mut data.encoder_map)
+            } else {
+                None
+            };
+            Storage::new(flash, &data.keymap, &encoder_opt, storage_config, behavior_config).await
         };
 
-        let keymap = KeyMap::new_from_storage(
-            data,
-            Some(&mut storage),
-            behavior_config,
-            positional_config,
-        )
-        .await;
+        let keymap = KeyMap::new_from_storage(data, Some(&mut storage), behavior_config, positional_config).await;
         (keymap, storage)
     }
 

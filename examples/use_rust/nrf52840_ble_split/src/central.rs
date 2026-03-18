@@ -185,10 +185,7 @@ async fn main(spawner: Spawner) {
 
     // Initialze keyboard stuffs
     // Initialize the storage and keymap
-    let mut keymap_data = KeymapData::new_with_encoder(
-        keymap::get_default_keymap(),
-        keymap::get_default_encoder_map(),
-    );
+    let mut keymap_data = KeymapData::new_with_encoder(keymap::get_default_keymap(), keymap::get_default_encoder_map());
     let mut behavior_config = BehaviorConfig::default();
     behavior_config.morse.enable_flow_tap = true;
     let key_config = PositionalConfig::default();

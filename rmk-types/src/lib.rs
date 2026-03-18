@@ -26,6 +26,7 @@
 
 pub mod action;
 pub mod ble;
+pub mod constants;
 pub mod keycode;
 pub mod led_indicator;
 pub mod modifier;

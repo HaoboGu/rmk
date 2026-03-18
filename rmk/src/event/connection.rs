@@ -5,7 +5,6 @@
 //! - BLE status change events
 
 use rmk_macro::event;
-
 #[cfg(feature = "_ble")]
 use rmk_types::ble::BleStatus;
 

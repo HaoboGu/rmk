@@ -7,7 +7,6 @@ pub const VIA_FIRMWARE_VERSION: u32 = 0x0001;
 
 pub const VIAL_PROTOCOL_VERSION: u32 = 6;
 pub const VIAL_EP_SIZE: usize = 32;
-pub const VIAL_COMBO_MAX_LENGTH: usize = 4;
 
 /// Via communication commands.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr)]
