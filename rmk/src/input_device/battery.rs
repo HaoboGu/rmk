@@ -1,11 +1,11 @@
 use embedded_hal::digital::InputPin;
 use rmk_macro::{input_device, processor};
+#[cfg(feature = "_ble")]
+use rmk_types::battery::{BatteryStatus, ChargeState};
 
 #[cfg(feature = "_ble")]
 use crate::event::BatteryStatusEvent;
 use crate::event::{BatteryAdcEvent, ChargingStateEvent, publish_event};
-#[cfg(feature = "_ble")]
-use rmk_types::battery::{BatteryStatus, ChargeState};
 
 /// Reads charging state from a GPIO pin and publishes ChargingStateEvent.
 ///

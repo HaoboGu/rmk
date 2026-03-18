@@ -15,8 +15,7 @@ use rmk_types::action::{MorseMode, MorseProfile};
 use rusty_fork::rusty_fork_test;
 
 use crate::common::morse::create_morse_keyboard;
-use crate::common::wrap_keymap;
-use crate::common::{KC_LGUI, KC_LSHIFT};
+use crate::common::{KC_LGUI, KC_LSHIFT, wrap_keymap};
 
 fn create_hrm_keyboard() -> Keyboard<'static> {
     let hand = [[Hand::Left, Hand::Left, Hand::Right, Hand::Right, Hand::Right]];

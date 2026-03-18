@@ -1,7 +1,7 @@
 use postcard::experimental::max_size::MaxSize;
 use rmk_types::action::KeyAction;
-use rmk_types::modifier::ModifierCombination;
 pub use rmk_types::fork::ForkStateBits as StateBits;
+use rmk_types::modifier::ModifierCombination;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]

@@ -37,11 +37,10 @@ pub struct LedIndicator {
 }
 
 impl Schema for LedIndicator {
-    const SCHEMA: &'static postcard_schema::schema::NamedType =
-        &postcard_schema::schema::NamedType {
-            name: "LedIndicator",
-            ty: &postcard_schema::schema::DataModelType::U8,
-        };
+    const SCHEMA: &'static postcard_schema::schema::NamedType = &postcard_schema::schema::NamedType {
+        name: "LedIndicator",
+        ty: &postcard_schema::schema::DataModelType::U8,
+    };
 }
 
 impl BitOr for LedIndicator {

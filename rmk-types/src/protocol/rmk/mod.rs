@@ -13,14 +13,13 @@ mod request;
 mod status;
 mod types;
 
+use postcard_rpc::{TopicDirection, endpoints, topics};
+
 pub use self::config::*;
 pub use self::keymap::*;
 pub use self::request::*;
 pub use self::status::*;
 pub use self::types::*;
-
-use postcard_rpc::{TopicDirection, endpoints, topics};
-
 use crate::action::{EncoderAction, KeyAction};
 use crate::battery::BatteryStatus;
 use crate::ble::BleStatus;
@@ -240,13 +239,11 @@ topics! {
 mod tests {
     extern crate alloc;
 
-    use super::ENDPOINT_LIST;
-    use super::TOPICS_OUT_LIST;
+    use heapless::Vec;
     use postcard_rpc::{Endpoint, Key, Topic};
-
     use serde::{Deserialize, Serialize};
 
-    use super::*;
+    use super::{ENDPOINT_LIST, TOPICS_OUT_LIST, *};
     use crate::action::MorseProfile;
     use crate::battery::ChargeState;
     use crate::ble::BleState;
@@ -254,7 +251,6 @@ mod tests {
     use crate::led_indicator::LedIndicator;
     use crate::modifier::ModifierCombination;
     use crate::mouse_button::MouseButtons;
-    use heapless::Vec;
 
     /// Helper: postcard round-trip for a value using a stack buffer.
     fn round_trip<T>(val: &T) -> T
@@ -508,9 +504,7 @@ mod tests {
     fn round_trip_matrix_state() {
         let mut bitmap = heapless::Vec::new();
         bitmap.extend_from_slice(&[0b0000_0101, 0x00, 0b0010_0000]).unwrap();
-        round_trip(&MatrixState {
-            pressed_bitmap: bitmap,
-        });
+        round_trip(&MatrixState { pressed_bitmap: bitmap });
     }
 
     #[test]

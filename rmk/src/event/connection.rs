@@ -5,10 +5,9 @@
 //! - BLE status change events
 
 use rmk_macro::event;
-pub use rmk_types::connection::ConnectionType;
-
 #[cfg(feature = "_ble")]
 use rmk_types::ble::BleStatus;
+pub use rmk_types::connection::ConnectionType;
 
 // ============================================================================
 // Connection Type Events

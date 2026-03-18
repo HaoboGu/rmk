@@ -1,8 +1,6 @@
 use core::cell::Cell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use embassy_sync::blocking_mutex::Mutex;
-
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join;
@@ -45,11 +43,10 @@ use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
-use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, publish_event};
+use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, ConnectionType, publish_event};
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
-use crate::event::ConnectionType;
 use crate::state::ConnectionState;
 #[cfg(feature = "usb_log")]
 use crate::usb::add_usb_logger;

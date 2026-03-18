@@ -5,6 +5,7 @@
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
+use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 /// Mouse buttons
@@ -92,4 +93,11 @@ impl MouseButtons {
             .with_button7(button7)
             .with_button8(button8)
     }
+}
+
+impl Schema for MouseButtons {
+    const SCHEMA: &'static postcard_schema::schema::NamedType = &postcard_schema::schema::NamedType {
+        name: "MouseButtons",
+        ty: &postcard_schema::schema::DataModelType::U8,
+    };
 }

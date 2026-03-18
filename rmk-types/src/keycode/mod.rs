@@ -8,9 +8,8 @@ mod system_control;
 pub use ascii::{from_ascii, to_ascii};
 pub use consumer::ConsumerKey;
 pub use hid::HidKeyCode;
-pub use system_control::SystemControlKey;
-
 use serde::{Deserialize, Serialize};
+pub use system_control::SystemControlKey;
 
 /// Key codes which are not in the HID spec, but still commonly used
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]

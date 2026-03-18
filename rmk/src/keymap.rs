@@ -18,7 +18,6 @@ use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
 #[cfg(feature = "host_security")]
 use crate::matrix::MatrixState;
-
 use crate::morse::Morse;
 
 pub(crate) const HOLD_BUFFER_SIZE: usize = 16;

@@ -34,11 +34,10 @@ pub struct ModifierCombination {
 }
 
 impl Schema for ModifierCombination {
-    const SCHEMA: &'static postcard_schema::schema::NamedType =
-        &postcard_schema::schema::NamedType {
-            name: "ModifierCombination",
-            ty: &postcard_schema::schema::DataModelType::U8,
-        };
+    const SCHEMA: &'static postcard_schema::schema::NamedType = &postcard_schema::schema::NamedType {
+        name: "ModifierCombination",
+        ty: &postcard_schema::schema::DataModelType::U8,
+    };
 }
 
 impl BitOr for ModifierCombination {

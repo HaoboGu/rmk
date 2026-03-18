@@ -1,9 +1,9 @@
 //! Core protocol types.
 
+use heapless::Vec;
 use serde::{Deserialize, Serialize};
 
 use super::MAX_UNLOCK_KEYS;
-use heapless::Vec;
 
 /// Protocol version advertised during the connection handshake.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, postcard_schema::Schema)]
