@@ -80,6 +80,8 @@ fn generate_mpsc_channel(
                 #type_name #ty_generics,
                 { #cap }
             >;
+            // A MPSC channel has a single consumer by definition.
+            const PUBLISH_IS_NOOP: bool = false;
 
             fn publisher() -> Self::Publisher {
                 #channel_name.sender()
@@ -157,6 +159,7 @@ fn generate_pubsub_channel(
                 { #subs_val },
                 { #pubs_val }
             >;
+            const PUBLISH_IS_NOOP: bool = #subs_val == 0;
 
             fn publisher() -> Self::Publisher {
                 #channel_name.immediate_publisher()

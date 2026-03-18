@@ -19,7 +19,9 @@ use crate::config::Hand;
 use crate::descriptor::KeyboardReport;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::ClearPeerEvent;
-use crate::event::{KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event};
+use crate::event::{
+    ActionEvent, KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event, publish_event_async,
+};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::input_device::Runnable;
@@ -145,8 +147,7 @@ impl CapsWordState {
     }
 }
 
-impl Runnable for Keyboard<'_>
-{
+impl Runnable for Keyboard<'_> {
     /// Main keyboard processing task, it receives input devices result, processes keys.
     /// The report is sent using `send_report`.
     async fn run(&mut self) -> ! {
@@ -257,8 +258,7 @@ pub struct Keyboard<'a> {
     passkey_entry_state: crate::ble::passkey::PasskeyEntryState,
 }
 
-impl<'a> Keyboard<'a>
-{
+impl<'a> Keyboard<'a> {
     pub fn new(keymap: &'a KeyMap<'a>) -> Self {
         Keyboard {
             keymap,
@@ -507,8 +507,7 @@ impl<'a> Keyboard<'a>
                                     _ => unreachable!(),
                                 };
                                 debug!("Pattern after unilateral tap or flow tap: {:?}", pattern);
-                                let action =
-                                    Self::action_from_pattern(self.keymap, &held_key.action, pattern);
+                                let action = Self::action_from_pattern(self.keymap, &held_key.action, pattern);
                                 self.process_key_action_normal(action, held_key.event).await;
                                 held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                 // Push back after triggered tap
@@ -518,8 +517,7 @@ impl<'a> Keyboard<'a>
                                 // In this state pattern is not surely finished,
                                 // however an other key is pressed so terminate the sequence, try to resolve as is
                                 debug!("Pattern after released, unilateral tap or flow tap: {:?}", pattern);
-                                let action =
-                                    Self::action_from_pattern(self.keymap, &held_key.action, pattern);
+                                let action = Self::action_from_pattern(self.keymap, &held_key.action, pattern);
                                 held_key.event.pressed = true;
                                 self.process_key_action_tap(action, held_key.event).await;
                                 // The tap is fully fired, don't push it back to buffer again
@@ -548,8 +546,7 @@ impl<'a> Keyboard<'a>
                                     };
                                     keyboard_state_updated = true;
                                     debug!("pattern after permissive hold: {:?}", pattern);
-                                    let action =
-                                        Self::action_from_pattern(self.keymap, &action, pattern);
+                                    let action = Self::action_from_pattern(self.keymap, &action, pattern);
                                     self.process_key_action_normal(action, held_key.event).await;
                                     held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                     // Push back after triggered hold
@@ -557,8 +554,7 @@ impl<'a> Keyboard<'a>
                                 }
                                 KeyState::Released(pattern) => {
                                     debug!("pattern after released, permissive hold: {:?}", pattern);
-                                    let action =
-                                        Self::action_from_pattern(self.keymap, &action, pattern);
+                                    let action = Self::action_from_pattern(self.keymap, &action, pattern);
                                     held_key.event.pressed = true;
                                     self.process_key_action_tap(action, held_key.event).await;
                                     // The tap is fully fired, don't push it back to buffer again
@@ -590,7 +586,8 @@ impl<'a> Keyboard<'a>
                                     self.process_key_action_tap(action, held_key.event).await;
                                 }
                                 KeyAction::No => {
-                                    self.process_key_action_tap(key_action.to_action(), held_key.event).await;
+                                    self.process_key_action_tap(key_action.to_action(), held_key.event)
+                                        .await;
                                 }
                                 _ => unreachable!(),
                             }
@@ -608,11 +605,8 @@ impl<'a> Keyboard<'a>
 
                                     debug!("pattern by decided tap release: {:?}", pattern);
 
-                                    let final_action = Self::try_predict_final_action(
-                                        self.keymap,
-                                        &key_action,
-                                        pattern,
-                                    );
+                                    let final_action =
+                                        Self::try_predict_final_action(self.keymap, &key_action, pattern);
                                     if let Some(action) = final_action {
                                         debug!("tap prediction {:?} -> {:?}", pattern, action);
                                         self.process_key_action_normal(action, held_key.event).await;
@@ -1009,15 +1003,12 @@ impl<'a> Keyboard<'a>
     fn reset_combo(&mut self, key_action: &KeyAction) {
         // Reset other sub-combo states
         self.keymap.with_combos_mut(|combos| {
-            combos
-                .iter_mut()
-                .filter_map(|c| c.as_mut())
-                .for_each(|c| {
-                    if c.is_all_pressed() && !c.is_triggered() && c.config.actions.contains(key_action) {
-                        info!("Resetting combo: {:?}", c,);
-                        c.reset();
-                    }
-                });
+            combos.iter_mut().filter_map(|c| c.as_mut()).for_each(|c| {
+                if c.is_all_pressed() && !c.is_triggered() && c.config.actions.contains(key_action) {
+                    info!("Resetting combo: {:?}", c,);
+                    c.reset();
+                }
+            });
         });
     }
 
@@ -1063,16 +1054,13 @@ impl<'a> Keyboard<'a>
 
             // Only one combo is updated, and triggered
             let next_action = self.keymap.with_combos_mut(|combos| {
-                combos
-                    .iter_mut()
-                    .filter_map(|c| c.as_mut())
-                    .find_map(|c| {
-                        if c.is_all_pressed() && !c.is_triggered() && c.size() == max_size {
-                            Some(c.trigger())
-                        } else {
-                            None
-                        }
-                    })
+                combos.iter_mut().filter_map(|c| c.as_mut()).find_map(|c| {
+                    if c.is_all_pressed() && !c.is_triggered() && c.size() == max_size {
+                        Some(c.trigger())
+                    } else {
+                        None
+                    }
+                })
             });
 
             if let Some(next_action) = next_action {
@@ -1150,6 +1138,12 @@ impl<'a> Keyboard<'a>
     }
 
     async fn process_key_action_normal(&mut self, action: Action, event: KeyboardEvent) {
+        publish_event_async(ActionEvent {
+            action,
+            keyboard_event: event,
+        })
+        .await;
+
         match action {
             Action::No => {}
             Action::Key(key) => self.process_action_key(key, event).await,
@@ -1447,11 +1441,11 @@ impl<'a> Keyboard<'a>
                     PasskeyAction::Submitted(passkey) => {
                         info!("[passkey] Submitting passkey");
                         PASSKEY_RESPONSE.signal(Some(passkey));
-                    },
+                    }
                     PasskeyAction::Cancelled => {
                         info!("[passkey] Cancelled");
                         PASSKEY_RESPONSE.signal(None);
-                    },
+                    }
                     _ => {
                         // Ignore other states
                     }
@@ -1631,6 +1625,7 @@ impl<'a> Keyboard<'a>
 
     async fn process_user(&mut self, id: u8, event: KeyboardEvent) {
         debug!("Processing user key id: {:?}, event: {:?}", id, event);
+
         #[cfg(feature = "_ble")]
         {
             use crate::NUM_BLE_PROFILE;
