@@ -19,7 +19,9 @@ use crate::config::Hand;
 use crate::descriptor::KeyboardReport;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::ClearPeerEvent;
-use crate::event::{KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event};
+use crate::event::{
+    ActionEvent, KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event, publish_event_async,
+};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::input_device::Runnable;
@@ -1136,6 +1138,12 @@ impl<'a> Keyboard<'a> {
     }
 
     async fn process_key_action_normal(&mut self, action: Action, event: KeyboardEvent) {
+        publish_event_async(ActionEvent {
+            action,
+            keyboard_event: event,
+        })
+        .await;
+
         match action {
             Action::No => {}
             Action::Key(key) => self.process_action_key(key, event).await,
@@ -1617,6 +1625,7 @@ impl<'a> Keyboard<'a> {
 
     async fn process_user(&mut self, id: u8, event: KeyboardEvent) {
         debug!("Processing user key id: {:?}, event: {:?}", id, event);
+
         #[cfg(feature = "_ble")]
         {
             use crate::NUM_BLE_PROFILE;
