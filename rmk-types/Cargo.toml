@@ -21,6 +21,11 @@ strum = { version = "0.28", default-features = false, features = ["derive"] }
 
 bitfield-struct = "0.12"
 
+[build-dependencies]
+rmk-config = { path = "../rmk-config", version = "=0.6.1" }
+toml = "1.0"
+const-gen = "1.6"
+
 [features]
 default = []
 ## Enable RMK protocol ICD types, endpoints, and topics (pulls in postcard-schema, postcard-rpc, heapless)
@@ -32,3 +37,5 @@ defmt = [
 ]
 # Feature for proc-macro code generation only, not included in firmware
 _codegen = []
+split = []
+passkey_entry = []
