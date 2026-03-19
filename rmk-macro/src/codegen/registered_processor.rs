@@ -1,6 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use rmk_config::{ChipModel, KeyboardTomlConfig, PinConfig};
+use rmk_config::resolved::Hardware;
+use rmk_config::resolved::hardware::{ChipModel, PinConfig};
 use syn::ItemMod;
 
 use super::chip::gpio::convert_gpio_str_to_output_pin;
@@ -8,13 +9,13 @@ use super::chip::gpio::convert_gpio_str_to_output_pin;
 /// Expand processor init/exec blocks from keyboard config.
 /// Returns (initializers, executors).
 pub(crate) fn expand_registered_processor_init(
-    keyboard_config: &KeyboardTomlConfig,
+    hardware: &Hardware,
     item_mod: &ItemMod,
 ) -> (TokenStream, Vec<TokenStream>) {
     let mut initializers = TokenStream::new();
     let mut executors = vec![];
 
-    let (i, e) = expand_light_indicator_processors(keyboard_config);
+    let (i, e) = expand_light_indicator_processors(hardware);
     initializers.extend(i);
     executors.extend(e);
 
@@ -68,17 +69,15 @@ pub(crate) fn expand_registered_processor_init(
     (initializers, executors)
 }
 
-fn expand_light_indicator_processors(
-    keyboard_config: &KeyboardTomlConfig,
-) -> (TokenStream, Vec<TokenStream>) {
-    let chip = keyboard_config.get_chip_model().unwrap();
-    let light_config = keyboard_config.get_light_config();
+fn expand_light_indicator_processors(hardware: &Hardware) -> (TokenStream, Vec<TokenStream>) {
+    let chip = &hardware.chip;
+    let light_config = &hardware.light;
 
     let mut initializers = TokenStream::new();
     let mut executors = vec![];
 
     create_keyboard_indicator_processor(
-        &chip,
+        chip,
         &light_config.numslock,
         quote! { numlock_processor },
         quote! { NumLock },
@@ -87,7 +86,7 @@ fn expand_light_indicator_processors(
     );
 
     create_keyboard_indicator_processor(
-        &chip,
+        chip,
         &light_config.scrolllock,
         quote! { scrolllock_processor },
         quote! { ScrollLock },
@@ -96,7 +95,7 @@ fn expand_light_indicator_processors(
     );
 
     create_keyboard_indicator_processor(
-        &chip,
+        chip,
         &light_config.capslock,
         quote! { capslock_processor },
         quote! { CapsLock },

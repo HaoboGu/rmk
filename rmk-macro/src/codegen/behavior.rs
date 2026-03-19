@@ -3,34 +3,29 @@
 use std::collections::HashMap;
 
 use quote::quote;
-use rmk_config::{
-    CombosConfig, DurationMillis, ForksConfig, KeyboardTomlConfig, MacrosConfig, MorseActionPair,
-    MorseConfig, MorseProfile, MorsesConfig, OneShotConfig, TriLayerConfig,
+use rmk_config::resolved::Behavior;
+use rmk_config::resolved::behavior::{
+    Combos, Forks, MacroOperation, Macros, Morse, MorseActionPair, MorseKey, MorseProfile,
 };
 
 use super::action_parser::{expand_profile, expand_profile_name, get_key_with_alias, parse_key};
 
-fn expand_tri_layer(tri_layer: &Option<TriLayerConfig>) -> proc_macro2::TokenStream {
+fn expand_tri_layer(tri_layer: &Option<[u8; 3]>) -> proc_macro2::TokenStream {
     match tri_layer {
         Some(tri_layer) => {
-            let upper = tri_layer.upper;
-            let lower = tri_layer.lower;
-            let adjust = tri_layer.adjust;
+            let upper = tri_layer[0];
+            let lower = tri_layer[1];
+            let adjust = tri_layer[2];
             quote! {::core::option::Option::Some([#upper, #lower, #adjust])}
         }
         None => quote! {::core::option::Option::None::<[u8; 3]>},
     }
 }
 
-fn expand_one_shot(one_shot: &Option<OneShotConfig>) -> proc_macro2::TokenStream {
+fn expand_one_shot(one_shot_timeout_ms: &Option<u64>) -> proc_macro2::TokenStream {
     let default = quote! {::rmk::config::OneShotConfig::default()};
-    match one_shot {
-        Some(one_shot) => {
-            let millis = match &one_shot.timeout {
-                Some(t) => t.0,
-                None => return default,
-            };
-
+    match one_shot_timeout_ms {
+        Some(millis) => {
             let timeout = quote! {::embassy_time::Duration::from_millis(#millis)};
 
             quote! {
@@ -78,46 +73,28 @@ fn expand_morse_actions(
     }
 }
 
-fn expand_morse(morse: &Option<MorsesConfig>) -> proc_macro2::TokenStream {
+fn expand_morse(morse: &Option<Morse>) -> proc_macro2::TokenStream {
     if let Some(config) = morse {
-        let enable_flow_tap = match config.enable_flow_tap {
-            Some(enable) => quote! { enable_flow_tap: #enable, },
-            None => quote! {},
-        };
+        let enable_flow_tap = config.enable_flow_tap;
+        let enable_flow_tap_token = quote! { enable_flow_tap: #enable_flow_tap, };
 
-        let prior_idle_time = match &config.prior_idle_time {
-            Some(t) => {
-                let timeout = t.0;
-                quote! { prior_idle_time: ::embassy_time::Duration::from_millis(#timeout), }
-            }
-            None => quote! {},
-        };
+        let prior_idle_time_ms = config.prior_idle_time_ms;
+        let prior_idle_time_token =
+            quote! { prior_idle_time: ::embassy_time::Duration::from_millis(#prior_idle_time_ms), };
 
-        // Use default timeout values (250ms) when not specified in TOML config
-        let default_timeout = DurationMillis(250);
-        let default_profile = expand_profile(&MorseProfile {
-            unilateral_tap: config.unilateral_tap,
-            permissive_hold: config.permissive_hold,
-            hold_on_other_press: config.hold_on_other_press,
-            normal_mode: config.normal_mode,
-            hold_timeout: Some(
-                config
-                    .hold_timeout
-                    .clone()
-                    .unwrap_or(default_timeout.clone()),
-            ),
-            gap_timeout: Some(config.gap_timeout.clone().unwrap_or(default_timeout)),
-        });
+        let default_profile = expand_profile(&config.default_profile);
 
-        let morses = match &config.morses {
-            Some(morses) => expand_morses(morses, &config.profiles),
-            None => quote! {},
+        let profiles_ref = if config.profiles.is_empty() {
+            None
+        } else {
+            Some(config.profiles.clone())
         };
+        let morses = expand_morses(&config.morses, &profiles_ref);
 
         quote! {
             ::rmk::config::MorsesConfig {
-                #enable_flow_tap
-                #prior_idle_time
+                #enable_flow_tap_token
+                #prior_idle_time_token
                 default_profile: #default_profile,
                 #morses
                 ..Default::default()
@@ -129,7 +106,7 @@ fn expand_morse(morse: &Option<MorsesConfig>) -> proc_macro2::TokenStream {
 }
 
 fn expand_combos(
-    combos: &Option<CombosConfig>,
+    combos: &Option<Combos>,
     profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> proc_macro2::TokenStream {
     let default = quote! { ::core::default::Default::default() };
@@ -145,9 +122,8 @@ fn expand_combos(
                 quote! { ::rmk::combo::Combo::new(::rmk::combo::ComboConfig::new([#(#actions),*], #output, #layer)) }
             });
 
-            let timeout = match &combos.timeout {
-                Some(t) => {
-                    let millis = t.0;
+            let timeout = match &combos.timeout_ms {
+                Some(millis) => {
                     quote! { timeout: ::embassy_time::Duration::from_millis(#millis), }
                 }
                 None => quote! {},
@@ -174,30 +150,30 @@ fn expand_combos(
     }
 }
 
-fn expand_macros(macros: &Option<MacrosConfig>) -> proc_macro2::TokenStream {
+fn expand_macros(macros: &Option<Macros>) -> proc_macro2::TokenStream {
     let default = quote! { ::core::default::Default::default() };
 
     match macros {
         Some(macros) => {
             let macros_def = macros.macros.iter().map(|m| {
                 let operations = m.operations.iter().map(|op| match op {
-                    rmk_config::MacroOperation::Tap { keycode } => {
+                    MacroOperation::Tap { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
                         quote! { ::rmk::keyboard_macros::MacroOperation::Tap(::rmk::types::keycode::KeyCode::#key).into_iter() }
                     }
-                    rmk_config::MacroOperation::Down { keycode } => {
+                    MacroOperation::Down { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
                         quote! { ::rmk::keyboard_macros::MacroOperation::Press(::rmk::types::keycode::KeyCode::#key).into_iter() }
                     }
-                    rmk_config::MacroOperation::Up { keycode } => {
+                    MacroOperation::Up { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
                         quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::types::keycode::KeyCode::#key).into_iter() }
                     }
-                    rmk_config::MacroOperation::Delay { duration } => {
-                        let millis = duration.0 as u16;
+                    MacroOperation::Delay { duration_ms } => {
+                        let millis = *duration_ms as u16;
                         quote! { ::rmk::keyboard_macros::MacroOperation::Delay(#millis).into_iter() }
                     }
-                    rmk_config::MacroOperation::Text { text } => {
+                    MacroOperation::Text { text } => {
                         quote! { ::rmk::keyboard_macros::to_macro_sequence(#text).into_iter() }
                     }
                 });
@@ -205,16 +181,19 @@ fn expand_macros(macros: &Option<MacrosConfig>) -> proc_macro2::TokenStream {
                 quote! { [#(#operations),*].into_iter().flatten().collect() }
             });
 
-            quote! { ::rmk::config::macro_config::KeyboardMacrosConfig::new(::rmk::keyboard_macros::define_macro_sequences(&[#(#macros_def),*])) }
+            quote! { ::rmk::config::KeyboardMacrosConfig::new(::rmk::keyboard_macros::define_macro_sequences(&[#(#macros_def),*])) }
         }
         None => default,
     }
 }
 
 fn expand_morses(
-    morses: &[MorseConfig],
+    morses: &[MorseKey],
     profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> proc_macro2::TokenStream {
+    if morses.is_empty() {
+        return quote! {};
+    }
     let morses_def = morses.iter().map(|morse| {
         let profile = if let Some(profile_name) = &morse.profile {
             let morse_profile = expand_profile_name(profile_name, profiles);
@@ -420,7 +399,7 @@ fn parse_state_combination(states_str: &str) -> StateBitsMacro {
 }
 
 fn expand_forks(
-    forks: &Option<ForksConfig>,
+    forks: &Option<Forks>,
     profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> proc_macro2::TokenStream {
     let default = quote! { ::core::default::Default::default() };
@@ -433,7 +412,7 @@ fn expand_forks(
                 let match_any  = fork.match_any.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
                 let match_none = fork.match_none.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
                 let kept = fork.kept_modifiers.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
-                let bindable = fork.bindable.unwrap_or(false);
+                let bindable = fork.bindable;
 
                 if match_any.is_empty() && match_none.is_empty() {
                     panic!("\n❌ keyboard.toml: fork configuration missing match conditions! Please check the documentation: https://rmk.rs/docs/features/configuration/behavior.html#fork");
@@ -453,20 +432,18 @@ fn expand_forks(
     }
 }
 
-pub(crate) fn expand_behavior_config(
-    keyboard_config: &KeyboardTomlConfig,
-) -> proc_macro2::TokenStream {
-    let profiles = &keyboard_config
-        .get_behavior_config()
-        .unwrap()
+pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenStream {
+    let profiles = behavior
         .morse
-        .and_then(|m| m.profiles);
-    let behavior = keyboard_config.get_behavior_config().unwrap();
+        .as_ref()
+        .map(|m| m.profiles.clone())
+        .filter(|p| !p.is_empty());
+
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
-    let one_shot = expand_one_shot(&behavior.one_shot);
-    let combos = expand_combos(&behavior.combo, profiles);
+    let one_shot = expand_one_shot(&behavior.one_shot_timeout_ms);
+    let combos = expand_combos(&behavior.combos, &profiles);
     let macros = expand_macros(&behavior.macros);
-    let forks = expand_forks(&behavior.fork, profiles);
+    let forks = expand_forks(&behavior.forks, &profiles);
     let morse = expand_morse(&behavior.morse);
 
     quote! {

@@ -5,7 +5,7 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
-use crate::UsbInfo;
+use crate::communication::UsbInfo;
 
 static USB_INFO: Lazy<HashMap<String, UsbInfo>> = Lazy::new(|| {
     let mut m = HashMap::new();

@@ -35,18 +35,23 @@ use builtin_processor::wpm::WpmProcessor;
 use config::RmkConfig;
 #[cfg(not(feature = "_ble"))]
 use descriptor::{CompositeReport, KeyboardReport};
+pub use embassy_futures;
 #[cfg(not(any(cortex_m)))]
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
 #[cfg(cortex_m)]
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 #[cfg(not(feature = "_no_usb"))]
 use embassy_usb::driver::Driver;
+pub use futures;
 use futures::FutureExt;
+pub use heapless;
 use hid::{HidReaderTrait, RunnableHidWriter};
 use keymap::KeyMap;
 pub use keymap::KeymapData;
 use matrix::MatrixTrait;
 use processor::PollingProcessor;
+pub use rmk_macro as macros;
+pub use rmk_types as types;
 #[cfg(all(feature = "storage", feature = "host"))]
 use rmk_types::action::EncoderAction;
 use rmk_types::led_indicator::LedIndicator;
@@ -60,7 +65,6 @@ use {
     crate::light::UsbLedReader,
     crate::usb::{UsbKeyboardWriter, add_usb_reader_writer, add_usb_writer, new_usb_builder},
 };
-pub use {embassy_futures, futures, heapless, rmk_macro as macros, rmk_types as types};
 #[cfg(feature = "storage")]
 use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 

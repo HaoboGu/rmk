@@ -1,5 +1,6 @@
 use quote::quote;
 use rmk_config::KeyboardTomlConfig;
+use rmk_config::resolved::{Host, Identity, Layout};
 
 pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
     // Get the path of the keyboard config file from the environment variable
@@ -10,22 +11,20 @@ pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
 }
 
 pub(crate) fn expand_keyboard_info(
-    keyboard_config: &KeyboardTomlConfig,
+    identity: &Identity,
+    layout: &Layout,
 ) -> proc_macro2::TokenStream {
-    let basic = keyboard_config.get_device_config();
-    let (layout, _) = keyboard_config.get_layout_config().unwrap();
-    let board = keyboard_config.get_board_config().unwrap();
-    let pid = basic.product_id;
-    let vid = basic.vendor_id;
-    let product_name = basic.product_name.clone();
-    let manufacturer = basic.manufacturer.clone();
-    let serial_number = basic.serial_number.clone();
+    let pid = identity.product_id;
+    let vid = identity.vendor_id;
+    let product_name = identity.product_name.clone();
+    let manufacturer = identity.manufacturer.clone();
+    let serial_number = identity.serial_number.clone();
 
     let num_col = layout.cols as usize;
     let num_row = layout.rows as usize;
     let num_layer = layout.layers as usize;
-    let num_encoder = board.get_num_encoder();
-    let total_num_encoder = num_encoder.iter().sum::<usize>();
+    let num_encoder = &layout.encoder_counts;
+    let total_num_encoder: usize = num_encoder.iter().sum();
     quote! {
         pub(crate) const COL: usize = #num_col;
         pub(crate) const ROW: usize = #num_row;
@@ -41,14 +40,13 @@ pub(crate) fn expand_keyboard_info(
     }
 }
 
-pub(crate) fn expand_vial_config(config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
-    // Check if vial is enabled (default: true)
-    let host_config = config.get_host_config();
-    if !host_config.vial_enabled {
+pub(crate) fn expand_vial_config(host: &Host) -> proc_macro2::TokenStream {
+    if !host.vial_enabled {
         return quote! {};
     }
-    let unlock_keys = if let Some(unlock_keys) = &host_config.unlock_keys {
-        let keys_expr = unlock_keys
+    let unlock_keys = if !host.unlock_keys.is_empty() {
+        let keys_expr = host
+            .unlock_keys
             .iter()
             .map(|key| {
                 let row = key[0];

@@ -2,6 +2,7 @@ use crate::{DependencyConfig, KeyboardTomlConfig};
 
 /// Keyboard's basic info
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct Basic {
     /// Keyboard name
     pub name: String,
@@ -30,8 +31,9 @@ impl Default for Basic {
     }
 }
 
+#[allow(dead_code)]
 impl KeyboardTomlConfig {
-    pub fn get_device_config(&self) -> Basic {
+    pub(crate) fn get_device_config(&self) -> Basic {
         let default = Basic::default();
         let keyboard = self.keyboard.as_ref().unwrap();
         Basic {
@@ -44,7 +46,7 @@ impl KeyboardTomlConfig {
         }
     }
 
-    pub fn get_dependency_config(&self) -> DependencyConfig {
+    pub(crate) fn get_dependency_config(&self) -> DependencyConfig {
         if let Some(dependency) = &self.dependency {
             dependency.clone()
         } else {

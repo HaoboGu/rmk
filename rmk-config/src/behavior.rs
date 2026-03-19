@@ -1,7 +1,7 @@
 use crate::{BehaviorConfig, MacroOperation};
 
 impl crate::KeyboardTomlConfig {
-    pub fn get_behavior_config(&self) -> Result<BehaviorConfig, String> {
+    pub(crate) fn get_behavior_config(&self) -> Result<BehaviorConfig, String> {
         let default = self.behavior.clone().unwrap_or_default();
         let (layout, _) = self.get_layout_config().unwrap();
         match self.behavior.clone() {

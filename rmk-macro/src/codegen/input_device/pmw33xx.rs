@@ -1,5 +1,5 @@
 use quote::{format_ident, quote};
-use rmk_config::{ChipModel, ChipSeries, Pmw33xxConfig, Pmw33xxType};
+use rmk_config::resolved::hardware::{ChipModel, ChipSeries, Pmw33xxConfig, Pmw33xxType};
 
 use super::Initializer;
 

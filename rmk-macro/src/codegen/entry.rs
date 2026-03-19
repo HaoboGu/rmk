@@ -1,13 +1,15 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::{BoardConfig, CommunicationConfig, KeyboardTomlConfig};
+use rmk_config::resolved::hardware::{BoardConfig, CommunicationConfig};
+use rmk_config::resolved::{Hardware, Host};
 use syn::{ItemFn, ItemMod};
 
 use super::override_helper::Overwritten;
 
 pub(crate) fn expand_rmk_entry(
-    keyboard_config: &KeyboardTomlConfig,
+    hardware: &Hardware,
+    host: &Host,
     item_mod: &ItemMod,
     devices: Vec<TokenStream2>,
     processors: Vec<TokenStream2>,
@@ -27,13 +29,14 @@ pub(crate) fn expand_rmk_entry(
                 None
             })
             .unwrap_or(rmk_entry_select(
-                keyboard_config,
+                hardware,
+                host,
                 devices,
                 processors,
                 registered_processors,
             ))
     } else {
-        rmk_entry_select(keyboard_config, devices, processors, registered_processors)
+        rmk_entry_select(hardware, host, devices, processors, registered_processors)
     }
 }
 
@@ -45,7 +48,8 @@ fn override_rmk_entry(item_fn: &ItemFn) -> TokenStream2 {
 }
 
 pub(crate) fn rmk_entry_select(
-    keyboard_config: &KeyboardTomlConfig,
+    hardware: &Hardware,
+    host: &Host,
     devices: Vec<TokenStream2>,
     processors: Vec<TokenStream2>,
     registered_processors: Vec<TokenStream2>,
@@ -70,25 +74,25 @@ pub(crate) fn rmk_entry_select(
     };
 
     // Remove the storage argument if disabled in config. The feature also needs to be disabled.
-    let storage = if keyboard_config.get_storage_config().enabled {
+    let storage = if hardware.storage.is_some() {
         quote! {&mut storage,}
     } else {
         TokenStream2::new()
     };
-    let keymap = if keyboard_config.get_host_config().vial_enabled {
+    let keymap = if host.vial_enabled {
         quote! { &keymap, }
     } else {
         quote! {}
     };
-    let board = keyboard_config.get_board_config().unwrap();
-    let communication = keyboard_config.get_communication_config().unwrap();
+    let board = &hardware.board;
+    let communication = &hardware.communication;
     let usb_driver_arg = match communication {
         CommunicationConfig::Usb(_) | CommunicationConfig::Both(_, _) => quote! { driver, },
         CommunicationConfig::Ble(_) => quote! {},
         CommunicationConfig::None => panic!("USB and BLE are both disabled"),
     };
 
-    let entry = match &board {
+    let entry = match board {
         BoardConfig::Split(split_config) => {
             let keyboard_task = quote! {
                 keyboard.run(),
@@ -163,7 +167,8 @@ pub(crate) fn rmk_entry_select(
             }
         }
         BoardConfig::UniBody(_) => rmk_entry_unibody(
-            keyboard_config,
+            hardware,
+            host,
             devices_task,
             processors_task,
             registered_processors,
@@ -177,7 +182,8 @@ pub(crate) fn rmk_entry_select(
 }
 
 pub(crate) fn rmk_entry_unibody(
-    keyboard_config: &KeyboardTomlConfig,
+    hardware: &Hardware,
+    host: &Host,
     devices_task: TokenStream2,
     processors_task: TokenStream2,
     registered_processors: Vec<TokenStream2>,
@@ -192,18 +198,18 @@ pub(crate) fn rmk_entry_unibody(
     }
     tasks.extend(registered_processors);
     // Remove the storage argument if disabled in config. The feature also needs to be disabled.
-    let storage = if keyboard_config.get_storage_config().enabled {
+    let storage = if hardware.storage.is_some() {
         quote! {&mut storage,}
     } else {
         TokenStream2::new()
     };
     // Remove the keymap argument if the vial is disabled
-    let keymap = if keyboard_config.get_host_config().vial_enabled {
+    let keymap = if host.vial_enabled {
         quote! { &keymap, }
     } else {
         quote! {}
     };
-    let communication = keyboard_config.get_communication_config().unwrap();
+    let communication = &hardware.communication;
     match communication {
         CommunicationConfig::Usb(_) => {
             let rmk_task = quote! {

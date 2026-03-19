@@ -8,6 +8,8 @@ mod vial;
 
 use bt_hci::controller::ExternalController;
 use embassy_executor::Spawner;
+use esp_alloc as _;
+use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{Input, InputConfig, Level, Output, OutputConfig, Pull};
 use esp_hal::interrupt::software::SoftwareInterruptControl;
@@ -24,7 +26,6 @@ use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
-use {esp_alloc as _, esp_backtrace as _};
 
 use crate::keymap::*;
 use crate::vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};

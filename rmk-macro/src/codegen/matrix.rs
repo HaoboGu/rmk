@@ -1,8 +1,9 @@
 //! Initialize matrix initialization boilerplate of RMK
 //!
 use quote::quote;
-use rmk_config::{
-    BoardConfig, ChipModel, ChipSeries, KeyboardTomlConfig, MatrixType, UniBodyConfig,
+use rmk_config::resolved::Hardware;
+use rmk_config::resolved::hardware::{
+    BoardConfig, ChipModel, ChipSeries, MatrixType, UniBodyConfig,
 };
 
 use super::chip::gpio::{
@@ -12,42 +13,38 @@ use super::chip::gpio::{
 use super::feature::is_feature_enabled;
 
 pub(crate) fn expand_matrix_config(
-    keyboard_config: &KeyboardTomlConfig,
+    hardware: &Hardware,
     rmk_features: &Option<Vec<String>>,
 ) -> proc_macro2::TokenStream {
     let async_matrix = is_feature_enabled(rmk_features, "async_matrix");
     let mut matrix_config = proc_macro2::TokenStream::new();
-    match &keyboard_config.get_board_config().unwrap() {
+    match &hardware.board {
         BoardConfig::UniBody(UniBodyConfig { matrix, .. }) => match matrix.matrix_type {
-            MatrixType::normal => {
+            MatrixType::Normal => {
                 matrix_config.extend(expand_matrix_input_output_pins(
-                    &keyboard_config.get_chip_model().unwrap(),
+                    &hardware.chip,
                     matrix.row_pins.clone().unwrap(),
                     matrix.col_pins.clone().unwrap(),
                     matrix.row2col,
                     async_matrix,
                 ));
             }
-            MatrixType::direct_pin => {
+            MatrixType::DirectPin => {
                 matrix_config.extend(expand_matrix_direct_pins(
-                    &keyboard_config.get_chip_model().unwrap(),
+                    &hardware.chip,
                     matrix.direct_pins.clone().unwrap(),
                     async_matrix,
                     matrix.direct_pin_low_active,
                 ));
                 // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
-                // So we need to declaring them in advance.
-                let (layout, _) = keyboard_config.get_layout_config().unwrap();
-                let rows = layout.rows as usize;
-                let cols = layout.cols as usize;
-                let size = layout.rows as usize * layout.cols as usize;
-                let layers = layout.layers as usize;
+                // So we need to declare them in advance.
+                let direct_pins = matrix.direct_pins.as_ref().unwrap();
+                let rows = direct_pins.len();
+                let cols = direct_pins.first().map_or(0, |row| row.len());
+                let size = rows * cols;
                 let low_active = matrix.direct_pin_low_active;
                 matrix_config.extend(quote! {
-                    pub(crate) const ROW: usize = #rows;
-                    pub(crate) const COL: usize = #cols;
                     pub(crate) const SIZE: usize = #size;
-                    pub(crate) const LAYER_NUM: usize = #layers;
                     let low_active = #low_active;
                 });
             }
@@ -55,15 +52,15 @@ pub(crate) fn expand_matrix_config(
         BoardConfig::Split(split_config) => {
             // Matrix config for split central
             match split_config.central.matrix.matrix_type {
-                MatrixType::normal => matrix_config.extend(expand_matrix_input_output_pins(
-                    &keyboard_config.get_chip_model().unwrap(),
+                MatrixType::Normal => matrix_config.extend(expand_matrix_input_output_pins(
+                    &hardware.chip,
                     split_config.central.matrix.row_pins.clone().unwrap(),
                     split_config.central.matrix.col_pins.clone().unwrap(),
                     split_config.central.matrix.row2col,
                     async_matrix,
                 )),
-                MatrixType::direct_pin => matrix_config.extend(expand_matrix_direct_pins(
-                    &keyboard_config.get_chip_model().unwrap(),
+                MatrixType::DirectPin => matrix_config.extend(expand_matrix_direct_pins(
+                    &hardware.chip,
                     split_config.central.matrix.direct_pins.clone().unwrap(),
                     async_matrix,
                     split_config.central.matrix.direct_pin_low_active,
@@ -92,7 +89,6 @@ pub(crate) fn expand_matrix_direct_pins(
         async_matrix,
         low_active,
     ));
-    // Generate a macro that does pin matrix config
 
     quote! {
         let direct_pins: [[Option<#input_pin_type>; #cols]; #rows] = {
