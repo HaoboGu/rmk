@@ -237,7 +237,7 @@ fn expand_split_peripheral(
     let chip = &hardware.chip;
     let mut matrix_config = proc_macro2::TokenStream::new();
     match &peripheral_config.matrix.matrix_type {
-        MatrixType::normal => {
+        MatrixType::Normal => {
             matrix_config.extend(expand_matrix_input_output_pins(
                 chip,
                 peripheral_config
@@ -263,7 +263,7 @@ fn expand_split_peripheral(
                 let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #num_row, #num_col, #col2row>::new(row_pins, col_pins, debouncer);
             });
         }
-        MatrixType::direct_pin => {
+        MatrixType::DirectPin => {
             matrix_config.extend(expand_matrix_direct_pins(
                 chip,
                 peripheral_config

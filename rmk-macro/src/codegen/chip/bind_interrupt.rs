@@ -65,7 +65,7 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
     let board = &hardware.board;
     let communication = &hardware.communication;
     match chip.series {
-        rmk_config::ChipSeries::Stm32 => {
+        rmk_config::resolved::hardware::ChipSeries::Stm32 => {
             // For stm32, bind USB interrupt and EXTI interrupts (if async_matrix is enabled)
             let rmk_features = get_rmk_features();
             let async_matrix = is_feature_enabled(&rmk_features, "async_matrix");
@@ -102,7 +102,7 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
                 }
             }
         }
-        rmk_config::ChipSeries::Nrf52 => {
+        rmk_config::resolved::hardware::ChipSeries::Nrf52 => {
             // Usb and clock interrupt
             let usb_and_clock_interrupt = if let Some(usb_info) = communication.get_usb_info() {
                 let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
@@ -231,7 +231,7 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
                 }
             }
         }
-        rmk_config::ChipSeries::Rp2040 => {
+        rmk_config::resolved::hardware::ChipSeries::Rp2040 => {
             let usb_info = communication
                 .get_usb_info()
                 .expect("no usb info for the chip");
@@ -263,7 +263,7 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
                 #ble_task
             }
         }
-        rmk_config::ChipSeries::Esp32 => quote! {},
+        rmk_config::resolved::hardware::ChipSeries::Esp32 => quote! {},
     }
 }
 

@@ -1,17 +1,28 @@
-// Re-export domain types that are already in their final resolved form after
-// the 3-layer merge. Consumers should import these from `resolved::hardware`
-// rather than from the crate root, so the resolved module is the single public API.
+//! Resolved hardware types for the public API of `rmk-config`.
+//!
+//! Leaf types are re-exported directly from the TOML configuration types
+//! Only types with genuine structural transformation are defined here.
+
+// Re-export leaf types from TOML config (now properly named and `pub`)
+pub use crate::board::{BoardConfig, UniBodyConfig};
+pub use crate::chip::{ChipModel, ChipSeries};
+pub use crate::communication::{CommunicationConfig, UsbInfo};
 pub use crate::{
-    BleConfig, BoardConfig, ChipConfig, ChipModel, ChipSeries, CommunicationConfig, DependencyConfig, EncoderConfig,
-    EncoderResolution, InputDeviceConfig, JoystickConfig, KeyInfo, LightConfig, MatrixConfig, MatrixType, OutputConfig,
-    PinConfig, Pmw33xxConfig, Pmw33xxType, Pmw3610Config, SerialConfig, SplitBoardConfig, SplitConfig, UniBodyConfig,
+    BleConfig, ChipConfig, CommunicationProtocol, DependencyConfig, EncoderConfig, EncoderResolution, I2cConfig,
+    InputDeviceConfig, JoystickConfig, KeyInfo, LightConfig, MatrixConfig, MatrixType, OutputConfig, PinConfig,
+    Pmw33xxConfig, Pmw33xxType, Pmw3610Config, PointingDeviceConfig, SerialConfig, SpiConfig, SplitBoardConfig,
+    SplitConfig,
 };
 
+/// Resolved storage hardware config
+pub struct Storage {
+    pub start_addr: usize,
+    pub num_sectors: u8,
+    pub clear_storage: bool,
+    pub clear_layout: bool,
+}
+
 /// Complete hardware configuration for init code generation.
-///
-/// Some fields (`chip_config`, `communication`, `board`, `light`, `output`, `dependency`)
-/// are passed through as domain types that are already in their final form after
-/// the 3-layer TOML merge — no further resolution is needed.
 pub struct Hardware {
     pub chip: ChipModel,
     pub chip_config: ChipConfig,
@@ -21,14 +32,6 @@ pub struct Hardware {
     pub light: LightConfig,
     pub output: Vec<OutputConfig>,
     pub dependency: DependencyConfig,
-}
-
-/// Resolved storage hardware config (None when storage disabled).
-pub struct Storage {
-    pub start_addr: usize,
-    pub num_sectors: u8,
-    pub clear_storage: bool,
-    pub clear_layout: bool,
 }
 
 impl crate::KeyboardTomlConfig {

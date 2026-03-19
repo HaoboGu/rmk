@@ -8,24 +8,19 @@ use serde_inline_default::serde_inline_default;
 /// Event channel default configuration
 const EVENT_DEFAULT_CONFIG: &str = include_str!("default_config/event_default.toml");
 
-pub mod chip;
-pub mod communication;
-pub mod keyboard;
+pub(crate) mod chip;
+pub(crate) mod communication;
+pub(crate) mod keyboard;
 pub mod resolved;
 #[rustfmt::skip]
 pub mod usb_interrupt_map;
-pub mod behavior;
-pub mod board;
-pub mod host;
-pub mod keycode_alias;
-pub mod layout;
-pub mod light;
-pub mod storage;
-
-pub use board::{BoardConfig, UniBodyConfig};
-pub use chip::{ChipModel, ChipSeries};
-pub use communication::{CommunicationConfig, UsbInfo};
-pub use keycode_alias::KEYCODE_ALIAS;
+pub(crate) mod behavior;
+pub(crate) mod board;
+pub(crate) mod host;
+pub(crate) mod keycode_alias;
+pub(crate) mod layout;
+pub(crate) mod light;
+pub(crate) mod storage;
 
 /// Configurations for RMK keyboard.
 #[derive(Clone, Debug, Deserialize)]
@@ -127,7 +122,7 @@ impl KeyboardTomlConfig {
     /// - Update max_patterns_per_key to fit the max number of configured (pattern, action) pairs per morse key
     /// - Update peripheral number based on the number of split boards
     /// - TODO: Update controller number based on the number of split boards
-    pub fn auto_calculate_parameters(&mut self) {
+    pub(crate) fn auto_calculate_parameters(&mut self) {
         // Update the number of peripherals
         if let Some(split) = &self.split
             && split.peripheral.len() > self.rmk.split_peripherals_num
@@ -296,7 +291,7 @@ impl Default for RmkConstantsConfig {
 /// Event channel configuration for a single event type
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct EventChannelConfig {
+pub(crate) struct EventChannelConfig {
     /// Channel buffer size
     pub channel_size: usize,
     /// Number of publishers
@@ -315,6 +310,7 @@ impl Default for EventChannelConfig {
     }
 }
 
+#[allow(dead_code)]
 impl EventChannelConfig {
     /// Extract values as tuple
     pub fn into_values(self) -> (usize, usize, usize) {
@@ -329,7 +325,7 @@ macro_rules! define_event_config {
         /// Default values are loaded from event_default.toml
         #[derive(Clone, Debug, Deserialize)]
         #[serde(deny_unknown_fields, default)]
-        pub struct EventConfig {
+        pub(crate) struct EventConfig {
             $(pub $field: EventChannelConfig,)*
         }
 
@@ -382,7 +378,7 @@ define_event_config!(
 /// Configurations for keyboard layout
 #[derive(Clone, Debug, Deserialize)]
 #[allow(unused)]
-pub struct LayoutTomlConfig {
+pub(crate) struct LayoutTomlConfig {
     pub rows: u8,
     pub cols: u8,
     pub layers: u8,
@@ -393,7 +389,7 @@ pub struct LayoutTomlConfig {
 
 #[derive(Clone, Debug, Deserialize)]
 #[allow(unused)]
-pub struct LayerTomlConfig {
+pub(crate) struct LayerTomlConfig {
     pub name: Option<String>,
     pub keys: String,
     pub encoders: Option<Vec<[String; 2]>>,
@@ -401,7 +397,7 @@ pub struct LayerTomlConfig {
 
 /// Configurations for keyboard info
 #[derive(Clone, Debug, Default, Deserialize)]
-pub struct KeyboardInfo {
+pub(crate) struct KeyboardInfo {
     /// Keyboard name
     pub name: String,
     /// Vender id
@@ -423,11 +419,12 @@ pub struct KeyboardInfo {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
-#[allow(non_camel_case_types)]
 pub enum MatrixType {
     #[default]
-    normal,
-    direct_pin,
+    #[serde(rename = "normal")]
+    Normal,
+    #[serde(rename = "direct_pin")]
+    DirectPin,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -447,7 +444,7 @@ pub struct MatrixConfig {
 /// Config for storage
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct StorageConfig {
+pub(crate) struct StorageConfig {
     /// Start address of local storage, MUST BE start of a sector.
     /// If start_addr is set to 0(this is the default value), the last `num_sectors` sectors will be used.
     pub start_addr: Option<usize>,
@@ -530,7 +527,7 @@ impl Default for DependencyConfig {
 /// Configurations for keyboard layout
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct LayoutConfig {
+pub(crate) struct LayoutConfig {
     pub rows: u8,
     pub cols: u8,
     pub layers: u8,
@@ -722,7 +719,6 @@ pub struct SplitConfig {
 /// Configurations for each split board
 ///
 /// Either ble_addr or serial must be set, but not both.
-#[allow(unused)]
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SplitBoardConfig {
@@ -762,7 +758,7 @@ pub struct SerialConfig {
 
 /// Duration in milliseconds
 #[derive(Clone, Debug, Deserialize)]
-pub struct DurationMillis(#[serde(deserialize_with = "parse_duration_millis")] pub u64);
+pub(crate) struct DurationMillis(#[serde(deserialize_with = "parse_duration_millis")] pub u64);
 
 const fn default_true() -> bool {
     true
@@ -799,7 +795,7 @@ fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Resu
 #[serde_inline_default]
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct HostConfig {
+pub(crate) struct HostConfig {
     /// Whether Vial is enabled
     #[serde_inline_default(true)]
     pub vial_enabled: bool,
@@ -819,7 +815,6 @@ impl Default for HostConfig {
 /// Configurations for input devices
 ///
 #[derive(Clone, Debug, Default, Deserialize)]
-#[allow(unused)]
 #[serde(deny_unknown_fields)]
 pub struct InputDeviceConfig {
     pub encoder: Option<Vec<EncoderConfig>>,
@@ -830,7 +825,6 @@ pub struct InputDeviceConfig {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
-#[allow(unused)]
 #[serde(deny_unknown_fields)]
 pub struct JoystickConfig {
     // Name of the joystick
@@ -848,7 +842,6 @@ pub struct JoystickConfig {
 
 /// PMW3610 optical mouse sensor configuration
 #[derive(Clone, Debug, Default, Deserialize)]
-#[allow(unused)]
 #[serde(deny_unknown_fields)]
 pub struct Pmw3610Config {
     /// Name of the sensor (used for variable naming)
@@ -890,7 +883,6 @@ pub struct Pmw3610Config {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
-#[allow(unused)]
 #[serde(deny_unknown_fields)]
 pub enum Pmw33xxType {
     #[default]
@@ -899,7 +891,6 @@ pub enum Pmw33xxType {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
-#[allow(unused)]
 #[serde(deny_unknown_fields)]
 pub struct Pmw33xxConfig {
     // Name of the sensor (used for variable naming)
@@ -933,7 +924,6 @@ pub struct Pmw33xxConfig {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
-#[allow(unused)]
 #[serde(deny_unknown_fields)]
 pub struct EncoderConfig {
     // Pin a of the encoder
@@ -961,7 +951,6 @@ pub struct EncoderConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[allow(unused)]
 #[serde(deny_unknown_fields, untagged)]
 pub enum EncoderResolution {
     Value(u8),
@@ -976,14 +965,12 @@ impl Default for EncoderResolution {
 
 /// Pointing device config
 #[derive(Clone, Debug, Default, Deserialize)]
-#[allow(unused)]
 #[serde(deny_unknown_fields)]
 pub struct PointingDeviceConfig {
     pub interface: Option<CommunicationProtocol>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[allow(unused)]
 pub enum CommunicationProtocol {
     I2c(I2cConfig),
     Spi(SpiConfig),
@@ -991,7 +978,6 @@ pub enum CommunicationProtocol {
 
 /// SPI config
 #[derive(Clone, Debug, Default, Deserialize)]
-#[allow(unused)]
 pub struct SpiConfig {
     pub instance: String,
     pub sck: String,
@@ -1005,7 +991,6 @@ pub struct SpiConfig {
 
 /// I2C config
 #[derive(Clone, Debug, Default, Deserialize)]
-#[allow(unused)]
 pub struct I2cConfig {
     pub instance: String,
     pub sda: String,
@@ -1014,7 +999,6 @@ pub struct I2cConfig {
 }
 
 /// Configuration for an output pin
-#[allow(unused)]
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OutputConfig {
@@ -1026,7 +1010,7 @@ pub struct OutputConfig {
 }
 
 impl KeyboardTomlConfig {
-    pub fn get_output_config(&self) -> Result<Vec<OutputConfig>, String> {
+    pub(crate) fn get_output_config(&self) -> Result<Vec<OutputConfig>, String> {
         let output_config = self.output.clone();
         let split = self.split.clone();
         match (output_config, split) {

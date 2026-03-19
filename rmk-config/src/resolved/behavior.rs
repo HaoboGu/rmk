@@ -138,11 +138,13 @@ impl crate::KeyboardTomlConfig {
         let morse = toml_behavior.morse.map(|m| {
             let profiles = m
                 .profiles
-                .clone()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(name, p)| (name, resolve_morse_profile(&p)))
-                .collect();
+                .as_ref()
+                .map(|p| {
+                    p.iter()
+                        .map(|(name, p)| (name.clone(), resolve_morse_profile(p)))
+                        .collect()
+                })
+                .unwrap_or_default();
 
             let default_profile = MorseProfile {
                 unilateral_tap: m.unilateral_tap,

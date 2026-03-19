@@ -2,7 +2,9 @@
 //!
 use quote::quote;
 use rmk_config::resolved::Hardware;
-use rmk_config::resolved::hardware::{BoardConfig, ChipSeries, MatrixType, UniBodyConfig};
+use rmk_config::resolved::hardware::{
+    BoardConfig, ChipModel, ChipSeries, MatrixType, UniBodyConfig,
+};
 
 use super::chip::gpio::{
     convert_direct_pins_to_initializers, convert_input_pins_to_initializers,
@@ -18,7 +20,7 @@ pub(crate) fn expand_matrix_config(
     let mut matrix_config = proc_macro2::TokenStream::new();
     match &hardware.board {
         BoardConfig::UniBody(UniBodyConfig { matrix, .. }) => match matrix.matrix_type {
-            MatrixType::normal => {
+            MatrixType::Normal => {
                 matrix_config.extend(expand_matrix_input_output_pins(
                     &hardware.chip,
                     matrix.row_pins.clone().unwrap(),
@@ -27,7 +29,7 @@ pub(crate) fn expand_matrix_config(
                     async_matrix,
                 ));
             }
-            MatrixType::direct_pin => {
+            MatrixType::DirectPin => {
                 matrix_config.extend(expand_matrix_direct_pins(
                     &hardware.chip,
                     matrix.direct_pins.clone().unwrap(),
@@ -50,14 +52,14 @@ pub(crate) fn expand_matrix_config(
         BoardConfig::Split(split_config) => {
             // Matrix config for split central
             match split_config.central.matrix.matrix_type {
-                MatrixType::normal => matrix_config.extend(expand_matrix_input_output_pins(
+                MatrixType::Normal => matrix_config.extend(expand_matrix_input_output_pins(
                     &hardware.chip,
                     split_config.central.matrix.row_pins.clone().unwrap(),
                     split_config.central.matrix.col_pins.clone().unwrap(),
                     split_config.central.matrix.row2col,
                     async_matrix,
                 )),
-                MatrixType::direct_pin => matrix_config.extend(expand_matrix_direct_pins(
+                MatrixType::DirectPin => matrix_config.extend(expand_matrix_direct_pins(
                     &hardware.chip,
                     split_config.central.matrix.direct_pins.clone().unwrap(),
                     async_matrix,
@@ -70,7 +72,7 @@ pub(crate) fn expand_matrix_config(
 }
 
 pub(crate) fn expand_matrix_direct_pins(
-    chip: &rmk_config::ChipModel,
+    chip: &ChipModel,
     direct_pins: Vec<Vec<String>>,
     async_matrix: bool,
     low_active: bool,
@@ -97,7 +99,7 @@ pub(crate) fn expand_matrix_direct_pins(
 }
 
 pub(crate) fn expand_matrix_input_output_pins(
-    chip: &rmk_config::ChipModel,
+    chip: &ChipModel,
     row_pins: Vec<String>,
     col_pins: Vec<String>,
     row2col: bool,

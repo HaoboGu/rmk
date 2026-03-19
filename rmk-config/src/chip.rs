@@ -60,7 +60,7 @@ impl ChipModel {
 }
 
 impl KeyboardTomlConfig {
-    pub fn get_chip_model(&self) -> Result<ChipModel, String> {
+    pub(crate) fn get_chip_model(&self) -> Result<ChipModel, String> {
         let keyboard = self.keyboard.as_ref().unwrap();
         if keyboard.board.is_none() == keyboard.chip.is_none() {
             return Err("Either \"board\" or \"chip\" should be set in keyboard.toml, but not both".to_string());
@@ -115,7 +115,7 @@ impl KeyboardTomlConfig {
         }
     }
 
-    pub fn get_chip_config(&self) -> ChipConfig {
+    pub(crate) fn get_chip_config(&self) -> ChipConfig {
         let chip_name = &self.get_chip_model().unwrap().chip;
         self.chip
             .as_ref()

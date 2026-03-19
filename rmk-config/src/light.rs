@@ -1,7 +1,7 @@
 use crate::LightConfig;
 
 impl crate::KeyboardTomlConfig {
-    pub fn get_light_config(&self) -> LightConfig {
+    pub(crate) fn get_light_config(&self) -> LightConfig {
         let default = LightConfig::default();
         match self.light.clone() {
             Some(mut light_config) => {

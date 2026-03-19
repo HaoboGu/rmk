@@ -401,7 +401,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(hardware: &Hardware) -> TokenStrea
             matrix: matrix_config,
             input_device: _,
         }) => match matrix_config.matrix_type {
-            MatrixType::normal => {
+            MatrixType::Normal => {
                 let col2row = !matrix_config.row2col;
                 let debouncer_type = get_debouncer_type(&matrix_config);
                 quote! {
@@ -409,7 +409,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(hardware: &Hardware) -> TokenStrea
                     let mut matrix = ::rmk::matrix::Matrix::<_, _, _, ROW, COL, #col2row>::new(row_pins, col_pins, debouncer);
                 }
             }
-            MatrixType::direct_pin => {
+            MatrixType::DirectPin => {
                 let low_active = matrix_config.direct_pin_low_active;
                 let debouncer_type = get_debouncer_type(&matrix_config);
                 quote! {
@@ -426,14 +426,14 @@ pub(crate) fn expand_matrix_and_keyboard_init(hardware: &Hardware) -> TokenStrea
             let central_col_offset = split_config.central.col_offset;
             let col2row = !split_config.central.matrix.row2col;
             match split_config.central.matrix.matrix_type {
-                MatrixType::normal => {
+                MatrixType::Normal => {
                     let debouncer_type = get_debouncer_type(&split_config.central.matrix);
                     quote! {
                         let debouncer = #debouncer_type::new();
                         let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #central_row, #central_col, #col2row, #central_row_offset, #central_col_offset>::new(row_pins, col_pins, debouncer);
                     }
                 }
-                MatrixType::direct_pin => {
+                MatrixType::DirectPin => {
                     let low_active = split_config.central.matrix.direct_pin_low_active;
                     let size = split_config.central.rows * split_config.central.cols;
                     let debouncer_type = get_debouncer_type(&split_config.central.matrix);

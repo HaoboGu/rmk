@@ -38,4 +38,4 @@ pub use identity::Identity;
 pub use layout::Layout;
 
 // Re-export constants used by codegen
-pub use crate::KEYCODE_ALIAS;
+pub use crate::keycode_alias::KEYCODE_ALIAS;
