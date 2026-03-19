@@ -19,7 +19,7 @@ use nrf_sdc::{self as sdc, mpsl};
 use panic_probe as _;
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
-use rmk::ble::build_ble_stack;
+use rmk::ble::build_ble_stack_with_peripheral_flag;
 use rmk::config::StorageConfig;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join;
@@ -126,7 +126,14 @@ async fn main(spawner: Spawner) {
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
 
     let mut resources = HostResources::new();
-    let stack = build_ble_stack(sdc, ble_addr(), &mut rng_generator, &mut resources).await;
+    let stack = build_ble_stack_with_peripheral_flag(
+        sdc,
+        ble_addr(),
+        &mut rng_generator,
+        &mut resources,
+        true,
+    )
+    .await;
 
     // Initialize the ADC. We are only using one channel for detecting battery level
     let adc_pin = p.P0_05.degrade_saadc();

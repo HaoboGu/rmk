@@ -80,11 +80,7 @@ impl crate::KeyboardTomlConfig {
         );
 
         // Only validate passkey settings when the build will emit passkey constants.
-        let passkey = if std::env::var("CARGO_FEATURE_PASSKEY_ENTRY").is_ok() {
-            self.ble.as_ref().map(resolve_passkey_enabled).transpose()?
-        } else {
-            None
-        };
+        let passkey = resolve_passkey(self.ble.as_ref(), std::env::var("CARGO_FEATURE_PASSKEY_ENTRY").is_ok())?;
 
         Ok(BuildConstants {
             combo_max_num: rmk.combo_max_num,
@@ -118,6 +114,14 @@ fn resolve_passkey_enabled(ble: &crate::BleConfig) -> Result<Passkey, String> {
         ));
     }
     Ok(Passkey { enabled, timeout_secs })
+}
+
+fn resolve_passkey(ble: Option<&crate::BleConfig>, enabled: bool) -> Result<Option<Passkey>, String> {
+    if enabled {
+        ble.map(resolve_passkey_enabled).transpose()
+    } else {
+        Ok(None)
+    }
 }
 
 #[cfg(test)]

@@ -18,7 +18,7 @@ use embassy_rp::pio::{self, Pio};
 use embassy_time as _;
 use panic_probe as _;
 use rand::SeedableRng;
-use rmk::ble::build_ble_stack;
+use rmk::ble::build_ble_stack_with_peripheral_flag;
 use rmk::config::StorageConfig;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join;
@@ -107,7 +107,14 @@ async fn main(spawner: Spawner) {
     let mut rosc_rng = RoscRng {};
     let mut rng = rand_chacha::ChaCha12Rng::from_rng(&mut rosc_rng).unwrap();
 
-    let stack = build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
+    let stack = build_ble_stack_with_peripheral_flag(
+        controller,
+        ble_addr,
+        &mut rng,
+        &mut host_resources,
+        true,
+    )
+    .await;
     // Start
     join(run_all!(matrix), run_rmk_split_peripheral(0, &stack, &mut storage)).await;
 }
