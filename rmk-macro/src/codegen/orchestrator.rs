@@ -29,23 +29,27 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
     let keyboard_config = read_keyboard_toml_config();
 
     // Resolve types from keyboard.toml
-    let identity = keyboard_config.identity().expect("failed to resolve identity config");
+    let identity = keyboard_config
+        .identity()
+        .expect("failed to resolve identity config");
     let host = keyboard_config.host();
-    let hardware = keyboard_config.hardware().expect("failed to resolve hardware config");
-    let behavior = keyboard_config.behavior().expect("failed to resolve behavior config");
-    let layout = keyboard_config.layout().expect("failed to resolve layout config");
+    let hardware = keyboard_config
+        .hardware()
+        .expect("failed to resolve hardware config");
+    let behavior = keyboard_config
+        .behavior()
+        .expect("failed to resolve behavior config");
+    let layout = keyboard_config
+        .layout()
+        .expect("failed to resolve layout config");
 
-    // Check "storage" feature gate (one-way: config requests, features provide)
-    if hardware.storage.is_some() && !is_feature_enabled(&rmk_features, "storage") {
-        panic!(
-            "storage is enabled in keyboard.toml but the \"storage\" Cargo feature is not enabled"
-        );
-    }
-
-    // Check "vial" feature gate (one-way)
-    if host.vial_enabled && !is_feature_enabled(&rmk_features, "vial") {
-        panic!("vial is enabled in keyboard.toml but the \"vial\" Cargo feature is not enabled");
-    }
+    validate_feature_config_parity(
+        hardware.storage.is_some(),
+        is_feature_enabled(&rmk_features, "storage"),
+        host.vial_enabled,
+        is_feature_enabled(&rmk_features, "vial"),
+    )
+    .unwrap_or_else(|err| panic!("{err}"));
 
     // Generate imports and statics
     let imports_and_statics =
@@ -66,6 +70,37 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
 
         #main_function
     }
+}
+
+fn validate_feature_config_parity(
+    storage_enabled_in_config: bool,
+    storage_enabled_in_features: bool,
+    vial_enabled_in_config: bool,
+    vial_enabled_in_features: bool,
+) -> Result<(), &'static str> {
+    if storage_enabled_in_config != storage_enabled_in_features {
+        if storage_enabled_in_config {
+            return Err(
+                "If the \"storage\" Cargo feature is disabled, `storage.enabled` must be set to false in keyboard.toml.",
+            );
+        }
+        return Err(
+            "`storage.enabled = false` in keyboard.toml requires disabling the \"storage\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need).",
+        );
+    }
+
+    if vial_enabled_in_config != vial_enabled_in_features {
+        if vial_enabled_in_config {
+            return Err(
+                "If the \"vial\" Cargo feature is disabled, `host.vial_enabled` must be set to false in keyboard.toml.",
+            );
+        }
+        return Err(
+            "`host.vial_enabled = false` in keyboard.toml requires disabling the \"vial\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need).",
+        );
+    }
+
+    Ok(())
 }
 
 pub(crate) fn expand_imports_and_constants(
@@ -120,6 +155,54 @@ pub(crate) fn expand_imports_and_constants(
         #keyboard_info_static_var
         #vial_static_var
         #default_keymap
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_feature_config_parity;
+
+    #[test]
+    fn accepts_matching_storage_and_vial_feature_states() {
+        assert!(validate_feature_config_parity(true, true, true, true).is_ok());
+        assert!(validate_feature_config_parity(false, false, false, false).is_ok());
+        assert!(validate_feature_config_parity(true, true, false, false).is_ok());
+    }
+
+    #[test]
+    fn rejects_storage_enabled_in_config_without_feature() {
+        let err = validate_feature_config_parity(true, false, false, false).unwrap_err();
+        assert_eq!(
+            err,
+            "If the \"storage\" Cargo feature is disabled, `storage.enabled` must be set to false in keyboard.toml."
+        );
+    }
+
+    #[test]
+    fn rejects_storage_feature_without_config() {
+        let err = validate_feature_config_parity(false, true, false, false).unwrap_err();
+        assert_eq!(
+            err,
+            "`storage.enabled = false` in keyboard.toml requires disabling the \"storage\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need)."
+        );
+    }
+
+    #[test]
+    fn rejects_vial_enabled_in_config_without_feature() {
+        let err = validate_feature_config_parity(false, false, true, false).unwrap_err();
+        assert_eq!(
+            err,
+            "If the \"vial\" Cargo feature is disabled, `host.vial_enabled` must be set to false in keyboard.toml."
+        );
+    }
+
+    #[test]
+    fn rejects_vial_feature_without_config() {
+        let err = validate_feature_config_parity(false, false, false, true).unwrap_err();
+        assert_eq!(
+            err,
+            "`host.vial_enabled = false` in keyboard.toml requires disabling the \"vial\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need)."
+        );
     }
 }
 
@@ -249,10 +332,7 @@ fn expand_main(
 }
 
 // TODO: move this function to a separate folder
-pub(crate) fn expand_keymap_and_storage(
-    hardware: &Hardware,
-    layout: &Layout,
-) -> TokenStream2 {
+pub(crate) fn expand_keymap_and_storage(hardware: &Hardware, layout: &Layout) -> TokenStream2 {
     let row = layout.rows as usize;
     let col = layout.cols as usize;
 

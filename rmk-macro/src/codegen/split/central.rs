@@ -2,8 +2,10 @@ use core::panic;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::resolved::hardware::{BoardConfig, ChipModel, ChipSeries, SerialConfig, SplitConfig};
 use rmk_config::resolved::Hardware;
+use rmk_config::resolved::hardware::{
+    BoardConfig, ChipModel, ChipSeries, SerialConfig, SplitConfig,
+};
 
 pub(crate) fn expand_split_central_config(hardware: &Hardware) -> proc_macro2::TokenStream {
     if let BoardConfig::Split(split_config) = &hardware.board {

@@ -1,10 +1,10 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+use rmk_config::resolved::Hardware;
 use rmk_config::resolved::hardware::{
     BleConfig, BoardConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig,
     MatrixType, SplitBoardConfig, SplitConfig,
 };
-use rmk_config::resolved::Hardware;
 use syn::ItemMod;
 
 use super::central::expand_serial_init;
@@ -35,12 +35,13 @@ pub(crate) fn parse_split_peripheral_mod(
     }
 
     let toml_config = read_keyboard_toml_config();
-    let hardware = toml_config.hardware().expect("failed to resolve hardware config");
+    let hardware = toml_config
+        .hardware()
+        .expect("failed to resolve hardware config");
 
     let main_function = expand_split_peripheral(id, &hardware, item_mod, &rmk_features);
 
-    let bind_interrupts =
-        expand_bind_interrupt_for_split_peripheral(&hardware.chip, &hardware, id);
+    let bind_interrupts = expand_bind_interrupt_for_split_peripheral(&hardware.chip, &hardware, id);
 
     let chip = &hardware.chip;
     let main_function_sig = if chip.series == ChipSeries::Esp32 {

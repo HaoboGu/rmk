@@ -4,10 +4,10 @@ use pmw33xx::expand_pmw33xx_device;
 use pmw3610::expand_pmw3610_device;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
+use rmk_config::resolved::Hardware;
 use rmk_config::resolved::hardware::{
     BleConfig, BoardConfig, CommunicationConfig, InputDeviceConfig, UniBodyConfig,
 };
-use rmk_config::resolved::Hardware;
 
 pub(crate) mod adc;
 pub(crate) mod encoder;

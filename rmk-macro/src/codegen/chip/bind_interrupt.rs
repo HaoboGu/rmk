@@ -5,17 +5,14 @@ use std::collections::HashSet;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::resolved::hardware::{BoardConfig, InputDeviceConfig, UniBodyConfig};
 use rmk_config::resolved::Hardware;
+use rmk_config::resolved::hardware::{BoardConfig, InputDeviceConfig, UniBodyConfig};
 use syn::ItemMod;
 
 use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
 
 /// Expand `bind_interrupt!` stuffs, and other code before `main` function
-pub(crate) fn expand_bind_interrupt(
-    hardware: &Hardware,
-    item_mod: &ItemMod,
-) -> TokenStream2 {
+pub(crate) fn expand_bind_interrupt(hardware: &Hardware, item_mod: &ItemMod) -> TokenStream2 {
     // If there is a function with `#[Overwritten(bind_interrupt)]`, override it
     if let Some((_, items)) = &item_mod.content {
         items

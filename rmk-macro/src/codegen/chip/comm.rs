@@ -4,8 +4,8 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, format_ident, quote};
-use rmk_config::resolved::hardware::ChipSeries;
 use rmk_config::resolved::Hardware;
+use rmk_config::resolved::hardware::ChipSeries;
 use syn::{ItemFn, ItemMod};
 
 use crate::codegen::override_helper::Overwritten;

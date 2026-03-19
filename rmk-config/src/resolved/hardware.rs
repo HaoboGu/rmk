@@ -2,10 +2,9 @@
 // the 3-layer merge. Consumers should import these from `resolved::hardware`
 // rather than from the crate root, so the resolved module is the single public API.
 pub use crate::{
-    BleConfig, BoardConfig, ChipConfig, ChipModel, ChipSeries, CommunicationConfig,
-    DependencyConfig, EncoderConfig, EncoderResolution, InputDeviceConfig, JoystickConfig,
-    LightConfig, MatrixConfig, MatrixType, OutputConfig, PinConfig, Pmw33xxConfig, Pmw33xxType,
-    KeyInfo, Pmw3610Config, SerialConfig, SplitBoardConfig, SplitConfig, UniBodyConfig,
+    BleConfig, BoardConfig, ChipConfig, ChipModel, ChipSeries, CommunicationConfig, DependencyConfig, EncoderConfig,
+    EncoderResolution, InputDeviceConfig, JoystickConfig, KeyInfo, LightConfig, MatrixConfig, MatrixType, OutputConfig,
+    PinConfig, Pmw33xxConfig, Pmw33xxType, Pmw3610Config, SerialConfig, SplitBoardConfig, SplitConfig, UniBodyConfig,
 };
 
 /// Complete hardware configuration for init code generation.

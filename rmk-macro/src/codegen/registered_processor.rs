@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use rmk_config::resolved::hardware::{ChipModel, PinConfig};
 use rmk_config::resolved::Hardware;
+use rmk_config::resolved::hardware::{ChipModel, PinConfig};
 use syn::ItemMod;
 
 use super::chip::gpio::convert_gpio_str_to_output_pin;

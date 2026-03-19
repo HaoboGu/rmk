@@ -114,11 +114,7 @@ impl crate::KeyboardTomlConfig {
                 .macros
                 .into_iter()
                 .map(|mc| Macro {
-                    operations: mc
-                        .operations
-                        .into_iter()
-                        .map(resolve_macro_operation)
-                        .collect(),
+                    operations: mc.operations.into_iter().map(resolve_macro_operation).collect(),
                 })
                 .collect(),
         });
