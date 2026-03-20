@@ -3,7 +3,6 @@ use embassy_time::{Instant, Timer};
 use embassy_usb::class::hid::HidReaderWriter;
 use embassy_usb::driver::Driver;
 use rmk_types::protocol::vial::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
-use ssmarshal::serialize;
 use vial::process_vial;
 
 use crate::config::VialConfig;

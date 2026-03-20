@@ -1,6 +1,5 @@
-use ssmarshal::serialize;
 use trouble_host::prelude::*;
-use usbd_hid::descriptor::SerializedDescriptor;
+use usbd_hid::descriptor::{AsInputReport as _, SerializedDescriptor};
 
 use super::battery_service::BatteryService;
 use super::device_info::DeviceConfigurationService;
@@ -104,7 +103,9 @@ impl<P: PacketPool> HidWriterTrait for BleHidServer<'_, '_, '_, P> {
         match report {
             Report::KeyboardReport(keyboard_report) => {
                 let mut buf = [0u8; 8];
-                let n = serialize(&mut buf, &keyboard_report).map_err(|_| HidError::ReportSerializeError)?;
+                let n = keyboard_report
+                    .serialize(&mut buf)
+                    .map_err(|_| HidError::ReportSerializeError)?;
                 self.input_keyboard.notify(self.conn, &buf).await.map_err(|e| {
                     error!("Failed to notify keyboard report: {:?}", e);
                     HidError::BleError
@@ -113,7 +114,9 @@ impl<P: PacketPool> HidWriterTrait for BleHidServer<'_, '_, '_, P> {
             }
             Report::MouseReport(mouse_report) => {
                 let mut buf = [0u8; 5];
-                let n = serialize(&mut buf, &mouse_report).map_err(|_| HidError::ReportSerializeError)?;
+                let n = mouse_report
+                    .serialize(&mut buf)
+                    .map_err(|_| HidError::ReportSerializeError)?;
                 self.mouse_report.notify(self.conn, &buf).await.map_err(|e| {
                     error!("Failed to notify mouse report: {:?}", e);
                     HidError::BleError
@@ -122,7 +125,9 @@ impl<P: PacketPool> HidWriterTrait for BleHidServer<'_, '_, '_, P> {
             }
             Report::MediaKeyboardReport(media_keyboard_report) => {
                 let mut buf = [0u8; 2];
-                let n = serialize(&mut buf, &media_keyboard_report).map_err(|_| HidError::ReportSerializeError)?;
+                let n = media_keyboard_report
+                    .serialize(&mut buf)
+                    .map_err(|_| HidError::ReportSerializeError)?;
                 self.media_report.notify(self.conn, &buf).await.map_err(|e| {
                     error!("Failed to notify media report: {:?}", e);
                     HidError::BleError
@@ -131,7 +136,9 @@ impl<P: PacketPool> HidWriterTrait for BleHidServer<'_, '_, '_, P> {
             }
             Report::SystemControlReport(system_control_report) => {
                 let mut buf = [0u8; 1];
-                let n = serialize(&mut buf, &system_control_report).map_err(|_| HidError::ReportSerializeError)?;
+                let n = system_control_report
+                    .serialize(&mut buf)
+                    .map_err(|_| HidError::ReportSerializeError)?;
                 self.system_report.notify(self.conn, &buf).await.map_err(|e| {
                     error!("Failed to notify system report: {:?}", e);
                     HidError::BleError

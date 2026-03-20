@@ -18,9 +18,9 @@ sifli-hal = { version = "0.1.1", features = [
     "time-driver-gptim2"
 ] }
 embassy-time = { version = "0.5", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"] }
-embassy-executor = { version = "0.9", features = [
+embassy-executor = { version = "0.10", features = [
     "defmt",
-    "arch-cortex-m",
+    "platform-cortex-m",
     "executor-thread",
 ] }
 cortex-m-rt = { version = "0.7.3", features = ["set-sp", "set-vtor"] }
