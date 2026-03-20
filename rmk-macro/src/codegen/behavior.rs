@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use quote::quote;
 use rmk_config::resolved::Behavior;
 use rmk_config::resolved::behavior::{
-    Combos, Forks, MacroOperation, Macros, Morse, MorseActionPair, MorseKey, MorseProfile,
+    Combos, Forks, MacroOperation, Macros, Morse, MorseActionPair, MorseKey, MorseProfile, OneShot,
 };
 
 use super::action_parser::{expand_profile, expand_profile_name, get_key_with_alias, parse_key};
@@ -31,6 +31,27 @@ fn expand_one_shot(one_shot_timeout_ms: &Option<u64>) -> proc_macro2::TokenStrea
             quote! {
                 ::rmk::config::OneShotConfig {
                     timeout: #timeout,
+                }
+            }
+        }
+        None => default,
+    }
+}
+
+fn expand_one_shot_modifiers(one_shot_modifiers: &Option<OneShot>) -> proc_macro2::TokenStream {
+    let default = quote! { ::core::default::Default::default() };
+
+    match one_shot_modifiers {
+        Some(one_shot_modifier) => {
+            let activate_on_keypress = match one_shot_modifier.activate_on_keypress {
+                Some(value) => quote! { activate_on_keypress: #value, },
+                None => quote! {},
+            };
+
+            quote! {
+                ::rmk::config::OneShotModifiersConfig {
+                    #activate_on_keypress
+                    ..Default::default()
                 }
             }
         }
@@ -441,6 +462,7 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
 
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
     let one_shot = expand_one_shot(&behavior.one_shot_timeout_ms);
+    let one_shot_modifiers = expand_one_shot_modifiers(&behavior.one_shot_modifiers);
     let combos = expand_combos(&behavior.combos, &profiles);
     let macros = expand_macros(&behavior.macros);
     let forks = expand_forks(&behavior.forks, &profiles);
@@ -451,6 +473,7 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
         let mut behavior_config = ::rmk::config::BehaviorConfig {
             tri_layer: #tri_layer,
             one_shot: #one_shot,
+            one_shot_modifiers: #one_shot_modifiers,
             combo: #combos,
             fork: #forks,
             morse: #morse,

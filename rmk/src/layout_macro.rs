@@ -334,15 +334,19 @@ macro_rules! osl {
 /// Create a one-shot modifier action.
 ///
 /// This macro creates a key that applies modifiers for the next keypress only.
-/// After the next key is pressed, the modifiers automatically deactivate.
+/// They automatically deactivate if:
+/// - other key that sends keyboard report is pressed,
+/// - timeout has passed before next key is triggered.
 ///
 /// # Parameters
 /// - `$m`: `ModifierCombination` to apply for the next keypress
 ///
 /// # Example
 /// ```ignore
-/// osm!(ModifierCombination::LSHIFT)  // Next key will be shifted
-/// osm!(ModifierCombination::LCTRL)   // Next key will have Ctrl applied
+/// // Next key will be shifted
+/// osm!(ModifierCombination::LSHIFT)
+/// // Next key will have both Shift and Ctrl applied
+/// osm!(ModifierCombination::LSHIFT | ModifierCombination::LCTRL)
 /// ```
 #[macro_export]
 macro_rules! osm {

@@ -1829,7 +1829,6 @@ dependencies = [
  "bt-hci",
  "byteorder",
  "chrono",
- "const-gen",
  "cortex-m",
  "crc32fast",
  "defmt 1.0.1",
@@ -1850,14 +1849,12 @@ dependencies = [
  "paste",
  "postcard",
  "rand_core 0.6.4",
- "rmk-config",
  "rmk-macro",
  "rmk-types",
  "sequential-storage",
  "serde",
  "ssmarshal",
  "static_cell",
- "toml 1.0.3+spec-1.1.0",
  "trouble-host",
  "usbd-hid 0.9.0",
 ]
@@ -1922,8 +1919,10 @@ dependencies = [
  "bitfield-struct",
  "defmt 1.0.1",
  "postcard",
+ "rmk-config",
  "serde",
  "strum",
+ "toml 1.0.3+spec-1.1.0",
 ]
 
 [[package]]

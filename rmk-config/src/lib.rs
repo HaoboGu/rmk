@@ -547,6 +547,7 @@ pub struct KeyInfo {
 pub(crate) struct BehaviorConfig {
     pub tri_layer: Option<TriLayerConfig>,
     pub one_shot: Option<OneShotConfig>,
+    pub one_shot_modifiers: Option<OneShotModifiersConfig>,
     pub combo: Option<CombosConfig>,
     #[serde(alias = "macro")]
     pub macros: Option<MacrosConfig>,
@@ -583,11 +584,18 @@ pub(crate) struct TriLayerConfig {
     pub adjust: u8,
 }
 
-/// Configurations for one shot
+/// Configurations for oneshot modifiers/layers
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct OneShotConfig {
     pub timeout: Option<DurationMillis>,
+}
+
+/// Configurations for oneshot modifiers
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OneShotModifiersConfig {
+    pub activate_on_keypress: Option<bool>,
 }
 
 /// Configurations for combos
