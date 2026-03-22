@@ -1,5 +1,5 @@
 use trouble_host::prelude::*;
-use usbd_hid::descriptor::SerializedDescriptor;
+use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor};
 
 use crate::ble::Server;
 use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;

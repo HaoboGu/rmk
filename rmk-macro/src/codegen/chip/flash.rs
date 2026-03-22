@@ -52,7 +52,11 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                 } else {
                     quote! {
                         const FLASH_SIZE: usize = 2 * 1024 * 1024;
-                        let flash = ::embassy_rp::flash::Flash::<_, ::embassy_rp::flash::Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH1);
+                        let flash = ::embassy_rp::flash::Flash::<_, ::embassy_rp::flash::Async, FLASH_SIZE>::new(
+                            p.FLASH,
+                            p.DMA_CH1,
+                            Irqs,
+                        );
                     }
                 }
             }

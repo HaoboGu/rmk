@@ -56,7 +56,7 @@ pub(crate) fn get_input_pin_type(chip: &ChipModel, async_matrix: bool) -> proc_m
     match chip.series {
         ChipSeries::Stm32 => {
             if async_matrix {
-                quote! {::embassy_stm32::exti::ExtiInput}
+                quote! {::embassy_stm32::exti::ExtiInput<'static, ::embassy_stm32::mode::Async>}
             } else {
                 quote! {::embassy_stm32::gpio::Input}
             }

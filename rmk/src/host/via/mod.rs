@@ -3,6 +3,7 @@ use embassy_time::{Instant, Timer};
 use embassy_usb::class::hid::HidReaderWriter;
 use embassy_usb::driver::Driver;
 use rmk_types::protocol::vial::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
+use usbd_hid::descriptor::AsInputReport as _;
 use vial::process_vial;
 
 use crate::config::VialConfig;
@@ -343,7 +344,9 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbVialReaderWriter<'_, 'd, D> {
 
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         let mut buffer = [0u8; 32];
-        let n = serialize(&mut buffer, &report).map_err(|_| HidError::ReportSerializeError)?;
+        let n = report
+            .serialize(&mut buffer)
+            .map_err(|_| HidError::ReportSerializeError)?;
         self.vial_reader_writer
             .write(&buffer[0..n])
             .await

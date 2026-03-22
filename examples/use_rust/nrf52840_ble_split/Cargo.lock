@@ -683,23 +683,6 @@ dependencies = [
 
 [[package]]
 name = "embassy-embedded-hal"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "554e3e840696f54b4c9afcf28a0f24da431c927f4151040020416e7393d6d0d8"
-dependencies = [
- "embassy-futures",
- "embassy-hal-internal 0.3.0",
- "embassy-sync 0.7.2",
- "embedded-hal 0.2.7",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "embedded-storage",
- "embedded-storage-async",
- "nb 1.1.0",
-]
-
-[[package]]
-name = "embassy-embedded-hal"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0641612053b2f34fc250bb63f6630ae75de46e02ade7f457268447081d709ce"
@@ -761,17 +744,6 @@ dependencies = [
 
 [[package]]
 name = "embassy-hal-internal"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95285007a91b619dc9f26ea8f55452aa6c60f7115a4edc05085cd2bd3127cd7a"
-dependencies = [
- "cortex-m",
- "critical-section",
- "num-traits",
-]
-
-[[package]]
-name = "embassy-hal-internal"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f10ce10a4dfdf6402d8e9bd63128986b96a736b1a0a6680547ed2ac55d55dba"
@@ -810,35 +782,6 @@ dependencies = [
 
 [[package]]
 name = "embassy-nrf"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de748eaafda21aab46925973e593f377ed4482e9f4de63a729c79a7b0e4a327a"
-dependencies = [
- "bitflags 2.11.0",
- "cfg-if",
- "cortex-m",
- "cortex-m-rt",
- "critical-section",
- "document-features",
- "embassy-embedded-hal 0.5.0",
- "embassy-hal-internal 0.3.0",
- "embassy-sync 0.7.2",
- "embassy-usb-driver",
- "embedded-hal 0.2.7",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "embedded-io 0.6.1",
- "embedded-io-async 0.6.1",
- "embedded-storage",
- "embedded-storage-async",
- "fixed",
- "nrf-pac 0.2.0",
- "rand_core 0.6.4",
- "rand_core 0.9.5",
-]
-
-[[package]]
-name = "embassy-nrf"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b715380574504335c40ec3016bc44598fac3c385f82959b26c41b25c30b7648d"
@@ -850,7 +793,7 @@ dependencies = [
  "critical-section",
  "defmt 1.0.1",
  "document-features",
- "embassy-embedded-hal 0.6.0",
+ "embassy-embedded-hal",
  "embassy-futures",
  "embassy-hal-internal 0.5.0",
  "embassy-sync 0.8.0",
@@ -866,7 +809,7 @@ dependencies = [
  "embedded-storage",
  "embedded-storage-async",
  "fixed",
- "nrf-pac 0.3.0",
+ "nrf-pac",
  "rand_core 0.6.4",
  "rand_core 0.9.5",
 ]
@@ -1585,14 +1528,14 @@ dependencies = [
 [[package]]
 name = "nrf-mpsl"
 version = "0.3.0"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=43df6b8b0affeacd9cb4094a3ab4f81576554887#43df6b8b0affeacd9cb4094a3ab4f81576554887"
+source = "git+https://github.com/haobogu/nrf-sdc?rev=ffe59a7aefaaa145a3d2474602f33387f80dcefa#ffe59a7aefaaa145a3d2474602f33387f80dcefa"
 dependencies = [
  "cfg-if",
  "cortex-m",
  "critical-section",
  "defmt 1.0.1",
- "embassy-nrf 0.9.0",
- "embassy-sync 0.7.2",
+ "embassy-nrf",
+ "embassy-sync 0.8.0",
  "embedded-io 0.7.1",
  "embedded-storage",
  "embedded-storage-async",
@@ -1602,20 +1545,10 @@ dependencies = [
 [[package]]
 name = "nrf-mpsl-sys"
 version = "0.2.1"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=43df6b8b0affeacd9cb4094a3ab4f81576554887#43df6b8b0affeacd9cb4094a3ab4f81576554887"
+source = "git+https://github.com/haobogu/nrf-sdc?rev=ffe59a7aefaaa145a3d2474602f33387f80dcefa#ffe59a7aefaaa145a3d2474602f33387f80dcefa"
 dependencies = [
  "bindgen",
  "doxygen-rs",
-]
-
-[[package]]
-name = "nrf-pac"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae76c372d1838abeccf1d397688cd4bd90fe3213410c51cb74c6769fdf075067"
-dependencies = [
- "cortex-m",
- "cortex-m-rt",
 ]
 
 [[package]]
@@ -1631,14 +1564,14 @@ dependencies = [
 [[package]]
 name = "nrf-sdc"
 version = "0.4.0"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=43df6b8b0affeacd9cb4094a3ab4f81576554887#43df6b8b0affeacd9cb4094a3ab4f81576554887"
+source = "git+https://github.com/haobogu/nrf-sdc?rev=ffe59a7aefaaa145a3d2474602f33387f80dcefa#ffe59a7aefaaa145a3d2474602f33387f80dcefa"
 dependencies = [
  "bt-hci",
  "critical-section",
  "defmt 1.0.1",
- "embassy-hal-internal 0.3.0",
- "embassy-nrf 0.9.0",
- "embassy-sync 0.7.2",
+ "embassy-hal-internal 0.5.0",
+ "embassy-nrf",
+ "embassy-sync 0.8.0",
  "embedded-io 0.7.1",
  "embedded-io-async 0.7.0",
  "nrf-mpsl",
@@ -1649,7 +1582,7 @@ dependencies = [
 [[package]]
 name = "nrf-sdc-sys"
 version = "0.2.1"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=43df6b8b0affeacd9cb4094a3ab4f81576554887#43df6b8b0affeacd9cb4094a3ab4f81576554887"
+source = "git+https://github.com/haobogu/nrf-sdc?rev=ffe59a7aefaaa145a3d2474602f33387f80dcefa#ffe59a7aefaaa145a3d2474602f33387f80dcefa"
 dependencies = [
  "bindgen",
  "doxygen-rs",
@@ -1989,9 +1922,9 @@ dependencies = [
  "crc32fast",
  "defmt 1.0.1",
  "document-features",
- "embassy-embedded-hal 0.6.0",
+ "embassy-embedded-hal",
  "embassy-futures",
- "embassy-nrf 0.10.0",
+ "embassy-nrf",
  "embassy-sync 0.8.0",
  "embassy-time",
  "embassy-usb",
@@ -2053,7 +1986,7 @@ dependencies = [
  "defmt 1.0.1",
  "defmt-rtt",
  "embassy-executor",
- "embassy-nrf 0.10.0",
+ "embassy-nrf",
  "embassy-time",
  "json",
  "nrf-mpsl",
@@ -2557,15 +2490,14 @@ dependencies = [
 [[package]]
 name = "trouble-host"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1df7817cead4b83dfbeeaa59736ecbc97c30b21dc3bfc0cc2ce8a6687f70b37a"
+source = "git+https://github.com/haobogu/trouble?rev=749315ec6b8fa1c7f0a2617c3de97a427902a263#749315ec6b8fa1c7f0a2617c3de97a427902a263"
 dependencies = [
  "aes",
  "bt-hci",
  "cmac",
  "defmt 1.0.1",
  "embassy-futures",
- "embassy-sync 0.7.2",
+ "embassy-sync 0.8.0",
  "embassy-time",
  "embedded-io 0.7.1",
  "futures",
@@ -2582,8 +2514,7 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d809ae05f510cf8f1d863749281eb28e049d9ae4ad52d92ea7a0ac068a0e17c"
+source = "git+https://github.com/haobogu/trouble?rev=749315ec6b8fa1c7f0a2617c3de97a427902a263#749315ec6b8fa1c7f0a2617c3de97a427902a263"
 dependencies = [
  "convert_case 0.8.0",
  "darling 0.20.11",

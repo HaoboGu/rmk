@@ -237,12 +237,14 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
                 .expect("no usb info for the chip");
             let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
             let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
+            let dma_irq_0 = quote! {
+                DMA_IRQ_0 => ::embassy_rp::dma::InterruptHandler<::embassy_rp::peripherals::DMA_CH0>, ::embassy_rp::dma::InterruptHandler<::embassy_rp::peripherals::DMA_CH1>;
+            };
             // For Pico W, enabled PIO0_IRQ_0 interrupt
             let (pio0_irq_0, ble_task) = if communication.ble_enabled() {
                 (
                     quote! {
                         PIO0_IRQ_0 => ::embassy_rp::pio::InterruptHandler<::embassy_rp::peripherals::PIO0>;
-                        DMA_IRQ_0 => ::embassy_rp::dma::InterruptHandler<::embassy_rp::peripherals::DMA_CH0>, ::embassy_rp::dma::InterruptHandler<::embassy_rp::peripherals::DMA_CH1>;
                     },
                     quote! {
                         #[::embassy_executor::task]
@@ -258,6 +260,7 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
                 use ::embassy_rp::bind_interrupts;
                 bind_interrupts!(struct Irqs {
                     #interrupt_name => ::embassy_rp::usb::InterruptHandler<::embassy_rp::peripherals::#peripheral_name>;
+                    #dma_irq_0
                     #pio0_irq_0
                 });
                 #ble_task

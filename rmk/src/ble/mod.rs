@@ -698,6 +698,39 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                     max_tx_octets, max_rx_octets, max_tx_time, max_rx_time
                 );
             }
+            GattConnectionEvent::FrameSpaceUpdated {
+                frame_space,
+                initiator,
+                phys,
+                spacing_types,
+            } => {
+                {
+                    connected = true;
+                }
+                info!(
+                    "[gatt] FrameSpaceUpdated: {:?}, {:?}, {:?}, {:?}",
+                    frame_space, initiator, phys, spacing_types
+                );
+            }
+            GattConnectionEvent::ConnectionRateChanged {
+                conn_interval,
+                subrate_factor,
+                peripheral_latency,
+                continuation_number,
+                supervision_timeout,
+            } => {
+                {
+                    connected = true;
+                }
+                info!(
+                    "[gatt] ConnectionRateChanged: {:?}ms, {:?}, {:?}, {:?}, {:?}ms",
+                    conn_interval.as_millis(),
+                    subrate_factor,
+                    peripheral_latency,
+                    continuation_number,
+                    supervision_timeout.as_millis()
+                );
+            }
             GattConnectionEvent::PassKeyDisplay(pass_key) => info!("[gatt] PassKeyDisplay: {:?}", pass_key),
             GattConnectionEvent::PassKeyConfirm(pass_key) => info!("[gatt] PassKeyConfirm: {:?}", pass_key),
             GattConnectionEvent::PassKeyInput => {
@@ -746,6 +779,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 #[cfg(not(feature = "passkey_entry"))]
                 warn!("[gatt] PassKeyInput event, should not happen")
             }
+            GattConnectionEvent::BondLost => warn!("[gatt] BondLost"),
         }
 
         // Publish the BLE connected event
@@ -771,7 +805,7 @@ async fn advertise<'a, 'b, C: Controller>(
     AdStructure::encode_slice(
         &[
             AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
-            AdStructure::ServiceUuids16(&[BATTERY.to_le_bytes(), HUMAN_INTERFACE_DEVICE.to_le_bytes()]),
+            AdStructure::CompleteServiceUuids16(&[BATTERY.to_le_bytes(), HUMAN_INTERFACE_DEVICE.to_le_bytes()]),
             AdStructure::CompleteLocalName(name.as_bytes()),
             AdStructure::Unknown {
                 ty: 0x19, // Appearance
