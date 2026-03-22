@@ -1,17 +1,74 @@
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
+use serde::de::{Error as DeError, SeqAccess, Visitor};
 use postcard::experimental::max_size::MaxSize;
 use rmk_types::action::{EncoderAction, KeyAction};
-use sequential_storage::map::{SerializationError, Value};
-use serde::{Deserialize, Serialize};
+use sequential_storage::map::PostcardValue;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::combo::{Combo, ComboConfig};
 use crate::fork::Fork;
 use crate::morse::Morse;
-use crate::storage::{
-    Storage, StorageData, StorageKeys, get_combo_key, get_fork_key, get_morse_key,
-    postcard_error_to_serialization_error, print_storage_error,
-};
-use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, ser_storage_variant};
+use crate::storage::{Storage, StorageData, StorageKeys, get_combo_key, get_fork_key, get_morse_key, print_storage_error};
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM};
+
+mod macro_bytes_serde {
+    use super::*;
+
+    pub(crate) fn serialize<S>(value: &[u8; MACRO_SPACE_SIZE], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_bytes(value)
+    }
+
+    pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<[u8; MACRO_SPACE_SIZE], D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct MacroBytesVisitor;
+
+        impl<'de> Visitor<'de> for MacroBytesVisitor {
+            type Value = [u8; MACRO_SPACE_SIZE];
+
+            fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(formatter, "exactly {MACRO_SPACE_SIZE} bytes")
+            }
+
+            fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+            where
+                E: DeError,
+            {
+                if value.len() != MACRO_SPACE_SIZE {
+                    return Err(E::invalid_length(value.len(), &self));
+                }
+
+                let mut bytes = [0u8; MACRO_SPACE_SIZE];
+                bytes.copy_from_slice(value);
+                Ok(bytes)
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut bytes = [0u8; MACRO_SPACE_SIZE];
+                for (idx, slot) in bytes.iter_mut().enumerate() {
+                    *slot = seq
+                        .next_element()?
+                        .ok_or_else(|| A::Error::invalid_length(idx, &self))?;
+                }
+
+                if (seq.next_element::<u8>()?).is_some() {
+                    return Err(A::Error::invalid_length(MACRO_SPACE_SIZE + 1, &self));
+                }
+
+                Ok(bytes)
+            }
+        }
+
+        deserializer.deserialize_bytes(MacroBytesVisitor)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -34,11 +91,11 @@ pub(crate) struct EncoderKeymap {
 }
 
 /// Keymap data that can be updated by the host tools like Vial.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum KeymapData {
     // Write macro
-    Macro([u8; MACRO_SPACE_SIZE]),
+    Macro(#[serde(with = "macro_bytes_serde")] [u8; MACRO_SPACE_SIZE]),
     // Write a key in keymap
     KeymapKey(KeymapKey),
     // Write encoder configuration
@@ -51,102 +108,7 @@ pub(crate) enum KeymapData {
     Morse(u8, Morse),
 }
 
-impl Value<'_> for KeymapData {
-    fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, SerializationError> {
-        if buffer.is_empty() {
-            return Err(SerializationError::BufferTooSmall);
-        }
-
-        match self {
-            Self::Macro(m) => {
-                // Macro: direct copy without postcard encoding
-                if buffer.len() < 1 + m.len() {
-                    return Err(SerializationError::BufferTooSmall);
-                }
-                buffer[0] = StorageKeys::MacroData as u8;
-                buffer[1..1 + m.len()].copy_from_slice(m);
-                Ok(1 + m.len())
-            }
-            Self::KeymapKey(k) => ser_storage_variant!(buffer, StorageKeys::KeymapConfig, k),
-            Self::Encoder(e) => ser_storage_variant!(buffer, StorageKeys::EncoderKeys, e),
-            Self::Combo(idx, combo) => {
-                buffer[0] = StorageKeys::ComboData as u8;
-                let len = postcard::to_slice(&(*idx, *combo), &mut buffer[1..])
-                    .map_err(postcard_error_to_serialization_error)?
-                    .len();
-                Ok(len + 1)
-            }
-            Self::Fork(idx, fork) => {
-                buffer[0] = StorageKeys::ForkData as u8;
-                let len = postcard::to_slice(&(*idx, *fork), &mut buffer[1..])
-                    .map_err(postcard_error_to_serialization_error)?
-                    .len();
-                Ok(len + 1)
-            }
-            Self::Morse(idx, morse) => {
-                buffer[0] = StorageKeys::MorseData as u8;
-                let len = postcard::to_slice(&(*idx, morse.clone()), &mut buffer[1..])
-                    .map_err(postcard_error_to_serialization_error)?
-                    .len();
-                Ok(len + 1)
-            }
-        }
-    }
-
-    fn deserialize_from(buffer: &[u8]) -> Result<(Self, usize), SerializationError>
-    where
-        Self: Sized,
-    {
-        if buffer.len() < 2 {
-            return Err(SerializationError::InvalidFormat);
-        }
-
-        let key = StorageKeys::from_u8(buffer[0]).ok_or(SerializationError::InvalidFormat)?;
-
-        match key {
-            StorageKeys::MacroData => {
-                // Large array: copy bytes directly
-                if buffer.len() < 1 + MACRO_SPACE_SIZE {
-                    return Err(SerializationError::InvalidFormat);
-                }
-                let mut macro_data = [0u8; MACRO_SPACE_SIZE];
-                macro_data.copy_from_slice(&buffer[1..1 + MACRO_SPACE_SIZE]);
-                Ok((Self::Macro(macro_data), MACRO_SPACE_SIZE + 1))
-            }
-            StorageKeys::KeymapConfig => {
-                let (keymap_key, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::KeymapKey(keymap_key), size))
-            }
-            StorageKeys::EncoderKeys => {
-                let (encoder, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::Encoder(encoder), size))
-            }
-            StorageKeys::ComboData => {
-                let ((idx, combo), unused): ((u8, ComboConfig), _) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::Combo(idx, combo), size))
-            }
-            StorageKeys::ForkData => {
-                let ((idx, fork), unused): ((u8, Fork), _) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::Fork(idx, fork), size))
-            }
-            StorageKeys::MorseData => {
-                let ((idx, morse), unused): ((u8, Morse), _) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::Morse(idx, morse), size))
-            }
-            _ => Err(SerializationError::InvalidFormat),
-        }
-    }
-}
+impl<'a> PostcardValue<'a> for KeymapData {}
 
 impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>

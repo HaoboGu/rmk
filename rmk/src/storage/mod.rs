@@ -8,7 +8,7 @@ use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use rmk_types::action::MorseProfile;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
-use sequential_storage::map::{MapConfig, MapStorage, SerializationError, Value};
+use sequential_storage::map::{MapConfig, MapStorage, PostcardValue};
 #[cfg(feature = "host")]
 use {
     crate::host::storage::{KeymapData, KeymapKey},
@@ -70,10 +70,7 @@ pub(crate) enum FlashOperationMessage {
     MorseDefaultProfile(MorseProfile),
 }
 
-/// StorageKeys is the prefix stored in the flash, it's used to identify the type of the stored data.
-///
-/// This is because the whole storage item is a Rust enum due to the limitation of `sequential_storage`.
-/// When deserializing, we need to know the type of the stored data to know how to parse it, the first 4 bytes (u32) of the stored data is always the type, aka StorageKeys.
+/// Storage keys used for fixed items and key-space partitioning in flash.
 #[repr(u32)]
 pub(crate) enum StorageKeys {
     StorageConfig = 0,
@@ -100,38 +97,8 @@ pub(crate) enum StorageKeys {
     BleBondInfo = 0xEF,
 }
 
-impl StorageKeys {
-    pub(crate) fn from_u8(value: u8) -> Option<Self> {
-        match value {
-            0 => Some(StorageKeys::StorageConfig),
-            #[cfg(feature = "host")]
-            1 => Some(StorageKeys::KeymapConfig),
-            2 => Some(StorageKeys::LayoutConfig),
-            3 => Some(StorageKeys::BehaviorConfig),
-            #[cfg(feature = "host")]
-            4 => Some(StorageKeys::MacroData),
-            #[cfg(feature = "host")]
-            5 => Some(StorageKeys::ComboData),
-            6 => Some(StorageKeys::ConnectionType),
-            #[cfg(feature = "host")]
-            7 => Some(StorageKeys::EncoderKeys),
-            #[cfg(feature = "host")]
-            8 => Some(StorageKeys::ForkData),
-            #[cfg(feature = "host")]
-            9 => Some(StorageKeys::MorseData),
-            #[cfg(all(feature = "_ble", feature = "split"))]
-            0xED => Some(StorageKeys::PeerAddress),
-            #[cfg(feature = "_ble")]
-            0xEE => Some(StorageKeys::ActiveBleProfile),
-            #[cfg(feature = "_ble")]
-            0xEF => Some(StorageKeys::BleBondInfo),
-            _ => None,
-        }
-    }
-}
-
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum StorageData {
     StorageConfig(LocalStorageConfig),
@@ -189,45 +156,9 @@ pub(crate) fn get_morse_key(idx: u8) -> u32 {
     0x7000 + idx as u32
 }
 
-/// Convert postcard::Error to SerializationError
-pub(crate) fn postcard_error_to_serialization_error(e: postcard::Error) -> SerializationError {
-    match e {
-        postcard::Error::SerializeBufferFull => SerializationError::BufferTooSmall,
-        postcard::Error::DeserializeUnexpectedEnd
-        | postcard::Error::DeserializeBadVarint
-        | postcard::Error::DeserializeBadBool
-        | postcard::Error::DeserializeBadChar
-        | postcard::Error::DeserializeBadUtf8
-        | postcard::Error::DeserializeBadOption
-        | postcard::Error::DeserializeBadEnum
-        | postcard::Error::DeserializeBadEncoding => SerializationError::InvalidFormat,
-        // Other errors with debug info
-        _ => {
-            #[cfg(feature = "defmt")]
-            {
-                defmt::error!("Unexpected postcard error: {:?}", defmt::Debug2Format(&e));
-            }
-            SerializationError::Custom(1)
-        }
-    }
-}
-
-/// Macro to serialize standard variants: key + postcard-serialized data
-/// Used by both StorageData and KeymapData
-#[macro_export]
-macro_rules! ser_storage_variant {
-    ($buffer:expr, $key:expr, $data:expr) => {{
-        $buffer[0] = $key as u8;
-        let len = postcard::to_slice($data, &mut $buffer[1..])
-            .map_err($crate::storage::postcard_error_to_serialization_error)?
-            .len();
-        Ok(len + 1)
-    }};
-}
-
 // Helper methods for StorageData
 impl StorageData {
-    /// Get the StorageKey for this variant (used as the first byte in stored data)
+    /// Get the storage map key for variants stored at fixed locations.
     const fn key(&self) -> u32 {
         match self {
             Self::StorageConfig(_) => StorageKeys::StorageConfig as u32,
@@ -253,97 +184,7 @@ impl StorageData {
     }
 }
 
-impl Value<'_> for StorageData {
-    fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, SerializationError> {
-        if buffer.is_empty() {
-            return Err(SerializationError::BufferTooSmall);
-        }
-
-        match self {
-            Self::StorageConfig(d) => ser_storage_variant!(buffer, StorageKeys::StorageConfig, d),
-            Self::LayoutConfig(d) => ser_storage_variant!(buffer, StorageKeys::LayoutConfig, d),
-            Self::BehaviorConfig(d) => ser_storage_variant!(buffer, StorageKeys::BehaviorConfig, d),
-            Self::ConnectionType(d) => ser_storage_variant!(buffer, StorageKeys::ConnectionType, d),
-            #[cfg(all(feature = "_ble", feature = "split"))]
-            Self::PeerAddress(d) => ser_storage_variant!(buffer, StorageKeys::PeerAddress, d),
-            #[cfg(feature = "_ble")]
-            Self::BondInfo(d) => ser_storage_variant!(buffer, StorageKeys::BleBondInfo, d),
-            #[cfg(feature = "_ble")]
-            Self::ActiveBleProfile(d) => ser_storage_variant!(buffer, StorageKeys::ActiveBleProfile, d),
-            #[cfg(feature = "host")]
-            Self::VialData(vial_data) => vial_data.serialize_into(buffer),
-        }
-    }
-
-    fn deserialize_from(buffer: &[u8]) -> Result<(Self, usize), SerializationError>
-    where
-        Self: Sized,
-    {
-        if buffer.is_empty() {
-            return Err(SerializationError::InvalidFormat);
-        }
-
-        let key = StorageKeys::from_u8(buffer[0]).ok_or(SerializationError::InvalidFormat)?;
-
-        match key {
-            StorageKeys::StorageConfig => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::StorageConfig(data), size))
-            }
-            StorageKeys::LayoutConfig => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::LayoutConfig(data), size))
-            }
-            StorageKeys::BehaviorConfig => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::BehaviorConfig(data), size))
-            }
-            StorageKeys::ConnectionType => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::ConnectionType(data), size))
-            }
-            #[cfg(all(feature = "_ble", feature = "split"))]
-            StorageKeys::PeerAddress => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::PeerAddress(data), size))
-            }
-            #[cfg(feature = "_ble")]
-            StorageKeys::BleBondInfo => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::BondInfo(data), size))
-            }
-            #[cfg(feature = "_ble")]
-            StorageKeys::ActiveBleProfile => {
-                let (data, unused) =
-                    postcard::take_from_bytes(&buffer[1..]).map_err(postcard_error_to_serialization_error)?;
-                let size = buffer.len() - unused.len();
-                Ok((Self::ActiveBleProfile(data), size))
-            }
-            #[cfg(feature = "host")]
-            StorageKeys::KeymapConfig
-            | StorageKeys::MacroData
-            | StorageKeys::ComboData
-            | StorageKeys::EncoderKeys
-            | StorageKeys::ForkData
-            | StorageKeys::MorseData => {
-                // VialData keys handled by KeymapData
-                KeymapData::deserialize_from(buffer).map(|(data, size)| (Self::VialData(data), size))
-            }
-        }
-    }
-}
+impl<'a> PostcardValue<'a> for StorageData {}
 
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, postcard::experimental::max_size::MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
