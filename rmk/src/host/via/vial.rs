@@ -531,17 +531,14 @@ mod tests {
             output: KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Space))),
             layer: None,
         };
-        let combo_idx: u8 = 20;
-
-        let mut buffer = [0u8; 64]; // Increased buffer size for idx + combo config
-        let storage_data = StorageData::VialData(KeymapData::Combo(combo_idx, combo_config));
+        let mut buffer = [0u8; 64];
+        let storage_data = StorageData::Combo(combo_config);
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
         // Deserialization
         let deserialized_data = StorageData::deserialize_from(&buffer[..serialized_size]).unwrap();
         // Validation
         match deserialized_data {
-            (StorageData::VialData(KeymapData::Combo(idx, deserialized_config)), _) => {
-                assert_eq!(idx, combo_idx);
+            (StorageData::Combo(deserialized_config), _) => {
                 // actions
                 assert_eq!(deserialized_config.actions.len(), combo_config.actions.len());
                 for (original, deserialized) in combo_config.actions.iter().zip(deserialized_config.actions.iter()) {
