@@ -9,15 +9,14 @@ use rmk_types::action::MorseProfile;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{Key, MapConfig, MapStorage, PostcardValue, SerializationError};
+#[cfg(feature = "_ble")]
+use {
+    crate::ble::{ble_server::CCCD_TABLE_SIZE, profile::ProfileInfo},
+    trouble_host::prelude::CccdTable,
+};
 #[cfg(feature = "host")]
 use {
-    crate::{
-        MACRO_SPACE_SIZE,
-        combo::ComboConfig,
-        fork::Fork,
-        host::storage::{KeymapData, KeymapKey},
-        morse::Morse,
-    },
+    crate::{MACRO_SPACE_SIZE, combo::ComboConfig, fork::Fork, morse::Morse},
     rmk_types::action::{EncoderAction, KeyAction},
 };
 
@@ -26,11 +25,6 @@ use crate::config::StorageConfig;
 #[cfg(all(feature = "_ble", feature = "split"))]
 use crate::split::ble::PeerAddress;
 use crate::{BUILD_HASH, config};
-#[cfg(feature = "_ble")]
-use {
-    crate::ble::{ble_server::CCCD_TABLE_SIZE, profile::ProfileInfo},
-    trouble_host::prelude::CccdTable,
-};
 
 /// Signal to synchronize the flash operation status, usually used outside of the flash task.
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
@@ -60,9 +54,36 @@ pub(crate) enum FlashOperationMessage {
     LayoutOptions(u32),
     // Default layer number
     DefaultLayer(u8),
-    // Vial Flash Message
     #[cfg(feature = "host")]
-    VialMessage(KeymapData),
+    MacroData([u8; MACRO_SPACE_SIZE]),
+    #[cfg(feature = "host")]
+    KeymapKey {
+        layer: u8,
+        row: u8,
+        col: u8,
+        action: KeyAction,
+    },
+    #[cfg(feature = "host")]
+    Encoder {
+        layer: u8,
+        idx: u8,
+        action: EncoderAction,
+    },
+    #[cfg(feature = "host")]
+    Combo {
+        idx: u8,
+        config: ComboConfig,
+    },
+    #[cfg(feature = "host")]
+    Fork {
+        idx: u8,
+        fork: Fork,
+    },
+    #[cfg(feature = "host")]
+    Morse {
+        idx: u8,
+        morse: Morse,
+    },
     // Current saved connection type
     ConnectionType(u8),
     // Timeout time for combos
@@ -117,11 +138,6 @@ impl StorageKey {
     #[cfg(feature = "host")]
     pub(crate) const fn keymap(layer: u8, row: u8, col: u8) -> Self {
         Self::Keymap { layer, row, col }
-    }
-
-    #[cfg(feature = "host")]
-    pub(crate) fn from_keymap_key(keymap_key: &KeymapKey) -> Self {
-        Self::keymap(keymap_key.layer, keymap_key.row, keymap_key.col)
     }
 
     #[cfg(feature = "_ble")]
@@ -234,29 +250,29 @@ pub(crate) struct BehaviorConfig {
     pub(crate) tap_capslock_interval: u16,
 }
 
-fn storage_config_data(enable: bool) -> StorageData {
-    StorageData::StorageConfig(LocalStorageConfig {
-        enable,
-        build_hash: BUILD_HASH,
-    })
+impl From<LocalStorageConfig> for StorageData {
+    fn from(config: LocalStorageConfig) -> Self {
+        Self::StorageConfig(config)
+    }
 }
 
-fn layout_config_data() -> StorageData {
-    StorageData::LayoutConfig(LayoutConfig {
-        default_layer: 0,
-        layout_option: 0,
-    })
+impl From<LayoutConfig> for StorageData {
+    fn from(config: LayoutConfig) -> Self {
+        Self::LayoutConfig(config)
+    }
 }
 
-fn behavior_config_data(behavior: &config::BehaviorConfig) -> StorageData {
-    StorageData::BehaviorConfig(BehaviorConfig {
-        prior_idle_time: behavior.morse.prior_idle_time.as_millis() as u16,
-        morse_default_profile: behavior.morse.default_profile,
-        combo_timeout: behavior.combo.timeout.as_millis() as u16,
-        one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,
-        tap_interval: behavior.tap.tap_interval,
-        tap_capslock_interval: behavior.tap.tap_capslock_interval,
-    })
+impl From<&config::BehaviorConfig> for StorageData {
+    fn from(behavior: &config::BehaviorConfig) -> Self {
+        Self::BehaviorConfig(BehaviorConfig {
+            prior_idle_time: behavior.morse.prior_idle_time.as_millis() as u16,
+            morse_default_profile: behavior.morse.default_profile,
+            combo_timeout: behavior.combo.timeout.as_millis() as u16,
+            one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,
+            tap_interval: behavior.tap.tap_interval,
+            tap_capslock_interval: behavior.tap.tap_capslock_interval,
+        })
+    }
 }
 
 pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
@@ -314,24 +330,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
     async fn store_data(&mut self, key: StorageKey, data: &StorageData) -> Result<(), SSError<F::Error>> {
         self.flash.store_item(&mut self.buffer, &key, data).await
-    }
-
-    #[cfg(feature = "host")]
-    fn entry_for_vial(vial_data: KeymapData) -> (StorageKey, StorageData) {
-        match vial_data {
-            KeymapData::Macro(macro_data) => (StorageKey::MacroData, StorageData::MacroData(macro_data)),
-            KeymapData::KeymapKey(keymap_key) => (
-                StorageKey::from_keymap_key(&keymap_key),
-                StorageData::KeyAction(keymap_key.action),
-            ),
-            KeymapData::Encoder(encoder_config) => (
-                StorageKey::encoder(encoder_config.idx, encoder_config.layer),
-                StorageData::EncoderAction(encoder_config.action),
-            ),
-            KeymapData::Combo(idx, config) => (StorageKey::combo(idx), StorageData::Combo(config)),
-            KeymapData::Fork(idx, fork) => (StorageKey::fork(idx), StorageData::Fork(fork)),
-            KeymapData::Morse(idx, morse) => (StorageKey::morse(idx), StorageData::Morse(morse)),
-        }
     }
 
     pub async fn new(
@@ -405,7 +403,13 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             {
                 // When there's an error, `enable: false` should be saved back to storage, preventing partial initialization of storage
                 storage
-                    .store_data(StorageKey::StorageConfig, &storage_config_data(false))
+                    .store_data(
+                        StorageKey::StorageConfig,
+                        &StorageData::from(LocalStorageConfig {
+                            enable: false,
+                            build_hash: BUILD_HASH,
+                        }),
+                    )
                     .await
                     .ok();
             }
@@ -440,9 +444,38 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     update_storage_field!(&mut self.flash, &mut self.buffer, LayoutConfig, default_layer)
                 }
                 #[cfg(feature = "host")]
-                FlashOperationMessage::VialMessage(vial_data) => {
-                    let (key, data) = Self::entry_for_vial(vial_data);
-                    self.store_data(key, &data).await
+                FlashOperationMessage::MacroData(data) => {
+                    self.store_data(StorageKey::MacroData, &StorageData::MacroData(data))
+                        .await
+                }
+                #[cfg(feature = "host")]
+                FlashOperationMessage::KeymapKey {
+                    layer,
+                    row,
+                    col,
+                    action,
+                } => {
+                    self.store_data(StorageKey::keymap(layer, row, col), &StorageData::KeyAction(action))
+                        .await
+                }
+                #[cfg(feature = "host")]
+                FlashOperationMessage::Encoder { layer, idx, action } => {
+                    self.store_data(StorageKey::encoder(idx, layer), &StorageData::EncoderAction(action))
+                        .await
+                }
+                #[cfg(feature = "host")]
+                FlashOperationMessage::Combo { idx, config } => {
+                    self.store_data(StorageKey::combo(idx), &StorageData::Combo(config))
+                        .await
+                }
+                #[cfg(feature = "host")]
+                FlashOperationMessage::Fork { idx, fork } => {
+                    self.store_data(StorageKey::fork(idx), &StorageData::Fork(fork)).await
+                }
+                #[cfg(feature = "host")]
+                FlashOperationMessage::Morse { idx, morse } => {
+                    self.store_data(StorageKey::morse(idx), &StorageData::Morse(morse))
+                        .await
                 }
                 FlashOperationMessage::ConnectionType(ty) => {
                     self.store_data(StorageKey::ConnectionType, &StorageData::ConnectionType(ty))
@@ -549,17 +582,29 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         behavior: &config::BehaviorConfig,
     ) -> Result<(), ()> {
         // Save storage config
-        self.store_data(StorageKey::StorageConfig, &storage_config_data(true))
-            .await
-            .map_err(|e| print_storage_error::<F>(e))?;
+        self.store_data(
+            StorageKey::StorageConfig,
+            &StorageData::from(LocalStorageConfig {
+                enable: true,
+                build_hash: BUILD_HASH,
+            }),
+        )
+        .await
+        .map_err(|e| print_storage_error::<F>(e))?;
 
         // Save layout config
-        self.store_data(StorageKey::LayoutConfig, &layout_config_data())
-            .await
-            .map_err(|e| print_storage_error::<F>(e))?;
+        self.store_data(
+            StorageKey::LayoutConfig,
+            &StorageData::from(LayoutConfig {
+                default_layer: 0,
+                layout_option: 0,
+            }),
+        )
+        .await
+        .map_err(|e| print_storage_error::<F>(e))?;
 
         // Save behavior config
-        self.store_data(StorageKey::BehaviorConfig, &behavior_config_data(behavior))
+        self.store_data(StorageKey::BehaviorConfig, &StorageData::from(behavior))
             .await
             .map_err(|e| print_storage_error::<F>(e))?;
 
@@ -567,15 +612,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         for (layer, layer_data) in keymap.iter().enumerate() {
             for (row, row_data) in layer_data.iter().enumerate() {
                 for (col, action) in row_data.iter().enumerate() {
-                    let keymap_key = KeymapKey {
-                        row: row as u8,
-                        col: col as u8,
-                        layer: layer as u8,
-                        action: *action,
-                    };
                     self.store_data(
-                        StorageKey::from_keymap_key(&keymap_key),
-                        &StorageData::KeyAction(keymap_key.action),
+                        StorageKey::keymap(layer as u8, row as u8, col as u8),
+                        &StorageData::KeyAction(*action),
                     )
                     .await
                     .map_err(|e| print_storage_error::<F>(e))?;
@@ -608,23 +647,24 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         encoder_map: &Option<&[[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         behavior: &config::BehaviorConfig,
     ) -> Result<(), SSError<F::Error>> {
-        self.store_data(StorageKey::LayoutConfig, &layout_config_data()).await?;
-        self.store_data(StorageKey::BehaviorConfig, &behavior_config_data(behavior))
+        self.store_data(
+            StorageKey::LayoutConfig,
+            &StorageData::from(LayoutConfig {
+                default_layer: 0,
+                layout_option: 0,
+            }),
+        )
+        .await?;
+        self.store_data(StorageKey::BehaviorConfig, &StorageData::from(behavior))
             .await?;
 
         // TODO: Generic reset for vial and other hosts
         for (layer, layer_data) in keymap.iter().enumerate() {
             for (row, row_data) in layer_data.iter().enumerate() {
                 for (col, action) in row_data.iter().enumerate() {
-                    let keymap_key = KeymapKey {
-                        row: row as u8,
-                        col: col as u8,
-                        layer: layer as u8,
-                        action: *action,
-                    };
                     self.store_data(
-                        StorageKey::from_keymap_key(&keymap_key),
-                        &StorageData::KeyAction(keymap_key.action),
+                        StorageKey::keymap(layer as u8, row as u8, col as u8),
+                        &StorageData::KeyAction(*action),
                     )
                     .await?;
                 }

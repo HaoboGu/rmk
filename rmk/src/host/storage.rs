@@ -1,11 +1,8 @@
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-use postcard::experimental::max_size::MaxSize;
-use rmk_types::action::{EncoderAction, KeyAction};
-use sequential_storage::map::PostcardValue;
 use serde::de::{Error as DeError, SeqAccess, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserializer, Serializer};
 
-use crate::combo::{Combo, ComboConfig};
+use crate::combo::Combo;
 use crate::fork::Fork;
 use crate::morse::Morse;
 use crate::storage::{Storage, StorageData, StorageKey, print_storage_error};
@@ -69,46 +66,6 @@ pub(crate) mod macro_bytes_serde {
         deserializer.deserialize_bytes(MacroBytesVisitor)
     }
 }
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) struct KeymapKey {
-    pub(crate) row: u8,
-    pub(crate) col: u8,
-    pub(crate) layer: u8,
-    pub(crate) action: KeyAction,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) struct EncoderKeymap {
-    /// Encoder index
-    pub(crate) idx: u8,
-    /// Layer
-    pub(crate) layer: u8,
-    /// Encoder action
-    pub(crate) action: EncoderAction,
-}
-
-/// Keymap data that can be updated by the host tools like Vial.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) enum KeymapData {
-    // Write macro
-    Macro(#[serde(with = "macro_bytes_serde")] [u8; MACRO_SPACE_SIZE]),
-    // Write a key in keymap
-    KeymapKey(KeymapKey),
-    // Write encoder configuration
-    Encoder(EncoderKeymap),
-    // Write combo - stores (idx, config)
-    Combo(u8, ComboConfig),
-    // Write fork - stores (idx, fork)
-    Fork(u8, Fork),
-    // Write tap dance
-    Morse(u8, Morse),
-}
-
-impl<'a> PostcardValue<'a> for KeymapData {}
 
 impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>

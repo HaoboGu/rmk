@@ -10,7 +10,7 @@ use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
 use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, Morse, TAP};
 #[cfg(feature = "storage")]
-use crate::{channel::FLASH_CHANNEL, host::storage::KeymapData, storage::FlashOperationMessage};
+use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 
 /// Note: vial uses little endian, while via uses big endian
 pub(crate) async fn process_vial<'a>(
@@ -352,10 +352,10 @@ pub(crate) async fn process_vial<'a>(
                         if let Some(m) = keymap.get_morse(morse_idx) {
                             // Save to storage
                             FLASH_CHANNEL
-                                .send(FlashOperationMessage::VialMessage(KeymapData::Morse(
-                                    morse_idx as u8,
-                                    m,
-                                )))
+                                .send(FlashOperationMessage::Morse {
+                                    idx: morse_idx as u8,
+                                    morse: m,
+                                })
                                 .await;
                         }
                     }
@@ -430,14 +430,14 @@ pub(crate) async fn process_vial<'a>(
 
                         if let Some((actions, output)) = result {
                             FLASH_CHANNEL
-                                .send(FlashOperationMessage::VialMessage(KeymapData::Combo(
-                                    combo_idx as u8,
-                                    ComboConfig {
+                                .send(FlashOperationMessage::Combo {
+                                    idx: combo_idx as u8,
+                                    config: ComboConfig {
                                         actions,
                                         output,
                                         layer: None,
                                     },
-                                )))
+                                })
                                 .await;
                         }
                     }
@@ -497,13 +497,12 @@ pub(crate) async fn process_vial<'a>(
             // Save the encoder action to the storage after the RefCell is released
             if let Some(encoder) = _encoder {
                 // Save the encoder action to the storage
-                use crate::host::storage::EncoderKeymap;
                 FLASH_CHANNEL
-                    .send(FlashOperationMessage::VialMessage(KeymapData::Encoder(EncoderKeymap {
+                    .send(FlashOperationMessage::Encoder {
                         idx: index,
                         layer,
                         action: encoder,
-                    })))
+                    })
                     .await;
             }
         }
