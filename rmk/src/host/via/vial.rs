@@ -10,7 +10,7 @@ use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
 use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, Morse, TAP};
 #[cfg(feature = "storage")]
-use crate::{channel::FLASH_CHANNEL, host::storage::KeymapData, storage::FlashOperationMessage};
+use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 
 /// Note: vial uses little endian, while via uses big endian
 pub(crate) async fn process_vial<'a>(
@@ -352,10 +352,10 @@ pub(crate) async fn process_vial<'a>(
                         if let Some(m) = keymap.get_morse(morse_idx) {
                             // Save to storage
                             FLASH_CHANNEL
-                                .send(FlashOperationMessage::VialMessage(KeymapData::Morse(
-                                    morse_idx as u8,
-                                    m,
-                                )))
+                                .send(FlashOperationMessage::Morse {
+                                    idx: morse_idx as u8,
+                                    morse: m,
+                                })
                                 .await;
                         }
                     }
@@ -430,14 +430,14 @@ pub(crate) async fn process_vial<'a>(
 
                         if let Some((actions, output)) = result {
                             FLASH_CHANNEL
-                                .send(FlashOperationMessage::VialMessage(KeymapData::Combo(
-                                    combo_idx as u8,
-                                    ComboConfig {
+                                .send(FlashOperationMessage::Combo {
+                                    idx: combo_idx as u8,
+                                    config: ComboConfig {
                                         actions,
                                         output,
                                         layer: None,
                                     },
-                                )))
+                                })
                                 .await;
                         }
                     }
@@ -497,13 +497,12 @@ pub(crate) async fn process_vial<'a>(
             // Save the encoder action to the storage after the RefCell is released
             if let Some(encoder) = _encoder {
                 // Save the encoder action to the storage
-                use crate::host::storage::EncoderKeymap;
                 FLASH_CHANNEL
-                    .send(FlashOperationMessage::VialMessage(KeymapData::Encoder(EncoderKeymap {
+                    .send(FlashOperationMessage::Encoder {
                         idx: index,
                         layer,
                         action: encoder,
-                    })))
+                    })
                     .await;
             }
         }
@@ -531,17 +530,14 @@ mod tests {
             output: KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Space))),
             layer: None,
         };
-        let combo_idx: u8 = 20;
-
-        let mut buffer = [0u8; 64]; // Increased buffer size for idx + combo config
-        let storage_data = StorageData::VialData(KeymapData::Combo(combo_idx, combo_config));
+        let mut buffer = [0u8; 64];
+        let storage_data = StorageData::Combo(combo_config);
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
         // Deserialization
         let deserialized_data = StorageData::deserialize_from(&buffer[..serialized_size]).unwrap();
         // Validation
         match deserialized_data {
-            (StorageData::VialData(KeymapData::Combo(idx, deserialized_config)), _) => {
-                assert_eq!(idx, combo_idx);
+            (StorageData::Combo(deserialized_config), _) => {
                 // actions
                 assert_eq!(deserialized_config.actions.len(), combo_config.actions.len());
                 for (original, deserialized) in combo_config.actions.iter().zip(deserialized_config.actions.iter()) {

@@ -2027,6 +2027,8 @@ checksum = "d4580ee0fa08cd41bee9f5b50ed309877e18735370fd4eef5766cc82863ef772"
 dependencies = [
  "defmt 1.0.1",
  "embedded-storage-async",
+ "postcard",
+ "serde",
 ]
 
 [[package]]

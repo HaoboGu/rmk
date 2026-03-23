@@ -32,7 +32,7 @@ use {
 };
 #[cfg(feature = "storage")]
 use {
-    crate::storage::{Storage, StorageData, StorageKeys},
+    crate::storage::{Storage, StorageData, StorageKey},
     crate::{read_storage, state::CONNECTION_TYPE},
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
 };
@@ -171,9 +171,8 @@ pub(crate) async fn run_ble<
     #[cfg(feature = "storage")]
     {
         let mut buf: [u8; 16] = [0; 16];
-        if let Ok(Some(StorageData::ConnectionType(conn_type))) =
-            read_storage!(storage, &(StorageKeys::ConnectionType as u32), buf)
-        {
+        let key = StorageKey::ConnectionType;
+        if let Ok(Some(StorageData::ConnectionType(conn_type))) = read_storage!(storage, &key, buf) {
             CONNECTION_TYPE.store(conn_type, Ordering::SeqCst);
         } else {
             // If no saved connection type, return default value
