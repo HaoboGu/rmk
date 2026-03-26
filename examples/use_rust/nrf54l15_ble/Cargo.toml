@@ -1,0 +1,85 @@
+[package]
+name = "rmk-nrf54l15"
+version = "0.1.0"
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Keyboard firmware written in Rust"
+homepage = "https://github.com/haobogu/rmk"
+repository = "https://github.com/haobogu/rmk"
+readme = "../../README.md"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+rmk = { path = "../../../rmk", features = ["async_matrix", "nrf54l15_ble"] }
+nrf-sdc = { path = "../../../../../rust/nrf-sdc/nrf-sdc", default-features = false, features = [
+    "defmt",
+    "peripheral",
+    "nrf54l15-app-s",
+] }
+nrf-mpsl = { path = "../../../../../rust/nrf-sdc/nrf-mpsl", default-features = false, features = [
+    "defmt",
+    "critical-section-impl",
+    "nrf54l15-app-s",
+] }
+bt-hci = { version = "0.8", features = ["defmt"] }
+
+cortex-m = "0.7.7"
+cortex-m-rt = "0.7.5"
+embassy-time = { version = "0.5", features = ["defmt", "defmt-timestamp-uptime"] }
+embassy-nrf = { version = "0.10", features = [
+    "defmt",
+    "nrf54l15-app-s",
+    "time-driver-grtc",
+    "gpiote",
+    "unstable-pac",
+    "time",
+] }
+embassy-executor = { version = "0.10", features = [
+    "defmt",
+    "platform-cortex-m",
+    "executor-thread",
+] }
+defmt = "1.0"
+defmt-rtt = "1.0"
+panic-probe = { version = "1.0", features = ["print-defmt"] }
+static_cell = "2"
+
+rand_core = { version = "0.6" }
+rand_chacha = { version = "0.3", default-features = false }
+
+[build-dependencies]
+xz2 = "0.1.7"
+json = "0.12"
+const-gen = "1.6"
+
+[[bin]]
+name = "rmk-nrf54l15"
+test = false
+bench = false
+
+[profile.dev]
+codegen-units = 1
+debug = true
+opt-level = 1
+overflow-checks = true
+lto = false
+panic = "unwind"
+
+[profile.release]
+codegen-units = 1
+debug = true
+opt-level = "z"
+overflow-checks = false
+lto = "fat"
+
+[patch.crates-io]
+embassy-executor = { path = "../../../../../rust/embassy/embassy-executor" }
+embassy-futures = { path = "../../../../../rust/embassy/embassy-futures" }
+embassy-embedded-hal = { path = "../../../../../rust/embassy/embassy-embedded-hal" }
+embassy-hal-internal = { path = "../../../../../rust/embassy/embassy-hal-internal" }
+embassy-nrf = { path = "../../../../../rust/embassy/embassy-nrf" }
+embassy-sync = { path = "../../../../../rust/embassy/embassy-sync" }
+embassy-time = { path = "../../../../../rust/embassy/embassy-time" }
+embassy-usb = { path = "../../../../../rust/embassy/embassy-usb" }
+bt-hci = { git = "https://github.com/embassy-rs/bt-hci", rev = "f6f359650e671d71c96b4354a6b5e26ea3918031" }
+trouble-host = { path = "../../../../../rust/trouble/host" }

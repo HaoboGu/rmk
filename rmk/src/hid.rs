@@ -136,6 +136,9 @@ pub(crate) fn get_serial_number() -> &'static str {
 
     let serial = SERIAL.init_with(|| {
         let ficr = embassy_nrf::pac::FICR;
+        #[cfg(any(feature = "nrf54l15_ble", feature = "nrf54lm20_ble"))]
+        let device_id = (u64::from(ficr.deviceaddr(1).read()) << 32) | u64::from(ficr.deviceaddr(0).read());
+        #[cfg(not(any(feature = "nrf54l15_ble", feature = "nrf54lm20_ble")))]
         let device_id = (u64::from(ficr.deviceid(1).read()) << 32) | u64::from(ficr.deviceid(0).read());
 
         let mut result = String::new();
