@@ -1,11 +1,10 @@
 //! This build script copies the `memory.x` file from the crate root into
 //! a directory where the linker can always find it at build time.
 
-use std::env;
-use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::{env, fs};
 
 use const_gen::*;
 use xz2::read::XzEncoder;
