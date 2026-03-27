@@ -24,9 +24,7 @@ use {
     crate::descriptor::{CompositeReport, KeyboardReport},
     crate::light::UsbLedReader,
     crate::state::get_connection_type,
-    crate::usb::UsbKeyboardWriter,
-    crate::usb::{USB_ENABLED, USB_REMOTE_WAKEUP, USB_SUSPENDED},
-    crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder},
+    crate::usb::{USB_REMOTE_WAKEUP, UsbKeyboardWriter, add_usb_reader_writer, add_usb_writer, new_usb_builder},
     embassy_futures::select::{Either4, select4},
     embassy_usb::driver::Driver,
 };
@@ -275,9 +273,11 @@ pub(crate) async fn run_ble<
             {
                 match get_connection_type() {
                     ConnectionType::Usb => {
+                        use crate::usb::wait_until_usb_configured;
+
                         info!("USB priority mode, waiting for USB enabled or BLE connection");
                         match select4(
-                            USB_ENABLED.wait(),
+                            wait_until_usb_configured(),
                             adv_fut,
                             #[cfg(feature = "storage")]
                             run_dummy_keyboard(storage),
@@ -288,11 +288,11 @@ pub(crate) async fn run_ble<
                         .await
                         {
                             Either4::First(_) => {
+                                use crate::usb::wait_until_usb_disabled;
+
                                 info!("USB enabled, run USB keyboard");
 
                                 set_ble_state(BleState::Inactive);
-                                // Re-send the consumed flag
-                                USB_ENABLED.signal(());
                                 let usb_fut = run_keyboard(
                                     #[cfg(feature = "storage")]
                                     storage,
@@ -302,7 +302,7 @@ pub(crate) async fn run_ble<
                                     UsbHostReaderWriter::new(&mut host_reader_writer),
                                     #[cfg(feature = "vial")]
                                     rmk_config.vial_config,
-                                    USB_SUSPENDED.wait(),
+                                    wait_until_usb_disabled(),
                                     UsbLedReader::new(&mut keyboard_reader),
                                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
                                 );
@@ -310,9 +310,6 @@ pub(crate) async fn run_ble<
                             }
                             Either4::Second(Ok(conn)) => {
                                 info!("No USB, BLE connected, run BLE keyboard");
-                                if USB_SUSPENDED.signaled() {
-                                    USB_SUSPENDED.reset();
-                                }
                                 let ble_fut = run_ble_keyboard(
                                     &server,
                                     &conn,
@@ -324,7 +321,7 @@ pub(crate) async fn run_ble<
                                     #[cfg(feature = "storage")]
                                     storage,
                                 );
-                                select3(ble_fut, USB_SUSPENDED.wait(), profile_manager.update_profile()).await;
+                                select3(ble_fut, wait_until_usb_configured(), profile_manager.update_profile()).await;
                                 continue;
                             }
                             Either4::Second(Err(BleHostError::BleHost(Error::Timeout))) => {

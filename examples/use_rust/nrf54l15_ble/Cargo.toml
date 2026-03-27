@@ -11,13 +11,13 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = ["async_matrix", "nrf54l15_ble"] }
-nrf-sdc = { path = "../../../../../rust/nrf-sdc/nrf-sdc", default-features = false, features = [
-    "defmt",
+nrf-sdc = { git = "https://github.com/HaoboGu/nrf-sdc", rev = "2478dd5c53219a9998251ca117abd5ed100952fc", default-features = false, features = [
+     "defmt",
     "peripheral",
     "nrf54l15-app-s",
 ] }
-nrf-mpsl = { path = "../../../../../rust/nrf-sdc/nrf-mpsl", default-features = false, features = [
-    "defmt",
+nrf-mpsl = { git = "https://github.com/HaoboGu/nrf-sdc", rev = "2478dd5c53219a9998251ca117abd5ed100952fc", default-features = false, features = [
+     "defmt",
     "critical-section-impl",
     "nrf54l15-app-s",
 ] }
@@ -73,13 +73,11 @@ overflow-checks = false
 lto = "fat"
 
 [patch.crates-io]
-embassy-executor = { path = "../../../../../rust/embassy/embassy-executor" }
-embassy-futures = { path = "../../../../../rust/embassy/embassy-futures" }
-embassy-embedded-hal = { path = "../../../../../rust/embassy/embassy-embedded-hal" }
-embassy-hal-internal = { path = "../../../../../rust/embassy/embassy-hal-internal" }
-embassy-nrf = { path = "../../../../../rust/embassy/embassy-nrf" }
-embassy-sync = { path = "../../../../../rust/embassy/embassy-sync" }
-embassy-time = { path = "../../../../../rust/embassy/embassy-time" }
-embassy-usb = { path = "../../../../../rust/embassy/embassy-usb" }
-bt-hci = { git = "https://github.com/embassy-rs/bt-hci", rev = "f6f359650e671d71c96b4354a6b5e26ea3918031" }
-trouble-host = { path = "../../../../../rust/trouble/host" }
+embassy-executor = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
+embassy-futures = {git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
+embassy-embedded-hal = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
+embassy-hal-internal = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" } 
+embassy-nrf = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
+embassy-sync = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
+embassy-time = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
+embassy-usb = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }

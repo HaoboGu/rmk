@@ -1,6 +1,7 @@
 use core::sync::atomic::Ordering;
 
 use embassy_sync::signal::Signal;
+use embassy_sync::watch::{Watch, WatchBehavior};
 use embassy_usb::class::hid::{HidWriter, ReportId, RequestHandler};
 use embassy_usb::control::OutResponse;
 use embassy_usb::driver::Driver;
@@ -248,20 +249,17 @@ impl UsbDeviceHandler {
     }
 }
 
-pub(crate) static USB_ENABLED: Signal<crate::RawMutex, ()> = Signal::new();
-pub(crate) static USB_SUSPENDED: Signal<crate::RawMutex, ()> = Signal::new();
+static USB_CONFIGURED: Watch<crate::RawMutex, (), 1> = Watch::new();
+static USB_DISABLED: Watch<crate::RawMutex, (), 1> = Watch::new();
 
 impl Handler for UsbDeviceHandler {
     fn enabled(&mut self, enabled: bool) {
         if enabled {
             info!("Device enabled");
-            USB_ENABLED.signal(());
         } else {
             info!("Device disabled");
-            if USB_ENABLED.signaled() {
-                USB_ENABLED.reset();
-                USB_SUSPENDED.signal(());
-            }
+            USB_CONFIGURED.sender().clear();
+            USB_DISABLED.sender().send(());
         }
     }
 
@@ -276,7 +274,8 @@ impl Handler for UsbDeviceHandler {
     fn configured(&mut self, configured: bool) {
         if configured {
             CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
-            USB_ENABLED.signal(());
+            USB_DISABLED.sender().clear();
+            USB_CONFIGURED.sender().send(());
             info!("Device configured, it may now draw up to the configured current from Vbus.")
         } else {
             info!("Device is no longer configured, the Vbus current limit is 100mA.");
@@ -288,16 +287,30 @@ impl Handler for UsbDeviceHandler {
             info!(
                 "Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
             );
-            USB_SUSPENDED.signal(());
         } else {
             info!(
                 "Device resumed, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
             );
-            USB_SUSPENDED.reset();
         }
     }
 
     fn remote_wakeup_enabled(&mut self, enabled: bool) {
         info!("Remote wakeup enabled state: {}", enabled);
+    }
+}
+
+pub(crate) async fn wait_until_usb_configured() {
+    if !USB_CONFIGURED.contains_value() {
+        if let Some(mut r) = USB_CONFIGURED.receiver() {
+            r.changed().await
+        }
+    }
+}
+
+pub(crate) async fn wait_until_usb_disabled() {
+    if !USB_DISABLED.contains_value() {
+        if let Some(mut r) = USB_DISABLED.receiver() {
+            r.changed().await
+        }
     }
 }
