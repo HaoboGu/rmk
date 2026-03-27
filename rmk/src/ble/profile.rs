@@ -38,7 +38,7 @@ pub struct ProfileInfo {
 }
 
 // Custom serde module for BondInformation
-mod bond_info_serde {
+pub(crate) mod bond_info_serde {
     use serde::{Deserializer, Serialize, Serializer};
 
     use super::*;
@@ -85,7 +85,7 @@ mod bond_info_serde {
 }
 
 // Custom serde module for CccdTable
-mod cccd_table_serde {
+pub(crate) mod cccd_table_serde {
     use serde::{Deserializer, Serialize, Serializer};
 
     use super::*;
@@ -203,7 +203,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
         storage: &mut crate::storage::Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     ) {
         use crate::read_storage;
-        use crate::storage::{StorageData, StorageKeys};
+        use crate::storage::{StorageData, StorageKey};
 
         self.bonded_devices.clear();
         for slot_num in 0..NUM_BLE_PROFILE {
@@ -219,9 +219,8 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
         let mut buf: [u8; 128] = [0; 128];
 
         // Load current active profile, save to `BLE_STATUS`
-        let profile = if let Ok(Some(StorageData::ActiveBleProfile(profile))) =
-            read_storage!(storage, &(StorageKeys::ActiveBleProfile as u32), buf)
-        {
+        let key = StorageKey::ActiveBleProfile;
+        let profile = if let Ok(Some(StorageData::ActiveBleProfile(profile))) = read_storage!(storage, &key, buf) {
             debug!("Loaded active profile: {}", profile);
             profile
         } else {
