@@ -5,6 +5,12 @@
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
+use postcard::experimental::max_size::MaxSize;
+#[cfg(feature = "rmk_protocol")]
+use postcard_schema::{
+    Schema,
+    schema::{DataModelType, NamedType},
+};
 use serde::{Deserialize, Serialize};
 
 /// Indicators defined in the HID spec 11.1
@@ -19,7 +25,7 @@ pub enum LedIndicatorType {
 }
 
 #[bitfield(u8, defmt = cfg(feature = "defmt"))]
-#[derive(Eq, PartialEq, Serialize, Deserialize, postcard::experimental::max_size::MaxSize)]
+#[derive(Eq, PartialEq, Serialize, Deserialize, MaxSize)]
 pub struct LedIndicator {
     #[bits(1)]
     pub num_lock: bool,
@@ -33,6 +39,14 @@ pub struct LedIndicator {
     pub kana: bool,
     #[bits(3)]
     _reserved: u8,
+}
+
+#[cfg(feature = "rmk_protocol")]
+impl Schema for LedIndicator {
+    const SCHEMA: &'static NamedType = &NamedType {
+        name: "LedIndicator",
+        ty: &DataModelType::U8,
+    };
 }
 
 impl BitOr for LedIndicator {

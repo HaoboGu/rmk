@@ -10,7 +10,6 @@ use embassy_futures::select::{Either3, select, select3};
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_time::{Duration, Timer, with_timeout};
 use rand_core::{CryptoRng, RngCore};
-use rmk_types::ble::{BleState, BleStatus};
 use rmk_types::led_indicator::LedIndicator;
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
@@ -42,11 +41,11 @@ use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
-use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, publish_event};
+use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, ConnectionType, publish_event};
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
-use crate::state::{ConnectionState, ConnectionType};
+use crate::state::ConnectionState;
 #[cfg(feature = "usb_log")]
 use crate::usb::add_usb_logger;
 use crate::{CONNECTION_STATE, run_keyboard};
@@ -59,6 +58,8 @@ pub(crate) mod led;
 #[cfg(feature = "passkey_entry")]
 pub mod passkey;
 pub(crate) mod profile;
+
+use rmk_types::ble::{BleState, BleStatus};
 
 /// Global BLE status: tracks the active profile and current BLE state.
 pub static BLE_STATUS: Mutex<crate::RawMutex, Cell<BleStatus>> = Mutex::new(Cell::new(BleStatus {
@@ -82,7 +83,6 @@ pub(crate) fn set_ble_state(state: BleState) {
     let profile = get_current_profile();
     let status = BleStatus { profile, state };
     set_ble_status(status);
-    publish_event(BleStatusChangeEvent(status));
 }
 
 /// Global state of sleep management
@@ -180,9 +180,9 @@ pub(crate) async fn run_ble<
             CONNECTION_TYPE.store(ConnectionType::Usb.into(), Ordering::SeqCst);
         }
 
-        publish_event(ConnectionChangeEvent {
-            connection_type: CONNECTION_TYPE.load(Ordering::SeqCst).into(),
-        });
+        publish_event(ConnectionChangeEvent::new(
+            CONNECTION_TYPE.load(Ordering::SeqCst).into(),
+        ));
     }
 
     // Create profile manager
@@ -265,7 +265,6 @@ pub(crate) async fn run_ble<
     join(background_task, async {
         loop {
             // Advertising state
-
             set_ble_state(BleState::Advertising);
             let adv_fut = advertise(rmk_config.device_config.product_name, &mut peripheral, &server);
             // USB + BLE dual mode
@@ -429,6 +428,7 @@ pub(crate) async fn run_ble<
                 Err(BleHostError::BleHost(Error::Timeout)) => {
                     warn!("Advertising timeout, sleep and wait for any key");
 
+                    set_ble_state(BleState::Inactive);
                     // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 

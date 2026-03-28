@@ -8,6 +8,7 @@ use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Timer, with_deadline};
 use heapless::Vec;
 use rmk_types::action::{Action, KeyAction, KeyboardAction, MorseMode};
+use rmk_types::fork::StateBits;
 use rmk_types::keycode::{ConsumerKey, HidKeyCode, KeyCode, SpecialKey, SystemControlKey};
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
@@ -23,7 +24,7 @@ use crate::event::ClearPeerEvent;
 use crate::event::{
     ActionEvent, KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event, publish_event_async,
 };
-use crate::fork::{ActiveFork, StateBits};
+use crate::fork::ActiveFork;
 use crate::hid::Report;
 use crate::input_device::Runnable;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
@@ -358,7 +359,7 @@ impl<'a> Keyboard<'a> {
         #[cfg(feature = "passkey_entry")]
         self.passkey_entry_state.check_mode_transition();
 
-        #[cfg(feature = "vial_lock")]
+        #[cfg(feature = "host_security")]
         self.keymap.update_matrix_state(&event);
 
         // Matrix should process key pressed event first, record the timestamp of key changes

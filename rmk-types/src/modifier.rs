@@ -7,12 +7,16 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
 use postcard::experimental::max_size::MaxSize;
+#[cfg(feature = "rmk_protocol")]
+use postcard_schema::{
+    Schema,
+    schema::{DataModelType, NamedType},
+};
 use serde::{Deserialize, Serialize};
 
 /// The bit representation of the modifier combination.
 #[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
 #[derive(Serialize, Deserialize, MaxSize, Eq, PartialEq)]
-
 pub struct ModifierCombination {
     #[bits(1)]
     pub left_ctrl: bool,
@@ -30,6 +34,14 @@ pub struct ModifierCombination {
     pub right_alt: bool,
     #[bits(1)]
     pub right_gui: bool,
+}
+
+#[cfg(feature = "rmk_protocol")]
+impl Schema for ModifierCombination {
+    const SCHEMA: &'static NamedType = &NamedType {
+        name: "ModifierCombination",
+        ty: &DataModelType::U8,
+    };
 }
 
 impl BitOr for ModifierCombination {
