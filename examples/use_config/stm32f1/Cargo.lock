@@ -1632,6 +1632,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4580ee0fa08cd41bee9f5b50ed309877e18735370fd4eef5766cc82863ef772"
 dependencies = [
  "embedded-storage-async",
+ "postcard",
+ "serde",
 ]
 
 [[package]]

@@ -2122,6 +2122,8 @@ checksum = "d4580ee0fa08cd41bee9f5b50ed309877e18735370fd4eef5766cc82863ef772"
 dependencies = [
  "defmt 1.0.1",
  "embedded-storage-async",
+ "postcard",
+ "serde",
 ]
 
 [[package]]
@@ -2491,7 +2493,7 @@ dependencies = [
 [[package]]
 name = "trouble-host"
 version = "0.6.0"
-source = "git+https://github.com/haobogu/trouble?rev=749315ec6b8fa1c7f0a2617c3de97a427902a263#749315ec6b8fa1c7f0a2617c3de97a427902a263"
+source = "git+https://github.com/haobogu/trouble?rev=e96bdadda8806b1f6257978549746a516f73cf3d#e96bdadda8806b1f6257978549746a516f73cf3d"
 dependencies = [
  "aes",
  "bt-hci",
@@ -2515,7 +2517,7 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.4.0"
-source = "git+https://github.com/haobogu/trouble?rev=749315ec6b8fa1c7f0a2617c3de97a427902a263#749315ec6b8fa1c7f0a2617c3de97a427902a263"
+source = "git+https://github.com/haobogu/trouble?rev=e96bdadda8806b1f6257978549746a516f73cf3d#e96bdadda8806b1f6257978549746a516f73cf3d"
 dependencies = [
  "convert_case 0.8.0",
  "darling 0.20.11",

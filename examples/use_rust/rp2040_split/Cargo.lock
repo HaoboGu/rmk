@@ -2271,6 +2271,8 @@ checksum = "d4580ee0fa08cd41bee9f5b50ed309877e18735370fd4eef5766cc82863ef772"
 dependencies = [
  "defmt 1.0.1",
  "embedded-storage-async",
+ "postcard",
+ "serde",
 ]
 
 [[package]]
@@ -2704,15 +2706,14 @@ dependencies = [
 [[package]]
 name = "trouble-host"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1df7817cead4b83dfbeeaa59736ecbc97c30b21dc3bfc0cc2ce8a6687f70b37a"
+source = "git+https://github.com/haobogu/trouble?rev=e96bdadda8806b1f6257978549746a516f73cf3d#e96bdadda8806b1f6257978549746a516f73cf3d"
 dependencies = [
  "aes",
  "bt-hci",
  "cmac",
  "defmt 1.0.1",
  "embassy-futures",
- "embassy-sync 0.7.2",
+ "embassy-sync 0.8.0",
  "embassy-time",
  "embedded-io 0.7.1",
  "futures",
@@ -2729,8 +2730,7 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d809ae05f510cf8f1d863749281eb28e049d9ae4ad52d92ea7a0ac068a0e17c"
+source = "git+https://github.com/haobogu/trouble?rev=e96bdadda8806b1f6257978549746a516f73cf3d#e96bdadda8806b1f6257978549746a516f73cf3d"
 dependencies = [
  "convert_case 0.8.0",
  "darling 0.20.11",
