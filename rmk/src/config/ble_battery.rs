@@ -1,6 +1,7 @@
 #[cfg(feature = "_nrf_ble")]
 use embassy_nrf::gpio::{Input, Output};
 
+/// BLE battery/charging GPIO configuration.
 pub struct BleBatteryConfig<'a> {
     #[cfg(feature = "_nrf_ble")]
     pub charge_state_pin: Option<Input<'a>>,

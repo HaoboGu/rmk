@@ -13,12 +13,7 @@ cd rmk-types && cargo +nightly fmt && cd ..
 for dir in examples/use_rust/*/; do
     if [ -d "$dir" ] && [ -d "$dir/src" ]; then
         cd "$dir"
-        # Check if it's an ESP project
-        if [[ "$dir" == *"esp"* ]]; then
-            cargo +esp fmt
-        else
-            cargo +nightly fmt
-        fi
+        cargo +nightly fmt
         cd ../../..
     fi
 done
@@ -27,12 +22,7 @@ done
 for dir in examples/use_config/*/; do
     if [ -d "$dir" ] && [ -d "$dir/src" ]; then
         cd "$dir"
-        # Check if it's an ESP project
-        if [[ "$dir" == *"esp"* ]]; then
-            cargo +esp fmt
-        else
-            cargo +nightly fmt
-        fi
+        cargo +nightly fmt
         cd ../../..
     fi
 done

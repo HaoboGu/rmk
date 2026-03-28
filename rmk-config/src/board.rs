@@ -68,7 +68,7 @@ impl BoardConfig {
 }
 
 impl KeyboardTomlConfig {
-    pub fn get_board_config(&self) -> Result<BoardConfig, String> {
+    pub(crate) fn get_board_config(&self) -> Result<BoardConfig, String> {
         let matrix = self.matrix.clone();
         let split = self.split.clone();
         let input_device = self.input_device.clone();
@@ -78,12 +78,12 @@ impl KeyboardTomlConfig {
             },
             (Some(m), None) => {
                 match m.matrix_type {
-                    MatrixType::normal => {
+                    MatrixType::Normal => {
                         if m.row_pins.is_none() || m.col_pins.is_none() {
                             return Err("`row_pins` and `col_pins` is required for normal matrix".to_string());
                         }
                     },
-                    MatrixType::direct_pin => {
+                    MatrixType::DirectPin => {
                         if m.direct_pins.is_none() {
                             return Err("`direct_pins` is required for direct pin matrix".to_string());
                         }

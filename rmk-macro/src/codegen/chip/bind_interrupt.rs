@@ -5,16 +5,14 @@ use std::collections::HashSet;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::{BoardConfig, InputDeviceConfig, KeyboardTomlConfig, UniBodyConfig};
+use rmk_config::resolved::Hardware;
+use rmk_config::resolved::hardware::{BoardConfig, InputDeviceConfig, UniBodyConfig};
 use syn::ItemMod;
 
 use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
 
 /// Expand `bind_interrupt!` stuffs, and other code before `main` function
-pub(crate) fn expand_bind_interrupt(
-    keyboard_config: &KeyboardTomlConfig,
-    item_mod: &ItemMod,
-) -> TokenStream2 {
+pub(crate) fn expand_bind_interrupt(hardware: &Hardware, item_mod: &ItemMod) -> TokenStream2 {
     // If there is a function with `#[Overwritten(bind_interrupt)]`, override it
     if let Some((_, items)) = &item_mod.content {
         items
@@ -32,9 +30,9 @@ pub(crate) fn expand_bind_interrupt(
                 }
                 None
             })
-            .unwrap_or(bind_interrupt_default(keyboard_config, item_mod))
+            .unwrap_or(bind_interrupt_default(hardware, item_mod))
     } else {
-        bind_interrupt_default(keyboard_config, item_mod)
+        bind_interrupt_default(hardware, item_mod)
     }
 }
 
@@ -53,10 +51,7 @@ pub(crate) fn find_extern_irqs(item_mod: &ItemMod) -> Vec<TokenStream2> {
 }
 
 /// Expand default `bind_interrupt!` for different chips and nrf-sdc config for nRF52
-pub(crate) fn bind_interrupt_default(
-    keyboard_config: &KeyboardTomlConfig,
-    item_mod: &ItemMod,
-) -> TokenStream2 {
+pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) -> TokenStream2 {
     let extern_irqs_vec = find_extern_irqs(item_mod);
     let extern_irqs = if extern_irqs_vec.is_empty() {
         quote! {}
@@ -66,18 +61,18 @@ pub(crate) fn bind_interrupt_default(
         }
     };
 
-    let chip = keyboard_config.get_chip_model().unwrap();
-    let board = keyboard_config.get_board_config().unwrap();
-    let communication = keyboard_config.get_communication_config().unwrap();
+    let chip = &hardware.chip;
+    let board = &hardware.board;
+    let communication = &hardware.communication;
     match chip.series {
-        rmk_config::ChipSeries::Stm32 => {
+        rmk_config::resolved::hardware::ChipSeries::Stm32 => {
             // For stm32, bind USB interrupt and EXTI interrupts (if async_matrix is enabled)
             let rmk_features = get_rmk_features();
             let async_matrix = is_feature_enabled(&rmk_features, "async_matrix");
 
             // Generate EXTI interrupt bindings for async_matrix
             let exti_interrupts = if async_matrix {
-                generate_stm32_exti_interrupts(keyboard_config)
+                generate_stm32_exti_interrupts(board)
             } else {
                 quote! {}
             };
@@ -107,7 +102,7 @@ pub(crate) fn bind_interrupt_default(
                 }
             }
         }
-        rmk_config::ChipSeries::Nrf52 => {
+        rmk_config::resolved::hardware::ChipSeries::Nrf52 => {
             // Usb and clock interrupt
             let usb_and_clock_interrupt = if let Some(usb_info) = communication.get_usb_info() {
                 let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
@@ -133,7 +128,7 @@ pub(crate) fn bind_interrupt_default(
             };
 
             // nrf-sdc interrupt config
-            let nrf_sdc_config = match board {
+            let nrf_sdc_config = match &board {
                 BoardConfig::Split(_) => {
                     let num_peri = board.get_num_periphreal() as u8;
                     quote! {
@@ -236,18 +231,20 @@ pub(crate) fn bind_interrupt_default(
                 }
             }
         }
-        rmk_config::ChipSeries::Rp2040 => {
+        rmk_config::resolved::hardware::ChipSeries::Rp2040 => {
             let usb_info = communication
                 .get_usb_info()
                 .expect("no usb info for the chip");
             let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
             let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
+            let dma_irq_0 = quote! {
+                DMA_IRQ_0 => ::embassy_rp::dma::InterruptHandler<::embassy_rp::peripherals::DMA_CH0>, ::embassy_rp::dma::InterruptHandler<::embassy_rp::peripherals::DMA_CH1>;
+            };
             // For Pico W, enabled PIO0_IRQ_0 interrupt
             let (pio0_irq_0, ble_task) = if communication.ble_enabled() {
                 (
                     quote! {
                         PIO0_IRQ_0 => ::embassy_rp::pio::InterruptHandler<::embassy_rp::peripherals::PIO0>;
-                        DMA_IRQ_0 => ::embassy_rp::dma::InterruptHandler<::embassy_rp::peripherals::DMA_CH0>, ::embassy_rp::dma::InterruptHandler<::embassy_rp::peripherals::DMA_CH1>;
                     },
                     quote! {
                         #[::embassy_executor::task]
@@ -263,12 +260,13 @@ pub(crate) fn bind_interrupt_default(
                 use ::embassy_rp::bind_interrupts;
                 bind_interrupts!(struct Irqs {
                     #interrupt_name => ::embassy_rp::usb::InterruptHandler<::embassy_rp::peripherals::#peripheral_name>;
+                    #dma_irq_0
                     #pio0_irq_0
                 });
                 #ble_task
             }
         }
-        rmk_config::ChipSeries::Esp32 => quote! {},
+        rmk_config::resolved::hardware::ChipSeries::Esp32 => quote! {},
     }
 }
 
@@ -277,11 +275,9 @@ pub(crate) fn bind_interrupt_default(
 /// - EXTI0 - EXTI4: each has its own interrupt
 /// - EXTI5 - EXTI9: share EXTI9_5 interrupt
 /// - EXTI10 - EXTI15: share EXTI15_10 interrupt
-fn generate_stm32_exti_interrupts(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
-    let board = keyboard_config.get_board_config().unwrap();
-
+fn generate_stm32_exti_interrupts(board: &BoardConfig) -> TokenStream2 {
     // Collect all row pins from the matrix configuration
-    let row_pins: Vec<String> = match &board {
+    let row_pins: Vec<String> = match board {
         BoardConfig::UniBody(unibody) => unibody.matrix.row_pins.clone().unwrap_or_default(),
         BoardConfig::Split(split) => split.central.matrix.row_pins.clone().unwrap_or_default(),
     };

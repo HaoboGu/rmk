@@ -1,5 +1,5 @@
 use quote::{format_ident, quote};
-use rmk_config::{ChipModel, EncoderConfig, EncoderResolution};
+use rmk_config::resolved::hardware::{ChipModel, EncoderConfig, EncoderResolution};
 
 use super::Initializer;
 use crate::codegen::chip::gpio::convert_gpio_str_to_input_pin;

@@ -2,13 +2,14 @@ use core::panic;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::{
-    BoardConfig, ChipModel, ChipSeries, KeyboardTomlConfig, SerialConfig, SplitConfig,
+use rmk_config::resolved::Hardware;
+use rmk_config::resolved::hardware::{
+    BoardConfig, ChipModel, ChipSeries, SerialConfig, SplitConfig,
 };
 
-pub(crate) fn expand_split_central_config(config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
-    if let BoardConfig::Split(split_config) = &config.get_board_config().unwrap() {
-        expand_split_communication_config(&config.get_chip_model().unwrap(), split_config)
+pub(crate) fn expand_split_central_config(hardware: &Hardware) -> proc_macro2::TokenStream {
+    if let BoardConfig::Split(split_config) = &hardware.board {
+        expand_split_communication_config(&hardware.chip, split_config)
     } else {
         quote! {}
     }
@@ -64,7 +65,7 @@ pub(crate) fn expand_serial_init(chip: &ChipModel, serial: Vec<SerialConfig>) ->
                             ::embassy_rp::bind_interrupts!(struct #irq_name {
                                 #uart_irq => ::embassy_rp::uart::BufferedInterruptHandler<::embassy_rp::peripherals::#uart_instance>;
                             });
-                            let #uart_name = ::rmk::split::rp::BufferedUartWrapper(::embassy_rp::uart::BufferedUart::new(
+                            let #uart_name = ::embassy_rp::uart::BufferedUart::new(
                                 p.#uart_instance,
                                 p.#tx_pin,
                                 p.#rx_pin,
@@ -72,7 +73,7 @@ pub(crate) fn expand_serial_init(chip: &ChipModel, serial: Vec<SerialConfig>) ->
                                 #tx_buf_name,
                                 #rx_buf_name,
                                 ::embassy_rp::uart::Config::default(),
-                            ));
+                            );
                         }
                     }
                     i if i.starts_with("PIO") => {

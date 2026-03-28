@@ -24,7 +24,6 @@ bitfield-struct = "0.12"
 [build-dependencies]
 rmk-config = { path = "../rmk-config", version = "=0.6.1" }
 toml = "1.0"
-const-gen = "1.6"
 
 [features]
 default = []

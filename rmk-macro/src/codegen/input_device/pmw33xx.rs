@@ -1,5 +1,5 @@
 use quote::{format_ident, quote};
-use rmk_config::{ChipModel, ChipSeries, Pmw33xxConfig, Pmw33xxType};
+use rmk_config::resolved::hardware::{ChipModel, ChipSeries, Pmw33xxConfig, Pmw33xxType};
 
 use super::Initializer;
 
@@ -138,7 +138,7 @@ pub(crate) fn expand_pmw33xx_device(
                     Some(::embassy_rp::gpio::Input::new(p.#motion_ident, ::embassy_rp::gpio::Pull::Up))
                 },
                 ChipSeries::Stm32 => quote! {
-                    None::<::embassy_stm32::exti::ExtiInput<'static>>
+                    None::<::embassy_stm32::exti::ExtiInput<'static, ::embassy_stm32::mode::Async>>
                 },
                 _ => unreachable!(),
             }
@@ -151,7 +151,7 @@ pub(crate) fn expand_pmw33xx_device(
                     None::<::embassy_rp::gpio::Input<'static>>
                 },
                 ChipSeries::Stm32 => quote! {
-                    None::<::embassy_stm32::exti::ExtiInput<'static>>
+                    None::<::embassy_stm32::exti::ExtiInput<'static, ::embassy_stm32::mode::Async>>
                 },
                 _ => unreachable!(),
             }

@@ -1,7 +1,7 @@
 use crate::{BehaviorConfig, MacroOperation};
 
 impl crate::KeyboardTomlConfig {
-    pub fn get_behavior_config(&self) -> Result<BehaviorConfig, String> {
+    pub(crate) fn get_behavior_config(&self) -> Result<BehaviorConfig, String> {
         let default = self.behavior.clone().unwrap_or_default();
         let (layout, _) = self.get_layout_config().unwrap();
         match self.behavior.clone() {
@@ -20,6 +20,7 @@ impl crate::KeyboardTomlConfig {
                     None => default.tri_layer,
                 };
                 behavior.one_shot = behavior.one_shot.or(default.one_shot);
+                behavior.one_shot_modifiers = behavior.one_shot_modifiers.or(default.one_shot_modifiers);
                 behavior.combo = behavior.combo.or(default.combo);
                 if let Some(combo) = &behavior.combo {
                     if combo.combos.len() > self.rmk.combo_max_num {

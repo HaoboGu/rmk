@@ -4,8 +4,17 @@ The `[behavior]` section contains configuration for how different keyboard actio
 
 ```toml
 [behavior]
-tri_layer = { upper = 1, lower = 2, adjust = 3 }
-one_shot = { timeout = "1s" }
+tri_layer = {
+  upper = 1,
+  lower = 2,
+  adjust = 3,
+}
+one_shot = {
+  timeout = "1s",
+}
+one_shot_modifiers = {
+  activate_on_keypress = false,
+}
 ```
 
 ## Tri Layer
@@ -25,13 +34,34 @@ In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 
 
 Note that `"#layer_name"` could also be used in place of layer numbers.
 
-## One Shot
+## One-Shot
 
-The `one_shot` sub-table configures one-shot modifiers or one-shot layers (OSM/OSL). Use `timeout` to specify how long the modifier/layer remains active. The value is a string suffixed with `s` or `ms` (default: `1s`).
+The `one_shot` sub-table contains common one-shot configuration (for both OSM and OSL)
 
+Currently, there are only `timeout` field that specifies how long the one-shot modifier/layer remains active.
+When no key is pressed within this time, the one-shot modifier/layer will be canceled.
+`timeout` value is a string suffixed with `s` or `ms` (default: `1s`).
+
+## One-Shot Modifiers
+
+The `one_shot_modifiers` sub-table configures one-shot modifiers (OSM).
+
+By default, one-shot modifiers do not activate on keypress and will be sent only when other key is pressed.
+You can change this behavior by setting `activate_on_keypress` to `true`.
+This behavior is also known as One-Shot Sticky Modifiers (OSSM).
+
+If you press One-Shot Modifier again, it will be sent as a normal modifier key press and, therefore, released.
+
+Default values:
 ```toml
-[behavior.one_shot]
-timeout = "5s"
+[behavior.one_shot_modifiers]
+activate_on_keypress = false
+```
+
+OSSM example:
+```toml
+[behavior.one_shot_modifiers]
+activate_on_keypress = true
 ```
 
 ## Combo

@@ -1,5 +1,6 @@
+use crate::chip::{ChipModel, ChipSeries};
 use crate::usb_interrupt_map::get_usb_info;
-use crate::{BleConfig, ChipModel, ChipSeries, KeyboardTomlConfig};
+use crate::{BleConfig, KeyboardTomlConfig};
 
 /// Information about USB interface
 #[derive(Clone, Debug, Default)]
@@ -73,7 +74,7 @@ impl CommunicationConfig {
 }
 
 impl KeyboardTomlConfig {
-    pub fn get_communication_config(&self) -> Result<CommunicationConfig, String> {
+    pub(crate) fn get_communication_config(&self) -> Result<CommunicationConfig, String> {
         let usb_enabled = self.keyboard.clone().unwrap_or_default().usb_enable.unwrap_or(false);
         let chip = self.get_chip_model().unwrap();
         let usb_info = if usb_enabled { get_usb_info(&chip.chip) } else { None };

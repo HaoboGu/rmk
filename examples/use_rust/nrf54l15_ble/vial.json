@@ -1,0 +1,16 @@
+{
+    "name": "RMK nRF54LM20A DK",
+    "vendorId": "0x4C4B",
+    "productId": "0x4643",
+    "lighting": "none",
+    "matrix": {
+        "rows": 2,
+        "cols": 2
+    },
+    "layouts": {
+        "keymap": [
+            ["0,0", "0,1"],
+            ["1,0", "1,1"]
+        ]
+    }
+}
