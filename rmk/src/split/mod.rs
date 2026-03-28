@@ -41,7 +41,7 @@ pub(crate) enum SplitMessage {
     KeyboardIndicator(u8),
     /// Layer number from central to peripheral
     Layer(u8),
-    /// Battery state, from peripheral to central
+    /// Battery status, from peripheral to central
     #[cfg(feature = "_ble")]
     BatteryStatus(BatteryStatusEvent),
 }

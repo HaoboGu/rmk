@@ -11,7 +11,7 @@
 //!
 //! - `input`: Input events (keyboard, modifier, pointing device)
 //! - `state`: Keyboard state events (layer, WPM, LED indicator, sleep)
-//! - `battery`: Battery events (ADC, charging, battery state)
+//! - `battery`: Battery events (ADC, charging, battery status)
 //! - `connection`: Connection events (USB/BLE, BLE status)
 //! - `split`: Split keyboard events (peripheral/central connection)
 

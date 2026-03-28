@@ -40,7 +40,7 @@ RMK provides built-in event types organized by category:
 **Battery Events** (`rmk::event::battery`):
 - `BatteryAdcEvent` - Raw battery ADC reading
 - `ChargingStateEvent` - Charging state changed
-- `BatteryStatusEvent` - Battery state changed (includes level and charging status)
+- `BatteryStatusEvent` - Battery status changed (includes level and charging status)
 
 **Connection Events** (`rmk::event::connection`):
 - `ConnectionChangeEvent` - Connection type changed (USB/BLE)
@@ -49,7 +49,7 @@ RMK provides built-in event types organized by category:
 **Split Keyboard Events** (`rmk::event::split`, when split is enabled):
 - `PeripheralConnectedEvent` - Peripheral connection state changed
 - `CentralConnectedEvent` - Connected to central state changed
-- `PeripheralBatteryEvent` - Peripheral battery state changed
+- `PeripheralBatteryEvent` - Peripheral battery status changed
 - `ClearPeerEvent` - BLE peer clearing event
 
 ## Defining Custom Events

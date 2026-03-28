@@ -75,13 +75,13 @@ impl<I: InputPin> ChargingStateReader<I> {
 }
 
 /// BatteryProcessor processes battery adc value and charging state,
-/// emits `BatteryStatusEvent` when battery state changes.
+/// emits `BatteryStatusEvent` when battery status changes.
 #[processor(subscribe = [BatteryAdcEvent, ChargingStateEvent])]
 pub struct BatteryProcessor {
     adc_divider_measured: u32,
     adc_divider_total: u32,
-    /// Current battery state
-    battery_state: BatteryStatus,
+    /// Current battery status
+    battery_status: BatteryStatus,
 }
 
 impl BatteryProcessor {
@@ -89,7 +89,7 @@ impl BatteryProcessor {
         BatteryProcessor {
             adc_divider_measured,
             adc_divider_total,
-            battery_state: BatteryStatus::Unavailable,
+            battery_status: BatteryStatus::Unavailable,
         }
     }
 
@@ -138,19 +138,19 @@ impl BatteryProcessor {
         #[cfg(feature = "_ble")]
         {
             // Only update level when not charging
-            let (charge_state, current_level) = match self.battery_state {
+            let (charge_state, current_level) = match self.battery_status {
                 BatteryStatus::Available { charge_state, level } => (Some(charge_state), level),
                 BatteryStatus::Unavailable => (None, None),
             };
             if !matches!(charge_state, Some(ChargeState::Charging)) {
                 let battery_percent = self.get_battery_percent(val);
                 if current_level != Some(battery_percent) || charge_state.is_none() {
-                    self.battery_state = BatteryStatus::Available {
+                    self.battery_status = BatteryStatus::Available {
                         charge_state: charge_state.unwrap_or(ChargeState::Unknown),
                         level: Some(battery_percent),
                     };
 
-                    publish_event(BatteryStatusEvent::from(self.battery_state));
+                    publish_event(BatteryStatusEvent::from(self.battery_status));
                 }
             }
         }
@@ -164,20 +164,20 @@ impl BatteryProcessor {
         {
             if charging {
                 // Keep current level when charging
-                let level = match self.battery_state {
+                let level = match self.battery_status {
                     BatteryStatus::Available { level, .. } => level,
                     BatteryStatus::Unavailable => None,
                 };
-                self.battery_state = BatteryStatus::Available {
+                self.battery_status = BatteryStatus::Available {
                     charge_state: ChargeState::Charging,
                     level,
                 };
             } else {
                 // When unplugged, mark unavailable until next ADC reading
-                self.battery_state = BatteryStatus::Unavailable;
+                self.battery_status = BatteryStatus::Unavailable;
             }
 
-            publish_event(BatteryStatusEvent::from(self.battery_state));
+            publish_event(BatteryStatusEvent::from(self.battery_status));
         }
     }
 }

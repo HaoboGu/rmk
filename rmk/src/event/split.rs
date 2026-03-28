@@ -21,7 +21,7 @@ pub struct CentralConnectedEvent {
     pub connected: bool,
 }
 
-/// Peripheral battery state changed event
+/// Peripheral battery status changed event
 #[event(channel_size = crate::PERIPHERAL_BATTERY_EVENT_CHANNEL_SIZE, pubs = crate::PERIPHERAL_BATTERY_EVENT_PUB_SIZE, subs = crate::PERIPHERAL_BATTERY_EVENT_SUB_SIZE)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

@@ -3,7 +3,7 @@
 //! This module contains all battery-related events:
 //! - Battery ADC reading events
 //! - Charging state events
-//! - Battery state events (computed from ADC and charging state)
+//! - Battery status events (computed from ADC and charging state)
 
 use postcard::experimental::max_size::MaxSize;
 use rmk_macro::event;
@@ -32,7 +32,7 @@ pub struct ChargingStateEvent {
     pub charging: bool,
 }
 
-/// Battery state changed event, wraps [`BatteryStatus`].
+/// Battery status changed event, wraps [`BatteryStatus`].
 #[event(channel_size = crate::BATTERY_STATUS_EVENT_CHANNEL_SIZE, pubs = crate::BATTERY_STATUS_EVENT_PUB_SIZE, subs = crate::BATTERY_STATUS_EVENT_SUB_SIZE)]
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

@@ -1785,31 +1785,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "postcard-rpc"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1b0f9cc8bd8f38f5893fb7f07626b1c8722b3166ead66cfb14b5c5d5352822c"
-dependencies = [
- "heapless 0.9.2",
- "portable-atomic",
- "postcard",
- "postcard-schema",
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "postcard-schema"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9475666d89f42231a0a57da32d5f6ca7f9b5cd4c335ea1fe8f3278215b7a21ff"
-dependencies = [
- "heapless 0.9.2",
- "postcard-derive",
- "serde",
-]
-
-[[package]]
 name = "ppv-lite86"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2031,7 +2006,6 @@ name = "rmk-types"
 version = "0.2.2"
 dependencies = [
  "bitfield-struct",
- "const-gen",
  "defmt 1.0.1",
  "heapless 0.9.2",
  "postcard",

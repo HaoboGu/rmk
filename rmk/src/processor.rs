@@ -81,7 +81,7 @@ pub trait Processor: Runnable {
 ///
 ///     // Called every 1000ms (poll_interval)
 ///     async fn poll(&mut self) {
-///         // Toggle LED based on battery state
+///         // Toggle LED based on battery status
 ///         self.led_on = !self.led_on;
 ///     }
 /// }
