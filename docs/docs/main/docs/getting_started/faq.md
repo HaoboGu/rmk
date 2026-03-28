@@ -195,9 +195,9 @@ The current Embassy requires manual setting of the task arena size. By default, 
 
 ```toml
 # Cargo.toml
-embassy-executor = { version = "0.9", features = [
+embassy-executor = { version = "0.10", features = [
     "defmt",
-    "arch-cortex-m",
+    "platform-cortex-m",
     "task-arena-size-32768",
     "executor-thread",
 ] }
@@ -207,9 +207,9 @@ If you get the `ERROR panicked at 'embassy-executor: task arena is full.'` error
 
 ```diff
 # Cargo.toml
-embassy-executor = { version = "0.9", features = [
+embassy-executor = { version = "0.10", features = [
     "defmt",
-    "arch-cortex-m",
+    "platform-cortex-m",
 -   "task-arena-size-32768",
 +   "task-arena-size-65536",
     "executor-thread",

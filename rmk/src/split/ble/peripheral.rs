@@ -260,7 +260,7 @@ fn get_peri_advertiser<'a, C: Controller>(
             AdStructure::encode_slice(
                 &[
                     AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
-                    AdStructure::ServiceUuids128(&[
+                    AdStructure::CompleteServiceUuids128(&[
                         // uuid: 4dd5fbaa-18e5-4b07-bf0a-353698659946
                         [
                             70u8, 153u8, 101u8, 152u8, 54u8, 53u8, 10u8, 191u8, 7u8, 75u8, 229u8, 24u8, 170u8, 251u8,

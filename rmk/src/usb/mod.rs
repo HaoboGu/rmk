@@ -1,12 +1,13 @@
 use core::sync::atomic::Ordering;
 
 use embassy_sync::signal::Signal;
+use embassy_sync::watch::{Watch, WatchBehavior};
 use embassy_usb::class::hid::{HidWriter, ReportId, RequestHandler};
 use embassy_usb::control::OutResponse;
 use embassy_usb::driver::Driver;
 use embassy_usb::{Builder, Handler};
-use ssmarshal::serialize;
 use static_cell::StaticCell;
+use usbd_hid::descriptor::AsInputReport as _;
 
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::config::DeviceConfig;
@@ -67,7 +68,9 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
         match report {
             Report::KeyboardReport(keyboard_report) => {
                 let mut buf: [u8; 8] = [0; 8];
-                let n: usize = serialize(&mut buf, &keyboard_report).map_err(|_| HidError::ReportSerializeError)?;
+                let n: usize = keyboard_report
+                    .serialize(&mut buf)
+                    .map_err(|_| HidError::ReportSerializeError)?;
                 self.keyboard_writer
                     .write(&buf[0..n])
                     .await
@@ -77,7 +80,9 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
             Report::MouseReport(mouse_report) => {
                 let mut buf: [u8; 9] = [0; 9];
                 buf[0] = CompositeReportType::Mouse as u8;
-                let n = serialize(&mut buf[1..], &mouse_report).map_err(|_| HidError::ReportSerializeError)?;
+                let n = mouse_report
+                    .serialize(&mut buf[1..])
+                    .map_err(|_| HidError::ReportSerializeError)?;
                 self.other_writer
                     .write(&buf[0..n + 1])
                     .await
@@ -87,7 +92,9 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
             Report::MediaKeyboardReport(media_keyboard_report) => {
                 let mut buf: [u8; 9] = [0; 9];
                 buf[0] = CompositeReportType::Media as u8;
-                let n = serialize(&mut buf[1..], &media_keyboard_report).map_err(|_| HidError::ReportSerializeError)?;
+                let n = media_keyboard_report
+                    .serialize(&mut buf[1..])
+                    .map_err(|_| HidError::ReportSerializeError)?;
                 self.other_writer
                     .write(&buf[0..n + 1])
                     .await
@@ -97,7 +104,9 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
             Report::SystemControlReport(system_control_report) => {
                 let mut buf: [u8; 9] = [0; 9];
                 buf[0] = CompositeReportType::System as u8;
-                let n = serialize(&mut buf[1..], &system_control_report).map_err(|_| HidError::ReportSerializeError)?;
+                let n = system_control_report
+                    .serialize(&mut buf[1..])
+                    .map_err(|_| HidError::ReportSerializeError)?;
                 self.other_writer
                     .write(&buf[0..n + 1])
                     .await
@@ -182,9 +191,7 @@ macro_rules! add_usb_writer {
             request_handler: Some(request_handler),
             poll_ms: 1,
             max_packet_size: 64,
-            #[cfg(feature = "pico_w_ble")]
             hid_subclass: ::embassy_usb::class::hid::HidSubclass::No,
-            #[cfg(feature = "pico_w_ble")]
             hid_boot_protocol: ::embassy_usb::class::hid::HidBootProtocol::None,
         };
 
@@ -211,9 +218,7 @@ macro_rules! add_usb_reader_writer {
             request_handler: Some(request_handler),
             poll_ms: 1,
             max_packet_size: 64,
-            #[cfg(feature = "pico_w_ble")]
             hid_subclass: ::embassy_usb::class::hid::HidSubclass::No,
-            #[cfg(feature = "pico_w_ble")]
             hid_boot_protocol: ::embassy_usb::class::hid::HidBootProtocol::None,
         };
 
@@ -244,20 +249,17 @@ impl UsbDeviceHandler {
     }
 }
 
-pub(crate) static USB_ENABLED: Signal<crate::RawMutex, ()> = Signal::new();
-pub(crate) static USB_SUSPENDED: Signal<crate::RawMutex, ()> = Signal::new();
+static USB_CONFIGURED: Watch<crate::RawMutex, (), 1> = Watch::new();
+static USB_DISABLED: Watch<crate::RawMutex, (), 1> = Watch::new();
 
 impl Handler for UsbDeviceHandler {
     fn enabled(&mut self, enabled: bool) {
         if enabled {
             info!("Device enabled");
-            USB_ENABLED.signal(());
         } else {
             info!("Device disabled");
-            if USB_ENABLED.signaled() {
-                USB_ENABLED.reset();
-                USB_SUSPENDED.signal(());
-            }
+            USB_CONFIGURED.sender().clear();
+            USB_DISABLED.sender().send(());
         }
     }
 
@@ -272,7 +274,8 @@ impl Handler for UsbDeviceHandler {
     fn configured(&mut self, configured: bool) {
         if configured {
             CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
-            USB_ENABLED.signal(());
+            USB_DISABLED.sender().clear();
+            USB_CONFIGURED.sender().send(());
             info!("Device configured, it may now draw up to the configured current from Vbus.")
         } else {
             info!("Device is no longer configured, the Vbus current limit is 100mA.");
@@ -284,16 +287,30 @@ impl Handler for UsbDeviceHandler {
             info!(
                 "Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
             );
-            USB_SUSPENDED.signal(());
         } else {
             info!(
                 "Device resumed, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
             );
-            USB_SUSPENDED.reset();
         }
     }
 
     fn remote_wakeup_enabled(&mut self, enabled: bool) {
         info!("Remote wakeup enabled state: {}", enabled);
+    }
+}
+
+pub(crate) async fn wait_until_usb_configured() {
+    if !USB_CONFIGURED.contains_value() {
+        if let Some(mut r) = USB_CONFIGURED.receiver() {
+            r.changed().await
+        }
+    }
+}
+
+pub(crate) async fn wait_until_usb_disabled() {
+    if !USB_DISABLED.contains_value() {
+        if let Some(mut r) = USB_DISABLED.receiver() {
+            r.changed().await
+        }
     }
 }
