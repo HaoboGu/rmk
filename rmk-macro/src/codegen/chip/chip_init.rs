@@ -49,6 +49,16 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
     let chip = &hardware.chip;
     let communication = &hardware.communication;
     let peri_num = hardware.board.get_num_periphreal();
+    let set_io_capabilities = if peripheral_id.is_none() {
+        quote! {
+            #[cfg(feature = "passkey_entry")]
+            if ::rmk::PASSKEY_ENTRY_ENABLED {
+                stack.set_io_capabilities(::rmk::IoCapabilities::KeyboardOnly);
+            }
+        }
+    } else {
+        quote! {}
+    };
     match chip.series {
         ChipSeries::Stm32 => quote! {
                 let config = ::embassy_stm32::Config::default();
@@ -126,7 +136,14 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                     let sdc = ::defmt::unwrap!(build_sdc(sdc_p, &mut rng, &*mpsl, &mut sdc_mem));
                     let ble_addr = #ble_addr;
                     let mut host_resources = ::rmk::HostResources::new();
-                    let stack = ::rmk::ble::build_ble_stack(sdc, ble_addr, &mut rng_gen, &mut host_resources).await;
+                    let stack = ::rmk::ble::build_ble_stack(
+                        sdc,
+                        ble_addr,
+                        &mut rng_gen,
+                        &mut host_resources,
+                    )
+                    .await;
+                    #set_io_capabilities
                 },
                 _ => quote! {},
             };
@@ -192,7 +209,14 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                     let mut rosc_rng = ::embassy_rp::clocks::RoscRng {};
                     use rand_core::SeedableRng;
                     let mut rng = ::rand_chacha::ChaCha12Rng::from_rng(&mut rosc_rng).unwrap();
-                    let stack = ::rmk::ble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
+                    let stack = ::rmk::ble::build_ble_stack(
+                        controller,
+                        ble_addr,
+                        &mut rng,
+                        &mut host_resources,
+                    )
+                    .await;
+                    #set_io_capabilities
                 }
             } else {
                 quote! {
@@ -216,7 +240,14 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                 let controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
                 let ble_addr = #ble_addr;
                 let mut host_resources = ::rmk::HostResources::new();
-                let stack = ::rmk::ble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
+                let stack = ::rmk::ble::build_ble_stack(
+                    controller,
+                    ble_addr,
+                    &mut rng,
+                    &mut host_resources,
+                )
+                .await;
+                #set_io_capabilities
             }
         }
     }

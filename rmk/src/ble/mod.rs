@@ -9,6 +9,8 @@ use embassy_futures::select::Either;
 use embassy_futures::select::{Either3, select, select3};
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_time::{Duration, Timer, with_timeout};
+#[cfg(feature = "passkey_entry")]
+use embassy_time::{Instant, with_deadline};
 use rand_core::{CryptoRng, RngCore};
 use rmk_types::ble::{BleState, BleStatus};
 use rmk_types::led_indicator::LedIndicator;
@@ -40,9 +42,9 @@ use crate::ble::ble_server::{BleHidServer, Server};
 use crate::ble::device_info::{PnPID, VidSource};
 use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
-use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
+use crate::channel::LED_SIGNAL;
 use crate::config::RmkConfig;
-use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, publish_event};
+use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, KeyboardEvent, SubscribableEvent, publish_event};
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
@@ -97,6 +99,93 @@ pub(crate) const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + 1;
 /// Max number of L2CAP channels
 pub(crate) const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
 
+async fn wait_for_keyboard_activity() {
+    let mut keyboard_events = KeyboardEvent::subscriber();
+    let _ = keyboard_events.next_message_pure().await;
+}
+
+struct PasskeyInputState {
+    #[cfg(feature = "passkey_entry")]
+    deadline: Option<Instant>,
+    #[cfg(feature = "passkey_entry")]
+    cleanup: Option<crate::ble::passkey::PasskeyCleanupGuard>,
+}
+
+impl PasskeyInputState {
+    const fn new() -> Self {
+        Self {
+            #[cfg(feature = "passkey_entry")]
+            deadline: None,
+            #[cfg(feature = "passkey_entry")]
+            cleanup: None,
+        }
+    }
+
+    fn clear(&mut self) {
+        #[cfg(feature = "passkey_entry")]
+        {
+            self.deadline = None;
+            drop(self.cleanup.take());
+        }
+    }
+
+    #[cfg(feature = "passkey_entry")]
+    fn begin(&mut self) {
+        use crate::ble::passkey::{PasskeyCleanupGuard, begin_passkey_entry_session};
+
+        self.clear();
+        begin_passkey_entry_session();
+        self.cleanup = Some(PasskeyCleanupGuard::new());
+        self.deadline = Some(Instant::now() + Duration::from_secs(crate::PASSKEY_ENTRY_TIMEOUT_SECS as u64));
+    }
+}
+
+async fn next_gatt_event<'a, 'b>(
+    conn: &GattConnection<'a, 'b, DefaultPacketPool>,
+    passkey_state: &mut PasskeyInputState,
+) -> Option<GattConnectionEvent<'a, 'b, DefaultPacketPool>> {
+    #[cfg(not(feature = "passkey_entry"))]
+    let _ = passkey_state;
+
+    #[cfg(feature = "passkey_entry")]
+    if crate::PASSKEY_ENTRY_ENABLED
+        && let Some(deadline) = passkey_state.deadline
+    {
+        use crate::ble::passkey::PASSKEY_RESPONSE;
+
+        return match select(conn.next(), with_deadline(deadline, PASSKEY_RESPONSE.wait())).await {
+            Either::First(event) => Some(event),
+            Either::Second(Ok(Some(passkey))) => {
+                passkey_state.clear();
+
+                info!("[gatt] Passkey entered: submitting");
+                if let Err(e) = conn.raw().pass_key_input(passkey) {
+                    error!("[gatt] pass_key_input error: {:?}", e);
+                }
+                None
+            }
+            Either::Second(Ok(None)) => {
+                passkey_state.clear();
+
+                info!("[gatt] Passkey entry cancelled");
+                if let Err(e) = conn.raw().pass_key_cancel() {
+                    error!("[gatt] pass_key_cancel error: {:?}", e);
+                }
+                None
+            }
+            Either::Second(Err(_)) => {
+                passkey_state.clear();
+
+                warn!("[gatt] Passkey entry timeout");
+                let _ = conn.raw().pass_key_cancel();
+                None
+            }
+        };
+    }
+
+    Some(conn.next().await)
+}
+
 /// Build the BLE stack.
 pub async fn build_ble_stack<
     'a,
@@ -110,16 +199,9 @@ pub async fn build_ble_stack<
     resources: &'a mut HostResources<P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX>,
 ) -> Stack<'a, C, P> {
     // Initialize trouble host stack
-    let builder = trouble_host::new(controller, resources)
+    return trouble_host::new(controller, resources)
         .set_random_address(Address::random(host_address))
         .set_random_generator_seed(random_generator);
-
-    #[cfg(feature = "passkey_entry")]
-    if crate::PASSKEY_ENTRY_ENABLED {
-        builder.set_io_capabilities(IoCapabilities::KeyboardOnly);
-    }
-
-    builder
 }
 
 /// Run the BLE stack.
@@ -335,8 +417,7 @@ pub(crate) async fn run_ble<
                                 #[cfg(feature = "split")]
                                 CENTRAL_SLEEP.signal(true);
 
-                                // Wait for the keyboard report for wake the keyboard
-                                let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+                                wait_for_keyboard_activity().await;
 
                                 // Quit from sleep mode
                                 #[cfg(feature = "split")]
@@ -391,8 +472,7 @@ pub(crate) async fn run_ble<
                                 #[cfg(feature = "split")]
                                 CENTRAL_SLEEP.signal(true);
 
-                                // Wait for the keyboard report for wake the keyboard
-                                let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+                                wait_for_keyboard_activity().await;
 
                                 // Quit from sleep mode
                                 #[cfg(feature = "split")]
@@ -436,8 +516,7 @@ pub(crate) async fn run_ble<
                     #[cfg(feature = "split")]
                     CENTRAL_SLEEP.signal(true);
 
-                    // Wait for the keyboard report for wake the keyboard
-                    let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+                    wait_for_keyboard_activity().await;
 
                     // Quit from sleep mode
                     #[cfg(feature = "split")]
@@ -508,15 +587,22 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
     let mut connected = false;
-
     let mut published_connected_state = false;
+    let mut passkey_state = PasskeyInputState::new();
+
     loop {
-        match conn.next().await {
+        let Some(event) = next_gatt_event(conn, &mut passkey_state).await else {
+            continue;
+        };
+
+        match event {
             GattConnectionEvent::Disconnected { reason } => {
+                passkey_state.clear();
                 info!("[gatt] disconnected: {:?}", reason);
                 break;
             }
             GattConnectionEvent::PairingComplete { security_level, bond } => {
+                passkey_state.clear();
                 info!("[gatt] pairing complete: {:?}", security_level);
                 let profile = get_current_profile();
                 if let Some(bond_info) = bond {
@@ -534,6 +620,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 }
             }
             GattConnectionEvent::PairingFailed(err) => {
+                passkey_state.clear();
                 error!("[gatt] pairing error: {:?}", err);
             }
             GattConnectionEvent::Gatt { event: gatt_event } => {
@@ -732,40 +819,8 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
             GattConnectionEvent::PassKeyInput => {
                 #[cfg(feature = "passkey_entry")]
                 if crate::PASSKEY_ENTRY_ENABLED {
-                    use crate::ble::passkey::{
-                        PASSKEY_RESPONSE, begin_passkey_entry_session, end_passkey_entry_session,
-                    };
-
                     info!("[gatt] PassKeyInput: entering passkey entry mode");
-                    begin_passkey_entry_session();
-
-                    // Wait with configurable timeout
-                    match embassy_time::with_timeout(
-                        Duration::from_secs(crate::PASSKEY_ENTRY_TIMEOUT_SECS as u64),
-                        PASSKEY_RESPONSE.wait(),
-                    )
-                    .await
-                    {
-                        Ok(Some(passkey)) => {
-                            end_passkey_entry_session();
-                            info!("[gatt] Passkey entered: submitting");
-                            if let Err(e) = conn.raw().pass_key_input(passkey) {
-                                error!("[gatt] pass_key_input error: {:?}", e);
-                            }
-                        }
-                        Ok(None) => {
-                            end_passkey_entry_session();
-                            info!("[gatt] Passkey entry cancelled");
-                            if let Err(e) = conn.raw().pass_key_cancel() {
-                                error!("[gatt] pass_key_cancel error: {:?}", e);
-                            }
-                        }
-                        Err(_) => {
-                            end_passkey_entry_session();
-                            warn!("[gatt] Passkey entry timeout");
-                            let _ = conn.raw().pass_key_cancel();
-                        }
-                    }
+                    passkey_state.begin();
                 } else {
                     warn!("[gatt] PassKeyInput: disabled in config, cancelling pairing, this shouldn't happen");
                     if let Err(e) = conn.raw().pass_key_cancel() {
