@@ -10,12 +10,12 @@ mod vial;
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_rp::bind_interrupts;
 use embassy_rp::block::ImageDef;
 use embassy_rp::flash::{Async, Flash};
 use embassy_rp::gpio::{Input, Output};
-use embassy_rp::peripherals::USB;
+use embassy_rp::peripherals::{DMA_CH0, USB};
 use embassy_rp::usb::{Driver, InterruptHandler};
+use embassy_rp::{bind_interrupts, dma};
 use keymap::{COL, ROW};
 use panic_probe as _;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
@@ -29,6 +29,7 @@ use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
+    DMA_IRQ_0 => dma::InterruptHandler<DMA_CH0>;
 });
 
 #[unsafe(link_section = ".start_block")]
@@ -62,7 +63,7 @@ async fn main(_spawner: Spawner) {
         config_matrix_pins_rp!(peripherals: p, input: [PIN_6, PIN_7, PIN_8, PIN_9], output: [PIN_19, PIN_20, PIN_21]);
 
     // Use internal flash to emulate eeprom
-    let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH0);
+    let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH0, Irqs);
 
     let keyboard_device_config = DeviceConfig {
         vid: 0x4c4b,

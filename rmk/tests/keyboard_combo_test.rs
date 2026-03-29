@@ -148,11 +148,14 @@ rusty_fork_test! {
 
 
     #[test]
-    fn test_combo_with_one_shot_mod() {
+    fn test_combo_with_one_shot_modifier() {
         key_sequence_test! {
             keyboard: create_test_keyboard_with_config(BehaviorConfig {
                 combo: get_combos_config(),
-                one_shot: OneShotConfig { timeout: Duration::from_millis(300) },
+                one_shot: OneShotConfig {
+                    timeout: Duration::from_millis(300),
+                    ..Default::default()
+                },
                 ..Default::default()
             }),
             sequence: [

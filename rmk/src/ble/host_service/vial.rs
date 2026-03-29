@@ -1,6 +1,5 @@
-use ssmarshal::serialize;
 use trouble_host::prelude::*;
-use usbd_hid::descriptor::SerializedDescriptor;
+use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor};
 
 use crate::ble::Server;
 use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;
@@ -46,7 +45,7 @@ impl<P: PacketPool> HidWriterTrait for BleVialServer<'_, '_, '_, P> {
 
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         let mut buf = [0u8; 32];
-        let n = serialize(&mut buf, &report).map_err(|_| HidError::ReportSerializeError)?;
+        let n = report.serialize(&mut buf).map_err(|_| HidError::ReportSerializeError)?;
         debug!("Sending via report: {:?}", buf);
         self.input_data.notify(self.conn, &buf).await.map_err(|e| {
             error!("Failed to notify via report: {:?}", e);

@@ -10,12 +10,12 @@ mod vial;
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_rp::bind_interrupts;
 use embassy_rp::flash::{Async, Flash};
 use embassy_rp::gpio::{Input, Output};
-use embassy_rp::peripherals::{UART0, USB};
+use embassy_rp::peripherals::{DMA_CH0, UART0, USB};
 use embassy_rp::uart::{self, BufferedUart};
 use embassy_rp::usb::{Driver, InterruptHandler};
+use embassy_rp::{bind_interrupts, dma};
 use panic_probe as _;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
@@ -25,7 +25,6 @@ use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
 use rmk::split::central::run_peripheral_manager;
-use rmk::split::rp::BufferedUartWrapper;
 use rmk::{KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -33,6 +32,7 @@ use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
     UART0_IRQ => uart::BufferedInterruptHandler<UART0>;
+    DMA_IRQ_0 => dma::InterruptHandler<DMA_CH0>;
 });
 
 const FLASH_SIZE: usize = 2 * 1024 * 1024;
@@ -52,7 +52,7 @@ async fn main(_spawner: Spawner) {
     // Use internal flash to emulate eeprom
     // Both blocking and async flash are support, use different API
     // let flash = Flash::<_, Blocking, FLASH_SIZE>::new_blocking(p.FLASH);
-    let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH0);
+    let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH0, Irqs);
 
     let keyboard_device_config = DeviceConfig {
         vid: 0x4c4b,
@@ -74,15 +74,7 @@ async fn main(_spawner: Spawner) {
     let tx_buf = &mut TX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
     static RX_BUF: StaticCell<[u8; SPLIT_MESSAGE_MAX_SIZE]> = StaticCell::new();
     let rx_buf = &mut RX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
-    let uart_receiver = BufferedUartWrapper(BufferedUart::new(
-        p.UART0,
-        p.PIN_0,
-        p.PIN_1,
-        Irqs,
-        tx_buf,
-        rx_buf,
-        uart::Config::default(),
-    ));
+    let uart_receiver = BufferedUart::new(p.UART0, p.PIN_0, p.PIN_1, Irqs, tx_buf, rx_buf, uart::Config::default());
 
     // Initialize the storage and keymap
     let mut keymap_data = KeymapData::new(keymap::get_default_keymap());

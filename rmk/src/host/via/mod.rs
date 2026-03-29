@@ -3,15 +3,13 @@ use embassy_time::{Instant, Timer};
 use embassy_usb::class::hid::HidReaderWriter;
 use embassy_usb::driver::Driver;
 use rmk_types::protocol::vial::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
-use ssmarshal::serialize;
+use usbd_hid::descriptor::AsInputReport as _;
 use vial::process_vial;
 
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
 use crate::event::KeyboardEventPos;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
-#[cfg(feature = "storage")]
-use crate::host::storage::{KeymapData, KeymapKey};
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
 use crate::state::ConnectionState;
@@ -167,12 +165,12 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
                 keymap.set_action_at(KeyboardEventPos::key_pos(col, row), layer as usize, action);
                 #[cfg(feature = "storage")]
                 FLASH_CHANNEL
-                    .send(FlashOperationMessage::VialMessage(KeymapData::KeymapKey(KeymapKey {
+                    .send(FlashOperationMessage::KeymapKey {
                         layer,
-                        col,
                         row,
+                        col,
                         action,
-                    })))
+                    })
                     .await;
             }
             ViaCommand::DynamicKeymapReset => {
@@ -239,9 +237,7 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
                 #[cfg(feature = "storage")]
                 {
                     let buf = self.keymap.get_macro_sequences();
-                    FLASH_CHANNEL
-                        .send(FlashOperationMessage::VialMessage(KeymapData::Macro(buf)))
-                        .await;
+                    FLASH_CHANNEL.send(FlashOperationMessage::MacroData(buf)).await;
                     info!("Flush macros to storage")
                 }
             }
@@ -285,14 +281,12 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
                         offset, row, col, layer
                     );
                     #[cfg(feature = "storage")]
-                    if let Err(_e) =
-                        FLASH_CHANNEL.try_send(FlashOperationMessage::VialMessage(KeymapData::KeymapKey(KeymapKey {
-                            layer: layer as u8,
-                            col: col as u8,
-                            row: row as u8,
-                            action,
-                        })))
-                    {
+                    if let Err(_e) = FLASH_CHANNEL.try_send(FlashOperationMessage::KeymapKey {
+                        layer: layer as u8,
+                        row: row as u8,
+                        col: col as u8,
+                        action,
+                    }) {
                         error!("Send keymap setting command error")
                     }
                 }
@@ -344,7 +338,9 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbVialReaderWriter<'_, 'd, D> {
 
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         let mut buffer = [0u8; 32];
-        let n = serialize(&mut buffer, &report).map_err(|_| HidError::ReportSerializeError)?;
+        let n = report
+            .serialize(&mut buffer)
+            .map_err(|_| HidError::ReportSerializeError)?;
         self.vial_reader_writer
             .write(&buffer[0..n])
             .await

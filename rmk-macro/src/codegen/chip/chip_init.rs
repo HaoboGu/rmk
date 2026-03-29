@@ -115,7 +115,7 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                         lfclk_cfg,
                         SESSION_MEM.init(::nrf_sdc::mpsl::SessionMem::new())
                     )));
-                    spawner.must_spawn(mpsl_task(&*mpsl));
+                    spawner.spawn(mpsl_task(&*mpsl).unwrap());
                     let sdc_p = ::nrf_sdc::Peripherals::new(
                         p.PPI_CH17, p.PPI_CH18, p.PPI_CH20, p.PPI_CH21, p.PPI_CH22, p.PPI_CH23, p.PPI_CH24, p.PPI_CH25, p.PPI_CH26,
                         p.PPI_CH27, p.PPI_CH28, p.PPI_CH29,
@@ -191,7 +191,7 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                     static STATE: ::static_cell::StaticCell<::cyw43::State> = ::static_cell::StaticCell::new();
                     let state = STATE.init(::cyw43::State::new());
                     let (_net_device, bt_device, mut control, runner) = ::cyw43::new_with_bluetooth(state, pwr, spi, fw, btfw, nvram).await;
-                    spawner.spawn(cyw43_task(runner)).unwrap();
+                    spawner.spawn(cyw43_task(runner).unwrap());
                     control.init(clm).await;
 
                     let controller: ::bt_hci::controller::ExternalController<_, 10> = ::bt_hci::controller::ExternalController::new(bt_device);
