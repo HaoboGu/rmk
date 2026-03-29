@@ -84,6 +84,8 @@ pub mod combo;
 pub mod config;
 pub mod debounce;
 pub mod descriptor;
+#[cfg(feature = "display")]
+pub mod display;
 pub mod direct_pin;
 pub mod driver;
 pub mod event;
