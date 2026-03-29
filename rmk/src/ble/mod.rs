@@ -42,9 +42,9 @@ use crate::ble::ble_server::{BleHidServer, Server};
 use crate::ble::device_info::{PnPID, VidSource};
 use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
-use crate::channel::LED_SIGNAL;
+use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
-use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, KeyboardEvent, SubscribableEvent, publish_event};
+use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, publish_event};
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
@@ -99,37 +99,26 @@ pub(crate) const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + 1;
 /// Max number of L2CAP channels
 pub(crate) const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
 
-async fn wait_for_keyboard_activity() {
-    let mut keyboard_events = KeyboardEvent::subscriber();
-    let _ = keyboard_events.next_message_pure().await;
-}
-
+#[cfg(feature = "passkey_entry")]
 struct PasskeyInputState {
-    #[cfg(feature = "passkey_entry")]
     deadline: Option<Instant>,
-    #[cfg(feature = "passkey_entry")]
     cleanup: Option<crate::ble::passkey::PasskeyCleanupGuard>,
 }
 
+#[cfg(feature = "passkey_entry")]
 impl PasskeyInputState {
     const fn new() -> Self {
         Self {
-            #[cfg(feature = "passkey_entry")]
             deadline: None,
-            #[cfg(feature = "passkey_entry")]
             cleanup: None,
         }
     }
 
     fn clear(&mut self) {
-        #[cfg(feature = "passkey_entry")]
-        {
-            self.deadline = None;
-            drop(self.cleanup.take());
-        }
+        self.deadline = None;
+        drop(self.cleanup.take());
     }
 
-    #[cfg(feature = "passkey_entry")]
     fn begin(&mut self) {
         use crate::ble::passkey::{PasskeyCleanupGuard, begin_passkey_entry_session};
 
@@ -140,14 +129,11 @@ impl PasskeyInputState {
     }
 }
 
+#[cfg(feature = "passkey_entry")]
 async fn next_gatt_event<'a, 'b>(
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     passkey_state: &mut PasskeyInputState,
 ) -> Option<GattConnectionEvent<'a, 'b, DefaultPacketPool>> {
-    #[cfg(not(feature = "passkey_entry"))]
-    let _ = passkey_state;
-
-    #[cfg(feature = "passkey_entry")]
     if crate::PASSKEY_ENTRY_ENABLED
         && let Some(deadline) = passkey_state.deadline
     {
@@ -417,7 +403,8 @@ pub(crate) async fn run_ble<
                                 #[cfg(feature = "split")]
                                 CENTRAL_SLEEP.signal(true);
 
-                                wait_for_keyboard_activity().await;
+                                // Wait for the keyboard report for wake the keyboard
+                                let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
 
                                 // Quit from sleep mode
                                 #[cfg(feature = "split")]
@@ -472,7 +459,8 @@ pub(crate) async fn run_ble<
                                 #[cfg(feature = "split")]
                                 CENTRAL_SLEEP.signal(true);
 
-                                wait_for_keyboard_activity().await;
+                                // Wait for the keyboard report for wake the keyboard
+                                let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
 
                                 // Quit from sleep mode
                                 #[cfg(feature = "split")]
@@ -516,7 +504,8 @@ pub(crate) async fn run_ble<
                     #[cfg(feature = "split")]
                     CENTRAL_SLEEP.signal(true);
 
-                    wait_for_keyboard_activity().await;
+                    // Wait for the keyboard report for wake the keyboard
+                    let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
 
                     // Quit from sleep mode
                     #[cfg(feature = "split")]
@@ -588,20 +577,26 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
 
     let mut connected = false;
     let mut published_connected_state = false;
+    #[cfg(feature = "passkey_entry")]
     let mut passkey_state = PasskeyInputState::new();
 
     loop {
+        #[cfg(feature = "passkey_entry")]
         let Some(event) = next_gatt_event(conn, &mut passkey_state).await else {
             continue;
         };
+        #[cfg(not(feature = "passkey_entry"))]
+        let event = conn.next().await;
 
         match event {
             GattConnectionEvent::Disconnected { reason } => {
+                #[cfg(feature = "passkey_entry")]
                 passkey_state.clear();
                 info!("[gatt] disconnected: {:?}", reason);
                 break;
             }
             GattConnectionEvent::PairingComplete { security_level, bond } => {
+                #[cfg(feature = "passkey_entry")]
                 passkey_state.clear();
                 info!("[gatt] pairing complete: {:?}", security_level);
                 let profile = get_current_profile();
@@ -620,6 +615,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 }
             }
             GattConnectionEvent::PairingFailed(err) => {
+                #[cfg(feature = "passkey_entry")]
                 passkey_state.clear();
                 error!("[gatt] pairing error: {:?}", err);
             }

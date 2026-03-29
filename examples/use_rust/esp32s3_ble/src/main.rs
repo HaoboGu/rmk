@@ -53,6 +53,8 @@ async fn main(_s: Spawner) {
     let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
     let mut host_resources = HostResources::new();
     let stack = build_ble_stack(controller, central_addr, &mut rng, &mut host_resources).await;
+    #[cfg(feature = "passkey_entry")]
+    stack.set_io_capabilities(rmk::IoCapabilities::KeyboardOnly);
 
     // Initialize USB
     static mut EP_MEMORY: [u8; 1024] = [0; 1024];

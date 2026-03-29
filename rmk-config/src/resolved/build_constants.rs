@@ -80,7 +80,11 @@ impl crate::KeyboardTomlConfig {
         );
 
         // Only validate passkey settings when the build will emit passkey constants.
-        let passkey = resolve_passkey(self.ble.as_ref(), std::env::var("CARGO_FEATURE_PASSKEY_ENTRY").is_ok())?;
+        let passkey = if std::env::var("CARGO_FEATURE_PASSKEY_ENTRY").is_ok() {
+            self.ble.as_ref().map(resolve_passkey_enabled).transpose()?
+        } else {
+            None
+        };
 
         Ok(BuildConstants {
             combo_max_num: rmk.combo_max_num,
@@ -116,37 +120,19 @@ fn resolve_passkey_enabled(ble: &crate::BleConfig) -> Result<Passkey, String> {
     Ok(Passkey { enabled, timeout_secs })
 }
 
-fn resolve_passkey(ble: Option<&crate::BleConfig>, enabled: bool) -> Result<Option<Passkey>, String> {
-    if enabled {
-        ble.map(resolve_passkey_enabled).transpose()
-    } else {
-        Ok(None)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::resolve_passkey;
+    use super::resolve_passkey_enabled;
     use crate::{BleConfig, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS, MIN_PASSKEY_ENTRY_TIMEOUT_SECS};
 
     #[test]
-    fn skips_passkey_validation_when_feature_is_disabled() {
+    fn validates_passkey_timeout() {
         let ble = BleConfig {
             passkey_entry_timeout: Some(MIN_PASSKEY_ENTRY_TIMEOUT_SECS - 1),
             ..Default::default()
         };
 
-        assert!(resolve_passkey(Some(&ble), false).unwrap().is_none());
-    }
-
-    #[test]
-    fn validates_passkey_timeout_when_feature_is_enabled() {
-        let ble = BleConfig {
-            passkey_entry_timeout: Some(MIN_PASSKEY_ENTRY_TIMEOUT_SECS - 1),
-            ..Default::default()
-        };
-
-        let err = match resolve_passkey(Some(&ble), true) {
+        let err = match resolve_passkey_enabled(&ble) {
             Ok(_) => panic!("expected passkey timeout validation failure"),
             Err(err) => err,
         };
@@ -161,9 +147,9 @@ mod tests {
     }
 
     #[test]
-    fn uses_default_timeout_when_feature_is_enabled() {
+    fn uses_default_timeout() {
         let ble = BleConfig::default();
-        let passkey = resolve_passkey(Some(&ble), true).unwrap().unwrap();
+        let passkey = resolve_passkey_enabled(&ble).unwrap();
 
         assert!(!passkey.enabled);
         assert_eq!(passkey.timeout_secs, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS);
