@@ -173,7 +173,10 @@ rp2040 = [
 adafruit_bl = ["_nrf_ble"]
 
 ## Internal feature that indicates no USB is used, this feature will be auto-activated for some chips
-_no_usb = []
+_no_usb = ["_no_usb_in_ble"]
+
+## Disables usb while ble is running. This allows use_rust to select usb or ble only one at the same time
+_no_usb_in_ble = []
 
 #! ### BLE feature flags
 #!

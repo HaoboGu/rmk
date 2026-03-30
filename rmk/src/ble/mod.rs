@@ -4,7 +4,7 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join;
-#[cfg(any(not(feature = "_no_usb"), feature = "passkey_entry"))]
+#[cfg(any(not(feature = "_no_usb_in_ble"), feature = "passkey_entry"))]
 use embassy_futures::select::Either;
 use embassy_futures::select::{Either3, select, select3};
 use embassy_sync::blocking_mutex::Mutex;
@@ -17,9 +17,9 @@ use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
 #[cfg(feature = "host")]
 use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap};
-#[cfg(all(feature = "host", not(feature = "_no_usb")))]
+#[cfg(all(feature = "host", not(feature = "_no_usb_in_ble")))]
 use {crate::descriptor::ViaReport, crate::host::UsbHostReaderWriter};
-#[cfg(not(feature = "_no_usb"))]
+#[cfg(not(feature = "_no_usb_in_ble"))]
 use {
     crate::descriptor::{CompositeReport, KeyboardReport},
     crate::light::UsbLedReader,
@@ -128,14 +128,14 @@ pub(crate) async fn run_ble<
     'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
+    #[cfg(not(feature = "_no_usb_in_ble"))] D: Driver<'static>,
     #[cfg(feature = "storage")] const ROW: usize,
     #[cfg(feature = "storage")] const COL: usize,
     #[cfg(feature = "storage")] const NUM_LAYER: usize,
     #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
     #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
-    #[cfg(not(feature = "_no_usb"))] usb_driver: D,
+    #[cfg(not(feature = "_no_usb_in_ble"))] usb_driver: D,
     stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     #[cfg_attr(not(feature = "_nrf_ble"), allow(unused_mut))] mut rmk_config: RmkConfig<'static>,
@@ -146,7 +146,7 @@ pub(crate) async fn run_ble<
     }
 
     // Initialize usb device and usb hid reader/writer
-    #[cfg(not(feature = "_no_usb"))]
+    #[cfg(not(feature = "_no_usb_in_ble"))]
     let (mut _usb_builder, mut keyboard_reader, mut keyboard_writer, mut other_writer) = {
         let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.device_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
@@ -155,14 +155,14 @@ pub(crate) async fn run_ble<
         (usb_builder, keyboard_reader, keyboard_writer, other_writer)
     };
 
-    #[cfg(all(not(feature = "_no_usb"), feature = "host"))]
+    #[cfg(all(not(feature = "_no_usb_in_ble"), feature = "host"))]
     let mut host_reader_writer = add_usb_reader_writer!(&mut _usb_builder, ViaReport, 32, 32);
 
     // Optional usb logger initialization
-    #[cfg(all(feature = "usb_log", not(feature = "_no_usb")))]
+    #[cfg(all(feature = "usb_log", not(feature = "_no_usb_in_ble")))]
     let usb_logger = add_usb_logger!(&mut _usb_builder);
 
-    #[cfg(not(feature = "_no_usb"))]
+    #[cfg(not(feature = "_no_usb_in_ble"))]
     let mut usb_device = _usb_builder.build();
 
     // Load current connection type
@@ -174,9 +174,9 @@ pub(crate) async fn run_ble<
             CONNECTION_TYPE.store(conn_type, Ordering::SeqCst);
         } else {
             // If no saved connection type, return default value
-            #[cfg(feature = "_no_usb")]
+            #[cfg(feature = "_no_usb_in_ble")]
             CONNECTION_TYPE.store(ConnectionType::Ble.into(), Ordering::SeqCst);
-            #[cfg(not(feature = "_no_usb"))]
+            #[cfg(not(feature = "_no_usb_in_ble"))]
             CONNECTION_TYPE.store(ConnectionType::Usb.into(), Ordering::SeqCst);
         }
 
@@ -232,7 +232,7 @@ pub(crate) async fn run_ble<
         )
         .unwrap();
 
-    #[cfg(not(feature = "_no_usb"))]
+    #[cfg(not(feature = "_no_usb_in_ble"))]
     let usb_task = async {
         loop {
             usb_device.run_until_suspend().await;
@@ -248,9 +248,9 @@ pub(crate) async fn run_ble<
         }
     };
 
-    #[cfg(all(not(feature = "usb_log"), not(feature = "_no_usb")))]
+    #[cfg(all(not(feature = "usb_log"), not(feature = "_no_usb_in_ble")))]
     let background_task = join(ble_task(runner), usb_task);
-    #[cfg(all(feature = "usb_log", not(feature = "_no_usb")))]
+    #[cfg(all(feature = "usb_log", not(feature = "_no_usb_in_ble")))]
     let background_task = join(
         ble_task(runner),
         select(
@@ -258,7 +258,7 @@ pub(crate) async fn run_ble<
             embassy_usb_logger::with_class!(1024, log::LevelFilter::Debug, usb_logger),
         ),
     );
-    #[cfg(feature = "_no_usb")]
+    #[cfg(feature = "_no_usb_in_ble")]
     let background_task = ble_task(runner);
 
     // Main loop
@@ -269,7 +269,7 @@ pub(crate) async fn run_ble<
             set_ble_state(BleState::Advertising);
             let adv_fut = advertise(rmk_config.device_config.product_name, &mut peripheral, &server);
             // USB + BLE dual mode
-            #[cfg(not(feature = "_no_usb"))]
+            #[cfg(not(feature = "_no_usb_in_ble"))]
             {
                 match get_connection_type() {
                     ConnectionType::Usb => {
@@ -406,7 +406,7 @@ pub(crate) async fn run_ble<
                 }
             }
 
-            #[cfg(feature = "_no_usb")]
+            #[cfg(feature = "_no_usb_in_ble")]
             match adv_fut.await {
                 Ok(conn) => {
                     // BLE connected

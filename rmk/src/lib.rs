@@ -33,7 +33,6 @@ use bt_hci::{
 };
 use builtin_processor::wpm::WpmProcessor;
 use config::RmkConfig;
-#[cfg(not(feature = "_ble"))]
 use descriptor::{CompositeReport, KeyboardReport};
 pub use embassy_futures;
 #[cfg(not(any(cortex_m)))]
@@ -60,7 +59,7 @@ use state::CONNECTION_STATE;
 pub use trouble_host::prelude::*;
 #[cfg(feature = "host")]
 use {crate::descriptor::ViaReport, crate::hid::HidWriterTrait, crate::host::run_host_communicate_task};
-#[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
+#[cfg(not(feature = "_no_usb"))]
 use {
     crate::light::UsbLedReader,
     crate::usb::{UsbKeyboardWriter, add_usb_reader_writer, add_usb_writer, new_usb_builder},
@@ -167,14 +166,14 @@ pub async fn run_rmk<
     #[cfg(feature = "_ble")] 'b,
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
+    #[cfg(not(feature = "_no_usb_in_ble"))] D: Driver<'static>,
     #[cfg(feature = "storage")] const ROW: usize,
     #[cfg(feature = "storage")] const COL: usize,
     #[cfg(feature = "storage")] const NUM_LAYER: usize,
     #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
     #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
-    #[cfg(not(feature = "_no_usb"))] usb_driver: D,
+    #[cfg(not(feature = "_no_usb_in_ble"))] usb_driver: D,
     #[cfg(feature = "_ble")] stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     rmk_config: RmkConfig<'static>,
@@ -184,7 +183,7 @@ pub async fn run_rmk<
     crate::ble::run_ble(
         #[cfg(feature = "host")]
         keymap,
-        #[cfg(not(feature = "_no_usb"))]
+        #[cfg(not(feature = "_no_usb_in_ble"))]
         usb_driver,
         #[cfg(feature = "_ble")]
         stack,
@@ -196,6 +195,36 @@ pub async fn run_rmk<
 
     // USB keyboard
     #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
+    {
+        run_rmk_usb_only(
+            #[cfg(feature = "host")]
+            keymap,
+            usb_driver,
+            #[cfg(feature = "storage")]
+            storage,
+            rmk_config,
+        ).await;
+    }
+
+    unreachable!("Should never reach here, wrong feature gate combination?");
+}
+
+#[allow(unreachable_code)]
+#[cfg(not(feature = "_no_usb"))]
+pub async fn run_rmk_usb_only<
+    #[cfg(feature = "host")] 'a,
+    #[cfg(feature = "storage")] F: AsyncNorFlash,
+    D: Driver<'static>,
+    #[cfg(feature = "storage")] const ROW: usize,
+    #[cfg(feature = "storage")] const COL: usize,
+    #[cfg(feature = "storage")] const NUM_LAYER: usize,
+    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
+>(
+    #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
+    usb_driver: D,
+    #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+    rmk_config: RmkConfig<'static>,
+) -> ! {
     {
         let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.device_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
