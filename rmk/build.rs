@@ -39,7 +39,10 @@ fn compute_build_hash() -> u32 {
         .unwrap_or_else(|| "unknown".to_string());
 
     // Get and format current local time
-    let now = chrono::Local::now();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
 
     // Combine data and compute CRC32
     let combined = format!("{commit_id}_{now}");
