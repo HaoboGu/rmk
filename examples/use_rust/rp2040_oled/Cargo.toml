@@ -10,8 +10,9 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = ["host", "log", "rp2040", "storage", "usb_log", "vial", "vial_lock", "ssd1306"], version = "0.8.2", default-features = false }
-ssd1306 = { version = "0.10", features = ["async"] }
+rmk = { path = "../../../rmk", features = ["host", "log", "rp2040", "storage", "usb_log", "vial", "vial_lock", "sh1106"], version = "0.8.2", default-features = false }
+oled_async = { git = "https://github.com/cschuhen/oled_drivers", rev = "0aa4b3d", features = ["i2c"] }
+display-interface-i2c = "0.5"
 embedded-graphics = "0.8"
 embassy-time = { version = "0.5", features = ["defmt"] }
 embassy-rp = { version = "0.9", features = [

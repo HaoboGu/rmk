@@ -17,6 +17,9 @@ use embassy_rp::i2c::{self, InterruptHandler as I2cInterruptHandler};
 use embassy_rp::peripherals::{I2C1, USB};
 use embassy_rp::usb::{Driver, InterruptHandler};
 use keymap::{COL, ROW};
+use oled_async::displays::sh1106::Sh1106_128_64;
+use oled_async::mode::graphics::GraphicsMode;
+use oled_async::{Builder, displayrotation::DisplayRotation};
 use panic_probe as _;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
@@ -26,8 +29,6 @@ use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::{KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
-use ssd1306::prelude::*;
-use ssd1306::{I2CDisplayInterface, Ssd1306Async};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 bind_interrupts!(struct Irqs {
@@ -92,8 +93,11 @@ async fn main(_spawner: Spawner) {
 
     // Initialize I2C1 on PIN_2 (SDA) and PIN_3 (SCL)
     let i2c = i2c::I2c::new_async(p.I2C1, p.PIN_3, p.PIN_2, Irqs, i2c::Config::default());
-    let interface = I2CDisplayInterface::new(i2c);
-    let display = Ssd1306Async::new(interface, DisplaySize128x32, DisplayRotation::Rotate270).into_buffered_graphics_mode();
+    let interface = display_interface_i2c::I2CInterface::new(i2c, 0x3C, 0x40);
+    let display: GraphicsMode<_, _> = Builder::new(Sh1106_128_64 {})
+        .with_rotation(DisplayRotation::Rotate0)
+        .connect(interface)
+        .into();
     let mut oled = DisplayProcessor::new(display);
 
     // Start

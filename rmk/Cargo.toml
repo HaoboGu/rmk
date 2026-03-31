@@ -49,6 +49,7 @@ paste = "1"
 
 # Display dependencies
 ssd1306 = { version = "0.10", optional = true, features = ["async"] }
+oled_async = { git = "https://github.com/cschuhen/oled_drivers", rev = "0aa4b3d", optional = true, features = ["i2c"] }
 embedded-graphics = { version = "0.8", optional = true }
 display-interface = { version = "0.5", optional = true }
 
@@ -159,6 +160,12 @@ std = [
 display = ["dep:embedded-graphics"]
 ## Enable SSD1306 OLED driver
 ssd1306 = ["display", "dep:ssd1306", "dep:display-interface"]
+## Enable OLED drivers via oled_async (SH1106, SH1107, SH1108, SSD1309)
+oled_async = ["display", "dep:oled_async", "dep:display-interface"]
+sh1106 = ["oled_async"]
+sh1107 = ["oled_async"]
+sh1108 = ["oled_async"]
+ssd1309 = ["oled_async"]
 
 ## Enable async matrix scanning
 async_matrix = []
