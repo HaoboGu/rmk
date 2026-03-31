@@ -51,6 +51,7 @@ impl KeyAction {
 
 /// combo, fork, etc. compares key actions
 /// WARNING: this is not a perfect comparison, we ignores the profile config of TapHold!
+// TODO: Two TapHold values that compare equal may serialize differently (different MorseProfile).
 impl PartialEq for KeyAction {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {

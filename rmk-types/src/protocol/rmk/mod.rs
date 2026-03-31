@@ -27,6 +27,24 @@ use crate::connection::ConnectionType;
 use crate::led_indicator::LedIndicator;
 
 // ---------------------------------------------------------------------------
+// MaxSize helper (postcard 1.x only implements MaxSize for heapless 0.7,
+// but we use heapless 0.9, so Vec-containing types need manual impls)
+// ---------------------------------------------------------------------------
+
+/// Compute the maximum varint-encoded length for a given max value.
+/// Mirrors `postcard`'s internal `varint_size`.
+const fn varint_size(max_n: usize) -> usize {
+    const BITS_PER_BYTE: usize = 8;
+    const BITS_PER_VARINT_BYTE: usize = 7;
+    if max_n == 0 {
+        return 1;
+    }
+    let bits = core::mem::size_of::<usize>() * BITS_PER_BYTE - max_n.leading_zeros() as usize;
+    let roundup_bits = bits + (BITS_PER_VARINT_BYTE - 1);
+    roundup_bits / BITS_PER_VARINT_BYTE
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
@@ -89,10 +107,10 @@ endpoints! {
 endpoints! {
     list = MACRO_ENDPOINT_LIST;
     omit_std = true;
-    | EndpointTy   | RequestTy       | ResponseTy | Path          |
-    | ----------   | ---------       | ---------- | ----          |
-    | GetMacro     | u8              | MacroData  | "macro/get"   |
-    | SetMacro     | SetMacroRequest | RmkResult  | "macro/set"   |
+    | EndpointTy   | RequestTy        | ResponseTy | Path          |
+    | ----------   | ---------        | ---------- | ----          |
+    | GetMacro     | GetMacroRequest  | MacroData  | "macro/get"   |
+    | SetMacro     | SetMacroRequest  | RmkResult  | "macro/set"   |
 }
 
 endpoints! {
@@ -146,12 +164,12 @@ endpoints! {
 endpoints! {
     list = STATUS_ENDPOINT_LIST;
     omit_std = true;
-    | EndpointTy       | RequestTy | ResponseTy    | Path             |
-    | ----------       | --------- | ----------    | ----             |
-    | GetBatteryStatus | ()        | BatteryStatus | "status/battery" |
-    | GetCurrentLayer  | ()        | u8            | "status/layer"   |
-    | GetMatrixState   | ()        | MatrixState   | "status/matrix"  |
-    | GetSplitStatus   | ()        | SplitStatus   | "status/split"   |
+    | EndpointTy          | RequestTy | ResponseTy       | Path                |
+    | ----------          | --------- | ----------       | ----                |
+    | GetBatteryStatus    | ()        | BatteryStatus    | "status/battery"    |
+    | GetCurrentLayer     | ()        | u8               | "status/layer"      |
+    | GetMatrixState      | ()        | MatrixState      | "status/matrix"     |
+    | GetPeripheralStatus | u8        | PeripheralStatus | "status/peripheral" |
 }
 
 /// Full endpoint map for the RMK protocol.
@@ -318,7 +336,7 @@ mod tests {
             GetBatteryStatus::REQ_KEY,
             GetCurrentLayer::REQ_KEY,
             GetMatrixState::REQ_KEY,
-            GetSplitStatus::REQ_KEY,
+            GetPeripheralStatus::REQ_KEY,
         ]
     }
 
@@ -489,25 +507,18 @@ mod tests {
     }
 
     #[test]
-    fn round_trip_split_status() {
-        // Empty peripherals (always valid)
-        round_trip(&SplitStatus {
-            peripherals: Vec::new(),
+    fn round_trip_peripheral_status() {
+        round_trip(&PeripheralStatus {
+            connected: true,
+            battery: BatteryStatus::Available {
+                charge_state: ChargeState::Discharging,
+                level: Some(85),
+            },
         });
-        // With peripherals (only when SPLIT_PERIPHERALS_NUM > 0)
-        if crate::constants::SPLIT_PERIPHERALS_NUM > 0 {
-            let mut peripherals = Vec::new();
-            peripherals
-                .push(PeripheralStatus {
-                    connected: true,
-                    battery: BatteryStatus::Available {
-                        charge_state: ChargeState::Discharging,
-                        level: Some(85),
-                    },
-                })
-                .unwrap();
-            round_trip(&SplitStatus { peripherals });
-        }
+        round_trip(&PeripheralStatus {
+            connected: false,
+            battery: BatteryStatus::Unavailable,
+        });
     }
 
     #[test]
@@ -520,6 +531,29 @@ mod tests {
     #[test]
     fn round_trip_macro_data_empty() {
         round_trip(&MacroData { data: Vec::new() });
+    }
+
+    #[test]
+    fn round_trip_get_macro_request() {
+        round_trip(&GetMacroRequest {
+            index: 0,
+            offset: 0,
+        });
+        round_trip(&GetMacroRequest {
+            index: 3,
+            offset: 256,
+        });
+    }
+
+    #[test]
+    fn round_trip_set_macro_request() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&[0x01, 0x02]).unwrap();
+        round_trip(&SetMacroRequest {
+            index: 1,
+            offset: 0,
+            data: MacroData { data },
+        });
     }
 
     #[test]

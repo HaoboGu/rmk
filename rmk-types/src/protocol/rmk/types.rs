@@ -1,13 +1,14 @@
 //! Core protocol types.
 
 use heapless::Vec;
+use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use super::MAX_UNLOCK_KEYS;
 
 /// Protocol version advertised during the connection handshake.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
 pub struct ProtocolVersion {
     pub major: u8,
     pub minor: u8,
@@ -19,7 +20,7 @@ impl ProtocolVersion {
 }
 
 /// Device capabilities discovered during the connection handshake.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
 pub struct DeviceCapabilities {
     pub num_layers: u8,
     pub num_rows: u8,
@@ -40,7 +41,7 @@ pub struct DeviceCapabilities {
 }
 
 /// Protocol-level error type returned by write operations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
 pub enum RmkError {
     /// The request parameters are invalid or out of range.
     InvalidParameter,
@@ -54,7 +55,7 @@ pub enum RmkError {
 pub type RmkResult = Result<(), RmkError>;
 
 /// Current lock/unlock state of the device.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
 pub struct LockStatus {
     pub locked: bool,
     pub awaiting_keys: bool,
@@ -67,8 +68,13 @@ pub struct UnlockChallenge {
     pub key_positions: Vec<(u8, u8), MAX_UNLOCK_KEYS>,
 }
 
+impl MaxSize for UnlockChallenge {
+    const POSTCARD_MAX_SIZE: usize =
+        <(u8, u8)>::POSTCARD_MAX_SIZE * MAX_UNLOCK_KEYS + super::varint_size(MAX_UNLOCK_KEYS);
+}
+
 /// Storage reset mode for the `StorageReset` endpoint.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
 pub enum StorageResetMode {
     /// Reset all stored data.
     Full,
