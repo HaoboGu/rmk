@@ -173,8 +173,11 @@ impl BatteryProcessor {
                     level,
                 };
             } else {
-                // When unplugged, mark unavailable until next ADC reading
-                self.battery_status = BatteryStatus::Unavailable;
+                // When unplugged, mark the level unknown and mark status as discharging
+                self.battery_status = BatteryStatus::Available {
+                    charge_state: ChargeState::Discharging,
+                    level: None,
+                };
             }
 
             publish_event(BatteryStatusEvent::from(self.battery_status));
