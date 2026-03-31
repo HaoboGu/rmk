@@ -58,6 +58,7 @@ mod renderer;
 
 pub use renderer::{DefaultOledRenderer, DisplayDriver, DisplayRenderer, RenderContext, write_battery};
 
+use embassy_time::{Duration, Instant};
 use rmk_macro::processor;
 
 #[cfg(feature = "_ble")]
@@ -96,6 +97,8 @@ where
     renderer: R,
     ctx: RenderContext,
     initialized: bool,
+    last_render: Instant,
+    min_render_interval: Duration,
 }
 
 impl<D> DisplayProcessor<D, DefaultOledRenderer>
@@ -116,20 +119,36 @@ where
     D: DisplayDriver,
     R: DisplayRenderer<D::Color>,
 {
-    /// Create a new display processor with a custom [`DisplayRenderer`].
-    ///
-    /// The display is lazily initialised on the first event.
+    /// Create a new display processor with a custom [`DisplayRenderer`]
+    /// and the default render interval (30 ms).
     pub fn with_renderer(display: D, renderer: R) -> Self {
+        Self::with_renderer_and_interval(display, renderer, Duration::from_millis(30))
+    }
+
+    /// Create a new display processor with a custom [`DisplayRenderer`]
+    /// and a custom minimum render interval.
+    pub fn with_renderer_and_interval(display: D, renderer: R, min_render_interval: Duration) -> Self {
         Self {
             display,
             renderer,
             ctx: RenderContext::default(),
             initialized: false,
+            last_render: Instant::from_ticks(0),
+            min_render_interval,
         }
     }
 
-    /// Redraw the full display by delegating to the renderer.
+    /// Redraw the display if enough time has passed since the last render.
+    ///
+    /// When events arrive faster than the display can refresh (e.g. rapid
+    /// key presses), the render is skipped — the updated state will be
+    /// drawn on the next event that passes the time check.
     async fn render(&mut self) {
+        let now = Instant::now();
+        if now.duration_since(self.last_render) < self.min_render_interval {
+            return;
+        }
+
         if !self.initialized {
             self.display.init().await;
 
@@ -141,8 +160,9 @@ where
         }
 
         self.renderer.render(&self.ctx, &mut self.display);
-
         self.display.flush().await;
+
+        self.last_render = Instant::now();
     }
 
     async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
