@@ -28,7 +28,7 @@ pub struct BulkRequest {
     pub layer: u8,
     pub start_row: u8,
     pub start_col: u8,
-    pub count: u16,
+    pub count: u8,
 }
 
 /// Response type for bulk keymap operations.

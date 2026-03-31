@@ -54,25 +54,6 @@ pub struct BehaviorConfig {
     pub tap_tolerance: u8,
 }
 
-/// Summary information about macro capabilities.
-///
-/// These fields are also available via [`DeviceCapabilities`]; this type
-/// provides a lightweight query for tools that only need macro info.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
-pub struct MacroInfo {
-    pub max_macros: u8,
-    pub macro_space_size: u16,
-}
-
-impl From<super::DeviceCapabilities> for MacroInfo {
-    fn from(caps: super::DeviceCapabilities) -> Self {
-        Self {
-            max_macros: caps.max_macros,
-            macro_space_size: caps.macro_space_size,
-        }
-    }
-}
-
 /// Raw macro data for a single macro.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct MacroData {

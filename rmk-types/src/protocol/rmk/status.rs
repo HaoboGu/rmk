@@ -4,16 +4,7 @@ use heapless::Vec;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
-use crate::connection::ConnectionType;
-
-/// Current connection information.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct ConnectionInfo {
-    pub connection_type: ConnectionType,
-    pub ble_profile: u8,
-    pub ble_connected: bool,
-}
+use crate::battery::BatteryStatus;
 
 /// Maximum bitmap size: supports up to 240 keys (e.g., 10 rows × 24 cols).
 /// Each row uses ceil(num_cols / 8) bytes. Host decodes using num_rows/num_cols
@@ -29,10 +20,17 @@ pub struct MatrixState {
     pub pressed_bitmap: Vec<u8, MAX_MATRIX_BITMAP_SIZE>,
 }
 
-/// Split keyboard peripheral status.
+/// Status of a single split peripheral.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct PeripheralStatus {
+    pub connected: bool,
+    pub battery: BatteryStatus,
+}
+
+/// Split keyboard status with per-peripheral detail.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SplitStatus {
-    pub num_peripherals: u8,
-    pub connected_peripherals: u8,
+    pub peripherals: Vec<PeripheralStatus, { crate::constants::SPLIT_PERIPHERALS_NUM }>,
 }

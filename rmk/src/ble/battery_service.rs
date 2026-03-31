@@ -52,11 +52,11 @@ impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
         // First report after connected
         let first_report = async {
             loop {
-                let event = self.sub.next_message_pure().await;
-                if let BatteryStatus::Available { level: Some(level), .. } = event.0 {
+                if let BatteryStatus::Available { level: Some(level), .. } = self.sub.next_message_pure().await.0 {
                     if let Err(e) = self.battery_level.notify(self.conn, &level).await {
                         error!("Failed to notify battery level: {:?}", e);
                     } else {
+                        // The first report is sent, return to continue
                         return;
                     }
                 }
@@ -71,7 +71,7 @@ impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
         loop {
             let battery_status = self.wait_until_battery_status_available().await;
 
-            // Try to receive the latest message
+            // Check if there's a newer event, if not, use original battery status event
             let state = self.sub.try_next_message_pure().unwrap_or(battery_status);
             if let BatteryStatus::Available { level: Some(level), .. } = state.0 {
                 if let Err(e) = self.battery_level.notify(self.conn, &level).await {

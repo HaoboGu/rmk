@@ -30,27 +30,23 @@ pub struct DeviceCapabilities {
     pub macro_space_size: u16,
     pub max_morse: u8,
     pub max_forks: u8,
-    pub has_storage: bool,
-    pub has_split: bool,
+    pub storage_enabled: bool,
+    pub is_split: bool,
     pub num_split_peripherals: u8,
-    pub has_ble: bool,
+    pub ble_enabled: bool,
     pub num_ble_profiles: u8,
-    pub has_lighting: bool,
+    pub lighting_enabled: bool,
     pub max_payload_size: u16,
 }
 
 /// Protocol-level error type returned by write operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub enum RmkError {
-    /// Valid endpoint but bad parameter values.
+    /// The request parameters are invalid or out of range.
     InvalidParameter,
-    /// Operation not valid in current state (e.g. device is locked).
+    /// Operation not valid in current device state (e.g. device is locked).
     BadState,
-    /// Temporary contention, retry recommended.
-    Busy,
-    /// Flash read/write failure.
-    StorageError,
-    /// Unexpected firmware error.
+    /// An internal firmware error occurred (storage, contention, etc).
     InternalError,
 }
 

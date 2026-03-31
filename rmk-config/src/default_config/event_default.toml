@@ -22,7 +22,7 @@ subs = 2
 [event.keyboard]
 channel_size = 16
 pubs = 2
-subs = 2
+subs = 3
 
 # Keyboard state events
 [event.layer_change]

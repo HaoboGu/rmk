@@ -73,10 +73,8 @@ endpoints! {
     | SetKeyAction    | SetKeyRequest        | RmkResult           | "keymap/set"               |
     | GetKeymapBulk   | BulkRequest          | BulkKeyActions      | "keymap/bulk_get"          |
     | SetKeymapBulk   | SetKeymapBulkRequest | RmkResult           | "keymap/bulk_set"          |
-    | GetLayerCount   | ()                   | u8                  | "keymap/layer_count"       |
     | GetDefaultLayer | ()                   | u8                  | "keymap/default_layer"     |
     | SetDefaultLayer | u8                   | RmkResult           | "keymap/set_default_layer" |
-    | ResetKeymap     | ()                   | RmkResult           | "keymap/reset"             |
 }
 
 endpoints! {
@@ -93,10 +91,8 @@ endpoints! {
     omit_std = true;
     | EndpointTy   | RequestTy       | ResponseTy | Path          |
     | ----------   | ---------       | ---------- | ----          |
-    | GetMacroInfo | ()              | MacroInfo  | "macro/info"  |
     | GetMacro     | u8              | MacroData  | "macro/get"   |
     | SetMacro     | SetMacroRequest | RmkResult  | "macro/set"   |
-    | ResetMacros  | ()              | RmkResult  | "macro/reset" |
 }
 
 endpoints! {
@@ -106,7 +102,6 @@ endpoints! {
     | ----------  | ---------       | ----------  | ----         |
     | GetCombo    | u8              | ComboConfig | "combo/get"  |
     | SetCombo    | SetComboRequest | RmkResult   | "combo/set"  |
-    | ResetCombos | ()              | RmkResult   | "combo/reset"|
 }
 
 endpoints! {
@@ -116,7 +111,6 @@ endpoints! {
     | ---------- | ---------       | ----------  | ----         |
     | GetMorse   | u8              | MorseConfig | "morse/get"  |
     | SetMorse   | SetMorseRequest | RmkResult   | "morse/set"  |
-    | ResetMorse | ()              | RmkResult   | "morse/reset"|
 }
 
 endpoints! {
@@ -126,7 +120,6 @@ endpoints! {
     | ---------- | ---------      | ---------- | ----        |
     | GetFork    | u8             | ForkConfig | "fork/get"  |
     | SetFork    | SetForkRequest | RmkResult  | "fork/set"  |
-    | ResetForks | ()             | RmkResult  | "fork/reset"|
 }
 
 endpoints! {
@@ -143,7 +136,8 @@ endpoints! {
     omit_std = true;
     | EndpointTy        | RequestTy      | ResponseTy | Path              |
     | ----------        | ---------      | ---------- | ----              |
-    | GetConnectionInfo | ()             | ConnectionInfo | "conn/info"    |
+    | GetConnectionType | ()             | ConnectionType | "conn/type"    |
+    | GetBleStatus      | ()             | BleStatus      | "conn/ble"     |
     | SetConnectionType | ConnectionType | RmkResult  | "conn/set_type"   |
     | SwitchBleProfile  | u8             | RmkResult  | "conn/switch_ble" |
     | ClearBleProfile   | u8             | RmkResult  | "conn/clear_ble"  |
@@ -294,35 +288,29 @@ mod tests {
             SetKeyAction::REQ_KEY,
             GetKeymapBulk::REQ_KEY,
             SetKeymapBulk::REQ_KEY,
-            GetLayerCount::REQ_KEY,
             GetDefaultLayer::REQ_KEY,
             SetDefaultLayer::REQ_KEY,
-            ResetKeymap::REQ_KEY,
             // Encoder
             GetEncoderAction::REQ_KEY,
             SetEncoderAction::REQ_KEY,
             // Macro
-            GetMacroInfo::REQ_KEY,
             GetMacro::REQ_KEY,
             SetMacro::REQ_KEY,
-            ResetMacros::REQ_KEY,
             // Combo
             GetCombo::REQ_KEY,
             SetCombo::REQ_KEY,
-            ResetCombos::REQ_KEY,
             // Morse
             GetMorse::REQ_KEY,
             SetMorse::REQ_KEY,
-            ResetMorse::REQ_KEY,
             // Fork
             GetFork::REQ_KEY,
             SetFork::REQ_KEY,
-            ResetForks::REQ_KEY,
             // Behavior
             GetBehaviorConfig::REQ_KEY,
             SetBehaviorConfig::REQ_KEY,
             // Connection
-            GetConnectionInfo::REQ_KEY,
+            GetConnectionType::REQ_KEY,
+            GetBleStatus::REQ_KEY,
             SetConnectionType::REQ_KEY,
             SwitchBleProfile::REQ_KEY,
             ClearBleProfile::REQ_KEY,
@@ -367,12 +355,12 @@ mod tests {
             macro_space_size: 2048,
             max_morse: 8,
             max_forks: 4,
-            has_storage: true,
-            has_split: false,
+            storage_enabled: true,
+            is_split: false,
             num_split_peripherals: 0,
-            has_ble: true,
+            ble_enabled: true,
             num_ble_profiles: 4,
-            has_lighting: false,
+            lighting_enabled: false,
             max_payload_size: 256,
         };
         round_trip(&caps);
@@ -390,12 +378,12 @@ mod tests {
             macro_space_size: 0,
             max_morse: 0,
             max_forks: 0,
-            has_storage: false,
-            has_split: false,
+            storage_enabled: false,
+            is_split: false,
             num_split_peripherals: 0,
-            has_ble: false,
+            ble_enabled: false,
             num_ble_profiles: 0,
-            has_lighting: false,
+            lighting_enabled: false,
             max_payload_size: 0,
         };
         round_trip(&caps);
@@ -405,8 +393,6 @@ mod tests {
     fn round_trip_rmk_error() {
         round_trip(&RmkError::InvalidParameter);
         round_trip(&RmkError::BadState);
-        round_trip(&RmkError::Busy);
-        round_trip(&RmkError::StorageError);
         round_trip(&RmkError::InternalError);
     }
 
@@ -476,11 +462,6 @@ mod tests {
     fn round_trip_connection_types() {
         round_trip(&ConnectionType::Usb);
         round_trip(&ConnectionType::Ble);
-        round_trip(&ConnectionInfo {
-            connection_type: ConnectionType::Ble,
-            ble_profile: 2,
-            ble_connected: true,
-        });
     }
 
     #[test]
@@ -509,18 +490,28 @@ mod tests {
 
     #[test]
     fn round_trip_split_status() {
+        // Empty peripherals (always valid)
         round_trip(&SplitStatus {
-            num_peripherals: 1,
-            connected_peripherals: 1,
+            peripherals: Vec::new(),
         });
+        // With peripherals (only when SPLIT_PERIPHERALS_NUM > 0)
+        if crate::constants::SPLIT_PERIPHERALS_NUM > 0 {
+            let mut peripherals = Vec::new();
+            peripherals
+                .push(PeripheralStatus {
+                    connected: true,
+                    battery: BatteryStatus::Available {
+                        charge_state: ChargeState::Discharging,
+                        level: Some(85),
+                    },
+                })
+                .unwrap();
+            round_trip(&SplitStatus { peripherals });
+        }
     }
 
     #[test]
-    fn round_trip_macro_types() {
-        round_trip(&MacroInfo {
-            max_macros: 32,
-            macro_space_size: 2048,
-        });
+    fn round_trip_macro_data() {
         let mut data = Vec::new();
         data.extend_from_slice(&[0x01, 0x02, 0x03]).unwrap();
         round_trip(&MacroData { data });
