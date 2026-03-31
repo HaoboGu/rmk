@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = ["host", "log", "rp2040", "storage", "usb_log", "vial", "vial_lock", "display"], version = "0.8.2", default-features = false }
-ssd1306 = "0.9"
+ssd1306 = { version = "0.10", features = ["async"] }
 embedded-graphics = "0.8"
 embassy-time = { version = "0.5", features = ["defmt"] }
 embassy-rp = { version = "0.9", features = [

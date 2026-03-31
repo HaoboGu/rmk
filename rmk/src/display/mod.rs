@@ -21,7 +21,7 @@
 //! You will also need `ssd1306` and `embedded-graphics` in your own
 //! dependencies:
 //! ```toml
-//! ssd1306 = "0.9"
+//! ssd1306 = { version = "0.10", features = ["async"] }
 //! embedded-graphics = "0.8"
 //! ```
 //!
@@ -67,10 +67,10 @@ mod renderer;
 
 pub use renderer::{DefaultRenderer, DisplayRenderer, RenderContext, write_battery};
 
-use display_interface::WriteOnlyDataCommand;
+use display_interface::AsyncWriteOnlyDataCommand;
 use embedded_graphics::{pixelcolor::BinaryColor, prelude::*};
 use rmk_macro::processor;
-use ssd1306::{mode::BufferedGraphicsMode, mode::DisplayConfig, size::DisplaySize};
+use ssd1306::{mode::BufferedGraphicsModeAsync, mode::DisplayConfigAsync, size::DisplaySizeAsync};
 
 use crate::event::{BatteryStateEvent, LayerChangeEvent, LedIndicatorEvent, WpmUpdateEvent};
 
@@ -86,18 +86,18 @@ use crate::event::{BatteryStateEvent, LayerChangeEvent, LedIndicatorEvent, WpmUp
 /// # Generics
 ///
 /// - `DI` — display interface (I2C or SPI), must implement
-///   [`display_interface::WriteOnlyDataCommand`].
+///   [`display_interface::AsyncWriteOnlyDataCommand`].
 /// - `SIZE` — display size, e.g. [`ssd1306::prelude::DisplaySize128x32`].
 /// - `R` — the renderer, defaults to [`DefaultRenderer`].
 #[processor(subscribe = [LayerChangeEvent, WpmUpdateEvent, LedIndicatorEvent, BatteryStateEvent])]
 pub struct OledDisplayProcessor<DI, SIZE, R = DefaultRenderer>
 where
-    DI: WriteOnlyDataCommand,
-    SIZE: DisplaySize,
+    DI: AsyncWriteOnlyDataCommand,
+    SIZE: DisplaySizeAsync,
     R: DisplayRenderer<BinaryColor>,
-    ssd1306::Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>>: DrawTarget<Color = BinaryColor> + DisplayConfig,
+    ssd1306::Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>: DrawTarget<Color = BinaryColor> + DisplayConfigAsync,
 {
-    display: ssd1306::Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>>,
+    display: ssd1306::Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>,
     renderer: R,
     layer: u8,
     wpm: u16,
@@ -110,29 +110,29 @@ where
 
 impl<DI, SIZE> OledDisplayProcessor<DI, SIZE, DefaultRenderer>
 where
-    DI: WriteOnlyDataCommand,
-    SIZE: DisplaySize,
-    ssd1306::Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>>: DrawTarget<Color = BinaryColor> + DisplayConfig,
+    DI: AsyncWriteOnlyDataCommand,
+    SIZE: DisplaySizeAsync,
+    ssd1306::Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>: DrawTarget<Color = BinaryColor> + DisplayConfigAsync,
 {
     /// Create a new display processor with the built-in [`DefaultRenderer`].
     ///
-    /// The display is lazily initialised on the first event
-    pub fn new(display: ssd1306::Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>>) -> Self {
+    /// The display is lazily initialised on the first event.
+    pub fn new(display: ssd1306::Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>) -> Self {
         Self::with_renderer(display, DefaultRenderer)
     }
 }
 
 impl<DI, SIZE, R> OledDisplayProcessor<DI, SIZE, R>
 where
-    DI: WriteOnlyDataCommand,
-    SIZE: DisplaySize,
+    DI: AsyncWriteOnlyDataCommand,
+    SIZE: DisplaySizeAsync,
     R: DisplayRenderer<BinaryColor>,
-    ssd1306::Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>>: DrawTarget<Color = BinaryColor> + DisplayConfig,
+    ssd1306::Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>: DrawTarget<Color = BinaryColor> + DisplayConfigAsync,
 {
     /// Create a new display processor with a custom [`DisplayRenderer`].
     ///
     /// The display is lazily initialised on the first event.
-    pub fn with_renderer(display: ssd1306::Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>>, renderer: R) -> Self {
+    pub fn with_renderer(display: ssd1306::Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>, renderer: R) -> Self {
         Self {
             display,
             renderer,
@@ -146,9 +146,9 @@ where
     }
 
     /// Redraw the full display by delegating to the renderer.
-    fn render(&mut self) {
+    async fn render(&mut self) {
         if !self.initialized {
-            self.display.init().ok();
+            self.display.init().await.ok();
             self.initialized = true;
         }
 
@@ -167,27 +167,27 @@ where
 
         self.renderer.render(&ctx, &mut self.display);
 
-        self.display.flush().ok();
+        self.display.flush().await.ok();
     }
 
     async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
         self.layer = event.layer;
-        self.render();
+        self.render().await;
     }
 
     async fn on_wpm_update_event(&mut self, event: WpmUpdateEvent) {
         self.wpm = event.wpm;
-        self.render();
+        self.render().await;
     }
 
     async fn on_led_indicator_event(&mut self, event: LedIndicatorEvent) {
         self.caps_lock = event.indicator.caps_lock();
         self.num_lock = event.indicator.num_lock();
-        self.render();
+        self.render().await;
     }
 
     async fn on_battery_state_event(&mut self, event: BatteryStateEvent) {
         self.battery = event;
-        self.render();
+        self.render().await;
     }
 }

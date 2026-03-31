@@ -48,7 +48,7 @@ postcard = { version = "1", features = ["experimental-derive"] }
 paste = "1"
 
 # Display dependencies
-ssd1306 = { version = "0.9", optional = true }
+ssd1306 = { version = "0.10", optional = true, features = ["async"] }
 embedded-graphics = { version = "0.8", optional = true }
 display-interface = { version = "0.5", optional = true }
 
