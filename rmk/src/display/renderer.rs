@@ -16,6 +16,8 @@ use embedded_graphics::{
 };
 
 use crate::event::BatteryStateEvent;
+#[cfg(feature = "_ble")]
+use rmk_types::ble::BleStatus;
 
 /// Snapshot of keyboard state passed to renderers on every redraw.
 pub struct RenderContext {
@@ -29,10 +31,47 @@ pub struct RenderContext {
     pub num_lock: bool,
     /// Current battery state.
     pub battery: BatteryStateEvent,
+    /// Whether the keyboard is sleeping.
+    pub sleeping: bool,
+    /// Current BLE connection status (profile + state).
+    #[cfg(feature = "_ble")]
+    pub ble_status: BleStatus,
+    /// Whether the central is connected (only meaningful on peripherals).
+    #[cfg(feature = "split")]
+    pub central_connected: bool,
+    /// Per-peripheral connection state, indexed by peripheral id.
+    #[cfg(feature = "split")]
+    pub peripherals_connected: [bool; crate::SPLIT_PERIPHERALS_NUM],
+    /// Per-peripheral battery state, indexed by peripheral id.
+    #[cfg(all(feature = "split", feature = "_ble"))]
+    pub peripheral_batteries: [BatteryStateEvent; crate::SPLIT_PERIPHERALS_NUM],
     /// Logical display width in pixels (already accounts for rotation).
     pub width: u32,
     /// Logical display height in pixels (already accounts for rotation).
     pub height: u32,
+}
+
+impl Default for RenderContext {
+    fn default() -> Self {
+        Self {
+            layer: 0,
+            wpm: 0,
+            caps_lock: false,
+            num_lock: false,
+            battery: BatteryStateEvent::NotAvailable,
+            sleeping: false,
+            #[cfg(feature = "_ble")]
+            ble_status: BleStatus::default(),
+            #[cfg(feature = "split")]
+            central_connected: false,
+            #[cfg(feature = "split")]
+            peripherals_connected: [false; crate::SPLIT_PERIPHERALS_NUM],
+            #[cfg(all(feature = "split", feature = "_ble"))]
+            peripheral_batteries: [BatteryStateEvent::NotAvailable; crate::SPLIT_PERIPHERALS_NUM],
+            width: 0,
+            height: 0,
+        }
+    }
 }
 
 /// Async display driver trait.

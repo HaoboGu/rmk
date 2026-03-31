@@ -56,13 +56,19 @@
 mod drivers;
 mod renderer;
 
-pub use renderer::{
-    DefaultOledRenderer, DisplayDriver, DisplayRenderer, RenderContext, write_battery,
-};
+pub use renderer::{DefaultOledRenderer, DisplayDriver, DisplayRenderer, RenderContext, write_battery};
 
 use rmk_macro::processor;
 
-use crate::event::{BatteryStateEvent, LayerChangeEvent, LedIndicatorEvent, WpmUpdateEvent};
+#[cfg(feature = "_ble")]
+use crate::event::BleStatusChangeEvent;
+#[cfg(all(feature = "split", feature = "_ble"))]
+use crate::event::PeripheralBatteryEvent;
+use crate::event::{
+    BatteryStateEvent, KeyboardEvent, LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent,
+};
+#[cfg(feature = "split")]
+use crate::event::{CentralConnectedEvent, PeripheralConnectedEvent};
 
 /// Processor that renders keyboard state on a display.
 ///
@@ -77,7 +83,10 @@ use crate::event::{BatteryStateEvent, LayerChangeEvent, LedIndicatorEvent, WpmUp
 ///
 /// - `D` — display driver, must implement [`DisplayDriver`].
 /// - `R` — the renderer, defaults to [`DefaultOledRenderer`].
-#[processor(subscribe = [LayerChangeEvent, WpmUpdateEvent, LedIndicatorEvent, BatteryStateEvent])]
+#[processor(subscribe = [KeyboardEvent, LayerChangeEvent, WpmUpdateEvent, LedIndicatorEvent, BatteryStateEvent, SleepStateEvent])]
+#[cfg_attr(feature = "_ble", processor(subscribe = [BleStatusChangeEvent]))]
+#[cfg_attr(feature = "split", processor(subscribe = [PeripheralConnectedEvent, CentralConnectedEvent]))]
+#[cfg_attr(all(feature = "split", feature = "_ble"), processor(subscribe = [PeripheralBatteryEvent]))]
 pub struct DisplayProcessor<D, R = DefaultOledRenderer>
 where
     D: DisplayDriver,
@@ -85,11 +94,7 @@ where
 {
     display: D,
     renderer: R,
-    layer: u8,
-    wpm: u16,
-    caps_lock: bool,
-    num_lock: bool,
-    battery: BatteryStateEvent,
+    ctx: RenderContext,
     initialized: bool,
 }
 
@@ -118,11 +123,7 @@ where
         Self {
             display,
             renderer,
-            layer: 0,
-            wpm: 0,
-            caps_lock: false,
-            num_lock: false,
-            battery: BatteryStateEvent::NotAvailable,
+            ctx: RenderContext::default(),
             initialized: false,
         }
     }
@@ -131,43 +132,74 @@ where
     async fn render(&mut self) {
         if !self.initialized {
             self.display.init().await;
+
+            let bbox = self.display.bounding_box();
+            self.ctx.width = bbox.size.width;
+            self.ctx.height = bbox.size.height;
+
             self.initialized = true;
         }
 
-        let bbox = self.display.bounding_box();
-        let ctx = RenderContext {
-            layer: self.layer,
-            wpm: self.wpm,
-            caps_lock: self.caps_lock,
-            num_lock: self.num_lock,
-            battery: self.battery,
-            width: bbox.size.width,
-            height: bbox.size.height,
-        };
-
-        self.renderer.render(&ctx, &mut self.display);
+        self.renderer.render(&self.ctx, &mut self.display);
 
         self.display.flush().await;
     }
 
     async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
-        self.layer = event.layer;
+        self.ctx.layer = event.layer;
         self.render().await;
     }
 
     async fn on_wpm_update_event(&mut self, event: WpmUpdateEvent) {
-        self.wpm = event.wpm;
+        self.ctx.wpm = event.wpm;
         self.render().await;
     }
 
     async fn on_led_indicator_event(&mut self, event: LedIndicatorEvent) {
-        self.caps_lock = event.indicator.caps_lock();
-        self.num_lock = event.indicator.num_lock();
+        self.ctx.caps_lock = event.indicator.caps_lock();
+        self.ctx.num_lock = event.indicator.num_lock();
         self.render().await;
     }
 
     async fn on_battery_state_event(&mut self, event: BatteryStateEvent) {
-        self.battery = event;
+        self.ctx.battery = event;
+        self.render().await;
+    }
+
+    async fn on_keyboard_event(&mut self, _event: KeyboardEvent) {
+        self.render().await;
+    }
+
+    async fn on_sleep_state_event(&mut self, event: SleepStateEvent) {
+        self.ctx.sleeping = event.sleeping;
+        self.render().await;
+    }
+
+    #[cfg(feature = "_ble")]
+    async fn on_ble_status_change_event(&mut self, event: BleStatusChangeEvent) {
+        self.ctx.ble_status = event.0;
+        self.render().await;
+    }
+
+    #[cfg(feature = "split")]
+    async fn on_peripheral_connected_event(&mut self, event: PeripheralConnectedEvent) {
+        if let Some(slot) = self.ctx.peripherals_connected.get_mut(event.id) {
+            *slot = event.connected;
+        }
+        self.render().await;
+    }
+
+    #[cfg(feature = "split")]
+    async fn on_central_connected_event(&mut self, event: CentralConnectedEvent) {
+        self.ctx.central_connected = event.connected;
+        self.render().await;
+    }
+
+    #[cfg(all(feature = "split", feature = "_ble"))]
+    async fn on_peripheral_battery_event(&mut self, event: PeripheralBatteryEvent) {
+        if let Some(slot) = self.ctx.peripheral_batteries.get_mut(event.id) {
+            *slot = event.state;
+        }
         self.render().await;
     }
 }
