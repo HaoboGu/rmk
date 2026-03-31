@@ -1,48 +1,38 @@
 //! Display support.
 //!
-//! Provides [`OledDisplayProcessor`] — a processor that subscribes to keyboard
-//! state events and renders them on an SSD1306-compatible OLED display.
+//! Provides [`DisplayProcessor`] — a processor that subscribes to keyboard
+//! state events and renders them on any display implementing [`DisplayDriver`].
 //!
 //! # Customisation
 //!
-//! The processor is generic over a [`DisplayRenderer<C>`].  The built-in
-//! [`DefaultRenderer`] adapts automatically between landscape and portrait
-//! layouts (see its docs for details).  To draw your own content implement
-//! [`DisplayRenderer<C>`] for your color type and pass it via
-//! [`OledDisplayProcessor::with_renderer`].
+//! The processor is generic over a [`DisplayDriver`] and a [`DisplayRenderer`].
+//! The built-in [`DefaultOledRenderer`] adapts automatically between landscape and
+//! portrait layouts.  To draw your own content implement [`DisplayRenderer<C>`]
+//! for your color type and pass it via [`DisplayProcessor::with_renderer`].
 //!
-//! # Feature flag
+//! # Feature flags
 //!
-//! Enable the `display` feature in your `Cargo.toml`:
-//! ```toml
-//! rmk = { version = "...", features = ["display"] }
-//! ```
+//! - `display` — base traits and processor (requires `embedded-graphics`)
+//! - `ssd1306` — SSD1306 OLED driver support (implies `display`)
 //!
-//! You will also need `ssd1306` and `embedded-graphics` in your own
-//! dependencies:
-//! ```toml
-//! ssd1306 = { version = "0.10", features = ["async"] }
-//! embedded-graphics = "0.8"
-//! ```
-//!
-//! # Example — default renderer
+//! # Example — SSD1306 with default renderer
 //!
 //! ```rust,ignore
-//! use ssd1306::{I2CDisplayInterface, Ssd1306, prelude::*};
-//! use rmk::display::OledDisplayProcessor;
+//! use ssd1306::{I2CDisplayInterface, Ssd1306Async, prelude::*};
+//! use rmk::display::DisplayProcessor;
 //!
 //! let interface = I2CDisplayInterface::new(i2c);
-//! let display = Ssd1306::new(interface, DisplaySize128x32, DisplayRotation::Rotate0)
+//! let display = Ssd1306Async::new(interface, DisplaySize128x32, DisplayRotation::Rotate0)
 //!     .into_buffered_graphics_mode();
 //!
-//! let mut oled = OledDisplayProcessor::new(display);
+//! let mut oled = DisplayProcessor::new(display);
 //! run_all!(matrix, oled);
 //! ```
 //!
 //! # Example — custom renderer
 //!
 //! ```rust,ignore
-//! use rmk::display::{DisplayRenderer, OledDisplayProcessor, RenderContext};
+//! use rmk::display::{DisplayRenderer, DisplayProcessor, RenderContext};
 //! use embedded_graphics::{prelude::*, pixelcolor::BinaryColor, text::Text,
 //!     mono_font::{ascii::FONT_6X10, MonoTextStyle}};
 //!
@@ -59,80 +49,72 @@
 //!     }
 //! }
 //!
-//! let mut oled = OledDisplayProcessor::with_renderer(display, BigLayer);
+//! let mut oled = DisplayProcessor::with_renderer(display, BigLayer);
 //! run_all!(matrix, oled);
 //! ```
 
+mod drivers;
 mod renderer;
 
-pub use renderer::{DefaultRenderer, DisplayRenderer, RenderContext, write_battery};
+pub use renderer::{
+    DefaultOledRenderer, DisplayDriver, DisplayRenderer, RenderContext, write_battery,
+};
 
-use display_interface::AsyncWriteOnlyDataCommand;
-use embedded_graphics::{pixelcolor::BinaryColor, prelude::*};
 use rmk_macro::processor;
-use ssd1306::{mode::BufferedGraphicsModeAsync, mode::DisplayConfigAsync, size::DisplaySizeAsync};
 
 use crate::event::{BatteryStateEvent, LayerChangeEvent, LedIndicatorEvent, WpmUpdateEvent};
 
-/// Processor that renders keyboard state on an SSD1306 OLED display.
+/// Processor that renders keyboard state on a display.
 ///
 /// Subscribes to [`LayerChangeEvent`], [`WpmUpdateEvent`], [`LedIndicatorEvent`],
 /// and [`BatteryStateEvent`], redrawing the screen whenever any of these change.
 ///
 /// The rendering is delegated to a [`DisplayRenderer`].  Use [`new`](Self::new)
-/// for the built-in [`DefaultRenderer`], or [`with_renderer`](Self::with_renderer)
+/// for the built-in [`DefaultOledRenderer`], or [`with_renderer`](Self::with_renderer)
 /// for a custom one.
 ///
 /// # Generics
 ///
-/// - `DI` — display interface (I2C or SPI), must implement
-///   [`display_interface::AsyncWriteOnlyDataCommand`].
-/// - `SIZE` — display size, e.g. [`ssd1306::prelude::DisplaySize128x32`].
-/// - `R` — the renderer, defaults to [`DefaultRenderer`].
+/// - `D` — display driver, must implement [`DisplayDriver`].
+/// - `R` — the renderer, defaults to [`DefaultOledRenderer`].
 #[processor(subscribe = [LayerChangeEvent, WpmUpdateEvent, LedIndicatorEvent, BatteryStateEvent])]
-pub struct OledDisplayProcessor<DI, SIZE, R = DefaultRenderer>
+pub struct DisplayProcessor<D, R = DefaultOledRenderer>
 where
-    DI: AsyncWriteOnlyDataCommand,
-    SIZE: DisplaySizeAsync,
-    R: DisplayRenderer<BinaryColor>,
-    ssd1306::Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>: DrawTarget<Color = BinaryColor> + DisplayConfigAsync,
+    D: DisplayDriver,
+    R: DisplayRenderer<D::Color>,
 {
-    display: ssd1306::Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>,
+    display: D,
     renderer: R,
     layer: u8,
     wpm: u16,
     caps_lock: bool,
     num_lock: bool,
     battery: BatteryStateEvent,
-    /// Tracks whether `init()` has been called; lazy so `new()` stays sync.
     initialized: bool,
 }
 
-impl<DI, SIZE> OledDisplayProcessor<DI, SIZE, DefaultRenderer>
+impl<D> DisplayProcessor<D, DefaultOledRenderer>
 where
-    DI: AsyncWriteOnlyDataCommand,
-    SIZE: DisplaySizeAsync,
-    ssd1306::Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>: DrawTarget<Color = BinaryColor> + DisplayConfigAsync,
+    D: DisplayDriver,
+    DefaultOledRenderer: DisplayRenderer<D::Color>,
 {
-    /// Create a new display processor with the built-in [`DefaultRenderer`].
+    /// Create a new display processor with the built-in [`DefaultOledRenderer`].
     ///
     /// The display is lazily initialised on the first event.
-    pub fn new(display: ssd1306::Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>) -> Self {
-        Self::with_renderer(display, DefaultRenderer)
+    pub fn new(display: D) -> Self {
+        Self::with_renderer(display, DefaultOledRenderer)
     }
 }
 
-impl<DI, SIZE, R> OledDisplayProcessor<DI, SIZE, R>
+impl<D, R> DisplayProcessor<D, R>
 where
-    DI: AsyncWriteOnlyDataCommand,
-    SIZE: DisplaySizeAsync,
-    R: DisplayRenderer<BinaryColor>,
-    ssd1306::Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>: DrawTarget<Color = BinaryColor> + DisplayConfigAsync,
+    D: DisplayDriver,
+    R: DisplayRenderer<D::Color>,
 {
     /// Create a new display processor with a custom [`DisplayRenderer`].
     ///
     /// The display is lazily initialised on the first event.
-    pub fn with_renderer(display: ssd1306::Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>, renderer: R) -> Self {
+    pub fn with_renderer(display: D, renderer: R) -> Self {
         Self {
             display,
             renderer,
@@ -148,11 +130,9 @@ where
     /// Redraw the full display by delegating to the renderer.
     async fn render(&mut self) {
         if !self.initialized {
-            self.display.init().await.ok();
+            self.display.init().await;
             self.initialized = true;
         }
-
-        self.display.clear(BinaryColor::Off).ok();
 
         let bbox = self.display.bounding_box();
         let ctx = RenderContext {
@@ -167,7 +147,7 @@ where
 
         self.renderer.render(&ctx, &mut self.display);
 
-        self.display.flush().await.ok();
+        self.display.flush().await;
     }
 
     async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {

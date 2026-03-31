@@ -155,8 +155,10 @@ std = [
     "embassy-time/generic-queue-128",
 ]
 
-## Enable OLED display support via SSD1306
-display = ["dep:ssd1306", "dep:embedded-graphics", "dep:display-interface"]
+## Enable display support (traits + processor)
+display = ["dep:embedded-graphics"]
+## Enable SSD1306 OLED driver
+ssd1306 = ["display", "dep:ssd1306", "dep:display-interface"]
 
 ## Enable async matrix scanning
 async_matrix = []

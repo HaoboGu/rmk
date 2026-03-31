@@ -1,8 +1,9 @@
-//! Display renderer trait and built-in renderers.
+//! Display traits and built-in renderers.
 //!
-//! Custom renderers implement [`DisplayRenderer`] to control what is drawn on
-//! the OLED.  The built-in [`DefaultRenderer`] adapts automatically between
-//! landscape and portrait layouts.
+//! [`DisplayDriver`] abstracts async display I/O (init/flush) on top of
+//! [`DrawTarget`].  [`DisplayRenderer`] controls what is drawn.  The built-in
+//! [`DefaultOledRenderer`] adapts automatically between landscape and portrait
+//! layouts.
 
 use core::fmt::Write as _;
 
@@ -32,6 +33,19 @@ pub struct RenderContext {
     pub width: u32,
     /// Logical display height in pixels (already accounts for rotation).
     pub height: u32,
+}
+
+/// Async display driver trait.
+///
+/// Extends [`DrawTarget`] with the async I/O operations (`init` and `flush`)
+/// that are driver-specific and not covered by `embedded-graphics`.
+///
+/// RMK provides built-in implementations behind feature flags (e.g. `ssd1306`).
+pub trait DisplayDriver: DrawTarget {
+    /// Initialize the display hardware.
+    fn init(&mut self) -> impl core::future::Future<Output = ()>;
+    /// Flush the framebuffer to the display.
+    fn flush(&mut self) -> impl core::future::Future<Output = ()>;
 }
 
 /// Trait for custom display renderers.
@@ -66,8 +80,8 @@ pub struct RenderContext {
 pub trait DisplayRenderer<C: PixelColor> {
     /// Draw the current keyboard state on the display.
     ///
-    /// The display has already been cleared before this method is called.
-    /// After it returns the caller flushes the display buffer.
+    /// The renderer is responsible for clearing the display if needed.
+    /// After this method returns, the caller flushes the display buffer.
     fn render<D: DrawTarget<Color = C>>(&mut self, ctx: &RenderContext, display: &mut D);
 }
 
@@ -77,10 +91,12 @@ pub trait DisplayRenderer<C: PixelColor> {
 ///   indicators + battery on bottom, separated by a horizontal line.
 /// - **Portrait** (height > width): four equal zones stacked vertically —
 ///   layer, WPM, indicators, battery — separated by horizontal lines.
-pub struct DefaultRenderer;
+pub struct DefaultOledRenderer;
 
-impl DisplayRenderer<BinaryColor> for DefaultRenderer {
+impl DisplayRenderer<BinaryColor> for DefaultOledRenderer {
     fn render<D: DrawTarget<Color = BinaryColor>>(&mut self, ctx: &RenderContext, display: &mut D) {
+        display.clear(BinaryColor::Off).ok();
+
         let w = ctx.width as i32;
         let h = ctx.height as i32;
 

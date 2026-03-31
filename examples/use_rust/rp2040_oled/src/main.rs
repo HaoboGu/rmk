@@ -20,7 +20,7 @@ use keymap::{COL, ROW};
 use panic_probe as _;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::display::OledDisplayProcessor;
+use rmk::display::DisplayProcessor;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
@@ -94,7 +94,7 @@ async fn main(_spawner: Spawner) {
     let i2c = i2c::I2c::new_async(p.I2C1, p.PIN_3, p.PIN_2, Irqs, i2c::Config::default());
     let interface = I2CDisplayInterface::new(i2c);
     let display = Ssd1306Async::new(interface, DisplaySize128x32, DisplayRotation::Rotate270).into_buffered_graphics_mode();
-    let mut oled = OledDisplayProcessor::new(display);
+    let mut oled = DisplayProcessor::new(display);
 
     // Start
     join3(
