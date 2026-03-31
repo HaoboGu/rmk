@@ -136,22 +136,31 @@ impl BatteryProcessor {
         trace!("Detected battery ADC value: {:?}", val);
 
         #[cfg(feature = "_ble")]
-        {
-            // Only update level when not charging
-            let (charge_state, current_level) = match self.battery_status {
-                BatteryStatus::Available { charge_state, level } => (Some(charge_state), level),
-                BatteryStatus::Unavailable => (None, None),
-            };
-            if !matches!(charge_state, Some(ChargeState::Charging)) {
+        match self.battery_status {
+            // Skip ADC updates while charging
+            BatteryStatus::Available {
+                charge_state: ChargeState::Charging,
+                ..
+            } => {}
+            // Not charging: update level if changed
+            BatteryStatus::Available { charge_state, level } => {
                 let battery_percent = self.get_battery_percent(val);
-                if current_level != Some(battery_percent) || charge_state.is_none() {
+                if level != Some(battery_percent) {
                     self.battery_status = BatteryStatus::Available {
-                        charge_state: charge_state.unwrap_or(ChargeState::Unknown),
+                        charge_state,
                         level: Some(battery_percent),
                     };
-
                     publish_event(BatteryStatusEvent::from(self.battery_status));
                 }
+            }
+            // First ADC reading: transition from Unavailable
+            BatteryStatus::Unavailable => {
+                let battery_percent = self.get_battery_percent(val);
+                self.battery_status = BatteryStatus::Available {
+                    charge_state: ChargeState::Unknown,
+                    level: Some(battery_percent),
+                };
+                publish_event(BatteryStatusEvent::from(self.battery_status));
             }
         }
     }

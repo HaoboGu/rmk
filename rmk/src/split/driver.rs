@@ -107,7 +107,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                         self.process_peripheral_message(split_message).await;
 
                         if let Some(indicator_event) = keyboard_indicator_sub.try_next_message_pure() {
-                            let message_to_peri = SplitMessage::KeyboardIndicator(indicator_event.0.into_bits());
+                            let message_to_peri = SplitMessage::KeyboardIndicator(indicator_event.into_bits());
                             debug!("Sending message to peripheral {}: {:?}", self.id, message_to_peri);
                             if let Err(e) = self.transceiver.write(&message_to_peri).await {
                                 match e {
@@ -155,7 +155,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 Either3::Second(e) => {
                     let message_to_peri = match e {
                         Either3::First(indicator_event) => {
-                            SplitMessage::KeyboardIndicator(indicator_event.0.into_bits())
+                            SplitMessage::KeyboardIndicator(indicator_event.into_bits())
                         }
                         Either3::Second(layer_event) => SplitMessage::Layer(layer_event.0),
                         #[cfg(feature = "_ble")]
