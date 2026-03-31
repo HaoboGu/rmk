@@ -1,14 +1,14 @@
-//! OLED display support.
+//! Display support.
 //!
 //! Provides [`OledDisplayProcessor`] — a processor that subscribes to keyboard
 //! state events and renders them on an SSD1306-compatible OLED display.
 //!
 //! # Customisation
 //!
-//! The processor is generic over a [`DisplayRenderer`].  The built-in
+//! The processor is generic over a [`DisplayRenderer<C>`].  The built-in
 //! [`DefaultRenderer`] adapts automatically between landscape and portrait
 //! layouts (see its docs for details).  To draw your own content implement
-//! [`DisplayRenderer`] and pass it via
+//! [`DisplayRenderer<C>`] for your color type and pass it via
 //! [`OledDisplayProcessor::with_renderer`].
 //!
 //! # Feature flag
@@ -48,7 +48,7 @@
 //!
 //! struct BigLayer;
 //!
-//! impl DisplayRenderer for BigLayer {
+//! impl DisplayRenderer<BinaryColor> for BigLayer {
 //!     fn render<D: DrawTarget<Color = BinaryColor>>(
 //!         &mut self, ctx: &RenderContext, display: &mut D,
 //!     ) {
@@ -94,7 +94,7 @@ pub struct OledDisplayProcessor<DI, SIZE, R = DefaultRenderer>
 where
     DI: WriteOnlyDataCommand,
     SIZE: DisplaySize,
-    R: DisplayRenderer,
+    R: DisplayRenderer<BinaryColor>,
     ssd1306::Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>>: DrawTarget<Color = BinaryColor> + DisplayConfig,
 {
     display: ssd1306::Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>>,
@@ -126,7 +126,7 @@ impl<DI, SIZE, R> OledDisplayProcessor<DI, SIZE, R>
 where
     DI: WriteOnlyDataCommand,
     SIZE: DisplaySize,
-    R: DisplayRenderer,
+    R: DisplayRenderer<BinaryColor>,
     ssd1306::Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>>: DrawTarget<Color = BinaryColor> + DisplayConfig,
 {
     /// Create a new display processor with a custom [`DisplayRenderer`].

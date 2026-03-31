@@ -34,9 +34,10 @@ pub struct RenderContext {
     pub height: u32,
 }
 
-/// Trait for custom OLED display renderers.
+/// Trait for custom display renderers.
 ///
-/// Implement this to fully control what is drawn on the display.
+/// Generic over the pixel color type `C`, so it works with both monochrome
+/// OLEDs (`BinaryColor`) and color LCDs (`Rgb565`, etc.).
 ///
 /// # Example
 ///
@@ -49,7 +50,7 @@ pub struct RenderContext {
 ///
 /// struct MyRenderer;
 ///
-/// impl DisplayRenderer for MyRenderer {
+/// impl DisplayRenderer<BinaryColor> for MyRenderer {
 ///     fn render<D: DrawTarget<Color = BinaryColor>>(
 ///         &mut self,
 ///         ctx: &RenderContext,
@@ -62,13 +63,12 @@ pub struct RenderContext {
 ///     }
 /// }
 /// ```
-pub trait DisplayRenderer {
+pub trait DisplayRenderer<C: PixelColor> {
     /// Draw the current keyboard state on the display.
     ///
-    /// The display has already been cleared (`BinaryColor::Off`) before this
-    /// method is called.  After it returns the caller flushes the display
-    /// buffer.
-    fn render<D: DrawTarget<Color = BinaryColor>>(&mut self, ctx: &RenderContext, display: &mut D);
+    /// The display has already been cleared before this method is called.
+    /// After it returns the caller flushes the display buffer.
+    fn render<D: DrawTarget<Color = C>>(&mut self, ctx: &RenderContext, display: &mut D);
 }
 
 /// Built-in renderer that adapts between landscape and portrait layouts.
@@ -79,7 +79,7 @@ pub trait DisplayRenderer {
 ///   layer, WPM, indicators, battery — separated by horizontal lines.
 pub struct DefaultRenderer;
 
-impl DisplayRenderer for DefaultRenderer {
+impl DisplayRenderer<BinaryColor> for DefaultRenderer {
     fn render<D: DrawTarget<Color = BinaryColor>>(&mut self, ctx: &RenderContext, display: &mut D) {
         let w = ctx.width as i32;
         let h = ctx.height as i32;
