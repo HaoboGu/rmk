@@ -2,13 +2,12 @@
 
 use core::fmt::Write;
 
-use embedded_graphics::{
-    mono_font::{MonoTextStyle, ascii::FONT_5X8},
-    pixelcolor::BinaryColor,
-    prelude::*,
-    primitives::{Line, PrimitiveStyle},
-    text::{Alignment, Text, TextStyleBuilder},
-};
+use embedded_graphics::mono_font::MonoTextStyle;
+use embedded_graphics::mono_font::ascii::FONT_5X8;
+use embedded_graphics::pixelcolor::BinaryColor;
+use embedded_graphics::prelude::*;
+use embedded_graphics::primitives::{Line, PrimitiveStyle};
+use embedded_graphics::text::{Alignment, Text, TextStyleBuilder};
 use rmk::display::{DisplayRenderer, RenderContext, write_battery};
 
 /// A custom renderer optimized for small vertical OLED displays (e.g. 128x32 portrait).

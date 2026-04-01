@@ -1,8 +1,10 @@
 //! [`DisplayDriver`] implementation for SSD1306 OLED displays.
 
 use display_interface::AsyncWriteOnlyDataCommand;
-use embedded_graphics::{pixelcolor::BinaryColor, prelude::*};
-use ssd1306::{mode::BufferedGraphicsModeAsync, mode::DisplayConfigAsync, size::DisplaySizeAsync};
+use embedded_graphics::pixelcolor::BinaryColor;
+use embedded_graphics::prelude::*;
+use ssd1306::mode::{BufferedGraphicsModeAsync, DisplayConfigAsync};
+use ssd1306::size::DisplaySizeAsync;
 
 use super::super::DisplayDriver;
 

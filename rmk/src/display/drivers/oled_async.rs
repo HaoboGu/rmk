@@ -2,8 +2,10 @@
 //! (SH1106, SH1107, SH1108, SSD1309).
 
 use display_interface::AsyncWriteOnlyDataCommand;
-use embedded_graphics::{pixelcolor::BinaryColor, prelude::*};
-use oled_async::{display::DisplayVariant, mode::graphics::GraphicsMode};
+use embedded_graphics::pixelcolor::BinaryColor;
+use embedded_graphics::prelude::*;
+use oled_async::display::DisplayVariant;
+use oled_async::mode::graphics::GraphicsMode;
 
 use super::super::DisplayDriver;
 

@@ -142,7 +142,10 @@ fn expand_display_driver_init(config: &DisplayConfig) -> TokenStream {
                 ).into_buffered_graphics_mode();
             }
         }
-        driver @ (DisplayDriver::Sh1106 | DisplayDriver::Sh1107 | DisplayDriver::Sh1108 | DisplayDriver::Ssd1309) => {
+        driver @ (DisplayDriver::Sh1106
+        | DisplayDriver::Sh1107
+        | DisplayDriver::Sh1108
+        | DisplayDriver::Ssd1309) => {
             let display_variant_path = parse_oled_async_variant(driver, &config.size);
             quote! {
                 let display_interface = ::rmk::display::display_interface_i2c::I2CInterface::new(display_i2c, #address, 0x40);
@@ -180,7 +183,10 @@ fn parse_ssd1306_size(size: &str) -> TokenStream {
         "96x16" => quote! { ::rmk::display::ssd1306::prelude::DisplaySize96x16 },
         "72x40" => quote! { ::rmk::display::ssd1306::prelude::DisplaySize72x40 },
         "64x48" => quote! { ::rmk::display::ssd1306::prelude::DisplaySize64x48 },
-        _ => panic!("Unsupported SSD1306 display size '{}'. Supported: 128x64, 128x32, 96x16, 72x40, 64x48", size),
+        _ => panic!(
+            "Unsupported SSD1306 display size '{}'. Supported: 128x64, 128x32, 96x16, 72x40, 64x48",
+            size
+        ),
     }
 }
 

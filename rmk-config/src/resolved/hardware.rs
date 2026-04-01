@@ -9,9 +9,9 @@ pub use crate::chip::{ChipModel, ChipSeries};
 pub use crate::communication::{CommunicationConfig, UsbInfo};
 pub use crate::{
     BleConfig, ChipConfig, CommunicationProtocol, DependencyConfig, DisplayConfig, DisplayDriver, EncoderConfig,
-    EncoderResolution, I2cConfig, InputDeviceConfig, JoystickConfig, KeyInfo,
-    LightConfig, MatrixConfig, MatrixType, OutputConfig, PinConfig, Pmw33xxConfig, Pmw33xxType, Pmw3610Config,
-    PointingDeviceConfig, SerialConfig, SpiConfig, SplitBoardConfig, SplitConfig,
+    EncoderResolution, I2cConfig, InputDeviceConfig, JoystickConfig, KeyInfo, LightConfig, MatrixConfig, MatrixType,
+    OutputConfig, PinConfig, Pmw33xxConfig, Pmw33xxType, Pmw3610Config, PointingDeviceConfig, SerialConfig, SpiConfig,
+    SplitBoardConfig, SplitConfig,
 };
 
 /// Resolved storage hardware config

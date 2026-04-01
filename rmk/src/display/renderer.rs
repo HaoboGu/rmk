@@ -7,17 +7,16 @@
 
 use core::fmt::Write as _;
 
-use embedded_graphics::{
-    mono_font::{MonoTextStyle, ascii::FONT_5X8},
-    pixelcolor::BinaryColor,
-    prelude::*,
-    primitives::{Line, PrimitiveStyle},
-    text::Text,
-};
-
-use crate::event::BatteryStateEvent;
+use embedded_graphics::mono_font::MonoTextStyle;
+use embedded_graphics::mono_font::ascii::FONT_5X8;
+use embedded_graphics::pixelcolor::BinaryColor;
+use embedded_graphics::prelude::*;
+use embedded_graphics::primitives::{Line, PrimitiveStyle};
+use embedded_graphics::text::Text;
 #[cfg(feature = "_ble")]
 use rmk_types::ble::BleStatus;
+
+use crate::event::BatteryStateEvent;
 
 /// Snapshot of keyboard state passed to renderers on every redraw.
 pub struct RenderContext {
