@@ -68,6 +68,8 @@ keymap = [
 driver = "ssd1306"
 size = "128x32"
 rotation = 270
+# renderer is optional
+renderer = "custom_renderer::BigLayerRenderer"
 
 [display.protocol.i2c]
 instance = "I2C1"

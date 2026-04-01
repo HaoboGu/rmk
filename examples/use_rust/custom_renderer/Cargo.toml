@@ -1,0 +1,9 @@
+[package]
+name = "custom_renderer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rmk = { path = "../../../rmk", features = ["display"], default-features = false }
+embedded-graphics = "0.8"
+heapless = "0.9"
