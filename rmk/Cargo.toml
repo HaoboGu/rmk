@@ -98,7 +98,6 @@ features = ["split", "vial", "async_matrix", "_ble"]
 [target.'cfg(all(target_arch = "arm", target_os = "none"))'.dependencies]
 cortex-m = { version = "0.7" }
 
-# Reminder: when changing feature configuration, double check `rmk-macro/src/feature.rs`
 [features]
 default = ["defmt", "storage", "vial", "vial_lock"]
 
@@ -116,6 +115,9 @@ host_security = []
 
 ## Enable RMK protocol support (new protocol, mutually exclusive with vial)
 rmk_protocol = ["host", "host_security", "dep:postcard-rpc", "rmk-types/rmk_protocol"]
+
+## Enable bulk transfer endpoints for RMK protocol on MCUs with sufficient RAM
+bulk_transfer = ["rmk_protocol", "rmk-types/bulk"]
 
 ## Enable the storage. The storage is optional to save memory
 storage = [

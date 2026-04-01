@@ -134,15 +134,18 @@ fn generate_constants(bc: &BuildConstants) -> String {
         ));
         // Compile-time check: firmware Vec sizes must not exceed host maximums,
         // otherwise the host tool cannot deserialize firmware responses.
-        lines.push(format!(
-            "const _: () = assert!(PROTOCOL_COMBO_VEC_SIZE <= {HOST_MAX_COMBO_VEC_SIZE}, \"firmware combo vec size exceeds host maximum ({HOST_MAX_COMBO_VEC_SIZE})\");"
-        ));
-        lines.push(format!(
-            "const _: () = assert!(PROTOCOL_MORSE_VEC_SIZE <= {HOST_MAX_MORSE_VEC_SIZE}, \"firmware morse vec size exceeds host maximum ({HOST_MAX_MORSE_VEC_SIZE})\");"
-        ));
-        lines.push(format!(
-            "const _: () = assert!(PROTOCOL_MAX_MACRO_DATA <= {HOST_MAX_MACRO_DATA}, \"firmware macro chunk size exceeds host maximum ({HOST_MAX_MACRO_DATA})\");"
-        ));
+        // Only enforce when the rmk_protocol feature is active.
+        if env::var("CARGO_FEATURE_RMK_PROTOCOL").is_ok() {
+            lines.push(format!(
+                "const _: () = assert!(PROTOCOL_COMBO_VEC_SIZE <= {HOST_MAX_COMBO_VEC_SIZE}, \"firmware combo vec size exceeds host maximum ({HOST_MAX_COMBO_VEC_SIZE})\");"
+            ));
+            lines.push(format!(
+                "const _: () = assert!(PROTOCOL_MORSE_VEC_SIZE <= {HOST_MAX_MORSE_VEC_SIZE}, \"firmware morse vec size exceeds host maximum ({HOST_MAX_MORSE_VEC_SIZE})\");"
+            ));
+            lines.push(format!(
+                "const _: () = assert!(PROTOCOL_MAX_MACRO_DATA <= {HOST_MAX_MACRO_DATA}, \"firmware macro chunk size exceeds host maximum ({HOST_MAX_MACRO_DATA})\");"
+            ));
+        }
 
         // Bulk constant only when bulk feature is active
         if is_bulk {

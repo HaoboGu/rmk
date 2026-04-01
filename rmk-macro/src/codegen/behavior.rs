@@ -156,7 +156,7 @@ fn expand_combos(
                         let v = [#(#combos_def),*];
                         core::array::from_fn(|i| {
                             if i < v.len() {
-                                Some(v[i])
+                                Some(v[i].clone())
                             } else {
                                 None
                             }
