@@ -12,8 +12,8 @@ use super::KeyAction;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub struct EncoderAction {
-    clockwise: KeyAction,
-    counter_clockwise: KeyAction,
+    pub clockwise: KeyAction,
+    pub counter_clockwise: KeyAction,
 }
 
 impl Default for EncoderAction {
@@ -32,25 +32,5 @@ impl EncoderAction {
             clockwise,
             counter_clockwise,
         }
-    }
-
-    /// Set the clockwise action.
-    pub fn set_clockwise(&mut self, clockwise: KeyAction) {
-        self.clockwise = clockwise;
-    }
-
-    /// Set the counter clockwise action.
-    pub fn set_counter_clockwise(&mut self, counter_clockwise: KeyAction) {
-        self.counter_clockwise = counter_clockwise;
-    }
-
-    /// Get the clockwise action.
-    pub fn clockwise(&self) -> KeyAction {
-        self.clockwise
-    }
-
-    /// Get the counter clockwise action.
-    pub fn counter_clockwise(&self) -> KeyAction {
-        self.counter_clockwise
     }
 }

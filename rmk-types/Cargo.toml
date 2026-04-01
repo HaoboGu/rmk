@@ -16,7 +16,7 @@ serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive"] }
 postcard-schema = { version = "0.2", default-features = false, features = ["derive", "heapless-v0_9"], optional = true }
 postcard-rpc = { version = "0.12", default-features = false, optional = true }
-heapless = { version = "0.9", default-features = false, features = ["serde"], optional = true }
+heapless = { version = "0.9", default-features = false, features = ["serde"] }
 strum = { version = "0.28", default-features = false, features = ["derive"] }
 
 bitfield-struct = "0.12"
@@ -30,11 +30,18 @@ default = []
 defmt = [
     "dep:defmt",
     "postcard/defmt",
+    "heapless/defmt",
 ]
 # Feature for proc-macro code generation only, not included in firmware
 _codegen = []
 # Feature for RMK native protocol schema/endpoint support
-rmk_protocol = ["dep:postcard-rpc", "dep:postcard-schema", "dep:heapless"]
+rmk_protocol = ["dep:postcard-rpc", "dep:postcard-schema"]
+# Bulk transfer endpoints for MCUs with sufficient RAM.
+# Enables multi-element bulk keymap/combo/morse endpoints and PROTOCOL_MAX_BULK_SIZE constant.
+bulk = ["rmk_protocol"]
+# Host tool: enables rmk_protocol with generous Vec capacities for protocol types.
+# Firmware should use `rmk_protocol` instead — Vec sizes come from keyboard.toml.
+host = ["rmk_protocol", "bulk"]
 # Build-time only features: forwarded from rmk to control constant generation in build.rs
 split = []
 passkey_entry = []

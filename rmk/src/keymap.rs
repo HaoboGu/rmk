@@ -9,7 +9,6 @@ use {
     embedded_storage_async::nor_flash::NorFlash,
 };
 
-use crate::MACRO_SPACE_SIZE;
 use crate::combo::Combo;
 use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, OneShotModifiersConfig, PositionalConfig};
 use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_event};
@@ -19,6 +18,7 @@ use crate::keyboard_macros::MacroOperation;
 #[cfg(feature = "host_security")]
 use crate::matrix::MatrixState;
 use crate::morse::Morse;
+use crate::{MACRO_SPACE_SIZE, MAX_PATTERNS_PER_KEY};
 
 pub(crate) const HOLD_BUFFER_SIZE: usize = 16;
 
@@ -165,8 +165,8 @@ impl KeyMapInner<'_> {
                     let idx = self.encoder_index(layer_num, encoder_pos.id as usize);
                     if let Some(encoder_action) = encoders.get(idx) {
                         return match encoder_pos.direction {
-                            Direction::Clockwise => encoder_action.clockwise(),
-                            Direction::CounterClockwise => encoder_action.counter_clockwise(),
+                            Direction::Clockwise => encoder_action.clockwise,
+                            Direction::CounterClockwise => encoder_action.counter_clockwise,
                             Direction::None => KeyAction::No,
                         };
                     }
@@ -189,8 +189,8 @@ impl KeyMapInner<'_> {
                 if let Some(encoders) = &mut self.encoders {
                     if let Some(encoder_action) = encoders.get_mut(idx) {
                         match encoder_pos.direction {
-                            Direction::Clockwise => encoder_action.set_clockwise(action),
-                            Direction::CounterClockwise => encoder_action.set_counter_clockwise(action),
+                            Direction::Clockwise => encoder_action.clockwise = action,
+                            Direction::CounterClockwise => encoder_action.counter_clockwise = action,
                             Direction::None => {}
                         }
                     }
@@ -559,11 +559,15 @@ impl<'a> KeyMap<'a> {
 
     // ── Per-element morse ──
 
-    pub(crate) fn get_morse(&self, idx: usize) -> Option<Morse> {
+    pub(crate) fn get_morse(&self, idx: usize) -> Option<Morse<MAX_PATTERNS_PER_KEY>> {
         self.inner.borrow().behavior.morse.morses.get(idx).cloned()
     }
 
-    pub(crate) fn with_morse_mut<R>(&self, idx: usize, f: impl FnOnce(&mut Morse) -> R) -> Option<R> {
+    pub(crate) fn with_morse_mut<R>(
+        &self,
+        idx: usize,
+        f: impl FnOnce(&mut Morse<MAX_PATTERNS_PER_KEY>) -> R,
+    ) -> Option<R> {
         self.inner.borrow_mut().behavior.morse.morses.get_mut(idx).map(f)
     }
 
@@ -641,7 +645,7 @@ impl<'a> KeyMap<'a> {
         let idx = inner.encoder_index(layer, id);
         if let Some(encoders) = &mut inner.encoders {
             if let Some(encoder_action) = encoders.get_mut(idx) {
-                encoder_action.set_clockwise(action);
+                encoder_action.clockwise = action;
                 return Some(*encoder_action);
             }
         }
@@ -658,7 +662,7 @@ impl<'a> KeyMap<'a> {
         let idx = inner.encoder_index(layer, id);
         if let Some(encoders) = &mut inner.encoders {
             if let Some(encoder_action) = encoders.get_mut(idx) {
-                encoder_action.set_counter_clockwise(action);
+                encoder_action.counter_clockwise = action;
                 return Some(*encoder_action);
             }
         }
@@ -745,17 +749,17 @@ mod test {
     fn test_fill_vec() {
         let mut combos: heapless::Vec<_, COMBO_MAX_NUM> = heapless::Vec::from_slice(&[
             Combo::new(ComboConfig {
-                actions: [k!(A), k!(B), k!(C), k!(D)],
+                actions: heapless::Vec::from_slice(&[k!(A), k!(B), k!(C), k!(D)]).unwrap(),
                 output: k!(Z),
                 layer: None,
             }),
             Combo::new(ComboConfig {
-                actions: [k!(A), k!(B), k!(No), k!(No)],
+                actions: heapless::Vec::from_slice(&[k!(A), k!(B), k!(No), k!(No)]).unwrap(),
                 output: k!(X),
                 layer: None,
             }),
             Combo::new(ComboConfig {
-                actions: [k!(A), k!(B), k!(C), k!(No)],
+                actions: heapless::Vec::from_slice(&[k!(A), k!(B), k!(C), k!(No)]).unwrap(),
                 output: k!(Y),
                 layer: None,
             }),

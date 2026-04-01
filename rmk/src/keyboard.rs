@@ -954,7 +954,7 @@ impl<'a> Keyboard<'a> {
                     None
                 }) // Find all delayed combos
                 .max_by_key(|x| x.0) // Find only the longest one
-                .map(|(_, c)| (c.trigger(), c.config.actions)) // Trigger it and get the actions
+                .map(|(_, c)| (c.trigger(), c.config.actions.clone())) // Trigger it and get the actions
         });
 
         // Clean the held buffer, process the combo output action and clear other combos
@@ -1890,20 +1890,20 @@ mod test {
         CombosConfig {
             combos: [
                 Some(Combo::new(ComboConfig {
-                    actions: [
+                    actions: heapless::Vec::from_slice(&[
                         k!(V), //3,4
                         k!(B), //3,5
                         k!(No), k!(No),
-                    ],
+                    ]).unwrap(),
                     output: k!(LShift),
                     layer: Some(0),
                 })),
                 Some(Combo::new(ComboConfig {
-                    actions: [
+                    actions: heapless::Vec::from_slice(&[
                         k!(R), //1,4
                         k!(T), //1,5
                         k!(No), k!(No),
-                    ],
+                    ]).unwrap(),
                     output: k!(LAlt),
                     layer: Some(0),
                 })),

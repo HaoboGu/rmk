@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::Duration;
 use rmk_types::action::{KeyAction, MorseMode};
-use rmk_types::constants::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, MORSE_MAX_NUM};
+use rmk_types::constants::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, MAX_PATTERNS_PER_KEY, MORSE_MAX_NUM};
 use rmk_types::protocol::vial::{SettingKey, VIAL_EP_SIZE, VIAL_PROTOCOL_VERSION, VialCommand, VialDynamic};
 
 use crate::config::VialConfig;
@@ -339,7 +339,7 @@ pub(crate) async fn process_vial<'a>(
                         let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
 
                         // Update the morse in keymap
-                        keymap.with_morse_mut(morse_idx, |morse: &mut Morse| {
+                        keymap.with_morse_mut(morse_idx, |morse: &mut Morse<MAX_PATTERNS_PER_KEY>| {
                             morse.put(TAP, tap.to_action());
                             morse.put(DOUBLE_TAP, double_tap.to_action());
                             morse.put(HOLD, hold.to_action());
@@ -390,6 +390,8 @@ pub(crate) async fn process_vial<'a>(
 
                     #[cfg(feature = "storage")]
                     {
+                        use heapless::Vec;
+
                         use crate::combo::{Combo, ComboConfig};
                         let combo_idx = report.output_data[3] as usize;
                         let result = keymap.with_combos_mut(|combos| {
@@ -397,34 +399,30 @@ pub(crate) async fn process_vial<'a>(
                                 return None;
                             }
 
-                            let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
-                            let mut n: usize = 0;
+                            let mut actions: Vec<KeyAction, COMBO_MAX_LENGTH> = Vec::new();
                             for i in 0..COMBO_MAX_LENGTH {
                                 let action =
                                     from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
                                 if !action.is_empty() {
-                                    if n >= COMBO_MAX_LENGTH {
+                                    if actions.push(action).is_err() {
                                         // Fail if the combo action buffer is too small
                                         return None;
                                     }
-                                    actions[n] = action;
-                                    n += 1;
                                 }
                             }
                             let output = from_via_keycode(LittleEndian::read_u16(
                                 &report.output_data[4 + COMBO_MAX_LENGTH * 2..6 + COMBO_MAX_LENGTH * 2],
                             ));
-                            combos[combo_idx] =
-                                if !actions.iter().any(|&x| x != KeyAction::No) && output == KeyAction::No {
-                                    debug!("combo is empty");
-                                    None
-                                } else {
-                                    Some(Combo::new(ComboConfig {
-                                        actions,
-                                        output,
-                                        layer: None,
-                                    }))
-                                };
+                            combos[combo_idx] = if actions.is_empty() && output == KeyAction::No {
+                                debug!("combo is empty");
+                                None
+                            } else {
+                                Some(Combo::new(ComboConfig {
+                                    actions: actions.clone(),
+                                    output,
+                                    layer: None,
+                                }))
+                            };
                             Some((actions, output))
                         });
 
@@ -463,8 +461,8 @@ pub(crate) async fn process_vial<'a>(
 
             // Get encoder value
             if let Some(encoder_action) = keymap.get_encoder_action(layer as usize, index as usize) {
-                let clockwise = to_via_keycode(encoder_action.clockwise());
-                let counter_clockwise = to_via_keycode(encoder_action.counter_clockwise());
+                let clockwise = to_via_keycode(encoder_action.clockwise);
+                let counter_clockwise = to_via_keycode(encoder_action.counter_clockwise);
                 BigEndian::write_u16(&mut report.input_data[0..2], counter_clockwise);
                 BigEndian::write_u16(&mut report.input_data[2..4], clockwise);
                 return;
@@ -523,15 +521,15 @@ mod tests {
     use crate::storage::StorageData;
     #[test]
     fn test_combo_serialization_deserialization() {
-        let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
-        actions[0] = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Kc1)));
+        let mut actions: heapless::Vec<KeyAction, COMBO_MAX_LENGTH> = heapless::Vec::new();
+        let _ = actions.push(KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Kc1))));
         let combo_config = ComboConfig {
             actions,
             output: KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Space))),
             layer: None,
         };
         let mut buffer = [0u8; 64];
-        let storage_data = StorageData::Combo(combo_config);
+        let storage_data = StorageData::Combo(combo_config.clone());
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
         // Deserialization
         let deserialized_data = StorageData::deserialize_from(&buffer[..serialized_size]).unwrap();

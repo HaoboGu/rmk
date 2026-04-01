@@ -23,45 +23,29 @@ pub use self::types::*;
 use crate::action::{EncoderAction, KeyAction};
 use crate::battery::BatteryStatus;
 use crate::ble::BleStatus;
+use crate::combo::ComboConfig;
 use crate::connection::ConnectionType;
+use crate::constants::PROTOCOL_MORSE_VEC_SIZE;
+use crate::fork::Fork;
 use crate::led_indicator::LedIndicator;
+use crate::morse::Morse;
+
+/// Type alias for a Morse configuration with protocol-level Vec capacity.
+pub type ProtocolMorse = Morse<PROTOCOL_MORSE_VEC_SIZE>;
 
 // ---------------------------------------------------------------------------
 // MaxSize helper (postcard 1.x only implements MaxSize for heapless 0.7,
 // but we use heapless 0.9, so Vec-containing types need manual impls)
 // ---------------------------------------------------------------------------
 
-/// Compute the maximum varint-encoded length for a given max value.
-/// Mirrors `postcard`'s internal `varint_size`.
-const fn varint_size(max_n: usize) -> usize {
-    const BITS_PER_BYTE: usize = 8;
-    const BITS_PER_VARINT_BYTE: usize = 7;
-    if max_n == 0 {
-        return 1;
-    }
-    let bits = core::mem::size_of::<usize>() * BITS_PER_BYTE - max_n.leading_zeros() as usize;
-    let roundup_bits = bits + (BITS_PER_VARINT_BYTE - 1);
-    roundup_bits / BITS_PER_VARINT_BYTE
-}
+pub(crate) use crate::varint_max_size as varint_size;
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 /// Maximum number of key positions in an unlock challenge.
-pub const MAX_UNLOCK_KEYS: usize = 2;
-
-/// Maximum number of key actions in a bulk get/set operation.
-pub const MAX_BULK: usize = 32;
-
-/// Maximum number of combo input keys in a protocol combo config.
-pub const MAX_COMBO_KEYS: usize = 8;
-
-/// Maximum number of morse pattern/action pairs in a protocol morse config.
-pub const MAX_MORSE_PATTERNS: usize = 16;
-
-/// Maximum macro data size for a single macro over the protocol.
-pub const MAX_MACRO_DATA: usize = 256;
+pub const PROTOCOL_MAX_UNLOCK_KEYS: usize = 2;
 
 // ---------------------------------------------------------------------------
 // Endpoint declarations
@@ -89,10 +73,18 @@ endpoints! {
     | ----------      | ---------            | ----------          | ----                       |
     | GetKeyAction    | KeyPosition          | KeyAction           | "keymap/get"               |
     | SetKeyAction    | SetKeyRequest        | RmkResult           | "keymap/set"               |
-    | GetKeymapBulk   | BulkRequest          | BulkKeyActions      | "keymap/bulk_get"          |
-    | SetKeymapBulk   | SetKeymapBulkRequest | RmkResult           | "keymap/bulk_set"          |
     | GetDefaultLayer | ()                   | u8                  | "keymap/default_layer"     |
     | SetDefaultLayer | u8                   | RmkResult           | "keymap/set_default_layer" |
+}
+
+#[cfg(feature = "bulk")]
+endpoints! {
+    list = KEYMAP_BULK_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy      | RequestTy            | ResponseTy          | Path              |
+    | ----------      | ---------            | ----------          | ----              |
+    | GetKeymapBulk   | BulkRequest          | BulkKeyActions      | "keymap/bulk_get" |
+    | SetKeymapBulk   | SetKeymapBulkRequest | RmkResult           | "keymap/bulk_set" |
 }
 
 endpoints! {
@@ -122,13 +114,33 @@ endpoints! {
     | SetCombo    | SetComboRequest | RmkResult   | "combo/set"  |
 }
 
+#[cfg(feature = "bulk")]
+endpoints! {
+    list = COMBO_BULK_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy    | RequestTy           | ResponseTy         | Path              |
+    | ----------    | ---------           | ----------         | ----              |
+    | GetComboBulk  | BulkRequest         | GetComboBulkResponse | "combo/bulk_get" |
+    | SetComboBulk  | SetComboBulkRequest | RmkResult            | "combo/bulk_set" |
+}
+
 endpoints! {
     list = MORSE_ENDPOINT_LIST;
     omit_std = true;
     | EndpointTy | RequestTy       | ResponseTy  | Path         |
     | ---------- | ---------       | ----------  | ----         |
-    | GetMorse   | u8              | MorseConfig | "morse/get"  |
+    | GetMorse   | u8              | ProtocolMorse | "morse/get"  |
     | SetMorse   | SetMorseRequest | RmkResult   | "morse/set"  |
+}
+
+#[cfg(feature = "bulk")]
+endpoints! {
+    list = MORSE_BULK_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy    | RequestTy           | ResponseTy         | Path              |
+    | ----------    | ---------           | ----------         | ----              |
+    | GetMorseBulk  | BulkRequest         | GetMorseBulkResponse | "morse/bulk_get" |
+    | SetMorseBulk  | SetMorseBulkRequest | RmkResult            | "morse/bulk_set" |
 }
 
 endpoints! {
@@ -136,7 +148,7 @@ endpoints! {
     omit_std = true;
     | EndpointTy | RequestTy      | ResponseTy | Path        |
     | ---------- | ---------      | ---------- | ----        |
-    | GetFork    | u8             | ForkConfig | "fork/get"  |
+    | GetFork    | u8             | Fork       | "fork/get"  |
     | SetFork    | SetForkRequest | RmkResult  | "fork/set"  |
 }
 
@@ -176,6 +188,8 @@ endpoints! {
 ///
 /// This is assembled from smaller endpoint groups to avoid very large const-eval
 /// workloads in a single `endpoints!` invocation.
+/// When the `bulk` feature is enabled, bulk transfer endpoints are included.
+#[cfg(not(feature = "bulk"))]
 pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = const {
     use postcard_rpc::postcard_schema::schema::{DataModelType, NamedType};
     use postcard_rpc::{EndpointMap, Key};
@@ -225,6 +239,63 @@ pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = const {
     }
 };
 
+/// Full endpoint map including bulk transfer endpoints.
+#[cfg(feature = "bulk")]
+pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = const {
+    use postcard_rpc::postcard_schema::schema::{DataModelType, NamedType};
+    use postcard_rpc::{EndpointMap, Key};
+
+    const NULL_KEY: Key = unsafe { Key::from_bytes([0u8; 8]) };
+    const NULL_TY: &NamedType = &NamedType {
+        name: "",
+        ty: &DataModelType::Unit,
+    };
+
+    const TYPE_SLICES: &[&[&NamedType]] = &[
+        postcard_rpc::standard_icd::STANDARD_ICD_ENDPOINTS.types,
+        SYSTEM_ENDPOINT_LIST.types,
+        KEYMAP_ENDPOINT_LIST.types,
+        KEYMAP_BULK_ENDPOINT_LIST.types,
+        ENCODER_ENDPOINT_LIST.types,
+        MACRO_ENDPOINT_LIST.types,
+        COMBO_ENDPOINT_LIST.types,
+        COMBO_BULK_ENDPOINT_LIST.types,
+        MORSE_ENDPOINT_LIST.types,
+        MORSE_BULK_ENDPOINT_LIST.types,
+        FORK_ENDPOINT_LIST.types,
+        BEHAVIOR_ENDPOINT_LIST.types,
+        CONNECTION_ENDPOINT_LIST.types,
+        STATUS_ENDPOINT_LIST.types,
+    ];
+    const TYPE_LEN: usize = postcard_rpc::uniques::total_len(TYPE_SLICES);
+    const TYPES: [&NamedType; TYPE_LEN] = postcard_rpc::uniques::combine_with_copy(TYPE_SLICES, NULL_TY);
+
+    const ENDPOINT_SLICES: &[&[(&str, Key, Key)]] = &[
+        postcard_rpc::standard_icd::STANDARD_ICD_ENDPOINTS.endpoints,
+        SYSTEM_ENDPOINT_LIST.endpoints,
+        KEYMAP_ENDPOINT_LIST.endpoints,
+        KEYMAP_BULK_ENDPOINT_LIST.endpoints,
+        ENCODER_ENDPOINT_LIST.endpoints,
+        MACRO_ENDPOINT_LIST.endpoints,
+        COMBO_ENDPOINT_LIST.endpoints,
+        COMBO_BULK_ENDPOINT_LIST.endpoints,
+        MORSE_ENDPOINT_LIST.endpoints,
+        MORSE_BULK_ENDPOINT_LIST.endpoints,
+        FORK_ENDPOINT_LIST.endpoints,
+        BEHAVIOR_ENDPOINT_LIST.endpoints,
+        CONNECTION_ENDPOINT_LIST.endpoints,
+        STATUS_ENDPOINT_LIST.endpoints,
+    ];
+    const ENDPOINT_LEN: usize = postcard_rpc::uniques::total_len(ENDPOINT_SLICES);
+    const ENDPOINTS: [(&str, Key, Key); ENDPOINT_LEN] =
+        postcard_rpc::uniques::combine_with_copy(ENDPOINT_SLICES, ("", NULL_KEY, NULL_KEY));
+
+    EndpointMap {
+        types: TYPES.as_slice(),
+        endpoints: ENDPOINTS.as_slice(),
+    }
+};
+
 // ---------------------------------------------------------------------------
 // Topic declarations
 // ---------------------------------------------------------------------------
@@ -256,13 +327,12 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::{ENDPOINT_LIST, TOPICS_OUT_LIST, *};
-    use crate::action::MorseProfile;
+    use crate::action::{Action, MorseProfile};
     use crate::battery::ChargeState;
     use crate::ble::BleState;
-    use crate::fork::StateBits;
-    use crate::led_indicator::LedIndicator;
+    use crate::fork::{Fork, StateBits};
     use crate::modifier::ModifierCombination;
-    use crate::mouse_button::MouseButtons;
+    use crate::morse::{Morse, MorsePattern};
 
     /// Helper: postcard round-trip for a value using a stack buffer.
     fn round_trip<T>(val: &T) -> T
@@ -290,8 +360,9 @@ mod tests {
     }
 
     /// All endpoint request keys, defined once and shared across collision tests.
-    fn all_endpoint_keys() -> &'static [Key] {
-        &[
+    fn all_endpoint_keys() -> alloc::vec::Vec<Key> {
+        #[allow(unused_mut)]
+        let mut keys = alloc::vec![
             // System
             GetVersion::REQ_KEY,
             GetCapabilities::REQ_KEY,
@@ -304,8 +375,6 @@ mod tests {
             // Keymap
             GetKeyAction::REQ_KEY,
             SetKeyAction::REQ_KEY,
-            GetKeymapBulk::REQ_KEY,
-            SetKeymapBulk::REQ_KEY,
             GetDefaultLayer::REQ_KEY,
             SetDefaultLayer::REQ_KEY,
             // Encoder
@@ -337,7 +406,20 @@ mod tests {
             GetCurrentLayer::REQ_KEY,
             GetMatrixState::REQ_KEY,
             GetPeripheralStatus::REQ_KEY,
-        ]
+        ];
+        // Bulk endpoints (feature-gated)
+        #[cfg(feature = "bulk")]
+        {
+            keys.extend_from_slice(&[
+                GetKeymapBulk::REQ_KEY,
+                SetKeymapBulk::REQ_KEY,
+                GetComboBulk::REQ_KEY,
+                SetComboBulk::REQ_KEY,
+                GetMorseBulk::REQ_KEY,
+                SetMorseBulk::REQ_KEY,
+            ]);
+        }
+        keys
     }
 
     /// All topic keys, defined once and shared across collision tests.
@@ -369,9 +451,11 @@ mod tests {
             num_cols: 14,
             num_encoders: 2,
             max_combos: 16,
+            max_combo_keys: 4,
             max_macros: 32,
             macro_space_size: 2048,
             max_morse: 8,
+            max_patterns_per_key: 8,
             max_forks: 4,
             storage_enabled: true,
             is_split: false,
@@ -380,6 +464,9 @@ mod tests {
             num_ble_profiles: 4,
             lighting_enabled: false,
             max_payload_size: 256,
+            max_bulk_keys: 8,
+            macro_chunk_size: 64,
+            bulk_transfer_supported: true,
         };
         round_trip(&caps);
     }
@@ -392,9 +479,11 @@ mod tests {
             num_cols: 0,
             num_encoders: 0,
             max_combos: 0,
+            max_combo_keys: 0,
             max_macros: 0,
             macro_space_size: 0,
             max_morse: 0,
+            max_patterns_per_key: 0,
             max_forks: 0,
             storage_enabled: false,
             is_split: false,
@@ -403,6 +492,9 @@ mod tests {
             num_ble_profiles: 0,
             lighting_enabled: false,
             max_payload_size: 0,
+            max_bulk_keys: 0,
+            macro_chunk_size: 0,
+            bulk_transfer_supported: false,
         };
         round_trip(&caps);
     }
@@ -535,14 +627,8 @@ mod tests {
 
     #[test]
     fn round_trip_get_macro_request() {
-        round_trip(&GetMacroRequest {
-            index: 0,
-            offset: 0,
-        });
-        round_trip(&GetMacroRequest {
-            index: 3,
-            offset: 256,
-        });
+        round_trip(&GetMacroRequest { index: 0, offset: 0 });
+        round_trip(&GetMacroRequest { index: 3, offset: 256 });
     }
 
     #[test]
@@ -569,32 +655,25 @@ mod tests {
     }
 
     #[test]
-    fn round_trip_morse_config() {
-        round_trip(&MorseConfig {
+    fn round_trip_morse() {
+        let morse: Morse<8> = Morse {
             profile: MorseProfile::const_default(),
-            patterns: Vec::new(),
-        });
+            actions: heapless::LinearMap::new(),
+        };
+        round_trip(&morse);
     }
 
     #[test]
-    fn round_trip_fork_config() {
-        round_trip(&ForkConfig {
-            trigger: KeyAction::No,
-            negative_output: KeyAction::No,
-            positive_output: KeyAction::No,
-            match_any: StateBits {
-                modifiers: ModifierCombination::new(),
-                leds: LedIndicator::new(),
-                mouse: MouseButtons::new(),
-            },
-            match_none: StateBits {
-                modifiers: ModifierCombination::new(),
-                leds: LedIndicator::new(),
-                mouse: MouseButtons::new(),
-            },
-            kept_modifiers: ModifierCombination::new(),
-            bindable: false,
-        });
+    fn round_trip_fork() {
+        round_trip(&Fork::new(
+            KeyAction::No,
+            KeyAction::No,
+            KeyAction::No,
+            StateBits::default(),
+            StateBits::default(),
+            ModifierCombination::new(),
+            false,
+        ));
     }
 
     #[test]
@@ -603,7 +682,7 @@ mod tests {
             combo_timeout_ms: 50,
             oneshot_timeout_ms: 500,
             tap_interval_ms: 200,
-            tap_tolerance: 3,
+            tap_capslock_interval_ms: 20,
         });
     }
 
@@ -644,6 +723,7 @@ mod tests {
         });
     }
 
+    #[cfg(feature = "bulk")]
     #[test]
     fn round_trip_set_keymap_bulk_request() {
         let mut actions = Vec::new();
@@ -672,12 +752,69 @@ mod tests {
         });
     }
 
+    #[test]
+    fn round_trip_set_combo_request() {
+        let mut actions = Vec::new();
+        actions.push(KeyAction::No).unwrap();
+        actions.push(KeyAction::No).unwrap();
+        round_trip(&SetComboRequest {
+            index: 3,
+            config: ComboConfig {
+                actions,
+                output: KeyAction::No,
+                layer: Some(1),
+            },
+        });
+    }
+
+    #[test]
+    fn round_trip_set_morse_request() {
+        let mut morse: Morse<{ crate::constants::PROTOCOL_MORSE_VEC_SIZE }> = Morse {
+            profile: MorseProfile::const_default(),
+            actions: heapless::LinearMap::new(),
+        };
+        morse.actions.insert(MorsePattern::from_u16(0b101), Action::No).unwrap();
+        round_trip(&SetMorseRequest {
+            index: 0,
+            config: morse,
+        });
+    }
+
+    #[test]
+    fn round_trip_set_fork_request() {
+        round_trip(&SetForkRequest {
+            index: 2,
+            config: Fork::new(
+                KeyAction::No,
+                KeyAction::No,
+                KeyAction::No,
+                StateBits::default(),
+                StateBits::default(),
+                ModifierCombination::new(),
+                true,
+            ),
+        });
+    }
+
+    #[test]
+    fn round_trip_set_encoder_request_with_actions() {
+        use crate::action::{Action, EncoderAction};
+        use crate::keycode::{ConsumerKey, KeyCode};
+        round_trip(&SetEncoderRequest {
+            encoder_id: 1,
+            layer: 2,
+            action: EncoderAction::new(
+                KeyAction::Single(Action::Key(KeyCode::Consumer(ConsumerKey::VolumeIncrement))),
+                KeyAction::Single(Action::Key(KeyCode::Consumer(ConsumerKey::VolumeDecrement))),
+            ),
+        });
+    }
+
     // Intra-group collisions are caught at compile time by endpoints!/topics! macros.
 
     #[test]
     fn no_cross_endpoint_topic_key_collisions() {
-        let mut all_keys = alloc::vec::Vec::new();
-        all_keys.extend_from_slice(all_endpoint_keys());
+        let mut all_keys = all_endpoint_keys();
         all_keys.extend_from_slice(all_topic_keys());
         assert_unique_keys(&all_keys, "cross endpoint/topic");
     }

@@ -6,7 +6,7 @@ use crate::combo::Combo;
 use crate::fork::Fork;
 use crate::morse::Morse;
 use crate::storage::{Storage, StorageData, StorageKey, print_storage_error};
-use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM};
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MAX_PATTERNS_PER_KEY, MORSE_MAX_NUM};
 
 pub(crate) mod macro_bytes_serde {
     use super::*;
@@ -161,7 +161,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         Ok(())
     }
 
-    pub(crate) async fn read_morses(&mut self, morses: &mut heapless::Vec<Morse, MORSE_MAX_NUM>) -> Result<(), ()> {
+    pub(crate) async fn read_morses(
+        &mut self,
+        morses: &mut heapless::Vec<Morse<MAX_PATTERNS_PER_KEY>, MORSE_MAX_NUM>,
+    ) -> Result<(), ()> {
         for (i, item) in morses.iter_mut().enumerate() {
             let key = StorageKey::morse(i as u8);
             let read_data = self
@@ -190,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_morse_serialization_deserialization() {
-        let morse = Morse::new_from_vial(
+        let morse = Morse::<MAX_PATTERNS_PER_KEY>::new_from_vial(
             Action::Key(KeyCode::Hid(HidKeyCode::A)),
             Action::Key(KeyCode::Hid(HidKeyCode::B)),
             Action::Key(KeyCode::Hid(HidKeyCode::C)),
@@ -224,7 +227,7 @@ mod tests {
     #[test]
     fn test_morse_with_partial_actions() {
         // Create a Morse with partial actions
-        let mut morse: Morse = Morse::default();
+        let mut morse: Morse<MAX_PATTERNS_PER_KEY> = Morse::default();
         _ = morse.put(TAP, Action::Key(KeyCode::Hid(HidKeyCode::A)));
         _ = morse.put(HOLD, Action::Key(KeyCode::Hid(HidKeyCode::B)));
 
@@ -253,7 +256,7 @@ mod tests {
 
     #[test]
     fn test_morse_with_morse_serialization_deserialization() {
-        let mut morse = Morse {
+        let mut morse = Morse::<MAX_PATTERNS_PER_KEY> {
             profile: MorseProfile::new(
                 Some(false),
                 Some(MorseMode::HoldOnOtherPress),

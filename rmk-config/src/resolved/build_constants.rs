@@ -17,6 +17,8 @@ pub struct BuildConstants {
     pub split_peripherals_num: usize,
     pub ble_profiles_num: usize,
     pub split_central_sleep_timeout_seconds: u32,
+    pub protocol_max_bulk_size: usize,
+    pub protocol_macro_chunk_size: usize,
     pub events: Vec<EventChannel>,
     pub passkey: Option<Passkey>,
 }
@@ -102,6 +104,8 @@ impl crate::KeyboardTomlConfig {
             split_peripherals_num,
             ble_profiles_num: rmk.ble_profiles_num,
             split_central_sleep_timeout_seconds: rmk.split_central_sleep_timeout_seconds,
+            protocol_max_bulk_size: rmk.protocol_max_bulk_size,
+            protocol_macro_chunk_size: rmk.protocol_macro_chunk_size,
             events,
             passkey,
         })

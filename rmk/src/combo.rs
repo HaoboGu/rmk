@@ -1,22 +1,10 @@
-use heapless::Vec;
-use postcard::experimental::max_size::MaxSize;
 use rmk_types::action::KeyAction;
-use serde::{Deserialize, Serialize};
+pub use rmk_types::combo::ComboConfig;
 
-use crate::COMBO_MAX_LENGTH;
 use crate::event::KeyboardEvent;
 
-/// Configuration data for a combo
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct ComboConfig {
-    pub(crate) actions: [KeyAction; COMBO_MAX_LENGTH],
-    pub(crate) output: KeyAction,
-    pub(crate) layer: Option<u8>,
-}
-
 /// Runtime combo instance (config + runtime state)
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Combo {
     pub(crate) config: ComboConfig,
@@ -29,37 +17,6 @@ pub struct Combo {
 impl Default for Combo {
     fn default() -> Self {
         Self::empty()
-    }
-}
-
-impl ComboConfig {
-    pub fn new<I: IntoIterator<Item = KeyAction>>(actions: I, output: KeyAction, layer: Option<u8>) -> Self {
-        let mut combo_actions = [KeyAction::No; COMBO_MAX_LENGTH];
-        for (id, action) in actions.into_iter().enumerate() {
-            if id < COMBO_MAX_LENGTH {
-                combo_actions[id] = action;
-            }
-        }
-        Self {
-            actions: combo_actions,
-            output,
-            layer,
-        }
-    }
-
-    /// Get an empty combo.
-    pub fn empty() -> Self {
-        Self::new(Vec::<KeyAction, COMBO_MAX_LENGTH>::new(), KeyAction::No, None)
-    }
-
-    /// Returns the number of key actions in the combo.
-    pub fn size(&self) -> usize {
-        self.actions.iter().filter(|&&a| a != KeyAction::No).count()
-    }
-
-    /// Find the index of a key action in the combo.
-    pub fn find_key_action_index(&self, key_action: &KeyAction) -> Option<usize> {
-        self.actions.iter().position(|&a| a == *key_action)
     }
 }
 

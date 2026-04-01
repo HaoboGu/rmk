@@ -75,6 +75,87 @@ fn generate_constants(bc: &BuildConstants) -> String {
         bc.max_patterns_per_key
     ));
 
+    // Protocol Vec capacity constants.
+    //
+    // There are two kinds of constants here:
+    //
+    // - **Normal constants** (e.g., `COMBO_MAX_LENGTH`, `MAX_PATTERNS_PER_KEY`, `MACRO_SPACE_SIZE`)
+    //   define the firmware's internal capacity -- how many combo keys, morse patterns, or macro
+    //   bytes the firmware can store and process.
+    //
+    // - **PROTOCOL_X constants** (e.g., `PROTOCOL_COMBO_VEC_SIZE`, `PROTOCOL_MORSE_VEC_SIZE`,
+    //   `PROTOCOL_MAX_MACRO_DATA`, `PROTOCOL_MAX_BULK_SIZE`) define the maximum Vec capacity in
+    //   protocol messages -- how many elements can fit in a single protocol request/response.
+    //
+    // On firmware, PROTOCOL_X values are typically set equal to their corresponding normal
+    // constants (e.g., `PROTOCOL_COMBO_VEC_SIZE = COMBO_MAX_LENGTH`), because a single protocol
+    // message needs to carry at most one full config.
+    //
+    // On the host side, PROTOCOL_X values use fixed upper bounds (e.g., 16, 32, 256) so the
+    // host can deserialize responses from any firmware regardless of its config.
+    //
+    // `PROTOCOL_MAX_BULK_SIZE` is different: it controls multi-element bulk transfer (multiple
+    // keys/combos/morses per message) and is only available behind the `bulk` feature.
+    const HOST_MAX_COMBO_VEC_SIZE: usize = 16;
+    const HOST_MAX_MORSE_VEC_SIZE: usize = 32;
+    const HOST_MAX_BULK_SIZE: usize = 16;
+    const HOST_MAX_MACRO_DATA: usize = 256;
+    let is_host = env::var("CARGO_FEATURE_HOST").is_ok();
+    let is_bulk = env::var("CARGO_FEATURE_BULK").is_ok();
+
+    if is_host {
+        // Host: always use upper bounds for wire compatibility with any firmware.
+        lines.push(format!(
+            "pub const PROTOCOL_COMBO_VEC_SIZE: usize = {HOST_MAX_COMBO_VEC_SIZE};"
+        ));
+        lines.push(format!(
+            "pub const PROTOCOL_MORSE_VEC_SIZE: usize = {HOST_MAX_MORSE_VEC_SIZE};"
+        ));
+        lines.push(format!(
+            "pub const PROTOCOL_MAX_MACRO_DATA: usize = {HOST_MAX_MACRO_DATA};"
+        ));
+        // Host always has bulk (host implies bulk feature)
+        lines.push(format!(
+            "pub const PROTOCOL_MAX_BULK_SIZE: usize = {HOST_MAX_BULK_SIZE};"
+        ));
+    } else {
+        // Firmware: per-item constants always generated from keyboard.toml / defaults.
+        lines.push(format!(
+            "pub const PROTOCOL_COMBO_VEC_SIZE: usize = {};",
+            bc.combo_max_length
+        ));
+        lines.push(format!(
+            "pub const PROTOCOL_MORSE_VEC_SIZE: usize = {};",
+            bc.max_patterns_per_key
+        ));
+        lines.push(format!(
+            "pub const PROTOCOL_MAX_MACRO_DATA: usize = {};",
+            bc.protocol_macro_chunk_size
+        ));
+        // Compile-time check: firmware Vec sizes must not exceed host maximums,
+        // otherwise the host tool cannot deserialize firmware responses.
+        lines.push(format!(
+            "const _: () = assert!(PROTOCOL_COMBO_VEC_SIZE <= {HOST_MAX_COMBO_VEC_SIZE}, \"firmware combo vec size exceeds host maximum ({HOST_MAX_COMBO_VEC_SIZE})\");"
+        ));
+        lines.push(format!(
+            "const _: () = assert!(PROTOCOL_MORSE_VEC_SIZE <= {HOST_MAX_MORSE_VEC_SIZE}, \"firmware morse vec size exceeds host maximum ({HOST_MAX_MORSE_VEC_SIZE})\");"
+        ));
+        lines.push(format!(
+            "const _: () = assert!(PROTOCOL_MAX_MACRO_DATA <= {HOST_MAX_MACRO_DATA}, \"firmware macro chunk size exceeds host maximum ({HOST_MAX_MACRO_DATA})\");"
+        ));
+
+        // Bulk constant only when bulk feature is active
+        if is_bulk {
+            lines.push(format!(
+                "pub const PROTOCOL_MAX_BULK_SIZE: usize = {};",
+                bc.protocol_max_bulk_size
+            ));
+            lines.push(format!(
+                "const _: () = assert!(PROTOCOL_MAX_BULK_SIZE <= {HOST_MAX_BULK_SIZE}, \"firmware bulk size exceeds host maximum ({HOST_MAX_BULK_SIZE})\");"
+            ));
+        }
+    }
+
     // Event channels
     for ev in &bc.events {
         let upper = ev.name.to_uppercase();

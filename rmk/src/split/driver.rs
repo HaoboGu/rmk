@@ -154,9 +154,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 },
                 Either3::Second(e) => {
                     let message_to_peri = match e {
-                        Either3::First(indicator_event) => {
-                            SplitMessage::KeyboardIndicator(indicator_event.into_bits())
-                        }
+                        Either3::First(indicator_event) => SplitMessage::KeyboardIndicator(indicator_event.into_bits()),
                         Either3::Second(layer_event) => SplitMessage::Layer(layer_event.0),
                         #[cfg(feature = "_ble")]
                         Either3::Third(_clear_peer) => {

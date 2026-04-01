@@ -5,7 +5,7 @@ use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
-use super::MAX_UNLOCK_KEYS;
+use super::PROTOCOL_MAX_UNLOCK_KEYS;
 
 /// Protocol version advertised during the connection handshake.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
@@ -27,9 +27,11 @@ pub struct DeviceCapabilities {
     pub num_cols: u8,
     pub num_encoders: u8,
     pub max_combos: u8,
+    pub max_combo_keys: u8,
     pub max_macros: u8,
     pub macro_space_size: u16,
     pub max_morse: u8,
+    pub max_patterns_per_key: u8,
     pub max_forks: u8,
     pub storage_enabled: bool,
     pub is_split: bool,
@@ -38,6 +40,9 @@ pub struct DeviceCapabilities {
     pub num_ble_profiles: u8,
     pub lighting_enabled: bool,
     pub max_payload_size: u16,
+    pub max_bulk_keys: u8,
+    pub macro_chunk_size: u16,
+    pub bulk_transfer_supported: bool,
 }
 
 /// Protocol-level error type returned by write operations.
@@ -65,12 +70,12 @@ pub struct LockStatus {
 /// Challenge returned by the Unlock endpoint containing physical key positions to press.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct UnlockChallenge {
-    pub key_positions: Vec<(u8, u8), MAX_UNLOCK_KEYS>,
+    pub key_positions: Vec<(u8, u8), PROTOCOL_MAX_UNLOCK_KEYS>,
 }
 
 impl MaxSize for UnlockChallenge {
     const POSTCARD_MAX_SIZE: usize =
-        <(u8, u8)>::POSTCARD_MAX_SIZE * MAX_UNLOCK_KEYS + super::varint_size(MAX_UNLOCK_KEYS);
+        <(u8, u8)>::POSTCARD_MAX_SIZE * PROTOCOL_MAX_UNLOCK_KEYS + super::varint_size(PROTOCOL_MAX_UNLOCK_KEYS);
 }
 
 /// Storage reset mode for the `StorageReset` endpoint.

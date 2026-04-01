@@ -10,7 +10,7 @@ use crate::battery::BatteryStatus;
 /// Maximum bitmap size: supports up to 256 keys (e.g., 16 rows × 16 cols).
 /// Each row uses ceil(num_cols / 8) bytes. Host decodes using num_rows/num_cols
 /// from DeviceCapabilities.
-pub const MAX_MATRIX_BITMAP_SIZE: usize = 32;
+pub const PROTOCOL_MAX_MATRIX_BITMAP: usize = 32;
 
 /// Current matrix key-press state as a bitmap.
 /// Bit ordering: row-major, bit 0 = col 0, bit 1 = col 1, etc.
@@ -18,12 +18,12 @@ pub const MAX_MATRIX_BITMAP_SIZE: usize = 32;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MatrixState {
-    pub pressed_bitmap: Vec<u8, MAX_MATRIX_BITMAP_SIZE>,
+    pub pressed_bitmap: Vec<u8, PROTOCOL_MAX_MATRIX_BITMAP>,
 }
 
 impl MaxSize for MatrixState {
     const POSTCARD_MAX_SIZE: usize =
-        u8::POSTCARD_MAX_SIZE * MAX_MATRIX_BITMAP_SIZE + super::varint_size(MAX_MATRIX_BITMAP_SIZE);
+        u8::POSTCARD_MAX_SIZE * PROTOCOL_MAX_MATRIX_BITMAP + super::varint_size(PROTOCOL_MAX_MATRIX_BITMAP);
 }
 
 /// Status of a single split peripheral.
@@ -33,4 +33,3 @@ pub struct PeripheralStatus {
     pub connected: bool,
     pub battery: BatteryStatus,
 }
-

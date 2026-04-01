@@ -219,6 +219,14 @@ pub(crate) struct RmkConstantsConfig {
     /// BLE Split Central sleep timeout in minutes (0 = disabled)
     #[serde_inline_default(0)]
     pub split_central_sleep_timeout_seconds: u32,
+    /// Maximum number of key actions in a bulk keymap transfer (protocol).
+    /// Smaller values reduce firmware RAM usage but require more round-trips.
+    #[serde_inline_default(8)]
+    pub protocol_max_bulk_size: usize,
+    /// Maximum macro data chunk size for protocol transfers (bytes).
+    /// Smaller values reduce firmware RAM usage but require more round-trips.
+    #[serde_inline_default(64)]
+    pub protocol_macro_chunk_size: usize,
 }
 
 fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
@@ -284,6 +292,8 @@ impl Default for RmkConstantsConfig {
             split_peripherals_num: 0,
             ble_profiles_num: 3,
             split_central_sleep_timeout_seconds: 0,
+            protocol_max_bulk_size: 8,
+            protocol_macro_chunk_size: 64,
         }
     }
 }
