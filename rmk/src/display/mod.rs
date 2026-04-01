@@ -58,6 +58,13 @@ mod renderer;
 
 pub use renderer::{DefaultOledRenderer, DisplayDriver, DisplayRenderer, RenderContext, write_battery};
 
+#[cfg(feature = "ssd1306")]
+pub use ssd1306;
+#[cfg(feature = "oled_async")]
+pub use oled_async;
+#[cfg(feature = "oled_async")]
+pub use display_interface_i2c;
+
 use embassy_time::{Duration, Instant};
 use rmk_macro::processor;
 

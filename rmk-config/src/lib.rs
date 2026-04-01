@@ -16,6 +16,7 @@ pub mod resolved;
 pub mod usb_interrupt_map;
 pub(crate) mod behavior;
 pub(crate) mod board;
+pub(crate) mod display;
 pub(crate) mod host;
 pub(crate) mod keycode_alias;
 pub(crate) mod layout;
@@ -53,6 +54,8 @@ pub struct KeyboardTomlConfig {
     split: Option<SplitConfig>,
     /// Input device config
     input_device: Option<InputDeviceConfig>,
+    /// Display config
+    display: Option<DisplayConfig>,
     /// Output Pin config
     output: Option<Vec<OutputConfig>>,
     /// Set host configurations
@@ -746,6 +749,8 @@ pub struct SplitBoardConfig {
     pub matrix: MatrixConfig,
     /// Input device config for the split
     pub input_device: Option<InputDeviceConfig>,
+    /// Display config for the split board
+    pub display: Option<DisplayConfig>,
     /// Battery ADC pin for this split board
     pub battery_adc_pin: Option<String>,
     /// ADC divider measured value for battery
@@ -979,6 +984,7 @@ pub struct PointingDeviceConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CommunicationProtocol {
     I2c(I2cConfig),
     Spi(SpiConfig),
@@ -1004,6 +1010,29 @@ pub struct I2cConfig {
     pub sda: String,
     pub scl: String,
     pub address: u8,
+}
+
+/// Display driver type
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayDriver {
+    Ssd1306,
+    Sh1106,
+    Sh1107,
+    Sh1108,
+    Ssd1309,
+}
+
+/// Display configuration
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DisplayConfig {
+    pub driver: DisplayDriver,
+    pub protocol: CommunicationProtocol,
+    pub size: String,
+    #[serde(default)]
+    pub rotation: u16,
+    pub renderer: Option<String>,
 }
 
 /// Configuration for an output pin

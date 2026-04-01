@@ -11,6 +11,7 @@ use super::central::expand_serial_init;
 use crate::codegen::chip::chip_init::expand_chip_init;
 use crate::codegen::chip::flash::expand_flash_init;
 use crate::codegen::chip::gpio::expand_output_initialization;
+use crate::codegen::display::{expand_display_config, expand_display_interrupt};
 use crate::codegen::entry::join_all_tasks;
 use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
 use crate::codegen::import::expand_custom_imports;
@@ -77,6 +78,18 @@ fn expand_bind_interrupt_for_split_peripheral(
     peripheral_id: usize,
 ) -> TokenStream2 {
     let communication = &hardware.communication;
+
+    let display_interrupt = match &hardware.board {
+        BoardConfig::Split(split_config) => {
+            if let Some(display_config) = &split_config.peripheral[peripheral_id].display {
+                expand_display_interrupt(&chip.series, display_config)
+            } else {
+                quote! {}
+            }
+        }
+        _ => quote! {},
+    };
+
     match chip.series {
         ChipSeries::Nrf52 => {
             let ble_config = communication.get_ble_config().unwrap();
@@ -142,6 +155,7 @@ fn expand_bind_interrupt_for_split_peripheral(
                     TIMER0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     RTC0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     #pmw33xx_spi_interrupts
+                    #display_interrupt
                 });
 
                 #[::embassy_executor::task]
@@ -184,11 +198,19 @@ fn expand_bind_interrupt_for_split_peripheral(
                     bind_interrupts!(struct Irqs {
                         PIO0_IRQ_0 => ::embassy_rp::pio::InterruptHandler<::embassy_rp::peripherals::PIO0>;
                         DMA_IRQ_0 => ::embassy_rp::dma::InterruptHandler<::embassy_rp::peripherals::DMA_CH0>, ::embassy_rp::dma::InterruptHandler<::embassy_rp::peripherals::DMA_CH1>;
+                        #display_interrupt
                     });
                     #[::embassy_executor::task]
                     async fn cyw43_task(runner: ::cyw43::Runner<'static, ::cyw43::SpiBus<::embassy_rp::gpio::Output<'static>, ::cyw43_pio::PioSpi<'static, ::embassy_rp::peripherals::PIO0, 0>>>) -> ! {
                         runner.run().await
                     }
+                }
+            } else if !display_interrupt.is_empty() {
+                quote! {
+                    use ::embassy_rp::bind_interrupts;
+                    bind_interrupts!(struct Irqs {
+                        #display_interrupt
+                    });
                 }
             } else {
                 quote! {}
@@ -319,8 +341,22 @@ fn expand_split_peripheral(
     };
 
     // Add processor support for peripherals
-    let (registered_processor_initializers, registered_processors) =
+    let (registered_processor_initializers, mut registered_processors) =
         expand_registered_processor_init(hardware, &item_mod);
+
+    // Display configuration for this peripheral
+    let display_init = if let Some(display_config) = &peripheral_config.display {
+        let (init, processor) = expand_display_config(&chip.series, display_config);
+        let processor_initializer = processor.initializer;
+        let processor_var = processor.var_name;
+        registered_processors.push(quote! { #processor_var.run() });
+        quote! {
+            #init
+            #processor_initializer
+        }
+    } else {
+        quote! {}
+    };
 
     // Import Runnable trait so processor.run() calls compile
     let processor_import = if !registered_processors.is_empty() {
@@ -348,6 +384,7 @@ fn expand_split_peripheral(
         #keymap_init
         #output_config
         #device_initialization
+        #display_init
         #run_rmk_peripheral
     }
 }
