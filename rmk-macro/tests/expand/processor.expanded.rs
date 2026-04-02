@@ -4,6 +4,7 @@
 //! - Single event subscription
 //! - Multiple event subscription
 //! - Polling processor with poll_interval
+//! - Multiple #[processor] attributes (merged subscriptions)
 use rmk_macro::processor;
 pub struct KeyEvent {
     pub row: u8,
@@ -325,6 +326,184 @@ mod polling {
         async fn run(&mut self) -> ! {
             use ::rmk::processor::PollingProcessor;
             self.polling_loop().await
+        }
+    }
+}
+/// Multiple #[processor] attributes (simulates cfg_attr expansion)
+mod multi_attr {
+    use super::{EncoderEvent, KeyEvent, processor};
+    pub struct MultiAttrProcessor;
+    pub enum MultiAttrProcessorProcessorEventEnum {
+        Key(KeyEvent),
+        Encoder(EncoderEvent),
+    }
+    #[automatically_derived]
+    impl ::core::clone::Clone for MultiAttrProcessorProcessorEventEnum {
+        #[inline]
+        fn clone(&self) -> MultiAttrProcessorProcessorEventEnum {
+            match self {
+                MultiAttrProcessorProcessorEventEnum::Key(__self_0) => {
+                    MultiAttrProcessorProcessorEventEnum::Key(
+                        ::core::clone::Clone::clone(__self_0),
+                    )
+                }
+                MultiAttrProcessorProcessorEventEnum::Encoder(__self_0) => {
+                    MultiAttrProcessorProcessorEventEnum::Encoder(
+                        ::core::clone::Clone::clone(__self_0),
+                    )
+                }
+            }
+        }
+    }
+    /// Event subscriber for aggregated events
+    pub struct MultiAttrProcessorProcessorEventSubscriber {
+        sub0: <KeyEvent as ::rmk::event::SubscribableEvent>::Subscriber,
+        sub1: <EncoderEvent as ::rmk::event::SubscribableEvent>::Subscriber,
+    }
+    impl MultiAttrProcessorProcessorEventSubscriber {
+        /// Create a new event subscriber
+        pub fn new() -> Self {
+            Self {
+                sub0: <KeyEvent as ::rmk::event::SubscribableEvent>::subscriber(),
+                sub1: <EncoderEvent as ::rmk::event::SubscribableEvent>::subscriber(),
+            }
+        }
+    }
+    impl ::rmk::event::EventSubscriber for MultiAttrProcessorProcessorEventSubscriber {
+        type Event = MultiAttrProcessorProcessorEventEnum;
+        async fn next_event(&mut self) -> Self::Event {
+            use ::rmk::event::EventSubscriber;
+            use ::rmk::futures::FutureExt;
+            {
+                use ::futures_util::__private as __futures_crate;
+                {
+                    enum __PrivResult<_0, _1> {
+                        _0(_0),
+                        _1(_1),
+                    }
+                    let __select_result = {
+                        let mut _0 = self.sub0.next_event().fuse();
+                        let mut _1 = self.sub1.next_event().fuse();
+                        let mut __poll_fn = |
+                            __cx: &mut __futures_crate::task::Context<'_>|
+                        {
+                            let mut __any_polled = false;
+                            let mut _0 = |__cx: &mut __futures_crate::task::Context<'_>| {
+                                let mut _0 = unsafe {
+                                    __futures_crate::Pin::new_unchecked(&mut _0)
+                                };
+                                if __futures_crate::future::FusedFuture::is_terminated(
+                                    &_0,
+                                ) {
+                                    __futures_crate::None
+                                } else {
+                                    __futures_crate::Some(
+                                        __futures_crate::future::FutureExt::poll_unpin(
+                                                &mut _0,
+                                                __cx,
+                                            )
+                                            .map(__PrivResult::_0),
+                                    )
+                                }
+                            };
+                            let _0: &mut dyn FnMut(
+                                &mut __futures_crate::task::Context<'_>,
+                            ) -> __futures_crate::Option<
+                                    __futures_crate::task::Poll<_>,
+                                > = &mut _0;
+                            let mut _1 = |__cx: &mut __futures_crate::task::Context<'_>| {
+                                let mut _1 = unsafe {
+                                    __futures_crate::Pin::new_unchecked(&mut _1)
+                                };
+                                if __futures_crate::future::FusedFuture::is_terminated(
+                                    &_1,
+                                ) {
+                                    __futures_crate::None
+                                } else {
+                                    __futures_crate::Some(
+                                        __futures_crate::future::FutureExt::poll_unpin(
+                                                &mut _1,
+                                                __cx,
+                                            )
+                                            .map(__PrivResult::_1),
+                                    )
+                                }
+                            };
+                            let _1: &mut dyn FnMut(
+                                &mut __futures_crate::task::Context<'_>,
+                            ) -> __futures_crate::Option<
+                                    __futures_crate::task::Poll<_>,
+                                > = &mut _1;
+                            let mut __select_arr = [_0, _1];
+                            for poller in &mut __select_arr {
+                                let poller: &mut &mut dyn FnMut(
+                                    &mut __futures_crate::task::Context<'_>,
+                                ) -> __futures_crate::Option<
+                                        __futures_crate::task::Poll<_>,
+                                    > = poller;
+                                match poller(__cx) {
+                                    __futures_crate::Some(
+                                        x @ __futures_crate::task::Poll::Ready(_),
+                                    ) => return x,
+                                    __futures_crate::Some(
+                                        __futures_crate::task::Poll::Pending,
+                                    ) => {
+                                        __any_polled = true;
+                                    }
+                                    __futures_crate::None => {}
+                                }
+                            }
+                            if !__any_polled {
+                                {
+                                    ::std::rt::begin_panic(
+                                        "all futures in select! were completed, \
+                    but no `complete =>` handler was provided",
+                                    );
+                                }
+                            } else {
+                                __futures_crate::task::Poll::Pending
+                            }
+                        };
+                        __futures_crate::future::poll_fn(__poll_fn).await
+                    };
+                    match __select_result {
+                        __PrivResult::_0(event) => {
+                            MultiAttrProcessorProcessorEventEnum::Key(event)
+                        }
+                        __PrivResult::_1(event) => {
+                            MultiAttrProcessorProcessorEventEnum::Encoder(event)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    impl ::rmk::event::SubscribableEvent for MultiAttrProcessorProcessorEventEnum {
+        type Subscriber = MultiAttrProcessorProcessorEventSubscriber;
+        fn subscriber() -> Self::Subscriber {
+            MultiAttrProcessorProcessorEventSubscriber::new()
+        }
+    }
+    impl ::rmk::processor::Processor for MultiAttrProcessor {
+        type Event = MultiAttrProcessorProcessorEventEnum;
+        fn subscriber() -> impl ::rmk::event::EventSubscriber<Event = Self::Event> {
+            <MultiAttrProcessorProcessorEventEnum as ::rmk::event::SubscribableEvent>::subscriber()
+        }
+        async fn process(&mut self, event: Self::Event) {
+            match event {
+                MultiAttrProcessorProcessorEventEnum::Key(event) => {
+                    self.on_key_event(event).await
+                }
+                MultiAttrProcessorProcessorEventEnum::Encoder(event) => {
+                    self.on_encoder_event(event).await
+                }
+            }
+        }
+    }
+    impl ::rmk::input_device::Runnable for MultiAttrProcessor {
+        async fn run(&mut self) -> ! {
+            use ::rmk::processor::Processor;
+            self.process_loop().await
         }
     }
 }
