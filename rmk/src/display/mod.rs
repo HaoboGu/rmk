@@ -182,11 +182,6 @@ where
 
         if !self.initialized {
             self.display.init().await;
-
-            let bbox = self.display.bounding_box();
-            self.ctx.width = bbox.size.width;
-            self.ctx.height = bbox.size.height;
-
             self.initialized = true;
         }
 

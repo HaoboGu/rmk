@@ -46,10 +46,6 @@ pub struct RenderContext {
     pub peripheral_batteries: [BatteryStateEvent; crate::SPLIT_PERIPHERALS_NUM],
     /// Whether a key was just pressed (set on `KeyboardEvent { pressed: true }`).
     pub key_pressed: bool,
-    /// Logical display width in pixels (already accounts for rotation).
-    pub width: u32,
-    /// Logical display height in pixels (already accounts for rotation).
-    pub height: u32,
 }
 
 impl Default for RenderContext {
@@ -70,8 +66,6 @@ impl Default for RenderContext {
             #[cfg(all(feature = "split", feature = "_ble"))]
             peripheral_batteries: [BatteryStateEvent::NotAvailable; crate::SPLIT_PERIPHERALS_NUM],
             key_pressed: false,
-            width: 0,
-            height: 0,
         }
     }
 }
@@ -138,8 +132,9 @@ impl DisplayRenderer<BinaryColor> for DefaultOledRenderer {
     fn render<D: DrawTarget<Color = BinaryColor>>(&mut self, ctx: &RenderContext, display: &mut D) {
         display.clear(BinaryColor::Off).ok();
 
-        let w = ctx.width as i32;
-        let h = ctx.height as i32;
+        let bbox = display.bounding_box();
+        let w = bbox.size.width as i32;
+        let h = bbox.size.height as i32;
 
         if w >= h {
             render_landscape(ctx, display, w, h);
