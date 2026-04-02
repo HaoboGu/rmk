@@ -75,6 +75,7 @@ use crate::event::{
 };
 #[cfg(feature = "split")]
 use crate::event::{CentralConnectedEvent, PeripheralConnectedEvent};
+use crate::processor::PollingProcessor;
 
 /// Processor that renders keyboard state on a display.
 ///
@@ -89,7 +90,7 @@ use crate::event::{CentralConnectedEvent, PeripheralConnectedEvent};
 ///
 /// - `D` — display driver, must implement [`DisplayDriver`].
 /// - `R` — the renderer, defaults to [`DefaultOledRenderer`].
-#[processor(subscribe = [KeyboardEvent, LayerChangeEvent, WpmUpdateEvent, LedIndicatorEvent, BatteryStateEvent, SleepStateEvent])]
+#[processor(subscribe = [KeyboardEvent, LayerChangeEvent, WpmUpdateEvent, LedIndicatorEvent, BatteryStateEvent, SleepStateEvent], manual_polling = true)]
 #[cfg_attr(feature = "_ble", processor(subscribe = [BleStatusChangeEvent]))]
 #[cfg_attr(feature = "split", processor(subscribe = [PeripheralConnectedEvent, CentralConnectedEvent]))]
 #[cfg_attr(all(feature = "split", feature = "_ble"), processor(subscribe = [PeripheralBatteryEvent]))]
@@ -103,7 +104,10 @@ where
     ctx: RenderContext,
     initialized: bool,
     last_render: Instant,
+    /// Minimum time between renders (rate-limiter for event-driven renders).
     min_render_interval: Duration,
+    /// Poll interval for animations. `Duration::MAX` disables polling.
+    render_interval: Duration,
 }
 
 impl<D> DisplayProcessor<D, DefaultOledRenderer>
@@ -113,7 +117,9 @@ where
 {
     /// Create a new display processor with the built-in [`DefaultOledRenderer`].
     ///
-    /// The display is lazily initialised on the first event.
+    /// Polling is disabled by default — the display only redraws on events.
+    /// Use [`with_render_interval`](Self::with_render_interval) to enable
+    /// periodic redraws for animations.
     pub fn new(display: D) -> Self {
         Self::with_renderer(display, DefaultOledRenderer)
     }
@@ -124,23 +130,43 @@ where
     D: DisplayDriver,
     R: DisplayRenderer<D::Color>,
 {
-    /// Create a new display processor with a custom [`DisplayRenderer`]
-    /// and the default render interval (30 ms).
+    /// Create a new display processor with a custom [`DisplayRenderer`].
+    ///
+    /// Polling is disabled by default. Call
+    /// [`with_render_interval`](Self::with_render_interval) to enable it.
     pub fn with_renderer(display: D, renderer: R) -> Self {
-        Self::with_renderer_and_interval(display, renderer, Duration::from_millis(30))
-    }
-
-    /// Create a new display processor with a custom [`DisplayRenderer`]
-    /// and a custom minimum render interval.
-    pub fn with_renderer_and_interval(display: D, renderer: R, min_render_interval: Duration) -> Self {
         Self {
             display,
             renderer,
             ctx: RenderContext::default(),
             initialized: false,
             last_render: Instant::from_ticks(0),
-            min_render_interval,
+            min_render_interval: Duration::from_millis(33),
+            render_interval: Duration::MAX,
         }
+    }
+
+    /// Set the poll interval for periodic redraws (animations).
+    ///
+    /// When set, the display redraws at this interval even without events.
+    /// Without this, the display only redraws when keyboard state changes.
+    pub fn with_render_interval(mut self, interval: Duration) -> Self {
+        self.render_interval = interval;
+        self
+    }
+
+    /// Set the minimum time between event-driven renders.
+    ///
+    /// When events arrive faster than this interval, renders are skipped
+    /// and the latest state is drawn on the next render. Default: 10 ms.
+    pub fn with_min_render_interval(mut self, interval: Duration) -> Self {
+        self.min_render_interval = interval;
+        self
+    }
+
+    /// Periodic poll — drives animations even when no events arrive.
+    async fn poll(&mut self) {
+        self.render().await;
     }
 
     /// Redraw the display if enough time has passed since the last render.
@@ -177,7 +203,6 @@ where
 
     async fn on_wpm_update_event(&mut self, event: WpmUpdateEvent) {
         self.ctx.wpm = event.wpm;
-        self.render().await;
     }
 
     async fn on_led_indicator_event(&mut self, event: LedIndicatorEvent) {
@@ -191,7 +216,8 @@ where
         self.render().await;
     }
 
-    async fn on_keyboard_event(&mut self, _event: KeyboardEvent) {
+    async fn on_keyboard_event(&mut self, event: KeyboardEvent) {
+        self.ctx.key_pressed = event.pressed;
         self.render().await;
     }
 
@@ -226,5 +252,23 @@ where
             *slot = event.state;
         }
         self.render().await;
+    }
+}
+
+impl<D, R> PollingProcessor for DisplayProcessor<D, R>
+where
+    D: DisplayDriver,
+    R: DisplayRenderer<D::Color>,
+{
+    fn interval(&self) -> Duration {
+        if self.ctx.sleeping {
+            Duration::MAX
+        } else {
+            self.render_interval
+        }
+    }
+
+    async fn update(&mut self) {
+        self.poll().await;
     }
 }

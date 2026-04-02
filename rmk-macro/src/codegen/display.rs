@@ -160,19 +160,37 @@ fn expand_display_driver_init(config: &DisplayConfig) -> TokenStream {
 }
 
 fn expand_display_processor_init(config: &DisplayConfig) -> TokenStream {
-    if let Some(renderer_path) = &config.renderer {
+    let constructor = if let Some(renderer_path) = &config.renderer {
         let renderer_type: syn::Type = syn::parse_str(renderer_path)
             .unwrap_or_else(|e| panic!("Invalid renderer type path '{}': {}", renderer_path, e));
         quote! {
-            let mut display_processor = ::rmk::display::DisplayProcessor::with_renderer(
+            ::rmk::display::DisplayProcessor::with_renderer(
                 display,
                 #renderer_type::default(),
-            );
+            )
         }
     } else {
         quote! {
-            let mut display_processor = ::rmk::display::DisplayProcessor::new(display);
+            ::rmk::display::DisplayProcessor::new(display)
         }
+    };
+
+    let render_interval = config.render_interval.map(|ms| {
+        quote! {
+            .with_render_interval(::embassy_time::Duration::from_millis(#ms))
+        }
+    });
+
+    let min_render_interval = config.min_render_interval.map(|ms| {
+        quote! {
+            .with_min_render_interval(::embassy_time::Duration::from_millis(#ms))
+        }
+    });
+
+    quote! {
+        let mut display_processor = #constructor
+            #render_interval
+            #min_render_interval;
     }
 }
 

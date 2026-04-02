@@ -13,17 +13,33 @@ use crate::event_macros::utils::{AttributeParser, attr_matches_name, has_runnabl
 pub struct ProcessorConfig {
     pub event_types: Vec<syn::Path>,
     pub poll_interval_ms: Option<u64>,
+    /// When true, the macro generates `Runnable` with `polling_loop` but does NOT
+    /// generate the `PollingProcessor` impl — the user implements it manually.
+    pub manual_polling: bool,
 }
 
 /// Parse processor config from attribute tokens.
 pub fn parse_processor_config(
     tokens: impl Into<TokenStream>,
 ) -> Result<ProcessorConfig, TokenStream> {
-    let parser = AttributeParser::new_validated(tokens, &["subscribe", "poll_interval"])?;
+    let parser =
+        AttributeParser::new_validated(tokens, &["subscribe", "poll_interval", "manual_polling"])?;
+
+    let poll_interval_ms = parser.get_int("poll_interval")?;
+    let manual_polling = parser.get_bool("manual_polling")?.unwrap_or(false);
+
+    if manual_polling && poll_interval_ms.is_some() {
+        return Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "`manual_polling` and `poll_interval` are mutually exclusive",
+        )
+        .to_compile_error());
+    }
 
     Ok(ProcessorConfig {
         event_types: parser.get_path_array("subscribe")?,
-        poll_interval_ms: parser.get_int("poll_interval")?,
+        poll_interval_ms,
+        manual_polling,
     })
 }
 
@@ -100,8 +116,10 @@ pub fn processor_impl(
             quote! { subscriber },
         );
 
-    // PollingProcessor impl when poll_interval is set
-    let polling_processor_impl = if let Some(interval_ms) = config.poll_interval_ms {
+    // PollingProcessor impl when poll_interval is set (skipped for manual_polling)
+    let polling_processor_impl = if let Some(interval_ms) =
+        config.poll_interval_ms.filter(|_| !config.manual_polling)
+    {
         quote! {
             impl #impl_generics ::rmk::processor::PollingProcessor for #struct_name #deduped_ty_generics #where_clause {
                 fn interval(&self) -> ::embassy_time::Duration {

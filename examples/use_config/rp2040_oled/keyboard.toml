@@ -67,9 +67,12 @@ keymap = [
 [display]
 driver = "ssd1306"
 size = "128x32"
-rotation = 270
-# renderer is optional
-renderer = "custom_renderer::BigLayerRenderer"
+rotation = 0
+renderer = "custom_renderer::BongoCatRenderer" # optional
+# Poll interval in ms for animations (omit to disable polling — event-driven only)
+render_interval = 16
+# Minimum time in ms between event-driven renders (default: 33)
+min_render_interval = 10
 
 [display.protocol.i2c]
 instance = "I2C1"

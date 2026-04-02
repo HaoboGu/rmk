@@ -44,6 +44,8 @@ pub struct RenderContext {
     /// Per-peripheral battery state, indexed by peripheral id.
     #[cfg(all(feature = "split", feature = "_ble"))]
     pub peripheral_batteries: [BatteryStateEvent; crate::SPLIT_PERIPHERALS_NUM],
+    /// Whether a key was just pressed (set on `KeyboardEvent { pressed: true }`).
+    pub key_pressed: bool,
     /// Logical display width in pixels (already accounts for rotation).
     pub width: u32,
     /// Logical display height in pixels (already accounts for rotation).
@@ -67,6 +69,7 @@ impl Default for RenderContext {
             peripherals_connected: [false; crate::SPLIT_PERIPHERALS_NUM],
             #[cfg(all(feature = "split", feature = "_ble"))]
             peripheral_batteries: [BatteryStateEvent::NotAvailable; crate::SPLIT_PERIPHERALS_NUM],
+            key_pressed: false,
             width: 0,
             height: 0,
         }

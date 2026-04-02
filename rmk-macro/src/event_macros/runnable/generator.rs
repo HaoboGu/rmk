@@ -57,11 +57,11 @@ fn build_polling_loop_body(
     };
 
     quote! {
-        let elapsed = last.elapsed();
         let interval = ::embassy_time::Duration::from_millis(#interval_ms);
-        let timer = ::embassy_time::Timer::after(
-            interval.checked_sub(elapsed).unwrap_or(::embassy_time::Duration::MIN)
-        );
+        let deadline = last
+            .checked_add(interval)
+            .unwrap_or(::embassy_time::Instant::MAX);
+        let timer = ::embassy_time::Timer::at(deadline);
         #select_handling
     }
 }
@@ -157,8 +157,8 @@ pub fn generate_runnable(
     // Handle processor.
     let has_polling = processor_config
         .as_ref()
-        .and_then(|c| c.poll_interval_ms)
-        .is_some();
+        .map(|c| c.poll_interval_ms.is_some() || c.manual_polling)
+        .unwrap_or(false);
 
     if processor_config.is_some() {
         use_statements.push(quote! { use ::rmk::event::SubscribableEvent; });

@@ -451,13 +451,11 @@ mod polling {
             let mut proc_sub = <Self as ::rmk::processor::Processor>::subscriber();
             let mut last = ::embassy_time::Instant::now();
             loop {
-                let elapsed = last.elapsed();
                 let interval = ::embassy_time::Duration::from_millis(50u64);
-                let timer = ::embassy_time::Timer::after(
-                    interval
-                        .checked_sub(elapsed)
-                        .unwrap_or(::embassy_time::Duration::MIN),
-                );
+                let deadline = last
+                    .checked_add(interval)
+                    .unwrap_or(::embassy_time::Instant::MAX);
+                let timer = ::embassy_time::Timer::at(deadline);
                 let select_result = {
                     {
                         use ::futures_util::__private as __futures_crate;
@@ -1148,13 +1146,11 @@ mod multi_event_polling {
             let mut proc_sub = <Self as ::rmk::processor::Processor>::subscriber();
             let mut last = ::embassy_time::Instant::now();
             loop {
-                let elapsed = last.elapsed();
                 let interval = ::embassy_time::Duration::from_millis(100u64);
-                let timer = ::embassy_time::Timer::after(
-                    interval
-                        .checked_sub(elapsed)
-                        .unwrap_or(::embassy_time::Duration::MIN),
-                );
+                let deadline = last
+                    .checked_add(interval)
+                    .unwrap_or(::embassy_time::Instant::MAX);
+                let timer = ::embassy_time::Timer::at(deadline);
                 let select_result = {
                     {
                         use ::futures_util::__private as __futures_crate;

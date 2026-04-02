@@ -1,98 +1,155 @@
 #![no_std]
 
-use core::fmt::Write;
+mod frames;
 
-use embedded_graphics::mono_font::MonoTextStyle;
-use embedded_graphics::mono_font::ascii::FONT_5X8;
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::*;
-use embedded_graphics::primitives::{Line, PrimitiveStyle};
-use embedded_graphics::text::{Alignment, Text, TextStyleBuilder};
-use rmk::display::{DisplayRenderer, RenderContext, write_battery};
+use rmk::display::{DisplayRenderer, RenderContext};
 
-/// A custom renderer optimized for small vertical OLED displays (e.g. 128x32 portrait).
-pub struct BigLayerRenderer;
+/// WPM below this → Idle (breathing animation).
+const IDLE_WPM: u16 = 10;
+/// WPM above this → Fury (both paws smashing).
+const FURY_WPM: u16 = 40;
+/// Render ticks between idle animation frame advances.
+const IDLE_TICKS_PER_FRAME: u8 = 5;
+/// Render ticks between fury frame toggles.
+const FURY_TICKS_PER_FRAME: u8 = 2;
+/// Render ticks to hold the tap frame before returning to prep.
+const TAP_HOLD_TICKS: u8 = 3;
 
-impl Default for BigLayerRenderer {
+/// Animation state.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum State {
+    /// Cat resting — cycles idle frames.
+    Idle,
+    /// Cat typing — alternates paws on each key press.
+    Tap,
+    /// Cat going wild — rapidly alternates both paws.
+    Fury,
+}
+
+/// Bongo Cat OLED renderer.
+///
+/// Draws the classic Bongo Cat animation on a 128×32 OLED.
+/// - **Idle** (low WPM): subtle breathing animation.
+/// - **Tap** (moderate WPM): each key press alternates left/right paw.
+/// - **Fury** (high WPM): both paws smashing rapidly.
+///
+/// Frame data from QMK firmware (GPL-2.0, keyboards/torn).
+pub struct BongoCatRenderer {
+    state: State,
+    /// Which tap frame to show (false = left paw, true = right paw).
+    tap_paw: bool,
+    /// Edge detection for key_pressed.
+    prev_pressed: bool,
+    /// Idle animation frame index.
+    idle_frame: u8,
+    /// Tick counter for frame timing.
+    tick: u8,
+    /// Remaining ticks to hold the tap frame before returning to prep.
+    tap_hold: u8,
+}
+
+impl Default for BongoCatRenderer {
     fn default() -> Self {
-        Self
+        Self {
+            state: State::Idle,
+            tap_paw: false,
+            prev_pressed: false,
+            idle_frame: 0,
+            tick: 0,
+            tap_hold: 0,
+        }
     }
 }
 
-impl DisplayRenderer<BinaryColor> for BigLayerRenderer {
+impl DisplayRenderer<BinaryColor> for BongoCatRenderer {
     fn render<D: DrawTarget<Color = BinaryColor>>(&mut self, ctx: &RenderContext, display: &mut D) {
-        display.clear(BinaryColor::Off).ok();
+        // Detect new key press (rising edge)
+        let new_press = ctx.key_pressed && !self.prev_pressed;
+        self.prev_pressed = ctx.key_pressed;
 
-        let w = ctx.width as i32;
-        let h = ctx.height as i32;
-        let style = MonoTextStyle::new(&FONT_5X8, BinaryColor::On);
-        let centered = TextStyleBuilder::new().alignment(Alignment::Center).build();
-        let sep = PrimitiveStyle::with_stroke(BinaryColor::On, 1);
-        let cx = w / 2;
+        // WPM drives state transitions
+        let new_state = if ctx.wpm >= FURY_WPM {
+            State::Fury
+        } else if ctx.wpm >= IDLE_WPM {
+            State::Tap
+        } else {
+            State::Idle
+        };
 
-        // Divide into 4 zones
-        let zone = h / 4;
-
-        // Baseline: vertically center a single 8px-tall line in each zone
-        let y = |z: i32| -> i32 { z * zone + (zone + 8) / 2 };
-
-        // ── Zone 0: Layer ──
-        let mut buf: heapless::String<8> = heapless::String::new();
-        write!(buf, "L: {}", ctx.layer).ok();
-        Text::with_text_style(&buf, Point::new(cx, y(0)), style, centered)
-            .draw(display)
-            .ok();
-
-        Line::new(Point::new(2, zone), Point::new(w - 3, zone))
-            .into_styled(sep)
-            .draw(display)
-            .ok();
-
-        // ── Zone 1: WPM ──
-        buf.clear();
-        write!(buf, "{:03}", ctx.wpm).ok();
-        Text::with_text_style(&buf, Point::new(cx, y(1)), style, centered)
-            .draw(display)
-            .ok();
-
-        Line::new(Point::new(2, zone * 2), Point::new(w - 3, zone * 2))
-            .into_styled(sep)
-            .draw(display)
-            .ok();
-
-        // ── Zone 2: Indicators ──
-        let has_cap = ctx.caps_lock;
-        let has_num = ctx.num_lock;
-
-        if has_cap && has_num {
-            // Two lines, stacked
-            let top = 2 * zone + (zone - 18) / 2 + 8;
-            Text::with_text_style("CAP", Point::new(cx, top), style, centered)
-                .draw(display)
-                .ok();
-            Text::with_text_style("NUM", Point::new(cx, top + 10), style, centered)
-                .draw(display)
-                .ok();
-        } else if has_cap {
-            Text::with_text_style("CAP", Point::new(cx, y(2)), style, centered)
-                .draw(display)
-                .ok();
-        } else if has_num {
-            Text::with_text_style("NUM", Point::new(cx, y(2)), style, centered)
-                .draw(display)
-                .ok();
+        if new_state != self.state {
+            self.state = new_state;
+            self.tick = 0;
+            self.idle_frame = 0;
         }
 
-        Line::new(Point::new(2, zone * 3), Point::new(w - 3, zone * 3))
-            .into_styled(sep)
-            .draw(display)
-            .ok();
+        // Alternate paw on each key press (used in Tap state)
+        if new_press {
+            self.tap_paw = !self.tap_paw;
+            self.tap_hold = TAP_HOLD_TICKS;
+        }
 
-        // ── Zone 3: Battery ──
-        let mut bat: heapless::String<5> = heapless::String::new();
-        write_battery(&mut bat, ctx.battery);
-        Text::with_text_style(&bat, Point::new(cx, y(3)), style, centered)
-            .draw(display)
-            .ok();
+        display.clear(BinaryColor::Off).ok();
+
+        let data: &[u8; frames::FRAME_SIZE] = match self.state {
+            State::Idle => {
+                self.tick += 1;
+                if self.tick >= IDLE_TICKS_PER_FRAME {
+                    self.tick = 0;
+                    self.idle_frame = (self.idle_frame + 1) % frames::IDLE.len() as u8;
+                }
+                &frames::IDLE[self.idle_frame as usize]
+            }
+            State::Tap => {
+                if self.tap_hold > 0 {
+                    self.tap_hold -= 1;
+                    &frames::TAP[self.tap_paw as usize]
+                } else {
+                    &frames::PREP
+                }
+            }
+            State::Fury => {
+                // Alternate: both paws down → prep (raised) → ...
+                self.tick += 1;
+                if self.tick >= FURY_TICKS_PER_FRAME {
+                    self.tick = 0;
+                    self.tap_paw = !self.tap_paw;
+                }
+                if self.tap_paw { &frames::FURY } else { &frames::PREP }
+            }
+        };
+
+        draw_page_format_frame(display, data, 0, 0);
+    }
+}
+
+/// Draw a frame stored in SSD1306 page format onto an embedded-graphics display.
+///
+/// Page format: 4 pages of 128 bytes each. Each byte is a column of 8 vertical
+/// pixels in one page, with bit 0 at the top of the 8-pixel strip.
+fn draw_page_format_frame<D: DrawTarget<Color = BinaryColor>>(
+    display: &mut D,
+    data: &[u8; frames::FRAME_SIZE],
+    offset_x: i32,
+    offset_y: i32,
+) {
+    const PAGES: usize = 4; // 32 / 8
+    const COLS: usize = 128;
+
+    for page in 0..PAGES {
+        for col in 0..COLS {
+            let byte = data[page * COLS + col];
+            if byte == 0 {
+                continue;
+            }
+            for bit in 0..8u32 {
+                if byte & (1 << bit) != 0 {
+                    let x = col as i32 + offset_x;
+                    let y = page as i32 * 8 + bit as i32 + offset_y;
+                    Pixel(Point::new(x, y), BinaryColor::On).draw(display).ok();
+                }
+            }
+        }
     }
 }
