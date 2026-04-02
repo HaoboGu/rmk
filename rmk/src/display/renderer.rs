@@ -19,6 +19,18 @@ use rmk_types::ble::BleStatus;
 use crate::event::BatteryStateEvent;
 
 /// Snapshot of keyboard state passed to renderers on every redraw.
+///
+/// # Feature-gated fields
+///
+/// Some fields are only available when specific RMK features are enabled:
+///
+/// - `ble_status` — requires the `_ble` feature
+/// - `central_connected`, `peripherals_connected` — require the `split` feature
+/// - `peripheral_batteries` — requires both `split` and `_ble` features
+///
+/// Third-party renderers that access these fields must enable the
+/// corresponding features in their `Cargo.toml` dependency on `rmk`,
+/// and guard access with matching `#[cfg]` attributes.
 pub struct RenderContext {
     /// Current active layer index.
     pub layer: u8,
