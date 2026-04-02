@@ -1,0 +1,51 @@
+# Feature-based event subscriber declarations.
+#
+# When all `features` listed in an entry are enabled (checked via
+# CARGO_FEATURE_* env vars at build time), each event's `subs` is
+# bumped by the specified amount.
+#
+# This keeps event_default.toml at base counts and avoids wasting
+# static memory when a feature is disabled.
+#
+# Format per event: { name = "event_name", count = N }
+# `count` defaults to 1 if omitted.
+
+# --- BLE-gated internal subscribers ---
+
+[[subscriber]]
+features = ["_ble"]
+events = [
+    # ble/battery_service.rs: BatteryStateEvent::subscriber()
+    # builtin_processor/battery_led.rs: subscribe = [BatteryStateEvent] (user-optional but _ble-gated)
+    { name = "battery_state", count = 2 },
+]
+
+# --- Split-gated internal subscribers ---
+
+[[subscriber]]
+features = ["split"]
+events = [
+    # split/peripheral.rs: KeyboardEvent::subscriber()
+    { name = "keyboard" },
+    # split/peripheral.rs: PointingEvent::subscriber()
+    { name = "pointing" },
+    # split/driver.rs: LedIndicatorEvent::subscriber()
+    { name = "led_indicator" },
+    # split/driver.rs: LayerChangeEvent::subscriber()
+    { name = "layer_change" },
+]
+
+# --- Split + BLE-gated internal subscribers ---
+
+[[subscriber]]
+features = ["split", "_ble"]
+events = [
+    # split/ble/peripheral.rs: KeyboardEvent::subscriber() (temporary, on timeout)
+    { name = "keyboard" },
+    # split/peripheral.rs: ChargingStateEvent::subscriber() (cfg _ble)
+    { name = "charging_state" },
+    # split/peripheral.rs: BatteryStateEvent::subscriber() (cfg _ble)
+    { name = "battery_state" },
+    # split/driver.rs: ClearPeerEvent::subscriber() (cfg _ble)
+    { name = "clear_peer" },
+]
