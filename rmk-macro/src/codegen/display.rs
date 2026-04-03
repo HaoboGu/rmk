@@ -89,8 +89,10 @@ fn expand_i2c_init(chip_series: &ChipSeries, i2c: &I2cConfig) -> TokenStream {
         }
         ChipSeries::Nrf52 => {
             quote! {
+                static DISPLAY_I2C_BUF: ::static_cell::StaticCell<[u8; 256]> = ::static_cell::StaticCell::new();
+                let display_i2c_buf = DISPLAY_I2C_BUF.init([0u8; 256]);
                 let display_i2c = ::embassy_nrf::twim::Twim::new(
-                    p.#instance, Irqs, p.#sda, p.#scl, ::embassy_nrf::twim::Config::default()
+                    p.#instance, Irqs, p.#sda, p.#scl, ::embassy_nrf::twim::Config::default(), display_i2c_buf
                 );
             }
         }
