@@ -1,4 +1,4 @@
-//! Keymap-related protocol types.
+//! Keymap endpoint types.
 
 #[cfg(feature = "bulk")]
 use heapless::Vec;
@@ -38,6 +38,10 @@ pub struct BulkRequest {
     pub count: u8,
 }
 
+// ---------------------------------------------------------------------------
+// Bulk transfer types
+// ---------------------------------------------------------------------------
+
 /// Response type for bulk keymap operations.
 #[cfg(feature = "bulk")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
@@ -47,7 +51,7 @@ pub struct BulkKeyActions(pub Vec<KeyAction, PROTOCOL_MAX_BULK_SIZE>);
 #[cfg(feature = "bulk")]
 impl MaxSize for BulkKeyActions {
     const POSTCARD_MAX_SIZE: usize =
-        KeyAction::POSTCARD_MAX_SIZE * PROTOCOL_MAX_BULK_SIZE + super::varint_size(PROTOCOL_MAX_BULK_SIZE);
+        KeyAction::POSTCARD_MAX_SIZE * PROTOCOL_MAX_BULK_SIZE + crate::varint_max_size(PROTOCOL_MAX_BULK_SIZE);
 }
 
 /// Request payload for `SetKeymapBulk` endpoint.
@@ -62,5 +66,5 @@ pub struct SetKeymapBulkRequest {
 impl MaxSize for SetKeymapBulkRequest {
     const POSTCARD_MAX_SIZE: usize = BulkRequest::POSTCARD_MAX_SIZE
         + KeyAction::POSTCARD_MAX_SIZE * PROTOCOL_MAX_BULK_SIZE
-        + super::varint_size(PROTOCOL_MAX_BULK_SIZE);
+        + crate::varint_max_size(PROTOCOL_MAX_BULK_SIZE);
 }

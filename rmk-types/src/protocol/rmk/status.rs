@@ -1,4 +1,4 @@
-//! Connection and status protocol types.
+//! Runtime status endpoint types.
 
 use heapless::Vec;
 use postcard::experimental::max_size::MaxSize;
@@ -23,7 +23,7 @@ pub struct MatrixState {
 
 impl MaxSize for MatrixState {
     const POSTCARD_MAX_SIZE: usize =
-        u8::POSTCARD_MAX_SIZE * PROTOCOL_MAX_MATRIX_BITMAP + super::varint_size(PROTOCOL_MAX_MATRIX_BITMAP);
+        u8::POSTCARD_MAX_SIZE * PROTOCOL_MAX_MATRIX_BITMAP + crate::varint_max_size(PROTOCOL_MAX_MATRIX_BITMAP);
 }
 
 /// Status of a single split peripheral.

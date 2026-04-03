@@ -1,11 +1,14 @@
-//! Core protocol types.
+//! System-level protocol types.
+//!
+//! Types for protocol handshake, device discovery, security, and global configuration.
 
 use heapless::Vec;
 use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
-use super::PROTOCOL_MAX_UNLOCK_KEYS;
+/// Maximum number of key positions in an unlock challenge.
+pub const PROTOCOL_MAX_UNLOCK_KEYS: usize = 2;
 
 /// Protocol version advertised during the connection handshake.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
@@ -75,7 +78,7 @@ pub struct UnlockChallenge {
 
 impl MaxSize for UnlockChallenge {
     const POSTCARD_MAX_SIZE: usize =
-        <(u8, u8)>::POSTCARD_MAX_SIZE * PROTOCOL_MAX_UNLOCK_KEYS + super::varint_size(PROTOCOL_MAX_UNLOCK_KEYS);
+        <(u8, u8)>::POSTCARD_MAX_SIZE * PROTOCOL_MAX_UNLOCK_KEYS + crate::varint_max_size(PROTOCOL_MAX_UNLOCK_KEYS);
 }
 
 /// Storage reset mode for the `StorageReset` endpoint.
@@ -85,4 +88,20 @@ pub enum StorageResetMode {
     Full,
     /// Reset only the layout/keymap data.
     LayoutOnly,
+}
+
+/// Protocol-facing behavior configuration (global timing settings).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+pub struct BehaviorConfig {
+    pub combo_timeout_ms: u16,
+    pub oneshot_timeout_ms: u16,
+    pub tap_interval_ms: u16,
+    pub tap_capslock_interval_ms: u16,
+}
+
+/// Request payload for bulk operations on flat-indexed collections (combos, morse, etc.).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+pub struct IndexedBulkRequest {
+    pub start_index: u8,
+    pub count: u8,
 }

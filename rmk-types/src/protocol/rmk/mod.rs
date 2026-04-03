@@ -7,19 +7,25 @@
 //! The protocol uses postcard-rpc's type-level endpoint definitions over COBS-framed
 //! byte streams (USB bulk transfer and BLE serial).
 
-mod config;
+mod combo;
+mod encoder;
+mod fork;
 mod keymap;
-mod request;
+mod macro_data;
+mod morse;
 mod status;
-mod types;
+mod system;
 
 use postcard_rpc::{TopicDirection, endpoints, topics};
 
-pub use self::config::*;
+pub use self::combo::*;
+pub use self::encoder::*;
+pub use self::fork::*;
 pub use self::keymap::*;
-pub use self::request::*;
+pub use self::macro_data::*;
+pub use self::morse::*;
 pub use self::status::*;
-pub use self::types::*;
+pub use self::system::*;
 use crate::action::{EncoderAction, KeyAction};
 use crate::battery::BatteryStatus;
 use crate::ble::BleStatus;
@@ -28,24 +34,9 @@ use crate::connection::ConnectionType;
 use crate::constants::PROTOCOL_MORSE_VEC_SIZE;
 use crate::fork::Fork;
 use crate::led_indicator::LedIndicator;
-use crate::morse::Morse;
 
 /// Type alias for a Morse configuration with protocol-level Vec capacity.
-pub type ProtocolMorse = Morse<PROTOCOL_MORSE_VEC_SIZE>;
-
-// ---------------------------------------------------------------------------
-// MaxSize helper (postcard 1.x only implements MaxSize for heapless 0.7,
-// but we use heapless 0.9, so Vec-containing types need manual impls)
-// ---------------------------------------------------------------------------
-
-pub(crate) use crate::varint_max_size as varint_size;
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-/// Maximum number of key positions in an unlock challenge.
-pub const PROTOCOL_MAX_UNLOCK_KEYS: usize = 2;
+pub type ProtocolMorse = crate::morse::Morse<PROTOCOL_MORSE_VEC_SIZE>;
 
 // ---------------------------------------------------------------------------
 // Endpoint declarations
@@ -118,10 +109,10 @@ endpoints! {
 endpoints! {
     list = COMBO_BULK_ENDPOINT_LIST;
     omit_std = true;
-    | EndpointTy    | RequestTy           | ResponseTy         | Path              |
-    | ----------    | ---------           | ----------         | ----              |
-    | GetComboBulk  | BulkRequest         | GetComboBulkResponse | "combo/bulk_get" |
-    | SetComboBulk  | SetComboBulkRequest | RmkResult            | "combo/bulk_set" |
+    | EndpointTy    | RequestTy           | ResponseTy           | Path              |
+    | ----------    | ---------           | ----------           | ----              |
+    | GetComboBulk  | IndexedBulkRequest  | GetComboBulkResponse | "combo/bulk_get"  |
+    | SetComboBulk  | SetComboBulkRequest | RmkResult            | "combo/bulk_set"  |
 }
 
 endpoints! {
@@ -137,10 +128,10 @@ endpoints! {
 endpoints! {
     list = MORSE_BULK_ENDPOINT_LIST;
     omit_std = true;
-    | EndpointTy    | RequestTy           | ResponseTy         | Path              |
-    | ----------    | ---------           | ----------         | ----              |
-    | GetMorseBulk  | BulkRequest         | GetMorseBulkResponse | "morse/bulk_get" |
-    | SetMorseBulk  | SetMorseBulkRequest | RmkResult            | "morse/bulk_set" |
+    | EndpointTy    | RequestTy           | ResponseTy           | Path              |
+    | ----------    | ---------           | ----------           | ----              |
+    | GetMorseBulk  | IndexedBulkRequest  | GetMorseBulkResponse | "morse/bulk_get"  |
+    | SetMorseBulk  | SetMorseBulkRequest | RmkResult            | "morse/bulk_set"  |
 }
 
 endpoints! {
@@ -184,117 +175,82 @@ endpoints! {
     | GetPeripheralStatus | u8        | PeripheralStatus | "status/peripheral" |
 }
 
+/// Build an `EndpointMap` from a list of endpoint group constants.
+///
+/// Each argument must be a `postcard_rpc::EndpointList` (as produced by `endpoints!`).
+/// The standard ICD endpoints are always included automatically.
+macro_rules! build_endpoint_map {
+    ($($list:expr),* $(,)?) => {
+        const {
+            use postcard_rpc::postcard_schema::schema::{DataModelType, NamedType};
+            use postcard_rpc::{EndpointMap, Key};
+
+            const NULL_KEY: Key = unsafe { Key::from_bytes([0u8; 8]) };
+            const NULL_TY: &NamedType = &NamedType {
+                name: "",
+                ty: &DataModelType::Unit,
+            };
+
+            const TYPE_SLICES: &[&[&NamedType]] = &[
+                postcard_rpc::standard_icd::STANDARD_ICD_ENDPOINTS.types,
+                $($list.types,)*
+            ];
+            const TYPE_LEN: usize = postcard_rpc::uniques::total_len(TYPE_SLICES);
+            const TYPES: [&NamedType; TYPE_LEN] =
+                postcard_rpc::uniques::combine_with_copy(TYPE_SLICES, NULL_TY);
+
+            const EP_SLICES: &[&[(&str, Key, Key)]] = &[
+                postcard_rpc::standard_icd::STANDARD_ICD_ENDPOINTS.endpoints,
+                $($list.endpoints,)*
+            ];
+            const EP_LEN: usize = postcard_rpc::uniques::total_len(EP_SLICES);
+            const EPS: [(&str, Key, Key); EP_LEN] =
+                postcard_rpc::uniques::combine_with_copy(EP_SLICES, ("", NULL_KEY, NULL_KEY));
+
+            EndpointMap {
+                types: TYPES.as_slice(),
+                endpoints: EPS.as_slice(),
+            }
+        }
+    };
+}
+
 /// Full endpoint map for the RMK protocol.
 ///
-/// This is assembled from smaller endpoint groups to avoid very large const-eval
+/// Assembled from smaller endpoint groups to avoid very large const-eval
 /// workloads in a single `endpoints!` invocation.
 /// When the `bulk` feature is enabled, bulk transfer endpoints are included.
 #[cfg(not(feature = "bulk"))]
-pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = const {
-    use postcard_rpc::postcard_schema::schema::{DataModelType, NamedType};
-    use postcard_rpc::{EndpointMap, Key};
-
-    const NULL_KEY: Key = unsafe { Key::from_bytes([0u8; 8]) };
-    const NULL_TY: &NamedType = &NamedType {
-        name: "",
-        ty: &DataModelType::Unit,
-    };
-
-    const TYPE_SLICES: &[&[&NamedType]] = &[
-        postcard_rpc::standard_icd::STANDARD_ICD_ENDPOINTS.types,
-        SYSTEM_ENDPOINT_LIST.types,
-        KEYMAP_ENDPOINT_LIST.types,
-        ENCODER_ENDPOINT_LIST.types,
-        MACRO_ENDPOINT_LIST.types,
-        COMBO_ENDPOINT_LIST.types,
-        MORSE_ENDPOINT_LIST.types,
-        FORK_ENDPOINT_LIST.types,
-        BEHAVIOR_ENDPOINT_LIST.types,
-        CONNECTION_ENDPOINT_LIST.types,
-        STATUS_ENDPOINT_LIST.types,
-    ];
-    const TYPE_LEN: usize = postcard_rpc::uniques::total_len(TYPE_SLICES);
-    const TYPES: [&NamedType; TYPE_LEN] = postcard_rpc::uniques::combine_with_copy(TYPE_SLICES, NULL_TY);
-
-    const ENDPOINT_SLICES: &[&[(&str, Key, Key)]] = &[
-        postcard_rpc::standard_icd::STANDARD_ICD_ENDPOINTS.endpoints,
-        SYSTEM_ENDPOINT_LIST.endpoints,
-        KEYMAP_ENDPOINT_LIST.endpoints,
-        ENCODER_ENDPOINT_LIST.endpoints,
-        MACRO_ENDPOINT_LIST.endpoints,
-        COMBO_ENDPOINT_LIST.endpoints,
-        MORSE_ENDPOINT_LIST.endpoints,
-        FORK_ENDPOINT_LIST.endpoints,
-        BEHAVIOR_ENDPOINT_LIST.endpoints,
-        CONNECTION_ENDPOINT_LIST.endpoints,
-        STATUS_ENDPOINT_LIST.endpoints,
-    ];
-    const ENDPOINT_LEN: usize = postcard_rpc::uniques::total_len(ENDPOINT_SLICES);
-    const ENDPOINTS: [(&str, Key, Key); ENDPOINT_LEN] =
-        postcard_rpc::uniques::combine_with_copy(ENDPOINT_SLICES, ("", NULL_KEY, NULL_KEY));
-
-    EndpointMap {
-        types: TYPES.as_slice(),
-        endpoints: ENDPOINTS.as_slice(),
-    }
-};
+pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = build_endpoint_map!(
+    SYSTEM_ENDPOINT_LIST,
+    KEYMAP_ENDPOINT_LIST,
+    ENCODER_ENDPOINT_LIST,
+    MACRO_ENDPOINT_LIST,
+    COMBO_ENDPOINT_LIST,
+    MORSE_ENDPOINT_LIST,
+    FORK_ENDPOINT_LIST,
+    BEHAVIOR_ENDPOINT_LIST,
+    CONNECTION_ENDPOINT_LIST,
+    STATUS_ENDPOINT_LIST,
+);
 
 /// Full endpoint map including bulk transfer endpoints.
 #[cfg(feature = "bulk")]
-pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = const {
-    use postcard_rpc::postcard_schema::schema::{DataModelType, NamedType};
-    use postcard_rpc::{EndpointMap, Key};
-
-    const NULL_KEY: Key = unsafe { Key::from_bytes([0u8; 8]) };
-    const NULL_TY: &NamedType = &NamedType {
-        name: "",
-        ty: &DataModelType::Unit,
-    };
-
-    const TYPE_SLICES: &[&[&NamedType]] = &[
-        postcard_rpc::standard_icd::STANDARD_ICD_ENDPOINTS.types,
-        SYSTEM_ENDPOINT_LIST.types,
-        KEYMAP_ENDPOINT_LIST.types,
-        KEYMAP_BULK_ENDPOINT_LIST.types,
-        ENCODER_ENDPOINT_LIST.types,
-        MACRO_ENDPOINT_LIST.types,
-        COMBO_ENDPOINT_LIST.types,
-        COMBO_BULK_ENDPOINT_LIST.types,
-        MORSE_ENDPOINT_LIST.types,
-        MORSE_BULK_ENDPOINT_LIST.types,
-        FORK_ENDPOINT_LIST.types,
-        BEHAVIOR_ENDPOINT_LIST.types,
-        CONNECTION_ENDPOINT_LIST.types,
-        STATUS_ENDPOINT_LIST.types,
-    ];
-    const TYPE_LEN: usize = postcard_rpc::uniques::total_len(TYPE_SLICES);
-    const TYPES: [&NamedType; TYPE_LEN] = postcard_rpc::uniques::combine_with_copy(TYPE_SLICES, NULL_TY);
-
-    const ENDPOINT_SLICES: &[&[(&str, Key, Key)]] = &[
-        postcard_rpc::standard_icd::STANDARD_ICD_ENDPOINTS.endpoints,
-        SYSTEM_ENDPOINT_LIST.endpoints,
-        KEYMAP_ENDPOINT_LIST.endpoints,
-        KEYMAP_BULK_ENDPOINT_LIST.endpoints,
-        ENCODER_ENDPOINT_LIST.endpoints,
-        MACRO_ENDPOINT_LIST.endpoints,
-        COMBO_ENDPOINT_LIST.endpoints,
-        COMBO_BULK_ENDPOINT_LIST.endpoints,
-        MORSE_ENDPOINT_LIST.endpoints,
-        MORSE_BULK_ENDPOINT_LIST.endpoints,
-        FORK_ENDPOINT_LIST.endpoints,
-        BEHAVIOR_ENDPOINT_LIST.endpoints,
-        CONNECTION_ENDPOINT_LIST.endpoints,
-        STATUS_ENDPOINT_LIST.endpoints,
-    ];
-    const ENDPOINT_LEN: usize = postcard_rpc::uniques::total_len(ENDPOINT_SLICES);
-    const ENDPOINTS: [(&str, Key, Key); ENDPOINT_LEN] =
-        postcard_rpc::uniques::combine_with_copy(ENDPOINT_SLICES, ("", NULL_KEY, NULL_KEY));
-
-    EndpointMap {
-        types: TYPES.as_slice(),
-        endpoints: ENDPOINTS.as_slice(),
-    }
-};
+pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = build_endpoint_map!(
+    SYSTEM_ENDPOINT_LIST,
+    KEYMAP_ENDPOINT_LIST,
+    KEYMAP_BULK_ENDPOINT_LIST,
+    ENCODER_ENDPOINT_LIST,
+    MACRO_ENDPOINT_LIST,
+    COMBO_ENDPOINT_LIST,
+    COMBO_BULK_ENDPOINT_LIST,
+    MORSE_ENDPOINT_LIST,
+    MORSE_BULK_ENDPOINT_LIST,
+    FORK_ENDPOINT_LIST,
+    BEHAVIOR_ENDPOINT_LIST,
+    CONNECTION_ENDPOINT_LIST,
+    STATUS_ENDPOINT_LIST,
+);
 
 // ---------------------------------------------------------------------------
 // Topic declarations
