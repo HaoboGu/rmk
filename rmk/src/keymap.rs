@@ -11,8 +11,9 @@ use {
 
 use crate::combo::Combo;
 use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, OneShotModifiersConfig, PositionalConfig};
+use rmk_types::fork::Fork;
+
 use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_event};
-use crate::fork::Fork;
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
 #[cfg(feature = "host_security")]
@@ -740,29 +741,19 @@ mod test {
     use rmk_types::fork::StateBits;
     use rmk_types::modifier::ModifierCombination;
 
-    use crate::combo::{Combo, ComboConfig};
-    use crate::fork::Fork;
+    use rmk_types::combo::ComboConfig;
+    use rmk_types::fork::Fork;
+
+    use crate::combo::Combo;
     use crate::keymap::fill_vec;
     use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
 
     #[test]
     fn test_fill_vec() {
         let mut combos: heapless::Vec<_, COMBO_MAX_NUM> = heapless::Vec::from_slice(&[
-            Combo::new(ComboConfig {
-                actions: heapless::Vec::from_slice(&[k!(A), k!(B), k!(C), k!(D)]).unwrap(),
-                output: k!(Z),
-                layer: None,
-            }),
-            Combo::new(ComboConfig {
-                actions: heapless::Vec::from_slice(&[k!(A), k!(B), k!(No), k!(No)]).unwrap(),
-                output: k!(X),
-                layer: None,
-            }),
-            Combo::new(ComboConfig {
-                actions: heapless::Vec::from_slice(&[k!(A), k!(B), k!(C), k!(No)]).unwrap(),
-                output: k!(Y),
-                layer: None,
-            }),
+            Combo::new(ComboConfig::new([k!(A), k!(B), k!(C), k!(D)], k!(Z), None)),
+            Combo::new(ComboConfig::new([k!(A), k!(B)], k!(X), None)),
+            Combo::new(ComboConfig::new([k!(A), k!(B), k!(C)], k!(Y), None)),
         ])
         .unwrap();
 

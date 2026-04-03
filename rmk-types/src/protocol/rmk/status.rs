@@ -5,8 +5,6 @@ use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
-use crate::battery::BatteryStatus;
-
 /// Maximum bitmap size: supports up to 256 keys (e.g., 16 rows × 16 cols).
 /// Each row uses ceil(num_cols / 8) bytes. Host decodes using num_rows/num_cols
 /// from DeviceCapabilities.
@@ -27,9 +25,10 @@ impl MaxSize for MatrixState {
 }
 
 /// Status of a single split peripheral.
+#[cfg(all(feature = "_ble", feature = "split"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PeripheralStatus {
     pub connected: bool,
-    pub battery: BatteryStatus,
+    pub battery: crate::battery::BatteryStatus,
 }

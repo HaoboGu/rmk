@@ -13,12 +13,17 @@ use crate::modifier::ModifierCombination;
 use crate::mouse_button::MouseButtons;
 
 /// Bitset state used by fork matching logic.
+///
+/// A zero (default) value means "match nothing" — no modifiers, LEDs, or mouse buttons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct StateBits {
+    /// Active modifier combination to match.
     pub modifiers: ModifierCombination,
+    /// LED indicator state to match (Num/Caps/Scroll Lock, etc.).
     pub leds: LedIndicator,
+    /// Mouse button state to match.
     pub mouse: MouseButtons,
 }
 
@@ -67,16 +72,25 @@ impl StateBits {
 /// Fork (key override) configuration.
 ///
 /// A fork overrides a key's output based on the current modifier/LED/mouse state.
+/// When the trigger key is pressed, the fork checks current state against `match_any`
+/// and `match_none` to decide between `positive_output` and `negative_output`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Fork {
+    /// The key action that activates this fork. Should not be `KeyAction::Transparent`.
     pub trigger: KeyAction,
+    /// Output when the state condition is NOT met.
     pub negative_output: KeyAction,
+    /// Output when the state condition IS met.
     pub positive_output: KeyAction,
+    /// If any of these state bits are active, the positive branch is taken.
     pub match_any: StateBits,
+    /// If any of these state bits are active, the fork is suppressed.
     pub match_none: StateBits,
+    /// Modifiers to keep active when the fork fires.
     pub kept_modifiers: ModifierCombination,
+    /// Whether this fork can be rebound via protocol.
     pub bindable: bool,
 }
 
@@ -103,26 +117,6 @@ impl Fork {
             match_any,
             match_none,
             kept_modifiers,
-            bindable,
-        }
-    }
-
-    pub fn new_ex(
-        trigger: KeyAction,
-        negative_output: KeyAction,
-        positive_output: KeyAction,
-        match_any: StateBits,
-        match_none: StateBits,
-        kept: StateBits,
-        bindable: bool,
-    ) -> Self {
-        Self {
-            trigger,
-            negative_output,
-            positive_output,
-            match_any,
-            match_none,
-            kept_modifiers: kept.modifiers,
             bindable,
         }
     }

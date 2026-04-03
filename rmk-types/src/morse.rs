@@ -122,6 +122,8 @@ impl<const NUM_PATTERNS: usize> PartialEq for Morse<NUM_PATTERNS> {
     }
 }
 
+impl<const NUM_PATTERNS: usize> Eq for Morse<NUM_PATTERNS> {}
+
 /// Manual Schema impl because Morse uses custom serde for LinearMap.
 /// The wire format is: (MorseProfile, Vec<(u16, Action)>).
 #[cfg(feature = "rmk_protocol")]
@@ -197,13 +199,13 @@ impl<const N: usize> Morse<N> {
         let mut pattern = 0b1u16;
         for item in tap_actions.iter() {
             pattern <<= 1;
-            result.put(MorsePattern::from_u16(pattern), *item);
+            let _ = result.put(MorsePattern::from_u16(pattern), *item);
         }
 
         let mut pattern = 0b1u16;
         for item in hold_actions.iter() {
             pattern <<= 1;
-            result.put(MorsePattern::from_u16(pattern | 0b1), *item);
+            let _ = result.put(MorsePattern::from_u16(pattern | 0b1), *item);
         }
 
         result
@@ -249,11 +251,19 @@ impl<const N: usize> Morse<N> {
         self.actions.get(&pattern).copied()
     }
 
-    pub fn put(&mut self, pattern: MorsePattern, action: Action) {
+    /// Insert or update an action for the given pattern.
+    ///
+    /// An `Action::No` removes the pattern. Returns `Err((pattern, action))` if the map is full.
+    pub fn put(
+        &mut self,
+        pattern: MorsePattern,
+        action: Action,
+    ) -> Result<(), (MorsePattern, Action)> {
         if action != Action::No {
-            _ = self.actions.insert(pattern, action);
+            self.actions.insert(pattern, action).map(|_| ())
         } else {
             let _ = self.actions.remove(&pattern);
+            Ok(())
         }
     }
 }

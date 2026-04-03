@@ -2,8 +2,9 @@ use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use serde::de::{Error as DeError, SeqAccess, Visitor};
 use serde::{Deserializer, Serializer};
 
+use rmk_types::fork::Fork;
+
 use crate::combo::Combo;
-use crate::fork::Fork;
 use crate::morse::Morse;
 use crate::storage::{Storage, StorageData, StorageKey, print_storage_error};
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MAX_PATTERNS_PER_KEY, MORSE_MAX_NUM};

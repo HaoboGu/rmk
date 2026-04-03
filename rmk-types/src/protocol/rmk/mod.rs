@@ -27,7 +27,9 @@ pub use self::morse::*;
 pub use self::status::*;
 pub use self::system::*;
 use crate::action::{EncoderAction, KeyAction};
+#[cfg(feature = "_ble")]
 use crate::battery::BatteryStatus;
+#[cfg(feature = "_ble")]
 use crate::ble::BleStatus;
 use crate::connection::ConnectionType;
 use crate::fork::Fork;
@@ -150,25 +152,68 @@ endpoints! {
 endpoints! {
     list = CONNECTION_ENDPOINT_LIST;
     omit_std = true;
-    | EndpointTy        | RequestTy      | ResponseTy | Path              |
-    | ----------        | ---------      | ---------- | ----              |
-    | GetConnectionType | ()             | ConnectionType | "conn/type"    |
-    | GetBleStatus      | ()             | BleStatus      | "conn/ble"     |
-    | SetConnectionType | ConnectionType | RmkResult  | "conn/set_type"   |
-    | SwitchBleProfile  | u8             | RmkResult  | "conn/switch_ble" |
-    | ClearBleProfile   | u8             | RmkResult  | "conn/clear_ble"  |
+    | EndpointTy        | RequestTy      | ResponseTy     | Path            |
+    | ----------        | ---------      | ----------     | ----            |
+    | GetConnectionType | ()             | ConnectionType | "conn/type"     |
+    | SetConnectionType | ConnectionType | RmkResult      | "conn/set_type" |
 }
+
+#[cfg(feature = "_ble")]
+endpoints! {
+    list = BLE_CONNECTION_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy       | RequestTy | ResponseTy | Path              |
+    | ----------       | --------- | ---------- | ----              |
+    | GetBleStatus     | ()        | BleStatus  | "conn/ble"        |
+    | SwitchBleProfile | u8        | RmkResult  | "conn/switch_ble" |
+    | ClearBleProfile  | u8        | RmkResult  | "conn/clear_ble"  |
+}
+
+/// Empty endpoint list for when BLE is not available.
+#[cfg(not(feature = "_ble"))]
+pub const BLE_CONNECTION_ENDPOINT_LIST: postcard_rpc::EndpointMap = postcard_rpc::EndpointMap {
+    types: &[],
+    endpoints: &[],
+};
 
 endpoints! {
     list = STATUS_ENDPOINT_LIST;
     omit_std = true;
+    | EndpointTy      | RequestTy | ResponseTy  | Path             |
+    | ----------      | --------- | ----------  | ----             |
+    | GetCurrentLayer | ()        | u8          | "status/layer"   |
+    | GetMatrixState  | ()        | MatrixState | "status/matrix"  |
+}
+
+#[cfg(feature = "_ble")]
+endpoints! {
+    list = BLE_STATUS_ENDPOINT_LIST;
+    omit_std = true;
+    | EndpointTy       | RequestTy | ResponseTy    | Path             |
+    | ----------       | --------- | ----------    | ----             |
+    | GetBatteryStatus | ()        | BatteryStatus | "status/battery" |
+}
+
+#[cfg(not(feature = "_ble"))]
+pub const BLE_STATUS_ENDPOINT_LIST: postcard_rpc::EndpointMap = postcard_rpc::EndpointMap {
+    types: &[],
+    endpoints: &[],
+};
+
+#[cfg(feature = "split")]
+endpoints! {
+    list = SPLIT_STATUS_ENDPOINT_LIST;
+    omit_std = true;
     | EndpointTy          | RequestTy | ResponseTy       | Path                |
     | ----------          | --------- | ----------       | ----                |
-    | GetBatteryStatus    | ()        | BatteryStatus    | "status/battery"    |
-    | GetCurrentLayer     | ()        | u8               | "status/layer"      |
-    | GetMatrixState      | ()        | MatrixState      | "status/matrix"     |
     | GetPeripheralStatus | u8        | PeripheralStatus | "status/peripheral" |
 }
+
+#[cfg(not(feature = "split"))]
+pub const SPLIT_STATUS_ENDPOINT_LIST: postcard_rpc::EndpointMap = postcard_rpc::EndpointMap {
+    types: &[],
+    endpoints: &[],
+};
 
 /// Build an `EndpointMap` from a list of endpoint group constants.
 ///
@@ -215,6 +260,10 @@ macro_rules! build_endpoint_map {
 /// Assembled from smaller endpoint groups to avoid very large const-eval
 /// workloads in a single `endpoints!` invocation.
 /// When the `bulk` feature is enabled, bulk transfer endpoints are included.
+///
+/// NOTE: the two `#[cfg]` variants share most of their body. A macro was attempted
+/// but `const {}` blocks inside `macro_rules!` hit Rust const-eval limitations.
+/// If you add a new endpoint group, update **both** blocks.
 #[cfg(not(feature = "bulk"))]
 pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = build_endpoint_map!(
     SYSTEM_ENDPOINT_LIST,
@@ -226,7 +275,10 @@ pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = build_endpoint_map!(
     FORK_ENDPOINT_LIST,
     BEHAVIOR_ENDPOINT_LIST,
     CONNECTION_ENDPOINT_LIST,
+    BLE_CONNECTION_ENDPOINT_LIST,
     STATUS_ENDPOINT_LIST,
+    BLE_STATUS_ENDPOINT_LIST,
+    SPLIT_STATUS_ENDPOINT_LIST,
 );
 
 /// Full endpoint map including bulk transfer endpoints.
@@ -244,7 +296,10 @@ pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = build_endpoint_map!(
     FORK_ENDPOINT_LIST,
     BEHAVIOR_ENDPOINT_LIST,
     CONNECTION_ENDPOINT_LIST,
+    BLE_CONNECTION_ENDPOINT_LIST,
     STATUS_ENDPOINT_LIST,
+    BLE_STATUS_ENDPOINT_LIST,
+    SPLIT_STATUS_ENDPOINT_LIST,
 );
 
 // ---------------------------------------------------------------------------
@@ -254,15 +309,23 @@ pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = build_endpoint_map!(
 topics! {
     list = TOPICS_OUT_LIST;
     direction = TopicDirection::ToClient;
-    | TopicTy               | MessageTy              | Path                  |
-    | -------               | ---------              | ----                  |
-    | LayerChangeTopic      | u8                     | "event/layer"         |
-    | WpmUpdateTopic        | u16                    | "event/wpm"           |
-    | BatteryStatusTopic     | BatteryStatus          | "event/battery"       |
-    | BleStatusChangeTopic  | BleStatus              | "event/ble_status"    |
-    | ConnectionChangeTopic | ConnectionType         | "event/connection"    |
-    | SleepStateTopic       | bool                   | "event/sleep"         |
-    | LedIndicatorTopic     | LedIndicator           | "event/led"           |
+    | TopicTy               | MessageTy      | Path               |
+    | -------               | ---------      | ----               |
+    | LayerChangeTopic      | u8             | "event/layer"      |
+    | WpmUpdateTopic        | u16            | "event/wpm"        |
+    | ConnectionChangeTopic | ConnectionType | "event/connection" |
+    | SleepStateTopic       | bool           | "event/sleep"      |
+    | LedIndicatorTopic     | LedIndicator   | "event/led"        |
+}
+
+#[cfg(feature = "_ble")]
+topics! {
+    list = BLE_TOPICS_OUT_LIST;
+    direction = TopicDirection::ToClient;
+    | TopicTy              | MessageTy     | Path               |
+    | -------              | ---------     | ----               |
+    | BatteryStatusTopic   | BatteryStatus | "event/battery"    |
+    | BleStatusChangeTopic | BleStatus     | "event/ble_status" |
 }
 
 // ---------------------------------------------------------------------------
@@ -279,7 +342,9 @@ mod tests {
 
     use super::{ENDPOINT_LIST, TOPICS_OUT_LIST, *};
     use crate::action::{Action, MorseProfile};
+    #[cfg(feature = "_ble")]
     use crate::battery::ChargeState;
+    #[cfg(feature = "_ble")]
     use crate::ble::BleState;
     use crate::combo::ComboConfig;
     use crate::fork::{Fork, StateBits};
@@ -350,16 +415,26 @@ mod tests {
             SetBehaviorConfig::REQ_KEY,
             // Connection
             GetConnectionType::REQ_KEY,
-            GetBleStatus::REQ_KEY,
             SetConnectionType::REQ_KEY,
-            SwitchBleProfile::REQ_KEY,
-            ClearBleProfile::REQ_KEY,
             // Status
-            GetBatteryStatus::REQ_KEY,
             GetCurrentLayer::REQ_KEY,
             GetMatrixState::REQ_KEY,
-            GetPeripheralStatus::REQ_KEY,
         ];
+        // BLE endpoints (feature-gated)
+        #[cfg(feature = "_ble")]
+        {
+            keys.extend_from_slice(&[
+                GetBleStatus::REQ_KEY,
+                SwitchBleProfile::REQ_KEY,
+                ClearBleProfile::REQ_KEY,
+                GetBatteryStatus::REQ_KEY,
+            ]);
+        }
+        // Split endpoints (feature-gated)
+        #[cfg(feature = "split")]
+        {
+            keys.extend_from_slice(&[GetPeripheralStatus::REQ_KEY]);
+        }
         // Bulk endpoints (feature-gated)
         #[cfg(feature = "bulk")]
         {
@@ -376,16 +451,23 @@ mod tests {
     }
 
     /// All topic keys, defined once and shared across collision tests.
-    fn all_topic_keys() -> &'static [Key] {
-        &[
+    fn all_topic_keys() -> alloc::vec::Vec<Key> {
+        #[allow(unused_mut)]
+        let mut keys = alloc::vec![
             LayerChangeTopic::TOPIC_KEY,
             WpmUpdateTopic::TOPIC_KEY,
-            BatteryStatusTopic::TOPIC_KEY,
-            BleStatusChangeTopic::TOPIC_KEY,
             ConnectionChangeTopic::TOPIC_KEY,
             SleepStateTopic::TOPIC_KEY,
             LedIndicatorTopic::TOPIC_KEY,
-        ]
+        ];
+        #[cfg(feature = "_ble")]
+        {
+            keys.extend_from_slice(&[
+                BatteryStatusTopic::TOPIC_KEY,
+                BleStatusChangeTopic::TOPIC_KEY,
+            ]);
+        }
+        keys
     }
 
     // -- Round-trip tests --
@@ -527,6 +609,7 @@ mod tests {
         round_trip(&ConnectionType::Ble);
     }
 
+    #[cfg(feature = "_ble")]
     #[test]
     fn round_trip_battery_status() {
         round_trip(&BatteryStatus::Unavailable);
@@ -551,6 +634,7 @@ mod tests {
         round_trip(&MatrixState { pressed_bitmap: bitmap });
     }
 
+    #[cfg(all(feature = "_ble", feature = "split"))]
     #[test]
     fn round_trip_peripheral_status() {
         round_trip(&PeripheralStatus {
@@ -599,14 +683,9 @@ mod tests {
 
     #[test]
     fn round_trip_combo_config() {
-        let mut actions: ProtocolVec<KeyAction, { crate::constants::COMBO_VEC_SIZE }> = ProtocolVec::new();
-        actions.push(KeyAction::No).unwrap();
-        actions.push(KeyAction::No).unwrap();
-        round_trip(&ComboConfig {
-            actions,
-            output: KeyAction::No,
-            layer: Some(1),
-        });
+        round_trip(&ComboConfig::new([KeyAction::No], KeyAction::No, Some(1)));
+        // Empty combo
+        round_trip(&ComboConfig::empty());
     }
 
     #[test]
@@ -645,6 +724,14 @@ mod tests {
     fn round_trip_topic_payloads() {
         round_trip(&3u8); // LayerChangeTopic
         round_trip(&120u16); // WpmUpdateTopic
+        round_trip(&ConnectionType::Usb); // ConnectionChangeTopic
+        round_trip(&true); // SleepStateTopic
+        round_trip(&LedIndicator::new()); // LedIndicatorTopic
+    }
+
+    #[cfg(feature = "_ble")]
+    #[test]
+    fn round_trip_ble_topic_payloads() {
         round_trip(&BatteryStatus::Available {
             charge_state: ChargeState::Discharging,
             level: Some(100),
@@ -661,9 +748,6 @@ mod tests {
             profile: 0,
             state: BleState::Inactive,
         });
-        round_trip(&ConnectionType::Usb); // ConnectionChangeTopic
-        round_trip(&true); // SleepStateTopic
-        round_trip(&LedIndicator::new()); // LedIndicatorTopic
     }
 
     #[test]
@@ -709,16 +793,9 @@ mod tests {
 
     #[test]
     fn round_trip_set_combo_request() {
-        let mut actions: ProtocolVec<KeyAction, { crate::constants::COMBO_VEC_SIZE }> = ProtocolVec::new();
-        actions.push(KeyAction::No).unwrap();
-        actions.push(KeyAction::No).unwrap();
         round_trip(&SetComboRequest {
             index: 3,
-            config: ComboConfig {
-                actions,
-                output: KeyAction::No,
-                layer: Some(1),
-            },
+            config: ComboConfig::new([KeyAction::No], KeyAction::No, Some(1)),
         });
     }
 
@@ -770,7 +847,7 @@ mod tests {
     #[test]
     fn no_cross_endpoint_topic_key_collisions() {
         let mut all_keys = all_endpoint_keys();
-        all_keys.extend_from_slice(all_topic_keys());
+        all_keys.extend_from_slice(&all_topic_keys());
         assert_unique_keys(&all_keys, "cross endpoint/topic");
     }
 
@@ -781,6 +858,67 @@ mod tests {
 
     #[test]
     fn topic_list_contains_all_declared() {
-        assert!(TOPICS_OUT_LIST.topics.len() >= all_topic_keys().len());
+        let mut total_topics = TOPICS_OUT_LIST.topics.len();
+        #[cfg(feature = "_ble")]
+        {
+            total_topics += BLE_TOPICS_OUT_LIST.topics.len();
+        }
+        assert!(total_topics >= all_topic_keys().len());
+    }
+
+    // -- Max-capacity round-trip tests --
+
+    #[test]
+    fn round_trip_macro_data_max_capacity() {
+        let mut data = Vec::new();
+        for i in 0..crate::constants::PROTOCOL_MAX_MACRO_DATA {
+            data.push(i as u8).unwrap();
+        }
+        round_trip(&MacroData { data });
+    }
+
+    #[test]
+    fn round_trip_matrix_state_max_capacity() {
+        let mut bitmap = heapless::Vec::new();
+        for i in 0..super::status::PROTOCOL_MAX_MATRIX_BITMAP {
+            bitmap.push(i as u8).unwrap();
+        }
+        round_trip(&MatrixState { pressed_bitmap: bitmap });
+    }
+
+    /// Verify that every non-bulk endpoint is present in the combined ENDPOINT_LIST.
+    /// This catches divergence when new endpoint groups are added to one cfg block
+    /// but not the other.
+    #[test]
+    fn endpoint_list_contains_all_non_bulk_endpoints() {
+        let endpoint_paths: alloc::collections::BTreeSet<&str> =
+            ENDPOINT_LIST.endpoints.iter().map(|(path, _, _)| *path).collect();
+
+        let non_bulk_groups: &[&[(&str, Key, Key)]] = &[
+            postcard_rpc::standard_icd::STANDARD_ICD_ENDPOINTS.endpoints,
+            SYSTEM_ENDPOINT_LIST.endpoints,
+            KEYMAP_ENDPOINT_LIST.endpoints,
+            ENCODER_ENDPOINT_LIST.endpoints,
+            MACRO_ENDPOINT_LIST.endpoints,
+            COMBO_ENDPOINT_LIST.endpoints,
+            MORSE_ENDPOINT_LIST.endpoints,
+            FORK_ENDPOINT_LIST.endpoints,
+            BEHAVIOR_ENDPOINT_LIST.endpoints,
+            CONNECTION_ENDPOINT_LIST.endpoints,
+            BLE_CONNECTION_ENDPOINT_LIST.endpoints,
+            STATUS_ENDPOINT_LIST.endpoints,
+            BLE_STATUS_ENDPOINT_LIST.endpoints,
+            SPLIT_STATUS_ENDPOINT_LIST.endpoints,
+        ];
+
+        for group in non_bulk_groups {
+            for (path, _, _) in *group {
+                assert!(
+                    endpoint_paths.contains(path),
+                    "Endpoint '{}' missing from ENDPOINT_LIST — update both cfg blocks in mod.rs",
+                    path
+                );
+            }
+        }
     }
 }

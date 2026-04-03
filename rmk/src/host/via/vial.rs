@@ -340,10 +340,10 @@ pub(crate) async fn process_vial<'a>(
 
                         // Update the morse in keymap
                         keymap.with_morse_mut(morse_idx, |morse: &mut Morse<MAX_PATTERNS_PER_KEY>| {
-                            morse.put(TAP, tap.to_action());
-                            morse.put(DOUBLE_TAP, double_tap.to_action());
-                            morse.put(HOLD, hold.to_action());
-                            morse.put(HOLD_AFTER_TAP, hold_after_tap.to_action());
+                            let _ = morse.put(TAP, tap.to_action());
+                            let _ = morse.put(DOUBLE_TAP, double_tap.to_action());
+                            let _ = morse.put(HOLD, hold.to_action());
+                            let _ = morse.put(HOLD_AFTER_TAP, hold_after_tap.to_action());
                             morse.profile.set_hold_timeout_ms(timeout_ms);
                             morse.profile.set_gap_timeout_ms(timeout_ms);
                         });
@@ -369,9 +369,15 @@ pub(crate) async fn process_vial<'a>(
                         if let Some(Some(combo)) = combos.get(combo_idx) {
                             // Combo components
                             for i in 0..COMBO_MAX_LENGTH {
+                                let kc = combo
+                                    .config
+                                    .actions
+                                    .get(i)
+                                    .copied()
+                                    .unwrap_or(KeyAction::No);
                                 LittleEndian::write_u16(
                                     &mut report.input_data[1 + i * 2..3 + i * 2],
-                                    to_via_keycode(*combo.config.actions.get(i).unwrap_or(&KeyAction::No)),
+                                    to_via_keycode(kc),
                                 );
                             }
                             // Combo output
@@ -390,22 +396,21 @@ pub(crate) async fn process_vial<'a>(
 
                     #[cfg(feature = "storage")]
                     {
-                        use heapless::Vec;
+                        use rmk_types::combo::ComboConfig;
 
-                        use crate::combo::{Combo, ComboConfig};
+                        use crate::combo::Combo;
                         let combo_idx = report.output_data[3] as usize;
                         let result = keymap.with_combos_mut(|combos| {
                             if combo_idx >= combos.len() {
                                 return None;
                             }
 
-                            let mut actions: Vec<KeyAction, COMBO_MAX_LENGTH> = Vec::new();
+                            let mut actions = heapless::Vec::<KeyAction, COMBO_MAX_LENGTH>::new();
                             for i in 0..COMBO_MAX_LENGTH {
                                 let action =
                                     from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
                                 if !action.is_empty() {
                                     if actions.push(action).is_err() {
-                                        // Fail if the combo action buffer is too small
                                         return None;
                                     }
                                 }
@@ -413,28 +418,22 @@ pub(crate) async fn process_vial<'a>(
                             let output = from_via_keycode(LittleEndian::read_u16(
                                 &report.output_data[4 + COMBO_MAX_LENGTH * 2..6 + COMBO_MAX_LENGTH * 2],
                             ));
-                            combos[combo_idx] = if actions.is_empty() && output == KeyAction::No {
-                                debug!("combo is empty");
-                                None
-                            } else {
-                                Some(Combo::new(ComboConfig {
-                                    actions: actions.clone(),
-                                    output,
-                                    layer: None,
-                                }))
-                            };
-                            Some((actions, output))
+                            let config = ComboConfig { actions, output, layer: None };
+                            combos[combo_idx] =
+                                if config.actions.is_empty() && output == KeyAction::No {
+                                    debug!("combo is empty");
+                                    None
+                                } else {
+                                    Some(Combo::new(config.clone()))
+                                };
+                            Some(config)
                         });
 
-                        if let Some((actions, output)) = result {
+                        if let Some(config) = result {
                             FLASH_CHANNEL
                                 .send(FlashOperationMessage::Combo {
                                     idx: combo_idx as u8,
-                                    config: ComboConfig {
-                                        actions,
-                                        output,
-                                        layer: None,
-                                    },
+                                    config,
                                 })
                                 .await;
                         }
@@ -517,12 +516,12 @@ mod tests {
 
     use super::*;
     use crate::COMBO_MAX_LENGTH;
-    use crate::combo::ComboConfig;
+    use rmk_types::combo::ComboConfig;
     use crate::storage::StorageData;
     #[test]
     fn test_combo_serialization_deserialization() {
-        let mut actions: heapless::Vec<KeyAction, COMBO_MAX_LENGTH> = heapless::Vec::new();
-        let _ = actions.push(KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Kc1))));
+        let mut actions = heapless::Vec::<KeyAction, COMBO_MAX_LENGTH>::new();
+        actions.push(KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Kc1)))).unwrap();
         let combo_config = ComboConfig {
             actions,
             output: KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Space))),
@@ -536,15 +535,7 @@ mod tests {
         // Validation
         match deserialized_data {
             (StorageData::Combo(deserialized_config), _) => {
-                // actions
-                assert_eq!(deserialized_config.actions.len(), combo_config.actions.len());
-                for (original, deserialized) in combo_config.actions.iter().zip(deserialized_config.actions.iter()) {
-                    assert_eq!(original, deserialized);
-                }
-                // output
-                assert_eq!(deserialized_config.output, combo_config.output);
-                // layer
-                assert_eq!(deserialized_config.layer, combo_config.layer);
+                assert_eq!(deserialized_config, combo_config);
             }
             _ => panic!("Expected Combo"),
         }

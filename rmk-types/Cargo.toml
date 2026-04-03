@@ -41,8 +41,10 @@ rmk_protocol = ["dep:postcard-rpc", "dep:postcard-schema"]
 bulk = ["rmk_protocol"]
 # Host tool: enables rmk_protocol with generous Vec capacities for protocol types.
 # Firmware should use `rmk_protocol` instead — Vec sizes come from keyboard.toml.
-host = ["rmk_protocol", "bulk"]
-# Build-time only features: forwarded from rmk to control constant generation in build.rs
-split = []
+# Includes all optional endpoint groups so the host can talk to any firmware.
+host = ["rmk_protocol", "bulk", "_ble", "split"]
+# Build-time only features: forwarded from rmk to control constant generation in build.rs.
+# Also used as `#[cfg(feature = "...")]` guards for protocol endpoint/topic gating.
 _ble = []
+split = []
 passkey_entry = []

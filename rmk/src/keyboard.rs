@@ -946,7 +946,7 @@ impl<'a> Keyboard<'a> {
                     if c.is_all_pressed() && !c.is_triggered() {
                         // When a key is pressed (interrupting a combo wait), trigger any delayed combo.
                         // When releasing a key, only trigger combos that contain the key_action.
-                        if event.pressed || c.config.actions.contains(key_action) {
+                        if event.pressed || c.config.contains(key_action) {
                             // All keys are pressed but the combo is not triggered, trigger it
                             return Some((c.size(), c));
                         }
@@ -983,7 +983,7 @@ impl<'a> Keyboard<'a> {
         // Reset other sub-combo states
         self.keymap.with_combos_mut(|combos| {
             combos.iter_mut().filter_map(|c| c.as_mut()).for_each(|c| {
-                if c.is_all_pressed() && !c.is_triggered() && c.config.actions.contains(key_action) {
+                if c.is_all_pressed() && !c.is_triggered() && c.config.contains(key_action) {
                     info!("Resetting combo: {:?}", c,);
                     c.reset();
                 }
@@ -1061,7 +1061,7 @@ impl<'a> Keyboard<'a> {
 
                 self.keymap.with_combos_mut(|combos| {
                     for combo in combos.iter_mut().filter_map(|c| c.as_mut()) {
-                        if combo.config.actions.contains(key_action) {
+                        if combo.config.contains(key_action) {
                             // Releasing a combo key in triggered combo
                             releasing_triggered_combo |= combo.is_triggered();
                             info!("[Combo] releasing: {:?}", combo);
@@ -1849,10 +1849,12 @@ mod test {
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use crate::combo::{Combo, ComboConfig};
+    use rmk_types::combo::ComboConfig;
+    use rmk_types::fork::Fork;
+
+    use crate::combo::Combo;
     use crate::config::{BehaviorConfig, CombosConfig, ForksConfig, PositionalConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
-    use crate::fork::Fork;
     use crate::{a, k, layer, mo, th, thp};
 
     // Init logger for tests
@@ -1889,24 +1891,8 @@ mod test {
         // Define the function to return the appropriate combo configuration
         CombosConfig {
             combos: [
-                Some(Combo::new(ComboConfig {
-                    actions: heapless::Vec::from_slice(&[
-                        k!(V), //3,4
-                        k!(B), //3,5
-                        k!(No), k!(No),
-                    ]).unwrap(),
-                    output: k!(LShift),
-                    layer: Some(0),
-                })),
-                Some(Combo::new(ComboConfig {
-                    actions: heapless::Vec::from_slice(&[
-                        k!(R), //1,4
-                        k!(T), //1,5
-                        k!(No), k!(No),
-                    ]).unwrap(),
-                    output: k!(LAlt),
-                    layer: Some(0),
-                })),
+                Some(Combo::new(ComboConfig::new([k!(V), k!(B)], k!(LShift), Some(0)))),
+                Some(Combo::new(ComboConfig::new([k!(R), k!(T)], k!(LAlt), Some(0)))),
                 None, None, None, None, None, None
             ],
             timeout: Duration::from_millis(100),

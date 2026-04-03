@@ -7,12 +7,16 @@ use serde::{Deserialize, Serialize};
 
 use super::KeyAction;
 
-/// EncoderAction is the action at a encoder position, stored in encoder_map.
+/// Action for a rotary encoder position, stored in the encoder map.
+///
+/// Both fields default to `KeyAction::No` (no action).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub struct EncoderAction {
+    /// Action triggered when the encoder is rotated clockwise.
     pub clockwise: KeyAction,
+    /// Action triggered when the encoder is rotated counter-clockwise.
     pub counter_clockwise: KeyAction,
 }
 

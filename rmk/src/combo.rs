@@ -1,9 +1,16 @@
 use rmk_types::action::KeyAction;
+use rmk_types::constants::COMBO_MAX_LENGTH;
 
 /// ComboConfig instantiated with firmware's combo Vec capacity.
 pub type ComboConfig = rmk_types::combo::ComboConfig<{ rmk_types::constants::COMBO_VEC_SIZE }>;
 
 use crate::event::KeyboardEvent;
+
+// Combo.state is a u16 bitmask, so combos are limited to 16 keys.
+const _: () = assert!(
+    COMBO_MAX_LENGTH <= 16,
+    "COMBO_MAX_LENGTH exceeds 16 — Combo.state is u16 and cannot track more than 16 keys"
+);
 
 /// Runtime combo instance (config + runtime state)
 #[derive(Clone, Debug)]
@@ -11,7 +18,7 @@ use crate::event::KeyboardEvent;
 pub struct Combo {
     pub(crate) config: ComboConfig,
     /// The state records the pressed keys of the combo
-    state: u8,
+    state: u16,
     /// The flag indicates whether the combo is triggered
     is_triggered: bool,
 }
@@ -38,7 +45,7 @@ impl Combo {
     /// Update the combo's state when a key is pressed.
     /// Returns true if the combo is updated.
     pub(crate) fn update(&mut self, key_action: &KeyAction, key_event: KeyboardEvent, active_layer: u8) -> bool {
-        if !key_event.pressed || self.config.actions.is_empty() || self.is_triggered {
+        if !key_event.pressed || self.config.size() == 0 || self.is_triggered {
             // Ignore combo that without actions
             return false;
         }

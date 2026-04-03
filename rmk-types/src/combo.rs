@@ -14,6 +14,7 @@ use crate::protocol_vec::ProtocolVec;
 /// `MAX_KEYS` controls the maximum number of trigger keys; on firmware this is
 /// typically `COMBO_MAX_LENGTH` (from keyboard.toml), on host it uses the protocol
 /// upper bound.
+/// Actions are stored in a Vec — only meaningful keys are present (no `KeyAction::No` padding).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -27,15 +28,18 @@ impl<const MAX_KEYS: usize> MaxSize for ComboConfig<MAX_KEYS> {
     const POSTCARD_MAX_SIZE: usize = KeyAction::POSTCARD_MAX_SIZE * MAX_KEYS
         + crate::varint_max_size(MAX_KEYS)
         + KeyAction::POSTCARD_MAX_SIZE
-        + <Option<u8>>::POSTCARD_MAX_SIZE;
+        + 1 // Option<u8> tag
+        + u8::POSTCARD_MAX_SIZE;
 }
 
 impl<const MAX_KEYS: usize> ComboConfig<MAX_KEYS> {
     pub fn new<I: IntoIterator<Item = KeyAction>>(actions: I, output: KeyAction, layer: Option<u8>) -> Self {
         let mut combo_actions = ProtocolVec::new();
         for action in actions {
-            if combo_actions.push(action).is_err() {
-                break;
+            if action != KeyAction::No {
+                if combo_actions.push(action).is_err() {
+                    break;
+                }
             }
         }
         Self {
@@ -56,11 +60,16 @@ impl<const MAX_KEYS: usize> ComboConfig<MAX_KEYS> {
 
     /// Returns the number of key actions in the combo.
     pub fn size(&self) -> usize {
-        self.actions.iter().filter(|&&a| a != KeyAction::No).count()
+        self.actions.len()
     }
 
     /// Find the index of a key action in the combo.
     pub fn find_key_action_index(&self, key_action: &KeyAction) -> Option<usize> {
         self.actions.iter().position(|a| a == key_action)
+    }
+
+    /// Check whether the combo contains the given key action.
+    pub fn contains(&self, key_action: &KeyAction) -> bool {
+        self.actions.contains(key_action)
     }
 }

@@ -11,7 +11,7 @@ use crate::morse::Morse;
 pub type MorseConfig = Morse<PROTOCOL_MORSE_VEC_SIZE>;
 
 /// Request payload for `SetMorse`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Schema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct SetMorseRequest {
     pub index: u8,
     pub config: Morse<PROTOCOL_MORSE_VEC_SIZE>,
@@ -40,7 +40,7 @@ pub struct GetMorseBulkRequest {
 
 /// Bulk request payload for setting multiple morse configs at once.
 #[cfg(feature = "bulk")]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Schema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct SetMorseBulkRequest {
     pub start_index: u8,
     pub configs: ProtocolVec<Morse<PROTOCOL_MORSE_VEC_SIZE>, PROTOCOL_MAX_BULK_SIZE>,
@@ -55,7 +55,7 @@ impl MaxSize for SetMorseBulkRequest {
 
 /// Bulk response for getting multiple morse configs at once.
 #[cfg(feature = "bulk")]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Schema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct GetMorseBulkResponse {
     pub configs: ProtocolVec<Morse<PROTOCOL_MORSE_VEC_SIZE>, PROTOCOL_MAX_BULK_SIZE>,
 }

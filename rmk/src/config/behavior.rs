@@ -2,8 +2,9 @@ use embassy_time::Duration;
 use heapless::Vec;
 use rmk_types::action::{MorseMode, MorseProfile};
 
+use rmk_types::fork::Fork;
+
 use crate::combo::Combo;
-use crate::fork::Fork;
 use crate::morse::Morse;
 use crate::{
     COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MAX_PATTERNS_PER_KEY, MORSE_MAX_NUM, MOUSE_KEY_INTERVAL,

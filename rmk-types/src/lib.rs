@@ -23,6 +23,8 @@
 //! - **rmk-config**: Configuration parsing produces these types
 //! - **rmk-macro**: Code generation macros work with these type definitions
 
+// The postcard-rpc endpoints! macro performs heavy const-eval for type uniqueness checks.
+#![allow(long_running_const_eval)]
 #![no_std]
 
 #[cfg(feature = "host")]

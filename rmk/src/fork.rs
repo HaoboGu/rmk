@@ -1,5 +1,4 @@
 use rmk_types::action::KeyAction;
-pub use rmk_types::fork::Fork;
 use rmk_types::modifier::ModifierCombination;
 
 #[derive(Copy, Clone, Debug)]
