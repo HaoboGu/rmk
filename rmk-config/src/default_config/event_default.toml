@@ -38,7 +38,7 @@ subs = 1
 [event.led_indicator]
 channel_size = 2
 pubs = 2
-subs = 4
+subs = 3
 
 [event.sleep_state]
 channel_size = 1
@@ -49,7 +49,7 @@ subs = 1
 [event.battery_state]
 channel_size = 1
 pubs = 1
-subs = 3
+subs = 0
 
 [event.battery_adc]
 channel_size = 2
@@ -59,7 +59,7 @@ subs = 1
 [event.charging_state]
 channel_size = 2
 pubs = 1
-subs = 2
+subs = 1
 
 # Pointing device events
 [event.pointing]
@@ -86,7 +86,7 @@ subs = 2
 [event.clear_peer]
 channel_size = 1
 pubs = 1
-subs = 1
+subs = 0
 
 [event.action]
 channel_size = 16

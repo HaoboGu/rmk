@@ -20,8 +20,13 @@ fn main() {
         toml::from_str("").expect("Failed to parse empty keyboard config\n")
     };
 
+    // Collect active feature flags.
+    // The number of event subscribers bumps according to the enabled feature.
+    let active_features = collect_active_features();
+    let feature_refs: Vec<&str> = active_features.iter().map(|s| s.as_str()).collect();
+
     let bc = config
-        .build_constants()
+        .build_constants(&feature_refs)
         .unwrap_or_else(|err| panic!("Failed to resolve build constants: {err}"));
     let output = generate_constants(&bc);
 
@@ -109,4 +114,15 @@ fn generate_constants(bc: &BuildConstants) -> String {
         .map(|s| "#[allow(clippy::redundant_static_lifetimes)]\n".to_owned() + s.as_str())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Collect active Cargo feature flags from environment variables.
+///
+/// Cargo sets `CARGO_FEATURE_<NAME>` for each enabled feature (with the name
+/// uppercased and `-` replaced by `_`). We reverse that to get lowercase names
+/// matching the convention used in `subscriber_default.toml`.
+fn collect_active_features() -> Vec<String> {
+    env::vars()
+        .filter_map(|(key, _)| key.strip_prefix("CARGO_FEATURE_").map(|f| f.to_lowercase()))
+        .collect()
 }
