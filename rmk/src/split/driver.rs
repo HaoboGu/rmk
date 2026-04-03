@@ -88,6 +88,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             return;
         }
 
+        #[cfg(feature = "_ble")]
         let peripheral_id = self.id;
         let mut last_sync_time = Instant::now();
         let mut indicator_sub = crate::event::LedIndicatorEvent::subscriber();
