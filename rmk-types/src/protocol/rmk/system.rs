@@ -99,9 +99,3 @@ pub struct BehaviorConfig {
     pub tap_capslock_interval_ms: u16,
 }
 
-/// Request payload for bulk operations on flat-indexed collections (combos, morse, etc.).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
-pub struct IndexedBulkRequest {
-    pub start_index: u8,
-    pub count: u8,
-}

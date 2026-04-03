@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 use crate::constants::PROTOCOL_MORSE_VEC_SIZE;
 use crate::morse::Morse;
 
+/// Morse configuration with protocol-level Vec capacity.
+pub type MorseConfig = Morse<PROTOCOL_MORSE_VEC_SIZE>;
+
 /// Request payload for `SetMorse`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Schema)]
 pub struct SetMorseRequest {
@@ -23,16 +26,24 @@ impl MaxSize for SetMorseRequest {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "bulk")]
-use heapless::Vec;
-#[cfg(feature = "bulk")]
 use crate::constants::PROTOCOL_MAX_BULK_SIZE;
+#[cfg(feature = "bulk")]
+use crate::protocol_vec::ProtocolVec;
+
+/// Request payload for `GetMorseBulk`.
+#[cfg(feature = "bulk")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+pub struct GetMorseBulkRequest {
+    pub start_index: u8,
+    pub count: u8,
+}
 
 /// Bulk request payload for setting multiple morse configs at once.
 #[cfg(feature = "bulk")]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Schema)]
 pub struct SetMorseBulkRequest {
     pub start_index: u8,
-    pub configs: Vec<Morse<PROTOCOL_MORSE_VEC_SIZE>, PROTOCOL_MAX_BULK_SIZE>,
+    pub configs: ProtocolVec<Morse<PROTOCOL_MORSE_VEC_SIZE>, PROTOCOL_MAX_BULK_SIZE>,
 }
 
 #[cfg(feature = "bulk")]
@@ -46,7 +57,7 @@ impl MaxSize for SetMorseBulkRequest {
 #[cfg(feature = "bulk")]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Schema)]
 pub struct GetMorseBulkResponse {
-    pub configs: Vec<Morse<PROTOCOL_MORSE_VEC_SIZE>, PROTOCOL_MAX_BULK_SIZE>,
+    pub configs: ProtocolVec<Morse<PROTOCOL_MORSE_VEC_SIZE>, PROTOCOL_MAX_BULK_SIZE>,
 }
 
 #[cfg(feature = "bulk")]

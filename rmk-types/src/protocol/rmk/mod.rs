@@ -29,14 +29,9 @@ pub use self::system::*;
 use crate::action::{EncoderAction, KeyAction};
 use crate::battery::BatteryStatus;
 use crate::ble::BleStatus;
-use crate::combo::ComboConfig;
 use crate::connection::ConnectionType;
-use crate::constants::PROTOCOL_MORSE_VEC_SIZE;
 use crate::fork::Fork;
 use crate::led_indicator::LedIndicator;
-
-/// Type alias for a Morse configuration with protocol-level Vec capacity.
-pub type ProtocolMorse = crate::morse::Morse<PROTOCOL_MORSE_VEC_SIZE>;
 
 // ---------------------------------------------------------------------------
 // Endpoint declarations
@@ -101,7 +96,7 @@ endpoints! {
     omit_std = true;
     | EndpointTy  | RequestTy       | ResponseTy  | Path         |
     | ----------  | ---------       | ----------  | ----         |
-    | GetCombo    | u8              | ComboConfig | "combo/get"  |
+    | GetCombo    | u8              | ProtocolComboConfig | "combo/get"  |
     | SetCombo    | SetComboRequest | RmkResult   | "combo/set"  |
 }
 
@@ -111,7 +106,7 @@ endpoints! {
     omit_std = true;
     | EndpointTy    | RequestTy           | ResponseTy           | Path              |
     | ----------    | ---------           | ----------           | ----              |
-    | GetComboBulk  | IndexedBulkRequest  | GetComboBulkResponse | "combo/bulk_get"  |
+    | GetComboBulk  | GetComboBulkRequest | GetComboBulkResponse | "combo/bulk_get"  |
     | SetComboBulk  | SetComboBulkRequest | RmkResult            | "combo/bulk_set"  |
 }
 
@@ -120,7 +115,7 @@ endpoints! {
     omit_std = true;
     | EndpointTy | RequestTy       | ResponseTy  | Path         |
     | ---------- | ---------       | ----------  | ----         |
-    | GetMorse   | u8              | ProtocolMorse | "morse/get"  |
+    | GetMorse   | u8              | MorseConfig | "morse/get"  |
     | SetMorse   | SetMorseRequest | RmkResult   | "morse/set"  |
 }
 
@@ -130,7 +125,7 @@ endpoints! {
     omit_std = true;
     | EndpointTy    | RequestTy           | ResponseTy           | Path              |
     | ----------    | ---------           | ----------           | ----              |
-    | GetMorseBulk  | IndexedBulkRequest  | GetMorseBulkResponse | "morse/bulk_get"  |
+    | GetMorseBulk  | GetMorseBulkRequest | GetMorseBulkResponse | "morse/bulk_get"  |
     | SetMorseBulk  | SetMorseBulkRequest | RmkResult            | "morse/bulk_set"  |
 }
 
@@ -286,9 +281,11 @@ mod tests {
     use crate::action::{Action, MorseProfile};
     use crate::battery::ChargeState;
     use crate::ble::BleState;
+    use crate::combo::ComboConfig;
     use crate::fork::{Fork, StateBits};
     use crate::modifier::ModifierCombination;
     use crate::morse::{Morse, MorsePattern};
+    use crate::protocol_vec::ProtocolVec;
 
     /// Helper: postcard round-trip for a value using a stack buffer.
     fn round_trip<T>(val: &T) -> T
@@ -571,14 +568,16 @@ mod tests {
 
     #[test]
     fn round_trip_macro_data() {
-        let mut data = Vec::new();
+        let mut data: ProtocolVec<u8, { crate::constants::PROTOCOL_MAX_MACRO_DATA }> = ProtocolVec::new();
         data.extend_from_slice(&[0x01, 0x02, 0x03]).unwrap();
         round_trip(&MacroData { data });
     }
 
     #[test]
     fn round_trip_macro_data_empty() {
-        round_trip(&MacroData { data: Vec::new() });
+        round_trip(&MacroData {
+            data: ProtocolVec::new(),
+        });
     }
 
     #[test]
@@ -589,7 +588,7 @@ mod tests {
 
     #[test]
     fn round_trip_set_macro_request() {
-        let mut data = Vec::new();
+        let mut data: ProtocolVec<u8, { crate::constants::PROTOCOL_MAX_MACRO_DATA }> = ProtocolVec::new();
         data.extend_from_slice(&[0x01, 0x02]).unwrap();
         round_trip(&SetMacroRequest {
             index: 1,
@@ -600,7 +599,7 @@ mod tests {
 
     #[test]
     fn round_trip_combo_config() {
-        let mut actions = Vec::new();
+        let mut actions: ProtocolVec<KeyAction, { crate::constants::COMBO_VEC_SIZE }> = ProtocolVec::new();
         actions.push(KeyAction::No).unwrap();
         actions.push(KeyAction::No).unwrap();
         round_trip(&ComboConfig {
@@ -682,7 +681,7 @@ mod tests {
     #[cfg(feature = "bulk")]
     #[test]
     fn round_trip_set_keymap_bulk_request() {
-        let mut actions = Vec::new();
+        let mut actions: ProtocolVec<KeyAction, { crate::constants::PROTOCOL_MAX_BULK_SIZE }> = ProtocolVec::new();
         actions.push(KeyAction::No).unwrap();
         round_trip(&SetKeymapBulkRequest {
             request: BulkRequest {
@@ -710,7 +709,7 @@ mod tests {
 
     #[test]
     fn round_trip_set_combo_request() {
-        let mut actions = Vec::new();
+        let mut actions: ProtocolVec<KeyAction, { crate::constants::COMBO_VEC_SIZE }> = ProtocolVec::new();
         actions.push(KeyAction::No).unwrap();
         actions.push(KeyAction::No).unwrap();
         round_trip(&SetComboRequest {

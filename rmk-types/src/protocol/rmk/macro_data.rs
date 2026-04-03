@@ -1,16 +1,16 @@
 //! Macro endpoint types.
 
-use heapless::Vec;
 use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::constants::PROTOCOL_MAX_MACRO_DATA;
+use crate::protocol_vec::ProtocolVec;
 
 /// Raw macro data for a single macro chunk.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct MacroData {
-    pub data: Vec<u8, { PROTOCOL_MAX_MACRO_DATA }>,
+    pub data: ProtocolVec<u8, PROTOCOL_MAX_MACRO_DATA>,
 }
 
 impl MaxSize for MacroData {

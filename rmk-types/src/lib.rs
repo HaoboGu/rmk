@@ -25,6 +25,9 @@
 
 #![no_std]
 
+#[cfg(feature = "host")]
+extern crate alloc;
+
 pub mod action;
 pub mod battery;
 pub mod ble;
@@ -38,6 +41,9 @@ pub mod modifier;
 pub mod morse;
 pub mod mouse_button;
 pub mod protocol;
+pub mod protocol_vec;
+
+pub use protocol_vec::ProtocolVec;
 
 /// Compute the maximum varint-encoded length for a given max value.
 /// Mirrors `postcard`'s internal `varint_size`.

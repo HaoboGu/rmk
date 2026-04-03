@@ -88,12 +88,13 @@ fn generate_constants(bc: &BuildConstants) -> String {
     //   define the firmware's internal capacity -- how many combo keys, morse patterns, or macro
     //   bytes the firmware can store and process.
     //
-    // - **PROTOCOL_X constants** (e.g., `PROTOCOL_COMBO_VEC_SIZE`, `PROTOCOL_MORSE_VEC_SIZE`,
-    //   `PROTOCOL_MAX_MACRO_DATA`, `PROTOCOL_MAX_BULK_SIZE`) define the maximum Vec capacity in
-    //   protocol messages -- how many elements can fit in a single protocol request/response.
+    // - **PROTOCOL_X constants** (e.g., `PROTOCOL_MORSE_VEC_SIZE`, `PROTOCOL_MAX_MACRO_DATA`,
+    //   `PROTOCOL_MAX_BULK_SIZE`) and **shared Vec-capacity constants** (e.g., `COMBO_VEC_SIZE`)
+    //   define the maximum Vec capacity in protocol messages -- how many elements can fit in a
+    //   single protocol request/response.
     //
-    // On firmware, PROTOCOL_X values are typically set equal to their corresponding normal
-    // constants (e.g., `PROTOCOL_COMBO_VEC_SIZE = COMBO_MAX_LENGTH`), because a single protocol
+    // On firmware, these values are typically set equal to their corresponding normal
+    // constants (e.g., `COMBO_VEC_SIZE = COMBO_MAX_LENGTH`), because a single protocol
     // message needs to carry at most one full config.
     //
     // On the host side, PROTOCOL_X values use fixed upper bounds (e.g., 16, 32, 256) so the
@@ -111,7 +112,7 @@ fn generate_constants(bc: &BuildConstants) -> String {
     if is_host {
         // Host: always use upper bounds for wire compatibility with any firmware.
         lines.push(format!(
-            "pub const PROTOCOL_COMBO_VEC_SIZE: usize = {HOST_MAX_COMBO_VEC_SIZE};"
+            "pub const COMBO_VEC_SIZE: usize = {HOST_MAX_COMBO_VEC_SIZE};"
         ));
         lines.push(format!(
             "pub const PROTOCOL_MORSE_VEC_SIZE: usize = {HOST_MAX_MORSE_VEC_SIZE};"
@@ -126,7 +127,7 @@ fn generate_constants(bc: &BuildConstants) -> String {
     } else {
         // Firmware: per-item constants always generated from keyboard.toml / defaults.
         lines.push(format!(
-            "pub const PROTOCOL_COMBO_VEC_SIZE: usize = {};",
+            "pub const COMBO_VEC_SIZE: usize = {};",
             bc.combo_max_length
         ));
         lines.push(format!(
@@ -142,7 +143,7 @@ fn generate_constants(bc: &BuildConstants) -> String {
         // Only enforce when the rmk_protocol feature is active.
         if env::var("CARGO_FEATURE_RMK_PROTOCOL").is_ok() {
             lines.push(format!(
-                "const _: () = assert!(PROTOCOL_COMBO_VEC_SIZE <= {HOST_MAX_COMBO_VEC_SIZE}, \"firmware combo vec size exceeds host maximum ({HOST_MAX_COMBO_VEC_SIZE})\");"
+                "const _: () = assert!(COMBO_VEC_SIZE <= {HOST_MAX_COMBO_VEC_SIZE}, \"firmware combo vec size exceeds host maximum ({HOST_MAX_COMBO_VEC_SIZE})\");"
             ));
             lines.push(format!(
                 "const _: () = assert!(PROTOCOL_MORSE_VEC_SIZE <= {HOST_MAX_MORSE_VEC_SIZE}, \"firmware morse vec size exceeds host maximum ({HOST_MAX_MORSE_VEC_SIZE})\");"
