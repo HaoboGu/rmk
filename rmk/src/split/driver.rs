@@ -2,7 +2,7 @@
 //!
 use core::sync::atomic::Ordering;
 
-use embassy_futures::select::{Either3, select3};
+use embassy_futures::select::{Either3, select3, select6};
 use embassy_time::Instant;
 #[cfg(all(feature = "storage", feature = "_ble"))]
 use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::storage::FlashOperationMessage};
@@ -61,91 +61,137 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
         Self { transceiver, id }
     }
 
+    /// Send a message to the peripheral, returning Err on disconnect.
+    async fn send(&mut self, msg: &SplitMessage) -> Result<(), ()> {
+        debug!("Sending message to peripheral {}: {:?}", self.id, msg);
+        match self.transceiver.write(msg).await {
+            Ok(_) => Ok(()),
+            Err(SplitDriverError::Disconnected) => Err(()),
+            Err(e) => {
+                error!("SplitDriver write error: {:?}", e);
+                Ok(())
+            }
+        }
+    }
+
     /// Run the manager.
     ///
     /// The manager receives from the peripheral and publishes input events.
-    /// It also sync the `ConnectionState` to the peripheral periodically.
+    /// It also syncs the `ConnectionState` to the peripheral periodically.
     pub(crate) async fn run(mut self) {
+        use embassy_time::Timer;
+
         use crate::event::EventSubscriber;
 
         let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
-        // Send connection state once on start
-        if let Err(e) = self.transceiver.write(&SplitMessage::ConnectionState(conn_state)).await {
-            match e {
-                SplitDriverError::Disconnected => return,
-                _ => error!("SplitDriver write error: {:?}", e),
-            }
+        if self.send(&SplitMessage::ConnectionState(conn_state)).await.is_err() {
+            return;
         }
 
+        let peripheral_id = self.id;
         let mut last_sync_time = Instant::now();
-        let mut keyboard_indicator_sub = crate::event::LedIndicatorEvent::subscriber();
+        let mut indicator_sub = crate::event::LedIndicatorEvent::subscriber();
         let mut layer_sub = crate::event::LayerChangeEvent::subscriber();
         #[cfg(feature = "_ble")]
         let mut clear_peer_sub = crate::event::ClearPeerEvent::subscriber();
+        #[cfg(feature = "display")]
+        let mut wpm_sub = crate::event::WpmUpdateEvent::subscriber();
+        #[cfg(feature = "display")]
+        let mut modifier_sub = crate::event::ModifierEvent::subscriber();
+        #[cfg(feature = "display")]
+        let mut sleep_sub = crate::event::SleepStateEvent::subscriber();
 
         loop {
-            // Calculate the time until the next 3000ms sync
-            use embassy_time::Timer;
             let elapsed = last_sync_time.elapsed().as_millis();
             let wait_time = if elapsed >= 3000 { 1 } else { 3000 - elapsed };
-            match select3(
-                self.transceiver.read(),
-                select3(
-                    keyboard_indicator_sub.next_event(),
-                    layer_sub.next_event(),
+
+            // Wait for the next event to forward to the peripheral.
+            // Each async block converts to SplitMessage; disabled features use pending().
+            let next_event = select6(
+                async { SplitMessage::KeyboardIndicator(indicator_sub.next_event().await.indicator.into_bits()) },
+                async { SplitMessage::Layer(layer_sub.next_event().await.layer) },
+                async {
                     #[cfg(feature = "_ble")]
-                    clear_peer_sub.next_event(),
+                    {
+                        let _ = clear_peer_sub.next_event().await;
+                        #[cfg(feature = "storage")]
+                        FLASH_CHANNEL
+                            .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
+                                peripheral_id as u8,
+                                false,
+                                [0; 6],
+                            )))
+                            .await;
+                        SplitMessage::ClearPeer
+                    }
                     #[cfg(not(feature = "_ble"))]
-                    core::future::pending::<()>(),
-                ),
-                Timer::after_millis(wait_time),
-            )
-            .await
-            {
+                    core::future::pending::<SplitMessage>().await
+                },
+                async {
+                    #[cfg(feature = "display")]
+                    return SplitMessage::Wpm(wpm_sub.next_event().await.wpm);
+                    #[cfg(not(feature = "display"))]
+                    core::future::pending::<SplitMessage>().await
+                },
+                async {
+                    #[cfg(feature = "display")]
+                    return SplitMessage::Modifier(modifier_sub.next_event().await.modifier.into_bits());
+                    #[cfg(not(feature = "display"))]
+                    core::future::pending::<SplitMessage>().await
+                },
+                async {
+                    #[cfg(feature = "display")]
+                    return SplitMessage::SleepState(sleep_sub.next_event().await.sleeping);
+                    #[cfg(not(feature = "display"))]
+                    core::future::pending::<SplitMessage>().await
+                },
+            );
+
+            match select3(self.transceiver.read(), next_event, Timer::after_millis(wait_time)).await {
                 Either3::First(read_result) => match read_result {
                     Ok(split_message) => {
                         self.process_peripheral_message(split_message).await;
 
-                        if let Some(indicator_event) = keyboard_indicator_sub.try_next_message_pure() {
-                            let message_to_peri =
-                                SplitMessage::KeyboardIndicator(indicator_event.indicator.into_bits());
-                            debug!("Sending message to peripheral {}: {:?}", self.id, message_to_peri);
-                            if let Err(e) = self.transceiver.write(&message_to_peri).await {
-                                match e {
-                                    SplitDriverError::Disconnected => return,
-                                    _ => error!("SplitDriver write error: {:?}", e),
-                                }
+                        // Opportunistically drain one pending event to forward
+                        let msg = if let Some(e) = indicator_sub.try_next_message_pure() {
+                            Some(SplitMessage::KeyboardIndicator(e.indicator.into_bits()))
+                        } else if let Some(e) = layer_sub.try_next_message_pure() {
+                            Some(SplitMessage::Layer(e.layer))
+                        } else {
+                            #[cfg(feature = "_ble")]
+                            if clear_peer_sub.try_next_message_pure().is_some() {
+                                #[cfg(feature = "storage")]
+                                FLASH_CHANNEL
+                                    .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
+                                        peripheral_id as u8,
+                                        false,
+                                        [0; 6],
+                                    )))
+                                    .await;
+                                Some(SplitMessage::ClearPeer)
+                            } else {
+                                None
                             }
-                        } else if let Some(layer_event) = layer_sub.try_next_message_pure() {
-                            let message_to_peri = SplitMessage::Layer(layer_event.layer);
-                            debug!("Sending message to peripheral {}: {:?}", self.id, message_to_peri);
-                            if let Err(e) = self.transceiver.write(&message_to_peri).await {
-                                match e {
-                                    SplitDriverError::Disconnected => return,
-                                    _ => error!("SplitDriver write error: {:?}", e),
-                                }
+                            #[cfg(not(feature = "_ble"))]
+                            None
+                        };
+
+                        #[cfg(feature = "display")]
+                        let msg = msg.or_else(|| {
+                            if let Some(e) = wpm_sub.try_next_message_pure() {
+                                Some(SplitMessage::Wpm(e.wpm))
+                            } else if let Some(e) = modifier_sub.try_next_message_pure() {
+                                Some(SplitMessage::Modifier(e.modifier.into_bits()))
+                            } else if let Some(e) = sleep_sub.try_next_message_pure() {
+                                Some(SplitMessage::SleepState(e.sleeping))
+                            } else {
+                                None
                             }
-                        }
+                        });
 
-                        #[cfg(feature = "_ble")]
-                        if clear_peer_sub.try_next_message_pure().is_some() {
-                            #[cfg(feature = "storage")]
-                            // Clear the peer address in storage
-                            FLASH_CHANNEL
-                                .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
-                                    self.id as u8,
-                                    false,
-                                    [0; 6],
-                                )))
-                                .await;
-
-                            let message_to_peri = SplitMessage::ClearPeer;
-                            debug!("Sending message to peripheral {}: {:?}", self.id, message_to_peri);
-                            if let Err(e) = self.transceiver.write(&message_to_peri).await {
-                                match e {
-                                    SplitDriverError::Disconnected => return,
-                                    _ => error!("SplitDriver write error: {:?}", e),
-                                }
+                        if let Some(msg) = msg {
+                            if self.send(&msg).await.is_err() {
+                                return;
                             }
                         }
                     }
@@ -153,47 +199,25 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                         error!("Peripheral message read error: {:?}", e);
                     }
                 },
-                Either3::Second(e) => {
-                    let message_to_peri = match e {
-                        Either3::First(indicator_event) => {
-                            SplitMessage::KeyboardIndicator(indicator_event.indicator.into_bits())
-                        }
-                        Either3::Second(layer_event) => SplitMessage::Layer(layer_event.layer),
-                        #[cfg(feature = "_ble")]
-                        Either3::Third(_clear_peer) => {
-                            #[cfg(feature = "storage")]
-                            // Clear the peer address in storage
-                            FLASH_CHANNEL
-                                .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
-                                    self.id as u8,
-                                    false,
-                                    [0; 6],
-                                )))
-                                .await;
-
-                            SplitMessage::ClearPeer
-                        }
-                        #[cfg(not(feature = "_ble"))]
-                        _ => continue,
+                Either3::Second(event) => {
+                    // Flatten Either6 — all variants carry the same SplitMessage type
+                    let message_to_peri = match event {
+                        embassy_futures::select::Either6::First(m)
+                        | embassy_futures::select::Either6::Second(m)
+                        | embassy_futures::select::Either6::Third(m)
+                        | embassy_futures::select::Either6::Fourth(m)
+                        | embassy_futures::select::Either6::Fifth(m)
+                        | embassy_futures::select::Either6::Sixth(m) => m,
                     };
-                    // Send message to peripheral
-                    debug!("Sending message to peripheral {}: {:?}", self.id, message_to_peri);
-                    if let Err(e) = self.transceiver.write(&message_to_peri).await {
-                        match e {
-                            SplitDriverError::Disconnected => return,
-                            _ => error!("SplitDriver write error: {:?}", e),
-                        }
+                    if self.send(&message_to_peri).await.is_err() {
+                        return;
                     }
                 }
                 Either3::Third(_) => {
-                    // Timer elapsed, sync the connection state
                     conn_state = CONNECTION_STATE.load(Ordering::Acquire);
                     trace!("Syncing connection state to peripheral: {}", conn_state);
-                    if let Err(e) = self.transceiver.write(&SplitMessage::ConnectionState(conn_state)).await {
-                        match e {
-                            SplitDriverError::Disconnected => return,
-                            _ => error!("SplitDriver write error: {:?}", e),
-                        }
+                    if self.send(&SplitMessage::ConnectionState(conn_state)).await.is_err() {
+                        return;
                     }
                     last_sync_time = Instant::now();
                 }

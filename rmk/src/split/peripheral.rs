@@ -18,8 +18,10 @@ use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
 use crate::CONNECTION_STATE;
 use crate::event::{
-    KeyboardEvent, LayerChangeEvent, LedIndicatorEvent, PointingEvent, SubscribableEvent, publish_event,
+    KeyboardEvent, LayerChangeEvent, LedIndicatorEvent, PointingEvent, SubscribableEvent, WpmUpdateEvent, publish_event,
 };
+#[cfg(feature = "display")]
+use crate::event::{ModifierEvent, SleepStateEvent};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;
@@ -127,6 +129,20 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         SplitMessage::Layer(layer) => {
                             // Publish Layer event
                             publish_event(LayerChangeEvent { layer });
+                        }
+                        #[cfg(feature = "display")]
+                        SplitMessage::Wpm(wpm) => {
+                            publish_event(WpmUpdateEvent { wpm });
+                        }
+                        #[cfg(feature = "display")]
+                        SplitMessage::Modifier(bits) => {
+                            publish_event(ModifierEvent {
+                                modifier: rmk_types::modifier::ModifierCombination::from_bits(bits),
+                            });
+                        }
+                        #[cfg(feature = "display")]
+                        SplitMessage::SleepState(sleeping) => {
+                            publish_event(SleepStateEvent { sleeping });
                         }
                         _ => (),
                     },
