@@ -163,7 +163,13 @@ fn expand_display_driver_init(config: &DisplayConfig) -> TokenStream {
 
 fn expand_display_processor_init(config: &DisplayConfig) -> TokenStream {
     let constructor = if let Some(renderer_path) = &config.renderer {
-        let renderer_type: syn::Type = syn::parse_str(renderer_path)
+        // Allow bare names like "OledRenderer" as shorthand for "::rmk::display::OledRenderer".
+        let full_path = if renderer_path.contains("::") {
+            renderer_path.clone()
+        } else {
+            format!("::rmk::display::{}", renderer_path)
+        };
+        let renderer_type: syn::Type = syn::parse_str(&full_path)
             .unwrap_or_else(|e| panic!("Invalid renderer type path '{}': {}", renderer_path, e));
         quote! {
             ::rmk::display::DisplayProcessor::with_renderer(
