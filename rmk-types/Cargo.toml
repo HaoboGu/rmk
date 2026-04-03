@@ -44,4 +44,5 @@ bulk = ["rmk_protocol"]
 host = ["rmk_protocol", "bulk"]
 # Build-time only features: forwarded from rmk to control constant generation in build.rs
 split = []
+_ble = []
 passkey_entry = []

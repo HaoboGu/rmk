@@ -1,4 +1,33 @@
+use serde::Deserialize;
+
 use crate::{DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS, MIN_PASSKEY_ENTRY_TIMEOUT_SECS};
+
+const SUBSCRIBER_DEFAULT_CONFIG: &str = include_str!("../default_config/subscriber_default.toml");
+
+/// Parsed representation of `subscriber_default.toml`.
+#[derive(Deserialize)]
+struct SubscriberConfig {
+    subscriber: Vec<SubscriberEntry>,
+}
+
+/// A single entry: bump `subs` for each listed event when all `features` are enabled.
+#[derive(Deserialize)]
+struct SubscriberEntry {
+    features: Vec<String>,
+    events: Vec<SubscriberEventEntry>,
+}
+
+/// Per-event subscriber bump. `count` defaults to 1.
+#[derive(Deserialize)]
+struct SubscriberEventEntry {
+    name: String,
+    #[serde(default = "default_sub_count")]
+    count: usize,
+}
+
+fn default_sub_count() -> usize {
+    1
+}
 
 /// Compile-time constants emitted as `pub const` items by `rmk-types/build.rs`.
 pub struct BuildConstants {
@@ -37,11 +66,15 @@ pub struct Passkey {
 
 impl crate::KeyboardTomlConfig {
     /// Build compile-time constants from the configuration.
-    pub fn build_constants(&self) -> Result<BuildConstants, String> {
+    ///
+    /// `active_features` contains feature names enabled on the
+    /// **downstream crate** (e.g. `["split", "_ble"]`). These are matched
+    /// against `subscriber_default.toml` to auto-bump event subscriber counts.
+    pub fn build_constants(&self, active_features: &[&str]) -> Result<BuildConstants, String> {
         let rmk = &self.rmk;
 
         // Fix split_peripherals_num: when split feature is enabled, ensure at least 1
-        let split_peripherals_num = if std::env::var("CARGO_FEATURE_SPLIT").is_ok() && rmk.split_peripherals_num < 1 {
+        let split_peripherals_num = if active_features.contains(&"split") && rmk.split_peripherals_num < 1 {
             1
         } else {
             rmk.split_peripherals_num
@@ -61,7 +94,7 @@ impl crate::KeyboardTomlConfig {
             };
         }
 
-        let events = event_channels!(
+        let mut events = event_channels!(
             ble_status_change,
             connection_change,
             modifier,
@@ -81,8 +114,12 @@ impl crate::KeyboardTomlConfig {
             action,
         );
 
+        // Auto-bump subscriber counts based on enabled feature flags.
+        // Declarations live in subscriber_default.toml.
+        apply_feature_subscriber_bumps(&mut events, active_features);
+
         // Only validate passkey settings when the build will emit passkey constants.
-        let passkey = if std::env::var("CARGO_FEATURE_PASSKEY_ENTRY").is_ok() {
+        let passkey = if active_features.contains(&"passkey_entry") {
             self.ble.as_ref().map(resolve_passkey_enabled).transpose()?
         } else {
             None
@@ -109,6 +146,30 @@ impl crate::KeyboardTomlConfig {
             events,
             passkey,
         })
+    }
+}
+
+/// Bump event subscriber counts based on feature flags declared in `subscriber_default.toml`.
+///
+/// `active_features` contains lowercase feature names (e.g. `"split"`, `"_ble"`).
+fn apply_feature_subscriber_bumps(events: &mut [EventChannel], active_features: &[&str]) {
+    let sub_config: SubscriberConfig =
+        toml::from_str(SUBSCRIBER_DEFAULT_CONFIG).expect("Failed to parse subscriber_default.toml");
+
+    for entry in &sub_config.subscriber {
+        let all_enabled = entry.features.iter().all(|f| active_features.contains(&f.as_str()));
+        if all_enabled {
+            for sub_event in &entry.events {
+                if let Some(event) = events.iter_mut().find(|e| e.name == sub_event.name) {
+                    event.subs += sub_event.count;
+                } else {
+                    println!(
+                        "cargo:warning=subscriber_default.toml: unknown event \"{}\"",
+                        sub_event.name
+                    );
+                }
+            }
+        }
     }
 }
 

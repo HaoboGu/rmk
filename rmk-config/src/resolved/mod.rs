@@ -13,7 +13,7 @@
 //! - [`Layout`] — keymap and encoder layout for keymap generation
 //!
 //! Consumers call resolution methods on [`KeyboardTomlConfig`](crate::KeyboardTomlConfig):
-//! - `.build_constants()` → `Result<BuildConstants, String>`
+//! - `.build_constants(active_features)` → `Result<BuildConstants, String>`
 //! - `.identity()` → `Result<Identity, String>`
 //! - `.hardware()` → `Result<Hardware, String>`
 //! - `.host()` → `Host`
