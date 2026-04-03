@@ -3,11 +3,11 @@
 //! Provides [`DisplayProcessor`] — a processor that subscribes to keyboard
 //! state events and renders them on any display implementing [`DisplayDriver`].
 //!
-//! # Customisation
+//! # Customization
 //!
 //! The processor is generic over a [`DisplayDriver`] and a [`DisplayRenderer`].
-//! The built-in [`DefaultOledRenderer`] adapts automatically between landscape and
-//! portrait layouts.  To draw your own content implement [`DisplayRenderer<C>`]
+//! The built-in [`LogoRenderer`] displays the RMK logo on startup.  For a
+//! full-featured keyboard status display, use [`OledRenderer`] instead.  To draw your own content implement [`DisplayRenderer<C>`]
 //! for your color type and pass it via [`DisplayProcessor::with_renderer`].
 //!
 //! # Feature flags
@@ -54,15 +54,21 @@
 //! ```
 
 mod drivers;
-mod renderer;
+mod renderers;
+
+use core::fmt::Write as _;
 
 #[cfg(feature = "oled_async")]
 pub use display_interface_i2c;
 use embassy_time::{Duration, Instant};
+use embedded_graphics::prelude::*;
 #[cfg(feature = "oled_async")]
 pub use oled_async;
-pub use renderer::{DefaultOledRenderer, DisplayDriver, DisplayRenderer, RenderContext, write_battery};
+pub use renderers::{LogoRenderer, OledRenderer};
 use rmk_macro::processor;
+#[cfg(feature = "_ble")]
+use rmk_types::ble::BleStatus;
+use rmk_types::modifier::ModifierCombination;
 #[cfg(feature = "ssd1306")]
 pub use ssd1306;
 
@@ -71,11 +77,147 @@ use crate::event::BleStatusChangeEvent;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::PeripheralBatteryEvent;
 use crate::event::{
-    BatteryStateEvent, KeyboardEvent, LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent,
+    BatteryStateEvent, KeyboardEvent, LayerChangeEvent, LedIndicatorEvent, ModifierEvent, SleepStateEvent,
+    WpmUpdateEvent,
 };
 #[cfg(feature = "split")]
 use crate::event::{CentralConnectedEvent, PeripheralConnectedEvent};
 use crate::processor::PollingProcessor;
+
+/// Snapshot of keyboard state passed to renderers on every redraw.
+///
+/// # Feature-gated fields
+///
+/// Some fields are only available when specific RMK features are enabled:
+///
+/// - `ble_status` — requires the `_ble` feature
+/// - `central_connected`, `peripherals_connected` — require the `split` feature
+/// - `peripheral_batteries` — requires both `split` and `_ble` features
+///
+/// Third-party renderers that access these fields must enable the
+/// corresponding features in their `Cargo.toml` dependency on `rmk`,
+/// and guard access with matching `#[cfg]` attributes.
+pub struct RenderContext {
+    /// Current active layer index.
+    pub layer: u8,
+    /// Current words-per-minute estimate.
+    pub wpm: u16,
+    /// Whether Caps Lock is active.
+    pub caps_lock: bool,
+    /// Whether Num Lock is active.
+    pub num_lock: bool,
+    /// Current battery state.
+    pub battery: BatteryStateEvent,
+    /// Whether the keyboard is sleeping.
+    pub sleeping: bool,
+    /// Current BLE connection status (profile + state).
+    #[cfg(feature = "_ble")]
+    pub ble_status: BleStatus,
+    /// Whether the central is connected (only meaningful on peripherals).
+    #[cfg(feature = "split")]
+    pub central_connected: bool,
+    /// Per-peripheral connection state, indexed by peripheral id.
+    #[cfg(feature = "split")]
+    pub peripherals_connected: [bool; crate::SPLIT_PERIPHERALS_NUM],
+    /// Per-peripheral battery state, indexed by peripheral id.
+    #[cfg(all(feature = "split", feature = "_ble"))]
+    pub peripheral_batteries: [BatteryStateEvent; crate::SPLIT_PERIPHERALS_NUM],
+    /// Currently active modifier keys (Shift, Ctrl, Alt, GUI).
+    pub modifiers: ModifierCombination,
+    /// Whether a key is currently held down.
+    pub key_pressed: bool,
+    /// Latched true when a key press event arrives, cleared after each render.
+    ///
+    /// Use this instead of `key_pressed` for detecting new presses in renderers —
+    /// it persists even if the key was released before the next render ran.
+    pub key_press_latch: bool,
+}
+
+impl Default for RenderContext {
+    fn default() -> Self {
+        Self {
+            layer: 0,
+            wpm: 0,
+            caps_lock: false,
+            num_lock: false,
+            battery: BatteryStateEvent::NotAvailable,
+            sleeping: false,
+            #[cfg(feature = "_ble")]
+            ble_status: BleStatus::default(),
+            #[cfg(feature = "split")]
+            central_connected: false,
+            #[cfg(feature = "split")]
+            peripherals_connected: [false; crate::SPLIT_PERIPHERALS_NUM],
+            #[cfg(all(feature = "split", feature = "_ble"))]
+            peripheral_batteries: [BatteryStateEvent::NotAvailable; crate::SPLIT_PERIPHERALS_NUM],
+            modifiers: ModifierCombination::new(),
+            key_pressed: false,
+            key_press_latch: false,
+        }
+    }
+}
+
+/// Async display driver trait.
+///
+/// Extends [`DrawTarget`] with the async I/O operations (`init` and `flush`)
+/// that are driver-specific and not covered by `embedded-graphics`.
+///
+/// RMK provides built-in implementations behind feature flags (e.g. `ssd1306`).
+pub trait DisplayDriver: DrawTarget {
+    /// Initialize the display hardware.
+    fn init(&mut self) -> impl core::future::Future<Output = ()>;
+    /// Flush the framebuffer to the display.
+    fn flush(&mut self) -> impl core::future::Future<Output = ()>;
+}
+
+/// Trait for custom display renderers.
+///
+/// Generic over the pixel color type `C`, so it works with both monochrome
+/// OLEDs (`BinaryColor`) and color LCDs (`Rgb565`, etc.).
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use rmk::display::{DisplayRenderer, RenderContext};
+/// use embedded_graphics::{
+///     prelude::*, pixelcolor::BinaryColor, text::Text,
+///     mono_font::{ascii::FONT_6X10, MonoTextStyle},
+/// };
+///
+/// struct MyRenderer;
+///
+/// impl DisplayRenderer<BinaryColor> for MyRenderer {
+///     fn render<D: DrawTarget<Color = BinaryColor>>(
+///         &mut self,
+///         ctx: &RenderContext,
+///         display: &mut D,
+///     ) {
+///         let style = MonoTextStyle::new(&FONT_6X10, BinaryColor::On);
+///         let mut buf: heapless::String<16> = heapless::String::new();
+///         core::fmt::write(&mut buf, format_args!("L{} W{}", ctx.layer, ctx.wpm)).ok();
+///         Text::new(&buf, Point::new(0, 12), style).draw(display).ok();
+///     }
+/// }
+/// ```
+pub trait DisplayRenderer<C: PixelColor> {
+    /// Draw the current keyboard state on the display.
+    ///
+    /// The renderer is responsible for clearing the display if needed.
+    /// After this method returns, the caller flushes the display buffer.
+    fn render<D: DrawTarget<Color = C>>(&mut self, ctx: &RenderContext, display: &mut D);
+}
+
+/// Format a [`BatteryStateEvent`] into a short display string.
+///
+/// Writes one of `"---"`, `" 85%"`, `"CHG"`, or `"FUL"` into `buf`.
+pub fn write_battery(buf: &mut heapless::String<5>, battery: BatteryStateEvent) {
+    match battery {
+        BatteryStateEvent::NotAvailable => write!(buf, "---").ok(),
+        BatteryStateEvent::Normal(v) => write!(buf, "{v:3}%").ok(),
+        BatteryStateEvent::Charging => write!(buf, "CHG").ok(),
+        BatteryStateEvent::Charged => write!(buf, "FUL").ok(),
+    };
+}
 
 /// Processor that renders keyboard state on a display.
 ///
@@ -83,18 +225,18 @@ use crate::processor::PollingProcessor;
 /// and [`BatteryStateEvent`], redrawing the screen whenever any of these change.
 ///
 /// The rendering is delegated to a [`DisplayRenderer`].  Use [`new`](Self::new)
-/// for the built-in [`DefaultOledRenderer`], or [`with_renderer`](Self::with_renderer)
+/// for the built-in [`LogoRenderer`], or [`with_renderer`](Self::with_renderer)
 /// for a custom one.
 ///
 /// # Generics
 ///
 /// - `D` — display driver, must implement [`DisplayDriver`].
-/// - `R` — the renderer, defaults to [`DefaultOledRenderer`].
-#[processor(subscribe = [KeyboardEvent, LayerChangeEvent, WpmUpdateEvent, LedIndicatorEvent, BatteryStateEvent, SleepStateEvent], manual_polling = true)]
+/// - `R` — the renderer, defaults to [`LogoRenderer`].
+#[processor(subscribe = [KeyboardEvent, LayerChangeEvent, WpmUpdateEvent, LedIndicatorEvent, ModifierEvent, BatteryStateEvent, SleepStateEvent], manual_polling = true)]
 #[cfg_attr(feature = "_ble", processor(subscribe = [BleStatusChangeEvent]))]
 #[cfg_attr(feature = "split", processor(subscribe = [PeripheralConnectedEvent, CentralConnectedEvent]))]
 #[cfg_attr(all(feature = "split", feature = "_ble"), processor(subscribe = [PeripheralBatteryEvent]))]
-pub struct DisplayProcessor<D, R = DefaultOledRenderer>
+pub struct DisplayProcessor<D, R = LogoRenderer>
 where
     D: DisplayDriver,
     R: DisplayRenderer<D::Color>,
@@ -110,18 +252,18 @@ where
     render_interval: Duration,
 }
 
-impl<D> DisplayProcessor<D, DefaultOledRenderer>
+impl<D> DisplayProcessor<D, LogoRenderer>
 where
     D: DisplayDriver,
-    DefaultOledRenderer: DisplayRenderer<D::Color>,
+    LogoRenderer: DisplayRenderer<D::Color>,
 {
-    /// Create a new display processor with the built-in [`DefaultOledRenderer`].
+    /// Create a new display processor with the built-in [`LogoRenderer`].
     ///
     /// Polling is disabled by default — the display only redraws on events.
     /// Use [`with_render_interval`](Self::with_render_interval) to enable
     /// periodic redraws for animations.
     pub fn new(display: D) -> Self {
-        Self::with_renderer(display, DefaultOledRenderer)
+        Self::with_renderer(display, LogoRenderer)
     }
 }
 
@@ -170,10 +312,6 @@ where
     }
 
     /// Redraw the display if enough time has passed since the last render.
-    ///
-    /// When events arrive faster than the display can refresh (e.g. rapid
-    /// key presses), the render is skipped — the updated state will be
-    /// drawn on the next event that passes the time check.
     async fn render(&mut self) {
         let now = Instant::now();
         if now.duration_since(self.last_render) < self.min_render_interval {
@@ -186,6 +324,7 @@ where
         }
 
         self.renderer.render(&self.ctx, &mut self.display);
+        self.ctx.key_press_latch = false;
         self.display.flush().await;
 
         self.last_render = Instant::now();
@@ -213,7 +352,14 @@ where
 
     async fn on_keyboard_event(&mut self, event: KeyboardEvent) {
         self.ctx.key_pressed = event.pressed;
+        if event.pressed {
+            self.ctx.key_press_latch = true;
+        }
         self.render().await;
+    }
+
+    async fn on_modifier_event(&mut self, event: ModifierEvent) {
+        self.ctx.modifiers = event.modifier;
     }
 
     async fn on_sleep_state_event(&mut self, event: SleepStateEvent) {
