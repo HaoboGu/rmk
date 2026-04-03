@@ -1,8 +1,9 @@
 //! Morse key types shared between firmware and protocol layers.
 //!
-//! A morse key behaves differently according to the pattern of a tap/hold sequence.
-//! The maximum number of taps is limited to 15 by the internal u16 representation
-//! of [`MorsePattern`].
+//! This module contains all morse-related types:
+//! - [`MorseMode`] / [`MorseProfile`] — timing and behavior configuration
+//! - [`MorsePattern`] — tap/hold pattern encoding (up to 15 steps in a u16)
+//! - [`Morse`] — full morse key definition (profile + pattern→action map)
 
 use heapless::LinearMap;
 use postcard::experimental::max_size::MaxSize;
@@ -12,7 +13,167 @@ use postcard_schema::Schema;
 use postcard_schema::schema::{DataModelType, NamedType, NamedValue};
 use serde::{Deserialize, Serialize};
 
-use crate::action::{Action, MorseProfile};
+use crate::action::Action;
+use crate::constants::MORSE_SIZE;
+
+// ---------------------------------------------------------------------------
+// MorseMode & MorseProfile — timing/behavior configuration
+// ---------------------------------------------------------------------------
+
+/// Mode for morse key behavior
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
+#[repr(u8)]
+pub enum MorseMode {
+    /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
+    /// When another key is pressed and released during the current morse key is held,
+    /// the hold action of current morse key will be triggered
+    PermissiveHold,
+    /// Trigger hold immediately if any other non-morse key is pressed when the current morse key is held
+    HoldOnOtherPress,
+    /// Normal mode, the decision is made when timeout
+    Normal,
+}
+
+/// Configuration for morse, tap dance and tap-hold
+/// to save some RAM space, manually packed into 32 bits
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
+pub struct MorseProfile(u32);
+
+impl MorseProfile {
+    pub const fn const_default() -> Self {
+        Self(0)
+    }
+
+    /// If the previous key is on the same "hand", the current key will be determined as a tap
+    pub fn unilateral_tap(self) -> Option<bool> {
+        match self.0 & 0x0000_C000 {
+            0x0000_C000 => Some(true),
+            0x0000_8000 => Some(false),
+            _ => None,
+        }
+    }
+
+    pub const fn with_unilateral_tap(self, b: Option<bool>) -> Self {
+        Self(
+            (self.0 & 0xFFFF_3FFF)
+                | match b {
+                    Some(true) => 0x0000_C000,
+                    Some(false) => 0x0000_8000,
+                    None => 0,
+                },
+        )
+    }
+
+    /// The decision mode of the morse/tap-hold key
+    pub fn mode(self) -> Option<MorseMode> {
+        match self.0 & 0xC000_0000 {
+            0xC000_0000 => Some(MorseMode::Normal),
+            0x8000_0000 => Some(MorseMode::HoldOnOtherPress),
+            0x4000_0000 => Some(MorseMode::PermissiveHold),
+            _ => None,
+        }
+    }
+
+    pub const fn with_mode(self, m: Option<MorseMode>) -> Self {
+        Self(
+            (self.0 & 0x3FFF_FFFF)
+                | match m {
+                    Some(MorseMode::Normal) => 0xC000_0000,
+                    Some(MorseMode::HoldOnOtherPress) => 0x8000_0000,
+                    Some(MorseMode::PermissiveHold) => 0x4000_0000,
+                    None => 0,
+                },
+        )
+    }
+
+    /// If the key is pressed longer than this, it is accepted as `hold` (in milliseconds)
+    pub fn hold_timeout_ms(self) -> Option<u16> {
+        let t = (self.0 & 0x3FFF) as u16;
+        if t == 0 { None } else { Some(t) }
+    }
+
+    pub const fn with_hold_timeout_ms(self, t: Option<u16>) -> Self {
+        if let Some(t) = t {
+            Self((self.0 & 0xFFFF_C000) | (t as u32 & 0x3FFF))
+        } else {
+            Self(self.0 & 0xFFFF_C000)
+        }
+    }
+
+    pub const fn set_hold_timeout_ms(&mut self, t: u16) {
+        self.0 = (self.0 & 0xFFFF_C000) | (t as u32 & 0x3FFF)
+    }
+
+    pub const fn set_gap_timeout_ms(&mut self, t: u16) {
+        self.0 = (self.0 & 0xC000_FFFF) | ((t as u32 & 0x3FFF) << 16)
+    }
+
+    /// The time elapsed from the last release of a key is longer than this, it will break the morse pattern (in milliseconds)
+    pub fn gap_timeout_ms(self) -> Option<u16> {
+        let t = ((self.0 >> 16) & 0x3FFF) as u16;
+        if t == 0 { None } else { Some(t) }
+    }
+
+    pub const fn with_gap_timeout_ms(self, t: Option<u16>) -> Self {
+        if let Some(t) = t {
+            Self((self.0 & 0xC000_FFFF) | ((t as u32 & 0x3FFF) << 16))
+        } else {
+            Self(self.0 & 0xC000_FFFF)
+        }
+    }
+
+    pub const fn new(
+        unilateral_tap: Option<bool>,
+        mode: Option<MorseMode>,
+        hold_timeout_ms: Option<u16>,
+        gap_timeout_ms: Option<u16>,
+    ) -> Self {
+        let mut v = 0u32;
+        if let Some(t) = hold_timeout_ms {
+            v = (t & 0x3FFF) as u32;
+        }
+        if let Some(t) = gap_timeout_ms {
+            v |= ((t & 0x3FFF) as u32) << 16;
+        }
+        if let Some(b) = unilateral_tap {
+            v |= if b { 0x0000_C000 } else { 0x0000_8000 };
+        }
+        if let Some(m) = mode {
+            v |= match m {
+                MorseMode::Normal => 0xC000_0000,
+                MorseMode::HoldOnOtherPress => 0x8000_0000,
+                MorseMode::PermissiveHold => 0x4000_0000,
+            };
+        }
+        MorseProfile(v)
+    }
+}
+
+impl Default for MorseProfile {
+    fn default() -> Self {
+        MorseProfile::const_default()
+    }
+}
+
+impl From<u32> for MorseProfile {
+    fn from(v: u32) -> Self {
+        MorseProfile(v)
+    }
+}
+
+impl From<MorseProfile> for u32 {
+    fn from(val: MorseProfile) -> Self {
+        val.0
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MorsePattern & Morse — pattern encoding and key definition
+// ---------------------------------------------------------------------------
 
 /// MorsePattern is a sequence of maximum 15 taps or holds that can be encoded into an u16:
 /// 0x1 when empty, then 0 for tap or 1 for hold shifted from the right
@@ -84,25 +245,25 @@ impl MorsePattern {
 /// A morse key is a key that behaves differently according to the pattern of a tap/hold sequence.
 /// The maximum number of taps is limited to 15 by the internal u16 representation of MorsePattern.
 /// There is a list of (pattern, corresponding action) pairs for each morse key:
-/// The number of pairs is limited by `NUM_PATTERNS`, which is a const generic parameter.
+/// The number of pairs is limited by `MORSE_SIZE` (from `constants.rs`, generated at build time).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Morse<const NUM_PATTERNS: usize> {
+pub struct Morse {
     /// The profile of this morse key, which defines the timing parameters, etc.
     /// If some of its fields are filled with None, the global default value will be used.
     pub profile: MorseProfile,
     /// The list of pattern -> action pairs, which can be triggered
     #[serde(with = "morse_actions_serde")]
-    pub actions: LinearMap<MorsePattern, Action, NUM_PATTERNS>,
+    pub actions: LinearMap<MorsePattern, Action, MORSE_SIZE>,
 }
 
-impl<const NUM_PATTERNS: usize> MaxSize for Morse<NUM_PATTERNS> {
+impl MaxSize for Morse {
     const POSTCARD_MAX_SIZE: usize = MorseProfile::POSTCARD_MAX_SIZE
-        + (<(u16, Action)>::POSTCARD_MAX_SIZE) * NUM_PATTERNS
-        + crate::varint_max_size(NUM_PATTERNS);
+        + (<(u16, Action)>::POSTCARD_MAX_SIZE) * MORSE_SIZE
+        + crate::varint_max_size(MORSE_SIZE);
 }
 
 #[cfg(feature = "defmt")]
-impl<const NUM_PATTERNS: usize> defmt::Format for Morse<NUM_PATTERNS> {
+impl defmt::Format for Morse {
     fn format(&self, f: defmt::Formatter<'_>) {
         defmt::write!(f, "profile: MorseProfile({:?}), ", self.profile);
         defmt::write!(f, "actions: [");
@@ -113,7 +274,7 @@ impl<const NUM_PATTERNS: usize> defmt::Format for Morse<NUM_PATTERNS> {
     }
 }
 
-impl<const NUM_PATTERNS: usize> PartialEq for Morse<NUM_PATTERNS> {
+impl PartialEq for Morse {
     fn eq(&self, other: &Self) -> bool {
         if self.profile != other.profile || self.actions.len() != other.actions.len() {
             return false;
@@ -122,12 +283,12 @@ impl<const NUM_PATTERNS: usize> PartialEq for Morse<NUM_PATTERNS> {
     }
 }
 
-impl<const NUM_PATTERNS: usize> Eq for Morse<NUM_PATTERNS> {}
+impl Eq for Morse {}
 
 /// Manual Schema impl because Morse uses custom serde for LinearMap.
 /// The wire format is: (MorseProfile, Vec<(u16, Action)>).
 #[cfg(feature = "rmk_protocol")]
-impl<const NUM_PATTERNS: usize> Schema for Morse<NUM_PATTERNS> {
+impl Schema for Morse {
     const SCHEMA: &'static NamedType = &NamedType {
         name: "Morse",
         ty: &DataModelType::Struct(&[
@@ -149,7 +310,7 @@ impl<const NUM_PATTERNS: usize> Schema for Morse<NUM_PATTERNS> {
     };
 }
 
-impl<const N: usize> Default for Morse<N> {
+impl Default for Morse {
     fn default() -> Self {
         Self {
             profile: MorseProfile::const_default(),
@@ -158,7 +319,7 @@ impl<const N: usize> Default for Morse<N> {
     }
 }
 
-impl<const N: usize> Morse<N> {
+impl Morse {
     pub fn new_from_vial(
         tap: Action,
         hold: Action,
@@ -187,8 +348,8 @@ impl<const N: usize> Morse<N> {
     }
 
     pub fn new_with_actions(
-        tap_actions: heapless::Vec<Action, N>,
-        hold_actions: heapless::Vec<Action, N>,
+        tap_actions: heapless::Vec<Action, MORSE_SIZE>,
+        hold_actions: heapless::Vec<Action, MORSE_SIZE>,
         profile: MorseProfile,
     ) -> Self {
         let mut result = Self {
@@ -275,19 +436,19 @@ mod morse_actions_serde {
 
     use super::*;
 
-    pub fn serialize<S, const N: usize>(
-        map: &LinearMap<MorsePattern, Action, N>,
+    pub fn serialize<S>(
+        map: &LinearMap<MorsePattern, Action, MORSE_SIZE>,
         serializer: S,
     ) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         // Convert to Vec for serialization
-        let vec: heapless::Vec<(u16, Action), N> = map.iter().map(|(k, v)| (k.to_u16(), *v)).collect();
+        let vec: heapless::Vec<(u16, Action), MORSE_SIZE> = map.iter().map(|(k, v)| (k.to_u16(), *v)).collect();
         vec.serialize(serializer)
     }
 
-    pub fn deserialize<'de, D, const N: usize>(deserializer: D) -> Result<LinearMap<MorsePattern, Action, N>, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<LinearMap<MorsePattern, Action, MORSE_SIZE>, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -295,10 +456,10 @@ mod morse_actions_serde {
 
         use serde::de::{SeqAccess, Visitor};
 
-        struct VecVisitor<const N: usize>;
+        struct VecVisitor;
 
-        impl<'de, const N: usize> Visitor<'de> for VecVisitor<N> {
-            type Value = heapless::Vec<(u16, Action), N>;
+        impl<'de> Visitor<'de> for VecVisitor {
+            type Value = heapless::Vec<(u16, Action), MORSE_SIZE>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 write!(formatter, "a sequence of (u16, Action) tuples")
@@ -317,7 +478,7 @@ mod morse_actions_serde {
             }
         }
 
-        let vec = deserializer.deserialize_seq(VecVisitor::<N>)?;
+        let vec = deserializer.deserialize_seq(VecVisitor)?;
         let mut map = LinearMap::new();
         for (pattern, action) in vec {
             map.insert(MorsePattern::from_u16(pattern), action)
@@ -332,16 +493,16 @@ mod tests {
     extern crate alloc;
 
     use super::*;
-    use crate::action::{Action, MorseMode, MorseProfile};
+    use crate::action::Action;
     use crate::keycode::{HidKeyCode, KeyCode};
 
     #[test]
     fn test_linear_map_serde_empty() {
-        let morse = Morse::<4>::default();
+        let morse = Morse::default();
 
         let mut buffer = [0u8; 128];
         let serialized = postcard::to_slice(&morse, &mut buffer).unwrap();
-        let deserialized: Morse<4> = postcard::from_bytes(serialized).unwrap();
+        let deserialized: Morse = postcard::from_bytes(serialized).unwrap();
 
         assert_eq!(morse.actions.len(), deserialized.actions.len());
         assert_eq!(morse.actions.len(), 0);
@@ -349,12 +510,12 @@ mod tests {
 
     #[test]
     fn test_linear_map_serde_single_entry() {
-        let mut morse = Morse::<4>::default();
+        let mut morse = Morse::default();
         morse.actions.insert(TAP, Action::Key(KeyCode::Hid(HidKeyCode::A))).ok();
 
         let mut buffer = [0u8; 128];
         let serialized = postcard::to_slice(&morse, &mut buffer).unwrap();
-        let deserialized: Morse<4> = postcard::from_bytes(serialized).unwrap();
+        let deserialized: Morse = postcard::from_bytes(serialized).unwrap();
 
         assert_eq!(morse.actions.len(), deserialized.actions.len());
         assert_eq!(
@@ -365,7 +526,7 @@ mod tests {
 
     #[test]
     fn test_linear_map_serde_multiple_entries() {
-        let mut morse = Morse::<4>::default();
+        let mut morse = Morse::default();
         morse.actions.insert(TAP, Action::Key(KeyCode::Hid(HidKeyCode::A))).ok();
         morse
             .actions
@@ -382,7 +543,7 @@ mod tests {
 
         let mut buffer = [0u8; 128];
         let serialized = postcard::to_slice(&morse, &mut buffer).unwrap();
-        let deserialized: Morse<4> = postcard::from_bytes(serialized).unwrap();
+        let deserialized: Morse = postcard::from_bytes(serialized).unwrap();
 
         assert_eq!(morse.actions.len(), deserialized.actions.len());
         assert_eq!(morse.actions.len(), 4);
@@ -407,7 +568,7 @@ mod tests {
 
     #[test]
     fn test_linear_map_serde_with_profile() {
-        let mut morse = Morse::<4> {
+        let mut morse = Morse {
             profile: MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(200), Some(150)),
             ..Default::default()
         };
@@ -419,9 +580,41 @@ mod tests {
 
         let mut buffer = [0u8; 128];
         let serialized = postcard::to_slice(&morse, &mut buffer).unwrap();
-        let deserialized: Morse<4> = postcard::from_bytes(serialized).unwrap();
+        let deserialized: Morse = postcard::from_bytes(serialized).unwrap();
 
         assert_eq!(morse.profile, deserialized.profile);
         assert_eq!(morse.actions.len(), deserialized.actions.len());
+    }
+
+    #[test]
+    fn test_morse_profile_timeout_setters() {
+        let mut profile = MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(1000), Some(2000));
+
+        assert_eq!(profile.hold_timeout_ms(), Some(1000));
+        assert_eq!(profile.gap_timeout_ms(), Some(2000));
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
+
+        profile.set_hold_timeout_ms(1500);
+        assert_eq!(profile.hold_timeout_ms(), Some(1500));
+        assert_eq!(profile.gap_timeout_ms(), Some(2000));
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
+
+        profile.set_gap_timeout_ms(2500);
+        assert_eq!(profile.hold_timeout_ms(), Some(1500));
+        assert_eq!(profile.gap_timeout_ms(), Some(2500));
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
+
+        profile.set_hold_timeout_ms(0x3FFF);
+        profile.set_gap_timeout_ms(0x3FFF);
+        assert_eq!(profile.hold_timeout_ms(), Some(0x3FFF));
+        assert_eq!(profile.gap_timeout_ms(), Some(0x3FFF));
+
+        profile.set_hold_timeout_ms(0);
+        profile.set_gap_timeout_ms(0);
+        assert_eq!(profile.hold_timeout_ms(), None);
+        assert_eq!(profile.gap_timeout_ms(), None);
     }
 }

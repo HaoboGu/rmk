@@ -16,13 +16,12 @@ mod encoder;
 mod key_action;
 mod keyboard;
 mod light;
-mod morse;
 
 pub use encoder::EncoderAction;
 pub use key_action::KeyAction;
 pub use keyboard::KeyboardAction;
 pub use light::LightAction;
-pub use morse::{MorseMode, MorseProfile};
+pub use crate::morse::{MorseMode, MorseProfile};
 use postcard::experimental::max_size::MaxSize;
 #[cfg(feature = "rmk_protocol")]
 use postcard_schema::Schema;

@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::action::KeyAction;
 #[cfg(feature = "bulk")]
-use crate::constants::PROTOCOL_MAX_BULK_SIZE;
+use crate::constants::BULK_SIZE;
 #[cfg(feature = "bulk")]
-use crate::protocol_vec::ProtocolVec;
+use crate::protocol::Vec;
 
 /// Identifies a specific key position in the keymap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
@@ -46,12 +46,12 @@ pub struct BulkRequest {
 #[cfg(feature = "bulk")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 #[serde(transparent)]
-pub struct BulkKeyActions(pub ProtocolVec<KeyAction, PROTOCOL_MAX_BULK_SIZE>);
+pub struct BulkKeyActions(pub Vec<KeyAction, BULK_SIZE>);
 
 #[cfg(feature = "bulk")]
 impl MaxSize for BulkKeyActions {
     const POSTCARD_MAX_SIZE: usize =
-        KeyAction::POSTCARD_MAX_SIZE * PROTOCOL_MAX_BULK_SIZE + crate::varint_max_size(PROTOCOL_MAX_BULK_SIZE);
+        KeyAction::POSTCARD_MAX_SIZE * BULK_SIZE + crate::varint_max_size(BULK_SIZE);
 }
 
 /// Request payload for `SetKeymapBulk` endpoint.
@@ -59,12 +59,12 @@ impl MaxSize for BulkKeyActions {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct SetKeymapBulkRequest {
     pub request: BulkRequest,
-    pub actions: ProtocolVec<KeyAction, PROTOCOL_MAX_BULK_SIZE>,
+    pub actions: Vec<KeyAction, BULK_SIZE>,
 }
 
 #[cfg(feature = "bulk")]
 impl MaxSize for SetKeymapBulkRequest {
     const POSTCARD_MAX_SIZE: usize = BulkRequest::POSTCARD_MAX_SIZE
-        + KeyAction::POSTCARD_MAX_SIZE * PROTOCOL_MAX_BULK_SIZE
-        + crate::varint_max_size(PROTOCOL_MAX_BULK_SIZE);
+        + KeyAction::POSTCARD_MAX_SIZE * BULK_SIZE
+        + crate::varint_max_size(BULK_SIZE);
 }

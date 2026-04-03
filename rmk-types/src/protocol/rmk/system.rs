@@ -8,7 +8,7 @@ use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 /// Maximum number of key positions in an unlock challenge.
-pub const PROTOCOL_MAX_UNLOCK_KEYS: usize = 2;
+pub const UNLOCK_KEYS_SIZE: usize = 2;
 
 /// Protocol version advertised during the connection handshake.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
@@ -23,11 +23,17 @@ impl ProtocolVersion {
 }
 
 /// Device capabilities discovered during the connection handshake.
+///
+/// The host reads this once after connecting to learn the firmware's layout,
+/// feature set, and protocol limits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
 pub struct DeviceCapabilities {
+    // -- Layout --
     pub num_layers: u8,
     pub num_rows: u8,
     pub num_cols: u8,
+
+    // -- Input devices --
     pub num_encoders: u8,
     pub max_combos: u8,
     pub max_combo_keys: u8,
@@ -36,12 +42,18 @@ pub struct DeviceCapabilities {
     pub max_morse: u8,
     pub max_patterns_per_key: u8,
     pub max_forks: u8,
+
+    // -- Feature flags --
     pub storage_enabled: bool,
+    pub lighting_enabled: bool,
+
+    // -- Connectivity --
     pub is_split: bool,
     pub num_split_peripherals: u8,
     pub ble_enabled: bool,
     pub num_ble_profiles: u8,
-    pub lighting_enabled: bool,
+
+    // -- Protocol limits --
     pub max_payload_size: u16,
     pub max_bulk_keys: u8,
     pub macro_chunk_size: u16,
@@ -73,12 +85,12 @@ pub struct LockStatus {
 /// Challenge returned by the Unlock endpoint containing physical key positions to press.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct UnlockChallenge {
-    pub key_positions: Vec<(u8, u8), PROTOCOL_MAX_UNLOCK_KEYS>,
+    pub key_positions: Vec<(u8, u8), UNLOCK_KEYS_SIZE>,
 }
 
 impl MaxSize for UnlockChallenge {
     const POSTCARD_MAX_SIZE: usize =
-        <(u8, u8)>::POSTCARD_MAX_SIZE * PROTOCOL_MAX_UNLOCK_KEYS + crate::varint_max_size(PROTOCOL_MAX_UNLOCK_KEYS);
+        <(u8, u8)>::POSTCARD_MAX_SIZE * UNLOCK_KEYS_SIZE + crate::varint_max_size(UNLOCK_KEYS_SIZE);
 }
 
 /// Storage reset mode for the `StorageReset` endpoint.

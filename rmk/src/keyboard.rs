@@ -1849,10 +1849,9 @@ mod test {
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use rmk_types::combo::ComboConfig;
     use rmk_types::fork::Fork;
 
-    use crate::combo::Combo;
+    use crate::combo::{Combo, ComboConfig};
     use crate::config::{BehaviorConfig, CombosConfig, ForksConfig, PositionalConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
     use crate::{a, k, layer, mo, th, thp};

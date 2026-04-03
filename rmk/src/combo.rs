@@ -1,8 +1,8 @@
 use rmk_types::action::KeyAction;
 use rmk_types::constants::COMBO_MAX_LENGTH;
 
-/// ComboConfig instantiated with firmware's combo Vec capacity.
-pub type ComboConfig = rmk_types::combo::ComboConfig<{ rmk_types::constants::COMBO_VEC_SIZE }>;
+/// Combo config instantiated with firmware's combo Vec capacity.
+pub type ComboConfig = rmk_types::combo::Combo;
 
 use crate::event::KeyboardEvent;
 

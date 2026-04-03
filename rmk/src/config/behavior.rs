@@ -7,8 +7,7 @@ use rmk_types::fork::Fork;
 use crate::combo::Combo;
 use crate::morse::Morse;
 use crate::{
-    COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MAX_PATTERNS_PER_KEY, MORSE_MAX_NUM, MOUSE_KEY_INTERVAL,
-    MOUSE_WHEEL_INTERVAL,
+    COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MOUSE_KEY_INTERVAL, MOUSE_WHEEL_INTERVAL,
 };
 
 /// Config for configurable action behavior
@@ -49,7 +48,7 @@ pub struct MorsesConfig {
     pub prior_idle_time: Duration, //used only when flow tap is enabled
     pub default_profile: MorseProfile,
 
-    pub morses: Vec<Morse<MAX_PATTERNS_PER_KEY>, MORSE_MAX_NUM>,
+    pub morses: Vec<Morse, MORSE_MAX_NUM>,
 }
 
 impl Default for MorsesConfig {

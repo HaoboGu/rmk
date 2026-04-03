@@ -6,35 +6,35 @@ use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::action::KeyAction;
-use crate::protocol_vec::ProtocolVec;
+use crate::constants::COMBO_SIZE;
+use crate::protocol::Vec;
 
 /// Configuration data for a combo.
 ///
 /// A combo triggers an output action when a set of keys are pressed simultaneously.
-/// `MAX_KEYS` controls the maximum number of trigger keys; on firmware this is
-/// typically `COMBO_MAX_LENGTH` (from keyboard.toml), on host it uses the protocol
-/// upper bound.
+/// The maximum number of trigger keys is determined by `COMBO_SIZE` (from `constants.rs`,
+/// generated at build time from `keyboard.toml` on firmware or fixed upper bound on host).
 /// Actions are stored in a Vec — only meaningful keys are present (no `KeyAction::No` padding).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct ComboConfig<const MAX_KEYS: usize> {
-    pub actions: ProtocolVec<KeyAction, MAX_KEYS>,
+pub struct Combo {
+    pub actions: Vec<KeyAction, COMBO_SIZE>,
     pub output: KeyAction,
     pub layer: Option<u8>,
 }
 
-impl<const MAX_KEYS: usize> MaxSize for ComboConfig<MAX_KEYS> {
-    const POSTCARD_MAX_SIZE: usize = KeyAction::POSTCARD_MAX_SIZE * MAX_KEYS
-        + crate::varint_max_size(MAX_KEYS)
+impl MaxSize for Combo {
+    const POSTCARD_MAX_SIZE: usize = KeyAction::POSTCARD_MAX_SIZE * COMBO_SIZE
+        + crate::varint_max_size(COMBO_SIZE)
         + KeyAction::POSTCARD_MAX_SIZE
         + 1 // Option<u8> tag
         + u8::POSTCARD_MAX_SIZE;
 }
 
-impl<const MAX_KEYS: usize> ComboConfig<MAX_KEYS> {
+impl Combo {
     pub fn new<I: IntoIterator<Item = KeyAction>>(actions: I, output: KeyAction, layer: Option<u8>) -> Self {
-        let mut combo_actions = ProtocolVec::new();
+        let mut combo_actions = Vec::new();
         for action in actions {
             if action != KeyAction::No {
                 if combo_actions.push(action).is_err() {
@@ -52,7 +52,7 @@ impl<const MAX_KEYS: usize> ComboConfig<MAX_KEYS> {
     /// Get an empty combo.
     pub fn empty() -> Self {
         Self {
-            actions: ProtocolVec::new(),
+            actions: Vec::new(),
             output: KeyAction::No,
             layer: None,
         }

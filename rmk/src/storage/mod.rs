@@ -17,7 +17,7 @@ use {
 };
 #[cfg(feature = "host")]
 use {
-    crate::{MACRO_SPACE_SIZE, MAX_PATTERNS_PER_KEY, combo::ComboConfig, morse::Morse},
+    crate::{MACRO_SPACE_SIZE, combo::ComboConfig, morse::Morse},
     rmk_types::action::{EncoderAction, KeyAction},
     rmk_types::fork::Fork,
 };
@@ -84,7 +84,7 @@ pub(crate) enum FlashOperationMessage {
     #[cfg(feature = "host")]
     Morse {
         idx: u8,
-        morse: Morse<MAX_PATTERNS_PER_KEY>,
+        morse: Morse,
     },
     // Current saved connection type
     ConnectionType(u8),
@@ -208,7 +208,7 @@ pub(crate) enum StorageData {
     #[cfg(feature = "host")]
     Fork(Fork),
     #[cfg(feature = "host")]
-    Morse(Morse<MAX_PATTERNS_PER_KEY>),
+    Morse(Morse),
     #[cfg(all(feature = "_ble", feature = "split"))]
     PeerAddress(PeerAddress),
     #[cfg(feature = "_ble")]

@@ -1,27 +1,33 @@
 //! # RMK Types
 //!
-//! This crate provides fundamental type definitions and data structures used in RMK.
+//! Shared type definitions used across the RMK keyboard firmware ecosystem.
 //!
 //! ## Modules
 //!
-//! ### Core Modules
-//! - [`action`] - Keyboard actions and behaviors (key presses, layer operations, macros)
-//! - [`ble`] - BLE profile and connection status types
-//! - [`keycode`] - Keycode definitions including HID keycodes, media keys, and system control keycodes
-//! - [`fork`] - Shared fork/key-override state types
-//! - [`modifier`] - Modifier key combinations and operations
-//! - [`mouse_button`] - Mouse button state and combinations
-//! - [`led_indicator`] - LED indicator states and operations
-//! - [`protocol`] - Communication protocol
+//! ### Actions & keycodes
+//! - [`action`] — What keys do: `Action`, `KeyAction`, `EncoderAction`, `LightAction`, etc.
+//! - [`keycode`] — What keys are: `KeyCode`, `HidKeyCode`, `ConsumerKey`, `SystemControlKey`
 //!
+//! ### Behaviors (key overrides, combos, tap-dance)
+//! - [`combo`] — `Combo<N>`: combo trigger configuration
+//! - [`fork`] — `Fork`, `StateBits`: key-override configuration
+//! - [`morse`] — `Morse<N>`, `MorsePattern`, `MorseProfile`, `MorseMode`: tap-dance/tap-hold
 //!
-//! ## Integration with RMK Ecosystem
+//! ### Hardware state
+//! - [`modifier`] — `ModifierCombination` bitfield
+//! - [`mouse_button`] — `MouseButtons` bitfield
+//! - [`led_indicator`] — `LedIndicator` bitfield
+//! - [`battery`] — `BatteryStatus`, `ChargeState`
+//! - [`ble`] — `BleStatus`, `BleState`
+//! - [`connection`] — `ConnectionType` (USB/BLE)
 //!
-//! This crate is designed to work with other RMK components:
+//! ### Protocol
+//! - [`protocol::Vec`] — Dual-target Vec (heapless on firmware, alloc on host)
+//! - [`protocol::vial`] — Vial/Via protocol types
+//! - [`protocol::rmk`] — RMK native protocol ICD (feature-gated: `rmk_protocol`)
 //!
-//! - **rmk**: Core firmware logic uses these types for state management
-//! - **rmk-config**: Configuration parsing produces these types
-//! - **rmk-macro**: Code generation macros work with these type definitions
+//! ### Build-time
+//! - [`constants`] — Generated from `keyboard.toml` by `build.rs`
 
 // The postcard-rpc endpoints! macro performs heavy const-eval for type uniqueness checks.
 #![allow(long_running_const_eval)]
@@ -43,9 +49,6 @@ pub mod modifier;
 pub mod morse;
 pub mod mouse_button;
 pub mod protocol;
-pub mod protocol_vec;
-
-pub use protocol_vec::ProtocolVec;
 
 /// Compute the maximum varint-encoded length for a given max value.
 /// Mirrors `postcard`'s internal `varint_size`.

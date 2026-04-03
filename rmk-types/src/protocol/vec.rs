@@ -10,7 +10,7 @@
 // Firmware: zero-cost alias for heapless::Vec
 // ---------------------------------------------------------------------------
 #[cfg(not(feature = "host"))]
-pub type ProtocolVec<T, const N: usize> = heapless::Vec<T, N>;
+pub type Vec<T, const N: usize> = heapless::Vec<T, N>;
 
 // ---------------------------------------------------------------------------
 // Host: newtype around alloc::Vec that ignores N at runtime
@@ -31,13 +31,13 @@ mod host_vec {
     /// A heap-allocated protocol Vec. `N` is retained as a type parameter for
     /// `MaxSize` / `Schema` compatibility with the firmware's `heapless::Vec<T, N>`,
     /// but does **not** limit the runtime capacity.
-    pub struct ProtocolVec<T, const N: usize>(Vec<T>);
+    pub struct Vec<T, const N: usize>(alloc::vec::Vec<T>);
 
     // -- Construction & mutation --
 
-    impl<T, const N: usize> ProtocolVec<T, N> {
+    impl<T, const N: usize> self::Vec<T, N> {
         pub fn new() -> Self {
-            Self(Vec::new())
+            Self(alloc::vec::Vec::new())
         }
 
         /// Push an element. Always succeeds on the host (unbounded capacity).
@@ -71,14 +71,14 @@ mod host_vec {
 
     // -- Deref / DerefMut → [T] --
 
-    impl<T, const N: usize> Deref for ProtocolVec<T, N> {
+    impl<T, const N: usize> Deref for self::Vec<T, N> {
         type Target = [T];
         fn deref(&self) -> &[T] {
             &self.0
         }
     }
 
-    impl<T, const N: usize> DerefMut for ProtocolVec<T, N> {
+    impl<T, const N: usize> DerefMut for self::Vec<T, N> {
         fn deref_mut(&mut self) -> &mut [T] {
             &mut self.0
         }
@@ -86,27 +86,27 @@ mod host_vec {
 
     // -- Standard traits --
 
-    impl<T: Clone, const N: usize> Clone for ProtocolVec<T, N> {
+    impl<T: Clone, const N: usize> Clone for self::Vec<T, N> {
         fn clone(&self) -> Self {
             Self(self.0.clone())
         }
     }
 
-    impl<T: fmt::Debug, const N: usize> fmt::Debug for ProtocolVec<T, N> {
+    impl<T: fmt::Debug, const N: usize> fmt::Debug for self::Vec<T, N> {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             self.0.fmt(f)
         }
     }
 
-    impl<T: PartialEq, const N: usize> PartialEq for ProtocolVec<T, N> {
+    impl<T: PartialEq, const N: usize> PartialEq for self::Vec<T, N> {
         fn eq(&self, other: &Self) -> bool {
             self.0 == other.0
         }
     }
 
-    impl<T: Eq, const N: usize> Eq for ProtocolVec<T, N> {}
+    impl<T: Eq, const N: usize> Eq for self::Vec<T, N> {}
 
-    impl<T, const N: usize> Default for ProtocolVec<T, N> {
+    impl<T, const N: usize> Default for self::Vec<T, N> {
         fn default() -> Self {
             Self::new()
         }
@@ -114,7 +114,7 @@ mod host_vec {
 
     // -- Iterator support --
 
-    impl<T, const N: usize> FromIterator<T> for ProtocolVec<T, N> {
+    impl<T, const N: usize> FromIterator<T> for self::Vec<T, N> {
         fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
             Self(iter.into_iter().collect())
         }
@@ -122,7 +122,7 @@ mod host_vec {
 
     // -- Serde: identical wire format to heapless::Vec --
 
-    impl<T: Serialize, const N: usize> Serialize for ProtocolVec<T, N> {
+    impl<T: Serialize, const N: usize> Serialize for self::Vec<T, N> {
         fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
             let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
             for item in &self.0 {
@@ -132,23 +132,23 @@ mod host_vec {
         }
     }
 
-    impl<'de, T: Deserialize<'de>, const N: usize> Deserialize<'de> for ProtocolVec<T, N> {
+    impl<'de, T: Deserialize<'de>, const N: usize> Deserialize<'de> for self::Vec<T, N> {
         fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
             struct VecVisitor<T, const N: usize>(core::marker::PhantomData<T>);
 
             impl<'de, T: Deserialize<'de>, const N: usize> Visitor<'de> for VecVisitor<T, N> {
-                type Value = ProtocolVec<T, N>;
+                type Value = self::super::host_vec::Vec<T, N>;
 
                 fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
                     write!(f, "a sequence")
                 }
 
                 fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-                    let mut vec = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+                    let mut vec = alloc::vec::Vec::with_capacity(seq.size_hint().unwrap_or(0));
                     while let Some(elem) = seq.next_element()? {
                         vec.push(elem);
                     }
-                    Ok(ProtocolVec(vec))
+                    Ok(super::host_vec::Vec(vec))
                 }
             }
 
@@ -158,14 +158,14 @@ mod host_vec {
 
     // -- MaxSize: uses N as the upper bound (same formula as heapless::Vec) --
 
-    impl<T: MaxSize, const N: usize> MaxSize for ProtocolVec<T, N> {
+    impl<T: MaxSize, const N: usize> MaxSize for self::Vec<T, N> {
         const POSTCARD_MAX_SIZE: usize =
             T::POSTCARD_MAX_SIZE * N + crate::varint_max_size(N);
     }
 
     // -- Schema: delegate to heapless::Vec so endpoint keys match firmware --
 
-    impl<T: Schema, const N: usize> Schema for ProtocolVec<T, N> {
+    impl<T: Schema, const N: usize> Schema for self::Vec<T, N> {
         const SCHEMA: &'static postcard_schema::schema::NamedType =
             <heapless::Vec<T, N> as Schema>::SCHEMA;
     }
@@ -173,7 +173,7 @@ mod host_vec {
     // -- defmt (optional) --
 
     #[cfg(feature = "defmt")]
-    impl<T: defmt::Format, const N: usize> defmt::Format for ProtocolVec<T, N> {
+    impl<T: defmt::Format, const N: usize> defmt::Format for self::Vec<T, N> {
         fn format(&self, f: defmt::Formatter<'_>) {
             defmt::write!(f, "[");
             for (i, item) in self.0.iter().enumerate() {
@@ -188,4 +188,4 @@ mod host_vec {
 }
 
 #[cfg(feature = "host")]
-pub use host_vec::ProtocolVec;
+pub use host_vec::Vec;

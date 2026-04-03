@@ -98,7 +98,7 @@ endpoints! {
     omit_std = true;
     | EndpointTy  | RequestTy       | ResponseTy  | Path         |
     | ----------  | ---------       | ----------  | ----         |
-    | GetCombo    | u8              | ProtocolComboConfig | "combo/get"  |
+    | GetCombo    | u8              | ComboConfig         | "combo/get"  |
     | SetCombo    | SetComboRequest | RmkResult   | "combo/set"  |
 }
 
@@ -200,7 +200,7 @@ pub const BLE_STATUS_ENDPOINT_LIST: postcard_rpc::EndpointMap = postcard_rpc::En
     endpoints: &[],
 };
 
-#[cfg(feature = "split")]
+#[cfg(all(feature = "_ble", feature = "split"))]
 endpoints! {
     list = SPLIT_STATUS_ENDPOINT_LIST;
     omit_std = true;
@@ -209,7 +209,7 @@ endpoints! {
     | GetPeripheralStatus | u8        | PeripheralStatus | "status/peripheral" |
 }
 
-#[cfg(not(feature = "split"))]
+#[cfg(not(all(feature = "_ble", feature = "split")))]
 pub const SPLIT_STATUS_ENDPOINT_LIST: postcard_rpc::EndpointMap = postcard_rpc::EndpointMap {
     types: &[],
     endpoints: &[],
@@ -336,7 +336,6 @@ topics! {
 mod tests {
     extern crate alloc;
 
-    use heapless::Vec;
     use postcard_rpc::{Endpoint, Key, Topic};
     use serde::{Deserialize, Serialize};
 
@@ -346,11 +345,10 @@ mod tests {
     use crate::battery::ChargeState;
     #[cfg(feature = "_ble")]
     use crate::ble::BleState;
-    use crate::combo::ComboConfig;
     use crate::fork::{Fork, StateBits};
     use crate::modifier::ModifierCombination;
     use crate::morse::{Morse, MorsePattern};
-    use crate::protocol_vec::ProtocolVec;
+    use crate::protocol::Vec;
 
     /// Helper: postcard round-trip for a value using a stack buffer.
     fn round_trip<T>(val: &T) -> T
@@ -430,8 +428,8 @@ mod tests {
                 GetBatteryStatus::REQ_KEY,
             ]);
         }
-        // Split endpoints (feature-gated)
-        #[cfg(feature = "split")]
+        // Split + BLE endpoints (feature-gated)
+        #[cfg(all(feature = "_ble", feature = "split"))]
         {
             keys.extend_from_slice(&[GetPeripheralStatus::REQ_KEY]);
         }
@@ -493,11 +491,11 @@ mod tests {
             max_patterns_per_key: 8,
             max_forks: 4,
             storage_enabled: true,
+            lighting_enabled: false,
             is_split: false,
             num_split_peripherals: 0,
             ble_enabled: true,
             num_ble_profiles: 4,
-            lighting_enabled: false,
             max_payload_size: 256,
             max_bulk_keys: 8,
             macro_chunk_size: 64,
@@ -521,11 +519,11 @@ mod tests {
             max_patterns_per_key: 0,
             max_forks: 0,
             storage_enabled: false,
+            lighting_enabled: false,
             is_split: false,
             num_split_peripherals: 0,
             ble_enabled: false,
             num_ble_profiles: 0,
-            lighting_enabled: false,
             max_payload_size: 0,
             max_bulk_keys: 0,
             macro_chunk_size: 0,
@@ -565,7 +563,7 @@ mod tests {
 
     #[test]
     fn round_trip_unlock_challenge() {
-        let mut kp = Vec::new();
+        let mut kp = heapless::Vec::new();
         kp.push((1, 2)).unwrap();
         kp.push((3, 4)).unwrap();
         round_trip(&UnlockChallenge { key_positions: kp });
@@ -574,7 +572,7 @@ mod tests {
     #[test]
     fn round_trip_unlock_challenge_empty() {
         round_trip(&UnlockChallenge {
-            key_positions: Vec::new(),
+            key_positions: heapless::Vec::new(),
         });
     }
 
@@ -652,7 +650,7 @@ mod tests {
 
     #[test]
     fn round_trip_macro_data() {
-        let mut data: ProtocolVec<u8, { crate::constants::PROTOCOL_MAX_MACRO_DATA }> = ProtocolVec::new();
+        let mut data: Vec<u8, { crate::constants::MACRO_DATA_SIZE }> = Vec::new();
         data.extend_from_slice(&[0x01, 0x02, 0x03]).unwrap();
         round_trip(&MacroData { data });
     }
@@ -660,7 +658,7 @@ mod tests {
     #[test]
     fn round_trip_macro_data_empty() {
         round_trip(&MacroData {
-            data: ProtocolVec::new(),
+            data: Vec::new(),
         });
     }
 
@@ -672,7 +670,7 @@ mod tests {
 
     #[test]
     fn round_trip_set_macro_request() {
-        let mut data: ProtocolVec<u8, { crate::constants::PROTOCOL_MAX_MACRO_DATA }> = ProtocolVec::new();
+        let mut data: Vec<u8, { crate::constants::MACRO_DATA_SIZE }> = Vec::new();
         data.extend_from_slice(&[0x01, 0x02]).unwrap();
         round_trip(&SetMacroRequest {
             index: 1,
@@ -690,7 +688,7 @@ mod tests {
 
     #[test]
     fn round_trip_morse() {
-        let morse: Morse<8> = Morse {
+        let morse = Morse {
             profile: MorseProfile::const_default(),
             actions: heapless::LinearMap::new(),
         };
@@ -765,7 +763,7 @@ mod tests {
     #[cfg(feature = "bulk")]
     #[test]
     fn round_trip_set_keymap_bulk_request() {
-        let mut actions: ProtocolVec<KeyAction, { crate::constants::PROTOCOL_MAX_BULK_SIZE }> = ProtocolVec::new();
+        let mut actions: Vec<KeyAction, { crate::constants::BULK_SIZE }> = Vec::new();
         actions.push(KeyAction::No).unwrap();
         round_trip(&SetKeymapBulkRequest {
             request: BulkRequest {
@@ -801,7 +799,7 @@ mod tests {
 
     #[test]
     fn round_trip_set_morse_request() {
-        let mut morse: Morse<{ crate::constants::PROTOCOL_MORSE_VEC_SIZE }> = Morse {
+        let mut morse = Morse {
             profile: MorseProfile::const_default(),
             actions: heapless::LinearMap::new(),
         };
@@ -871,7 +869,7 @@ mod tests {
     #[test]
     fn round_trip_macro_data_max_capacity() {
         let mut data = Vec::new();
-        for i in 0..crate::constants::PROTOCOL_MAX_MACRO_DATA {
+        for i in 0..crate::constants::MACRO_DATA_SIZE {
             data.push(i as u8).unwrap();
         }
         round_trip(&MacroData { data });
@@ -880,7 +878,7 @@ mod tests {
     #[test]
     fn round_trip_matrix_state_max_capacity() {
         let mut bitmap = heapless::Vec::new();
-        for i in 0..super::status::PROTOCOL_MAX_MATRIX_BITMAP {
+        for i in 0..super::status::MATRIX_BITMAP_SIZE {
             bitmap.push(i as u8).unwrap();
         }
         round_trip(&MatrixState { pressed_bitmap: bitmap });

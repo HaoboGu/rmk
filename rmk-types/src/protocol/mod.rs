@@ -1,10 +1,19 @@
 //! Communication protocol definitions.
 //!
-//! This module contains the protocol, type definitions and constants for communicating with
-//! keyboard configuration software like Vial.
+//! RMK supports two host-communication protocols:
 //!
-//! - `vial` - Vial protocol implementation
-//! - `rmk` - RMK native protocol ICD (enabled by the `rmk_protocol` feature)
+//! - [`vial`] — Legacy Vial/Via protocol for compatibility with the Vial GUI.
+//!   Always available.
+//! - [`rmk`] — RMK native protocol built on postcard-rpc. Provides typed
+//!   endpoints for keymap, combo, morse, fork, encoder, macro, and status
+//!   queries over COBS-framed byte streams (USB bulk or BLE serial).
+//!   Enabled by the `rmk_protocol` feature.
+//!
+//! The two protocols are mutually exclusive at the firmware level
+//! (`rmk_protocol` and `vial` features cannot be enabled together).
+
+pub mod vec;
+pub use vec::Vec;
 
 #[cfg(feature = "rmk_protocol")]
 pub mod rmk;

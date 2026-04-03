@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::Duration;
 use rmk_types::action::{KeyAction, MorseMode};
-use rmk_types::constants::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, MAX_PATTERNS_PER_KEY, MORSE_MAX_NUM};
+use rmk_types::constants::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, MORSE_MAX_NUM};
 use rmk_types::protocol::vial::{SettingKey, VIAL_EP_SIZE, VIAL_PROTOCOL_VERSION, VialCommand, VialDynamic};
 
 use crate::config::VialConfig;
@@ -339,7 +339,7 @@ pub(crate) async fn process_vial<'a>(
                         let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
 
                         // Update the morse in keymap
-                        keymap.with_morse_mut(morse_idx, |morse: &mut Morse<MAX_PATTERNS_PER_KEY>| {
+                        keymap.with_morse_mut(morse_idx, |morse: &mut Morse| {
                             let _ = morse.put(TAP, tap.to_action());
                             let _ = morse.put(DOUBLE_TAP, double_tap.to_action());
                             let _ = morse.put(HOLD, hold.to_action());
@@ -396,7 +396,7 @@ pub(crate) async fn process_vial<'a>(
 
                     #[cfg(feature = "storage")]
                     {
-                        use rmk_types::combo::ComboConfig;
+                        use rmk_types::combo::Combo as ComboConfig;
 
                         use crate::combo::Combo;
                         let combo_idx = report.output_data[3] as usize;
@@ -516,7 +516,7 @@ mod tests {
 
     use super::*;
     use crate::COMBO_MAX_LENGTH;
-    use rmk_types::combo::ComboConfig;
+    use rmk_types::combo::Combo as ComboConfig;
     use crate::storage::StorageData;
     #[test]
     fn test_combo_serialization_deserialization() {

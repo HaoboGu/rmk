@@ -19,7 +19,7 @@ use crate::keyboard_macros::MacroOperation;
 #[cfg(feature = "host_security")]
 use crate::matrix::MatrixState;
 use crate::morse::Morse;
-use crate::{MACRO_SPACE_SIZE, MAX_PATTERNS_PER_KEY};
+use crate::MACRO_SPACE_SIZE;
 
 pub(crate) const HOLD_BUFFER_SIZE: usize = 16;
 
@@ -560,14 +560,14 @@ impl<'a> KeyMap<'a> {
 
     // ── Per-element morse ──
 
-    pub(crate) fn get_morse(&self, idx: usize) -> Option<Morse<MAX_PATTERNS_PER_KEY>> {
+    pub(crate) fn get_morse(&self, idx: usize) -> Option<Morse> {
         self.inner.borrow().behavior.morse.morses.get(idx).cloned()
     }
 
     pub(crate) fn with_morse_mut<R>(
         &self,
         idx: usize,
-        f: impl FnOnce(&mut Morse<MAX_PATTERNS_PER_KEY>) -> R,
+        f: impl FnOnce(&mut Morse) -> R,
     ) -> Option<R> {
         self.inner.borrow_mut().behavior.morse.morses.get_mut(idx).map(f)
     }
@@ -741,10 +741,9 @@ mod test {
     use rmk_types::fork::StateBits;
     use rmk_types::modifier::ModifierCombination;
 
-    use rmk_types::combo::ComboConfig;
     use rmk_types::fork::Fork;
 
-    use crate::combo::Combo;
+    use crate::combo::{Combo, ComboConfig};
     use crate::keymap::fill_vec;
     use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
 

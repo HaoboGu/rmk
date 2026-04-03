@@ -15,9 +15,9 @@
 [[subscriber]]
 features = ["_ble"]
 events = [
-    # ble/battery_service.rs: BatteryStateEvent::subscriber()
-    # builtin_processor/battery_led.rs: subscribe = [BatteryStateEvent] (user-optional but _ble-gated)
-    { name = "battery_state", count = 2 },
+    # ble/battery_service.rs: BatteryStatusEvent::subscriber()
+    # builtin_processor/battery_led.rs: subscribe = [BatteryStatusEvent] (user-optional but _ble-gated)
+    { name = "battery_status", count = 2 },
 ]
 
 # --- Split-gated internal subscribers ---
@@ -44,8 +44,8 @@ events = [
     { name = "keyboard" },
     # split/peripheral.rs: ChargingStateEvent::subscriber() (cfg _ble)
     { name = "charging_state" },
-    # split/peripheral.rs: BatteryStateEvent::subscriber() (cfg _ble)
-    { name = "battery_state" },
+    # split/peripheral.rs: BatteryStatusEvent::subscriber() (cfg _ble)
+    { name = "battery_status" },
     # split/driver.rs: ClearPeerEvent::subscriber() (cfg _ble)
     { name = "clear_peer" },
 ]
