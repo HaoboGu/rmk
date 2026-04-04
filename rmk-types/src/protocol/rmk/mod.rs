@@ -6,6 +6,20 @@
 //!
 //! The protocol uses postcard-rpc's type-level endpoint definitions over COBS-framed
 //! byte streams (USB bulk transfer and BLE serial).
+//!
+//! ## Protocol Handshake
+//!
+//! The expected connection flow is:
+//! 1. Host connects over USB bulk or BLE serial (COBS-framed).
+//! 2. Host sends `GetVersion` — verifies protocol compatibility.
+//! 3. Host sends `GetCapabilities` — learns layout, feature set, and limits.
+//! 4. Host checks capability flags (e.g., `bulk_transfer_supported`,
+//!    `ble_enabled`) before using conditional endpoint groups.
+//! 5. If the device is locked, host sends `UnlockRequest` and completes
+//!    the physical key challenge before issuing write operations.
+
+// The postcard-rpc endpoints! macro performs heavy const-eval for type uniqueness checks.
+#![allow(long_running_const_eval)]
 
 mod combo;
 mod encoder;
@@ -98,7 +112,7 @@ endpoints! {
     omit_std = true;
     | EndpointTy  | RequestTy       | ResponseTy  | Path         |
     | ----------  | ---------       | ----------  | ----         |
-    | GetCombo    | u8              | ComboConfig         | "combo/get"  |
+    | GetCombo    | u8              | Combo               | "combo/get"  |
     | SetCombo    | SetComboRequest | RmkResult   | "combo/set"  |
 }
 
@@ -117,7 +131,7 @@ endpoints! {
     omit_std = true;
     | EndpointTy | RequestTy       | ResponseTy  | Path         |
     | ---------- | ---------       | ----------  | ----         |
-    | GetMorse   | u8              | MorseConfig | "morse/get"  |
+    | GetMorse   | u8              | Morse       | "morse/get"  |
     | SetMorse   | SetMorseRequest | RmkResult   | "morse/set"  |
 }
 
@@ -157,6 +171,15 @@ endpoints! {
     | GetConnectionType | ()             | ConnectionType | "conn/type"     |
     | SetConnectionType | ConnectionType | RmkResult      | "conn/set_type" |
 }
+
+// --- Feature-gated endpoint groups ---
+//
+// When adding a new conditional endpoint group:
+// 1. Add the `endpoints!` block with its `#[cfg(...)]` guard
+// 2. Add a `#[cfg(not(...))]` empty fallback constant (EndpointMap with empty slices)
+// 3. Add the list to BOTH `ENDPOINT_LIST` cfg blocks (bulk and non-bulk)
+// 4. Add the group's endpoints to `endpoint_list_contains_all_non_bulk_endpoints` test
+// 5. If feature-gated keys exist, add them to `all_endpoint_keys()` test helper
 
 #[cfg(feature = "_ble")]
 endpoints! {
@@ -348,7 +371,7 @@ mod tests {
     use crate::fork::{Fork, StateBits};
     use crate::modifier::ModifierCombination;
     use crate::morse::{Morse, MorsePattern};
-    use crate::protocol::Vec;
+    use crate::vec::Vec;
 
     /// Helper: postcard round-trip for a value using a stack buffer.
     fn round_trip<T>(val: &T) -> T
@@ -563,7 +586,7 @@ mod tests {
 
     #[test]
     fn round_trip_unlock_challenge() {
-        let mut kp = heapless::Vec::new();
+        let mut kp = Vec::new();
         kp.push((1, 2)).unwrap();
         kp.push((3, 4)).unwrap();
         round_trip(&UnlockChallenge { key_positions: kp });
@@ -572,7 +595,7 @@ mod tests {
     #[test]
     fn round_trip_unlock_challenge_empty() {
         round_trip(&UnlockChallenge {
-            key_positions: heapless::Vec::new(),
+            key_positions: Vec::new(),
         });
     }
 
@@ -627,7 +650,7 @@ mod tests {
 
     #[test]
     fn round_trip_matrix_state() {
-        let mut bitmap = heapless::Vec::new();
+        let mut bitmap = Vec::new();
         bitmap.extend_from_slice(&[0b0000_0101, 0x00, 0b0010_0000]).unwrap();
         round_trip(&MatrixState { pressed_bitmap: bitmap });
     }
@@ -681,9 +704,9 @@ mod tests {
 
     #[test]
     fn round_trip_combo_config() {
-        round_trip(&ComboConfig::new([KeyAction::No], KeyAction::No, Some(1)));
+        round_trip(&Combo::new([KeyAction::No], KeyAction::No, Some(1)));
         // Empty combo
-        round_trip(&ComboConfig::empty());
+        round_trip(&Combo::empty());
     }
 
     #[test]
@@ -793,7 +816,7 @@ mod tests {
     fn round_trip_set_combo_request() {
         round_trip(&SetComboRequest {
             index: 3,
-            config: ComboConfig::new([KeyAction::No], KeyAction::No, Some(1)),
+            config: Combo::new([KeyAction::No], KeyAction::No, Some(1)),
         });
     }
 
@@ -877,7 +900,7 @@ mod tests {
 
     #[test]
     fn round_trip_matrix_state_max_capacity() {
-        let mut bitmap = heapless::Vec::new();
+        let mut bitmap = Vec::new();
         for i in 0..super::status::MATRIX_BITMAP_SIZE {
             bitmap.push(i as u8).unwrap();
         }
@@ -914,6 +937,30 @@ mod tests {
                 assert!(
                     endpoint_paths.contains(path),
                     "Endpoint '{}' missing from ENDPOINT_LIST — update both cfg blocks in mod.rs",
+                    path
+                );
+            }
+        }
+    }
+
+    /// Verify that every bulk endpoint is present in the combined ENDPOINT_LIST.
+    #[cfg(feature = "bulk")]
+    #[test]
+    fn endpoint_list_contains_all_bulk_endpoints() {
+        let endpoint_paths: alloc::collections::BTreeSet<&str> =
+            ENDPOINT_LIST.endpoints.iter().map(|(path, _, _)| *path).collect();
+
+        let bulk_groups: &[&[(&str, Key, Key)]] = &[
+            KEYMAP_BULK_ENDPOINT_LIST.endpoints,
+            COMBO_BULK_ENDPOINT_LIST.endpoints,
+            MORSE_BULK_ENDPOINT_LIST.endpoints,
+        ];
+
+        for group in bulk_groups {
+            for (path, _, _) in *group {
+                assert!(
+                    endpoint_paths.contains(path),
+                    "Bulk endpoint '{}' missing from ENDPOINT_LIST",
                     path
                 );
             }

@@ -36,8 +36,20 @@ pub enum MorseMode {
     Normal,
 }
 
-/// Configuration for morse, tap dance and tap-hold
-/// to save some RAM space, manually packed into 32 bits
+/// Configuration for morse, tap dance and tap-hold.
+/// Manually packed into 32 bits to save RAM.
+///
+/// Bit layout of the inner `u32`:
+/// ```text
+/// 31  30 | 29      16 | 15  14 | 13       0
+/// mode   | gap_timeout | uni_tap| hold_timeout
+///  (2b)  |   (14b ms)  |  (2b)  |  (14b ms)
+/// ```
+///
+/// - `mode` (bits 31-30): `00` = None, `01` = PermissiveHold, `10` = HoldOnOtherPress, `11` = Normal
+/// - `gap_timeout` (bits 29-16): gap timeout in ms (0 = None, max 16383)
+/// - `uni_tap` (bits 15-14): `00`/`01` = None, `10` = Some(false), `11` = Some(true)
+/// - `hold_timeout` (bits 13-0): hold timeout in ms (0 = None, max 16383)
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
@@ -246,6 +258,9 @@ impl MorsePattern {
 /// The maximum number of taps is limited to 15 by the internal u16 representation of MorsePattern.
 /// There is a list of (pattern, corresponding action) pairs for each morse key:
 /// The number of pairs is limited by `MORSE_SIZE` (from `constants.rs`, generated at build time).
+///
+/// Note: `MORSE_SIZE` is a **wire-format** capacity — on firmware it equals
+/// `MAX_PATTERNS_PER_KEY` (from `keyboard.toml`), on host it's a fixed upper bound.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Morse {
     /// The profile of this morse key, which defines the timing parameters, etc.
@@ -584,6 +599,14 @@ mod tests {
 
         assert_eq!(morse.profile, deserialized.profile);
         assert_eq!(morse.actions.len(), deserialized.actions.len());
+    }
+
+    #[test]
+    fn morse_pattern_max_size_matches_u16() {
+        // Morse actions serialize MorsePattern as u16 on the wire.
+        // If MorsePattern's MaxSize ever diverges from u16, the manual
+        // MaxSize impl on Morse would be wrong.
+        assert_eq!(MorsePattern::POSTCARD_MAX_SIZE, u16::POSTCARD_MAX_SIZE,);
     }
 
     #[test]

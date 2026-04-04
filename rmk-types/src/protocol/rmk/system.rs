@@ -2,7 +2,7 @@
 //!
 //! Types for protocol handshake, device discovery, security, and global configuration.
 
-use heapless::Vec;
+use crate::vec::Vec;
 use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};

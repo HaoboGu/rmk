@@ -21,6 +21,8 @@ pub use encoder::EncoderAction;
 pub use key_action::KeyAction;
 pub use keyboard::KeyboardAction;
 pub use light::LightAction;
+// Re-exported for convenience: `KeyAction::TapHold(_, _, MorseProfile)` users
+// can import everything from `action` without a separate `morse` import.
 pub use crate::morse::{MorseMode, MorseProfile};
 use postcard::experimental::max_size::MaxSize;
 #[cfg(feature = "rmk_protocol")]

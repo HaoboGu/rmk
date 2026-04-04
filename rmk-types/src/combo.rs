@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::action::KeyAction;
 use crate::constants::COMBO_SIZE;
-use crate::protocol::Vec;
+use crate::vec::Vec;
 
 /// Configuration data for a combo.
 ///
@@ -15,6 +15,9 @@ use crate::protocol::Vec;
 /// The maximum number of trigger keys is determined by `COMBO_SIZE` (from `constants.rs`,
 /// generated at build time from `keyboard.toml` on firmware or fixed upper bound on host).
 /// Actions are stored in a Vec — only meaningful keys are present (no `KeyAction::No` padding).
+///
+/// Note: `COMBO_SIZE` is a **wire-format** capacity — on firmware it equals
+/// `COMBO_MAX_LENGTH` (from `keyboard.toml`), on host it's a fixed upper bound.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

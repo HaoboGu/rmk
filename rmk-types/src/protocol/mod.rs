@@ -12,9 +12,6 @@
 //! The two protocols are mutually exclusive at the firmware level
 //! (`rmk_protocol` and `vial` features cannot be enabled together).
 
-pub mod vec;
-pub use vec::Vec;
-
 #[cfg(feature = "rmk_protocol")]
 pub mod rmk;
 pub mod vial;

@@ -4,14 +4,13 @@ use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
-/// ComboConfig — re-export of `Combo` for protocol-layer naming.
-pub type ComboConfig = crate::combo::Combo;
+pub use crate::combo::Combo;
 
 /// Request payload for `SetCombo`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
 pub struct SetComboRequest {
     pub index: u8,
-    pub config: ComboConfig,
+    pub config: Combo,
 }
 
 // ---------------------------------------------------------------------------
@@ -21,7 +20,7 @@ pub struct SetComboRequest {
 #[cfg(feature = "bulk")]
 use crate::constants::BULK_SIZE;
 #[cfg(feature = "bulk")]
-use crate::protocol::Vec;
+use crate::vec::Vec;
 
 /// Request payload for `GetComboBulk`.
 #[cfg(feature = "bulk")]
@@ -36,13 +35,13 @@ pub struct GetComboBulkRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct SetComboBulkRequest {
     pub start_index: u8,
-    pub configs: Vec<ComboConfig, BULK_SIZE>,
+    pub configs: Vec<Combo, BULK_SIZE>,
 }
 
 #[cfg(feature = "bulk")]
 impl MaxSize for SetComboBulkRequest {
     const POSTCARD_MAX_SIZE: usize = u8::POSTCARD_MAX_SIZE
-        + <ComboConfig>::POSTCARD_MAX_SIZE * BULK_SIZE
+        + <Combo>::POSTCARD_MAX_SIZE * BULK_SIZE
         + crate::varint_max_size(BULK_SIZE);
 }
 
@@ -50,12 +49,12 @@ impl MaxSize for SetComboBulkRequest {
 #[cfg(feature = "bulk")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct GetComboBulkResponse {
-    pub configs: Vec<ComboConfig, BULK_SIZE>,
+    pub configs: Vec<Combo, BULK_SIZE>,
 }
 
 #[cfg(feature = "bulk")]
 impl MaxSize for GetComboBulkResponse {
     const POSTCARD_MAX_SIZE: usize =
-        <ComboConfig>::POSTCARD_MAX_SIZE * BULK_SIZE
+        <Combo>::POSTCARD_MAX_SIZE * BULK_SIZE
             + crate::varint_max_size(BULK_SIZE);
 }

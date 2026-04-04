@@ -8,7 +8,7 @@ use crate::action::KeyAction;
 #[cfg(feature = "bulk")]
 use crate::constants::BULK_SIZE;
 #[cfg(feature = "bulk")]
-use crate::protocol::Vec;
+use crate::vec::Vec;
 
 /// Identifies a specific key position in the keymap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]

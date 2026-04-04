@@ -5,7 +5,7 @@ use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::constants::MACRO_DATA_SIZE;
-use crate::protocol::Vec;
+use crate::vec::Vec;
 
 /// Raw macro data for a single macro chunk.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]

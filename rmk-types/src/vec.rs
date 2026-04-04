@@ -15,11 +15,12 @@ pub type Vec<T, const N: usize> = heapless::Vec<T, N>;
 // ---------------------------------------------------------------------------
 // Host: newtype around alloc::Vec that ignores N at runtime
 // ---------------------------------------------------------------------------
+// NOTE: The `host` feature implies `rmk_protocol` (which provides `postcard-schema`
+// and `postcard-rpc`). The Schema and MaxSize impls below rely on this invariant.
 #[cfg(feature = "host")]
 mod host_vec {
     extern crate alloc;
 
-    use alloc::vec::Vec;
     use core::fmt;
     use core::ops::{Deref, DerefMut};
 

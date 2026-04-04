@@ -4,10 +4,7 @@ use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
-use crate::morse::Morse;
-
-/// MorseConfig — re-export of `Morse` for protocol-layer naming.
-pub type MorseConfig = Morse;
+pub use crate::morse::Morse;
 
 /// Request payload for `SetMorse`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
@@ -27,7 +24,7 @@ impl MaxSize for SetMorseRequest {
 #[cfg(feature = "bulk")]
 use crate::constants::BULK_SIZE;
 #[cfg(feature = "bulk")]
-use crate::protocol::Vec;
+use crate::vec::Vec;
 
 /// Request payload for `GetMorseBulk`.
 #[cfg(feature = "bulk")]

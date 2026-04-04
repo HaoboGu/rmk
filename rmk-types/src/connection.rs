@@ -14,9 +14,11 @@ pub enum ConnectionType {
     Ble,
 }
 
-/// Unknown values default to [`ConnectionType::Usb`] for forward-compatibility:
-/// if a newer firmware writes a variant this version doesn't recognise
-/// (e.g. from stored settings), USB is the safest fallback.
+/// Unknown values default to [`ConnectionType::Usb`] for forward-compatibility
+/// with stored settings: if a newer firmware writes a variant this version
+/// doesn't recognise, USB is the safest fallback.
+/// Note: postcard wire deserialization would error on unknown variants;
+/// this conversion is for reading persisted u8 values from storage.
 impl From<u8> for ConnectionType {
     fn from(value: u8) -> Self {
         match value {

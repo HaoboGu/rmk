@@ -50,9 +50,13 @@ impl KeyAction {
     }
 }
 
-/// combo, fork, etc. compares key actions
-/// WARNING: this is not a perfect comparison, we ignores the profile config of TapHold!
-// TODO: Two TapHold values that compare equal may serialize differently (different MorseProfile).
+/// Combo and fork trigger matching compares key actions by their "identity" —
+/// the tap/hold actions — ignoring the `MorseProfile` timing configuration.
+///
+/// This is intentional: a combo or fork may store a trigger with `Profile1`,
+/// but if the user later rebinds the key's profile to `Profile2`, the
+/// trigger should still match. The profile is a per-key timing config,
+/// not part of the key's logical identity.
 impl PartialEq for KeyAction {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {

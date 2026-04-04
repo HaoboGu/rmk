@@ -29,8 +29,6 @@
 //! ### Build-time
 //! - [`constants`] — Generated from `keyboard.toml` by `build.rs`
 
-// The postcard-rpc endpoints! macro performs heavy const-eval for type uniqueness checks.
-#![allow(long_running_const_eval)]
 #![no_std]
 
 #[cfg(feature = "host")]
@@ -49,6 +47,7 @@ pub mod modifier;
 pub mod morse;
 pub mod mouse_button;
 pub mod protocol;
+pub mod vec;
 
 /// Compute the maximum varint-encoded length for a given max value.
 /// Mirrors `postcard`'s internal `varint_size`.
