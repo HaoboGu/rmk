@@ -158,7 +158,7 @@ std = [
 ]
 
 ## Enable display support (traits + processor)
-display = ["dep:embedded-graphics"]
+display = ["dep:embedded-graphics", "rmk-types/display"]
 ## Enable SSD1306 OLED driver
 ssd1306 = ["display", "dep:ssd1306", "dep:display-interface", "dep:display-interface-i2c"]
 ## Enable OLED drivers via oled_async (SH1106, SH1107, SH1108, SSD1309)
