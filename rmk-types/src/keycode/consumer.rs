@@ -11,7 +11,7 @@ use super::hid::HidKeyCode;
 /// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=75>
 #[non_exhaustive]
 #[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub enum ConsumerKey {
@@ -73,10 +73,6 @@ pub enum ConsumerKey {
     NextKeyboardLayoutSelect = 0x29D,
     DesktopShowAllWindows = 0x29F,
     AcSoftKeyLeft = 0x2A0,
-}
-
-impl MaxSize for ConsumerKey {
-    const POSTCARD_MAX_SIZE: usize = 3usize;
 }
 
 impl ConsumerKey {

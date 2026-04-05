@@ -12,7 +12,7 @@ use crate::modifier::ModifierCombination;
 
 // All key codes defined in HID spec
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, FromRepr)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, FromRepr, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub enum HidKeyCode {
@@ -484,9 +484,6 @@ impl HidKeyCode {
     }
 }
 
-impl MaxSize for HidKeyCode {
-    const POSTCARD_MAX_SIZE: usize = 1usize;
-}
 
 impl From<u8> for HidKeyCode {
     fn from(value: u8) -> Self {

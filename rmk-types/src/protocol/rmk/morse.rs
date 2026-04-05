@@ -7,14 +7,10 @@ use serde::{Deserialize, Serialize};
 use crate::morse::Morse;
 
 /// Request payload for `SetMorse`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
 pub struct SetMorseRequest {
     pub index: u8,
     pub config: Morse,
-}
-
-impl MaxSize for SetMorseRequest {
-    const POSTCARD_MAX_SIZE: usize = u8::POSTCARD_MAX_SIZE + <Morse>::POSTCARD_MAX_SIZE;
 }
 
 // ---------------------------------------------------------------------------

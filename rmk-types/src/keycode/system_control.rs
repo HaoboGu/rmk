@@ -11,7 +11,7 @@ use super::hid::HidKeyCode;
 /// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=26>
 #[non_exhaustive]
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub enum SystemControlKey {
@@ -20,10 +20,6 @@ pub enum SystemControlKey {
     Sleep = 0x82,
     WakeUp = 0x83,
     Restart = 0x8F,
-}
-
-impl MaxSize for SystemControlKey {
-    const POSTCARD_MAX_SIZE: usize = 1usize;
 }
 
 impl SystemControlKey {
