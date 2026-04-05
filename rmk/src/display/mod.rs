@@ -56,8 +56,6 @@
 mod drivers;
 mod renderers;
 
-use core::fmt::Write as _;
-
 #[cfg(feature = "oled_async")]
 pub use display_interface_i2c;
 use embassy_time::{Duration, Instant};
@@ -205,18 +203,6 @@ pub trait DisplayRenderer<C: PixelColor> {
     /// The renderer is responsible for clearing the display if needed.
     /// After this method returns, the caller flushes the display buffer.
     fn render<D: DrawTarget<Color = C>>(&mut self, ctx: &RenderContext, display: &mut D);
-}
-
-/// Format a [`BatteryStateEvent`] into a short display string.
-///
-/// Writes one of `"---"`, `" 85%"`, `"CHG"`, or `"FUL"` into `buf`.
-pub fn write_battery(buf: &mut heapless::String<5>, battery: BatteryStateEvent) {
-    match battery {
-        BatteryStateEvent::NotAvailable => write!(buf, "---").ok(),
-        BatteryStateEvent::Normal(v) => write!(buf, "{v:3}%").ok(),
-        BatteryStateEvent::Charging => write!(buf, "CHG").ok(),
-        BatteryStateEvent::Charged => write!(buf, "FUL").ok(),
-    };
 }
 
 /// Processor that renders keyboard state on a display.
