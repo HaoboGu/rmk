@@ -7,7 +7,9 @@ pub type ComboConfig = rmk_types::combo::Combo;
 use crate::event::KeyboardEvent;
 
 // Combo.state is a u16 bitmask, so combos are limited to 16 keys.
-const _: () = assert!(
+// Use core::assert! explicitly — the crate-level `assert!` macro dispatches to
+// defmt::assert! which is not const-compatible.
+const _: () = core::assert!(
     COMBO_MAX_LENGTH <= 16,
     "COMBO_MAX_LENGTH exceeds 16 — Combo.state is u16 and cannot track more than 16 keys"
 );

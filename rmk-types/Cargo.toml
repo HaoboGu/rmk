@@ -39,9 +39,8 @@ rmk_protocol = ["dep:postcard-rpc", "dep:postcard-schema"]
 # Bulk transfer endpoints for MCUs with sufficient RAM.
 # Enables multi-element bulk keymap/combo/morse endpoints and BULK_SIZE constant.
 bulk = ["rmk_protocol"]
-# Host tool: enables rmk_protocol with generous Vec capacities for protocol types.
-# Firmware should use `rmk_protocol` instead — Vec sizes come from keyboard.toml.
-# Includes all optional endpoint groups so the host can talk to any firmware.
+# Host tool: uses protocol ceiling values for Vec capacities.
+# Enables all optional endpoint groups so the host can talk to any firmware.
 host = ["rmk_protocol", "bulk", "_ble", "split"]
 # Build-time only features: forwarded from rmk to control constant generation in build.rs.
 # Also used as `#[cfg(feature = "...")]` guards for protocol endpoint/topic gating.

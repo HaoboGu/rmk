@@ -4,7 +4,7 @@ use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
-pub use crate::morse::Morse;
+use crate::morse::Morse;
 
 /// Request payload for `SetMorse`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
@@ -24,7 +24,7 @@ impl MaxSize for SetMorseRequest {
 #[cfg(feature = "bulk")]
 use crate::constants::BULK_SIZE;
 #[cfg(feature = "bulk")]
-use crate::vec::Vec;
+use heapless::Vec;
 
 /// Request payload for `GetMorseBulk`.
 #[cfg(feature = "bulk")]

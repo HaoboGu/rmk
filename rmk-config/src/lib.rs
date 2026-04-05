@@ -22,6 +22,26 @@ pub(crate) mod layout;
 pub(crate) mod light;
 pub(crate) mod storage;
 
+/// Protocol-level capacity ceilings for wire-format Vec sizes.
+///
+/// These define the maximum values any firmware may use for protocol
+/// Vec capacities (`COMBO_SIZE`, `MORSE_SIZE`, etc.). The host tool compiles
+/// against these as upper bounds. Any firmware with `rmk_protocol` enabled
+/// must satisfy `value <= ceiling` at compile time.
+///
+/// Constant names mirror the generated constants with a `MAX_` prefix:
+/// `COMBO_SIZE` is bounded by `MAX_COMBO_SIZE`, etc.
+pub mod protocol_limits {
+    /// Max keys in a combo trigger — ceiling for `COMBO_SIZE`
+    pub const MAX_COMBO_SIZE: usize = 16;
+    /// Max pattern entries per morse key — ceiling for `MORSE_SIZE`
+    pub const MAX_MORSE_SIZE: usize = 32;
+    /// Max bytes per macro data chunk — ceiling for `MACRO_DATA_SIZE`
+    pub const MAX_MACRO_DATA_SIZE: usize = 256;
+    /// Max items per bulk transfer message — ceiling for `BULK_SIZE`
+    pub const MAX_BULK_SIZE: usize = 16;
+}
+
 /// Configurations for RMK keyboard.
 #[derive(Clone, Debug, Deserialize)]
 #[allow(unused)]

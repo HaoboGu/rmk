@@ -2,6 +2,7 @@ use std::path::Path;
 use std::{env, fs};
 
 use rmk_config::KeyboardTomlConfig;
+use rmk_config::protocol_limits;
 use rmk_config::resolved::BuildConstants;
 
 fn main() {
@@ -101,30 +102,48 @@ fn generate_constants(bc: &BuildConstants) -> String {
     //
     // `BULK_SIZE` is different: it controls multi-element bulk transfer (multiple
     // keys/combos/morses per message) and is only available behind the `bulk` feature.
-    const HOST_COMBO_SIZE: usize = 16;
-    const HOST_MORSE_SIZE: usize = 32;
-    const HOST_BULK_SIZE: usize = 16;
-    const HOST_MACRO_DATA_SIZE: usize = 256;
     let is_host = env::var("CARGO_FEATURE_HOST").is_ok();
     let is_bulk = env::var("CARGO_FEATURE_BULK").is_ok();
 
+    // Protocol ceilings — always emitted so rmk-types source code can reference them.
+    lines.push(format!(
+        "pub const MAX_COMBO_SIZE: usize = {};",
+        protocol_limits::MAX_COMBO_SIZE
+    ));
+    lines.push(format!(
+        "pub const MAX_MORSE_SIZE: usize = {};",
+        protocol_limits::MAX_MORSE_SIZE
+    ));
+    lines.push(format!(
+        "pub const MAX_MACRO_DATA_SIZE: usize = {};",
+        protocol_limits::MAX_MACRO_DATA_SIZE
+    ));
+    lines.push(format!(
+        "pub const MAX_BULK_SIZE: usize = {};",
+        protocol_limits::MAX_BULK_SIZE
+    ));
+
     if is_host {
-        // Host: always use upper bounds for wire compatibility with any firmware.
+        // Host: Vec capacities equal protocol ceilings for wire compatibility with any firmware.
         lines.push(format!(
-            "pub const COMBO_SIZE: usize = {HOST_COMBO_SIZE};"
+            "pub const COMBO_SIZE: usize = {};",
+            protocol_limits::MAX_COMBO_SIZE
         ));
         lines.push(format!(
-            "pub const MORSE_SIZE: usize = {HOST_MORSE_SIZE};"
+            "pub const MORSE_SIZE: usize = {};",
+            protocol_limits::MAX_MORSE_SIZE
         ));
         lines.push(format!(
-            "pub const MACRO_DATA_SIZE: usize = {HOST_MACRO_DATA_SIZE};"
+            "pub const MACRO_DATA_SIZE: usize = {};",
+            protocol_limits::MAX_MACRO_DATA_SIZE
         ));
         // Host always has bulk (host implies bulk feature)
         lines.push(format!(
-            "pub const BULK_SIZE: usize = {HOST_BULK_SIZE};"
+            "pub const BULK_SIZE: usize = {};",
+            protocol_limits::MAX_BULK_SIZE
         ));
     } else {
-        // Firmware: per-item constants always generated from keyboard.toml / defaults.
+        // Firmware: per-item constants from keyboard.toml / defaults.
         lines.push(format!(
             "pub const COMBO_SIZE: usize = {};",
             bc.combo_max_length
@@ -137,19 +156,12 @@ fn generate_constants(bc: &BuildConstants) -> String {
             "pub const MACRO_DATA_SIZE: usize = {};",
             bc.protocol_macro_chunk_size
         ));
-        // Compile-time check: firmware Vec sizes must not exceed host maximums,
-        // otherwise the host tool cannot deserialize firmware responses.
+        // Compile-time check: firmware Vec sizes must not exceed protocol ceilings.
         // Only enforce when the rmk_protocol feature is active.
         if env::var("CARGO_FEATURE_RMK_PROTOCOL").is_ok() {
-            lines.push(format!(
-                "const _: () = assert!(COMBO_SIZE <= {HOST_COMBO_SIZE}, \"firmware combo vec size exceeds host maximum ({HOST_COMBO_SIZE})\");"
-            ));
-            lines.push(format!(
-                "const _: () = assert!(MORSE_SIZE <= {HOST_MORSE_SIZE}, \"firmware morse vec size exceeds host maximum ({HOST_MORSE_SIZE})\");"
-            ));
-            lines.push(format!(
-                "const _: () = assert!(MACRO_DATA_SIZE <= {HOST_MACRO_DATA_SIZE}, \"firmware macro chunk size exceeds host maximum ({HOST_MACRO_DATA_SIZE})\");"
-            ));
+            lines.push("const _: () = assert!(COMBO_SIZE <= MAX_COMBO_SIZE, \"firmware COMBO_SIZE exceeds protocol ceiling MAX_COMBO_SIZE\");".to_string());
+            lines.push("const _: () = assert!(MORSE_SIZE <= MAX_MORSE_SIZE, \"firmware MORSE_SIZE exceeds protocol ceiling MAX_MORSE_SIZE\");".to_string());
+            lines.push("const _: () = assert!(MACRO_DATA_SIZE <= MAX_MACRO_DATA_SIZE, \"firmware MACRO_DATA_SIZE exceeds protocol ceiling MAX_MACRO_DATA_SIZE\");".to_string());
         }
 
         // Bulk constant only when bulk feature is active
@@ -158,9 +170,7 @@ fn generate_constants(bc: &BuildConstants) -> String {
                 "pub const BULK_SIZE: usize = {};",
                 bc.protocol_max_bulk_size
             ));
-            lines.push(format!(
-                "const _: () = assert!(BULK_SIZE <= {HOST_BULK_SIZE}, \"firmware bulk size exceeds host maximum ({HOST_BULK_SIZE})\");"
-            ));
+            lines.push("const _: () = assert!(BULK_SIZE <= MAX_BULK_SIZE, \"firmware BULK_SIZE exceeds protocol ceiling MAX_BULK_SIZE\");".to_string());
         }
     }
 
@@ -193,11 +203,7 @@ fn generate_constants(bc: &BuildConstants) -> String {
         }
     }
 
-    lines
-        .into_iter()
-        .map(|s| "#[allow(clippy::redundant_static_lifetimes)]\n".to_owned() + s.as_str())
-        .collect::<Vec<_>>()
-        .join("\n")
+    lines.join("\n")
 }
 
 /// Collect active Cargo feature flags from environment variables.

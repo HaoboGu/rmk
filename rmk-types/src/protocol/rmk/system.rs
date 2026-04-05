@@ -2,7 +2,7 @@
 //!
 //! Types for protocol handshake, device discovery, security, and global configuration.
 
-use crate::vec::Vec;
+use heapless::Vec;
 use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
@@ -72,6 +72,12 @@ pub enum RmkError {
 }
 
 /// Result type for write operations.
+///
+/// This is a type alias rather than a newtype. `Schema` and `MaxSize` are
+/// provided by postcard's blanket impls for `Result<T, E>`. The endpoint
+/// key is derived from the schema structure (not the Rust path), so the
+/// alias is stable. Cross-endpoint collision tests in this module verify
+/// key uniqueness.
 pub type RmkResult = Result<(), RmkError>;
 
 /// Current lock/unlock state of the device.

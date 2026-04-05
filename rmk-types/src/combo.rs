@@ -5,9 +5,10 @@ use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
+use heapless::Vec;
+
 use crate::action::KeyAction;
 use crate::constants::COMBO_SIZE;
-use crate::vec::Vec;
 
 /// Configuration data for a combo.
 ///
@@ -36,13 +37,15 @@ impl MaxSize for Combo {
 }
 
 impl Combo {
+    /// Create a new combo from an iterator of key actions.
+    ///
+    /// Actions equal to `KeyAction::No` are filtered out. If there are more
+    /// non-No actions than `COMBO_SIZE`, excess actions are silently dropped.
     pub fn new<I: IntoIterator<Item = KeyAction>>(actions: I, output: KeyAction, layer: Option<u8>) -> Self {
         let mut combo_actions = Vec::new();
         for action in actions {
-            if action != KeyAction::No {
-                if combo_actions.push(action).is_err() {
-                    break;
-                }
+            if action != KeyAction::No && combo_actions.push(action).is_err() {
+                break;
             }
         }
         Self {

@@ -8,7 +8,7 @@ use crate::action::KeyAction;
 #[cfg(feature = "bulk")]
 use crate::constants::BULK_SIZE;
 #[cfg(feature = "bulk")]
-use crate::vec::Vec;
+use heapless::Vec;
 
 /// Identifies a specific key position in the keymap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
@@ -25,13 +25,14 @@ pub struct SetKeyRequest {
     pub action: KeyAction,
 }
 
-/// Request payload for bulk keymap operations.
+/// Request payload for `GetKeymapBulk` endpoint.
 ///
 /// Keys are linearized in row-major order starting from `(start_row, start_col)`.
-/// `count` is the number of keys to read/write; iteration wraps to subsequent
+/// `count` is the number of keys to read; iteration wraps to subsequent
 /// rows when the end of a row is reached.
+#[cfg(feature = "bulk")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
-pub struct BulkRequest {
+pub struct GetKeymapBulkRequest {
     pub layer: u8,
     pub start_row: u8,
     pub start_col: u8,
@@ -55,16 +56,22 @@ impl MaxSize for BulkKeyActions {
 }
 
 /// Request payload for `SetKeymapBulk` endpoint.
+///
+/// Keys are linearized in row-major order starting from `(start_row, start_col)`.
+/// Iteration wraps to subsequent rows when the end of a row is reached.
+/// The number of keys to write is derived from `actions.len()`.
 #[cfg(feature = "bulk")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct SetKeymapBulkRequest {
-    pub request: BulkRequest,
+    pub layer: u8,
+    pub start_row: u8,
+    pub start_col: u8,
     pub actions: Vec<KeyAction, BULK_SIZE>,
 }
 
 #[cfg(feature = "bulk")]
 impl MaxSize for SetKeymapBulkRequest {
-    const POSTCARD_MAX_SIZE: usize = BulkRequest::POSTCARD_MAX_SIZE
+    const POSTCARD_MAX_SIZE: usize = 3 // layer + start_row + start_col
         + KeyAction::POSTCARD_MAX_SIZE * BULK_SIZE
         + crate::varint_max_size(BULK_SIZE);
 }

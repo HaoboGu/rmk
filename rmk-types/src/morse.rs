@@ -210,7 +210,13 @@ impl MorsePattern {
         15 // 15 taps can be encoded on u16 bits (1 bit used to mark the start position)
     }
 
+    /// Creates a `MorsePattern` from a raw `u16`.
+    ///
+    /// # Panics (debug only)
+    /// Panics if `value` is 0, which is not a valid encoding
+    /// (the empty pattern is `0b1`).
     pub fn from_u16(value: u16) -> Self {
+        debug_assert!(value != 0, "MorsePattern 0 is invalid; the empty pattern is 0b1");
         MorsePattern(value)
     }
 
@@ -227,7 +233,9 @@ impl MorsePattern {
     }
 
     pub fn pattern_length(&self) -> usize {
-        15 - self.0.leading_zeros() as usize
+        // leading_zeros() is 16 for 0, which would underflow.
+        // Saturate to 0 for the (invalid) zero case.
+        15usize.saturating_sub(self.0.leading_zeros() as usize)
     }
 
     /// Checks if this pattern starts with the given one
@@ -237,8 +245,10 @@ impl MorsePattern {
         m <= n && (self.0 >> (n - m) == pattern_start.0)
     }
 
+    /// Returns `true` if the last step in the pattern is a hold.
+    /// Returns `false` for empty patterns.
     pub fn last_is_hold(&self) -> bool {
-        self.0 & 0b1 == 0b1
+        !self.is_empty() && self.0 & 0b1 == 0b1
     }
 
     pub fn followed_by_tap(&self) -> Self {
@@ -261,7 +271,7 @@ impl MorsePattern {
 ///
 /// Note: `MORSE_SIZE` is a **wire-format** capacity — on firmware it equals
 /// `MAX_PATTERNS_PER_KEY` (from `keyboard.toml`), on host it's a fixed upper bound.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Morse {
     /// The profile of this morse key, which defines the timing parameters, etc.
     /// If some of its fields are filled with None, the global default value will be used.
@@ -302,6 +312,11 @@ impl Eq for Morse {}
 
 /// Manual Schema impl because Morse uses custom serde for LinearMap.
 /// The wire format is: (MorseProfile, Vec<(u16, Action)>).
+///
+/// **Important:** This must stay in sync with the custom serde impl in
+/// `morse_actions_serde`. If the wire format changes, update this Schema
+/// accordingly. The `morse_schema_matches_wire_format` test validates
+/// this invariant.
 #[cfg(feature = "rmk_protocol")]
 impl Schema for Morse {
     const SCHEMA: &'static NamedType = &NamedType {
@@ -314,9 +329,9 @@ impl Schema for Morse {
             &NamedValue {
                 name: "actions",
                 ty: &NamedType {
-                    name: "Vec<(u16, Action)>",
+                    name: "MorseActions",
                     ty: &DataModelType::Seq(&NamedType {
-                        name: "(u16, Action)",
+                        name: "MorseActionEntry",
                         ty: &DataModelType::Tuple(&[<u16 as Schema>::SCHEMA, <Action as Schema>::SCHEMA]),
                     }),
                 },
@@ -325,14 +340,7 @@ impl Schema for Morse {
     };
 }
 
-impl Default for Morse {
-    fn default() -> Self {
-        Self {
-            profile: MorseProfile::const_default(),
-            actions: LinearMap::default(),
-        }
-    }
-}
+
 
 impl Morse {
     pub fn new_from_vial(
@@ -496,6 +504,9 @@ mod morse_actions_serde {
         let vec = deserializer.deserialize_seq(VecVisitor)?;
         let mut map = LinearMap::new();
         for (pattern, action) in vec {
+            if pattern == 0 {
+                return Err(D::Error::custom("MorsePattern 0 is invalid; the empty pattern is 0b1"));
+            }
             map.insert(MorsePattern::from_u16(pattern), action)
                 .map_err(|_| D::Error::custom("Failed to insert into LinearMap"))?;
         }
@@ -639,5 +650,42 @@ mod tests {
         profile.set_gap_timeout_ms(0);
         assert_eq!(profile.hold_timeout_ms(), None);
         assert_eq!(profile.gap_timeout_ms(), None);
+    }
+
+    /// Validates that the manual Schema impl matches the actual serde wire format.
+    ///
+    /// The Schema claims Morse serializes as:
+    ///   struct { profile: MorseProfile, actions: Vec<(u16, Action)> }
+    ///
+    /// We verify this by checking that a Morse value can be reconstructed by
+    /// manually deserializing its two fields in order using the same bytes.
+    #[test]
+    fn morse_schema_matches_wire_format() {
+        use postcard::to_slice;
+
+        // Build a Morse with known data
+        let mut morse = Morse::default();
+        morse
+            .actions
+            .insert(MorsePattern::from_u16(0b11), Action::No)
+            .unwrap();
+
+        // Serialize the whole Morse
+        let mut buf = [0u8; 256];
+        let bytes = to_slice(&morse, &mut buf).unwrap();
+
+        // Now manually deserialize field-by-field in the order the Schema declares:
+        // 1. profile: MorseProfile (a newtype around u32)
+        let (profile, rest): (MorseProfile, &[u8]) =
+            postcard::take_from_bytes(bytes).expect("should deserialize MorseProfile first");
+        assert_eq!(profile, MorseProfile::const_default());
+
+        // 2. actions: Vec<(u16, Action)> — which is what the custom serde produces
+        let (actions, rest): (heapless::Vec<(u16, Action), MORSE_SIZE>, &[u8]) =
+            postcard::take_from_bytes(rest).expect("should deserialize actions vec second");
+        assert!(rest.is_empty(), "no trailing bytes should remain");
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0], (0b11u16, Action::No));
     }
 }

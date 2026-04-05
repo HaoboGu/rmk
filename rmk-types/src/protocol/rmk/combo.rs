@@ -4,7 +4,7 @@ use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
-pub use crate::combo::Combo;
+use crate::combo::Combo;
 
 /// Request payload for `SetCombo`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
@@ -20,7 +20,7 @@ pub struct SetComboRequest {
 #[cfg(feature = "bulk")]
 use crate::constants::BULK_SIZE;
 #[cfg(feature = "bulk")]
-use crate::vec::Vec;
+use heapless::Vec;
 
 /// Request payload for `GetComboBulk`.
 #[cfg(feature = "bulk")]

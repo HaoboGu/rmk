@@ -22,32 +22,36 @@
 #![allow(long_running_const_eval)]
 
 mod combo;
-mod encoder;
-mod fork;
 mod keymap;
 mod macro_data;
 mod morse;
-mod status;
 mod system;
 
 use postcard_rpc::{TopicDirection, endpoints, topics};
 
+// Re-export all protocol-specific types (request/response structs, etc.)
+// from submodules into `protocol::rmk::*` for convenient endpoint registration.
+// Domain types (Combo, Morse, Fork, etc.) are NOT re-exported here —
+// import them from their canonical crate-root modules instead.
 pub use self::combo::*;
-pub use self::encoder::*;
-pub use self::fork::*;
 pub use self::keymap::*;
 pub use self::macro_data::*;
 pub use self::morse::*;
-pub use self::status::*;
 pub use self::system::*;
+use postcard::experimental::max_size::MaxSize;
+use postcard_schema::Schema;
+use serde::{Deserialize, Serialize};
+
 use crate::action::{EncoderAction, KeyAction};
 #[cfg(feature = "_ble")]
 use crate::battery::BatteryStatus;
 #[cfg(feature = "_ble")]
 use crate::ble::BleStatus;
+use crate::combo::Combo;
 use crate::connection::ConnectionType;
 use crate::fork::Fork;
 use crate::led_indicator::LedIndicator;
+use crate::morse::Morse;
 
 // ---------------------------------------------------------------------------
 // Endpoint declarations
@@ -85,9 +89,15 @@ endpoints! {
     omit_std = true;
     | EndpointTy      | RequestTy            | ResponseTy          | Path              |
     | ----------      | ---------            | ----------          | ----              |
-    | GetKeymapBulk   | BulkRequest          | BulkKeyActions      | "keymap/bulk_get" |
+    | GetKeymapBulk   | GetKeymapBulkRequest | BulkKeyActions      | "keymap/bulk_get" |
     | SetKeymapBulk   | SetKeymapBulkRequest | RmkResult           | "keymap/bulk_set" |
 }
+
+#[cfg(not(feature = "bulk"))]
+pub const KEYMAP_BULK_ENDPOINT_LIST: postcard_rpc::EndpointMap = postcard_rpc::EndpointMap {
+    types: &[],
+    endpoints: &[],
+};
 
 endpoints! {
     list = ENCODER_ENDPOINT_LIST;
@@ -126,6 +136,12 @@ endpoints! {
     | SetComboBulk  | SetComboBulkRequest | RmkResult            | "combo/bulk_set"  |
 }
 
+#[cfg(not(feature = "bulk"))]
+pub const COMBO_BULK_ENDPOINT_LIST: postcard_rpc::EndpointMap = postcard_rpc::EndpointMap {
+    types: &[],
+    endpoints: &[],
+};
+
 endpoints! {
     list = MORSE_ENDPOINT_LIST;
     omit_std = true;
@@ -144,6 +160,12 @@ endpoints! {
     | GetMorseBulk  | GetMorseBulkRequest | GetMorseBulkResponse | "morse/bulk_get"  |
     | SetMorseBulk  | SetMorseBulkRequest | RmkResult            | "morse/bulk_set"  |
 }
+
+#[cfg(not(feature = "bulk"))]
+pub const MORSE_BULK_ENDPOINT_LIST: postcard_rpc::EndpointMap = postcard_rpc::EndpointMap {
+    types: &[],
+    endpoints: &[],
+};
 
 endpoints! {
     list = FORK_ENDPOINT_LIST;
@@ -177,7 +199,7 @@ endpoints! {
 // When adding a new conditional endpoint group:
 // 1. Add the `endpoints!` block with its `#[cfg(...)]` guard
 // 2. Add a `#[cfg(not(...))]` empty fallback constant (EndpointMap with empty slices)
-// 3. Add the list to BOTH `ENDPOINT_LIST` cfg blocks (bulk and non-bulk)
+// 3. Add the list to the single `ENDPOINT_LIST` definition
 // 4. Add the group's endpoints to `endpoint_list_contains_all_non_bulk_endpoints` test
 // 5. If feature-gated keys exist, add them to `all_endpoint_keys()` test helper
 
@@ -282,30 +304,8 @@ macro_rules! build_endpoint_map {
 ///
 /// Assembled from smaller endpoint groups to avoid very large const-eval
 /// workloads in a single `endpoints!` invocation.
-/// When the `bulk` feature is enabled, bulk transfer endpoints are included.
-///
-/// NOTE: the two `#[cfg]` variants share most of their body. A macro was attempted
-/// but `const {}` blocks inside `macro_rules!` hit Rust const-eval limitations.
-/// If you add a new endpoint group, update **both** blocks.
-#[cfg(not(feature = "bulk"))]
-pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = build_endpoint_map!(
-    SYSTEM_ENDPOINT_LIST,
-    KEYMAP_ENDPOINT_LIST,
-    ENCODER_ENDPOINT_LIST,
-    MACRO_ENDPOINT_LIST,
-    COMBO_ENDPOINT_LIST,
-    MORSE_ENDPOINT_LIST,
-    FORK_ENDPOINT_LIST,
-    BEHAVIOR_ENDPOINT_LIST,
-    CONNECTION_ENDPOINT_LIST,
-    BLE_CONNECTION_ENDPOINT_LIST,
-    STATUS_ENDPOINT_LIST,
-    BLE_STATUS_ENDPOINT_LIST,
-    SPLIT_STATUS_ENDPOINT_LIST,
-);
-
-/// Full endpoint map including bulk transfer endpoints.
-#[cfg(feature = "bulk")]
+/// Feature-gated groups (bulk, BLE, split) use empty fallback constants
+/// when the corresponding feature is disabled.
 pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = build_endpoint_map!(
     SYSTEM_ENDPOINT_LIST,
     KEYMAP_ENDPOINT_LIST,
@@ -352,6 +352,68 @@ topics! {
 }
 
 // ---------------------------------------------------------------------------
+// Encoder endpoint types (inlined — too small for a separate file)
+// ---------------------------------------------------------------------------
+
+/// Request payload for `GetEncoderAction`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+pub struct GetEncoderRequest {
+    pub encoder_id: u8,
+    pub layer: u8,
+}
+
+/// Request payload for `SetEncoderAction`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+pub struct SetEncoderRequest {
+    pub encoder_id: u8,
+    pub layer: u8,
+    pub action: EncoderAction,
+}
+
+// ---------------------------------------------------------------------------
+// Fork endpoint types (inlined — too small for a separate file)
+// ---------------------------------------------------------------------------
+
+/// Request payload for `SetFork`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+pub struct SetForkRequest {
+    pub index: u8,
+    pub config: Fork,
+}
+
+// ---------------------------------------------------------------------------
+// Status endpoint types (inlined — too small for a separate file)
+// ---------------------------------------------------------------------------
+
+/// Maximum bitmap size: supports up to 256 keys (e.g., 16 rows x 16 cols).
+/// Each row uses ceil(num_cols / 8) bytes. Host decodes using num_rows/num_cols
+/// from DeviceCapabilities.
+pub const MATRIX_BITMAP_SIZE: usize = 32;
+
+/// Current matrix key-press state as a bitmap.
+/// Bit ordering: row-major, bit 0 = col 0, bit 1 = col 1, etc.
+/// Total meaningful bytes = num_rows * ceil(num_cols / 8).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct MatrixState {
+    pub pressed_bitmap: heapless::Vec<u8, MATRIX_BITMAP_SIZE>,
+}
+
+impl MaxSize for MatrixState {
+    const POSTCARD_MAX_SIZE: usize =
+        MATRIX_BITMAP_SIZE + crate::varint_max_size(MATRIX_BITMAP_SIZE);
+}
+
+/// Status of a single split peripheral.
+#[cfg(all(feature = "_ble", feature = "split"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct PeripheralStatus {
+    pub connected: bool,
+    pub battery: crate::battery::BatteryStatus,
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -371,7 +433,7 @@ mod tests {
     use crate::fork::{Fork, StateBits};
     use crate::modifier::ModifierCombination;
     use crate::morse::{Morse, MorsePattern};
-    use crate::vec::Vec;
+    use heapless::Vec;
 
     /// Helper: postcard round-trip for a value using a stack buffer.
     fn round_trip<T>(val: &T) -> T
@@ -608,9 +670,10 @@ mod tests {
         });
     }
 
+    #[cfg(feature = "bulk")]
     #[test]
-    fn round_trip_bulk_request() {
-        round_trip(&BulkRequest {
+    fn round_trip_get_keymap_bulk_request() {
+        round_trip(&GetKeymapBulkRequest {
             layer: 2,
             start_row: 0,
             start_col: 0,
@@ -789,12 +852,9 @@ mod tests {
         let mut actions: Vec<KeyAction, { crate::constants::BULK_SIZE }> = Vec::new();
         actions.push(KeyAction::No).unwrap();
         round_trip(&SetKeymapBulkRequest {
-            request: BulkRequest {
-                layer: 0,
-                start_row: 0,
-                start_col: 0,
-                count: 1,
-            },
+            layer: 0,
+            start_row: 0,
+            start_col: 0,
             actions,
         });
     }
@@ -879,6 +939,7 @@ mod tests {
 
     #[test]
     fn topic_list_contains_all_declared() {
+        #[allow(unused_mut)]
         let mut total_topics = TOPICS_OUT_LIST.topics.len();
         #[cfg(feature = "_ble")]
         {
@@ -901,7 +962,7 @@ mod tests {
     #[test]
     fn round_trip_matrix_state_max_capacity() {
         let mut bitmap = Vec::new();
-        for i in 0..super::status::MATRIX_BITMAP_SIZE {
+        for i in 0..super::MATRIX_BITMAP_SIZE {
             bitmap.push(i as u8).unwrap();
         }
         round_trip(&MatrixState { pressed_bitmap: bitmap });

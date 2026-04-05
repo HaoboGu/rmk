@@ -4,8 +4,9 @@ use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
+use heapless::Vec;
+
 use crate::constants::MACRO_DATA_SIZE;
-use crate::vec::Vec;
 
 /// Raw macro data for a single macro chunk.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
@@ -15,7 +16,7 @@ pub struct MacroData {
 
 impl MaxSize for MacroData {
     const POSTCARD_MAX_SIZE: usize =
-        u8::POSTCARD_MAX_SIZE * MACRO_DATA_SIZE + crate::varint_max_size(MACRO_DATA_SIZE);
+        MACRO_DATA_SIZE + crate::varint_max_size(MACRO_DATA_SIZE);
 }
 
 /// Request payload for `GetMacro`.
