@@ -2,15 +2,12 @@
 //!
 use core::sync::atomic::Ordering;
 
-use embassy_futures::select::{Either3, select3, select6};
+use embassy_futures::select::{Either3, select3};
 use embassy_time::Instant;
-#[cfg(all(feature = "storage", feature = "_ble"))]
-use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::storage::FlashOperationMessage};
+use futures::FutureExt;
 
 use super::SplitMessage;
 use crate::CONNECTION_STATE;
-#[cfg(feature = "_ble")]
-use crate::event::PeripheralBatteryEvent;
 use crate::event::{KeyboardEvent, KeyboardEventPos, SubscribableEvent, publish_event, publish_event_async};
 
 #[derive(Debug, Clone, Copy)]
@@ -88,8 +85,6 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             return;
         }
 
-        #[cfg(feature = "_ble")]
-        let peripheral_id = self.id;
         let mut last_sync_time = Instant::now();
         let mut indicator_sub = crate::event::LedIndicatorEvent::subscriber();
         let mut layer_sub = crate::event::LayerChangeEvent::subscriber();
@@ -106,110 +101,41 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             let elapsed = last_sync_time.elapsed().as_millis();
             let wait_time = if elapsed >= 3000 { 1 } else { 3000 - elapsed };
 
-            // Wait for the next event to forward to the peripheral.
-            // Each async block converts to SplitMessage; disabled features use pending().
-            let next_event = select6(
-                async { SplitMessage::KeyboardIndicator(indicator_sub.next_event().await.indicator.into_bits()) },
-                async { SplitMessage::Layer(layer_sub.next_event().await.layer) },
-                async {
-                    #[cfg(feature = "_ble")]
-                    {
-                        let _ = clear_peer_sub.next_event().await;
+            // Use select_biased_with_feature to handle feature-gated subscriber arms
+            let next_event = async {
+                crate::select_biased_with_feature! {
+                    e = indicator_sub.next_event().fuse() => SplitMessage::KeyboardIndicator(e.indicator.into_bits()),
+                    e = layer_sub.next_event().fuse() => SplitMessage::Layer(e.layer),
+                    with_feature("_ble"): _ = clear_peer_sub.next_event().fuse() => {
                         #[cfg(feature = "storage")]
-                        FLASH_CHANNEL
-                            .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
-                                peripheral_id as u8,
-                                false,
-                                [0; 6],
-                            )))
-                            .await;
+                        {
+                            use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::storage::FlashOperationMessage};
+                            FLASH_CHANNEL
+                                .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
+                                    self.id as u8,
+                                    false,
+                                    [0; 6],
+                                )))
+                                .await;
+                        }
                         SplitMessage::ClearPeer
-                    }
-                    #[cfg(not(feature = "_ble"))]
-                    core::future::pending::<SplitMessage>().await
-                },
-                async {
-                    #[cfg(feature = "display")]
-                    return SplitMessage::Wpm(wpm_sub.next_event().await.wpm);
-                    #[cfg(not(feature = "display"))]
-                    core::future::pending::<SplitMessage>().await
-                },
-                async {
-                    #[cfg(feature = "display")]
-                    return SplitMessage::Modifier(modifier_sub.next_event().await.modifier.into_bits());
-                    #[cfg(not(feature = "display"))]
-                    core::future::pending::<SplitMessage>().await
-                },
-                async {
-                    #[cfg(feature = "display")]
-                    return SplitMessage::SleepState(sleep_sub.next_event().await.sleeping);
-                    #[cfg(not(feature = "display"))]
-                    core::future::pending::<SplitMessage>().await
-                },
-            );
+                    },
+                    with_feature("display"): e = wpm_sub.next_event().fuse() => SplitMessage::Wpm(e.wpm),
+                    with_feature("display"): e = modifier_sub.next_event().fuse() => SplitMessage::Modifier(e.modifier.into_bits()),
+                    with_feature("display"): e = sleep_sub.next_event().fuse() => SplitMessage::SleepState(e.sleeping),
+                }
+            };
 
             match select3(self.transceiver.read(), next_event, Timer::after_millis(wait_time)).await {
                 Either3::First(read_result) => match read_result {
                     Ok(split_message) => {
                         self.process_peripheral_message(split_message).await;
-
-                        // Opportunistically drain one pending event to forward
-                        let msg = if let Some(e) = indicator_sub.try_next_message_pure() {
-                            Some(SplitMessage::KeyboardIndicator(e.indicator.into_bits()))
-                        } else if let Some(e) = layer_sub.try_next_message_pure() {
-                            Some(SplitMessage::Layer(e.layer))
-                        } else {
-                            #[cfg(feature = "_ble")]
-                            if clear_peer_sub.try_next_message_pure().is_some() {
-                                #[cfg(feature = "storage")]
-                                FLASH_CHANNEL
-                                    .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
-                                        peripheral_id as u8,
-                                        false,
-                                        [0; 6],
-                                    )))
-                                    .await;
-                                Some(SplitMessage::ClearPeer)
-                            } else {
-                                None
-                            }
-                            #[cfg(not(feature = "_ble"))]
-                            None
-                        };
-
-                        #[cfg(feature = "display")]
-                        let msg = msg.or_else(|| {
-                            if let Some(e) = wpm_sub.try_next_message_pure() {
-                                Some(SplitMessage::Wpm(e.wpm))
-                            } else if let Some(e) = modifier_sub.try_next_message_pure() {
-                                Some(SplitMessage::Modifier(e.modifier.into_bits()))
-                            } else if let Some(e) = sleep_sub.try_next_message_pure() {
-                                Some(SplitMessage::SleepState(e.sleeping))
-                            } else {
-                                None
-                            }
-                        });
-
-                        if let Some(msg) = msg {
-                            if self.send(&msg).await.is_err() {
-                                return;
-                            }
-                        }
                     }
                     Err(e) => {
                         error!("Peripheral message read error: {:?}", e);
                     }
                 },
-                Either3::Second(event) => {
-                    // Flatten Either6 — all variants carry the same SplitMessage type
-                    let message_to_peri = match event {
-                        embassy_futures::select::Either6::First(m)
-                        | embassy_futures::select::Either6::Second(m)
-                        | embassy_futures::select::Either6::Third(m)
-                        | embassy_futures::select::Either6::Fourth(m)
-                        | embassy_futures::select::Either6::Fifth(m)
-                        | embassy_futures::select::Either6::Sixth(m) => m,
-                    };
+                Either3::Second(message_to_peri) => {
                     if self.send(&message_to_peri).await.is_err() {
                         return;
                     }
@@ -265,6 +191,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 #[cfg(feature = "_ble")]
                 SplitMessage::BatteryState(state) => {
                     // Publish as PeripheralBatteryEvent with the full state
+                    use crate::event::PeripheralBatteryEvent;
                     publish_event(PeripheralBatteryEvent { id: self.id, state })
                 }
                 _ => warn!("{:?} should not come from peripheral", split_message),
