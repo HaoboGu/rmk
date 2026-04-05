@@ -27,7 +27,10 @@ mod macro_data;
 mod morse;
 mod system;
 
+use postcard::experimental::max_size::MaxSize;
 use postcard_rpc::{TopicDirection, endpoints, topics};
+use postcard_schema::Schema;
+use serde::{Deserialize, Serialize};
 
 // Re-export all protocol-specific types (request/response structs, etc.)
 // from submodules into `protocol::rmk::*` for convenient endpoint registration.
@@ -38,10 +41,6 @@ pub use self::keymap::*;
 pub use self::macro_data::*;
 pub use self::morse::*;
 pub use self::system::*;
-use postcard::experimental::max_size::MaxSize;
-use postcard_schema::Schema;
-use serde::{Deserialize, Serialize};
-
 use crate::action::{EncoderAction, KeyAction};
 #[cfg(feature = "_ble")]
 use crate::battery::BatteryStatus;
@@ -89,7 +88,7 @@ endpoints! {
     omit_std = true;
     | EndpointTy      | RequestTy            | ResponseTy          | Path              |
     | ----------      | ---------            | ----------          | ----              |
-    | GetKeymapBulk   | GetKeymapBulkRequest | BulkKeyActions      | "keymap/bulk_get" |
+    | GetKeymapBulk   | GetKeymapBulkRequest | GetKeymapBulkResponse | "keymap/bulk_get" |
     | SetKeymapBulk   | SetKeymapBulkRequest | RmkResult           | "keymap/bulk_set" |
 }
 
@@ -226,8 +225,8 @@ endpoints! {
     omit_std = true;
     | EndpointTy      | RequestTy | ResponseTy  | Path             |
     | ----------      | --------- | ----------  | ----             |
-    | GetCurrentLayer | ()        | u8          | "status/layer"   |
-    | GetMatrixState  | ()        | MatrixState | "status/matrix"  |
+    | GetCurrentLayer | ()        | u8          | "status/layer/get"  |
+    | GetMatrixState  | ()        | MatrixState | "status/matrix/get" |
 }
 
 #[cfg(feature = "_ble")]
@@ -236,7 +235,7 @@ endpoints! {
     omit_std = true;
     | EndpointTy       | RequestTy | ResponseTy    | Path             |
     | ----------       | --------- | ----------    | ----             |
-    | GetBatteryStatus | ()        | BatteryStatus | "status/battery" |
+    | GetBatteryStatus | ()        | BatteryStatus | "status/battery/get" |
 }
 
 #[cfg(not(feature = "_ble"))]
@@ -251,7 +250,7 @@ endpoints! {
     omit_std = true;
     | EndpointTy          | RequestTy | ResponseTy       | Path                |
     | ----------          | --------- | ----------       | ----                |
-    | GetPeripheralStatus | u8        | PeripheralStatus | "status/peripheral" |
+    | GetPeripheralStatus | u8        | PeripheralStatus | "status/peripheral/get" |
 }
 
 #[cfg(not(all(feature = "_ble", feature = "split")))]
@@ -400,8 +399,7 @@ pub struct MatrixState {
 }
 
 impl MaxSize for MatrixState {
-    const POSTCARD_MAX_SIZE: usize =
-        MATRIX_BITMAP_SIZE + crate::varint_max_size(MATRIX_BITMAP_SIZE);
+    const POSTCARD_MAX_SIZE: usize = MATRIX_BITMAP_SIZE + crate::varint_max_size(MATRIX_BITMAP_SIZE);
 }
 
 /// Status of a single split peripheral.
@@ -421,19 +419,19 @@ pub struct PeripheralStatus {
 mod tests {
     extern crate alloc;
 
+    use heapless::Vec;
     use postcard_rpc::{Endpoint, Key, Topic};
     use serde::{Deserialize, Serialize};
 
     use super::{ENDPOINT_LIST, TOPICS_OUT_LIST, *};
-    use crate::action::{Action, MorseProfile};
+    use crate::action::Action;
     #[cfg(feature = "_ble")]
     use crate::battery::ChargeState;
     #[cfg(feature = "_ble")]
     use crate::ble::BleState;
     use crate::fork::{Fork, StateBits};
     use crate::modifier::ModifierCombination;
-    use crate::morse::{Morse, MorsePattern};
-    use heapless::Vec;
+    use crate::morse::{Morse, MorsePattern, MorseProfile};
 
     /// Helper: postcard round-trip for a value using a stack buffer.
     fn round_trip<T>(val: &T) -> T
@@ -545,10 +543,7 @@ mod tests {
         ];
         #[cfg(feature = "_ble")]
         {
-            keys.extend_from_slice(&[
-                BatteryStatusTopic::TOPIC_KEY,
-                BleStatusChangeTopic::TOPIC_KEY,
-            ]);
+            keys.extend_from_slice(&[BatteryStatusTopic::TOPIC_KEY, BleStatusChangeTopic::TOPIC_KEY]);
         }
         keys
     }
@@ -743,9 +738,7 @@ mod tests {
 
     #[test]
     fn round_trip_macro_data_empty() {
-        round_trip(&MacroData {
-            data: Vec::new(),
-        });
+        round_trip(&MacroData { data: Vec::new() });
     }
 
     #[test]

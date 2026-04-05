@@ -22,9 +22,10 @@ impl MaxSize for SetMorseRequest {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "bulk")]
-use crate::constants::BULK_SIZE;
-#[cfg(feature = "bulk")]
 use heapless::Vec;
+
+#[cfg(feature = "bulk")]
+use crate::constants::BULK_SIZE;
 
 /// Request payload for `GetMorseBulk`.
 #[cfg(feature = "bulk")]
@@ -44,9 +45,8 @@ pub struct SetMorseBulkRequest {
 
 #[cfg(feature = "bulk")]
 impl MaxSize for SetMorseBulkRequest {
-    const POSTCARD_MAX_SIZE: usize = u8::POSTCARD_MAX_SIZE
-        + <Morse>::POSTCARD_MAX_SIZE * BULK_SIZE
-        + crate::varint_max_size(BULK_SIZE);
+    const POSTCARD_MAX_SIZE: usize =
+        u8::POSTCARD_MAX_SIZE + <Morse>::POSTCARD_MAX_SIZE * BULK_SIZE + crate::varint_max_size(BULK_SIZE);
 }
 
 /// Bulk response for getting multiple morse configs at once.
@@ -58,6 +58,5 @@ pub struct GetMorseBulkResponse {
 
 #[cfg(feature = "bulk")]
 impl MaxSize for GetMorseBulkResponse {
-    const POSTCARD_MAX_SIZE: usize = <Morse>::POSTCARD_MAX_SIZE * BULK_SIZE
-        + crate::varint_max_size(BULK_SIZE);
+    const POSTCARD_MAX_SIZE: usize = <Morse>::POSTCARD_MAX_SIZE * BULK_SIZE + crate::varint_max_size(BULK_SIZE);
 }

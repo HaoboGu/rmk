@@ -1,14 +1,11 @@
 use embassy_time::Duration;
 use heapless::Vec;
-use rmk_types::action::{MorseMode, MorseProfile};
-
 use rmk_types::fork::Fork;
+use rmk_types::morse::{MorseMode, MorseProfile};
 
 use crate::combo::Combo;
 use crate::morse::Morse;
-use crate::{
-    COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MOUSE_KEY_INTERVAL, MOUSE_WHEEL_INTERVAL,
-};
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MOUSE_KEY_INTERVAL, MOUSE_WHEEL_INTERVAL};
 
 /// Config for configurable action behavior
 #[derive(Debug, Default)]

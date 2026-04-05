@@ -130,25 +130,29 @@ impl crate::KeyboardTomlConfig {
         if rmk.combo_max_length > protocol_limits::MAX_COMBO_SIZE {
             return Err(format!(
                 "combo_max_length ({}) exceeds protocol ceiling MAX_COMBO_SIZE ({})",
-                rmk.combo_max_length, protocol_limits::MAX_COMBO_SIZE
+                rmk.combo_max_length,
+                protocol_limits::MAX_COMBO_SIZE
             ));
         }
         if rmk.max_patterns_per_key > protocol_limits::MAX_MORSE_SIZE {
             return Err(format!(
                 "max_patterns_per_key ({}) exceeds protocol ceiling MAX_MORSE_SIZE ({})",
-                rmk.max_patterns_per_key, protocol_limits::MAX_MORSE_SIZE
+                rmk.max_patterns_per_key,
+                protocol_limits::MAX_MORSE_SIZE
             ));
         }
         if rmk.protocol_macro_chunk_size > protocol_limits::MAX_MACRO_DATA_SIZE {
             return Err(format!(
                 "protocol_macro_chunk_size ({}) exceeds protocol ceiling MAX_MACRO_DATA_SIZE ({})",
-                rmk.protocol_macro_chunk_size, protocol_limits::MAX_MACRO_DATA_SIZE
+                rmk.protocol_macro_chunk_size,
+                protocol_limits::MAX_MACRO_DATA_SIZE
             ));
         }
         if rmk.protocol_max_bulk_size > protocol_limits::MAX_BULK_SIZE {
             return Err(format!(
                 "protocol_max_bulk_size ({}) exceeds protocol ceiling MAX_BULK_SIZE ({})",
-                rmk.protocol_max_bulk_size, protocol_limits::MAX_BULK_SIZE
+                rmk.protocol_max_bulk_size,
+                protocol_limits::MAX_BULK_SIZE
             ));
         }
 
@@ -210,6 +214,14 @@ fn resolve_passkey_enabled(ble: &crate::BleConfig) -> Result<Passkey, String> {
         ));
     }
     Ok(Passkey { enabled, timeout_secs })
+}
+
+#[cfg(test)]
+fn resolve_passkey(ble: Option<&crate::BleConfig>, feature_enabled: bool) -> Result<Option<Passkey>, String> {
+    if !feature_enabled {
+        return Ok(None);
+    }
+    ble.map(resolve_passkey_enabled).transpose()
 }
 
 #[cfg(test)]

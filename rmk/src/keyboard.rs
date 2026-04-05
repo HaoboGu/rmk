@@ -7,11 +7,12 @@ use embassy_futures::yield_now;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Timer, with_deadline};
 use heapless::Vec;
-use rmk_types::action::{Action, KeyAction, KeyboardAction, MorseMode};
+use rmk_types::action::{Action, KeyAction, KeyboardAction};
 use rmk_types::fork::StateBits;
 use rmk_types::keycode::{ConsumerKey, HidKeyCode, KeyCode, SpecialKey, SystemControlKey};
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
+use rmk_types::morse::MorseMode;
 use rmk_types::mouse_button::MouseButtons;
 use usbd_hid::descriptor::{MediaKeyboardReport, SystemControlReport};
 
@@ -1844,13 +1845,13 @@ mod test {
 
     use embassy_futures::block_on;
     use embassy_time::{Duration, Timer};
-    use rmk_types::action::{KeyAction, MorseMode, MorseProfile};
+    use rmk_types::action::KeyAction;
+    use rmk_types::fork::Fork;
     use rmk_types::modifier::ModifierCombination;
+    use rmk_types::morse::{MorseMode, MorseProfile};
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use rmk_types::fork::Fork;
-
     use crate::combo::{Combo, ComboConfig};
     use crate::config::{BehaviorConfig, CombosConfig, ForksConfig, PositionalConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};

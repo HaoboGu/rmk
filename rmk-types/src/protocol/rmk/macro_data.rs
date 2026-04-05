@@ -1,10 +1,9 @@
 //! Macro endpoint types.
 
+use heapless::Vec;
 use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
-
-use heapless::Vec;
 
 use crate::constants::MACRO_DATA_SIZE;
 
@@ -15,8 +14,7 @@ pub struct MacroData {
 }
 
 impl MaxSize for MacroData {
-    const POSTCARD_MAX_SIZE: usize =
-        MACRO_DATA_SIZE + crate::varint_max_size(MACRO_DATA_SIZE);
+    const POSTCARD_MAX_SIZE: usize = MACRO_DATA_SIZE + crate::varint_max_size(MACRO_DATA_SIZE);
 }
 
 /// Request payload for `GetMacro`.

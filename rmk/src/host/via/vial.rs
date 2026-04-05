@@ -1,7 +1,8 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::Duration;
-use rmk_types::action::{KeyAction, MorseMode};
+use rmk_types::action::KeyAction;
 use rmk_types::constants::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, MORSE_MAX_NUM};
+use rmk_types::morse::MorseMode;
 use rmk_types::protocol::vial::{SettingKey, VIAL_EP_SIZE, VIAL_PROTOCOL_VERSION, VialCommand, VialDynamic};
 
 use crate::config::VialConfig;
@@ -369,12 +370,7 @@ pub(crate) async fn process_vial<'a>(
                         if let Some(Some(combo)) = combos.get(combo_idx) {
                             // Combo components
                             for i in 0..COMBO_MAX_LENGTH {
-                                let kc = combo
-                                    .config
-                                    .actions
-                                    .get(i)
-                                    .copied()
-                                    .unwrap_or(KeyAction::No);
+                                let kc = combo.config.actions.get(i).copied().unwrap_or(KeyAction::No);
                                 LittleEndian::write_u16(
                                     &mut report.input_data[1 + i * 2..3 + i * 2],
                                     to_via_keycode(kc),
@@ -418,14 +414,17 @@ pub(crate) async fn process_vial<'a>(
                             let output = from_via_keycode(LittleEndian::read_u16(
                                 &report.output_data[4 + COMBO_MAX_LENGTH * 2..6 + COMBO_MAX_LENGTH * 2],
                             ));
-                            let config = ComboConfig { actions, output, layer: None };
-                            combos[combo_idx] =
-                                if config.actions.is_empty() && output == KeyAction::No {
-                                    debug!("combo is empty");
-                                    None
-                                } else {
-                                    Some(Combo::new(config.clone()))
-                                };
+                            let config = ComboConfig {
+                                actions,
+                                output,
+                                layer: None,
+                            };
+                            combos[combo_idx] = if config.actions.is_empty() && output == KeyAction::No {
+                                debug!("combo is empty");
+                                None
+                            } else {
+                                Some(Combo::new(config.clone()))
+                            };
                             Some(config)
                         });
 
@@ -511,17 +510,19 @@ pub(crate) async fn process_vial<'a>(
 #[cfg(feature = "storage")]
 mod tests {
     use rmk_types::action::Action;
+    use rmk_types::combo::Combo as ComboConfig;
     use rmk_types::keycode::{HidKeyCode, KeyCode};
     use sequential_storage::map::Value;
 
     use super::*;
     use crate::COMBO_MAX_LENGTH;
-    use rmk_types::combo::Combo as ComboConfig;
     use crate::storage::StorageData;
     #[test]
     fn test_combo_serialization_deserialization() {
         let mut actions = heapless::Vec::<KeyAction, COMBO_MAX_LENGTH>::new();
-        actions.push(KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Kc1)))).unwrap();
+        actions
+            .push(KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Kc1))))
+            .unwrap();
         let combo_config = ComboConfig {
             actions,
             output: KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Space))),

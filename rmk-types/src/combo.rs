@@ -1,11 +1,10 @@
 //! Combo configuration types shared between firmware and protocol layers.
 
+use heapless::Vec;
 use postcard::experimental::max_size::MaxSize;
 #[cfg(feature = "rmk_protocol")]
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
-
-use heapless::Vec;
 
 use crate::action::KeyAction;
 use crate::constants::COMBO_SIZE;

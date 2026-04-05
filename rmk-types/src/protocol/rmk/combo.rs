@@ -18,9 +18,10 @@ pub struct SetComboRequest {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "bulk")]
-use crate::constants::BULK_SIZE;
-#[cfg(feature = "bulk")]
 use heapless::Vec;
+
+#[cfg(feature = "bulk")]
+use crate::constants::BULK_SIZE;
 
 /// Request payload for `GetComboBulk`.
 #[cfg(feature = "bulk")]
@@ -40,9 +41,8 @@ pub struct SetComboBulkRequest {
 
 #[cfg(feature = "bulk")]
 impl MaxSize for SetComboBulkRequest {
-    const POSTCARD_MAX_SIZE: usize = u8::POSTCARD_MAX_SIZE
-        + <Combo>::POSTCARD_MAX_SIZE * BULK_SIZE
-        + crate::varint_max_size(BULK_SIZE);
+    const POSTCARD_MAX_SIZE: usize =
+        u8::POSTCARD_MAX_SIZE + <Combo>::POSTCARD_MAX_SIZE * BULK_SIZE + crate::varint_max_size(BULK_SIZE);
 }
 
 /// Bulk response for getting multiple combos at once.
@@ -54,7 +54,5 @@ pub struct GetComboBulkResponse {
 
 #[cfg(feature = "bulk")]
 impl MaxSize for GetComboBulkResponse {
-    const POSTCARD_MAX_SIZE: usize =
-        <Combo>::POSTCARD_MAX_SIZE * BULK_SIZE
-            + crate::varint_max_size(BULK_SIZE);
+    const POSTCARD_MAX_SIZE: usize = <Combo>::POSTCARD_MAX_SIZE * BULK_SIZE + crate::varint_max_size(BULK_SIZE);
 }

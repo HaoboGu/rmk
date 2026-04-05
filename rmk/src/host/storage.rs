@@ -1,8 +1,7 @@
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
+use rmk_types::fork::Fork;
 use serde::de::{Error as DeError, SeqAccess, Visitor};
 use serde::{Deserializer, Serializer};
-
-use rmk_types::fork::Fork;
 
 use crate::combo::Combo;
 use crate::morse::Morse;
@@ -162,10 +161,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         Ok(())
     }
 
-    pub(crate) async fn read_morses(
-        &mut self,
-        morses: &mut heapless::Vec<Morse, MORSE_MAX_NUM>,
-    ) -> Result<(), ()> {
+    pub(crate) async fn read_morses(&mut self, morses: &mut heapless::Vec<Morse, MORSE_MAX_NUM>) -> Result<(), ()> {
         for (i, item) in morses.iter_mut().enumerate() {
             let key = StorageKey::morse(i as u8);
             let read_data = self
@@ -185,8 +181,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
 #[cfg(test)]
 mod tests {
-    use rmk_types::action::{Action, MorseMode, MorseProfile};
+    use rmk_types::action::Action;
     use rmk_types::keycode::{HidKeyCode, KeyCode};
+    use rmk_types::morse::{MorseMode, MorseProfile};
     use sequential_storage::map::Value;
 
     use super::*;

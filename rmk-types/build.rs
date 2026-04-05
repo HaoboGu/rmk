@@ -1,9 +1,8 @@
 use std::path::Path;
 use std::{env, fs};
 
-use rmk_config::KeyboardTomlConfig;
-use rmk_config::protocol_limits;
 use rmk_config::resolved::BuildConstants;
+use rmk_config::{KeyboardTomlConfig, protocol_limits};
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
@@ -144,14 +143,8 @@ fn generate_constants(bc: &BuildConstants) -> String {
         ));
     } else {
         // Firmware: per-item constants from keyboard.toml / defaults.
-        lines.push(format!(
-            "pub const COMBO_SIZE: usize = {};",
-            bc.combo_max_length
-        ));
-        lines.push(format!(
-            "pub const MORSE_SIZE: usize = {};",
-            bc.max_patterns_per_key
-        ));
+        lines.push(format!("pub const COMBO_SIZE: usize = {};", bc.combo_max_length));
+        lines.push(format!("pub const MORSE_SIZE: usize = {};", bc.max_patterns_per_key));
         lines.push(format!(
             "pub const MACRO_DATA_SIZE: usize = {};",
             bc.protocol_macro_chunk_size
@@ -166,10 +159,7 @@ fn generate_constants(bc: &BuildConstants) -> String {
 
         // Bulk constant only when bulk feature is active
         if is_bulk {
-            lines.push(format!(
-                "pub const BULK_SIZE: usize = {};",
-                bc.protocol_max_bulk_size
-            ));
+            lines.push(format!("pub const BULK_SIZE: usize = {};", bc.protocol_max_bulk_size));
             lines.push("const _: () = assert!(BULK_SIZE <= MAX_BULK_SIZE, \"firmware BULK_SIZE exceeds protocol ceiling MAX_BULK_SIZE\");".to_string());
         }
     }

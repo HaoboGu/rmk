@@ -116,4 +116,3 @@ pub struct BehaviorConfig {
     pub tap_interval_ms: u16,
     pub tap_capslock_interval_ms: u16,
 }
-

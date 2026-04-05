@@ -340,8 +340,6 @@ impl Schema for Morse {
     };
 }
 
-
-
 impl Morse {
     pub fn new_from_vial(
         tap: Action,
@@ -438,11 +436,7 @@ impl Morse {
     /// Insert or update an action for the given pattern.
     ///
     /// An `Action::No` removes the pattern. Returns `Err((pattern, action))` if the map is full.
-    pub fn put(
-        &mut self,
-        pattern: MorsePattern,
-        action: Action,
-    ) -> Result<(), (MorsePattern, Action)> {
+    pub fn put(&mut self, pattern: MorsePattern, action: Action) -> Result<(), (MorsePattern, Action)> {
         if action != Action::No {
             self.actions.insert(pattern, action).map(|_| ())
         } else {
@@ -459,10 +453,7 @@ mod morse_actions_serde {
 
     use super::*;
 
-    pub fn serialize<S>(
-        map: &LinearMap<MorsePattern, Action, MORSE_SIZE>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(map: &LinearMap<MorsePattern, Action, MORSE_SIZE>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -665,10 +656,7 @@ mod tests {
 
         // Build a Morse with known data
         let mut morse = Morse::default();
-        morse
-            .actions
-            .insert(MorsePattern::from_u16(0b11), Action::No)
-            .unwrap();
+        morse.actions.insert(MorsePattern::from_u16(0b11), Action::No).unwrap();
 
         // Serialize the whole Morse
         let mut buf = [0u8; 256];

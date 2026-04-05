@@ -1,5 +1,7 @@
 //! Keymap endpoint types.
 
+#[cfg(feature = "bulk")]
+use heapless::Vec;
 use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
@@ -7,8 +9,6 @@ use serde::{Deserialize, Serialize};
 use crate::action::KeyAction;
 #[cfg(feature = "bulk")]
 use crate::constants::BULK_SIZE;
-#[cfg(feature = "bulk")]
-use heapless::Vec;
 
 /// Identifies a specific key position in the keymap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
@@ -43,16 +43,16 @@ pub struct GetKeymapBulkRequest {
 // Bulk transfer types
 // ---------------------------------------------------------------------------
 
-/// Response type for bulk keymap operations.
+/// Bulk response for getting multiple key actions at once.
 #[cfg(feature = "bulk")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
-#[serde(transparent)]
-pub struct BulkKeyActions(pub Vec<KeyAction, BULK_SIZE>);
+pub struct GetKeymapBulkResponse {
+    pub actions: Vec<KeyAction, BULK_SIZE>,
+}
 
 #[cfg(feature = "bulk")]
-impl MaxSize for BulkKeyActions {
-    const POSTCARD_MAX_SIZE: usize =
-        KeyAction::POSTCARD_MAX_SIZE * BULK_SIZE + crate::varint_max_size(BULK_SIZE);
+impl MaxSize for GetKeymapBulkResponse {
+    const POSTCARD_MAX_SIZE: usize = KeyAction::POSTCARD_MAX_SIZE * BULK_SIZE + crate::varint_max_size(BULK_SIZE);
 }
 
 /// Request payload for `SetKeymapBulk` endpoint.

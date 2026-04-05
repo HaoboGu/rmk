@@ -2,24 +2,24 @@ use core::cell::RefCell;
 
 use embassy_time::{Duration, Instant};
 use heapless::LinearMap;
-use rmk_types::action::{EncoderAction, KeyAction, MorseProfile};
+use rmk_types::action::{EncoderAction, KeyAction};
+use rmk_types::fork::Fork;
+use rmk_types::morse::MorseProfile;
 #[cfg(all(feature = "storage", feature = "host"))]
 use {
     crate::{boot::reboot_keyboard, storage::Storage},
     embedded_storage_async::nor_flash::NorFlash,
 };
 
+use crate::MACRO_SPACE_SIZE;
 use crate::combo::Combo;
 use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, OneShotModifiersConfig, PositionalConfig};
-use rmk_types::fork::Fork;
-
 use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_event};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
 #[cfg(feature = "host_security")]
 use crate::matrix::MatrixState;
 use crate::morse::Morse;
-use crate::MACRO_SPACE_SIZE;
 
 pub(crate) const HOLD_BUFFER_SIZE: usize = 16;
 
@@ -564,11 +564,7 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().behavior.morse.morses.get(idx).cloned()
     }
 
-    pub(crate) fn with_morse_mut<R>(
-        &self,
-        idx: usize,
-        f: impl FnOnce(&mut Morse) -> R,
-    ) -> Option<R> {
+    pub(crate) fn with_morse_mut<R>(&self, idx: usize, f: impl FnOnce(&mut Morse) -> R) -> Option<R> {
         self.inner.borrow_mut().behavior.morse.morses.get_mut(idx).map(f)
     }
 
@@ -738,10 +734,8 @@ impl<'a> KeyMap<'a> {
 
 #[cfg(test)]
 mod test {
-    use rmk_types::fork::StateBits;
+    use rmk_types::fork::{Fork, StateBits};
     use rmk_types::modifier::ModifierCombination;
-
-    use rmk_types::fork::Fork;
 
     use crate::combo::{Combo, ComboConfig};
     use crate::keymap::fill_vec;
