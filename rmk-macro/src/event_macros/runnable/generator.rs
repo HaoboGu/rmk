@@ -157,7 +157,7 @@ pub fn generate_runnable(
     // Handle processor.
     let has_polling = processor_config
         .as_ref()
-        .map(|c| c.poll_interval_ms.is_some() || c.manual_polling)
+        .map(|c| c.poll_interval_ms.is_some())
         .unwrap_or(false);
 
     if processor_config.is_some() {
