@@ -484,7 +484,6 @@ impl HidKeyCode {
     }
 }
 
-
 impl From<u8> for HidKeyCode {
     fn from(value: u8) -> Self {
         Self::from_repr(value).unwrap_or(HidKeyCode::No)
