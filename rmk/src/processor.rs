@@ -94,27 +94,28 @@ pub trait PollingProcessor: Processor {
     async fn update(&mut self);
 
     /// Polling loop that processes events and calls `update()` at the specified interval.
-    ///
-    /// When `interval()` is so large that `last + interval` overflows, the timer
-    /// is skipped entirely and only events are processed — no hardware timer is
-    /// set, so there is zero power cost.
     async fn polling_loop(&mut self) -> ! {
         let mut sub = Self::subscriber();
         let mut last = embassy_time::Instant::now();
 
         loop {
-            if let Some(deadline) = last.checked_add(self.interval()) {
-                match select(embassy_time::Timer::at(deadline), sub.next_event()).await {
-                    Either::First(_) => {
-                        self.update().await;
-                        last = embassy_time::Instant::now();
-                    }
-                    Either::Second(event) => self.process(event).await,
+            let elapsed = last.elapsed();
+
+            match select(
+                embassy_time::Timer::after(
+                    self.interval()
+                        .checked_sub(elapsed)
+                        .unwrap_or(embassy_time::Duration::MIN),
+                ),
+                sub.next_event(),
+            )
+            .await
+            {
+                Either::First(_) => {
+                    self.update().await;
+                    last = embassy_time::Instant::now();
                 }
-            } else {
-                // Interval overflow — no timer, just process events
-                let event = sub.next_event().await;
-                self.process(event).await;
+                Either::Second(event) => self.process(event).await,
             }
         }
     }

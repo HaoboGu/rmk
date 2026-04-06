@@ -58,7 +58,8 @@ mod renderers;
 
 #[cfg(feature = "oled_async")]
 pub use display_interface_i2c;
-use embassy_time::{Duration, Instant};
+use embassy_futures::select::{Either, select};
+use embassy_time::{Duration, Instant, Timer};
 use embedded_graphics::prelude::*;
 #[cfg(feature = "oled_async")]
 pub use oled_async;
@@ -80,7 +81,8 @@ use crate::event::{
 };
 #[cfg(feature = "split")]
 use crate::event::{CentralConnectedEvent, PeripheralConnectedEvent};
-use crate::processor::PollingProcessor;
+use crate::input_device::Runnable;
+use crate::processor::Processor;
 
 /// Snapshot of keyboard state passed to renderers on every redraw.
 ///
@@ -218,10 +220,11 @@ pub trait DisplayRenderer<C: PixelColor> {
 ///
 /// - `D` — display driver, must implement [`DisplayDriver`].
 /// - `R` — the renderer, defaults to [`LogoRenderer`].
-#[processor(subscribe = [KeyboardEvent, LayerChangeEvent, WpmUpdateEvent, LedIndicatorEvent, ModifierEvent, BatteryStateEvent, SleepStateEvent], manual_polling = true)]
+#[processor(subscribe = [KeyboardEvent, LayerChangeEvent, WpmUpdateEvent, LedIndicatorEvent, ModifierEvent, BatteryStateEvent, SleepStateEvent])]
 #[cfg_attr(feature = "_ble", processor(subscribe = [BleStatusChangeEvent]))]
 #[cfg_attr(feature = "split", processor(subscribe = [PeripheralConnectedEvent, CentralConnectedEvent]))]
 #[cfg_attr(all(feature = "split", feature = "_ble"), processor(subscribe = [PeripheralBatteryEvent]))]
+#[::rmk::macros::runnable_generated]
 pub struct DisplayProcessor<D, R = LogoRenderer>
 where
     D: DisplayDriver,
@@ -234,8 +237,8 @@ where
     last_render: Instant,
     /// Minimum time between renders (rate-limiter for event-driven renders).
     min_render_interval: Duration,
-    /// Poll interval for animations. `Duration::MAX` disables polling.
-    render_interval: Duration,
+    /// Poll interval for animations. `None` disables polling (event-driven only).
+    render_interval: Option<Duration>,
 }
 
 impl<D> DisplayProcessor<D, LogoRenderer>
@@ -270,7 +273,7 @@ where
             initialized: false,
             last_render: Instant::from_ticks(0),
             min_render_interval: Duration::from_millis(33),
-            render_interval: Duration::MAX,
+            render_interval: None,
         }
     }
 
@@ -279,7 +282,7 @@ where
     /// When set, the display redraws at this interval even without events.
     /// Without this, the display only redraws when keyboard state changes.
     pub fn with_render_interval(mut self, interval: Duration) -> Self {
-        self.render_interval = interval;
+        self.render_interval = Some(interval);
         self
     }
 
@@ -382,20 +385,36 @@ where
     }
 }
 
-impl<D, R> PollingProcessor for DisplayProcessor<D, R>
+impl<D, R> Runnable for DisplayProcessor<D, R>
 where
     D: DisplayDriver,
     R: DisplayRenderer<D::Color>,
 {
-    fn interval(&self) -> Duration {
-        if self.ctx.sleeping {
-            Duration::MAX
-        } else {
-            self.render_interval
-        }
-    }
+    async fn run(&mut self) -> ! {
+        use crate::event::EventSubscriber;
+        let mut sub = <Self as Processor>::subscriber();
+        let mut last = Instant::now();
 
-    async fn update(&mut self) {
-        self.poll().await;
+        loop {
+            if self.ctx.sleeping || self.render_interval.is_none() {
+                let event = sub.next_event().await;
+                self.process(event).await;
+            } else {
+                let interval = self.render_interval.unwrap();
+                let elapsed = last.elapsed();
+                match select(
+                    Timer::after(interval.checked_sub(elapsed).unwrap_or(Duration::MIN)),
+                    sub.next_event(),
+                )
+                .await
+                {
+                    Either::First(_) => {
+                        self.poll().await;
+                        last = Instant::now();
+                    }
+                    Either::Second(event) => self.process(event).await,
+                }
+            }
+        }
     }
 }
