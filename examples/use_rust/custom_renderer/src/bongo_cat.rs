@@ -16,10 +16,8 @@ const DEFAULT_TAP_IDLE_TICKS: u8 = 5;
 /// Animation state.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum State {
-    /// Cat resting — cycles idle frames.
-    Idle,
     /// Cat typing — alternates paws on each key press.
-    Tap,
+    Normal,
     /// Cat going wild — rapidly alternates both paws.
     Fury,
 }
@@ -27,8 +25,7 @@ enum State {
 /// Bongo Cat OLED renderer.
 ///
 /// Draws the classic Bongo Cat animation on a 128×32 OLED.
-/// - **Idle** (low WPM): subtle breathing animation, one frame per render.
-/// - **Tap** (moderate WPM): each key press alternates left/right paw.
+/// - **Normal**: each key press alternates left/right paw.
 /// - **Fury** (high WPM): both paws smashing, one toggle per render.
 ///
 /// Animation speed is controlled by `render_interval` in `keyboard.toml`.
@@ -62,7 +59,7 @@ impl Default for BongoCatRenderer {
             idle_ticks_per_frame: DEFAULT_IDLE_TICKS_PER_FRAME,
             tap_hold_ticks: DEFAULT_TAP_HOLD_TICKS,
             tap_idle_ticks: DEFAULT_TAP_IDLE_TICKS,
-            state: State::Idle,
+            state: State::Normal,
             tap_paw: false,
             idle_frame: 0,
             idle_tick: 0,
@@ -109,10 +106,8 @@ impl DisplayRenderer<BinaryColor> for BongoCatRenderer {
         // WPM drives state transitions
         let new_state = if ctx.wpm >= self.fury_wpm {
             State::Fury
-        } else if ctx.wpm >= self.idle_wpm {
-            State::Tap
         } else {
-            State::Idle
+            State::Normal
         };
 
         if new_state != self.state {
@@ -121,7 +116,7 @@ impl DisplayRenderer<BinaryColor> for BongoCatRenderer {
             self.idle_tick = 0;
         }
 
-        // Alternate paw on each key press (only in Tap/Idle — Fury manages tap_paw itself)
+        // Alternate paw on each key press (only in Normal — Fury manages tap_paw itself)
         if new_press && self.state != State::Fury {
             self.tap_paw = !self.tap_paw;
             self.tap_hold = self.tap_hold_ticks;
@@ -131,8 +126,7 @@ impl DisplayRenderer<BinaryColor> for BongoCatRenderer {
         display.clear(BinaryColor::Off).ok();
 
         let data: &[u8; frames::FRAME_SIZE] = match self.state {
-            State::Idle => self.next_idle_frame(),
-            State::Tap => {
+            State::Normal => {
                 if self.tap_hold > 0 {
                     self.tap_hold -= 1;
                     self.tap_inactivity = 0;
