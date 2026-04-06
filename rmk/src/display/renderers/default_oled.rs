@@ -99,6 +99,9 @@ pub struct OledRenderer;
 impl DisplayRenderer<BinaryColor> for OledRenderer {
     fn render<D: DrawTarget<Color = BinaryColor>>(&mut self, ctx: &RenderContext, display: &mut D) {
         display.clear(BinaryColor::Off).ok();
+        if ctx.sleeping {
+            return;
+        }
         let layout = Layout::from_display(display);
 
         draw_info_zone(ctx, display, &layout);
