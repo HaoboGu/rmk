@@ -103,8 +103,8 @@ mod tests {
     mod bulk {
         use heapless::Vec;
 
-        use super::full_combo;
         use super::super::*;
+        use super::full_combo;
         use crate::combo::Combo;
         use crate::constants::BULK_SIZE;
         use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};

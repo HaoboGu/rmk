@@ -124,8 +124,8 @@ mod tests {
     mod bulk {
         use heapless::Vec;
 
-        use super::full_morse;
         use super::super::*;
+        use super::full_morse;
         use crate::constants::BULK_SIZE;
         use crate::morse::Morse;
         use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
