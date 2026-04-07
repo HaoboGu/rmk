@@ -51,8 +51,7 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
     let peri_num = hardware.board.get_num_periphreal();
     let set_io_capabilities = if peripheral_id.is_none() {
         quote! {
-            #[cfg(feature = "passkey_entry")]
-            if ::rmk::PASSKEY_ENTRY_ENABLED {
+            if ::rmk::ble::passkey_entry_enabled() {
                 stack.set_io_capabilities(::rmk::IoCapabilities::KeyboardOnly);
             }
         }

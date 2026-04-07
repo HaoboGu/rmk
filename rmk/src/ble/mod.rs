@@ -190,6 +190,18 @@ pub async fn build_ble_stack<
         .set_random_generator_seed(random_generator);
 }
 
+#[doc(hidden)]
+pub fn passkey_entry_enabled() -> bool {
+    #[cfg(feature = "passkey_entry")]
+    {
+        crate::PASSKEY_ENTRY_ENABLED
+    }
+    #[cfg(not(feature = "passkey_entry"))]
+    {
+        false
+    }
+}
+
 /// Run the BLE stack.
 pub(crate) async fn run_ble<
     'a,
