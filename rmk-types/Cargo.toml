@@ -30,6 +30,7 @@ defmt = [
 ]
 # Feature for proc-macro code generation only, not included in firmware
 _codegen = []
-# Build-time only features: forwarded from rmk to control constant generation in build.rs
+# Build-time only features: forwarded from rmk to control constant generation in build.rs.
 split = []
+_ble = []
 passkey_entry = []

@@ -4,6 +4,7 @@
 //! - Single event subscription
 //! - Multiple event subscription
 //! - Polling processor with poll_interval
+//! - Multiple #[processor] attributes (merged subscriptions)
 
 use rmk_macro::processor;
 
@@ -49,6 +50,15 @@ mod polling {
     pub struct PollingProcessor {
         pub counter: u32,
     }
+}
+
+/// Multiple #[processor] attributes (simulates cfg_attr expansion)
+mod multi_attr {
+    use super::{EncoderEvent, KeyEvent, processor};
+
+    #[processor(subscribe = [KeyEvent])]
+    #[processor(subscribe = [EncoderEvent])]
+    pub struct MultiAttrProcessor;
 }
 
 /// Polling processor with multiple events

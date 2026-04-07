@@ -209,7 +209,7 @@ pico_w_ble = ["_ble", "dep:embassy-rp"]
 passkey_entry = ["_ble", "rmk-types/passkey_entry"]
 
 ## Enable feature if you want to use trouble BLE stack
-_ble = ["dep:trouble-host", "dep:rand_core", "dep:bt-hci", "storage"]
+_ble = ["dep:trouble-host", "dep:rand_core", "dep:bt-hci", "storage", "rmk-types/_ble"]
 
 [lib]
 # Don't run doctest for lib
