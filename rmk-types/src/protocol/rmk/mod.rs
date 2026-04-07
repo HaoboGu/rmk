@@ -86,6 +86,7 @@ pub type RmkResult = Result<(), RmkError>;
 
 #[cfg(test)]
 pub(crate) mod test_utils {
+    use postcard::experimental::max_size::MaxSize;
     use serde::{Deserialize, Serialize};
 
     /// Postcard round-trip helper used by every submodule's tests.
@@ -98,6 +99,24 @@ pub(crate) mod test_utils {
         let decoded: T = postcard::from_bytes(bytes).expect("deserialize");
         assert_eq!(&decoded, val);
         decoded
+    }
+
+    /// Assert that `val` serializes within its declared `POSTCARD_MAX_SIZE`.
+    /// Use alongside `round_trip` in max-capacity tests to catch under-counted
+    /// manual `MaxSize` impls (the dangerous bug — buffer overflows downstream).
+    pub fn assert_max_size_bound<T>(val: &T)
+    where
+        T: Serialize + MaxSize,
+    {
+        let mut buf = [0u8; 4096];
+        let bytes = postcard::to_slice(val, &mut buf).expect("serialize");
+        assert!(
+            bytes.len() <= T::POSTCARD_MAX_SIZE,
+            "{} encoded to {} bytes but POSTCARD_MAX_SIZE = {}",
+            core::any::type_name::<T>(),
+            bytes.len(),
+            T::POSTCARD_MAX_SIZE,
+        );
     }
 }
 

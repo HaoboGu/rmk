@@ -52,7 +52,7 @@ pub struct GetKeymapBulkResponse {
 
 #[cfg(feature = "bulk")]
 impl MaxSize for GetKeymapBulkResponse {
-    const POSTCARD_MAX_SIZE: usize = KeyAction::POSTCARD_MAX_SIZE * BULK_SIZE + crate::varint_max_size(BULK_SIZE);
+    const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<KeyAction, BULK_SIZE>();
 }
 
 /// Request payload for `SetKeymapBulk` endpoint.
@@ -71,15 +71,33 @@ pub struct SetKeymapBulkRequest {
 
 #[cfg(feature = "bulk")]
 impl MaxSize for SetKeymapBulkRequest {
-    const POSTCARD_MAX_SIZE: usize = 3 // layer + start_row + start_col
-        + KeyAction::POSTCARD_MAX_SIZE * BULK_SIZE
-        + crate::varint_max_size(BULK_SIZE);
+    // 3 bytes for layer + start_row + start_col (each `u8::POSTCARD_MAX_SIZE == 1`).
+    const POSTCARD_MAX_SIZE: usize = 3 + crate::heapless_vec_max_size::<KeyAction, BULK_SIZE>();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::protocol::rmk::test_utils::round_trip;
+    #[cfg(feature = "bulk")]
+    use crate::{
+        action::Action,
+        keycode::{HidKeyCode, KeyCode},
+        modifier::ModifierCombination,
+        morse::MorseProfile,
+        protocol::rmk::test_utils::assert_max_size_bound,
+    };
+
+    /// Largest-encoded `KeyAction` variant: `TapHold` wraps two multi-field
+    /// `Action`s and a `MorseProfile(u32)`, many times the size of
+    /// `KeyAction::No`. Using it in max-capacity bulk tests makes
+    /// `assert_max_size_bound` exercise both the per-element and the
+    /// length-prefix dimensions of the bound.
+    #[cfg(feature = "bulk")]
+    fn worst_key_action() -> KeyAction {
+        let action = Action::KeyWithModifier(KeyCode::Hid(HidKeyCode::A), ModifierCombination::new());
+        KeyAction::TapHold(action, action, MorseProfile::const_default())
+    }
 
     #[test]
     fn round_trip_key_position() {
@@ -124,5 +142,34 @@ mod tests {
             start_col: 0,
             actions,
         });
+    }
+
+    #[cfg(feature = "bulk")]
+    #[test]
+    fn round_trip_set_keymap_bulk_request_max_capacity() {
+        let mut actions: Vec<KeyAction, BULK_SIZE> = Vec::new();
+        for _ in 0..BULK_SIZE {
+            actions.push(worst_key_action()).unwrap();
+        }
+        let req = SetKeymapBulkRequest {
+            layer: u8::MAX,
+            start_row: u8::MAX,
+            start_col: u8::MAX,
+            actions,
+        };
+        round_trip(&req);
+        assert_max_size_bound(&req);
+    }
+
+    #[cfg(feature = "bulk")]
+    #[test]
+    fn round_trip_get_keymap_bulk_response_max_capacity() {
+        let mut actions: Vec<KeyAction, BULK_SIZE> = Vec::new();
+        for _ in 0..BULK_SIZE {
+            actions.push(worst_key_action()).unwrap();
+        }
+        let resp = GetKeymapBulkResponse { actions };
+        round_trip(&resp);
+        assert_max_size_bound(&resp);
     }
 }

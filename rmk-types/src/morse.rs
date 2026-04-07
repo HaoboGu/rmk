@@ -282,9 +282,11 @@ pub struct Morse {
 }
 
 impl MaxSize for Morse {
-    const POSTCARD_MAX_SIZE: usize = MorseProfile::POSTCARD_MAX_SIZE
-        + (<(u16, Action)>::POSTCARD_MAX_SIZE) * MORSE_SIZE
-        + crate::varint_max_size(MORSE_SIZE);
+    // The custom serializer in `morse_actions_serde` (below) emits the
+    // `LinearMap` as `Vec<(u16, Action), MORSE_SIZE>` on the wire — keep that
+    // shape in sync with the helper type parameter here.
+    const POSTCARD_MAX_SIZE: usize =
+        MorseProfile::POSTCARD_MAX_SIZE + crate::heapless_vec_max_size::<(u16, Action), MORSE_SIZE>();
 }
 
 #[cfg(feature = "defmt")]

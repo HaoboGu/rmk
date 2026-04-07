@@ -28,11 +28,9 @@ pub struct Combo {
 }
 
 impl MaxSize for Combo {
-    const POSTCARD_MAX_SIZE: usize = KeyAction::POSTCARD_MAX_SIZE * COMBO_SIZE
-        + crate::varint_max_size(COMBO_SIZE)
+    const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<KeyAction, COMBO_SIZE>()
         + KeyAction::POSTCARD_MAX_SIZE
-        + 1 // Option<u8> tag
-        + u8::POSTCARD_MAX_SIZE;
+        + Option::<u8>::POSTCARD_MAX_SIZE;
 }
 
 impl Combo {

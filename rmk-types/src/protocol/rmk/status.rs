@@ -19,7 +19,7 @@ pub struct MatrixState {
 }
 
 impl MaxSize for MatrixState {
-    const POSTCARD_MAX_SIZE: usize = MATRIX_BITMAP_SIZE + crate::varint_max_size(MATRIX_BITMAP_SIZE);
+    const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<u8, MATRIX_BITMAP_SIZE>();
 }
 
 /// Status of a single split peripheral.
@@ -36,7 +36,7 @@ mod tests {
     use heapless::Vec;
 
     use super::*;
-    use crate::protocol::rmk::test_utils::round_trip;
+    use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
 
     #[test]
     fn round_trip_matrix_state() {
@@ -49,7 +49,9 @@ mod tests {
         for i in 0..MATRIX_BITMAP_SIZE {
             bitmap.push(i as u8).unwrap();
         }
-        round_trip(&MatrixState { pressed_bitmap: bitmap });
+        let state = MatrixState { pressed_bitmap: bitmap };
+        round_trip(&state);
+        assert_max_size_bound(&state);
     }
 
     #[cfg(all(feature = "_ble", feature = "split"))]

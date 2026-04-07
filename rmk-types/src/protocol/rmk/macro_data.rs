@@ -14,7 +14,7 @@ pub struct MacroData {
 }
 
 impl MaxSize for MacroData {
-    const POSTCARD_MAX_SIZE: usize = MACRO_DATA_SIZE + crate::varint_max_size(MACRO_DATA_SIZE);
+    const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<u8, MACRO_DATA_SIZE>();
 }
 
 /// Request payload for `GetMacro`.
@@ -41,7 +41,7 @@ pub struct SetMacroRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::rmk::test_utils::round_trip;
+    use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
 
     #[test]
     fn round_trip_macro_data() {
@@ -56,7 +56,9 @@ mod tests {
         for i in 0..MACRO_DATA_SIZE {
             data.push(i as u8).unwrap();
         }
-        round_trip(&MacroData { data });
+        let full = MacroData { data };
+        round_trip(&full);
+        assert_max_size_bound(&full);
     }
 
     #[test]

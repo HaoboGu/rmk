@@ -75,8 +75,7 @@ pub struct UnlockChallenge {
 }
 
 impl MaxSize for UnlockChallenge {
-    const POSTCARD_MAX_SIZE: usize =
-        <(u8, u8)>::POSTCARD_MAX_SIZE * UNLOCK_KEYS_SIZE + crate::varint_max_size(UNLOCK_KEYS_SIZE);
+    const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<(u8, u8), UNLOCK_KEYS_SIZE>();
 }
 
 /// Storage reset mode for the `StorageReset` endpoint.
@@ -100,7 +99,7 @@ pub struct BehaviorConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::rmk::test_utils::round_trip;
+    use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
 
     #[test]
     fn round_trip_protocol_version() {
@@ -182,6 +181,16 @@ mod tests {
         round_trip(&UnlockChallenge {
             key_positions: Vec::new(),
         });
+
+        // Max-capacity case: every (u8, u8) at u8::MAX so each varint takes
+        // its full width and the bound is genuinely exercised.
+        let mut full = Vec::new();
+        for _ in 0..UNLOCK_KEYS_SIZE {
+            full.push((u8::MAX, u8::MAX)).unwrap();
+        }
+        let challenge = UnlockChallenge { key_positions: full };
+        round_trip(&challenge);
+        assert_max_size_bound(&challenge);
     }
 
     #[test]

@@ -41,8 +41,7 @@ pub struct SetMorseBulkRequest {
 
 #[cfg(feature = "bulk")]
 impl MaxSize for SetMorseBulkRequest {
-    const POSTCARD_MAX_SIZE: usize =
-        u8::POSTCARD_MAX_SIZE + <Morse>::POSTCARD_MAX_SIZE * BULK_SIZE + crate::varint_max_size(BULK_SIZE);
+    const POSTCARD_MAX_SIZE: usize = u8::POSTCARD_MAX_SIZE + crate::heapless_vec_max_size::<Morse, BULK_SIZE>();
 }
 
 /// Bulk response for getting multiple morse configs at once.
@@ -54,15 +53,41 @@ pub struct GetMorseBulkResponse {
 
 #[cfg(feature = "bulk")]
 impl MaxSize for GetMorseBulkResponse {
-    const POSTCARD_MAX_SIZE: usize = <Morse>::POSTCARD_MAX_SIZE * BULK_SIZE + crate::varint_max_size(BULK_SIZE);
+    const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<Morse, BULK_SIZE>();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::action::Action;
+    use crate::constants::MORSE_SIZE;
+    use crate::keycode::{HidKeyCode, KeyCode};
+    use crate::modifier::ModifierCombination;
     use crate::morse::{MorsePattern, MorseProfile};
-    use crate::protocol::rmk::test_utils::round_trip;
+    use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+
+    /// Build a `Morse` whose `actions` `LinearMap` is filled to `MORSE_SIZE`
+    /// distinct entries, each using a multi-field `Action` variant so both the
+    /// entry count *and* the per-entry encoded size meaningfully exercise the
+    /// manual `MaxSize` impl. `MorsePattern::from_u16(0)` panics (the empty
+    /// pattern is `0b1`), so patterns start at 1.
+    fn full_morse() -> Morse {
+        // `KeyWithModifier` carries a nested `KeyCode` enum + a `ModifierCombination`
+        // bitfield, so it encodes to several bytes rather than the 1 byte of
+        // `Action::No` — enough slack for `assert_max_size_bound` to catch a
+        // per-element under-count.
+        let action = Action::KeyWithModifier(KeyCode::Hid(HidKeyCode::A), ModifierCombination::new());
+        let mut m = Morse {
+            profile: MorseProfile::const_default(),
+            actions: heapless::LinearMap::new(),
+        };
+        for i in 0..MORSE_SIZE {
+            m.actions
+                .insert(MorsePattern::from_u16((i + 1) as u16), action)
+                .unwrap();
+        }
+        m
+    }
 
     #[test]
     fn round_trip_morse() {
@@ -83,5 +108,40 @@ mod tests {
             index: 0,
             config: morse,
         });
+    }
+
+    #[test]
+    fn round_trip_morse_max_capacity() {
+        let m = full_morse();
+        assert_eq!(m.actions.len(), MORSE_SIZE);
+        round_trip(&m);
+        assert_max_size_bound(&m);
+    }
+
+    #[cfg(feature = "bulk")]
+    #[test]
+    fn round_trip_set_morse_bulk_request_max_capacity() {
+        let mut configs: Vec<Morse, BULK_SIZE> = Vec::new();
+        for _ in 0..BULK_SIZE {
+            configs.push(full_morse()).unwrap();
+        }
+        let req = SetMorseBulkRequest {
+            start_index: u8::MAX,
+            configs,
+        };
+        round_trip(&req);
+        assert_max_size_bound(&req);
+    }
+
+    #[cfg(feature = "bulk")]
+    #[test]
+    fn round_trip_get_morse_bulk_response_max_capacity() {
+        let mut configs: Vec<Morse, BULK_SIZE> = Vec::new();
+        for _ in 0..BULK_SIZE {
+            configs.push(full_morse()).unwrap();
+        }
+        let resp = GetMorseBulkResponse { configs };
+        round_trip(&resp);
+        assert_max_size_bound(&resp);
     }
 }
