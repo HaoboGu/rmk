@@ -111,8 +111,6 @@ async fn main(spawner: Spawner) {
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
     let mut host_resources = HostResources::new();
     let stack = build_ble_stack(sdc, ble_addr(), &mut rng_gen, &mut host_resources).await;
-    #[cfg(feature = "passkey_entry")]
-    stack.set_io_capabilities(rmk::IoCapabilities::KeyboardOnly);
 
     // Initialize flash
     let flash = Flash::take(mpsl, p.NVMC);

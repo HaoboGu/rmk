@@ -160,8 +160,6 @@ async fn main(spawner: Spawner) {
     let mut rng = rand_chacha::ChaCha12Rng::from_rng(&mut rosc_rng).unwrap();
 
     let stack = build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
-    #[cfg(feature = "passkey_entry")]
-    stack.set_io_capabilities(rmk::IoCapabilities::KeyboardOnly);
 
     // Start
     join3(

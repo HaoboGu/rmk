@@ -161,8 +161,6 @@ async fn main(spawner: Spawner) {
     info!("SDC built");
     let mut host_resources = HostResources::new();
     let stack = build_ble_stack(sdc, ble_addr(), &mut rng_gen, &mut host_resources).await;
-    #[cfg(feature = "passkey_entry")]
-    stack.set_io_capabilities(rmk::IoCapabilities::KeyboardOnly);
     info!("BLE stack ready");
 
     static EP_OUT_BUFFER: StaticCell<[u8; 2048]> = StaticCell::new();
