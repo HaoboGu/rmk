@@ -86,15 +86,34 @@ pub type RmkResult = Result<(), RmkError>;
 
 #[cfg(test)]
 pub(crate) mod test_utils {
+    extern crate alloc;
+
+    use alloc::vec;
+
     use postcard::experimental::max_size::MaxSize;
     use serde::{Deserialize, Serialize};
+
+    /// Buffer size used by round-trip / max-size helpers.
+    ///
+    /// Sized at twice the type's declared `POSTCARD_MAX_SIZE` plus a small
+    /// fixed slack so that:
+    /// - under feature configurations with a large `BULK_SIZE` (notably
+    ///   `host`, where `BULK_SIZE = MAX_BULK_SIZE = 16` and
+    ///   `MORSE_SIZE = MAX_MORSE_SIZE = 32`), max-capacity bulk payloads
+    ///   still fit comfortably;
+    /// - an under-counted manual `MaxSize` impl produces a clear assertion
+    ///   failure in `assert_max_size_bound` instead of a `SerializeBufferFull`
+    ///   panic.
+    fn buffer_capacity<T: MaxSize>() -> usize {
+        T::POSTCARD_MAX_SIZE.saturating_mul(2).saturating_add(64)
+    }
 
     /// Postcard round-trip helper used by every submodule's tests.
     pub fn round_trip<T>(val: &T) -> T
     where
-        T: Serialize + for<'de> Deserialize<'de> + PartialEq + core::fmt::Debug,
+        T: Serialize + for<'de> Deserialize<'de> + PartialEq + core::fmt::Debug + MaxSize,
     {
-        let mut buf = [0u8; 1024];
+        let mut buf = vec![0u8; buffer_capacity::<T>()];
         let bytes = postcard::to_slice(val, &mut buf).expect("serialize");
         let decoded: T = postcard::from_bytes(bytes).expect("deserialize");
         assert_eq!(&decoded, val);
@@ -108,7 +127,7 @@ pub(crate) mod test_utils {
     where
         T: Serialize + MaxSize,
     {
-        let mut buf = [0u8; 4096];
+        let mut buf = vec![0u8; buffer_capacity::<T>()];
         let bytes = postcard::to_slice(val, &mut buf).expect("serialize");
         assert!(
             bytes.len() <= T::POSTCARD_MAX_SIZE,

@@ -13,48 +13,50 @@ pub struct SetMorseRequest {
     pub config: Morse,
 }
 
-// ---------------------------------------------------------------------------
-// Bulk transfer types
-// ---------------------------------------------------------------------------
-
+// Bulk transfer types live in the `bulk` submodule below and are re-exported
+// when the `bulk` feature is enabled. Gating the entire submodule once avoids
+// repeating `#[cfg(feature = "bulk")]` on every type, impl, and import.
 #[cfg(feature = "bulk")]
-use heapless::Vec;
+mod bulk {
+    use heapless::Vec;
+    use postcard::experimental::max_size::MaxSize;
+    use postcard_schema::Schema;
+    use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "bulk")]
-use crate::constants::BULK_SIZE;
+    use crate::constants::BULK_SIZE;
+    use crate::morse::Morse;
 
-/// Request payload for `GetMorseBulk`.
-#[cfg(feature = "bulk")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
-pub struct GetMorseBulkRequest {
-    pub start_index: u8,
-    pub count: u8,
+    /// Request payload for `GetMorseBulk`.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+    pub struct GetMorseBulkRequest {
+        pub start_index: u8,
+        pub count: u8,
+    }
+
+    /// Bulk request payload for setting multiple morse configs at once.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+    pub struct SetMorseBulkRequest {
+        pub start_index: u8,
+        pub configs: Vec<Morse, BULK_SIZE>,
+    }
+
+    impl MaxSize for SetMorseBulkRequest {
+        const POSTCARD_MAX_SIZE: usize = u8::POSTCARD_MAX_SIZE + crate::heapless_vec_max_size::<Morse, BULK_SIZE>();
+    }
+
+    /// Bulk response for getting multiple morse configs at once.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+    pub struct GetMorseBulkResponse {
+        pub configs: Vec<Morse, BULK_SIZE>,
+    }
+
+    impl MaxSize for GetMorseBulkResponse {
+        const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<Morse, BULK_SIZE>();
+    }
 }
 
-/// Bulk request payload for setting multiple morse configs at once.
 #[cfg(feature = "bulk")]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
-pub struct SetMorseBulkRequest {
-    pub start_index: u8,
-    pub configs: Vec<Morse, BULK_SIZE>,
-}
-
-#[cfg(feature = "bulk")]
-impl MaxSize for SetMorseBulkRequest {
-    const POSTCARD_MAX_SIZE: usize = u8::POSTCARD_MAX_SIZE + crate::heapless_vec_max_size::<Morse, BULK_SIZE>();
-}
-
-/// Bulk response for getting multiple morse configs at once.
-#[cfg(feature = "bulk")]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
-pub struct GetMorseBulkResponse {
-    pub configs: Vec<Morse, BULK_SIZE>,
-}
-
-#[cfg(feature = "bulk")]
-impl MaxSize for GetMorseBulkResponse {
-    const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<Morse, BULK_SIZE>();
-}
+pub use bulk::*;
 
 #[cfg(test)]
 mod tests {
@@ -119,29 +121,38 @@ mod tests {
     }
 
     #[cfg(feature = "bulk")]
-    #[test]
-    fn round_trip_set_morse_bulk_request_max_capacity() {
-        let mut configs: Vec<Morse, BULK_SIZE> = Vec::new();
-        for _ in 0..BULK_SIZE {
-            configs.push(full_morse()).unwrap();
-        }
-        let req = SetMorseBulkRequest {
-            start_index: u8::MAX,
-            configs,
-        };
-        round_trip(&req);
-        assert_max_size_bound(&req);
-    }
+    mod bulk {
+        use heapless::Vec;
 
-    #[cfg(feature = "bulk")]
-    #[test]
-    fn round_trip_get_morse_bulk_response_max_capacity() {
-        let mut configs: Vec<Morse, BULK_SIZE> = Vec::new();
-        for _ in 0..BULK_SIZE {
-            configs.push(full_morse()).unwrap();
+        use super::super::*;
+        use super::full_morse;
+        use crate::constants::BULK_SIZE;
+        use crate::morse::Morse;
+        use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+
+        #[test]
+        fn round_trip_set_morse_bulk_request_max_capacity() {
+            let mut configs: Vec<Morse, BULK_SIZE> = Vec::new();
+            for _ in 0..BULK_SIZE {
+                configs.push(full_morse()).unwrap();
+            }
+            let req = SetMorseBulkRequest {
+                start_index: u8::MAX,
+                configs,
+            };
+            round_trip(&req);
+            assert_max_size_bound(&req);
         }
-        let resp = GetMorseBulkResponse { configs };
-        round_trip(&resp);
-        assert_max_size_bound(&resp);
+
+        #[test]
+        fn round_trip_get_morse_bulk_response_max_capacity() {
+            let mut configs: Vec<Morse, BULK_SIZE> = Vec::new();
+            for _ in 0..BULK_SIZE {
+                configs.push(full_morse()).unwrap();
+            }
+            let resp = GetMorseBulkResponse { configs };
+            round_trip(&resp);
+            assert_max_size_bound(&resp);
+        }
     }
 }
