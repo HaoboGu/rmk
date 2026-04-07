@@ -13,48 +13,50 @@ pub struct SetComboRequest {
     pub config: Combo,
 }
 
-// ---------------------------------------------------------------------------
-// Bulk transfer types
-// ---------------------------------------------------------------------------
-
+// Bulk transfer types live in the `bulk` submodule below and are re-exported
+// when the `bulk` feature is enabled. Gating the entire submodule once avoids
+// repeating `#[cfg(feature = "bulk")]` on every type, impl, and import.
 #[cfg(feature = "bulk")]
-use heapless::Vec;
+mod bulk {
+    use heapless::Vec;
+    use postcard::experimental::max_size::MaxSize;
+    use postcard_schema::Schema;
+    use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "bulk")]
-use crate::constants::BULK_SIZE;
+    use crate::combo::Combo;
+    use crate::constants::BULK_SIZE;
 
-/// Request payload for `GetComboBulk`.
-#[cfg(feature = "bulk")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
-pub struct GetComboBulkRequest {
-    pub start_index: u8,
-    pub count: u8,
+    /// Request payload for `GetComboBulk`.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+    pub struct GetComboBulkRequest {
+        pub start_index: u8,
+        pub count: u8,
+    }
+
+    /// Bulk request payload for setting multiple combos at once.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+    pub struct SetComboBulkRequest {
+        pub start_index: u8,
+        pub configs: Vec<Combo, BULK_SIZE>,
+    }
+
+    impl MaxSize for SetComboBulkRequest {
+        const POSTCARD_MAX_SIZE: usize = u8::POSTCARD_MAX_SIZE + crate::heapless_vec_max_size::<Combo, BULK_SIZE>();
+    }
+
+    /// Bulk response for getting multiple combos at once.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+    pub struct GetComboBulkResponse {
+        pub configs: Vec<Combo, BULK_SIZE>,
+    }
+
+    impl MaxSize for GetComboBulkResponse {
+        const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<Combo, BULK_SIZE>();
+    }
 }
 
-/// Bulk request payload for setting multiple combos at once.
 #[cfg(feature = "bulk")]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
-pub struct SetComboBulkRequest {
-    pub start_index: u8,
-    pub configs: Vec<Combo, BULK_SIZE>,
-}
-
-#[cfg(feature = "bulk")]
-impl MaxSize for SetComboBulkRequest {
-    const POSTCARD_MAX_SIZE: usize = u8::POSTCARD_MAX_SIZE + crate::heapless_vec_max_size::<Combo, BULK_SIZE>();
-}
-
-/// Bulk response for getting multiple combos at once.
-#[cfg(feature = "bulk")]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
-pub struct GetComboBulkResponse {
-    pub configs: Vec<Combo, BULK_SIZE>,
-}
-
-#[cfg(feature = "bulk")]
-impl MaxSize for GetComboBulkResponse {
-    const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<Combo, BULK_SIZE>();
-}
+pub use bulk::*;
 
 #[cfg(test)]
 mod tests {
@@ -98,29 +100,38 @@ mod tests {
     }
 
     #[cfg(feature = "bulk")]
-    #[test]
-    fn round_trip_set_combo_bulk_request_max_capacity() {
-        let mut configs: Vec<Combo, BULK_SIZE> = Vec::new();
-        for _ in 0..BULK_SIZE {
-            configs.push(full_combo()).unwrap();
-        }
-        let req = SetComboBulkRequest {
-            start_index: u8::MAX,
-            configs,
-        };
-        round_trip(&req);
-        assert_max_size_bound(&req);
-    }
+    mod bulk {
+        use heapless::Vec;
 
-    #[cfg(feature = "bulk")]
-    #[test]
-    fn round_trip_get_combo_bulk_response_max_capacity() {
-        let mut configs: Vec<Combo, BULK_SIZE> = Vec::new();
-        for _ in 0..BULK_SIZE {
-            configs.push(full_combo()).unwrap();
+        use super::full_combo;
+        use super::super::*;
+        use crate::combo::Combo;
+        use crate::constants::BULK_SIZE;
+        use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+
+        #[test]
+        fn round_trip_set_combo_bulk_request_max_capacity() {
+            let mut configs: Vec<Combo, BULK_SIZE> = Vec::new();
+            for _ in 0..BULK_SIZE {
+                configs.push(full_combo()).unwrap();
+            }
+            let req = SetComboBulkRequest {
+                start_index: u8::MAX,
+                configs,
+            };
+            round_trip(&req);
+            assert_max_size_bound(&req);
         }
-        let resp = GetComboBulkResponse { configs };
-        round_trip(&resp);
-        assert_max_size_bound(&resp);
+
+        #[test]
+        fn round_trip_get_combo_bulk_response_max_capacity() {
+            let mut configs: Vec<Combo, BULK_SIZE> = Vec::new();
+            for _ in 0..BULK_SIZE {
+                configs.push(full_combo()).unwrap();
+            }
+            let resp = GetComboBulkResponse { configs };
+            round_trip(&resp);
+            assert_max_size_bound(&resp);
+        }
     }
 }
