@@ -56,3 +56,24 @@ pub struct GetComboBulkResponse {
 impl MaxSize for GetComboBulkResponse {
     const POSTCARD_MAX_SIZE: usize = <Combo>::POSTCARD_MAX_SIZE * BULK_SIZE + crate::varint_max_size(BULK_SIZE);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::action::KeyAction;
+    use crate::protocol::rmk::test_utils::round_trip;
+
+    #[test]
+    fn round_trip_combo() {
+        round_trip(&Combo::new([KeyAction::No], KeyAction::No, Some(1)));
+        round_trip(&Combo::empty());
+    }
+
+    #[test]
+    fn round_trip_set_combo_request() {
+        round_trip(&SetComboRequest {
+            index: 3,
+            config: Combo::new([KeyAction::No], KeyAction::No, Some(1)),
+        });
+    }
+}

@@ -7,6 +7,14 @@
 //! The protocol uses postcard-rpc's type-level endpoint definitions over COBS-framed
 //! byte streams (USB bulk transfer and BLE serial).
 //!
+//! ## Module layout
+//!
+//! - [`endpoints`] — `endpoints!` macro invocations + assembled `ENDPOINT_LIST`
+//! - [`topics`] — `topics!` macro invocations
+//! - [`system`] — handshake, lock/unlock, storage reset, behavior config
+//! - [`keymap`], [`encoder`], [`macro_data`], [`combo`], [`morse`], [`fork`] — per-domain request/response types
+//! - [`status`] — runtime status types (matrix state, peripheral status)
+//!
 //! ## Protocol Handshake
 //!
 //! The expected connection flow is:
@@ -18,423 +26,70 @@
 //! 5. If the device is locked, host sends `UnlockRequest` and completes
 //!    the physical key challenge before issuing write operations.
 
-// The postcard-rpc endpoints! macro performs heavy const-eval for type uniqueness checks.
-#![allow(long_running_const_eval)]
-
 mod combo;
+mod encoder;
+mod endpoints;
+mod fork;
 mod keymap;
 mod macro_data;
 mod morse;
+mod status;
 mod system;
+mod topics;
 
 use postcard::experimental::max_size::MaxSize;
-use postcard_rpc::{TopicDirection, endpoints, topics};
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
-// Re-export all protocol-specific types (request/response structs, etc.)
-// from submodules into `protocol::rmk::*` for convenient endpoint registration.
-// Domain types (Combo, Morse, Fork, etc.) are NOT re-exported here —
-// import them from their canonical crate-root modules instead.
+// Re-export every submodule's public items into `protocol::rmk::*` for
+// convenient endpoint registration. Domain types (Combo, Morse, Fork, etc.)
+// are NOT re-exported here — import them from their canonical crate-root
+// modules instead.
 pub use self::combo::*;
+pub use self::encoder::*;
+pub use self::endpoints::*;
+pub use self::fork::*;
 pub use self::keymap::*;
 pub use self::macro_data::*;
 pub use self::morse::*;
+pub use self::status::*;
 pub use self::system::*;
-use crate::action::{EncoderAction, KeyAction};
-#[cfg(feature = "_ble")]
-use crate::battery::BatteryStatus;
-#[cfg(feature = "_ble")]
-use crate::ble::BleStatus;
-use crate::combo::Combo;
-use crate::connection::ConnectionType;
-use crate::fork::Fork;
-use crate::led_indicator::LedIndicator;
-use crate::morse::Morse;
+pub use self::topics::*;
 
 // ---------------------------------------------------------------------------
-// Endpoint declarations
+// Protocol-wide error primitives
 // ---------------------------------------------------------------------------
 
-endpoints! {
-    list = SYSTEM_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy      | RequestTy        | ResponseTy          | Path                |
-    | ----------      | ---------        | ----------          | ----                |
-    | GetVersion      | ()               | ProtocolVersion     | "sys/version"       |
-    | GetCapabilities | ()               | DeviceCapabilities  | "sys/caps"          |
-    | GetLockStatus   | ()               | LockStatus          | "sys/lock_status"   |
-    | UnlockRequest   | ()               | UnlockChallenge     | "sys/unlock"        |
-    | LockRequest     | ()               | ()                  | "sys/lock"          |
-    | Reboot          | ()               | ()                  | "sys/reboot"        |
-    | BootloaderJump  | ()               | ()                  | "sys/bootloader"    |
-    | StorageReset    | StorageResetMode | ()                  | "sys/storage_reset" |
+/// Protocol-level error type returned by write operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+pub enum RmkError {
+    /// The request parameters are invalid or out of range.
+    InvalidParameter,
+    /// Operation not valid in current device state (e.g. device is locked).
+    BadState,
+    /// An internal firmware error occurred (storage, contention, etc).
+    InternalError,
 }
 
-endpoints! {
-    list = KEYMAP_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy      | RequestTy            | ResponseTy          | Path                       |
-    | ----------      | ---------            | ----------          | ----                       |
-    | GetKeyAction    | KeyPosition          | KeyAction           | "keymap/get"               |
-    | SetKeyAction    | SetKeyRequest        | RmkResult           | "keymap/set"               |
-    | GetDefaultLayer | ()                   | u8                  | "keymap/default_layer"     |
-    | SetDefaultLayer | u8                   | RmkResult           | "keymap/set_default_layer" |
-}
-
-#[cfg(feature = "bulk")]
-endpoints! {
-    list = KEYMAP_BULK_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy      | RequestTy            | ResponseTy          | Path              |
-    | ----------      | ---------            | ----------          | ----              |
-    | GetKeymapBulk   | GetKeymapBulkRequest | GetKeymapBulkResponse | "keymap/bulk_get" |
-    | SetKeymapBulk   | SetKeymapBulkRequest | RmkResult           | "keymap/bulk_set" |
-}
-
-#[cfg(not(feature = "bulk"))]
-pub const KEYMAP_BULK_ENDPOINT_LIST: postcard_rpc::EndpointMap = postcard_rpc::EndpointMap {
-    types: &[],
-    endpoints: &[],
-};
-
-endpoints! {
-    list = ENCODER_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy       | RequestTy         | ResponseTy    | Path          |
-    | ----------       | ---------         | ----------    | ----          |
-    | GetEncoderAction | GetEncoderRequest | EncoderAction | "encoder/get" |
-    | SetEncoderAction | SetEncoderRequest | RmkResult     | "encoder/set" |
-}
-
-endpoints! {
-    list = MACRO_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy   | RequestTy        | ResponseTy | Path          |
-    | ----------   | ---------        | ---------- | ----          |
-    | GetMacro     | GetMacroRequest  | MacroData  | "macro/get"   |
-    | SetMacro     | SetMacroRequest  | RmkResult  | "macro/set"   |
-}
-
-endpoints! {
-    list = COMBO_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy  | RequestTy       | ResponseTy  | Path         |
-    | ----------  | ---------       | ----------  | ----         |
-    | GetCombo    | u8              | Combo               | "combo/get"  |
-    | SetCombo    | SetComboRequest | RmkResult   | "combo/set"  |
-}
-
-#[cfg(feature = "bulk")]
-endpoints! {
-    list = COMBO_BULK_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy    | RequestTy           | ResponseTy           | Path              |
-    | ----------    | ---------           | ----------           | ----              |
-    | GetComboBulk  | GetComboBulkRequest | GetComboBulkResponse | "combo/bulk_get"  |
-    | SetComboBulk  | SetComboBulkRequest | RmkResult            | "combo/bulk_set"  |
-}
-
-#[cfg(not(feature = "bulk"))]
-pub const COMBO_BULK_ENDPOINT_LIST: postcard_rpc::EndpointMap = postcard_rpc::EndpointMap {
-    types: &[],
-    endpoints: &[],
-};
-
-endpoints! {
-    list = MORSE_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy | RequestTy       | ResponseTy  | Path         |
-    | ---------- | ---------       | ----------  | ----         |
-    | GetMorse   | u8              | Morse       | "morse/get"  |
-    | SetMorse   | SetMorseRequest | RmkResult   | "morse/set"  |
-}
-
-#[cfg(feature = "bulk")]
-endpoints! {
-    list = MORSE_BULK_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy    | RequestTy           | ResponseTy           | Path              |
-    | ----------    | ---------           | ----------           | ----              |
-    | GetMorseBulk  | GetMorseBulkRequest | GetMorseBulkResponse | "morse/bulk_get"  |
-    | SetMorseBulk  | SetMorseBulkRequest | RmkResult            | "morse/bulk_set"  |
-}
-
-#[cfg(not(feature = "bulk"))]
-pub const MORSE_BULK_ENDPOINT_LIST: postcard_rpc::EndpointMap = postcard_rpc::EndpointMap {
-    types: &[],
-    endpoints: &[],
-};
-
-endpoints! {
-    list = FORK_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy | RequestTy      | ResponseTy | Path        |
-    | ---------- | ---------      | ---------- | ----        |
-    | GetFork    | u8             | Fork       | "fork/get"  |
-    | SetFork    | SetForkRequest | RmkResult  | "fork/set"  |
-}
-
-endpoints! {
-    list = BEHAVIOR_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy        | RequestTy      | ResponseTy     | Path           |
-    | ----------        | ---------      | ----------     | ----           |
-    | GetBehaviorConfig | ()             | BehaviorConfig | "behavior/get" |
-    | SetBehaviorConfig | BehaviorConfig | RmkResult      | "behavior/set" |
-}
-
-endpoints! {
-    list = CONNECTION_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy        | RequestTy      | ResponseTy     | Path            |
-    | ----------        | ---------      | ----------     | ----            |
-    | GetConnectionType | ()             | ConnectionType | "conn/type"     |
-    | SetConnectionType | ConnectionType | RmkResult      | "conn/set_type" |
-}
-
-// --- Feature-gated endpoint groups ---
-//
-// When adding a new conditional endpoint group:
-// 1. Add the `endpoints!` block with its `#[cfg(...)]` guard
-// 2. Add a `#[cfg(not(...))]` empty fallback constant (EndpointMap with empty slices)
-// 3. Add the list to the single `ENDPOINT_LIST` definition
-// 4. Add the group's endpoints to `endpoint_list_contains_all_non_bulk_endpoints` test
-// 5. If feature-gated keys exist, add them to `all_endpoint_keys()` test helper
-
-#[cfg(feature = "_ble")]
-endpoints! {
-    list = BLE_CONNECTION_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy       | RequestTy | ResponseTy | Path              |
-    | ----------       | --------- | ---------- | ----              |
-    | GetBleStatus     | ()        | BleStatus  | "conn/ble"        |
-    | SwitchBleProfile | u8        | RmkResult  | "conn/switch_ble" |
-    | ClearBleProfile  | u8        | RmkResult  | "conn/clear_ble"  |
-}
-
-/// Empty endpoint list for when BLE is not available.
-#[cfg(not(feature = "_ble"))]
-pub const BLE_CONNECTION_ENDPOINT_LIST: postcard_rpc::EndpointMap = postcard_rpc::EndpointMap {
-    types: &[],
-    endpoints: &[],
-};
-
-endpoints! {
-    list = STATUS_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy      | RequestTy | ResponseTy  | Path             |
-    | ----------      | --------- | ----------  | ----             |
-    | GetCurrentLayer | ()        | u8          | "status/layer/get"  |
-    | GetMatrixState  | ()        | MatrixState | "status/matrix/get" |
-}
-
-#[cfg(feature = "_ble")]
-endpoints! {
-    list = BLE_STATUS_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy       | RequestTy | ResponseTy    | Path             |
-    | ----------       | --------- | ----------    | ----             |
-    | GetBatteryStatus | ()        | BatteryStatus | "status/battery/get" |
-}
-
-#[cfg(not(feature = "_ble"))]
-pub const BLE_STATUS_ENDPOINT_LIST: postcard_rpc::EndpointMap = postcard_rpc::EndpointMap {
-    types: &[],
-    endpoints: &[],
-};
-
-#[cfg(all(feature = "_ble", feature = "split"))]
-endpoints! {
-    list = SPLIT_STATUS_ENDPOINT_LIST;
-    omit_std = true;
-    | EndpointTy          | RequestTy | ResponseTy       | Path                |
-    | ----------          | --------- | ----------       | ----                |
-    | GetPeripheralStatus | u8        | PeripheralStatus | "status/peripheral/get" |
-}
-
-#[cfg(not(all(feature = "_ble", feature = "split")))]
-pub const SPLIT_STATUS_ENDPOINT_LIST: postcard_rpc::EndpointMap = postcard_rpc::EndpointMap {
-    types: &[],
-    endpoints: &[],
-};
-
-/// Build an `EndpointMap` from a list of endpoint group constants.
+/// Result type for write operations.
 ///
-/// Each argument must be a `postcard_rpc::EndpointList` (as produced by `endpoints!`).
-/// The standard ICD endpoints are always included automatically.
-macro_rules! build_endpoint_map {
-    ($($list:expr),* $(,)?) => {
-        const {
-            use postcard_rpc::postcard_schema::schema::{DataModelType, NamedType};
-            use postcard_rpc::{EndpointMap, Key};
-
-            const NULL_KEY: Key = unsafe { Key::from_bytes([0u8; 8]) };
-            const NULL_TY: &NamedType = &NamedType {
-                name: "",
-                ty: &DataModelType::Unit,
-            };
-
-            const TYPE_SLICES: &[&[&NamedType]] = &[
-                postcard_rpc::standard_icd::STANDARD_ICD_ENDPOINTS.types,
-                $($list.types,)*
-            ];
-            const TYPE_LEN: usize = postcard_rpc::uniques::total_len(TYPE_SLICES);
-            const TYPES: [&NamedType; TYPE_LEN] =
-                postcard_rpc::uniques::combine_with_copy(TYPE_SLICES, NULL_TY);
-
-            const EP_SLICES: &[&[(&str, Key, Key)]] = &[
-                postcard_rpc::standard_icd::STANDARD_ICD_ENDPOINTS.endpoints,
-                $($list.endpoints,)*
-            ];
-            const EP_LEN: usize = postcard_rpc::uniques::total_len(EP_SLICES);
-            const EPS: [(&str, Key, Key); EP_LEN] =
-                postcard_rpc::uniques::combine_with_copy(EP_SLICES, ("", NULL_KEY, NULL_KEY));
-
-            EndpointMap {
-                types: TYPES.as_slice(),
-                endpoints: EPS.as_slice(),
-            }
-        }
-    };
-}
-
-/// Full endpoint map for the RMK protocol.
-///
-/// Assembled from smaller endpoint groups to avoid very large const-eval
-/// workloads in a single `endpoints!` invocation.
-/// Feature-gated groups (bulk, BLE, split) use empty fallback constants
-/// when the corresponding feature is disabled.
-pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = build_endpoint_map!(
-    SYSTEM_ENDPOINT_LIST,
-    KEYMAP_ENDPOINT_LIST,
-    KEYMAP_BULK_ENDPOINT_LIST,
-    ENCODER_ENDPOINT_LIST,
-    MACRO_ENDPOINT_LIST,
-    COMBO_ENDPOINT_LIST,
-    COMBO_BULK_ENDPOINT_LIST,
-    MORSE_ENDPOINT_LIST,
-    MORSE_BULK_ENDPOINT_LIST,
-    FORK_ENDPOINT_LIST,
-    BEHAVIOR_ENDPOINT_LIST,
-    CONNECTION_ENDPOINT_LIST,
-    BLE_CONNECTION_ENDPOINT_LIST,
-    STATUS_ENDPOINT_LIST,
-    BLE_STATUS_ENDPOINT_LIST,
-    SPLIT_STATUS_ENDPOINT_LIST,
-);
+/// This is a type alias rather than a newtype. `Schema` and `MaxSize` are
+/// provided by postcard's blanket impls for `Result<T, E>`. The endpoint
+/// key is derived from the schema structure (not the Rust path), so the
+/// alias is stable. Cross-endpoint collision tests in this module verify
+/// key uniqueness.
+pub type RmkResult = Result<(), RmkError>;
 
 // ---------------------------------------------------------------------------
-// Topic declarations
-// ---------------------------------------------------------------------------
-
-topics! {
-    list = TOPICS_OUT_LIST;
-    direction = TopicDirection::ToClient;
-    | TopicTy               | MessageTy      | Path               |
-    | -------               | ---------      | ----               |
-    | LayerChangeTopic      | u8             | "event/layer"      |
-    | WpmUpdateTopic        | u16            | "event/wpm"        |
-    | ConnectionChangeTopic | ConnectionType | "event/connection" |
-    | SleepStateTopic       | bool           | "event/sleep"      |
-    | LedIndicatorTopic     | LedIndicator   | "event/led"        |
-}
-
-#[cfg(feature = "_ble")]
-topics! {
-    list = BLE_TOPICS_OUT_LIST;
-    direction = TopicDirection::ToClient;
-    | TopicTy              | MessageTy     | Path               |
-    | -------              | ---------     | ----               |
-    | BatteryStatusTopic   | BatteryStatus | "event/battery"    |
-    | BleStatusChangeTopic | BleStatus     | "event/ble_status" |
-}
-
-// ---------------------------------------------------------------------------
-// Encoder endpoint types (inlined — too small for a separate file)
-// ---------------------------------------------------------------------------
-
-/// Request payload for `GetEncoderAction`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
-pub struct GetEncoderRequest {
-    pub encoder_id: u8,
-    pub layer: u8,
-}
-
-/// Request payload for `SetEncoderAction`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
-pub struct SetEncoderRequest {
-    pub encoder_id: u8,
-    pub layer: u8,
-    pub action: EncoderAction,
-}
-
-// ---------------------------------------------------------------------------
-// Fork endpoint types (inlined — too small for a separate file)
-// ---------------------------------------------------------------------------
-
-/// Request payload for `SetFork`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
-pub struct SetForkRequest {
-    pub index: u8,
-    pub config: Fork,
-}
-
-// ---------------------------------------------------------------------------
-// Status endpoint types (inlined — too small for a separate file)
-// ---------------------------------------------------------------------------
-
-/// Maximum bitmap size: supports up to 256 keys (e.g., 16 rows x 16 cols).
-/// Each row uses ceil(num_cols / 8) bytes. Host decodes using num_rows/num_cols
-/// from DeviceCapabilities.
-pub const MATRIX_BITMAP_SIZE: usize = 32;
-
-/// Current matrix key-press state as a bitmap.
-/// Bit ordering: row-major, bit 0 = col 0, bit 1 = col 1, etc.
-/// Total meaningful bytes = num_rows * ceil(num_cols / 8).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct MatrixState {
-    pub pressed_bitmap: heapless::Vec<u8, MATRIX_BITMAP_SIZE>,
-}
-
-impl MaxSize for MatrixState {
-    const POSTCARD_MAX_SIZE: usize = MATRIX_BITMAP_SIZE + crate::varint_max_size(MATRIX_BITMAP_SIZE);
-}
-
-/// Status of a single split peripheral.
-#[cfg(all(feature = "_ble", feature = "split"))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct PeripheralStatus {
-    pub connected: bool,
-    pub battery: crate::battery::BatteryStatus,
-}
-
-// ---------------------------------------------------------------------------
-// Tests
+// Test utilities (shared across submodule test mods)
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-mod tests {
-    extern crate alloc;
-
-    use heapless::Vec;
-    use postcard_rpc::{Endpoint, Key, Topic};
+pub(crate) mod test_utils {
     use serde::{Deserialize, Serialize};
 
-    use super::{ENDPOINT_LIST, TOPICS_OUT_LIST, *};
-    use crate::action::Action;
-    #[cfg(feature = "_ble")]
-    use crate::battery::ChargeState;
-    #[cfg(feature = "_ble")]
-    use crate::ble::BleState;
-    use crate::fork::{Fork, StateBits};
-    use crate::modifier::ModifierCombination;
-    use crate::morse::{Morse, MorsePattern, MorseProfile};
-
-    /// Helper: postcard round-trip for a value using a stack buffer.
-    fn round_trip<T>(val: &T) -> T
+    /// Postcard round-trip helper used by every submodule's tests.
+    pub fn round_trip<T>(val: &T) -> T
     where
         T: Serialize + for<'de> Deserialize<'de> + PartialEq + core::fmt::Debug,
     {
@@ -444,6 +99,167 @@ mod tests {
         assert_eq!(&decoded, val);
         decoded
     }
+}
+
+// ---------------------------------------------------------------------------
+// Wire-format snapshot harness (golden-file tests)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+pub(crate) mod snapshot {
+    extern crate alloc;
+    extern crate std;
+
+    use alloc::format;
+    use alloc::string::String;
+    use alloc::vec::Vec;
+    use std::path::PathBuf;
+    use std::{env, fs};
+
+    /// Format a byte slice as lowercase, space-separated hex (e.g. `01 0a ff`).
+    pub fn hex(bytes: &[u8]) -> String {
+        let mut s = String::with_capacity(bytes.len() * 3);
+        for (i, b) in bytes.iter().enumerate() {
+            if i > 0 {
+                s.push(' ');
+            }
+            s.push_str(&format!("{:02x}", b));
+        }
+        s
+    }
+
+    /// Build the snapshot text for an endpoint key list.
+    /// Output format: `<path>  REQ <hex>  RESP <hex>`, sorted by path.
+    pub fn format_endpoint_keys(rel_path: &str, entries: &[(&str, [u8; 8], [u8; 8])]) -> String {
+        let mut sorted: Vec<&(&str, [u8; 8], [u8; 8])> = entries.iter().collect();
+        sorted.sort_by_key(|(path, _, _)| *path);
+
+        // Pad the path column to the longest entry for readable diffs.
+        let path_width = sorted.iter().map(|(p, _, _)| p.len()).max().unwrap_or(0);
+
+        let mut out = String::new();
+        out.push_str(&format!(
+            "# Endpoint Key snapshot — DO NOT edit by hand.\n\
+             # File: {}\n\
+             # Each Key is an 8-byte hash of (path, postcard schema of req/resp).\n\
+             # Any change to a request/response type — including transitively-referenced\n\
+             # types — flips the corresponding Key. If the change is intentional, regenerate:\n\
+             #   UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rmk_protocol\n\
+             # Format: <path>  REQ <8-byte hex>  RESP <8-byte hex>\n\
+             \n",
+            rel_path,
+        ));
+        for (path, req, resp) in sorted {
+            out.push_str(&format!(
+                "{:width$}  REQ {}  RESP {}\n",
+                path,
+                hex(req),
+                hex(resp),
+                width = path_width,
+            ));
+        }
+        out
+    }
+
+    /// Build the snapshot text for a topic key list.
+    /// Output format: `<path>  KEY <hex>`, sorted by path.
+    pub fn format_topic_keys(rel_path: &str, entries: &[(&str, [u8; 8])]) -> String {
+        let mut sorted: Vec<&(&str, [u8; 8])> = entries.iter().collect();
+        sorted.sort_by_key(|(path, _)| *path);
+
+        let path_width = sorted.iter().map(|(p, _)| p.len()).max().unwrap_or(0);
+
+        let mut out = String::new();
+        out.push_str(&format!(
+            "# Topic Key snapshot — DO NOT edit by hand.\n\
+             # File: {}\n\
+             # Regenerate intentionally with:\n\
+             #   UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rmk_protocol\n\
+             # Format: <path>  KEY <8-byte hex>\n\
+             \n",
+            rel_path,
+        ));
+        for (path, key) in sorted {
+            out.push_str(&format!("{:width$}  KEY {}\n", path, hex(key), width = path_width,));
+        }
+        out
+    }
+
+    /// Build the snapshot text for a list of (label, encoded bytes) pairs.
+    pub fn format_value_snapshot(rel_path: &str, entries: &[(&str, &[u8])]) -> String {
+        let mut sorted: Vec<&(&str, &[u8])> = entries.iter().collect();
+        sorted.sort_by_key(|(label, _)| *label);
+
+        let label_width = sorted.iter().map(|(l, _)| l.len()).max().unwrap_or(0);
+
+        let mut out = String::new();
+        out.push_str(&format!(
+            "# Wire-format value snapshot — DO NOT edit by hand.\n\
+             # File: {}\n\
+             # Each entry is the postcard byte encoding of a fixed value. A diff here means\n\
+             # the wire format changed (either intentionally or by accident). Regenerate with:\n\
+             #   UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rmk_protocol wire_values\n\
+             # Format: <label>  <hex bytes>\n\
+             \n",
+            rel_path,
+        ));
+        for (label, bytes) in sorted {
+            out.push_str(&format!("{:width$}  {}\n", label, hex(bytes), width = label_width));
+        }
+        out
+    }
+
+    /// Compare actual snapshot text against the on-disk file.
+    /// When `UPDATE_SNAPSHOTS` is set in the environment, write the file instead.
+    pub fn assert_snapshot(rel_path: &str, actual: String) {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src/protocol/rmk")
+            .join(rel_path);
+
+        if env::var_os("UPDATE_SNAPSHOTS").is_some() {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)
+                    .unwrap_or_else(|e| panic!("create snapshot dir {}: {}", parent.display(), e));
+            }
+            fs::write(&path, &actual).unwrap_or_else(|e| panic!("write snapshot {}: {}", path.display(), e));
+            return;
+        }
+
+        let expected = fs::read_to_string(&path).unwrap_or_else(|e| {
+            panic!(
+                "missing snapshot {} ({}). Run with UPDATE_SNAPSHOTS=1 to create.",
+                path.display(),
+                e
+            )
+        });
+
+        if expected != actual {
+            panic!(
+                "snapshot mismatch: {}\n\
+                 --- expected ---\n{}\
+                 --- actual ---\n{}\
+                 If this change is intentional, regenerate with UPDATE_SNAPSHOTS=1.",
+                path.display(),
+                expected,
+                actual,
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests: cross-cutting collision checks + value-level wire format snapshot
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    extern crate alloc;
+
+    use heapless::Vec;
+    use postcard_rpc::{Endpoint, Key, Topic};
+
+    use super::*;
+    use crate::connection::ConnectionType;
 
     /// Helper: assert no duplicate keys in a slice.
     fn assert_unique_keys(keys: &[Key], label: &str) {
@@ -501,7 +317,6 @@ mod tests {
             GetCurrentLayer::REQ_KEY,
             GetMatrixState::REQ_KEY,
         ];
-        // BLE endpoints (feature-gated)
         #[cfg(feature = "_ble")]
         {
             keys.extend_from_slice(&[
@@ -511,12 +326,10 @@ mod tests {
                 GetBatteryStatus::REQ_KEY,
             ]);
         }
-        // Split + BLE endpoints (feature-gated)
         #[cfg(all(feature = "_ble", feature = "split"))]
         {
             keys.extend_from_slice(&[GetPeripheralStatus::REQ_KEY]);
         }
-        // Bulk endpoints (feature-gated)
         #[cfg(feature = "bulk")]
         {
             keys.extend_from_slice(&[
@@ -548,375 +361,7 @@ mod tests {
         keys
     }
 
-    // -- Round-trip tests --
-
-    #[test]
-    fn round_trip_protocol_version() {
-        round_trip(&ProtocolVersion { major: 1, minor: 0 });
-        round_trip(&ProtocolVersion { major: 255, minor: 255 });
-    }
-
-    #[test]
-    fn round_trip_device_capabilities() {
-        let caps = DeviceCapabilities {
-            num_layers: 4,
-            num_rows: 6,
-            num_cols: 14,
-            num_encoders: 2,
-            max_combos: 16,
-            max_combo_keys: 4,
-            max_macros: 32,
-            macro_space_size: 2048,
-            max_morse: 8,
-            max_patterns_per_key: 8,
-            max_forks: 4,
-            storage_enabled: true,
-            lighting_enabled: false,
-            is_split: false,
-            num_split_peripherals: 0,
-            ble_enabled: true,
-            num_ble_profiles: 4,
-            max_payload_size: 256,
-            max_bulk_keys: 8,
-            macro_chunk_size: 64,
-            bulk_transfer_supported: true,
-        };
-        round_trip(&caps);
-    }
-
-    #[test]
-    fn round_trip_device_capabilities_all_zero() {
-        let caps = DeviceCapabilities {
-            num_layers: 0,
-            num_rows: 0,
-            num_cols: 0,
-            num_encoders: 0,
-            max_combos: 0,
-            max_combo_keys: 0,
-            max_macros: 0,
-            macro_space_size: 0,
-            max_morse: 0,
-            max_patterns_per_key: 0,
-            max_forks: 0,
-            storage_enabled: false,
-            lighting_enabled: false,
-            is_split: false,
-            num_split_peripherals: 0,
-            ble_enabled: false,
-            num_ble_profiles: 0,
-            max_payload_size: 0,
-            max_bulk_keys: 0,
-            macro_chunk_size: 0,
-            bulk_transfer_supported: false,
-        };
-        round_trip(&caps);
-    }
-
-    #[test]
-    fn round_trip_rmk_error() {
-        round_trip(&RmkError::InvalidParameter);
-        round_trip(&RmkError::BadState);
-        round_trip(&RmkError::InternalError);
-    }
-
-    #[test]
-    fn round_trip_rmk_result() {
-        let ok: RmkResult = Ok(());
-        let err: RmkResult = Err(RmkError::BadState);
-        let _ = round_trip(&ok);
-        let _ = round_trip(&err);
-    }
-
-    #[test]
-    fn round_trip_lock_status() {
-        round_trip(&LockStatus {
-            locked: true,
-            awaiting_keys: false,
-            remaining_keys: 0,
-        });
-        round_trip(&LockStatus {
-            locked: false,
-            awaiting_keys: true,
-            remaining_keys: 3,
-        });
-    }
-
-    #[test]
-    fn round_trip_unlock_challenge() {
-        let mut kp = Vec::new();
-        kp.push((1, 2)).unwrap();
-        kp.push((3, 4)).unwrap();
-        round_trip(&UnlockChallenge { key_positions: kp });
-    }
-
-    #[test]
-    fn round_trip_unlock_challenge_empty() {
-        round_trip(&UnlockChallenge {
-            key_positions: Vec::new(),
-        });
-    }
-
-    #[test]
-    fn round_trip_key_position() {
-        round_trip(&KeyPosition {
-            layer: 0,
-            row: 5,
-            col: 13,
-        });
-    }
-
-    #[cfg(feature = "bulk")]
-    #[test]
-    fn round_trip_get_keymap_bulk_request() {
-        round_trip(&GetKeymapBulkRequest {
-            layer: 2,
-            start_row: 0,
-            start_col: 0,
-            count: 32,
-        });
-    }
-
-    #[test]
-    fn round_trip_storage_reset_mode() {
-        round_trip(&StorageResetMode::Full);
-        round_trip(&StorageResetMode::LayoutOnly);
-    }
-
-    #[test]
-    fn round_trip_connection_types() {
-        round_trip(&ConnectionType::Usb);
-        round_trip(&ConnectionType::Ble);
-    }
-
-    #[cfg(feature = "_ble")]
-    #[test]
-    fn round_trip_battery_status() {
-        round_trip(&BatteryStatus::Unavailable);
-        round_trip(&BatteryStatus::Available {
-            charge_state: ChargeState::Charging,
-            level: Some(85),
-        });
-        round_trip(&BatteryStatus::Available {
-            charge_state: ChargeState::Discharging,
-            level: Some(50),
-        });
-        round_trip(&BatteryStatus::Available {
-            charge_state: ChargeState::Unknown,
-            level: None,
-        });
-    }
-
-    #[test]
-    fn round_trip_matrix_state() {
-        let mut bitmap = Vec::new();
-        bitmap.extend_from_slice(&[0b0000_0101, 0x00, 0b0010_0000]).unwrap();
-        round_trip(&MatrixState { pressed_bitmap: bitmap });
-    }
-
-    #[cfg(all(feature = "_ble", feature = "split"))]
-    #[test]
-    fn round_trip_peripheral_status() {
-        round_trip(&PeripheralStatus {
-            connected: true,
-            battery: BatteryStatus::Available {
-                charge_state: ChargeState::Discharging,
-                level: Some(85),
-            },
-        });
-        round_trip(&PeripheralStatus {
-            connected: false,
-            battery: BatteryStatus::Unavailable,
-        });
-    }
-
-    #[test]
-    fn round_trip_macro_data() {
-        let mut data: Vec<u8, { crate::constants::MACRO_DATA_SIZE }> = Vec::new();
-        data.extend_from_slice(&[0x01, 0x02, 0x03]).unwrap();
-        round_trip(&MacroData { data });
-    }
-
-    #[test]
-    fn round_trip_macro_data_empty() {
-        round_trip(&MacroData { data: Vec::new() });
-    }
-
-    #[test]
-    fn round_trip_get_macro_request() {
-        round_trip(&GetMacroRequest { index: 0, offset: 0 });
-        round_trip(&GetMacroRequest { index: 3, offset: 256 });
-    }
-
-    #[test]
-    fn round_trip_set_macro_request() {
-        let mut data: Vec<u8, { crate::constants::MACRO_DATA_SIZE }> = Vec::new();
-        data.extend_from_slice(&[0x01, 0x02]).unwrap();
-        round_trip(&SetMacroRequest {
-            index: 1,
-            offset: 0,
-            data: MacroData { data },
-        });
-    }
-
-    #[test]
-    fn round_trip_combo_config() {
-        round_trip(&Combo::new([KeyAction::No], KeyAction::No, Some(1)));
-        // Empty combo
-        round_trip(&Combo::empty());
-    }
-
-    #[test]
-    fn round_trip_morse() {
-        let morse = Morse {
-            profile: MorseProfile::const_default(),
-            actions: heapless::LinearMap::new(),
-        };
-        round_trip(&morse);
-    }
-
-    #[test]
-    fn round_trip_fork() {
-        round_trip(&Fork::new(
-            KeyAction::No,
-            KeyAction::No,
-            KeyAction::No,
-            StateBits::default(),
-            StateBits::default(),
-            ModifierCombination::new(),
-            false,
-        ));
-    }
-
-    #[test]
-    fn round_trip_behavior_config() {
-        round_trip(&BehaviorConfig {
-            combo_timeout_ms: 50,
-            oneshot_timeout_ms: 500,
-            tap_interval_ms: 200,
-            tap_capslock_interval_ms: 20,
-        });
-    }
-
-    #[test]
-    fn round_trip_topic_payloads() {
-        round_trip(&3u8); // LayerChangeTopic
-        round_trip(&120u16); // WpmUpdateTopic
-        round_trip(&ConnectionType::Usb); // ConnectionChangeTopic
-        round_trip(&true); // SleepStateTopic
-        round_trip(&LedIndicator::new()); // LedIndicatorTopic
-    }
-
-    #[cfg(feature = "_ble")]
-    #[test]
-    fn round_trip_ble_topic_payloads() {
-        round_trip(&BatteryStatus::Available {
-            charge_state: ChargeState::Discharging,
-            level: Some(100),
-        });
-        round_trip(&BleStatus {
-            profile: 0,
-            state: BleState::Advertising,
-        });
-        round_trip(&BleStatus {
-            profile: 2,
-            state: BleState::Connected,
-        });
-        round_trip(&BleStatus {
-            profile: 0,
-            state: BleState::Inactive,
-        });
-    }
-
-    #[test]
-    fn round_trip_set_key_request() {
-        round_trip(&SetKeyRequest {
-            position: KeyPosition {
-                layer: 0,
-                row: 0,
-                col: 0,
-            },
-            action: KeyAction::No,
-        });
-    }
-
-    #[cfg(feature = "bulk")]
-    #[test]
-    fn round_trip_set_keymap_bulk_request() {
-        let mut actions: Vec<KeyAction, { crate::constants::BULK_SIZE }> = Vec::new();
-        actions.push(KeyAction::No).unwrap();
-        round_trip(&SetKeymapBulkRequest {
-            layer: 0,
-            start_row: 0,
-            start_col: 0,
-            actions,
-        });
-    }
-
-    #[test]
-    fn round_trip_encoder_requests() {
-        round_trip(&GetEncoderRequest {
-            encoder_id: 0,
-            layer: 1,
-        });
-        round_trip(&SetEncoderRequest {
-            encoder_id: 0,
-            layer: 1,
-            action: EncoderAction::default(),
-        });
-    }
-
-    #[test]
-    fn round_trip_set_combo_request() {
-        round_trip(&SetComboRequest {
-            index: 3,
-            config: Combo::new([KeyAction::No], KeyAction::No, Some(1)),
-        });
-    }
-
-    #[test]
-    fn round_trip_set_morse_request() {
-        let mut morse = Morse {
-            profile: MorseProfile::const_default(),
-            actions: heapless::LinearMap::new(),
-        };
-        morse.actions.insert(MorsePattern::from_u16(0b101), Action::No).unwrap();
-        round_trip(&SetMorseRequest {
-            index: 0,
-            config: morse,
-        });
-    }
-
-    #[test]
-    fn round_trip_set_fork_request() {
-        round_trip(&SetForkRequest {
-            index: 2,
-            config: Fork::new(
-                KeyAction::No,
-                KeyAction::No,
-                KeyAction::No,
-                StateBits::default(),
-                StateBits::default(),
-                ModifierCombination::new(),
-                true,
-            ),
-        });
-    }
-
-    #[test]
-    fn round_trip_set_encoder_request_with_actions() {
-        use crate::action::{Action, EncoderAction};
-        use crate::keycode::{ConsumerKey, KeyCode};
-        round_trip(&SetEncoderRequest {
-            encoder_id: 1,
-            layer: 2,
-            action: EncoderAction::new(
-                KeyAction::Single(Action::Key(KeyCode::Consumer(ConsumerKey::VolumeIncrement))),
-                KeyAction::Single(Action::Key(KeyCode::Consumer(ConsumerKey::VolumeDecrement))),
-            ),
-        });
-    }
-
-    // Intra-group collisions are caught at compile time by endpoints!/topics! macros.
+    // -- Cross-group key collision (the main thing tested at module scope) --
 
     #[test]
     fn no_cross_endpoint_topic_key_collisions() {
@@ -941,83 +386,79 @@ mod tests {
         assert!(total_topics >= all_topic_keys().len());
     }
 
-    // -- Max-capacity round-trip tests --
+    // -- Top-level type round-trips that don't fit any single submodule --
 
     #[test]
-    fn round_trip_macro_data_max_capacity() {
-        let mut data = Vec::new();
-        for i in 0..crate::constants::MACRO_DATA_SIZE {
-            data.push(i as u8).unwrap();
-        }
-        round_trip(&MacroData { data });
+    fn round_trip_rmk_error_and_result() {
+        use super::test_utils::round_trip;
+        round_trip(&RmkError::InvalidParameter);
+        round_trip(&RmkError::BadState);
+        round_trip(&RmkError::InternalError);
+        let ok: RmkResult = Ok(());
+        let err: RmkResult = Err(RmkError::BadState);
+        let _ = round_trip(&ok);
+        let _ = round_trip(&err);
     }
 
-    #[test]
-    fn round_trip_matrix_state_max_capacity() {
-        let mut bitmap = Vec::new();
-        for i in 0..super::MATRIX_BITMAP_SIZE {
-            bitmap.push(i as u8).unwrap();
-        }
-        round_trip(&MatrixState { pressed_bitmap: bitmap });
+    // -- Wire-format value snapshot --
+
+    /// Encode a value to a freshly-allocated `Vec<u8>` for the snapshot table.
+    fn encode<T: serde::Serialize>(val: &T) -> alloc::vec::Vec<u8> {
+        let mut buf = [0u8; 256];
+        let bytes = postcard::to_slice(val, &mut buf).expect("encode");
+        bytes.to_vec()
     }
 
-    /// Verify that every non-bulk endpoint is present in the combined ENDPOINT_LIST.
-    /// This catches divergence when new endpoint groups are added to one cfg block
-    /// but not the other.
+    /// Lock down postcard's actual byte encoding for stability-critical values.
+    /// This catches regressions in postcard itself or in serde attributes that
+    /// wouldn't change a schema hash (and thus wouldn't be caught by the
+    /// endpoint-key snapshot tests).
     #[test]
-    fn endpoint_list_contains_all_non_bulk_endpoints() {
-        let endpoint_paths: alloc::collections::BTreeSet<&str> =
-            ENDPOINT_LIST.endpoints.iter().map(|(path, _, _)| *path).collect();
+    fn wire_values_locked() {
+        // -- Build the bitmap up front so the borrow lives long enough.
+        let mut bitmap: heapless::Vec<u8, MATRIX_BITMAP_SIZE> = heapless::Vec::new();
+        bitmap.extend_from_slice(&[0x05, 0x00, 0x20]).unwrap();
+        let matrix = MatrixState { pressed_bitmap: bitmap };
+        let unlock_empty = UnlockChallenge {
+            key_positions: Vec::new(),
+        };
 
-        let non_bulk_groups: &[&[(&str, Key, Key)]] = &[
-            postcard_rpc::standard_icd::STANDARD_ICD_ENDPOINTS.endpoints,
-            SYSTEM_ENDPOINT_LIST.endpoints,
-            KEYMAP_ENDPOINT_LIST.endpoints,
-            ENCODER_ENDPOINT_LIST.endpoints,
-            MACRO_ENDPOINT_LIST.endpoints,
-            COMBO_ENDPOINT_LIST.endpoints,
-            MORSE_ENDPOINT_LIST.endpoints,
-            FORK_ENDPOINT_LIST.endpoints,
-            BEHAVIOR_ENDPOINT_LIST.endpoints,
-            CONNECTION_ENDPOINT_LIST.endpoints,
-            BLE_CONNECTION_ENDPOINT_LIST.endpoints,
-            STATUS_ENDPOINT_LIST.endpoints,
-            BLE_STATUS_ENDPOINT_LIST.endpoints,
-            SPLIT_STATUS_ENDPOINT_LIST.endpoints,
+        let entries: alloc::vec::Vec<(&str, alloc::vec::Vec<u8>)> = alloc::vec![
+            ("ConnectionType::Ble", encode(&ConnectionType::Ble)),
+            ("ConnectionType::Usb", encode(&ConnectionType::Usb)),
+            (
+                "KeyPosition{layer:0,row:5,col:13}",
+                encode(&KeyPosition {
+                    layer: 0,
+                    row: 5,
+                    col: 13,
+                }),
+            ),
+            (
+                "LockStatus{locked:true,await:false,rem:0}",
+                encode(&LockStatus {
+                    locked: true,
+                    awaiting_keys: false,
+                    remaining_keys: 0,
+                }),
+            ),
+            ("MatrixState{[0x05,0x00,0x20]}", encode(&matrix)),
+            ("ProtocolVersion{1,0}", encode(&ProtocolVersion { major: 1, minor: 0 }),),
+            ("RmkError::BadState", encode(&RmkError::BadState)),
+            ("RmkError::InternalError", encode(&RmkError::InternalError)),
+            ("RmkError::InvalidParameter", encode(&RmkError::InvalidParameter)),
+            (
+                "RmkResult::Err(BadState)",
+                encode::<RmkResult>(&Err(RmkError::BadState))
+            ),
+            ("RmkResult::Ok", encode::<RmkResult>(&Ok(()))),
+            ("StorageResetMode::Full", encode(&StorageResetMode::Full)),
+            ("StorageResetMode::LayoutOnly", encode(&StorageResetMode::LayoutOnly)),
+            ("UnlockChallenge{[]}", encode(&unlock_empty)),
         ];
+        let view: alloc::vec::Vec<(&str, &[u8])> = entries.iter().map(|(l, b)| (*l, b.as_slice())).collect();
 
-        for group in non_bulk_groups {
-            for (path, _, _) in *group {
-                assert!(
-                    endpoint_paths.contains(path),
-                    "Endpoint '{}' missing from ENDPOINT_LIST — update both cfg blocks in mod.rs",
-                    path
-                );
-            }
-        }
-    }
-
-    /// Verify that every bulk endpoint is present in the combined ENDPOINT_LIST.
-    #[cfg(feature = "bulk")]
-    #[test]
-    fn endpoint_list_contains_all_bulk_endpoints() {
-        let endpoint_paths: alloc::collections::BTreeSet<&str> =
-            ENDPOINT_LIST.endpoints.iter().map(|(path, _, _)| *path).collect();
-
-        let bulk_groups: &[&[(&str, Key, Key)]] = &[
-            KEYMAP_BULK_ENDPOINT_LIST.endpoints,
-            COMBO_BULK_ENDPOINT_LIST.endpoints,
-            MORSE_BULK_ENDPOINT_LIST.endpoints,
-        ];
-
-        for group in bulk_groups {
-            for (path, _, _) in *group {
-                assert!(
-                    endpoint_paths.contains(path),
-                    "Bulk endpoint '{}' missing from ENDPOINT_LIST",
-                    path
-                );
-            }
-        }
+        let actual = snapshot::format_value_snapshot("snapshots/wire_values.snap", &view);
+        snapshot::assert_snapshot("snapshots/wire_values.snap", actual);
     }
 }

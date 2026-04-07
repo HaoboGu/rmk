@@ -37,3 +37,42 @@ pub struct SetMacroRequest {
     pub offset: u16,
     pub data: MacroData,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::rmk::test_utils::round_trip;
+
+    #[test]
+    fn round_trip_macro_data() {
+        // Empty, populated, and max-capacity edge cases.
+        round_trip(&MacroData { data: Vec::new() });
+
+        let mut data: Vec<u8, MACRO_DATA_SIZE> = Vec::new();
+        data.extend_from_slice(&[0x01, 0x02, 0x03]).unwrap();
+        round_trip(&MacroData { data });
+
+        let mut data: Vec<u8, MACRO_DATA_SIZE> = Vec::new();
+        for i in 0..MACRO_DATA_SIZE {
+            data.push(i as u8).unwrap();
+        }
+        round_trip(&MacroData { data });
+    }
+
+    #[test]
+    fn round_trip_get_macro_request() {
+        round_trip(&GetMacroRequest { index: 0, offset: 0 });
+        round_trip(&GetMacroRequest { index: 3, offset: 256 });
+    }
+
+    #[test]
+    fn round_trip_set_macro_request() {
+        let mut data: Vec<u8, MACRO_DATA_SIZE> = Vec::new();
+        data.extend_from_slice(&[0x01, 0x02]).unwrap();
+        round_trip(&SetMacroRequest {
+            index: 1,
+            offset: 0,
+            data: MacroData { data },
+        });
+    }
+}

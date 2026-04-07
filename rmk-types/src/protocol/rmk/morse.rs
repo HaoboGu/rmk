@@ -56,3 +56,32 @@ pub struct GetMorseBulkResponse {
 impl MaxSize for GetMorseBulkResponse {
     const POSTCARD_MAX_SIZE: usize = <Morse>::POSTCARD_MAX_SIZE * BULK_SIZE + crate::varint_max_size(BULK_SIZE);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::action::Action;
+    use crate::morse::{MorsePattern, MorseProfile};
+    use crate::protocol::rmk::test_utils::round_trip;
+
+    #[test]
+    fn round_trip_morse() {
+        round_trip(&Morse {
+            profile: MorseProfile::const_default(),
+            actions: heapless::LinearMap::new(),
+        });
+    }
+
+    #[test]
+    fn round_trip_set_morse_request() {
+        let mut morse = Morse {
+            profile: MorseProfile::const_default(),
+            actions: heapless::LinearMap::new(),
+        };
+        morse.actions.insert(MorsePattern::from_u16(0b101), Action::No).unwrap();
+        round_trip(&SetMorseRequest {
+            index: 0,
+            config: morse,
+        });
+    }
+}

@@ -60,26 +60,6 @@ pub struct DeviceCapabilities {
     pub bulk_transfer_supported: bool,
 }
 
-/// Protocol-level error type returned by write operations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
-pub enum RmkError {
-    /// The request parameters are invalid or out of range.
-    InvalidParameter,
-    /// Operation not valid in current device state (e.g. device is locked).
-    BadState,
-    /// An internal firmware error occurred (storage, contention, etc).
-    InternalError,
-}
-
-/// Result type for write operations.
-///
-/// This is a type alias rather than a newtype. `Schema` and `MaxSize` are
-/// provided by postcard's blanket impls for `Result<T, E>`. The endpoint
-/// key is derived from the schema structure (not the Rust path), so the
-/// alias is stable. Cross-endpoint collision tests in this module verify
-/// key uniqueness.
-pub type RmkResult = Result<(), RmkError>;
-
 /// Current lock/unlock state of the device.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
 pub struct LockStatus {
@@ -115,4 +95,108 @@ pub struct BehaviorConfig {
     pub oneshot_timeout_ms: u16,
     pub tap_interval_ms: u16,
     pub tap_capslock_interval_ms: u16,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::rmk::test_utils::round_trip;
+
+    #[test]
+    fn round_trip_protocol_version() {
+        round_trip(&ProtocolVersion { major: 1, minor: 0 });
+        round_trip(&ProtocolVersion { major: 255, minor: 255 });
+    }
+
+    #[test]
+    fn round_trip_device_capabilities() {
+        // Populated and all-zero edge cases.
+        round_trip(&DeviceCapabilities {
+            num_layers: 4,
+            num_rows: 6,
+            num_cols: 14,
+            num_encoders: 2,
+            max_combos: 16,
+            max_combo_keys: 4,
+            max_macros: 32,
+            macro_space_size: 2048,
+            max_morse: 8,
+            max_patterns_per_key: 8,
+            max_forks: 4,
+            storage_enabled: true,
+            lighting_enabled: false,
+            is_split: false,
+            num_split_peripherals: 0,
+            ble_enabled: true,
+            num_ble_profiles: 4,
+            max_payload_size: 256,
+            max_bulk_keys: 8,
+            macro_chunk_size: 64,
+            bulk_transfer_supported: true,
+        });
+        round_trip(&DeviceCapabilities {
+            num_layers: 0,
+            num_rows: 0,
+            num_cols: 0,
+            num_encoders: 0,
+            max_combos: 0,
+            max_combo_keys: 0,
+            max_macros: 0,
+            macro_space_size: 0,
+            max_morse: 0,
+            max_patterns_per_key: 0,
+            max_forks: 0,
+            storage_enabled: false,
+            lighting_enabled: false,
+            is_split: false,
+            num_split_peripherals: 0,
+            ble_enabled: false,
+            num_ble_profiles: 0,
+            max_payload_size: 0,
+            max_bulk_keys: 0,
+            macro_chunk_size: 0,
+            bulk_transfer_supported: false,
+        });
+    }
+
+    #[test]
+    fn round_trip_lock_status() {
+        round_trip(&LockStatus {
+            locked: true,
+            awaiting_keys: false,
+            remaining_keys: 0,
+        });
+        round_trip(&LockStatus {
+            locked: false,
+            awaiting_keys: true,
+            remaining_keys: 3,
+        });
+    }
+
+    #[test]
+    fn round_trip_unlock_challenge() {
+        let mut kp = Vec::new();
+        kp.push((1, 2)).unwrap();
+        kp.push((3, 4)).unwrap();
+        round_trip(&UnlockChallenge { key_positions: kp });
+        round_trip(&UnlockChallenge {
+            key_positions: Vec::new(),
+        });
+    }
+
+    #[test]
+    fn round_trip_storage_reset_mode() {
+        round_trip(&StorageResetMode::Full);
+        round_trip(&StorageResetMode::LayoutOnly);
+    }
+
+    #[test]
+    fn round_trip_behavior_config() {
+        round_trip(&BehaviorConfig {
+            combo_timeout_ms: 50,
+            oneshot_timeout_ms: 500,
+            tap_interval_ms: 200,
+            tap_capslock_interval_ms: 20,
+        });
+    }
 }

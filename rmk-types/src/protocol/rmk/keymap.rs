@@ -75,3 +75,54 @@ impl MaxSize for SetKeymapBulkRequest {
         + KeyAction::POSTCARD_MAX_SIZE * BULK_SIZE
         + crate::varint_max_size(BULK_SIZE);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::rmk::test_utils::round_trip;
+
+    #[test]
+    fn round_trip_key_position() {
+        round_trip(&KeyPosition {
+            layer: 0,
+            row: 5,
+            col: 13,
+        });
+    }
+
+    #[test]
+    fn round_trip_set_key_request() {
+        round_trip(&SetKeyRequest {
+            position: KeyPosition {
+                layer: 0,
+                row: 0,
+                col: 0,
+            },
+            action: KeyAction::No,
+        });
+    }
+
+    #[cfg(feature = "bulk")]
+    #[test]
+    fn round_trip_get_keymap_bulk_request() {
+        round_trip(&GetKeymapBulkRequest {
+            layer: 2,
+            start_row: 0,
+            start_col: 0,
+            count: 32,
+        });
+    }
+
+    #[cfg(feature = "bulk")]
+    #[test]
+    fn round_trip_set_keymap_bulk_request() {
+        let mut actions: Vec<KeyAction, BULK_SIZE> = Vec::new();
+        actions.push(KeyAction::No).unwrap();
+        round_trip(&SetKeymapBulkRequest {
+            layer: 0,
+            start_row: 0,
+            start_col: 0,
+            actions,
+        });
+    }
+}
