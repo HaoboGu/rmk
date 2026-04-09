@@ -25,22 +25,24 @@ split_binaries=(central peripheral)
 build_bloat_set() {
     local workspace_root="$1"
     local target_dir="$2"
-    local args=()
     local manifest target
     for manifest in "${bloat_manifests[@]}"; do
-        # cargo-batch runs from workspace_root and does not walk into each
-        # example's .cargo/config.toml, so hand it the target triple directly.
+        # We must build each example from its own directory so cargo loads
+        # the per-example .cargo/config.toml (it carries env vars like
+        # KEYBOARD_TOML_PATH that the `#[rmk_keyboard]` macro needs). cargo-
+        # batch doesn't walk into sibling config.toml files when invoked
+        # from the repo root.
         target="$(cd "$workspace_root" && get_example_target "$manifest")"
         if [[ -z "$target" ]]; then
             echo "bloat: skipping $manifest (no [build].target)" >&2
             continue
         fi
-        args+=(--- build --manifest-path "$manifest" --release --target "$target")
+        (
+            cd "$workspace_root/$(dirname "$manifest")"
+            cargo +stable batch --target-dir "$target_dir" \
+                --- build --release --target "$target"
+        )
     done
-    (
-        cd "$workspace_root"
-        cargo +stable batch --target-dir "$target_dir" "${args[@]}"
-    )
 }
 
 # $1=workspace_root $2=target_dir $3=manifest [$4=bin_name]
@@ -57,17 +59,21 @@ size_value() {
         return 1
     fi
 
+    # Run from the example dir so cargo picks up the per-example
+    # .cargo/config.toml (notably KEYBOARD_TOML_PATH). `cargo size` still
+    # performs a fingerprint check that can trigger proc-macro expansion,
+    # so the env var must be set here as well.
     if [[ -n "$bin_name" ]]; then
         output="$(
-            cd "$workspace_root"
+            cd "$workspace_root/$(dirname "$manifest")"
             CARGO_TARGET_DIR="$target_dir" \
-                cargo +stable size --manifest-path "$manifest" --release --target "$target" --bin "$bin_name"
+                cargo +stable size --release --target "$target" --bin "$bin_name"
         )"
     else
         output="$(
-            cd "$workspace_root"
+            cd "$workspace_root/$(dirname "$manifest")"
             CARGO_TARGET_DIR="$target_dir" \
-                cargo +stable size --manifest-path "$manifest" --release --target "$target"
+                cargo +stable size --release --target "$target"
         )"
     fi
 

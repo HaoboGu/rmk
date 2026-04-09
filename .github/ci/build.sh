@@ -8,13 +8,15 @@ ensure_stable_toolchain
 ensure_cargo_tool cargo-make cargo-make
 ensure_cargo_tool flip-link flip-link
 
-# Split discovered examples into those that build on the stable toolchain and
-# those that require the xtensa +esp toolchain (currently only esp32s3_ble).
-# Each --- command gets an explicit --target extracted from the example's
-# .cargo/config.toml, since cargo-batch invoked from the repo root does not
-# walk into per-example .cargo/config.toml to discover the triple.
-stable_args=()
-esp_args=()
+# Partition examples between the stable toolchain and the xtensa +esp
+# toolchain (currently only esp32s3_ble). We build each example in its own
+# cargo-batch invocation started from the example directory so that cargo
+# loads the per-example .cargo/config.toml — it contains env vars like
+# KEYBOARD_TOML_PATH that `#[rmk_keyboard]` relies on at macro-expansion
+# time. Sharing --target-dir across invocations keeps dependency artifacts
+# hot, so the loss vs one giant batch is modest.
+stable_manifests=()
+esp_manifests=()
 while IFS= read -r manifest; do
     target="$(get_example_target "$manifest")"
     if [[ -z "$target" ]]; then
@@ -23,18 +25,35 @@ while IFS= read -r manifest; do
     fi
     case "$manifest" in
         */esp32s3_ble/*)
-            esp_args+=(--- build --manifest-path "$manifest" --release --target "$target")
+            esp_manifests+=("$manifest")
             ;;
         *)
-            stable_args+=(--- build --manifest-path "$manifest" --release --target "$target")
+            stable_manifests+=("$manifest")
             ;;
     esac
 done < <(list_example_manifests)
 
-log_section "Building stable-toolchain examples"
-cargo +stable batch --target-dir "$target_root/build" "${stable_args[@]}"
+# $1=toolchain $2=target-dir $3..=example manifest paths
+batch_examples() {
+    local toolchain="$1"
+    local target_dir="$2"
+    shift 2
+    local manifest target dir
+    for manifest in "$@"; do
+        target="$(get_example_target "$manifest")"
+        dir="$(dirname "$manifest")"
+        (
+            cd "$dir"
+            cargo "+$toolchain" batch --target-dir "$target_dir" \
+                --- build --release --target "$target"
+        )
+    done
+}
 
-if (( ${#esp_args[@]} > 0 )); then
+log_section "Building stable-toolchain examples"
+batch_examples stable "$target_root/build" "${stable_manifests[@]}"
+
+if (( ${#esp_manifests[@]} > 0 )); then
     log_section "Building esp32s3 examples"
     ensure_esp_toolchain
     # shellcheck source=/dev/null
@@ -42,7 +61,7 @@ if (( ${#esp_args[@]} > 0 )); then
     # xtensa-esp32s3-none-elf has no prebuilt sysroot; rely on build-std
     # instead of the per-example [unstable].build-std that we don't inherit.
     CARGO_UNSTABLE_BUILD_STD=alloc,core \
-        cargo +esp batch --target-dir "$target_root/build-esp" "${esp_args[@]}"
+        batch_examples esp "$target_root/build-esp" "${esp_manifests[@]}"
 fi
 
 log_section "UF2 smoke"
