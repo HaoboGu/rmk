@@ -78,12 +78,13 @@ jobs:
         working-directory: ${{ matrix.dir }}
         run: cargo build --release
 
-      # ── Bloat: size HEAD, build+size BASE, upload comparison ──
-      - name: Install cargo-size
+      # ── Bloat: size + bloaty diff HEAD vs BASE, upload data ──
+      - name: Install bloat tools
         if: github.event_name == 'pull_request' && matrix.bloat
         run: |
           rustup component add llvm-tools
           cargo install cargo-binutils 2>/dev/null || true
+          sudo apt-get install -y -qq bloaty >/dev/null
 
       - name: Measure sizes and compare with base
         if: github.event_name == 'pull_request' && matrix.bloat
@@ -93,7 +94,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Determine which binaries to size (empty = default single binary).
+          # Determine which binaries to size.
           if [[ -n "$BLOAT_BINS" ]]; then
             IFS=',' read -ra bins <<< "$BLOAT_BINS"
           else
@@ -111,46 +112,70 @@ jobs:
             (cd "$base_dir" && cargo build --release --target ${{ matrix.target }})
           fi
 
-          # ── Measure HEAD vs BASE for each binary ──
+          # ── Output directory ──
           safe_name=$(echo "${{ matrix.dir }}" | tr '/' '_')
-          outfile="$GITHUB_WORKSPACE/.bloat-data/$safe_name/size-data.txt"
-          mkdir -p "$(dirname "$outfile")"
+          outdir="$GITHUB_WORKSPACE/.bloat-data/$safe_name"
+          mkdir -p "$outdir"
 
           for bin in "${bins[@]}"; do
             bin_flag=""
             bin_label=""
+            bin_suffix=""
             if [[ "$bin" != "default" ]]; then
               bin_flag="--bin $bin"
               bin_label="$bin"
+              bin_suffix="-$bin"
             fi
 
-            head_size=$(cargo size --release $bin_flag 2>/dev/null | awk 'NR==2 {print $4}')
+            # cargo size for HEAD
+            cargo size --release $bin_flag 2>/dev/null > "$outdir/size-head${bin_suffix}.txt"
+            head_size=$(awk 'NR==2 {print $4}' "$outdir/size-head${bin_suffix}.txt")
 
+            # cargo size + bloaty for BASE
             if [[ -d "$base_dir" ]]; then
-              base_size=$( (cd "$base_dir" && cargo size --release $bin_flag 2>/dev/null) | awk 'NR==2 {print $4}')
+              (cd "$base_dir" && cargo size --release $bin_flag 2>/dev/null) > "$outdir/size-base${bin_suffix}.txt"
+              base_size=$(awk 'NR==2 {print $4}' "$outdir/size-base${bin_suffix}.txt")
+
+              # Find ELF paths for bloaty
+              head_target_dir="target/${{ matrix.target }}/release"
+              base_target_dir="$base_dir/target/${{ matrix.target }}/release"
+              if [[ -n "$bin_label" ]]; then
+                head_elf="$head_target_dir/$bin_label"
+                base_elf="$base_target_dir/$bin_label"
+              else
+                # Single-binary: find the ELF by package name
+                head_elf=$(find "$head_target_dir" -maxdepth 1 -type f -executable ! -name "*.d" ! -name "*.rlib" ! -name "build-script-*" | head -1)
+                base_elf=$(find "$base_target_dir" -maxdepth 1 -type f -executable ! -name "*.d" ! -name "*.rlib" ! -name "build-script-*" | head -1)
+              fi
+              if [[ -f "$head_elf" && -f "$base_elf" ]]; then
+                bloaty "$head_elf" -- "$base_elf" > "$outdir/bloaty${bin_suffix}.txt" 2>&1 || true
+              fi
             else
               base_size=0
+              echo "(base not available)" > "$outdir/size-base${bin_suffix}.txt"
             fi
 
-            echo "${{ matrix.dir }}|${bin_label}|${base_size}|${head_size}" >> "$outfile"
+            echo "${{ matrix.dir }}|${bin_label}|${base_size}|${head_size}" >> "$outdir/size-data.txt"
           done
 
-          echo "Size data written:"
-          cat "$outfile"
+          echo "Size data:"
+          cat "$outdir/size-data.txt"
 
-      - name: Upload size data
+      - name: Upload bloat data
         if: github.event_name == 'pull_request' && matrix.bloat
         uses: actions/upload-artifact@v4
         with:
           name: bloat-${{ hashFiles('.bloat-data/*/size-data.txt') }}
-          path: .bloat-data/*/size-data.txt
+          path: .bloat-data/
           retention-days: 1
 
-  # Assemble bloat report from matrix artifacts
+  # Assemble bloat report from matrix artifacts and post as PR comment
   bloat-report:
     if: github.event_name == 'pull_request'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@v4
@@ -159,7 +184,41 @@ jobs:
           pattern: bloat-*
           merge-multiple: true
       - name: Generate report
-        run: .github/ci/bloat-report.sh .bloat-artifacts
+        id: report
+        run: |
+          report=$(.github/ci/bloat-report.sh .bloat-artifacts)
+          # Save for the comment step (handle multi-line)
+          echo "REPORT<<EOF" >> "$GITHUB_ENV"
+          echo "$report" >> "$GITHUB_ENV"
+          echo "EOF" >> "$GITHUB_ENV"
+      - name: Post PR comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const marker = '## Size Report';
+            const body = process.env.REPORT;
+            const { data: comments } = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                comment_id: existing.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            }
 
   # Build ESP/xtensa examples (separate toolchain)
   build-esp:
