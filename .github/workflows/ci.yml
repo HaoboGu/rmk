@@ -118,7 +118,7 @@ jobs:
 
           # ── Output directory ──
           safe_name=$(echo "${{ matrix.dir }}" | tr '/' '_')
-          outdir="$GITHUB_WORKSPACE/.bloat-data/$safe_name"
+          outdir="$GITHUB_WORKSPACE/bloat-data/$safe_name"
           mkdir -p "$outdir"
 
           for bin in "${bins[@]}"; do
@@ -167,10 +167,10 @@ jobs:
 
       - name: Upload bloat data
         if: github.event_name == 'pull_request' && matrix.bloat
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: bloat-${{ hashFiles('.bloat-data/*/size-data.txt') }}
-          path: .bloat-data/
+          name: bloat-${{ hashFiles('bloat-data/*/size-data.txt') }}
+          path: bloat-data/
           retention-days: 1
 
   # Assemble bloat report from matrix artifacts and post as PR comment
@@ -182,15 +182,15 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
-          path: .bloat-artifacts
+          path: bloat-artifacts
           pattern: bloat-*
           merge-multiple: true
       - name: Generate report
         id: report
         run: |
-          report=$(.github/ci/bloat-report.sh .bloat-artifacts)
+          report=$(.github/ci/bloat-report.sh bloat-artifacts)
           # Save for the comment step (handle multi-line)
           echo "REPORT<<EOF" >> "$GITHUB_ENV"
           echo "$report" >> "$GITHUB_ENV"
