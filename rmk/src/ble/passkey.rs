@@ -28,6 +28,27 @@ pub fn end_passkey_entry_session() {
     PASSKEY_ENTRY_MODE.store(false, Ordering::Release);
 }
 
+/// Drop guard that clears passkey mode whenever the surrounding task exits.
+pub struct PasskeyCleanupGuard;
+
+impl Default for PasskeyCleanupGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PasskeyCleanupGuard {
+    pub const fn new() -> Self {
+        Self
+    }
+}
+
+impl Drop for PasskeyCleanupGuard {
+    fn drop(&mut self) {
+        end_passkey_entry_session();
+    }
+}
+
 /// Result of processing a key press in passkey entry mode.
 #[derive(Debug, PartialEq, Eq)]
 pub enum PasskeyAction {
@@ -398,6 +419,19 @@ mod tests {
         assert_eq!(got, Some(222222));
 
         end_passkey_entry_session();
+        assert!(!PASSKEY_ENTRY_MODE.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn test_passkey_cleanup_guard_clears_active_mode_on_drop() {
+        begin_passkey_entry_session();
+        assert!(PASSKEY_ENTRY_MODE.load(Ordering::Acquire));
+
+        {
+            let _guard = PasskeyCleanupGuard::new();
+            assert!(PASSKEY_ENTRY_MODE.load(Ordering::Acquire));
+        }
+
         assert!(!PASSKEY_ENTRY_MODE.load(Ordering::Acquire));
     }
 }
