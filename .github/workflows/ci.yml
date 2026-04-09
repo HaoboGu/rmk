@@ -56,6 +56,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # Cap parallelism so format/check/test/bloat/build-esp aren't starved
+      # of runner slots (public repos get 20 concurrent jobs).
+      max-parallel: 15
       matrix:
         include: ${{ fromJson(needs.discover.outputs.stable) }}
     steps:
