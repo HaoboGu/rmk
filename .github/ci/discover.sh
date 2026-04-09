@@ -19,17 +19,30 @@ EXAMPLE_SKIPLIST=(
 # Examples tracked for binary-size regression (bloat) reports on PRs.
 # Keep in sync with the comment in the array — changes are rare.
 BLOAT_DIRS=(
+    # use_config — TOML-driven path
+    "examples/use_config/nrf52832_ble"
     "examples/use_config/nrf52840_ble"
     "examples/use_config/nrf52840_ble_split"
     "examples/use_config/rp2040"
+    "examples/use_config/rp2040_split"
     "examples/use_config/pi_pico_w_ble"
+    "examples/use_config/stm32f1"
     "examples/use_config/stm32h7"
+    # use_rust — pure-Rust API path (mirrors use_config set)
+    "examples/use_rust/nrf52832_ble"
+    "examples/use_rust/nrf52840_ble"
+    "examples/use_rust/nrf52840_ble_split"
+    "examples/use_rust/rp2040"
+    "examples/use_rust/rp2040_split"
+    "examples/use_rust/pi_pico_w_ble"
+    "examples/use_rust/stm32f1"
+    "examples/use_rust/stm32h7"
 )
 
 # nrf52840_ble_split produces two binaries; list them comma-separated.
 bloat_bins_for() {
     case "$1" in
-        examples/use_config/nrf52840_ble_split) echo "central,peripheral" ;;
+        */nrf52840_ble_split|*/rp2040_split) echo "central,peripheral" ;;
         *) echo "" ;;
     esac
 }

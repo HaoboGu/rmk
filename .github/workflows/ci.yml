@@ -131,14 +131,19 @@ jobs:
               bin_suffix="-$bin"
             fi
 
-            # cargo size for HEAD
+            # cargo size for HEAD — extract text/data/bss/total
             cargo size --release $bin_flag 2>/dev/null > "$outdir/size-head${bin_suffix}.txt"
-            head_size=$(awk 'NR==2 {print $4}' "$outdir/size-head${bin_suffix}.txt")
+            read -r h_text h_data h_bss head_size < <(awk 'NR==2 {print $1, $2, $3, $4}' "$outdir/size-head${bin_suffix}.txt")
 
             # cargo size + bloaty for BASE
             if [[ -d "$base_dir" ]]; then
               (cd "$base_dir" && cargo size --release $bin_flag 2>/dev/null) > "$outdir/size-base${bin_suffix}.txt"
-              base_size=$(awk 'NR==2 {print $4}' "$outdir/size-base${bin_suffix}.txt")
+              read -r b_text b_data b_bss base_size < <(awk 'NR==2 {print $1, $2, $3, $4}' "$outdir/size-base${bin_suffix}.txt")
+
+              # Section diffs
+              d_text=$((h_text - b_text))
+              d_data=$((h_data - b_data))
+              d_bss=$((h_bss - b_bss))
 
               # Find ELF paths for bloaty
               head_target_dir="target/${{ matrix.target }}/release"
@@ -147,7 +152,6 @@ jobs:
                 head_elf="$head_target_dir/$bin_label"
                 base_elf="$base_target_dir/$bin_label"
               else
-                # Single-binary: find the ELF by package name
                 head_elf=$(find "$head_target_dir" -maxdepth 1 -type f -executable ! -name "*.d" ! -name "*.rlib" ! -name "build-script-*" | head -1)
                 base_elf=$(find "$base_target_dir" -maxdepth 1 -type f -executable ! -name "*.d" ! -name "*.rlib" ! -name "build-script-*" | head -1)
               fi
@@ -155,11 +159,12 @@ jobs:
                 bloaty "$head_elf" -- "$base_elf" > "$outdir/bloaty${bin_suffix}.txt" 2>&1 || true
               fi
             else
-              base_size=0
+              base_size=0; d_text=0; d_data=0; d_bss=0
               echo "(base not available)" > "$outdir/size-base${bin_suffix}.txt"
             fi
 
-            echo "${{ matrix.dir }}|${bin_label}|${base_size}|${head_size}" >> "$outdir/size-data.txt"
+            # Format: dir|bin_label|base_total|head_total|text_diff|data_diff|bss_diff
+            echo "${{ matrix.dir }}|${bin_label}|${base_size}|${head_size}|${d_text}|${d_data}|${d_bss}" >> "$outdir/size-data.txt"
           done
 
           echo "Size data:"
