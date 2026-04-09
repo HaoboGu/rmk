@@ -95,5 +95,5 @@ jobs:
           fetch-depth: 0
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: ci-build
+          shared-key: ci-bloat
       - run: .github/ci/bloat.sh
