@@ -50,19 +50,23 @@ jobs:
       - id: discover
         run: .github/ci/discover.sh
 
-  # Build each stable-toolchain example in parallel
+  # Build each stable-toolchain example in parallel.
+  # Entries with bloat==true also compare binary sizes against the base branch.
   build:
     needs: discover
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # Cap parallelism so format/check/test/bloat/build-esp aren't starved
-      # of runner slots (public repos get 20 concurrent jobs).
+      # Leave runner slots for format/check/test/build-esp.
       max-parallel: 15
       matrix:
         include: ${{ fromJson(needs.discover.outputs.stable) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Bloat entries need full history for git worktree to base revision.
+          # Shallow clone is fast for this repo, so always fetch full history.
+          fetch-depth: 0
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-build-${{ matrix.target }}
@@ -73,6 +77,93 @@ jobs:
       - name: Build
         working-directory: ${{ matrix.dir }}
         run: cargo build --release
+
+      # ── Bloat: size HEAD, build+size BASE, upload comparison ──
+      - name: Install cargo-size
+        if: github.event_name == 'pull_request' && matrix.bloat
+        run: |
+          rustup component add llvm-tools
+          cargo install cargo-binutils 2>/dev/null || true
+
+      - name: Measure sizes and compare with base
+        if: github.event_name == 'pull_request' && matrix.bloat
+        working-directory: ${{ matrix.dir }}
+        env:
+          BLOAT_BINS: ${{ matrix.bloat_bins }}
+        run: |
+          set -euo pipefail
+
+          # Determine which binaries to size (empty = default single binary).
+          if [[ -n "$BLOAT_BINS" ]]; then
+            IFS=',' read -ra bins <<< "$BLOAT_BINS"
+          else
+            bins=("")
+          fi
+
+          # ── HEAD sizes ──
+          declare -A head_sizes
+          for bin in "${bins[@]}"; do
+            bin_flag=""
+            [[ -n "$bin" ]] && bin_flag="--bin $bin"
+            size_out=$(cargo size --release $bin_flag 2>/dev/null)
+            head_sizes["$bin"]=$(echo "$size_out" | awk 'NR==2 {print $4}')
+          done
+
+          # ── BASE build + sizes ──
+          base_sha=$(git -C "$GITHUB_WORKSPACE" merge-base HEAD origin/main)
+          worktree=$(mktemp -d)
+          git -C "$GITHUB_WORKSPACE" worktree add --detach "$worktree" "$base_sha"
+          trap 'git -C "$GITHUB_WORKSPACE" worktree remove --force "$worktree" 2>/dev/null; rm -rf "$worktree"' EXIT
+
+          # Build base from within the worktree's example dir.
+          base_dir="$worktree/${{ matrix.dir }}"
+          if [[ -d "$base_dir" ]]; then
+            (cd "$base_dir" && cargo build --release --target ${{ matrix.target }})
+          fi
+
+          # ── Write comparison data ──
+          mkdir -p "$GITHUB_WORKSPACE/.bloat-data"
+          # Use a sanitised dir name as filename to avoid collisions.
+          safe_name=$(echo "${{ matrix.dir }}" | tr '/' '_')
+          outfile="$GITHUB_WORKSPACE/.bloat-data/$safe_name/size-data.txt"
+          mkdir -p "$(dirname "$outfile")"
+
+          for bin in "${bins[@]}"; do
+            bin_flag=""
+            [[ -n "$bin" ]] && bin_flag="--bin $bin"
+            if [[ -d "$base_dir" ]]; then
+              base_size=$( (cd "$base_dir" && cargo size --release $bin_flag 2>/dev/null) | awk 'NR==2 {print $4}')
+            else
+              base_size=0
+            fi
+            echo "${{ matrix.dir }}|${bin}|${base_size}|${head_sizes[$bin]}" >> "$outfile"
+          done
+
+          echo "Size data written to $outfile:"
+          cat "$outfile"
+
+      - name: Upload size data
+        if: github.event_name == 'pull_request' && matrix.bloat
+        uses: actions/upload-artifact@v4
+        with:
+          name: bloat-${{ hashFiles('.bloat-data/*/size-data.txt') }}
+          path: .bloat-data/*/size-data.txt
+          retention-days: 1
+
+  # Assemble bloat report from matrix artifacts
+  bloat-report:
+    if: github.event_name == 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: .bloat-artifacts
+          pattern: bloat-*
+          merge-multiple: true
+      - name: Generate report
+        run: .github/ci/bloat-report.sh .bloat-artifacts
 
   # Build ESP/xtensa examples (separate toolchain)
   build-esp:
@@ -85,15 +176,3 @@ jobs:
         with:
           shared-key: ci-build-esp
       - run: .github/ci/build.sh
-
-  bloat:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: ci-bloat
-      - run: .github/ci/bloat.sh
