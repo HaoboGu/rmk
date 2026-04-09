@@ -287,19 +287,20 @@ fn generate_stm32_exti_interrupts(board: &BoardConfig) -> TokenStream2 {
 
     for pin in &row_pins {
         if let Some(pin_num_str) = get_pin_num_stm32(pin)
-            && let Ok(pin_num) = pin_num_str.parse::<u8>() {
-                let interrupt_name = match pin_num {
-                    0 => "EXTI0",
-                    1 => "EXTI1",
-                    2 => "EXTI2",
-                    3 => "EXTI3",
-                    4 => "EXTI4",
-                    5..=9 => "EXTI9_5",
-                    10..=15 => "EXTI15_10",
-                    _ => continue,
-                };
-                required_interrupts.insert(interrupt_name.to_string());
-            }
+            && let Ok(pin_num) = pin_num_str.parse::<u8>()
+        {
+            let interrupt_name = match pin_num {
+                0 => "EXTI0",
+                1 => "EXTI1",
+                2 => "EXTI2",
+                3 => "EXTI3",
+                4 => "EXTI4",
+                5..=9 => "EXTI9_5",
+                10..=15 => "EXTI15_10",
+                _ => continue,
+            };
+            required_interrupts.insert(interrupt_name.to_string());
+        }
     }
 
     // Generate interrupt bindings

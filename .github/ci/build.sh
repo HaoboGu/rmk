@@ -56,12 +56,18 @@ batch_examples stable "$target_root/build" "${stable_manifests[@]}"
 if (( ${#esp_manifests[@]} > 0 )); then
     log_section "Building esp32s3 examples"
     ensure_esp_toolchain
-    # shellcheck source=/dev/null
-    source "$HOME/export-esp.sh"
-    # xtensa-esp32s3-none-elf has no prebuilt sysroot; rely on build-std
-    # instead of the per-example [unstable].build-std that we don't inherit.
-    CARGO_UNSTABLE_BUILD_STD=alloc,core \
-        batch_examples esp "$target_root/build-esp" "${esp_manifests[@]}"
+    # Run ESP builds in a subshell so that `source export-esp.sh` (which puts
+    # esp-clang on PATH) does not leak into subsequent steps. The ESP clang
+    # lacks ARM sysroot headers and would break nrf-mpsl-sys's bindgen in the
+    # UF2 smoke section that follows.
+    (
+        # shellcheck source=/dev/null
+        source "$HOME/export-esp.sh"
+        # xtensa-esp32s3-none-elf has no prebuilt sysroot; rely on build-std
+        # instead of the per-example [unstable].build-std that we don't inherit.
+        CARGO_UNSTABLE_BUILD_STD=alloc,core \
+            batch_examples esp "$target_root/build-esp" "${esp_manifests[@]}"
+    )
 fi
 
 log_section "UF2 smoke"
