@@ -3,7 +3,7 @@
 use quote::quote;
 use rmk_config::resolved::Hardware;
 use rmk_config::resolved::hardware::{
-    BoardConfig, ChipModel, ChipSeries, MatrixType, UniBodyConfig,
+    BoardConfig, ChipModel, ChipSeries, MatrixConfig, MatrixType, UniBodyConfig,
 };
 
 use super::chip::gpio::{
@@ -98,6 +98,82 @@ pub(crate) fn expand_matrix_direct_pins(
     }
 }
 
+/// Emit a one-shot bootmagic scan: if the configured key is held while the
+/// firmware boots, jump to the chip bootloader instead of starting normal
+/// operation.
+///
+/// The emitted code expects the matrix pin arrays to already be in scope:
+/// `row_pins` and `col_pins` for normal matrices, or `direct_pins` for the
+/// direct-pin variant. It must be inserted *after* pin init but *before*
+/// `Matrix::new` consumes the arrays.
+///
+/// Bootmagic coordinates are bounds-checked at macro-expansion time against
+/// the dimensions inferred from the matrix configuration itself, so callers
+/// don't need to pass them.
+pub(crate) fn expand_bootmagic_check(matrix: &MatrixConfig) -> proc_macro2::TokenStream {
+    let Some(bm) = matrix.bootmagic else {
+        return quote! {};
+    };
+    let row = bm.0 as usize;
+    let col = bm.1 as usize;
+    match matrix.matrix_type {
+        MatrixType::Normal => {
+            let num_rows = matrix.row_pins.as_deref().map_or(0, <[_]>::len);
+            let num_cols = matrix.col_pins.as_deref().map_or(0, <[_]>::len);
+            if row >= num_rows || col >= num_cols {
+                panic!(
+                    "bootmagic key ({row}, {col}) is out of range for matrix {num_rows}×{num_cols}"
+                );
+            }
+            let (output_pins, output_idx, input_pins, input_idx) = if matrix.row2col {
+                (quote!(row_pins), row, quote!(col_pins), col)
+            } else {
+                (quote!(col_pins), col, quote!(row_pins), row)
+            };
+            quote! {
+                {
+                    // Bootmagic: drop into the bootloader if the configured
+                    // key is held during boot.
+                    #output_pins[#output_idx].set_high();
+                    ::embassy_time::Timer::after_micros(50).await;
+                    let bootmagic_pressed = #input_pins[#input_idx].is_high();
+                    #output_pins[#output_idx].set_low();
+                    if bootmagic_pressed {
+                        ::rmk::boot::jump_to_bootloader();
+                    }
+                }
+            }
+        }
+        MatrixType::DirectPin => {
+            if matrix
+                .direct_pins
+                .as_deref()
+                .and_then(|pins| pins.get(row))
+                .and_then(|r| r.get(col))
+                .is_none_or(|name| name == "_" || name.eq_ignore_ascii_case("trns"))
+            {
+                panic!("bootmagic cell ({row}, {col}) has no pin assigned")
+            }
+            let pressed_call = if matrix.direct_pin_low_active {
+                quote! { pin.is_low() }
+            } else {
+                quote! { pin.is_high() }
+            };
+            quote! {
+                {
+                    // Bootmagic: drop into the bootloader if the configured
+                    // key is held during boot.
+                    if let Some(ref pin) = direct_pins[#row][#col] {
+                        if #pressed_call {
+                            ::rmk::boot::jump_to_bootloader();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub(crate) fn expand_matrix_input_output_pins(
     chip: &ChipModel,
     row_pins: Vec<String>,
@@ -139,9 +215,9 @@ pub(crate) fn expand_matrix_input_output_pins(
     // Initialize output pins
     pin_initialization.extend(convert_output_pins_to_initializers(chip, output_pins));
     let pin_names = if row2col {
-        quote! { (col_pins, row_pins) }
+        quote! { (mut col_pins, mut row_pins) }
     } else {
-        quote! { (row_pins, col_pins) }
+        quote! { (mut row_pins, mut col_pins) }
     };
     // Generate a macro that does pin matrix config
     quote! {

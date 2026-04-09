@@ -18,7 +18,7 @@ use super::import::expand_custom_imports;
 use super::input_device::expand_input_device_config;
 use super::keyboard_config::{expand_keyboard_info, expand_vial_config, read_keyboard_toml_config};
 use super::layout::expand_default_keymap;
-use super::matrix::expand_matrix_config;
+use super::matrix::{expand_bootmagic_check, expand_matrix_config};
 use super::registered_processor::expand_registered_processor_init;
 use super::split::central::expand_split_central_config;
 
@@ -400,24 +400,28 @@ pub(crate) fn expand_matrix_and_keyboard_init(hardware: &Hardware) -> TokenStrea
         BoardConfig::UniBody(UniBodyConfig {
             matrix: matrix_config,
             input_device: _,
-        }) => match matrix_config.matrix_type {
-            MatrixType::Normal => {
-                let col2row = !matrix_config.row2col;
-                let debouncer_type = get_debouncer_type(&matrix_config);
-                quote! {
-                    let debouncer = #debouncer_type::new();
-                    let mut matrix = ::rmk::matrix::Matrix::<_, _, _, ROW, COL, #col2row>::new(row_pins, col_pins, debouncer);
+        }) => {
+            let bootmagic = expand_bootmagic_check(matrix_config);
+            let debouncer_type = get_debouncer_type(matrix_config);
+            match matrix_config.matrix_type {
+                MatrixType::Normal => {
+                    let col2row = !matrix_config.row2col;
+                    quote! {
+                        #bootmagic
+                        let debouncer = #debouncer_type::new();
+                        let mut matrix = ::rmk::matrix::Matrix::<_, _, _, ROW, COL, #col2row>::new(row_pins, col_pins, debouncer);
+                    }
+                }
+                MatrixType::DirectPin => {
+                    let low_active = matrix_config.direct_pin_low_active;
+                    quote! {
+                        #bootmagic
+                        let debouncer = #debouncer_type::new();
+                        let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, #low_active);
+                    }
                 }
             }
-            MatrixType::DirectPin => {
-                let low_active = matrix_config.direct_pin_low_active;
-                let debouncer_type = get_debouncer_type(&matrix_config);
-                quote! {
-                    let debouncer = #debouncer_type::new();
-                    let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, #low_active);
-                }
-            }
-        },
+        }
         BoardConfig::Split(split_config) => {
             // Matrix config for split central
             let central_row = split_config.central.rows;
@@ -425,10 +429,12 @@ pub(crate) fn expand_matrix_and_keyboard_init(hardware: &Hardware) -> TokenStrea
             let central_col = split_config.central.cols;
             let central_col_offset = split_config.central.col_offset;
             let col2row = !split_config.central.matrix.row2col;
+            let bootmagic = expand_bootmagic_check(&split_config.central.matrix);
+            let debouncer_type = get_debouncer_type(&split_config.central.matrix);
             match split_config.central.matrix.matrix_type {
                 MatrixType::Normal => {
-                    let debouncer_type = get_debouncer_type(&split_config.central.matrix);
                     quote! {
+                        #bootmagic
                         let debouncer = #debouncer_type::new();
                         let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #central_row, #central_col, #col2row, #central_row_offset, #central_col_offset>::new(row_pins, col_pins, debouncer);
                     }
@@ -436,8 +442,8 @@ pub(crate) fn expand_matrix_and_keyboard_init(hardware: &Hardware) -> TokenStrea
                 MatrixType::DirectPin => {
                     let low_active = split_config.central.matrix.direct_pin_low_active;
                     let size = split_config.central.rows * split_config.central.cols;
-                    let debouncer_type = get_debouncer_type(&split_config.central.matrix);
                     quote! {
+                        #bootmagic
                         let debouncer = #debouncer_type::new();
                         let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #central_row, #central_col, #size, #central_row_offset, #central_col_offset>::new(direct_pins, debouncer, #low_active);
                     }

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add PMW3360 / PMW3389 optical mouse sensor support
 - Add `report_hz` option for Pmw3610Device
+- Add `bootmagic` config: hold a designated key during boot to drop into the chip bootloader. Works on unibody and on each half of a split independently. Particularly useful for split peripherals whose BOOTSEL button is physically inaccessible ([#457](https://github.com/HaoboGu/rmk/issues/457)).
+- Make `rmk::boot` module public so user code can call `boot::jump_to_bootloader()` directly
 
 ### Changed
 
@@ -42,7 +44,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix compilation error when use `Macro()` in keymap config
 - Fix row2col matrix doesn't work issue
 - Fix `lm` key is not properly released
-
 
 ## [0.8.1] - 2025-11-25
 
@@ -212,7 +213,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Move `Controller` behind a feature flag
-
 
 ## [0.7.1] - 2025-06-04
 

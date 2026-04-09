@@ -95,6 +95,47 @@ direct_pin_low_active = true
 - `false`: The pin is pulled low by default, pressing a key pulls it to high
 - Use `"_"` or `"trns"` for unused positions in the matrix
 
+### Bootmagic - Bootloader Recovery via a Held Key
+
+Bootmagic lets you drop into the chip's USB bootloader (e.g. BOOTSEL mode on RP2040) by holding a designated key while the firmware boots. This is useful if the physical BOOTSEL/RESET button can't be reached without disassembling the keyboard. For a unibody keyboard:
+
+```toml
+[matrix]
+bootmagic = [0, 0] # (row=0, col=0), typically the ESC key
+```
+
+For direct-pin matrices, the same syntax works; the configured cell must point to a real pin (not `"_"`/`"trns"`). RMK will refuse to compile if you reference a placeholder cell.
+
+For a split keyboard, configure each half independently:
+
+```toml
+[split.central.matrix]
+bootmagic = [0, 0]
+
+[split.peripheral.matrix]
+bootmagic = [0, 0]
+```
+
+Note the sides are commonly mirrored, so this configuration might refer to the outermost column for each side.
+
+::: warning
+**Do not unplug or reseat a TRRS connector joining halves of a split keyboard.** This is tempting when flashing the peripheral side, but TRRS connectors short adjacent ring contacts as the plug slides in or out, which on a split keyboard typically means momentarily shorting `VCC` to `GND` (or to a data line) across the connector. That can permanently damage the MCU on either half.
+
+A safe procedure to flash the peripheral side:
+
+1. Remove USB connector between central side and host.
+2. Attach USB connector between peripheral side and host, while holding the peripheral side's bootmagic key.
+3. Flash.
+4. Remove USB connector between peripheral side and host.
+5. Restore USB connector between central side and host.
+   :::
+
+**Bootmagic Behavior:**
+
+- The scan runs once at boot, before the keyboard task or USB enumeration, and adds ~50µs to boot time when configured
+
+If `bootmagic` is omitted, no scan is performed and there is zero runtime overhead.
+
 ### Debouncer
 
 RMK has two debouncer modes, "default" and "fast":
