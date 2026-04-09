@@ -18,13 +18,13 @@ jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: .github/ci/format.sh
 
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-check
@@ -33,7 +33,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-test
@@ -46,7 +46,7 @@ jobs:
       stable: ${{ steps.discover.outputs.stable }}
       esp: ${{ steps.discover.outputs.esp }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - id: discover
         run: .github/ci/discover.sh
 
@@ -62,7 +62,7 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.discover.outputs.stable) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # Bloat entries need full history for git worktree to base revision.
           # Shallow clone is fast for this repo, so always fetch full history.
@@ -97,49 +97,45 @@ jobs:
           if [[ -n "$BLOAT_BINS" ]]; then
             IFS=',' read -ra bins <<< "$BLOAT_BINS"
           else
-            bins=("")
+            bins=(default)
           fi
 
-          # ── HEAD sizes ──
-          declare -A head_sizes
-          for bin in "${bins[@]}"; do
-            bin_flag=""
-            [[ -n "$bin" ]] && bin_flag="--bin $bin"
-            size_out=$(cargo size --release $bin_flag 2>/dev/null)
-            head_sizes["$bin"]=$(echo "$size_out" | awk 'NR==2 {print $4}')
-          done
-
-          # ── BASE build + sizes ──
+          # ── Build BASE ──
           base_sha=$(git -C "$GITHUB_WORKSPACE" merge-base HEAD origin/main)
           worktree=$(mktemp -d)
           git -C "$GITHUB_WORKSPACE" worktree add --detach "$worktree" "$base_sha"
           trap 'git -C "$GITHUB_WORKSPACE" worktree remove --force "$worktree" 2>/dev/null; rm -rf "$worktree"' EXIT
 
-          # Build base from within the worktree's example dir.
           base_dir="$worktree/${{ matrix.dir }}"
           if [[ -d "$base_dir" ]]; then
             (cd "$base_dir" && cargo build --release --target ${{ matrix.target }})
           fi
 
-          # ── Write comparison data ──
-          mkdir -p "$GITHUB_WORKSPACE/.bloat-data"
-          # Use a sanitised dir name as filename to avoid collisions.
+          # ── Measure HEAD vs BASE for each binary ──
           safe_name=$(echo "${{ matrix.dir }}" | tr '/' '_')
           outfile="$GITHUB_WORKSPACE/.bloat-data/$safe_name/size-data.txt"
           mkdir -p "$(dirname "$outfile")"
 
           for bin in "${bins[@]}"; do
             bin_flag=""
-            [[ -n "$bin" ]] && bin_flag="--bin $bin"
+            bin_label=""
+            if [[ "$bin" != "default" ]]; then
+              bin_flag="--bin $bin"
+              bin_label="$bin"
+            fi
+
+            head_size=$(cargo size --release $bin_flag 2>/dev/null | awk 'NR==2 {print $4}')
+
             if [[ -d "$base_dir" ]]; then
               base_size=$( (cd "$base_dir" && cargo size --release $bin_flag 2>/dev/null) | awk 'NR==2 {print $4}')
             else
               base_size=0
             fi
-            echo "${{ matrix.dir }}|${bin}|${base_size}|${head_sizes[$bin]}" >> "$outfile"
+
+            echo "${{ matrix.dir }}|${bin_label}|${base_size}|${head_size}" >> "$outfile"
           done
 
-          echo "Size data written to $outfile:"
+          echo "Size data written:"
           cat "$outfile"
 
       - name: Upload size data
@@ -156,7 +152,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/download-artifact@v4
         with:
           path: .bloat-artifacts
@@ -171,7 +167,7 @@ jobs:
     if: fromJson(needs.discover.outputs.esp)[0] != null
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-build-esp
