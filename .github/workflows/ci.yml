@@ -39,13 +39,48 @@ jobs:
           shared-key: ci-test
       - run: .github/ci/test.sh
 
+  # Discover buildable examples for the matrix
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      stable: ${{ steps.discover.outputs.stable }}
+      esp: ${{ steps.discover.outputs.esp }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: discover
+        run: .github/ci/discover.sh
+
+  # Build each stable-toolchain example in parallel
   build:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.discover.outputs.stable) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-build-${{ matrix.target }}
+      - name: Install target and tools
+        run: |
+          rustup target add ${{ matrix.target }}
+          cargo install flip-link 2>/dev/null || true
+      - name: Build
+        working-directory: ${{ matrix.dir }}
+        run: cargo build --release
+
+  # Build ESP/xtensa examples (separate toolchain)
+  build-esp:
+    needs: discover
+    if: fromJson(needs.discover.outputs.esp)[0] != null
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: ci-build
+          shared-key: ci-build-esp
       - run: .github/ci/build.sh
 
   bloat:

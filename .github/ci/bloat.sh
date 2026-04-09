@@ -3,7 +3,6 @@ set -euo pipefail
 # shellcheck source=_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-require_cargo_batch
 ensure_stable_toolchain
 ensure_cargo_tool cargo-make cargo-make
 ensure_cargo_tool flip-link flip-link
@@ -25,22 +24,18 @@ split_binaries=(central peripheral)
 build_bloat_set() {
     local workspace_root="$1"
     local target_dir="$2"
-    local manifest target
+    local manifest target dir
     for manifest in "${bloat_manifests[@]}"; do
-        # We must build each example from its own directory so cargo loads
-        # the per-example .cargo/config.toml (it carries env vars like
-        # KEYBOARD_TOML_PATH that the `#[rmk_keyboard]` macro needs). cargo-
-        # batch doesn't walk into sibling config.toml files when invoked
-        # from the repo root.
         target="$(cd "$workspace_root" && get_example_target "$manifest")"
         if [[ -z "$target" ]]; then
             echo "bloat: skipping $manifest (no [build].target)" >&2
             continue
         fi
+        dir="$(dirname "$manifest")"
         (
-            cd "$workspace_root/$(dirname "$manifest")"
-            cargo +stable batch --target-dir "$target_dir" \
-                --- build --release --target "$target"
+            cd "$workspace_root/$dir"
+            cargo +stable build --release --target "$target" \
+                --target-dir "$target_dir"
         )
     done
 }
@@ -51,7 +46,7 @@ size_value() {
     local target_dir="$2"
     local manifest="$3"
     local bin_name="${4:-}"
-    local output target
+    local output target dir
 
     target="$(cd "$workspace_root" && get_example_target "$manifest")"
     if [[ -z "$target" ]]; then
@@ -59,23 +54,15 @@ size_value() {
         return 1
     fi
 
-    # Run from the example dir so cargo picks up the per-example
-    # .cargo/config.toml (notably KEYBOARD_TOML_PATH). `cargo size` still
-    # performs a fingerprint check that can trigger proc-macro expansion,
-    # so the env var must be set here as well.
-    if [[ -n "$bin_name" ]]; then
-        output="$(
-            cd "$workspace_root/$(dirname "$manifest")"
-            CARGO_TARGET_DIR="$target_dir" \
-                cargo +stable size --release --target "$target" --bin "$bin_name"
-        )"
-    else
-        output="$(
-            cd "$workspace_root/$(dirname "$manifest")"
-            CARGO_TARGET_DIR="$target_dir" \
-                cargo +stable size --release --target "$target"
-        )"
-    fi
+    dir="$(dirname "$manifest")"
+    local size_args=(--release --target "$target")
+    [[ -n "$bin_name" ]] && size_args+=(--bin "$bin_name")
+
+    output="$(
+        cd "$workspace_root/$dir"
+        CARGO_TARGET_DIR="$target_dir" \
+            cargo +stable size "${size_args[@]}"
+    )"
 
     printf '%s\n' "$output" | awk 'NR==2 {print $4}'
 }
