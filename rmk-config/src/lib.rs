@@ -1055,7 +1055,7 @@ mod tests {
 
         assert_eq!(config.led_indicator.channel_size, 2);
         assert_eq!(config.led_indicator.pubs, 2);
-        assert_eq!(config.led_indicator.subs, 4);
+        assert_eq!(config.led_indicator.subs, 3);
 
         assert_eq!(config.pointing.channel_size, 8);
         assert_eq!(config.pointing.subs, 2);

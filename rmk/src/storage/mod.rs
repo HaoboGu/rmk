@@ -688,10 +688,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     async fn check_enable(&mut self) -> bool {
-        if let Ok(Some(StorageData::StorageConfig(config))) = self.fetch_data(StorageKey::StorageConfig).await {
-            if config.enable && config.build_hash == BUILD_HASH {
-                return true;
-            }
+        if let Ok(Some(StorageData::StorageConfig(config))) = self.fetch_data(StorageKey::StorageConfig).await
+            && config.enable
+            && config.build_hash == BUILD_HASH
+        {
+            return true;
         }
         false
     }

@@ -286,8 +286,8 @@ fn generate_stm32_exti_interrupts(board: &BoardConfig) -> TokenStream2 {
     let mut required_interrupts: HashSet<String> = HashSet::new();
 
     for pin in &row_pins {
-        if let Some(pin_num_str) = get_pin_num_stm32(pin) {
-            if let Ok(pin_num) = pin_num_str.parse::<u8>() {
+        if let Some(pin_num_str) = get_pin_num_stm32(pin)
+            && let Ok(pin_num) = pin_num_str.parse::<u8>() {
                 let interrupt_name = match pin_num {
                     0 => "EXTI0",
                     1 => "EXTI1",
@@ -300,7 +300,6 @@ fn generate_stm32_exti_interrupts(board: &BoardConfig) -> TokenStream2 {
                 };
                 required_interrupts.insert(interrupt_name.to_string());
             }
-        }
     }
 
     // Generate interrupt bindings

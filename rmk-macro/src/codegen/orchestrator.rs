@@ -403,7 +403,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(hardware: &Hardware) -> TokenStrea
         }) => match matrix_config.matrix_type {
             MatrixType::Normal => {
                 let col2row = !matrix_config.row2col;
-                let debouncer_type = get_debouncer_type(&matrix_config);
+                let debouncer_type = get_debouncer_type(matrix_config);
                 quote! {
                     let debouncer = #debouncer_type::new();
                     let mut matrix = ::rmk::matrix::Matrix::<_, _, _, ROW, COL, #col2row>::new(row_pins, col_pins, debouncer);
@@ -411,7 +411,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(hardware: &Hardware) -> TokenStrea
             }
             MatrixType::DirectPin => {
                 let low_active = matrix_config.direct_pin_low_active;
-                let debouncer_type = get_debouncer_type(&matrix_config);
+                let debouncer_type = get_debouncer_type(matrix_config);
                 quote! {
                     let debouncer = #debouncer_type::new();
                     let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, #low_active);

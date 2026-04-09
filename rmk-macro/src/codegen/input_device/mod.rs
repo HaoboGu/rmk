@@ -122,7 +122,7 @@ pub(crate) fn expand_input_device_config(
                 .unwrap_or(InputDeviceConfig::default())
                 .encoder
                 .unwrap_or(Vec::new()),
-            &chip,
+            chip,
         ),
     };
     for initializer in device_initializer {
@@ -150,7 +150,7 @@ pub(crate) fn expand_input_device_config(
                 .unwrap_or(InputDeviceConfig::default())
                 .pmw3610
                 .unwrap_or(Vec::new()),
-            &chip,
+            chip,
         ),
     };
 
@@ -202,7 +202,7 @@ pub(crate) fn expand_input_device_config(
                 .unwrap_or(InputDeviceConfig::default())
                 .pmw33xx
                 .unwrap_or(Vec::new()),
-            &chip,
+            chip,
         ),
     };
 

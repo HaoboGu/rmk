@@ -40,8 +40,8 @@ pub fn processor_impl(
 
     // Merge sibling #[processor] attributes (e.g. from cfg_attr expansion)
     for attr in &input.attrs {
-        if attr.path().is_ident("processor") {
-            if let Meta::List(meta_list) = &attr.meta {
+        if attr.path().is_ident("processor")
+            && let Meta::List(meta_list) = &attr.meta {
                 match parse_processor_config(meta_list.tokens.clone()) {
                     Ok(sibling_config) => {
                         config.event_types.extend(sibling_config.event_types);
@@ -60,7 +60,6 @@ pub fn processor_impl(
                     Err(err) => return err.into(),
                 }
             }
-        }
     }
 
     // Validate that subscribe list is not empty
