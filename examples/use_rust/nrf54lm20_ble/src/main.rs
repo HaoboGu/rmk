@@ -10,6 +10,8 @@ use defmt::{info, unwrap};
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_nrf::config::{ClockSpeed, Config as NrfConfig, HfclkSource, LfclkSource};
+use embassy_nrf::interrupt::InterruptExt;
+use embassy_nrf::interrupt::Priority;
 use embassy_nrf::mode::Blocking;
 use embassy_nrf::peripherals::USBHS;
 use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
@@ -50,7 +52,7 @@ async fn mpsl_task(mpsl: &'static MultiprotocolServiceLayer<'static>) -> ! {
     mpsl.run().await
 }
 
-const SDC_MEM_SIZE: usize = 5688;
+const SDC_MEM_SIZE: usize = 5760;
 const FLASH_START_ADDR: usize = 0x120000;
 const FLASH_SECTORS: u8 = 6;
 
@@ -97,8 +99,16 @@ async fn main(spawner: Spawner) {
     nrf_config.clock_speed = ClockSpeed::CK128;
     nrf_config.hfclk_source = HfclkSource::ExternalXtal;
     nrf_config.lfclk_source = LfclkSource::ExternalXtal;
+    // NOTE: When using MPSL/SDC, keep non-radio interrupts at a lower priority than MPSL's P0.
+    // This avoids starving time-critical radio work and has been observed to prevent hangs on nRF54.
+    nrf_config.time_interrupt_priority = Priority::P2;
+    nrf_config.gpiote_interrupt_priority = Priority::P2;
     let p = embassy_nrf::init(nrf_config);
     info!("nRF initialized");
+
+    // Lower USB interrupt priorities as well (they default to P0 in embassy-nrf Config).
+    embassy_nrf::interrupt::USBHS.set_priority(Priority::P3);
+    embassy_nrf::interrupt::VREGUSB.set_priority(Priority::P3);
 
     let mpsl_p = mpsl::Peripherals::new(
         p.GRTC_CH7,
