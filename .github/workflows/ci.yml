@@ -84,7 +84,11 @@ jobs:
         run: |
           rustup component add llvm-tools
           cargo install cargo-binutils 2>/dev/null || true
-          sudo apt-get install -y -qq bloaty >/dev/null
+          # bloaty isn't in apt; extract the pre-built binary from the Docker image
+          # used by carlosperate/bloaty-action.
+          id=$(docker create ghcr.io/carlosperate/bloaty-action:latest)
+          sudo docker cp "$id:/usr/local/bin/bloaty" /usr/local/bin/bloaty
+          docker rm "$id" >/dev/null
 
       - name: Measure sizes and compare with base
         if: github.event_name == 'pull_request' && matrix.bloat
