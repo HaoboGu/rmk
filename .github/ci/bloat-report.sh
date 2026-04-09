@@ -1,7 +1,7 @@
 #!/bin/bash
 # Assemble a bloat report from size-data artifact files.
 # Input directory structure per example:
-#   <safe_name>/size-data.txt       — dir|bin_label|base_total|head_total
+#   <safe_name>/size-data.txt       — dir|bin_label|base_total|head_total|text_diff|data_diff|bss_diff
 #   <safe_name>/size-head[-bin].txt — full cargo size output (HEAD)
 #   <safe_name>/size-base[-bin].txt — full cargo size output (BASE)
 #   <safe_name>/bloaty[-bin].txt    — bloaty diff output
@@ -37,12 +37,21 @@ fmt_diff() {
     printf "%s%d.%02d%%%s" "$sign" "$whole" "$frac" "$indicator"
 }
 
-# Collect all size-data entries: dir|bin_label|base|head|safe_name
+# Format a byte diff with sign (e.g. "+688", "-32", "0").
+fmt_bytes_diff() {
+    local d=$1
+    if (( d > 0 )); then printf "+%d" "$d"
+    elif (( d < 0 )); then printf "%d" "$d"
+    else printf "0"
+    fi
+}
+
+# Collect all size-data entries: dir|bin_label|base|head|d_text|d_data|d_bss|safe_name
 entries=()
 for f in $(find "$artifact_dir" -name 'size-data.txt' -type f | sort); do
     safe_name="$(basename "$(dirname "$f")")"
-    while IFS='|' read -r dir bin_label base_size head_size; do
-        entries+=("$dir|$bin_label|$base_size|$head_size|$safe_name")
+    while IFS='|' read -r dir bin_label base_size head_size d_text d_data d_bss; do
+        entries+=("$dir|$bin_label|$base_size|$head_size|${d_text:-0}|${d_data:-0}|${d_bss:-0}|$safe_name")
     done < "$f"
 done
 
@@ -50,15 +59,21 @@ done
     # ── Overview table ──
     echo "## Size Report"
     echo
-    echo "| Example | main | PR | Diff |"
-    echo "| :--- | ---: | ---: | ---: |"
+    echo "| Example | main | PR | Diff | .text | .data | .bss |"
+    echo "| :--- | ---: | ---: | ---: | ---: | ---: | ---: |"
 
     for entry in "${entries[@]}"; do
-        IFS='|' read -r dir bin_label base_size head_size safe_name <<< "$entry"
+        IFS='|' read -r dir bin_label base_size head_size d_text d_data d_bss safe_name <<< "$entry"
         label="${dir#examples/}"
         [[ -n "$bin_label" ]] && label="$label ($bin_label)"
-        printf "| \`%s\` | %s | %s | %s |\n" \
-            "$label" "$(fmt_size "$base_size")" "$(fmt_size "$head_size")" "$(fmt_diff "$base_size" "$head_size")"
+        printf "| \`%s\` | %s | %s | %s | %s | %s | %s |\n" \
+            "$label" \
+            "$(fmt_size "$base_size")" \
+            "$(fmt_size "$head_size")" \
+            "$(fmt_diff "$base_size" "$head_size")" \
+            "$(fmt_bytes_diff "$d_text")" \
+            "$(fmt_bytes_diff "$d_data")" \
+            "$(fmt_bytes_diff "$d_bss")"
     done
 
     echo
