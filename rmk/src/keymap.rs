@@ -42,7 +42,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeymapData<ROW,
     pub const fn new(keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> Self {
         Self {
             keymap,
-            encoder_map: [[EncoderAction::new(KeyAction::No, KeyAction::No); 0]; NUM_LAYER],
+            encoder_map: [const { [] }; NUM_LAYER],
             layer_state: [false; NUM_LAYER],
             layer_cache: [[0; COL]; ROW],
             encoder_layer_cache: [],
@@ -187,13 +187,13 @@ impl KeyMapInner<'_> {
             }
             KeyboardEventPos::RotaryEncoder(encoder_pos) => {
                 let idx = self.encoder_index(layer_num, encoder_pos.id as usize);
-                if let Some(encoders) = &mut self.encoders {
-                    if let Some(encoder_action) = encoders.get_mut(idx) {
-                        match encoder_pos.direction {
-                            Direction::Clockwise => encoder_action.clockwise = action,
-                            Direction::CounterClockwise => encoder_action.counter_clockwise = action,
-                            Direction::None => {}
-                        }
+                if let Some(encoders) = &mut self.encoders
+                    && let Some(encoder_action) = encoders.get_mut(idx)
+                {
+                    match encoder_pos.direction {
+                        Direction::Clockwise => encoder_action.clockwise = action,
+                        Direction::CounterClockwise => encoder_action.counter_clockwise = action,
+                        Direction::None => {}
                     }
                 }
             }
@@ -640,11 +640,11 @@ impl<'a> KeyMap<'a> {
     pub(crate) fn set_encoder_clockwise(&self, layer: usize, id: usize, action: KeyAction) -> Option<EncoderAction> {
         let mut inner = self.inner.borrow_mut();
         let idx = inner.encoder_index(layer, id);
-        if let Some(encoders) = &mut inner.encoders {
-            if let Some(encoder_action) = encoders.get_mut(idx) {
-                encoder_action.clockwise = action;
-                return Some(*encoder_action);
-            }
+        if let Some(encoders) = &mut inner.encoders
+            && let Some(encoder_action) = encoders.get_mut(idx)
+        {
+            encoder_action.clockwise = action;
+            return Some(*encoder_action);
         }
         None
     }
@@ -657,11 +657,11 @@ impl<'a> KeyMap<'a> {
     ) -> Option<EncoderAction> {
         let mut inner = self.inner.borrow_mut();
         let idx = inner.encoder_index(layer, id);
-        if let Some(encoders) = &mut inner.encoders {
-            if let Some(encoder_action) = encoders.get_mut(idx) {
-                encoder_action.counter_clockwise = action;
-                return Some(*encoder_action);
-            }
+        if let Some(encoders) = &mut inner.encoders
+            && let Some(encoder_action) = encoders.get_mut(idx)
+        {
+            encoder_action.counter_clockwise = action;
+            return Some(*encoder_action);
         }
         None
     }

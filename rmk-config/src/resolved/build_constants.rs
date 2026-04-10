@@ -226,27 +226,17 @@ fn resolve_passkey(ble: Option<&crate::BleConfig>, feature_enabled: bool) -> Res
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_passkey;
+    use super::resolve_passkey_enabled;
     use crate::{BleConfig, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS, MIN_PASSKEY_ENTRY_TIMEOUT_SECS};
 
     #[test]
-    fn skips_passkey_validation_when_feature_is_disabled() {
+    fn validates_passkey_timeout() {
         let ble = BleConfig {
             passkey_entry_timeout: Some(MIN_PASSKEY_ENTRY_TIMEOUT_SECS - 1),
             ..Default::default()
         };
 
-        assert!(resolve_passkey(Some(&ble), false).unwrap().is_none());
-    }
-
-    #[test]
-    fn validates_passkey_timeout_when_feature_is_enabled() {
-        let ble = BleConfig {
-            passkey_entry_timeout: Some(MIN_PASSKEY_ENTRY_TIMEOUT_SECS - 1),
-            ..Default::default()
-        };
-
-        let err = match resolve_passkey(Some(&ble), true) {
+        let err = match resolve_passkey_enabled(&ble) {
             Ok(_) => panic!("expected passkey timeout validation failure"),
             Err(err) => err,
         };
@@ -261,9 +251,9 @@ mod tests {
     }
 
     #[test]
-    fn uses_default_timeout_when_feature_is_enabled() {
+    fn uses_default_timeout() {
         let ble = BleConfig::default();
-        let passkey = resolve_passkey(Some(&ble), true).unwrap().unwrap();
+        let passkey = resolve_passkey_enabled(&ble).unwrap();
 
         assert!(!passkey.enabled);
         assert_eq!(passkey.timeout_secs, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS);

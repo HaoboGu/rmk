@@ -40,25 +40,25 @@ pub fn processor_impl(
 
     // Merge sibling #[processor] attributes (e.g. from cfg_attr expansion)
     for attr in &input.attrs {
-        if attr.path().is_ident("processor") {
-            if let Meta::List(meta_list) = &attr.meta {
-                match parse_processor_config(meta_list.tokens.clone()) {
-                    Ok(sibling_config) => {
-                        config.event_types.extend(sibling_config.event_types);
-                        if sibling_config.poll_interval_ms.is_some() {
-                            if config.poll_interval_ms.is_some() {
-                                return syn::Error::new_spanned(
-                                    attr,
-                                    "Conflicting poll_interval in multiple #[processor] attributes",
-                                )
-                                .to_compile_error()
-                                .into();
-                            }
-                            config.poll_interval_ms = sibling_config.poll_interval_ms;
+        if attr.path().is_ident("processor")
+            && let Meta::List(meta_list) = &attr.meta
+        {
+            match parse_processor_config(meta_list.tokens.clone()) {
+                Ok(sibling_config) => {
+                    config.event_types.extend(sibling_config.event_types);
+                    if sibling_config.poll_interval_ms.is_some() {
+                        if config.poll_interval_ms.is_some() {
+                            return syn::Error::new_spanned(
+                                attr,
+                                "Conflicting poll_interval in multiple #[processor] attributes",
+                            )
+                            .to_compile_error()
+                            .into();
                         }
+                        config.poll_interval_ms = sibling_config.poll_interval_ms;
                     }
-                    Err(err) => return err.into(),
                 }
+                Err(err) => return err.into(),
             }
         }
     }

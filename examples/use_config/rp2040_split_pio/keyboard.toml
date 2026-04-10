@@ -45,6 +45,8 @@ matrix_type = "normal"
 # row2col = true
 row_pins = ["PIN_9", "PIN_11"]
 col_pins = ["PIN_10", "PIN_12"]
+# Hold the key at (row=0,col=0) during boot to drop into the RP2040 bootloader.
+bootmagic = [0, 0]
 
 [[split.peripheral]]
 rows = 2
@@ -56,14 +58,4 @@ serial = [{ instance = "PIO0", tx_pin = "PIN_0", rx_pin = "PIN_0" }]
 matrix_type = "normal"
 row_pins = ["PIN_9", "PIN_11"]
 col_pins = ["PIN_10"]
-
-[[split.peripheral]]
-rows = 2
-cols = 1
-row_offset = 2
-col_offset = 2
-serial = [{ instance = "PIO0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
-[split.peripheral.matrix]
-matrix_type = "normal"
-row_pins = ["PIN_9", "PIN_11"]
-col_pins = ["PIN_10"]
+bootmagic = [0, 0]
