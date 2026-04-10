@@ -19,7 +19,9 @@ use crate::codegen::input_device::encoder::expand_encoder_device;
 use crate::codegen::input_device::pmw33xx::expand_pmw33xx_device;
 use crate::codegen::input_device::pmw3610::expand_pmw3610_device;
 use crate::codegen::keyboard_config::read_keyboard_toml_config;
-use crate::codegen::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
+use crate::codegen::matrix::{
+    expand_bootmagic_check, expand_matrix_direct_pins, expand_matrix_input_output_pins,
+};
 use crate::codegen::orchestrator::get_debouncer_type;
 use crate::codegen::registered_processor::expand_registered_processor_init;
 
@@ -236,6 +238,8 @@ fn expand_split_peripheral(
     let async_matrix = is_feature_enabled(rmk_features, "async_matrix");
     let chip = &hardware.chip;
     let mut matrix_config = proc_macro2::TokenStream::new();
+    let bootmagic = expand_bootmagic_check(&peripheral_config.matrix);
+    let debouncer_type = get_debouncer_type(&peripheral_config.matrix);
     match &peripheral_config.matrix.matrix_type {
         MatrixType::Normal => {
             matrix_config.extend(expand_matrix_input_output_pins(
@@ -253,12 +257,12 @@ fn expand_split_peripheral(
                 peripheral_config.matrix.row2col,
                 async_matrix,
             ));
-            let debouncer_type = get_debouncer_type(&peripheral_config.matrix);
             let col2row = !peripheral_config.matrix.row2col;
             let num_row = peripheral_config.rows;
             let num_col = peripheral_config.cols;
 
             matrix_config.extend(quote! {
+                #bootmagic
                 let debouncer = #debouncer_type::new();
                 let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #num_row, #num_col, #col2row>::new(row_pins, col_pins, debouncer);
             });
@@ -278,9 +282,9 @@ fn expand_split_peripheral(
             // So we need to declaring them in advance.
             let size = row * col;
             let low_active = peripheral_config.matrix.direct_pin_low_active;
-            let debouncer_type = get_debouncer_type(&peripheral_config.matrix);
 
             matrix_config.extend(quote! {
+                #bootmagic
                 let debouncer = #debouncer_type::new();
                 let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #row, #col, #size>::new(direct_pins, debouncer, #low_active);
             });

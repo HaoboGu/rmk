@@ -82,7 +82,7 @@ use crate::state::ConnectionState;
 
 #[cfg(feature = "_ble")]
 pub mod ble;
-mod boot;
+pub mod boot;
 pub mod builtin_processor;
 pub mod channel;
 pub mod combo;

@@ -439,6 +439,7 @@ pub struct MatrixConfig {
     #[serde(default = "default_false")]
     pub row2col: bool,
     pub debouncer: Option<String>,
+    pub bootmagic: Option<(u8, u8)>,
 }
 
 /// Config for storage

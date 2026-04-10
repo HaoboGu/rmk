@@ -10,7 +10,7 @@ pub fn jump_to_bootloader() {
     embassy_rp::rom_data::reset_to_usb_boot(0, 0);
 
     #[cfg(not(any(feature = "adafruit_bl", feature = "rp2040")))]
-    warn!("Please specified a bootloader to jump to!");
+    warn!("Please specify a bootloader to jump to!");
 
     reboot_keyboard();
 }
