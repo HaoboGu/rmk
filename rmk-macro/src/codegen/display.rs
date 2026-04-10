@@ -128,10 +128,11 @@ fn get_i2c_address(config: &DisplayConfig) -> u8 {
 fn expand_display_driver_init(config: &DisplayConfig) -> TokenStream {
     let address = get_i2c_address(config);
     let rotation = match config.rotation {
+        0 => quote! { Rotate0 },
         90 => quote! { Rotate90 },
         180 => quote! { Rotate180 },
         270 => quote! { Rotate270 },
-        _ => quote! { Rotate0 },
+        rotation => panic!("Unsupported display rotation '{}'. Supported: 0, 90, 180, 270", rotation),
     };
 
     match &config.driver {
@@ -219,15 +220,31 @@ fn parse_ssd1306_size(size: &str) -> TokenStream {
 }
 
 fn parse_oled_async_variant(driver: &DisplayDriver, size: &str) -> TokenStream {
-    let (module, prefix) = match driver {
-        DisplayDriver::Sh1106 => ("sh1106", "Sh1106"),
-        DisplayDriver::Sh1107 => ("sh1107", "Sh1107"),
-        DisplayDriver::Sh1108 => ("sh1108", "Sh1108"),
-        DisplayDriver::Ssd1309 => ("ssd1309", "Ssd1309"),
+    let (module, variant_name) = match (driver, size) {
+        (DisplayDriver::Sh1106, "128x64") => ("sh1106", "Sh1106_128_64"),
+        (DisplayDriver::Sh1107, "64x128") => ("sh1107", "Sh1107_64_128"),
+        (DisplayDriver::Sh1107, "128x128") => ("sh1107", "Sh1107_128_128"),
+        (DisplayDriver::Sh1108, "64x160") => ("sh1108", "Sh1108_64_160"),
+        (DisplayDriver::Sh1108, "96x160") => ("sh1108", "Sh1108_96_160"),
+        (DisplayDriver::Sh1108, "128x160") => ("sh1108", "Sh1108_128_160"),
+        (DisplayDriver::Sh1108, "160x160") => ("sh1108", "Sh1108_160_160"),
+        (DisplayDriver::Ssd1309, "128x64") => ("ssd1309", "Ssd1309_128_64"),
+        (DisplayDriver::Sh1106, _) => {
+            panic!("Unsupported SH1106 display size '{}'. Supported: 128x64", size)
+        }
+        (DisplayDriver::Sh1107, _) => {
+            panic!("Unsupported SH1107 display size '{}'. Supported: 64x128, 128x128", size)
+        }
+        (DisplayDriver::Sh1108, _) => panic!(
+            "Unsupported SH1108 display size '{}'. Supported: 64x160, 96x160, 128x160, 160x160",
+            size
+        ),
+        (DisplayDriver::Ssd1309, _) => {
+            panic!("Unsupported SSD1309 display size '{}'. Supported: 128x64", size)
+        }
         _ => unreachable!(),
     };
 
-    let variant_name = format!("{}_{}", prefix, size.replace('x', "_"));
     let module_ident = format_ident!("{}", module);
     let variant_ident = format_ident!("{}", variant_name);
 
