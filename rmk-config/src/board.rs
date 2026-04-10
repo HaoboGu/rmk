@@ -1,6 +1,7 @@
 use crate::{InputDeviceConfig, KeyboardTomlConfig, MatrixConfig, MatrixType, SplitConfig};
 
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum BoardConfig {
     Split(SplitConfig),
     UniBody(UniBodyConfig),
