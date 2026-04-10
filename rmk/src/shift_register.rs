@@ -30,6 +30,7 @@
 //! );
 //! ```
 
+use embassy_futures::yield_now;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::spi::SpiBus;
 #[cfg(feature = "async_matrix")]
@@ -111,10 +112,13 @@ impl<
         self.clear_columns().await;
     }
 
-    /// Small busy-wait delay (~5µs) for SPI signal settling.
+    /// Busy-wait delay (~30µs) for SPI signal settling.
+    ///
+    /// Matches QMK's `matrix_io_delay()` to allow the 595 outputs to
+    /// propagate through the key matrix before reading row pins.
     #[inline(always)]
     fn io_delay() {
-        for _ in 0..160 {
+        for _ in 0..960 {
             core::hint::spin_loop();
         }
     }
@@ -220,6 +224,11 @@ impl<
                 }
                 self.rescan_needed = false;
             }
+
+            // Yield to let other tasks run (e.g. pointing sensor on shared SPI bus).
+            // The full column scan above is synchronous (bit-bang SPI never suspends),
+            // so without this yield the sensor task would be starved.
+            yield_now().await;
 
             self.scan_pos = (0, 0);
         }
