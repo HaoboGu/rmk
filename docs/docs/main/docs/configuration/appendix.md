@@ -123,6 +123,9 @@ one_shot = {
 # One Shot Modifiers configuration
 one_shot_modifiers = {
   activate_on_keypress = false,
+  tap_on_timeout = false,
+  tap_on_double_press = false,
+  retap_cancel = false,
 }
 
 [behavior.morse]

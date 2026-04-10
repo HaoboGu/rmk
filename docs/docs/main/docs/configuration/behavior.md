@@ -50,18 +50,41 @@ By default, one-shot modifiers do not activate on keypress and will be sent only
 You can change this behavior by setting `activate_on_keypress` to `true`.
 This behavior is also known as One-Shot Sticky Modifiers (OSSM).
 
-If you press One-Shot Modifier again, it will be sent as a normal modifier key press and, therefore, released.
+### Re-press behavior
+
+When you press the same OSM key again while one-shot is active, the behavior depends on these options:
+
+- `tap_on_double_press` (default: `false`) — send a bare modifier tap to the host and consume the one-shot state. Useful for intentionally firing the modifier by itself (e.g., tapping LGui twice to open the Start menu).
+- `retap_cancel` (default: `false`) — cancel the one-shot silently without sending anything.
+
+If neither is enabled, re-pressing the same OSM key has no effect (the one-shot remains active). If both are enabled, `retap_cancel` takes priority.
+
+Pressing a *different* OSM key while one-shot is active will stack the modifiers (e.g., OSM-Shift then OSM-Ctrl applies both to the next key).
+
+### Timeout behavior
+
+- `tap_on_timeout` (default: `false`) — when the one-shot timeout expires with no follow-up key, send a bare modifier tap to the host instead of silently cancelling. Useful for triggering OS actions tied to a lone modifier press (e.g., tapping LGui to open the Start menu).
 
 Default values:
 ```toml
 [behavior.one_shot_modifiers]
 activate_on_keypress = false
+tap_on_timeout = false
+tap_on_double_press = false
+retap_cancel = false
 ```
 
 OSSM example:
 ```toml
 [behavior.one_shot_modifiers]
 activate_on_keypress = true
+```
+
+Example with re-press and timeout behaviors:
+```toml
+[behavior.one_shot_modifiers]
+tap_on_timeout = true
+tap_on_double_press = true
 ```
 
 ## Combo
