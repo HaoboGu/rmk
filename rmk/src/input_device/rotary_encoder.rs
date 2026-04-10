@@ -30,6 +30,12 @@ pub struct RotaryEncoder<
     /// The last action of the rotary encoder.
     /// When it's not `None`, the rotary encoder needs to emit a release event.
     last_action: Option<Direction>,
+    /// Timestamp of the last emitted direction event, used for debounce.
+    last_event_time: Option<embassy_time::Instant>,
+    /// Minimum interval in milliseconds between emitted direction events.
+    /// Contact bounce on mechanical encoders produces spurious quadrature edges;
+    /// this suppresses them without altering the Phase/Resolution logic.
+    debounce_ms: u16,
 }
 
 /// The encoder direction is either `Clockwise`, `CounterClockwise`, or `None`
@@ -150,6 +156,8 @@ impl<
             phase: DefaultPhase,
             id,
             last_action: None,
+            last_event_time: None,
+            debounce_ms: 0,
         }
     }
 }
@@ -171,6 +179,8 @@ impl<
             phase: ResolutionPhase::new(resolution, reverse),
             id,
             last_action: None,
+            last_event_time: None,
+            debounce_ms: 0,
         }
     }
 }
@@ -192,7 +202,16 @@ impl<
             phase,
             id,
             last_action: None,
+            last_event_time: None,
+            debounce_ms: 0,
         }
+    }
+
+    /// Set the debounce interval in milliseconds. Events arriving faster than
+    /// this interval after the last emitted event are suppressed.
+    pub fn with_debounce(mut self, debounce_ms: u16) -> Self {
+        self.debounce_ms = debounce_ms;
+        self
     }
 
     /// Call `update` to evaluate the next state of the encoder, propagates errors from `InputPin` read
@@ -240,6 +259,22 @@ impl<
     pub fn into_inner(self) -> (A, B) {
         (self.pin_a, self.pin_b)
     }
+
+    /// Check whether enough time has elapsed since the last emitted event.
+    /// Returns `true` if the event should pass through (first event, or
+    /// debounce interval exceeded). Updates the internal timestamp when
+    /// returning `true`.
+    fn debounce_check(&mut self) -> bool {
+        let now = embassy_time::Instant::now();
+        let ok = match self.last_event_time {
+            Some(last) => now.duration_since(last).as_millis() >= self.debounce_ms as u64,
+            None => true,
+        };
+        if ok {
+            self.last_event_time = Some(now);
+        }
+        ok
+    }
 }
 
 impl<
@@ -269,7 +304,7 @@ impl<
 
             let direction = self.update();
 
-            if direction != Direction::None {
+            if direction != Direction::None && self.debounce_check() {
                 self.last_action = Some(direction);
                 return KeyboardEvent::rotary_encoder(self.id, direction, true);
             }

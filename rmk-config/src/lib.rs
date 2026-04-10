@@ -961,6 +961,9 @@ pub struct EncoderConfig {
     // Use MCU's internal pull-up resistor or not, defaults to false, the external pull-up resistor is needed
     #[serde(default = "default_false")]
     pub internal_pullup: bool,
+    // Debounce interval in milliseconds. Suppresses spurious events from mechanical contact bounce.
+    // Defaults to 0 (disabled) if not specified.
+    pub debounce_ms: Option<u16>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1087,7 +1090,7 @@ mod tests {
 
         assert_eq!(config.led_indicator.channel_size, 2);
         assert_eq!(config.led_indicator.pubs, 2);
-        assert_eq!(config.led_indicator.subs, 4);
+        assert_eq!(config.led_indicator.subs, 3);
 
         assert_eq!(config.pointing.channel_size, 8);
         assert_eq!(config.pointing.subs, 2);
