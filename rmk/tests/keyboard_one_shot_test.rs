@@ -549,5 +549,127 @@ mod one_shot_test {
                 ]
             };
         }
+
+        /// OSM tap_on_timeout: when timeout expires, send bare modifier tap
+        #[test]
+        fn test_osm_tap_on_timeout() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard_with_behavior_config(
+                    BehaviorConfig {
+                        one_shot: OneShotConfig {
+                            timeout: Duration::from_millis(100),
+                            ..OneShotConfig::default()
+                        },
+                        one_shot_modifiers: OneShotModifiersConfig {
+                            tap_on_timeout: true,
+                            ..OneShotModifiersConfig::default()
+                        },
+                        ..BehaviorConfig::default()
+                    }
+                ),
+                sequence: [
+                    [0, 0, true, 10],   // Press OSM LShift
+                    [0, 0, false, 10],  // Release OSM LShift
+                    [0, 2, true, 150],  // Press A after timeout (delay > 100ms)
+                    [0, 2, false, 10],  // Release A
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Bare modifier press (tap_on_timeout)
+                    [0, [0, 0, 0, 0, 0, 0]],          // Modifier released
+                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A without modifier
+                    [0, [0, 0, 0, 0, 0, 0]],          // All released
+                ]
+            };
+        }
+
+        /// OSM tap_on_double_press: re-pressing same OSM sends bare modifier tap
+        #[test]
+        fn test_osm_tap_on_double_press() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard_with_behavior_config(
+                    BehaviorConfig {
+                        one_shot: OneShotConfig {
+                            timeout: Duration::from_millis(100),
+                            ..OneShotConfig::default()
+                        },
+                        one_shot_modifiers: OneShotModifiersConfig {
+                            tap_on_double_press: true,
+                            ..OneShotModifiersConfig::default()
+                        },
+                        ..BehaviorConfig::default()
+                    }
+                ),
+                sequence: [
+                    [0, 0, true, 10],   // Press OSM LShift
+                    [0, 0, false, 10],  // Release OSM LShift (Single state)
+                    [0, 0, true, 50],   // Press OSM LShift again (before 100ms timeout)
+                    [0, 0, false, 10],  // Release (no-op, state cleared)
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Bare modifier press (double tap)
+                    [0, [0, 0, 0, 0, 0, 0]],          // Modifier released
+                ]
+            };
+        }
+
+        /// OSM retap_cancel: re-pressing same OSM cancels silently
+        #[test]
+        fn test_osm_retap_cancel() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard_with_behavior_config(
+                    BehaviorConfig {
+                        one_shot: OneShotConfig {
+                            timeout: Duration::from_millis(100),
+                            ..OneShotConfig::default()
+                        },
+                        one_shot_modifiers: OneShotModifiersConfig {
+                            retap_cancel: true,
+                            ..OneShotModifiersConfig::default()
+                        },
+                        ..BehaviorConfig::default()
+                    }
+                ),
+                sequence: [
+                    [0, 0, true, 10],   // Press OSM LShift
+                    [0, 0, false, 10],  // Release OSM LShift (Single state)
+                    [0, 0, true, 50],   // Press OSM LShift again (cancels)
+                    [0, 0, false, 10],  // Release (no-op)
+                    [0, 2, true, 10],   // Press A (no modifier)
+                    [0, 2, false, 10],  // Release A
+                ],
+                expected_reports: [
+                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A without modifier (OSM was cancelled)
+                    [0, [0, 0, 0, 0, 0, 0]],             // All released
+                ]
+            };
+        }
+
+        /// tap_on_double_press with different OSM still stacks modifiers
+        #[test]
+        fn test_osm_double_press_different_modifier_still_stacks() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard_with_behavior_config(
+                    BehaviorConfig {
+                        one_shot_modifiers: OneShotModifiersConfig {
+                            tap_on_double_press: true,
+                            ..OneShotModifiersConfig::default()
+                        },
+                        ..BehaviorConfig::default()
+                    }
+                ),
+                sequence: [
+                    [0, 0, true, 10],   // Press OSM LShift
+                    [0, 0, false, 10],  // Release OSM LShift (Single state)
+                    [0, 4, true, 50],   // Press OSM LCtrl (different modifier, should stack)
+                    [0, 4, false, 10],  // Release OSM LCtrl
+                    [0, 2, true, 10],   // Press A
+                    [0, 2, false, 10],  // Release A
+                ],
+                expected_reports: [
+                    [KC_LSHIFT | KC_LCTRL, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with both modifiers
+                    [0, [0, 0, 0, 0, 0, 0]],             // All released
+                ]
+            };
+        }
     }
 }

@@ -78,6 +78,12 @@ impl Default for OneShotConfig {
 pub struct OneShotModifiersConfig {
     /// Should modifiers be active from keypress (sticky modifiers)
     pub activate_on_keypress: bool,
+    /// When timeout expires with no follow-up key, send a bare tap of the modifier
+    pub tap_on_timeout: bool,
+    /// When OSM key is pressed again while one-shot is active, send a bare tap of the modifier
+    pub tap_on_double_press: bool,
+    /// When OSM key is pressed again while one-shot is active, cancel silently
+    pub retap_cancel: bool,
 }
 
 /// Config for combo behavior

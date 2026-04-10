@@ -13,6 +13,9 @@ pub struct Behavior {
 
 pub struct OneShot {
     pub activate_on_keypress: Option<bool>,
+    pub tap_on_timeout: Option<bool>,
+    pub tap_on_double_press: Option<bool>,
+    pub retap_cancel: Option<bool>,
 }
 
 pub struct Combos {
@@ -103,6 +106,9 @@ impl crate::KeyboardTomlConfig {
 
         let one_shot_modifiers = toml_behavior.one_shot_modifiers.map(|o| OneShot {
             activate_on_keypress: o.activate_on_keypress,
+            tap_on_timeout: o.tap_on_timeout,
+            tap_on_double_press: o.tap_on_double_press,
+            retap_cancel: o.retap_cancel,
         });
 
         let combos = toml_behavior.combo.map(|c| Combos {
