@@ -175,6 +175,11 @@ impl<
             let (col_start, row_start) = self.scan_pos;
 
             for col_idx in col_start..COL {
+                // Clear all columns first so the previous column fully discharges
+                // before the new one is driven.  This prevents residual charge on
+                // column traces from causing false row readings (ghosting).
+                self.clear_columns().await;
+
                 // Drive this column high via the shift register
                 let bitmask = Self::col_bitmask(col_idx);
                 self.latch(&bitmask[..Self::NUM_BYTES]).await;
