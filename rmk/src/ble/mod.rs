@@ -185,9 +185,9 @@ pub async fn build_ble_stack<
     resources: &'a mut HostResources<P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX>,
 ) -> Stack<'a, C, P> {
     // Initialize trouble host stack
-    return trouble_host::new(controller, resources)
+    trouble_host::new(controller, resources)
         .set_random_address(Address::random(host_address))
-        .set_random_generator_seed(random_generator);
+        .set_random_generator_seed(random_generator)
 }
 
 #[doc(hidden)]
@@ -203,6 +203,9 @@ pub fn passkey_entry_enabled() -> bool {
 }
 
 /// Run the BLE stack.
+// `'a` is only used by the `host`-cfg-gated keymap parameter, so when that
+// feature is disabled clippy sees it as unused. Silence it here.
+#[allow(clippy::extra_unused_lifetimes)]
 pub(crate) async fn run_ble<
     'a,
     'b,
@@ -980,6 +983,9 @@ pub(crate) async fn set_conn_params<
 }
 
 /// Run BLE keyboard with connected device
+// `'c` / `'d` are only used by `host`-cfg-gated parameters; silence the
+// unused-lifetime lint when the host feature is disabled.
+#[allow(clippy::extra_unused_lifetimes)]
 async fn run_ble_keyboard<
     'a,
     'b,

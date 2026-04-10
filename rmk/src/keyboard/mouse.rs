@@ -331,10 +331,10 @@ impl MouseState {
             base.saturating_mul(2)
         } else if accel & (1 << 1) != 0 {
             // Accel1: 0.5x (round up to avoid zero)
-            (base + 1) / 2
+            base.div_ceil(2)
         } else if accel & (1 << 0) != 0 {
             // Accel0: 0.25x (round up to avoid zero)
-            (base + 3) / 4
+            base.div_ceil(4)
         } else {
             base
         };
