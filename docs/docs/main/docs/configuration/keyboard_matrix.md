@@ -128,7 +128,7 @@ A safe procedure to flash the peripheral side:
 3. Flash.
 4. Remove USB connector between peripheral side and host.
 5. Restore USB connector between central side and host.
-   :::
+:::
 
 **Bootmagic Behavior:**
 
