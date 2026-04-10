@@ -81,7 +81,7 @@ done
     # ── Collapsible details per example ──
     prev_safe=""
     for entry in "${entries[@]}"; do
-        IFS='|' read -r dir bin_label base_size head_size safe_name <<< "$entry"
+        IFS='|' read -r dir bin_label base_size head_size _d_text _d_data _d_bss safe_name <<< "$entry"
         label="${dir#examples/}"
         [[ -n "$bin_label" ]] && label="$label ($bin_label)"
 
