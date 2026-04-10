@@ -8,9 +8,10 @@ use futures::FutureExt;
 use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 #[cfg(feature = "_ble")]
 use {
-    crate::event::{BatteryStateEvent, ChargingStateEvent, EventSubscriber},
+    crate::event::{BatteryStatusEvent, ChargingStateEvent, EventSubscriber},
     crate::storage::Storage,
     embedded_storage_async::nor_flash::NorFlash,
+    rmk_types::battery::BatteryStatus,
     trouble_host::prelude::*,
 };
 
@@ -84,21 +85,20 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
         let mut charging_state_sub = ChargingStateEvent::subscriber();
         let mut pointing_sub = PointingEvent::subscriber();
         #[cfg(feature = "_ble")]
-        let mut battery_sub = BatteryStateEvent::subscriber();
+        let mut battery_sub = BatteryStatusEvent::subscriber();
 
         loop {
             let read_message_to_send = async {
                 crate::select_biased_with_feature! {
                     e = key_sub.next_message_pure().fuse() => SplitMessage::Key(e),
                     with_feature("_ble"): e = charging_state_sub.next_message_pure().fuse() => {
-                        if e.charging {
-                            SplitMessage::BatteryState(BatteryStateEvent::Charging)
-                        } else {
-                            SplitMessage::BatteryState(BatteryStateEvent::NotAvailable)
-                        }
+                        SplitMessage::BatteryStatus(BatteryStatus::Available {
+                            charge_state: e.charging.into(),
+                            level: None,
+                        }.into())
                     },
                     e = pointing_sub.next_message_pure().fuse() => SplitMessage::Pointing(e),
-                    with_feature("_ble"): e = battery_sub.next_event().fuse() => SplitMessage::BatteryState(e),
+                    with_feature("_ble"): e = battery_sub.next_event().fuse() => SplitMessage::BatteryStatus(e),
                 }
             };
 
@@ -122,13 +122,13 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         }
                         SplitMessage::KeyboardIndicator(indicator) => {
                             // Publish KeyboardIndicator event
-                            publish_event(LedIndicatorEvent {
-                                indicator: rmk_types::led_indicator::LedIndicator::from_bits(indicator),
-                            });
+                            publish_event(LedIndicatorEvent::new(
+                                rmk_types::led_indicator::LedIndicator::from_bits(indicator),
+                            ));
                         }
                         SplitMessage::Layer(layer) => {
                             // Publish Layer event
-                            publish_event(LayerChangeEvent { layer });
+                            publish_event(LayerChangeEvent::new(layer));
                         }
                         _ => (),
                     },

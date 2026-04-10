@@ -156,7 +156,7 @@ fn expand_combos(
                         let v = [#(#combos_def),*];
                         core::array::from_fn(|i| {
                             if i < v.len() {
-                                Some(v[i])
+                                Some(v[i].clone())
                             } else {
                                 None
                             }
@@ -220,7 +220,7 @@ fn expand_morses(
             let morse_profile = expand_profile_name(profile_name, profiles);
             quote! { #morse_profile }
         } else {
-            quote! { rmk::types::action::MorseProfile::const_default() }
+            quote! { rmk::types::morse::MorseProfile::const_default() }
         };
 
         if let Some(morse_actions) = &morse.morse_actions {
@@ -374,7 +374,7 @@ impl quote::ToTokens for StateBitsMacro {
         let button8 = self.mouse_button8;
 
         tokens.extend(quote! {
-            ::rmk::fork::StateBits::new_from(
+            ::rmk::types::fork::StateBits::new_from(
                 ::rmk::types::modifier::ModifierCombination::new_from_vals(#left_ctrl, #left_shift, #left_alt, #left_gui, #right_ctrl, #right_shift, #right_alt, #right_gui),
                 ::rmk::types::led_indicator::LedIndicator::new_from(#num_lock, #caps_lock, #scroll_lock, #compose, #kana),
                 ::rmk::types::mouse_button::MouseButtons::new_from(#button1, #button2, #button3, #button4, #button5, #button6, #button7, #button8))
@@ -439,7 +439,7 @@ fn expand_forks(
                     panic!("\n❌ keyboard.toml: fork configuration missing match conditions! Please check the documentation: https://rmk.rs/docs/features/configuration/behavior.html#fork");
                 }
 
-                quote! { ::rmk::fork::Fork::new_ex(#trigger, #negative_output, #positive_output, #match_any, #match_none, #kept, #bindable) }
+                quote! { ::rmk::types::fork::Fork::new(#trigger, #negative_output, #positive_output, #match_any, #match_none, #kept.modifiers, #bindable) }
             });
 
             quote! {

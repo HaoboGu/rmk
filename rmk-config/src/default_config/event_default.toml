@@ -22,7 +22,7 @@ subs = 2
 [event.keyboard]
 channel_size = 16
 pubs = 2
-subs = 2
+subs = 3
 
 # Keyboard state events
 [event.layer_change]
@@ -46,7 +46,7 @@ pubs = 1
 subs = 1
 
 # Power events
-[event.battery_state]
+[event.battery_status]
 channel_size = 1
 pubs = 1
 subs = 0

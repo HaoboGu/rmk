@@ -8,7 +8,7 @@ use rmk::keyboard::Keyboard;
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
-use rmk_types::action::{MorseMode, MorseProfile};
+use rmk_types::morse::{MorseMode, MorseProfile};
 use rusty_fork::rusty_fork_test;
 
 use crate::common::morse::create_simple_morse_keyboard;

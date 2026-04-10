@@ -6,7 +6,7 @@ use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, OneShotConfig};
 use rmk::types::keycode::HidKeyCode;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{k, osm, th};
-use rmk_types::action::{MorseMode, MorseProfile};
+use rmk_types::morse::{MorseMode, MorseProfile};
 use rusty_fork::rusty_fork_test;
 
 use crate::common::{KC_LSHIFT, create_test_keyboard_with_config};

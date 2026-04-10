@@ -22,6 +22,26 @@ pub(crate) mod layout;
 pub(crate) mod light;
 pub(crate) mod storage;
 
+/// Protocol-level capacity ceilings for wire-format Vec sizes.
+///
+/// These define the maximum values any firmware may use for protocol
+/// Vec capacities (`COMBO_SIZE`, `MORSE_SIZE`, etc.). The host tool compiles
+/// against these as upper bounds. Any firmware with `rmk_protocol` enabled
+/// must satisfy `value <= ceiling` at compile time.
+///
+/// Constant names mirror the generated constants with a `MAX_` prefix:
+/// `COMBO_SIZE` is bounded by `MAX_COMBO_SIZE`, etc.
+pub mod protocol_limits {
+    /// Max keys in a combo trigger — ceiling for `COMBO_SIZE`
+    pub const MAX_COMBO_SIZE: usize = 16;
+    /// Max pattern entries per morse key — ceiling for `MORSE_SIZE`
+    pub const MAX_MORSE_SIZE: usize = 32;
+    /// Max bytes per macro data chunk — ceiling for `MACRO_DATA_SIZE`
+    pub const MAX_MACRO_DATA_SIZE: usize = 256;
+    /// Max items per bulk transfer message — ceiling for `BULK_SIZE`
+    pub const MAX_BULK_SIZE: usize = 16;
+}
+
 /// Configurations for RMK keyboard.
 #[derive(Clone, Debug, Deserialize)]
 #[allow(unused)]
@@ -219,6 +239,14 @@ pub(crate) struct RmkConstantsConfig {
     /// BLE Split Central sleep timeout in minutes (0 = disabled)
     #[serde_inline_default(0)]
     pub split_central_sleep_timeout_seconds: u32,
+    /// Maximum number of key actions in a bulk keymap transfer (protocol).
+    /// Smaller values reduce firmware RAM usage but require more round-trips.
+    #[serde_inline_default(8)]
+    pub protocol_max_bulk_size: usize,
+    /// Maximum macro data chunk size for protocol transfers (bytes).
+    /// Smaller values reduce firmware RAM usage but require more round-trips.
+    #[serde_inline_default(64)]
+    pub protocol_macro_chunk_size: usize,
 }
 
 fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
@@ -284,6 +312,8 @@ impl Default for RmkConstantsConfig {
             split_peripherals_num: 0,
             ble_profiles_num: 3,
             split_central_sleep_timeout_seconds: 0,
+            protocol_max_bulk_size: 8,
+            protocol_macro_chunk_size: 64,
         }
     }
 }
@@ -361,7 +391,7 @@ define_event_config!(
     led_indicator,
     sleep_state,
     // Power events
-    battery_state,
+    battery_status,
     battery_adc,
     charging_state,
     // Pointing device events
@@ -1045,7 +1075,7 @@ mod tests {
         // Check some key default values from event_default.toml
         assert_eq!(config.keyboard.channel_size, 16);
         assert_eq!(config.keyboard.pubs, 2);
-        assert_eq!(config.keyboard.subs, 2);
+        assert_eq!(config.keyboard.subs, 3);
 
         assert_eq!(config.modifier.channel_size, 8);
         assert_eq!(config.modifier.pubs, 1);
@@ -1085,7 +1115,7 @@ channel_size = 32
         // User-overridden values
         assert_eq!(config.event.keyboard.channel_size, 32);
         assert_eq!(config.event.keyboard.pubs, 2);
-        assert_eq!(config.event.keyboard.subs, 2);
+        assert_eq!(config.event.keyboard.subs, 3);
 
         // Non-overridden values should use defaults
         assert_eq!(config.event.modifier.channel_size, 8);

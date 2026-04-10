@@ -1,0 +1,9 @@
+# Endpoint Key snapshot — DO NOT edit by hand.
+# File: snapshots/endpoint_keys_ble_split.snap
+# Each Key is an 8-byte hash of (path, postcard schema of req/resp).
+# Any change to a request/response type — including transitively-referenced
+# types — flips the corresponding Key. If the change is intentional, regenerate:
+#   UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rmk_protocol
+# Format: <path>  REQ <8-byte hex>  RESP <8-byte hex>
+
+status/peripheral/get  REQ 66 80 e5 f5 a2 e0 cd 4c  RESP bf 10 26 68 3d d1 3c b2

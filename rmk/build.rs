@@ -22,7 +22,6 @@ fn main() {
     let dest_path = Path::new(&out_dir).join("constants.rs");
     fs::write(&dest_path, constants).expect("Failed to write constants.rs file");
 }
-
 fn compute_build_hash() -> u32 {
     // Get the short hash of the latest Git commit. Use "unknown" if it fails
     let commit_id = Command::new("git")

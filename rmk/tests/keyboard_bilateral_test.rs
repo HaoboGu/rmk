@@ -17,7 +17,7 @@ pub mod common;
 use embassy_time::Duration;
 use rmk::config::{BehaviorConfig, Hand, MorsesConfig};
 use rmk::keyboard::Keyboard;
-use rmk_types::action::{MorseMode, MorseProfile};
+use rmk_types::morse::{MorseMode, MorseProfile};
 use rusty_fork::rusty_fork_test;
 
 use crate::common::KC_LSHIFT;

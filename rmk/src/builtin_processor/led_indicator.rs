@@ -22,11 +22,11 @@ impl<P: StatefulOutputPin> KeyboardIndicatorProcessor<P> {
 
     async fn on_led_indicator_event(&mut self, event: LedIndicatorEvent) {
         let activated = match self.indicator {
-            LedIndicatorType::NumLock => event.indicator.num_lock(),
-            LedIndicatorType::CapsLock => event.indicator.caps_lock(),
-            LedIndicatorType::ScrollLock => event.indicator.scroll_lock(),
-            LedIndicatorType::Compose => event.indicator.compose(),
-            LedIndicatorType::Kana => event.indicator.kana(),
+            LedIndicatorType::NumLock => event.num_lock(),
+            LedIndicatorType::CapsLock => event.caps_lock(),
+            LedIndicatorType::ScrollLock => event.scroll_lock(),
+            LedIndicatorType::Compose => event.compose(),
+            LedIndicatorType::Kana => event.kana(),
         };
         info!("Activating {:?} {}", self.indicator, activated);
         if activated {

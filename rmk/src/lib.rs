@@ -17,6 +17,10 @@
 // Enable std for espidf and test
 #![cfg_attr(not(test), no_std)]
 
+// Mutual exclusivity guard
+#[cfg(all(feature = "rmk_protocol", feature = "vial"))]
+compile_error!("features `rmk_protocol` and `vial` are mutually exclusive");
+
 // Re-export self as ::rmk for macro-generated code to work both inside and outside the crate
 extern crate self as rmk;
 
@@ -297,9 +301,7 @@ pub(crate) async fn run_keyboard<
                 Ok(led_indicator) => {
                     info!("Got led indicator");
                     LOCK_LED_STATES.store(led_indicator.into_bits(), core::sync::atomic::Ordering::Relaxed);
-                    publish_event(LedIndicatorEvent {
-                        indicator: led_indicator,
-                    });
+                    publish_event(LedIndicatorEvent::new(led_indicator));
                 }
                 Err(e) => {
                     debug!("Read HID LED indicator error: {:?}", e);

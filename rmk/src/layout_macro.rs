@@ -159,7 +159,7 @@ macro_rules! lt {
                 $crate::types::keycode::HidKeyCode::$k,
             )),
             $crate::types::action::Action::LayerOn($x),
-            $crate::types::action::MorseProfile::const_default(),
+            $crate::types::morse::MorseProfile::const_default(),
         )
     };
 }
@@ -218,7 +218,7 @@ macro_rules! mt {
                 $crate::types::keycode::HidKeyCode::$k,
             )),
             $crate::types::action::Action::Modifier($m),
-            $crate::types::action::MorseProfile::const_default(),
+            $crate::types::morse::MorseProfile::const_default(),
         )
     };
 }
@@ -277,7 +277,7 @@ macro_rules! th {
             $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
                 $crate::types::keycode::HidKeyCode::$h,
             )),
-            $crate::types::action::MorseProfile::const_default(),
+            $crate::types::morse::MorseProfile::const_default(),
         )
     };
 }
@@ -395,7 +395,7 @@ macro_rules! tt {
         $crate::types::action::KeyAction::TapHold(
             $crate::types::action::Action::LayerToggle($x),
             $crate::types::action::Action::LayerOn($x),
-            $crate::types::action::MorseProfile::const_default(),
+            $crate::types::morse::MorseProfile::const_default(),
         )
     };
 }
