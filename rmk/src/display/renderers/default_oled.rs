@@ -362,9 +362,17 @@ fn draw_status_mark<D: DrawTarget<Color = BinaryColor>>(connected: bool, display
 
 /// Returns true when the keyboard considers itself connected.
 fn is_connected(_ctx: &RenderContext) -> bool {
-    // Split peripheral: connected when central is paired
-    #[cfg(feature = "split")]
-    return _ctx.central_connected;
+    // Split + BLE:
+    // - peripheral: connected when paired to the central
+    // - central: connected when host BLE is connected
+    #[cfg(all(feature = "split", feature = "_ble"))]
+    return _ctx.central_connected || _ctx.ble_status.state == crate::types::ble::BleState::Connected;
+
+    // Split without BLE:
+    // - peripheral: connected when paired to the central
+    // - central: connected when at least one peripheral is paired
+    #[cfg(all(feature = "split", not(feature = "_ble")))]
+    return _ctx.central_connected || _ctx.peripherals_connected.iter().any(|&connected| connected);
 
     // BLE: connected when BLE state reports connected
     #[cfg(all(not(feature = "split"), feature = "_ble"))]
