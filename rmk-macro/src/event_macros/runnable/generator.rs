@@ -32,9 +32,8 @@ fn build_select_loop_body(
     }
 }
 
-/// Build the polling loop body with timer.
+/// Build the polling loop body with ticker.
 fn build_polling_loop_body(
-    interval_ms: u64,
     timer_arm: TokenStream,
     select_arms: &[TokenStream],
     match_arms: Option<&[TokenStream]>,
@@ -57,11 +56,6 @@ fn build_polling_loop_body(
     };
 
     quote! {
-        let interval = ::embassy_time::Duration::from_millis(#interval_ms);
-        let deadline = last
-            .checked_add(interval)
-            .unwrap_or(::embassy_time::Instant::MAX);
-        let timer = ::embassy_time::Timer::at(deadline);
         #select_handling
     }
 }
@@ -267,40 +261,45 @@ pub fn generate_runnable(
 
     // Build loop body
     let loop_body = if has_polling {
-        let interval_ms = processor_config.as_ref().unwrap().poll_interval_ms.unwrap();
         use_statements.push(quote! { use ::rmk::processor::PollingProcessor; });
 
         let (timer_arm, match_arms) = if let Some(ref enum_name) = select_enum_name {
             select_match_arms.push(quote! {
                 #enum_name::Timer => {
                     <Self as ::rmk::processor::PollingProcessor>::update(self).await;
-                    last = ::embassy_time::Instant::now();
                 }
             });
             (
-                quote! { _ = timer.fuse() => #enum_name::Timer },
+                quote! { _ = ticker.next().fuse() => #enum_name::Timer },
                 Some(select_match_arms.as_slice()),
             )
         } else {
             (
                 quote! {
-                    _ = timer.fuse() => {
+                    _ = ticker.next().fuse() => {
                         <Self as ::rmk::processor::PollingProcessor>::update(self).await;
-                        last = ::embassy_time::Instant::now();
                     }
                 },
                 None,
             )
         };
 
-        build_polling_loop_body(interval_ms, timer_arm, &select_arms, match_arms)
+        build_polling_loop_body(timer_arm, &select_arms, match_arms)
     } else {
         let match_arms = needs_split_select.then_some(select_match_arms.as_slice());
         build_select_loop_body(&select_arms, match_arms)
     };
 
     // Build timer init if polling
-    let timer_init = has_polling.then(|| quote! { let mut last = ::embassy_time::Instant::now(); });
+    let timer_init = processor_config.as_ref().and_then(|config| {
+        config.poll_interval_ms.map(|interval_ms| {
+            quote! {
+                let mut ticker = ::embassy_time::Ticker::every(
+                    ::embassy_time::Duration::from_millis(#interval_ms)
+                );
+            }
+        })
+    });
 
     // Assemble final output
     wrap_runnable(quote! {

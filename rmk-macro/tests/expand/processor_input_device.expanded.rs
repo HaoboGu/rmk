@@ -449,13 +449,10 @@ mod polling {
                 Timer,
             }
             let mut proc_sub = <Self as ::rmk::processor::Processor>::subscriber();
-            let mut last = ::embassy_time::Instant::now();
+            let mut ticker = ::embassy_time::Ticker::every(
+                ::embassy_time::Duration::from_millis(50u64),
+            );
             loop {
-                let interval = ::embassy_time::Duration::from_millis(50u64);
-                let deadline = last
-                    .checked_add(interval)
-                    .unwrap_or(::embassy_time::Instant::MAX);
-                let timer = ::embassy_time::Timer::at(deadline);
                 let select_result = {
                     {
                         use ::futures_util::__private as __futures_crate;
@@ -466,7 +463,7 @@ mod polling {
                                 _2(_2),
                             }
                             let __select_result = {
-                                let mut _0 = timer.fuse();
+                                let mut _0 = ticker.next().fuse();
                                 let mut _1 = self.read_event().fuse();
                                 let mut _2 = proc_sub.next_event().fuse();
                                 let mut __poll_fn = |
@@ -606,7 +603,6 @@ mod polling {
                     }
                     __RmkSelectEventPollingSensorController::Timer => {
                         <Self as ::rmk::processor::PollingProcessor>::update(self).await;
-                        last = ::embassy_time::Instant::now();
                     }
                 }
             }
@@ -1144,13 +1140,10 @@ mod multi_event_polling {
                 Timer,
             }
             let mut proc_sub = <Self as ::rmk::processor::Processor>::subscriber();
-            let mut last = ::embassy_time::Instant::now();
+            let mut ticker = ::embassy_time::Ticker::every(
+                ::embassy_time::Duration::from_millis(100u64),
+            );
             loop {
-                let interval = ::embassy_time::Duration::from_millis(100u64);
-                let deadline = last
-                    .checked_add(interval)
-                    .unwrap_or(::embassy_time::Instant::MAX);
-                let timer = ::embassy_time::Timer::at(deadline);
                 let select_result = {
                     {
                         use ::futures_util::__private as __futures_crate;
@@ -1161,7 +1154,7 @@ mod multi_event_polling {
                                 _2(_2),
                             }
                             let __select_result = {
-                                let mut _0 = timer.fuse();
+                                let mut _0 = ticker.next().fuse();
                                 let mut _1 = self.read_event().fuse();
                                 let mut _2 = proc_sub.next_event().fuse();
                                 let mut __poll_fn = |
@@ -1305,7 +1298,6 @@ mod multi_event_polling {
                     }
                     __RmkSelectEventMultiEventPollingSensorController::Timer => {
                         <Self as ::rmk::processor::PollingProcessor>::update(self).await;
-                        last = ::embassy_time::Instant::now();
                     }
                 }
             }

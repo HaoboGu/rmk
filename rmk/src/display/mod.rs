@@ -59,7 +59,7 @@ mod renderers;
 #[cfg(feature = "oled_async")]
 pub use display_interface_i2c;
 use embassy_futures::select::{Either, select};
-use embassy_time::{Duration, Instant, Timer};
+use embassy_time::{Duration, Instant, Ticker};
 use embedded_graphics::prelude::*;
 #[cfg(feature = "oled_async")]
 pub use oled_async;
@@ -395,26 +395,27 @@ where
         let mut sub = <Self as Processor>::subscriber();
 
         self.render().await;
-        let mut last = Instant::now();
+        let mut ticker = self.render_interval.map(Ticker::every);
 
         loop {
-            if !self.ctx.sleeping && let Some(interval) = self.render_interval {
-                let elapsed = last.elapsed();
-                match select(
-                    Timer::after(interval.checked_sub(elapsed).unwrap_or(Duration::MIN)),
-                    sub.next_event(),
-                )
-                .await
-                {
-                    Either::First(_) => {
-                        self.poll().await;
-                        last = Instant::now();
-                    }
+            if !self.ctx.sleeping
+                && let Some(ticker) = ticker.as_mut()
+            {
+                match select(ticker.next(), sub.next_event()).await {
+                    Either::First(_) => self.poll().await,
                     Either::Second(event) => self.process(event).await,
                 }
             } else {
+                let was_sleeping = self.ctx.sleeping;
                 let event = sub.next_event().await;
                 self.process(event).await;
+
+                if was_sleeping
+                    && !self.ctx.sleeping
+                    && let Some(ticker) = ticker.as_mut()
+                {
+                    ticker.reset();
+                }
             }
         }
     }

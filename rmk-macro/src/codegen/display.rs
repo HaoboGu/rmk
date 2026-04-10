@@ -132,7 +132,10 @@ fn expand_display_driver_init(config: &DisplayConfig) -> TokenStream {
         90 => quote! { Rotate90 },
         180 => quote! { Rotate180 },
         270 => quote! { Rotate270 },
-        rotation => panic!("Unsupported display rotation '{}'. Supported: 0, 90, 180, 270", rotation),
+        rotation => panic!(
+            "Unsupported display rotation '{}'. Supported: 0, 90, 180, 270",
+            rotation
+        ),
     };
 
     match &config.driver {
@@ -230,17 +233,26 @@ fn parse_oled_async_variant(driver: &DisplayDriver, size: &str) -> TokenStream {
         (DisplayDriver::Sh1108, "160x160") => ("sh1108", "Sh1108_160_160"),
         (DisplayDriver::Ssd1309, "128x64") => ("ssd1309", "Ssd1309_128_64"),
         (DisplayDriver::Sh1106, _) => {
-            panic!("Unsupported SH1106 display size '{}'. Supported: 128x64", size)
+            panic!(
+                "Unsupported SH1106 display size '{}'. Supported: 128x64",
+                size
+            )
         }
         (DisplayDriver::Sh1107, _) => {
-            panic!("Unsupported SH1107 display size '{}'. Supported: 64x128, 128x128", size)
+            panic!(
+                "Unsupported SH1107 display size '{}'. Supported: 64x128, 128x128",
+                size
+            )
         }
         (DisplayDriver::Sh1108, _) => panic!(
             "Unsupported SH1108 display size '{}'. Supported: 64x160, 96x160, 128x160, 160x160",
             size
         ),
         (DisplayDriver::Ssd1309, _) => {
-            panic!("Unsupported SSD1309 display size '{}'. Supported: 128x64", size)
+            panic!(
+                "Unsupported SSD1309 display size '{}'. Supported: 128x64",
+                size
+            )
         }
         _ => unreachable!(),
     };
