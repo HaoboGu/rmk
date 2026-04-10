@@ -74,18 +74,10 @@ impl Default for OneShotConfig {
     }
 }
 /// Config for one-shot behavior
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct OneShotModifiersConfig {
     /// Should modifiers be active from keypress (sticky modifiers)
     pub activate_on_keypress: bool,
-}
-
-impl Default for OneShotModifiersConfig {
-    fn default() -> Self {
-        Self {
-            activate_on_keypress: false,
-        }
-    }
 }
 
 /// Config for combo behavior
