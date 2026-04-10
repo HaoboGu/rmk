@@ -58,8 +58,8 @@ mod renderers;
 
 #[cfg(feature = "oled_async")]
 pub use display_interface_i2c;
-use embassy_futures::select::{Either, select};
-use embassy_time::{Duration, Instant, Ticker};
+use embassy_futures::select::{Either, Either3, select, select3};
+use embassy_time::{Duration, Instant, Ticker, Timer};
 use embedded_graphics::prelude::*;
 #[cfg(feature = "oled_async")]
 pub use oled_async;
@@ -235,6 +235,7 @@ where
     ctx: RenderContext,
     initialized: bool,
     last_render: Instant,
+    pending_render: bool,
     /// Minimum time between renders (rate-limiter for event-driven renders).
     min_render_interval: Duration,
     /// Poll interval for animations. `None` disables polling (event-driven only).
@@ -272,6 +273,7 @@ where
             ctx: RenderContext::default(),
             initialized: false,
             last_render: Instant::from_ticks(0),
+            pending_render: false,
             min_render_interval: Duration::from_millis(33),
             render_interval: None,
         }
@@ -288,8 +290,8 @@ where
 
     /// Set the minimum time between event-driven renders.
     ///
-    /// When events arrive faster than this interval, renders are skipped
-    /// and the latest state is drawn on the next render. Default: 10 ms.
+    /// When events arrive faster than this interval, redraws are coalesced
+    /// and the latest state is drawn once the interval elapses. Default: 10 ms.
     pub fn with_min_render_interval(mut self, interval: Duration) -> Self {
         self.min_render_interval = interval;
         self
@@ -297,13 +299,30 @@ where
 
     /// Periodic poll — drives animations even when no events arrive.
     async fn poll(&mut self) {
+        self.pending_render = true;
         self.render().await;
+    }
+
+    fn next_render_wait(&self) -> Option<Duration> {
+        if self.pending_render {
+            // A redraw was deferred by the rate limiter, so wait only for the
+            // remaining time before flushing the latest state.
+            Some(
+                self.min_render_interval
+                    .checked_sub(self.last_render.elapsed())
+                    .unwrap_or(Duration::MIN),
+            )
+        } else {
+            None
+        }
     }
 
     /// Redraw the display if enough time has passed since the last render.
     async fn render(&mut self) {
         let now = Instant::now();
         if now.duration_since(self.last_render) < self.min_render_interval {
+            // Keep the newest state dirty so the run loop can flush it later.
+            self.pending_render = true;
             return;
         }
 
@@ -316,6 +335,7 @@ where
         self.ctx.key_press_latch = false;
         self.display.flush().await;
 
+        self.pending_render = false;
         self.last_render = Instant::now();
     }
 
@@ -394,18 +414,43 @@ where
         use crate::event::EventSubscriber;
         let mut sub = <Self as Processor>::subscriber();
 
+        self.pending_render = true;
         self.render().await;
         let mut ticker = self.render_interval.map(Ticker::every);
 
         loop {
-            if !self.ctx.sleeping
-                && let Some(ticker) = ticker.as_mut()
-            {
-                match select(ticker.next(), sub.next_event()).await {
-                    Either::First(_) => self.poll().await,
-                    Either::Second(event) => self.process(event).await,
+            if !self.ctx.sleeping {
+                match (ticker.as_mut(), self.next_render_wait()) {
+                    // Polling enabled and a redraw is pending: wait for whichever
+                    // happens first — the next animation tick, the deferred redraw,
+                    // or a new event.
+                    (Some(ticker), Some(wait)) => {
+                        match select3(ticker.next(), Timer::after(wait), sub.next_event()).await {
+                            Either3::First(_) => self.poll().await,
+                            Either3::Second(_) => self.render().await,
+                            Either3::Third(event) => self.process(event).await,
+                        }
+                    }
+                    // Polling enabled and nothing pending: only animation ticks or
+                    // new events can wake the loop.
+                    (Some(ticker), None) => match select(ticker.next(), sub.next_event()).await {
+                        Either::First(_) => self.poll().await,
+                        Either::Second(event) => self.process(event).await,
+                    },
+                    // Event-driven mode with a deferred redraw: wait until the
+                    // rate-limit window closes, unless a new event arrives first.
+                    (None, Some(wait)) => match select(Timer::after(wait), sub.next_event()).await {
+                        Either::First(_) => self.render().await,
+                        Either::Second(event) => self.process(event).await,
+                    },
+                    // Event-driven mode with nothing pending: just block on events.
+                    (None, None) => {
+                        let event = sub.next_event().await;
+                        self.process(event).await;
+                    }
                 }
             } else {
+                // While sleeping, ignore timers and wait only for state changes.
                 let was_sleeping = self.ctx.sleeping;
                 let event = sub.next_event().await;
                 self.process(event).await;
@@ -414,6 +459,7 @@ where
                     && !self.ctx.sleeping
                     && let Some(ticker) = ticker.as_mut()
                 {
+                    // Restart the animation cadence after waking up.
                     ticker.reset();
                 }
             }
