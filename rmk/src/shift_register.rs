@@ -30,7 +30,6 @@
 //! );
 //! ```
 
-use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::spi::SpiBus;
 #[cfg(feature = "async_matrix")]
@@ -106,14 +105,31 @@ impl<
         }
     }
 
+    /// Initialize the shift register by clearing all outputs.
+    /// Call this once before starting the scan loop.
+    pub async fn init(&mut self) {
+        self.clear_columns().await;
+    }
+
+    /// Small busy-wait delay (~5µs) for SPI signal settling.
+    #[inline(always)]
+    fn io_delay() {
+        for _ in 0..160 {
+            core::hint::spin_loop();
+        }
+    }
+
     /// Shift out `data` and latch the 595 outputs.
     ///
     /// The latch pin (RCLK) is pulsed low→high after the SPI transfer,
     /// causing the shift-register contents to appear on the output pins.
     async fn latch(&mut self, data: &[u8]) {
         self.cs.set_low().ok();
+        Self::io_delay();
         let _ = self.spi.write(data).await;
+        Self::io_delay();
         self.cs.set_high().ok();
+        Self::io_delay();
     }
 
     /// Build a column bitmask: only bit `col_idx` is set.
@@ -158,7 +174,6 @@ impl<
                 // Drive this column high via the shift register
                 let bitmask = Self::col_bitmask(col_idx);
                 self.latch(&bitmask[..Self::NUM_BYTES]).await;
-                Timer::after_micros(1).await;
 
                 let r_start = if col_idx == col_start { row_start } else { 0 };
 
