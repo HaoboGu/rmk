@@ -76,7 +76,13 @@ jobs:
           cargo install flip-link 2>/dev/null || true
       - name: Build
         working-directory: ${{ matrix.dir }}
-        run: cargo build --release
+        run: |
+          # For bloat examples, remap source paths so the absolute workspace
+          # prefix doesn't affect binary size (panic messages embed file!() paths).
+          if [[ "${{ matrix.bloat }}" == "true" ]]; then
+            export RUSTFLAGS="--remap-path-prefix=$GITHUB_WORKSPACE=/rmk-build"
+          fi
+          cargo build --release
 
       # ── Bloat: size + bloaty diff HEAD vs BASE, upload data ──
       - name: Install bloat tools
@@ -111,9 +117,16 @@ jobs:
           git -C "$GITHUB_WORKSPACE" worktree add --detach "$worktree" "$base_sha"
           trap 'git -C "$GITHUB_WORKSPACE" worktree remove --force "$worktree" 2>/dev/null; rm -rf "$worktree"' EXIT
 
+          # Remap source paths so that HEAD and BASE binaries use the same
+          # virtual prefix.  Without this, absolute paths embedded by panic
+          # messages (file!() macro) differ in length between $GITHUB_WORKSPACE
+          # and the temp worktree, producing false size diffs in .rodata/.text.
+          head_remap="--remap-path-prefix=$GITHUB_WORKSPACE=/rmk-build"
+          base_remap="--remap-path-prefix=$worktree=/rmk-build"
+
           base_dir="$worktree/${{ matrix.dir }}"
           if [[ -d "$base_dir" ]]; then
-            (cd "$base_dir" && cargo build --release --target ${{ matrix.target }})
+            (cd "$base_dir" && RUSTFLAGS="$base_remap" cargo build --release)
           fi
 
           # ── Output directory ──
@@ -132,12 +145,13 @@ jobs:
             fi
 
             # cargo size for HEAD — extract text/data/bss/total
-            cargo size --release $bin_flag 2>/dev/null > "$outdir/size-head${bin_suffix}.txt"
+            # RUSTFLAGS must match the Build step so cargo reuses the existing binary.
+            RUSTFLAGS="$head_remap" cargo size --release $bin_flag 2>/dev/null > "$outdir/size-head${bin_suffix}.txt"
             read -r h_text h_data h_bss head_size < <(awk 'NR==2 {print $1, $2, $3, $4}' "$outdir/size-head${bin_suffix}.txt")
 
             # cargo size + bloaty for BASE
             if [[ -d "$base_dir" ]]; then
-              (cd "$base_dir" && cargo size --release $bin_flag 2>/dev/null) > "$outdir/size-base${bin_suffix}.txt"
+              (cd "$base_dir" && RUSTFLAGS="$base_remap" cargo size --release $bin_flag 2>/dev/null) > "$outdir/size-base${bin_suffix}.txt"
               read -r b_text b_data b_bss base_size < <(awk 'NR==2 {print $1, $2, $3, $4}' "$outdir/size-base${bin_suffix}.txt")
 
               # Section diffs
