@@ -33,6 +33,9 @@ use crate::state::ConnectionState;
 /// * `stack` - (optional) The TrouBLE stack
 /// * `serial` - (optional) serial port used to send peripheral split message. This argument is enabled only for serial split now
 /// * `storage` - (optional) The storage to save the central address
+// `'a` is only referenced from the `_ble` cfg-gated parameters; clippy can't
+// see that when `_ble` is off, so silence the unused-lifetime warning.
+#[allow(clippy::extra_unused_lifetimes)]
 pub async fn run_rmk_split_peripheral<
     'a,
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy>,

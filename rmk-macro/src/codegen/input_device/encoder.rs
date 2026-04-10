@@ -35,6 +35,11 @@ pub(crate) fn expand_encoder_device(
         let encoder_name = format_ident!("encoder_{}", encoder_id);
         // encoder_names.push(encoder_name.clone());
 
+        let debounce_chain = match encoder.debounce_ms {
+            Some(ms) if ms > 0 => quote! { .with_debounce(#ms) },
+            _ => quote! {},
+        };
+
         // Create different types of encoders based on the phase field
         let encoder_device = match encoder.phase.as_deref() {
             Some("e8h7") => {
@@ -44,7 +49,7 @@ pub(crate) fn expand_encoder_device(
                         #pin_b,
                         ::rmk::input_device::rotary_encoder::E8H7Phase,
                         #encoder_id
-                    );
+                    )#debounce_chain;
                 }
             }
             Some("resolution") => {
@@ -64,7 +69,7 @@ pub(crate) fn expand_encoder_device(
                         #resolution,
                         #reverse,
                         #encoder_id
-                    );
+                    )#debounce_chain;
                 }
             }
             Some("default") => {
@@ -75,7 +80,7 @@ pub(crate) fn expand_encoder_device(
                         #pin_b,
                         ::rmk::input_device::rotary_encoder::DefaultPhase,
                         #encoder_id
-                    );
+                    )#debounce_chain;
                 }
             }
             _ => {

@@ -9,6 +9,11 @@
 #![allow(dead_code)]
 #![allow(non_snake_case, non_upper_case_globals)]
 #![allow(async_fn_in_trait)]
+// Lints below fire inside `#[gatt_service]`/`#[gatt_server]` attribute-macro
+// expansions from trouble-host; we can't annotate the generated code, so
+// suppress them crate-wide rather than littering individual BLE structs.
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::needless_update)]
 // Enable std for espidf and test
 #![cfg_attr(not(test), no_std)]
 
@@ -81,7 +86,7 @@ use crate::state::ConnectionState;
 
 #[cfg(feature = "_ble")]
 pub mod ble;
-mod boot;
+pub mod boot;
 pub mod builtin_processor;
 pub mod channel;
 pub mod combo;
@@ -159,7 +164,7 @@ pub async fn initialize_keymap_and_storage<
 
     #[cfg(not(feature = "host"))]
     {
-        let storage = Storage::new(flash, storage_config, &behavior_config).await;
+        let storage = Storage::new(flash, storage_config, behavior_config).await;
         let keymap = KeyMap::new(data, behavior_config, positional_config).await;
         (keymap, storage)
     }

@@ -283,6 +283,9 @@ impl Handler for UsbDeviceHandler {
     }
 
     fn suspended(&mut self, suspended: bool) {
+        // When no logging feature is enabled, `info!` expands to a no-op and
+        // both arms collapse to identical empty blocks — suppress the lint.
+        #[allow(clippy::if_same_then_else)]
         if suspended {
             info!(
                 "Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
@@ -300,17 +303,17 @@ impl Handler for UsbDeviceHandler {
 }
 
 pub(crate) async fn wait_until_usb_configured() {
-    if !USB_CONFIGURED.contains_value() {
-        if let Some(mut r) = USB_CONFIGURED.receiver() {
-            r.changed().await
-        }
+    if !USB_CONFIGURED.contains_value()
+        && let Some(mut r) = USB_CONFIGURED.receiver()
+    {
+        r.changed().await
     }
 }
 
 pub(crate) async fn wait_until_usb_disabled() {
-    if !USB_DISABLED.contains_value() {
-        if let Some(mut r) = USB_DISABLED.receiver() {
-            r.changed().await
-        }
+    if !USB_DISABLED.contains_value()
+        && let Some(mut r) = USB_DISABLED.receiver()
+    {
+        r.changed().await
     }
 }
