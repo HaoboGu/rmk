@@ -82,35 +82,6 @@ impl AttributeParser {
         })
     }
 
-    /// Get a boolean value for `name = true/false`.
-    pub fn get_bool(&self, name: &str) -> Result<Option<bool>, TokenStream> {
-        let Some(meta) = self
-            .metas
-            .iter()
-            .find(|meta| matches!(meta, Meta::NameValue(nv) if nv.path.is_ident(name)))
-        else {
-            return Ok(None);
-        };
-
-        let Meta::NameValue(nv) = meta else {
-            return Ok(None);
-        };
-
-        let syn::Expr::Lit(syn::ExprLit {
-            lit: syn::Lit::Bool(lit),
-            ..
-        }) = &nv.value
-        else {
-            return Err(syn::Error::new_spanned(
-                &nv.value,
-                format!("`{name}` must be a boolean literal (`true` or `false`)"),
-            )
-            .to_compile_error());
-        };
-
-        Ok(Some(lit.value))
-    }
-
     /// Get an array of paths for `name = [Type1, Type2]`.
     ///
     /// Returns an error when the key exists but the value is not an array,

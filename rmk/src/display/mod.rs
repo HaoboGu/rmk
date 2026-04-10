@@ -393,14 +393,12 @@ where
     async fn run(&mut self) -> ! {
         use crate::event::EventSubscriber;
         let mut sub = <Self as Processor>::subscriber();
+
+        self.render().await;
         let mut last = Instant::now();
 
         loop {
-            if self.ctx.sleeping || self.render_interval.is_none() {
-                let event = sub.next_event().await;
-                self.process(event).await;
-            } else {
-                let interval = self.render_interval.unwrap();
+            if !self.ctx.sleeping && let Some(interval) = self.render_interval {
                 let elapsed = last.elapsed();
                 match select(
                     Timer::after(interval.checked_sub(elapsed).unwrap_or(Duration::MIN)),
@@ -414,6 +412,9 @@ where
                     }
                     Either::Second(event) => self.process(event).await,
                 }
+            } else {
+                let event = sub.next_event().await;
+                self.process(event).await;
             }
         }
     }
