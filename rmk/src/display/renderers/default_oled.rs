@@ -298,19 +298,19 @@ fn draw_battery_icon<D: DrawTarget<Color = BinaryColor>>(battery: BatteryStateEv
 
 fn draw_connection_indicator<D: DrawTarget<Color = BinaryColor>>(
     ctx: &RenderContext,
-    display: &mut D,
-    layout: &Layout,
+    _display: &mut D,
+    _layout: &Layout,
 ) {
-    let connected = is_connected(ctx);
+    let _connected = is_connected(ctx);
 
     #[cfg(feature = "_ble")]
     {
-        draw_ble_indicator(connected, display, layout);
+        draw_ble_indicator(_connected, _display, _layout);
     }
 
     #[cfg(all(not(feature = "_ble"), feature = "split"))]
     {
-        draw_status_mark(connected, display, layout.w - 7, 4);
+        draw_status_mark(_connected, _display, _layout.w - 7, 4);
     }
 }
 
