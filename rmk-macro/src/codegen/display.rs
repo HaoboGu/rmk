@@ -57,8 +57,10 @@ fn expand_i2c_interrupt(chip_series: &ChipSeries, i2c: &I2cConfig) -> TokenStrea
         }
         ChipSeries::Stm32 => {
             let ev_irq = format_ident!("{}_EV", i2c.instance);
+            let er_irq = format_ident!("{}_ER", i2c.instance);
             quote! {
                 #ev_irq => ::embassy_stm32::i2c::EventInterruptHandler<::embassy_stm32::peripherals::#instance>;
+                #er_irq => ::embassy_stm32::i2c::ErrorInterruptHandler<::embassy_stm32::peripherals::#instance>;
             }
         }
         ChipSeries::Esp32 => {
