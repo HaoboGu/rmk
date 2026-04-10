@@ -178,13 +178,11 @@ jobs:
           path: bloat-data/
           retention-days: 1
 
-  # Assemble bloat report from matrix artifacts and post as PR comment
+  # Assemble bloat report from matrix artifacts and save for the comment workflow
   bloat-report:
     if: github.event_name == 'pull_request'
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
     steps:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@v7
@@ -193,41 +191,17 @@ jobs:
           pattern: bloat-*
           merge-multiple: true
       - name: Generate report
-        id: report
         run: |
           report=$(.github/ci/bloat-report.sh bloat-artifacts)
-          # Save for the comment step (handle multi-line)
-          echo "REPORT<<EOF" >> "$GITHUB_ENV"
-          echo "$report" >> "$GITHUB_ENV"
-          echo "EOF" >> "$GITHUB_ENV"
-      - name: Post PR comment
-        uses: actions/github-script@v7
+          mkdir -p bloat-comment
+          echo "${{ github.event.pull_request.number }}" > bloat-comment/pr-number.txt
+          echo "$report" > bloat-comment/report.md
+      - name: Upload comment data
+        uses: actions/upload-artifact@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const marker = '## Size Report';
-            const body = process.env.REPORT;
-            const { data: comments } = await github.rest.issues.listComments({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
-            const existing = comments.find(c => c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                comment_id: existing.id,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body,
-              });
-            }
+          name: bloat-comment
+          path: bloat-comment/
+          retention-days: 1
 
   # Build ESP/xtensa examples (separate toolchain)
   build-esp:
