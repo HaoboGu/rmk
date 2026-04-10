@@ -30,7 +30,7 @@
 //! );
 //! ```
 
-use embassy_futures::yield_now;
+use embassy_time::{Duration, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::spi::SpiBus;
 #[cfg(feature = "async_matrix")]
@@ -225,10 +225,10 @@ impl<
                 self.rescan_needed = false;
             }
 
-            // Yield to let other tasks run (e.g. pointing sensor on shared SPI bus).
-            // The full column scan above is synchronous (bit-bang SPI never suspends),
-            // so without this yield the sensor task would be starved.
-            yield_now().await;
+            // Pause to let other tasks use the SPI bus (e.g. pointing sensor).
+            // The column scan above is synchronous (bit-bang SPI never suspends),
+            // so without this delay the sensor task would be starved.
+            Timer::after(Duration::from_millis(1)).await;
 
             self.scan_pos = (0, 0);
         }
