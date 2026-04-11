@@ -48,9 +48,27 @@ fn expand_one_shot_modifiers(one_shot_modifiers: &Option<OneShot>) -> proc_macro
                 None => quote! {},
             };
 
+            let tap_on_timeout = match one_shot_modifier.tap_on_timeout {
+                Some(value) => quote! { tap_on_timeout: #value, },
+                None => quote! {},
+            };
+
+            let tap_on_double_press = match one_shot_modifier.tap_on_double_press {
+                Some(value) => quote! { tap_on_double_press: #value, },
+                None => quote! {},
+            };
+
+            let retap_cancel = match one_shot_modifier.retap_cancel {
+                Some(value) => quote! { retap_cancel: #value, },
+                None => quote! {},
+            };
+
             quote! {
                 ::rmk::config::OneShotModifiersConfig {
                     #activate_on_keypress
+                    #tap_on_timeout
+                    #tap_on_double_press
+                    #retap_cancel
                     ..Default::default()
                 }
             }

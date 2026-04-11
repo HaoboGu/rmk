@@ -600,6 +600,9 @@ pub(crate) struct OneShotConfig {
 #[serde(deny_unknown_fields)]
 pub struct OneShotModifiersConfig {
     pub activate_on_keypress: Option<bool>,
+    pub tap_on_timeout: Option<bool>,
+    pub tap_on_double_press: Option<bool>,
+    pub retap_cancel: Option<bool>,
 }
 
 /// Configurations for combos

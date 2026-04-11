@@ -1480,6 +1480,13 @@ impl<'a> Keyboard<'a> {
 
     /// Process mouse key action with acceleration support.
     async fn process_action_mouse(&mut self, key: HidKeyCode, event: KeyboardEvent) {
+        // Mouse reports don't carry keyboard modifiers. When an OSM modifier
+        // is active and a mouse button is pressed, send a keyboard report with
+        // the modifier first so the host applies it to the click (Ctrl+Click).
+        if event.pressed && self.osm_state.value().is_some() {
+            self.send_keyboard_report_with_resolved_modifiers(true).await;
+        }
+
         let action = {
             let config = self.keymap.mouse_key_config();
             self.mouse.process(key, event.pressed, &config)

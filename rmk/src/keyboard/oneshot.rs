@@ -31,41 +31,46 @@ impl<T> OneShotState<T> {
 
 impl<'a> Keyboard<'a> {
     pub(crate) async fn process_action_osm(&mut self, new_modifiers: ModifierCombination, event: KeyboardEvent) {
-        let activate_on_keypress = self.keymap.one_shot_modifiers_config().activate_on_keypress;
+        let osm_config = self.keymap.one_shot_modifiers_config();
+        let activate_on_keypress = osm_config.activate_on_keypress;
 
         // Update one shot state
         if event.pressed {
-            let mut was_active = false;
+            // Check for re-press of same OSM key (modifier bits overlap with active one-shot)
+            if let Some(&active_mods) = self.osm_state.value() {
+                let is_repress = active_mods & new_modifiers == new_modifiers;
+                if is_repress {
+                    if osm_config.retap_cancel {
+                        // Cancel one-shot silently
+                        self.unprocessed_events.retain(|e| e.pos != event.pos);
+                        self.osm_state = OneShotState::None;
+                        if activate_on_keypress {
+                            self.send_keyboard_report_with_resolved_modifiers(false).await;
+                        }
+                        return;
+                    } else if osm_config.tap_on_double_press {
+                        // Send bare modifier tap and consume one-shot
+                        self.unprocessed_events.retain(|e| e.pos != event.pos);
+                        self.send_keyboard_report_with_resolved_modifiers(true).await;
+                        self.osm_state = OneShotState::None;
+                        self.send_keyboard_report_with_resolved_modifiers(false).await;
+                        return;
+                    }
+                }
+            }
+
             // Add new modifier combination to existing one shot or init if none
             self.osm_state = match self.osm_state {
                 OneShotState::None => OneShotState::Initial(new_modifiers),
                 OneShotState::Initial(cur_modifiers) => OneShotState::Initial(cur_modifiers | new_modifiers),
-                OneShotState::Single(cur_modifiers) => {
-                    was_active = cur_modifiers & new_modifiers == new_modifiers;
-
-                    if was_active {
-                        let result = cur_modifiers & !new_modifiers;
-                        // Remove the matching event from unprocessed_events queue
-                        self.unprocessed_events.retain(|e| e.pos != event.pos);
-                        // Send report for current osm_state modifiers
-                        self.send_keyboard_report_with_resolved_modifiers(true).await;
-
-                        if result.into_bits() == 0 {
-                            OneShotState::None
-                        } else {
-                            OneShotState::Single(result)
-                        }
-                    } else {
-                        OneShotState::Single(cur_modifiers | new_modifiers)
-                    }
-                }
+                OneShotState::Single(cur_modifiers) => OneShotState::Single(cur_modifiers | new_modifiers),
                 OneShotState::Held(cur_modifiers) => OneShotState::Held(cur_modifiers | new_modifiers),
             };
 
             self.update_osl(event);
 
             // Send report for updated osm_state modifiers
-            if was_active || activate_on_keypress {
+            if activate_on_keypress {
                 self.send_keyboard_report_with_resolved_modifiers(true).await;
             }
         } else {
@@ -75,13 +80,29 @@ impl<'a> Keyboard<'a> {
                     let timeout = Timer::after(self.keymap.one_shot_timeout());
                     match select(timeout, self.keyboard_event_subscriber.next_message_pure()).await {
                         Either::First(_) => {
-                            // Timeout, release modifiers
-                            self.update_osl(event);
-                            self.osm_state = OneShotState::None;
-
-                            // Send release report because modifiers were held
-                            if activate_on_keypress {
-                                self.send_keyboard_report_with_resolved_modifiers(false).await;
+                            // Timeout fired. Guard against the select race where
+                            // the timer is polled first and wins even though a key
+                            // event arrived at the subscriber at the same instant.
+                            if let Some(e) = self.keyboard_event_subscriber.try_next_message_pure() {
+                                // A key event was pending — one-shot is consumed, not timed out
+                                if self.unprocessed_events.push(e).is_err() {
+                                    warn!("Unprocessed event queue is full, dropping event");
+                                }
+                            } else {
+                                // Genuinely timed out with no pending key event
+                                self.update_osl(event);
+                                if osm_config.tap_on_timeout {
+                                    // Send bare modifier tap before clearing state
+                                    self.send_keyboard_report_with_resolved_modifiers(true).await;
+                                    self.osm_state = OneShotState::None;
+                                    self.send_keyboard_report_with_resolved_modifiers(false).await;
+                                } else {
+                                    self.osm_state = OneShotState::None;
+                                    // Send release report because modifiers were held
+                                    if activate_on_keypress {
+                                        self.send_keyboard_report_with_resolved_modifiers(false).await;
+                                    }
+                                }
                             }
                         }
                         Either::Second(e) => {
@@ -160,13 +181,16 @@ impl<'a> Keyboard<'a> {
         }
     }
 
-    pub(crate) fn update_osm(&mut self, event: KeyboardEvent) {
+    pub(crate) fn update_osm(&mut self, _event: KeyboardEvent) {
         match self.osm_state {
             OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
             OneShotState::Single(_) => {
-                if !event.pressed {
-                    self.osm_state = OneShotState::None;
-                }
+                // Once any key is pressed or released after an OSM tap,
+                // the one-shot is consumed. On press, the modifier was already
+                // included in the HID report (resolve_modifiers runs before
+                // update_osm), so clearing here is safe and prevents the
+                // state from lingering as Single between key press and release.
+                self.osm_state = OneShotState::None;
             }
             _ => (),
         }
