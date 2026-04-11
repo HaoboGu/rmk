@@ -105,8 +105,8 @@ pub mod layout_macro;
 pub mod light;
 pub mod matrix;
 pub mod morse;
-pub mod shift_register;
 pub mod processor;
+pub mod shift_register;
 #[cfg(feature = "split")]
 pub mod split;
 pub mod state;

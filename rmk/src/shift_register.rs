@@ -33,9 +33,9 @@
 
 use embassy_time::{Duration, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
-use embedded_hal_async::spi::SpiBus;
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
+use embedded_hal_async::spi::SpiBus;
 
 use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::event::{KeyboardEvent, publish_event_async};
