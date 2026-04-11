@@ -5,7 +5,7 @@
 //! Subsequent presses send only the key. Modifier releases when any
 //! non-SM/non-modifier key is pressed, or when the layer changes.
 
-use rmk_types::keycode::{HidKeyCode, KeyCode};
+use rmk_types::keycode::KeyCode;
 use rmk_types::modifier::ModifierCombination;
 
 use crate::event::KeyboardEvent;

@@ -1220,12 +1220,15 @@ impl<'a> Keyboard<'a> {
             Action::Key(key) => self.process_action_key(key, event).await,
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, event).await,
             Action::LayerOff(layer_num) => {
+                // Turn off a layer temporarily when the key is pressed
+                // Reactivate the layer after the key is released
                 if event.pressed {
                     self.keymap.deactivate_layer(layer_num);
                     self.release_sticky_mod_if_active().await;
                 }
             }
             Action::LayerToggle(layer_num) => {
+                // Toggle a layer when the key is released
                 if !event.pressed {
                     self.keymap.toggle_layer(layer_num);
                     self.release_sticky_mod_if_active().await;
@@ -1248,6 +1251,7 @@ impl<'a> Keyboard<'a> {
                 }
             }
             Action::DefaultLayer(layer_num) => {
+                // Set the default layer
                 self.keymap.set_default_layer(layer_num);
                 self.release_sticky_mod_if_active().await;
             }
