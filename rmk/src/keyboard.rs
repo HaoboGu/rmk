@@ -29,6 +29,7 @@ use crate::keyboard::fork::ActiveFork;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard::mouse::{MouseAction, MouseState};
 use crate::keyboard::oneshot::OneShotState;
+use crate::keyboard::sticky_mod::StickyModState;
 use crate::keyboard_macros::MacroOperation;
 use crate::keymap::KeyMap;
 #[cfg(all(feature = "split", feature = "_ble"))]
@@ -43,6 +44,7 @@ pub(crate) mod mouse;
 pub(crate) mod oneshot;
 #[cfg(feature = "steno")]
 pub(crate) mod steno;
+pub(crate) mod sticky_mod;
 
 use crate::keymap::HOLD_BUFFER_SIZE;
 
@@ -206,6 +208,9 @@ pub struct Keyboard<'a> {
     /// Oneshot Modifier state
     osm_state: OneShotState<ModifierCombination>,
 
+    /// StickyMod state — holds modifier across key presses for Alt+Tab-like behavior
+    sticky_mod_state: StickyModState,
+
     /// Caps Word state machine
     caps_word: CapsWordState,
 
@@ -259,6 +264,7 @@ impl<'a> Keyboard<'a> {
             last_press_time: Instant::now(),
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
+            sticky_mod_state: StickyModState::default(),
             caps_word: CapsWordState::default(),
             with_modifiers: ModifierCombination::default(),
             macro_texting: false,
@@ -1200,21 +1206,29 @@ impl<'a> Keyboard<'a> {
         })
         .await;
 
+        // Release StickyMod when any non-SM, non-modifier key is pressed.
+        // Modifier keys (Shift, Ctrl, etc.) are excluded so Shift+Tab reverse cycling works.
+        if event.pressed
+            && !matches!(action, Action::StickyMod(_, _) | Action::Modifier(_))
+            && self.sticky_mod_state.is_active()
+        {
+            self.release_sticky_mod_if_active().await;
+        }
+
         match action {
             Action::No => {}
             Action::Key(key) => self.process_action_key(key, event).await,
-            Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, event),
+            Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, event).await,
             Action::LayerOff(layer_num) => {
-                // Turn off a layer temporarily when the key is pressed
-                // Reactivate the layer after the key is released
                 if event.pressed {
                     self.keymap.deactivate_layer(layer_num);
+                    self.release_sticky_mod_if_active().await;
                 }
             }
             Action::LayerToggle(layer_num) => {
-                // Toggle a layer when the key is release
                 if !event.pressed {
                     self.keymap.toggle_layer(layer_num);
+                    self.release_sticky_mod_if_active().await;
                 }
             }
             Action::LayerToggleOnly(layer_num) => {
@@ -1230,11 +1244,12 @@ impl<'a> Keyboard<'a> {
                     }
                     // Activate the target layer
                     self.keymap.activate_layer(layer_num);
+                    self.release_sticky_mod_if_active().await;
                 }
             }
             Action::DefaultLayer(layer_num) => {
-                // Set the default layer
                 self.keymap.set_default_layer(layer_num);
+                self.release_sticky_mod_if_active().await;
             }
             Action::Modifier(modifiers) => {
                 if event.pressed {
@@ -1269,7 +1284,7 @@ impl<'a> Keyboard<'a> {
                     // they will be "released" the same time as the key (in same hid report)
                     self.held_modifiers &= !(modifiers);
                 }
-                self.process_action_layer_switch(layer_num, event);
+                self.process_action_layer_switch(layer_num, event).await;
                 self.send_keyboard_report_with_resolved_modifiers(event.pressed).await
             }
             Action::OneShotLayer(l) => {
@@ -1282,6 +1297,9 @@ impl<'a> Keyboard<'a> {
                 // Process OSL to avoid the OSM state stuck when an OSM is followed by an OSL
                 self.update_osl(event);
             }
+            Action::StickyMod(key, modifiers) => {
+                self.process_action_sticky_mod(key, modifiers, event).await;
+            }
             Action::OneShotKey(_k) => warn!("One-shot key is not supported: {:?}", action),
             Action::Light(_light_action) => warn!("Light controll is not supported"),
             Action::KeyboardControl(c) => self.process_action_keyboard_control(c, event).await,
@@ -1289,12 +1307,12 @@ impl<'a> Keyboard<'a> {
             Action::User(id) => self.process_user(id, event).await,
             Action::TriLayerLower => {
                 // Tri-layer lower, turn layer 1 on and update layer state
-                self.process_action_layer_switch(1, event);
+                self.process_action_layer_switch(1, event).await;
                 self.keymap.update_fn_layer_state();
             }
             Action::TriLayerUpper => {
                 // Tri-layer upper, turn layer 2 on and update layer state
-                self.process_action_layer_switch(2, event);
+                self.process_action_layer_switch(2, event).await;
                 self.keymap.update_fn_layer_state();
             }
             #[cfg(feature = "steno")]
@@ -1349,6 +1367,11 @@ impl<'a> Keyboard<'a> {
             // the "modifier released" change in a separate hid report
             result |= osm;
         };
+
+        // Add StickyMod modifiers if active
+        if let Some(sm_mods) = self.sticky_mod_state.value() {
+            result |= *sm_mods;
+        }
 
         result
     }
@@ -1542,12 +1565,14 @@ impl<'a> Keyboard<'a> {
     }
 
     /// Process layer switch action.
-    fn process_action_layer_switch(&mut self, layer_num: u8, event: KeyboardEvent) {
+    async fn process_action_layer_switch(&mut self, layer_num: u8, event: KeyboardEvent) {
         // Change layer state only when the key's state is changed
         if event.pressed {
             self.keymap.activate_layer(layer_num);
         } else {
             self.keymap.deactivate_layer(layer_num);
+            // Clean up StickyMod when layer deactivates
+            self.release_sticky_mod_if_active().await;
         }
     }
 
