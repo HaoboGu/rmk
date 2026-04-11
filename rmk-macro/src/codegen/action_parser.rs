@@ -223,6 +223,38 @@ pub(crate) fn parse_key(
                 );
             }
         }
+        s if s.to_lowercase().starts_with("sm(") => {
+            let prefix = s.get(0..3).unwrap();
+            if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
+                let keys: Vec<&str> = internal
+                    .split_terminator(",")
+                    .map(|w| w.trim())
+                    .filter(|w| !w.is_empty())
+                    .collect();
+                if keys.len() != 2 {
+                    panic!(
+                        "\n\u{274c} keyboard.toml: SM(key, modifier) requires exactly 2 arguments, got {}. Usage: SM(Tab, LAlt)",
+                        keys.len()
+                    );
+                }
+
+                let ident = get_key_with_alias(keys[0].to_string());
+                let modifiers = parse_modifiers(keys[1]);
+
+                if modifiers.is_empty() {
+                    panic!(
+                        "\n\u{274c} keyboard.toml: modifier in SM(key, modifier) is not valid! Usage: SM(Tab, LAlt)"
+                    );
+                }
+                quote! {
+                    ::rmk::sm!(#ident, #modifiers)
+                }
+            } else {
+                panic!(
+                    "\n\u{274c} keyboard.toml: SM(key, modifier) invalid. Usage: SM(Tab, LAlt)"
+                );
+            }
+        }
         s if s.to_lowercase().starts_with("lm(") => {
             let prefix = s.get(0..3).unwrap();
             if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {

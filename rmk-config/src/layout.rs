@@ -396,6 +396,11 @@ impl KeyboardTomlConfig {
                                     key_action_sequence.push(action);
                                 }
 
+                                Rule::sm_action => {
+                                    let action = inner_pair.as_str().to_string();
+                                    key_action_sequence.push(action);
+                                }
+
                                 Rule::wm_action => {
                                     let action = inner_pair.as_str().to_string();
                                     key_action_sequence.push(action);
