@@ -78,7 +78,7 @@ min_render_interval = 10
 instance = "I2C1"
 scl = "PIN_3"
 sda = "PIN_2"
-address = 60
+address = 0x3C
 
 [light]
 # All light pins are high-active by default, uncomment if you want it to be low-active

@@ -1012,7 +1012,13 @@ pub struct I2cConfig {
     pub instance: String,
     pub sda: String,
     pub scl: String,
+    /// 7-bit I2C address. Defaults to 0x3C when omitted.
+    #[serde(default = "default_i2c_address")]
     pub address: u8,
+}
+
+const fn default_i2c_address() -> u8 {
+    0x3C
 }
 
 /// Display driver type
