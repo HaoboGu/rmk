@@ -90,7 +90,7 @@ impl<
 > ShiftRegisterMatrix<SPI, CS, In, D, ROW, COL, ROW_OFFSET, COL_OFFSET>
 {
     /// Number of bytes in the shift-register chain.
-    const NUM_BYTES: usize = (COL + 7) / 8;
+    const NUM_BYTES: usize = COL.div_ceil(8);
 
     /// Create a new shift-register matrix.
     ///
