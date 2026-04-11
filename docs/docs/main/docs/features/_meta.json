@@ -11,5 +11,6 @@
   "use_rust_api",
   "processor",
   "input_device",
+  "display",
   "binary_size_optimization"
 ]

@@ -12,6 +12,7 @@ use super::chip::chip_init::expand_chip_init;
 use super::chip::comm::expand_usb_init;
 use super::chip::flash::expand_flash_init;
 use super::chip::gpio::expand_output_config;
+use super::display::expand_display_config;
 use super::entry::expand_rmk_entry;
 use super::feature::{get_rmk_features, is_feature_enabled};
 use super::import::expand_custom_imports;
@@ -228,8 +229,27 @@ fn expand_main(
     let split_central_config = expand_split_central_config(hardware);
     let (input_device_config, devices, processors) = expand_input_device_config(hardware);
     let matrix_and_keyboard = expand_matrix_and_keyboard_init(hardware);
-    let (registered_processor_initializers, registered_processors) =
+    let (registered_processor_initializers, mut registered_processors) =
         expand_registered_processor_init(hardware, &item_mod);
+
+    // Display configuration — for unibody use top-level, for split use central's config
+    let display_config = match &hardware.board {
+        BoardConfig::UniBody(_) => hardware.display.as_ref(),
+        BoardConfig::Split(split_config) => split_config.central.display.as_ref(),
+    };
+    let display_init = if let Some(display_config) = display_config {
+        let (init, processor) = expand_display_config(&hardware.chip.series, display_config);
+        let processor_initializer = processor.initializer;
+        let processor_var = processor.var_name;
+        registered_processors.push(quote! { #processor_var.run() });
+        quote! {
+            #init
+            #processor_initializer
+        }
+    } else {
+        quote! {}
+    };
+
     let run_rmk = expand_rmk_entry(
         hardware,
         host,
@@ -321,6 +341,9 @@ fn expand_main(
 
             // Initialize input device config as `input_device_config` and processor as `processor`
             #input_device_config
+
+            // Initialize display (if configured)
+            #display_init
 
             // Initialize split central config(if needed)
             #split_central_config

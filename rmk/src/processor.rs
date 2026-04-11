@@ -96,25 +96,11 @@ pub trait PollingProcessor: Processor {
     /// Polling loop that processes events and calls `update()` at the specified interval.
     async fn polling_loop(&mut self) -> ! {
         let mut sub = Self::subscriber();
-        let mut last = embassy_time::Instant::now();
+        let mut ticker = embassy_time::Ticker::every(self.interval());
 
         loop {
-            let elapsed = last.elapsed();
-
-            match select(
-                embassy_time::Timer::after(
-                    self.interval()
-                        .checked_sub(elapsed)
-                        .unwrap_or(embassy_time::Duration::MIN),
-                ),
-                sub.next_event(),
-            )
-            .await
-            {
-                Either::First(_) => {
-                    self.update().await;
-                    last = embassy_time::Instant::now();
-                }
+            match select(ticker.next(), sub.next_event()).await {
+                Either::First(_) => self.update().await,
                 Either::Second(event) => self.process(event).await,
             }
         }

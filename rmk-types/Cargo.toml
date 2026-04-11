@@ -33,4 +33,5 @@ _codegen = []
 # Build-time only features: forwarded from rmk to control constant generation in build.rs.
 split = []
 _ble = []
+display = []
 passkey_entry = []

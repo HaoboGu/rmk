@@ -21,9 +21,11 @@ pub fn parse_processor_config(
 ) -> Result<ProcessorConfig, TokenStream> {
     let parser = AttributeParser::new_validated(tokens, &["subscribe", "poll_interval"])?;
 
+    let poll_interval_ms = parser.get_int("poll_interval")?;
+
     Ok(ProcessorConfig {
         event_types: parser.get_path_array("subscribe")?,
-        poll_interval_ms: parser.get_int("poll_interval")?,
+        poll_interval_ms,
     })
 }
 

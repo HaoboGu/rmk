@@ -16,6 +16,7 @@ pub mod resolved;
 pub mod usb_interrupt_map;
 pub(crate) mod behavior;
 pub(crate) mod board;
+pub(crate) mod display;
 pub(crate) mod host;
 pub(crate) mod keycode_alias;
 pub(crate) mod layout;
@@ -53,6 +54,8 @@ pub struct KeyboardTomlConfig {
     split: Option<SplitConfig>,
     /// Input device config
     input_device: Option<InputDeviceConfig>,
+    /// Display config
+    display: Option<DisplayConfig>,
     /// Output Pin config
     output: Option<Vec<OutputConfig>>,
     /// Set host configurations
@@ -747,6 +750,8 @@ pub struct SplitBoardConfig {
     pub matrix: MatrixConfig,
     /// Input device config for the split
     pub input_device: Option<InputDeviceConfig>,
+    /// Display config for the split board
+    pub display: Option<DisplayConfig>,
     /// Battery ADC pin for this split board
     pub battery_adc_pin: Option<String>,
     /// ADC divider measured value for battery
@@ -983,6 +988,7 @@ pub struct PointingDeviceConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CommunicationProtocol {
     I2c(I2cConfig),
     Spi(SpiConfig),
@@ -1007,7 +1013,42 @@ pub struct I2cConfig {
     pub instance: String,
     pub sda: String,
     pub scl: String,
+    /// 7-bit I2C address. Defaults to 0x3C when omitted.
+    #[serde(default = "default_i2c_address")]
     pub address: u8,
+}
+
+const fn default_i2c_address() -> u8 {
+    0x3C
+}
+
+/// Display driver type
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayDriver {
+    Ssd1306,
+    Sh1106,
+    Sh1107,
+    Sh1108,
+    Ssd1309,
+}
+
+/// Display configuration
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DisplayConfig {
+    pub driver: DisplayDriver,
+    pub protocol: CommunicationProtocol,
+    pub size: String,
+    #[serde(default)]
+    pub rotation: u16,
+    pub renderer: Option<String>,
+    /// Poll interval in milliseconds for periodic redraws (animations).
+    /// When absent, polling is disabled — the display only redraws on events.
+    pub render_interval: Option<u64>,
+    /// Minimum time in milliseconds between event-driven renders.
+    /// Prevents the display from being hammered by rapid events. Default: 10 ms.
+    pub min_render_interval: Option<u64>,
 }
 
 /// Configuration for an output pin
@@ -1045,7 +1086,7 @@ mod tests {
         // Check some key default values from event_default.toml
         assert_eq!(config.keyboard.channel_size, 16);
         assert_eq!(config.keyboard.pubs, 2);
-        assert_eq!(config.keyboard.subs, 2);
+        assert_eq!(config.keyboard.subs, 3);
 
         assert_eq!(config.modifier.channel_size, 8);
         assert_eq!(config.modifier.pubs, 1);
@@ -1085,7 +1126,7 @@ channel_size = 32
         // User-overridden values
         assert_eq!(config.event.keyboard.channel_size, 32);
         assert_eq!(config.event.keyboard.pubs, 2);
-        assert_eq!(config.event.keyboard.subs, 2);
+        assert_eq!(config.event.keyboard.subs, 3);
 
         // Non-overridden values should use defaults
         assert_eq!(config.event.modifier.channel_size, 8);

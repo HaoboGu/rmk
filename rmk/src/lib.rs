@@ -90,6 +90,8 @@ pub mod config;
 pub mod debounce;
 pub mod descriptor;
 pub mod direct_pin;
+#[cfg(feature = "display")]
+pub mod display;
 pub mod driver;
 pub mod event;
 pub mod fork;
