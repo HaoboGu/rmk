@@ -1208,11 +1208,15 @@ impl<'a> Keyboard<'a> {
 
         // Release StickyMod when any non-SM, non-modifier key is pressed.
         // Modifier keys (Shift, Ctrl, etc.) are excluded so Shift+Tab reverse cycling works.
-        if event.pressed
-            && !matches!(action, Action::StickyMod(_, _) | Action::Modifier(_))
-            && self.sticky_mod_state.is_active()
-        {
-            self.release_sticky_mod_if_active().await;
+        if event.pressed && self.sticky_mod_state.is_active() {
+            let is_sm_or_modifier = match action {
+                Action::StickyMod(_, _) | Action::Modifier(_) => true,
+                Action::Key(KeyCode::Hid(hid_key)) if hid_key.is_modifier() => true,
+                _ => false,
+            };
+            if !is_sm_or_modifier {
+                self.release_sticky_mod_if_active().await;
+            }
         }
 
         match action {
