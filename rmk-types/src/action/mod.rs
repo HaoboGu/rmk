@@ -75,6 +75,9 @@ pub enum Action {
     Special(SpecialKey),
     /// User Keys
     User(u8),
+    /// Sticky modifier: sends key + modifier on press, holds modifier until
+    /// another key is pressed or layer changes. Used for Alt+Tab-like switching.
+    StickyMod(KeyCode, ModifierCombination),
     /// A Plover HID stenography key. Press/release of this key updates the
     /// in-progress steno chord; on first release the accumulated chord is
     /// sent to the host as a vendor HID report.
