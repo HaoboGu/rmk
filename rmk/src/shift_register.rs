@@ -28,6 +28,7 @@
 //!     row_pins,     // [impl InputPin; ROW]
 //!     debouncer,
 //! );
+//! matrix.init().await;
 //! ```
 
 use embassy_time::{Duration, Timer};
