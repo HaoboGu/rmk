@@ -181,7 +181,7 @@ impl<'a> Keyboard<'a> {
         }
     }
 
-    pub(crate) fn update_osm(&mut self, event: KeyboardEvent) {
+    pub(crate) fn update_osm(&mut self, _event: KeyboardEvent) {
         match self.osm_state {
             OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
             OneShotState::Single(_) => {
