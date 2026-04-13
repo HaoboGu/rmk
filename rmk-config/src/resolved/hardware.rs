@@ -8,10 +8,10 @@ pub use crate::board::{BoardConfig, UniBodyConfig};
 pub use crate::chip::{ChipModel, ChipSeries};
 pub use crate::communication::{CommunicationConfig, UsbInfo};
 pub use crate::{
-    BleConfig, ChipConfig, CommunicationProtocol, DependencyConfig, EncoderConfig, EncoderResolution, I2cConfig,
-    InputDeviceConfig, JoystickConfig, KeyInfo, LightConfig, MatrixConfig, MatrixType, OutputConfig, PinConfig,
-    Pmw33xxConfig, Pmw33xxType, Pmw3610Config, PointingDeviceConfig, SerialConfig, SpiConfig, SplitBoardConfig,
-    SplitConfig,
+    BleConfig, ChipConfig, CommunicationProtocol, DependencyConfig, DisplayConfig, DisplayDriver, EncoderConfig,
+    EncoderResolution, I2cConfig, InputDeviceConfig, JoystickConfig, KeyInfo, LightConfig, MatrixConfig, MatrixType,
+    OutputConfig, PinConfig, Pmw33xxConfig, Pmw33xxType, Pmw3610Config, PointingDeviceConfig, SerialConfig, SpiConfig,
+    SplitBoardConfig, SplitConfig,
 };
 
 /// Resolved storage hardware config
@@ -30,6 +30,7 @@ pub struct Hardware {
     pub board: BoardConfig,
     pub storage: Option<Storage>,
     pub light: LightConfig,
+    pub display: Option<DisplayConfig>,
     pub output: Vec<OutputConfig>,
     pub dependency: DependencyConfig,
 }
@@ -53,6 +54,7 @@ impl crate::KeyboardTomlConfig {
             None
         };
         let light = self.get_light_config();
+        let display = self.get_display_config();
         let output = self.get_output_config()?;
         let dependency = self.get_dependency_config();
         Ok(Hardware {
@@ -62,6 +64,7 @@ impl crate::KeyboardTomlConfig {
             board,
             storage,
             light,
+            display,
             output,
             dependency,
         })

@@ -10,6 +10,29 @@
 # Format per event: { name = "event_name", count = N }
 # `count` defaults to 1 if omitted.
 
+# --- Display-gated internal subscribers ---
+
+[[subscriber]]
+features = ["display"]
+events = [
+    # display/mod.rs: DisplayProcessor subscribes to these events
+    { name = "wpm_update" },
+    { name = "modifier" },
+    { name = "sleep_state" },
+    { name = "layer_change" },
+    { name = "battery_status" },
+]
+
+[[subscriber]]
+features = ["display", "split"]
+events = [
+    # split/driver.rs: each PeripheralManager subscribes when display is enabled
+    # (gated on #[cfg(feature = "display")] in driver.rs)
+    # Covers up to 2 peripherals; for 3+ peripherals override subs in keyboard.toml
+    { name = "wpm_update" },
+    { name = "sleep_state" },
+]
+
 # --- BLE-gated internal subscribers ---
 
 [[subscriber]]
@@ -47,5 +70,6 @@ events = [
     # split/peripheral.rs: BatteryStatusEvent::subscriber() (cfg _ble)
     { name = "battery_status" },
     # split/driver.rs: ClearPeerEvent::subscriber() (cfg _ble)
-    { name = "clear_peer" },
+    # Covers up to 2 peripherals; for 3+ peripherals override subs in keyboard.toml
+    { name = "clear_peer", count = 2 },
 ]

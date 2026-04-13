@@ -41,6 +41,15 @@ pub(crate) enum SplitMessage {
     KeyboardIndicator(u8),
     /// Layer number from central to peripheral
     Layer(u8),
+    /// WPM from central to peripheral
+    #[cfg(feature = "display")]
+    Wpm(u16),
+    /// Modifier state from central to peripheral
+    #[cfg(feature = "display")]
+    Modifier(u8),
+    /// Sleep state from central to peripheral
+    #[cfg(feature = "display")]
+    SleepState(bool),
     /// Battery status, from peripheral to central
     #[cfg(feature = "_ble")]
     BatteryStatus(BatteryStatusEvent),

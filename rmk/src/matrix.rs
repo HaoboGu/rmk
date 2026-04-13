@@ -28,7 +28,7 @@ pub struct MatrixState {
 #[cfg(feature = "host_security")]
 impl MatrixState {
     pub fn new(row: usize, col: usize) -> Self {
-        let row_len = (col + 7) / 8;
+        let row_len = col.div_ceil(8);
         assert!(row * row_len <= 30, "Matrix too large for MatrixState");
         Self {
             state: [0; 30],

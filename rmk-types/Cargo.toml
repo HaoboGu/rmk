@@ -46,4 +46,5 @@ host = ["rmk_protocol", "bulk", "_ble", "split"]
 # Also used as `#[cfg(feature = "...")]` guards for protocol endpoint/topic gating.
 _ble = []
 split = []
+display = []
 passkey_entry = []
