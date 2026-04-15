@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "_codegen", derive(strum::VariantNames))]
+#[non_exhaustive]
 pub enum KeyboardAction {
     Bootloader,
     Reboot,

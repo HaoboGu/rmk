@@ -33,6 +33,7 @@ use crate::modifier::ModifierCombination;
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
+#[non_exhaustive]
 pub enum Action {
     /// Default action, no action.
     No,

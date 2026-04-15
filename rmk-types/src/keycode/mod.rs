@@ -19,6 +19,7 @@ pub use system_control::SystemControlKey;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "_codegen", derive(strum::VariantNames))]
+#[non_exhaustive]
 pub enum SpecialKey {
     // GraveEscape
     GraveEscape,
@@ -29,6 +30,7 @@ pub enum SpecialKey {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
+#[non_exhaustive]
 pub enum KeyCode {
     Hid(HidKeyCode),
     Consumer(ConsumerKey),

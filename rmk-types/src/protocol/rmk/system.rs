@@ -80,6 +80,7 @@ impl MaxSize for UnlockChallenge {
 
 /// Storage reset mode for the `StorageReset` endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[non_exhaustive]
 pub enum StorageResetMode {
     /// Reset all stored data.
     Full,

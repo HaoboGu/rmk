@@ -17,14 +17,32 @@
 //!
 //! ## Protocol Handshake
 //!
-//! The expected connection flow is:
+//! **Versioning rule.** `sys/version`'s path and `ProtocolVersion`'s shape are
+//! immortal. Hosts call `GetVersion` first, compare `major` / `minor`, and
+//! bail cleanly on mismatch — it is the only endpoint guaranteed to be
+//! callable across every firmware version, and it is the gate that makes
+//! the rest of the protocol forward-compatible.
+//!
+//! Connection flow:
 //! 1. Host connects over USB bulk or BLE serial (COBS-framed).
-//! 2. Host sends `GetVersion` — verifies protocol compatibility.
+//! 2. Host sends `GetVersion`. If `major` differs from the host's supported
+//!    major, or `minor` exceeds the host's known maximum, the host aborts
+//!    with an "update host" diagnostic. It does not proceed to any other
+//!    endpoint.
 //! 3. Host sends `GetCapabilities` — learns layout, feature set, and limits.
-//! 4. Host checks capability flags (e.g., `bulk_transfer_supported`,
-//!    `ble_enabled`) before using conditional endpoint groups.
-//! 5. If the device is locked, host sends `UnlockRequest` and completes
-//!    the physical key challenge before issuing write operations.
+//! 4. Host gates every subsequent call on the capability flags
+//!    (e.g. `bulk_transfer_supported`, `ble_enabled`).
+//! 5. If the device is locked, host sends `UnlockRequest` and completes the
+//!    physical key challenge before issuing write operations.
+//!
+//! ### Version bump policy
+//!
+//! - `minor`: new endpoint; new field appended to a wire struct; new variant
+//!   in a wire enum (including `RmkError`).
+//! - `major`: endpoint removed or retyped; struct field reshaped; enum
+//!   variant renamed or renumbered. `sys/version` itself is exempt —
+//!   changing its shape is forbidden even across major bumps.
+//! - Neither: no wire change.
 
 mod combo;
 mod encoder;
@@ -62,6 +80,7 @@ pub use self::topics::*;
 
 /// Protocol-level error type returned by write operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[non_exhaustive]
 pub enum RmkError {
     /// The request parameters are invalid or out of range.
     InvalidParameter,

@@ -1221,6 +1221,7 @@ impl<'a> Keyboard<'a> {
                 self.process_action_layer_switch(2, event);
                 self.keymap.update_fn_layer_state();
             }
+            _ => warn!("Action variant not supported: {:?}", action),
         }
     }
 
@@ -1367,6 +1368,7 @@ impl<'a> Keyboard<'a> {
                 let key = self.last_key_code;
                 self.process_action_key(key, event).await;
             }
+            _ => warn!("SpecialKey variant not supported: {:?}", key),
         };
     }
 
@@ -1446,6 +1448,7 @@ impl<'a> Keyboard<'a> {
             }
             KeyCode::Consumer(consumer) => self.process_action_consumer_control(consumer, event).await,
             KeyCode::SystemControl(system_control) => self.process_action_system_control(system_control, event).await,
+            _ => warn!("KeyCode variant not supported: {:?}", key),
         }
 
         self.update_osm(event);

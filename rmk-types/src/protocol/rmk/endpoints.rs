@@ -291,7 +291,7 @@ pub const ENDPOINT_LIST: postcard_rpc::EndpointMap = build_endpoint_map!(
 mod tests {
     extern crate alloc;
 
-    use postcard_rpc::Key;
+    use postcard_rpc::{Endpoint, Key};
 
     use super::*;
     use crate::protocol::rmk::snapshot;
@@ -303,6 +303,31 @@ mod tests {
             .flat_map(|g| g.iter())
             .map(|(path, req, resp)| (*path, req.to_bytes(), resp.to_bytes()))
             .collect()
+    }
+
+    /// `sys/version` is the protocol's gate: its REQ/RESP keys must be immortal.
+    /// Every host — regardless of age — relies on this endpoint being callable
+    /// and returning a shape it can decode. Changing these bytes strands every
+    /// older host, which is why this test does NOT honor `UPDATE_SNAPSHOTS`:
+    /// the constants below may only be edited as part of an explicit protocol
+    /// break with design review and a documented major bump.
+    ///
+    /// See the "Protocol Handshake" section in `protocol/rmk/mod.rs` for the
+    /// full versioning rule.
+    #[test]
+    fn sys_version_frozen() {
+        assert_eq!(
+            GetVersion::REQ_KEY.to_bytes(),
+            [0xd6, 0xee, 0xc1, 0xcd, 0xd6, 0x16, 0xfc, 0x29],
+            "sys/version REQ_KEY changed — forbidden. This key is the protocol's \
+             compatibility gate and must never change; see protocol/rmk/mod.rs.",
+        );
+        assert_eq!(
+            GetVersion::RESP_KEY.to_bytes(),
+            [0x82, 0xc8, 0xf1, 0x04, 0xc9, 0x4e, 0x7e, 0x8a],
+            "sys/version RESP_KEY changed — forbidden. Changing ProtocolVersion's \
+             shape breaks every older host; see protocol/rmk/mod.rs.",
+        );
     }
 
     /// Lock down endpoint schema fingerprints for the always-on groups.
