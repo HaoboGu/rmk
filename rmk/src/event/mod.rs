@@ -11,13 +11,38 @@
 //!
 //! - `input`: Input events (keyboard, modifier, pointing device)
 //! - `state`: Keyboard state events (layer, WPM, LED indicator, sleep)
-//! - `battery`: Battery events (ADC, charging, battery state)
+//! - `battery`: Battery events (ADC, charging, battery status)
 //! - `connection`: Connection events (USB/BLE, BLE status)
 //! - `split`: Split keyboard events (peripheral/central connection)
 
 use embassy_sync::blocking_mutex::raw::RawMutex;
 use embassy_sync::pubsub::{ImmediatePublisher, Publisher, Subscriber};
 use embassy_sync::{channel, watch};
+
+/// Generates `Deref`, `From<Event> for Payload`, and `From<Payload> for Event`
+/// for a newtype event struct wrapping a payload.
+macro_rules! impl_payload_wrapper {
+    ($event:ty, $payload:ty) => {
+        impl core::ops::Deref for $event {
+            type Target = $payload;
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl From<$event> for $payload {
+            fn from(event: $event) -> Self {
+                event.0
+            }
+        }
+
+        impl From<$payload> for $event {
+            fn from(payload: $payload) -> Self {
+                Self(payload)
+            }
+        }
+    };
+}
 
 mod action;
 mod battery;
@@ -28,7 +53,7 @@ mod split;
 mod state;
 
 pub use action::ActionEvent;
-pub use battery::{BatteryAdcEvent, BatteryStateEvent, ChargingStateEvent};
+pub use battery::{BatteryAdcEvent, BatteryStatusEvent, ChargingStateEvent};
 #[cfg(feature = "_ble")]
 pub use connection::BleStatusChangeEvent;
 pub use connection::{ConnectionChangeEvent, ConnectionType};

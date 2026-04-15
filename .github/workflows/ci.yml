@@ -19,24 +19,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
       - run: .github/ci/format.sh
 
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt, llvm-tools
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabihf,riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
+      - uses: dtolnay/rust-toolchain@nightly
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-check
+      - name: Install cargo-batch
+        run: cargo install --locked --git https://github.com/embassy-rs/cargo-batch cargo --bin cargo-batch
       - run: .github/ci/check.sh
 
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt, llvm-tools
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabihf,riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-test
+      - name: Install cargo-expand
+        run: cargo install --locked cargo-expand
       - run: .github/ci/test.sh
 
   # Discover buildable examples for the matrix
@@ -224,7 +240,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-build-esp
+      - name: Install espup and esp toolchain
+        run: |
+          cargo install --locked espup
+          espup install
+      - name: Install flip-link
+        run: cargo install --locked flip-link
       - run: .github/ci/build.sh

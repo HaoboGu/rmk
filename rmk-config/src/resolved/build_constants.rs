@@ -46,6 +46,8 @@ pub struct BuildConstants {
     pub split_peripherals_num: usize,
     pub ble_profiles_num: usize,
     pub split_central_sleep_timeout_seconds: u32,
+    pub protocol_max_bulk_size: usize,
+    pub protocol_macro_chunk_size: usize,
     pub events: Vec<EventChannel>,
     pub passkey: Option<Passkey>,
 }
@@ -101,7 +103,7 @@ impl crate::KeyboardTomlConfig {
             wpm_update,
             led_indicator,
             sleep_state,
-            battery_state,
+            battery_status,
             battery_adc,
             charging_state,
             pointing,
@@ -123,6 +125,37 @@ impl crate::KeyboardTomlConfig {
             None
         };
 
+        // Validate that config values do not exceed protocol ceilings.
+        use crate::protocol_limits;
+        if rmk.combo_max_length > protocol_limits::MAX_COMBO_SIZE {
+            return Err(format!(
+                "combo_max_length ({}) exceeds protocol ceiling MAX_COMBO_SIZE ({})",
+                rmk.combo_max_length,
+                protocol_limits::MAX_COMBO_SIZE
+            ));
+        }
+        if rmk.max_patterns_per_key > protocol_limits::MAX_MORSE_SIZE {
+            return Err(format!(
+                "max_patterns_per_key ({}) exceeds protocol ceiling MAX_MORSE_SIZE ({})",
+                rmk.max_patterns_per_key,
+                protocol_limits::MAX_MORSE_SIZE
+            ));
+        }
+        if rmk.protocol_macro_chunk_size > protocol_limits::MAX_MACRO_DATA_SIZE {
+            return Err(format!(
+                "protocol_macro_chunk_size ({}) exceeds protocol ceiling MAX_MACRO_DATA_SIZE ({})",
+                rmk.protocol_macro_chunk_size,
+                protocol_limits::MAX_MACRO_DATA_SIZE
+            ));
+        }
+        if rmk.protocol_max_bulk_size > protocol_limits::MAX_BULK_SIZE {
+            return Err(format!(
+                "protocol_max_bulk_size ({}) exceeds protocol ceiling MAX_BULK_SIZE ({})",
+                rmk.protocol_max_bulk_size,
+                protocol_limits::MAX_BULK_SIZE
+            ));
+        }
+
         Ok(BuildConstants {
             combo_max_num: rmk.combo_max_num,
             combo_max_length: rmk.combo_max_length,
@@ -139,6 +172,8 @@ impl crate::KeyboardTomlConfig {
             split_peripherals_num,
             ble_profiles_num: rmk.ble_profiles_num,
             split_central_sleep_timeout_seconds: rmk.split_central_sleep_timeout_seconds,
+            protocol_max_bulk_size: rmk.protocol_max_bulk_size,
+            protocol_macro_chunk_size: rmk.protocol_macro_chunk_size,
             events,
             passkey,
         })

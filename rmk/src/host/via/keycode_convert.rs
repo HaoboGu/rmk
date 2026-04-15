@@ -33,6 +33,10 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                         0
                     }
                 }
+                _ => {
+                    warn!("KeyCode variant {:?} not supported by via", k);
+                    0
+                }
             },
             Action::KeyWithModifier(k, m) => {
                 if let KeyCode::Hid(hid_keycode) = k {
@@ -85,6 +89,10 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             Action::Special(special_key) => match special_key {
                 SpecialKey::GraveEscape => 0x7c16,
                 SpecialKey::Repeat => 0x7c79,
+                _ => {
+                    warn!("SpecialKey variant {:?} not supported by via", special_key);
+                    0
+                }
             },
             Action::User(id) => (id as u16 & 0xF) | 0x7E00,
             _ => {
@@ -120,6 +128,10 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
         KeyAction::Morse(index) => {
             // Tap dance keycodes: 0x5700..=0x57FF
             0x5700 | (index as u16)
+        }
+        _ => {
+            warn!("KeyAction variant {:?} not supported by via", key_action);
+            0
         }
     }
 }

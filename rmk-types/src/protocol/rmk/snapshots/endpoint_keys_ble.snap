@@ -1,0 +1,12 @@
+# Endpoint Key snapshot — DO NOT edit by hand.
+# File: snapshots/endpoint_keys_ble.snap
+# Each Key is an 8-byte hash of (path, postcard schema of req/resp).
+# Any change to a request/response type — including transitively-referenced
+# types — flips the corresponding Key. If the change is intentional, regenerate:
+#   UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rmk_protocol
+# Format: <path>  REQ <8-byte hex>  RESP <8-byte hex>
+
+conn/ble            REQ 62 7b 0c 28 8e a3 f2 de  RESP ff 78 93 bd 17 58 4d 9f
+conn/clear_ble      REQ 26 b0 91 56 3b db 8b c0  RESP f9 bf 12 de 46 be 06 44
+conn/switch_ble     REQ b1 a5 c6 98 86 80 a5 84  RESP 10 10 b8 fe 8e 8c 4e 4f
+status/battery/get  REQ 9f 96 7d 1e 58 90 18 0c  RESP fa a6 45 83 88 29 a6 8b

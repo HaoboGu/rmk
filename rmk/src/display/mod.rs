@@ -76,7 +76,7 @@ use crate::event::BleStatusChangeEvent;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::PeripheralBatteryEvent;
 use crate::event::{
-    BatteryStateEvent, KeyboardEvent, LayerChangeEvent, LedIndicatorEvent, ModifierEvent, SleepStateEvent,
+    BatteryStatusEvent, KeyboardEvent, LayerChangeEvent, LedIndicatorEvent, ModifierEvent, SleepStateEvent,
     WpmUpdateEvent,
 };
 #[cfg(feature = "split")]
@@ -106,8 +106,8 @@ pub struct RenderContext {
     pub caps_lock: bool,
     /// Whether Num Lock is active.
     pub num_lock: bool,
-    /// Current battery state.
-    pub battery: BatteryStateEvent,
+    /// Current battery status.
+    pub battery: BatteryStatusEvent,
     /// Whether the keyboard is sleeping.
     pub sleeping: bool,
     /// Current BLE connection status (profile + state).
@@ -119,9 +119,9 @@ pub struct RenderContext {
     /// Per-peripheral connection state, indexed by peripheral id.
     #[cfg(feature = "split")]
     pub peripherals_connected: [bool; crate::SPLIT_PERIPHERALS_NUM],
-    /// Per-peripheral battery state, indexed by peripheral id.
+    /// Per-peripheral battery status, indexed by peripheral id.
     #[cfg(all(feature = "split", feature = "_ble"))]
-    pub peripheral_batteries: [BatteryStateEvent; crate::SPLIT_PERIPHERALS_NUM],
+    pub peripheral_batteries: [BatteryStatusEvent; crate::SPLIT_PERIPHERALS_NUM],
     /// Currently active modifier keys (Shift, Ctrl, Alt, GUI).
     pub modifiers: ModifierCombination,
     /// Whether a key is currently held down.
@@ -140,7 +140,7 @@ impl Default for RenderContext {
             wpm: 0,
             caps_lock: false,
             num_lock: false,
-            battery: BatteryStateEvent::NotAvailable,
+            battery: BatteryStatusEvent(rmk_types::battery::BatteryStatus::Unavailable),
             sleeping: false,
             #[cfg(feature = "_ble")]
             ble_status: BleStatus::default(),
@@ -149,7 +149,8 @@ impl Default for RenderContext {
             #[cfg(feature = "split")]
             peripherals_connected: [false; crate::SPLIT_PERIPHERALS_NUM],
             #[cfg(all(feature = "split", feature = "_ble"))]
-            peripheral_batteries: [BatteryStateEvent::NotAvailable; crate::SPLIT_PERIPHERALS_NUM],
+            peripheral_batteries: [BatteryStatusEvent(rmk_types::battery::BatteryStatus::Unavailable);
+                crate::SPLIT_PERIPHERALS_NUM],
             modifiers: ModifierCombination::new(),
             key_pressed: false,
             key_press_latch: false,
@@ -210,7 +211,7 @@ pub trait DisplayRenderer<C: PixelColor> {
 /// Processor that renders keyboard state on a display.
 ///
 /// Subscribes to [`LayerChangeEvent`], [`WpmUpdateEvent`], [`LedIndicatorEvent`],
-/// and [`BatteryStateEvent`], redrawing the screen whenever any of these change.
+/// and [`BatteryStatusEvent`], redrawing the screen whenever any of these change.
 ///
 /// The rendering is delegated to a [`DisplayRenderer`].  Use [`new`](Self::new)
 /// for the built-in [`LogoRenderer`], or [`with_renderer`](Self::with_renderer)
@@ -220,7 +221,7 @@ pub trait DisplayRenderer<C: PixelColor> {
 ///
 /// - `D` — display driver, must implement [`DisplayDriver`].
 /// - `R` — the renderer, defaults to [`LogoRenderer`].
-#[processor(subscribe = [KeyboardEvent, LayerChangeEvent, WpmUpdateEvent, LedIndicatorEvent, ModifierEvent, BatteryStateEvent, SleepStateEvent])]
+#[processor(subscribe = [KeyboardEvent, LayerChangeEvent, WpmUpdateEvent, LedIndicatorEvent, ModifierEvent, BatteryStatusEvent, SleepStateEvent])]
 #[cfg_attr(feature = "_ble", processor(subscribe = [BleStatusChangeEvent]))]
 #[cfg_attr(feature = "split", processor(subscribe = [PeripheralConnectedEvent, CentralConnectedEvent]))]
 #[cfg_attr(all(feature = "split", feature = "_ble"), processor(subscribe = [PeripheralBatteryEvent]))]
@@ -340,21 +341,21 @@ where
     }
 
     async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
-        self.ctx.layer = event.layer;
+        self.ctx.layer = event.0;
         self.render().await;
     }
 
     async fn on_wpm_update_event(&mut self, event: WpmUpdateEvent) {
-        self.ctx.wpm = event.wpm;
+        self.ctx.wpm = event.0;
     }
 
     async fn on_led_indicator_event(&mut self, event: LedIndicatorEvent) {
-        self.ctx.caps_lock = event.indicator.caps_lock();
-        self.ctx.num_lock = event.indicator.num_lock();
+        self.ctx.caps_lock = event.0.caps_lock();
+        self.ctx.num_lock = event.0.num_lock();
         self.render().await;
     }
 
-    async fn on_battery_state_event(&mut self, event: BatteryStateEvent) {
+    async fn on_battery_status_event(&mut self, event: BatteryStatusEvent) {
         self.ctx.battery = event;
         self.render().await;
     }
@@ -372,7 +373,7 @@ where
     }
 
     async fn on_sleep_state_event(&mut self, event: SleepStateEvent) {
-        self.ctx.sleeping = event.sleeping;
+        self.ctx.sleeping = event.0;
         self.render().await;
     }
 

@@ -7,9 +7,6 @@ export CARGO_NET_OFFLINE=false
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$target_root/test}"
 mkdir -p "$CARGO_TARGET_DIR"
 
-ensure_stable_toolchain
-ensure_cargo_tool cargo-expand cargo-expand
-
 # Feature-set matrix for rmk unit tests. Empty entry = --no-default-features only.
 rmk_test_featuresets=(
     ""

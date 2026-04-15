@@ -5,7 +5,8 @@ use embassy_sync::signal::Signal;
 use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-use rmk_types::action::MorseProfile;
+use postcard::experimental::max_size::MaxSize;
+use rmk_types::morse::MorseProfile;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{Key, MapConfig, MapStorage, PostcardValue, SerializationError};
@@ -16,8 +17,9 @@ use {
 };
 #[cfg(feature = "host")]
 use {
-    crate::{MACRO_SPACE_SIZE, combo::ComboConfig, fork::Fork, morse::Morse},
+    crate::{MACRO_SPACE_SIZE, combo::ComboConfig, morse::Morse},
     rmk_types::action::{EncoderAction, KeyAction},
+    rmk_types::fork::Fork,
 };
 
 use crate::channel::FLASH_CHANNEL;
@@ -217,21 +219,21 @@ pub(crate) enum StorageData {
 
 impl<'a> PostcardValue<'a> for StorageData {}
 
-#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, postcard::experimental::max_size::MaxSize)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LocalStorageConfig {
     enable: bool,
     build_hash: u32,
 }
 
-#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, postcard::experimental::max_size::MaxSize)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LayoutConfig {
     default_layer: u8,
     layout_option: u32,
 }
 
-#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, postcard::experimental::max_size::MaxSize)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct BehaviorConfig {
     // The prior-idle-time in ms used for in flow tap

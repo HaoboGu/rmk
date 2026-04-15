@@ -65,6 +65,12 @@ pub fn processor_impl(
         }
     }
 
+    // Deduplicate event types that may appear in multiple sibling #[processor] attributes
+    config.event_types.retain({
+        let mut seen = std::collections::HashSet::new();
+        move |path| seen.insert(quote!(#path).to_string())
+    });
+
     // Validate that subscribe list is not empty
     if config.event_types.is_empty() {
         return syn::Error::new_spanned(

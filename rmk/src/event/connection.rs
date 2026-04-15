@@ -7,44 +7,25 @@
 use rmk_macro::event;
 #[cfg(feature = "_ble")]
 use rmk_types::ble::BleStatus;
+pub use rmk_types::connection::ConnectionType;
 
 // ============================================================================
 // Connection Type Events
 // ============================================================================
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum ConnectionType {
-    Usb,
-    Ble,
-}
-
-impl From<u8> for ConnectionType {
-    fn from(value: u8) -> Self {
-        match value {
-            0 => ConnectionType::Usb,
-            1 => ConnectionType::Ble,
-            _ => ConnectionType::Usb,
-        }
-    }
-}
-
-impl From<ConnectionType> for u8 {
-    fn from(value: ConnectionType) -> Self {
-        match value {
-            ConnectionType::Usb => 0,
-            ConnectionType::Ble => 1,
-        }
-    }
-}
-
 /// Connection type changed event
 #[event(channel_size = crate::CONNECTION_CHANGE_EVENT_CHANNEL_SIZE, pubs = crate::CONNECTION_CHANGE_EVENT_PUB_SIZE, subs = crate::CONNECTION_CHANGE_EVENT_SUB_SIZE)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct ConnectionChangeEvent {
-    pub connection_type: ConnectionType,
+pub struct ConnectionChangeEvent(pub ConnectionType);
+
+impl ConnectionChangeEvent {
+    pub fn new(connection_type: ConnectionType) -> Self {
+        Self(connection_type)
+    }
 }
+
+impl_payload_wrapper!(ConnectionChangeEvent, ConnectionType);
 
 // ============================================================================
 // BLE Connection Events
@@ -56,3 +37,6 @@ pub struct ConnectionChangeEvent {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct BleStatusChangeEvent(pub BleStatus);
+
+#[cfg(feature = "_ble")]
+impl_payload_wrapper!(BleStatusChangeEvent, BleStatus);

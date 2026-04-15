@@ -1,9 +1,9 @@
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
+use rmk_types::fork::Fork;
 use serde::de::{Error as DeError, SeqAccess, Visitor};
 use serde::{Deserializer, Serializer};
 
 use crate::combo::Combo;
-use crate::fork::Fork;
 use crate::morse::Morse;
 use crate::storage::{Storage, StorageData, StorageKey, print_storage_error};
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM};
@@ -181,8 +181,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
 #[cfg(test)]
 mod tests {
-    use rmk_types::action::{Action, MorseMode, MorseProfile};
+    use rmk_types::action::Action;
     use rmk_types::keycode::{HidKeyCode, KeyCode};
+    use rmk_types::morse::{MorseMode, MorseProfile};
     use sequential_storage::map::Value;
 
     use super::*;
@@ -224,7 +225,7 @@ mod tests {
     #[test]
     fn test_morse_with_partial_actions() {
         // Create a Morse with partial actions
-        let mut morse: Morse = Morse::default();
+        let mut morse = Morse::default();
         _ = morse.put(TAP, Action::Key(KeyCode::Hid(HidKeyCode::A)));
         _ = morse.put(HOLD, Action::Key(KeyCode::Hid(HidKeyCode::B)));
 

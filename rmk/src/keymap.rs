@@ -2,7 +2,9 @@ use core::cell::RefCell;
 
 use embassy_time::{Duration, Instant};
 use heapless::LinearMap;
-use rmk_types::action::{EncoderAction, KeyAction, MorseProfile};
+use rmk_types::action::{EncoderAction, KeyAction};
+use rmk_types::fork::Fork;
+use rmk_types::morse::MorseProfile;
 #[cfg(all(feature = "storage", feature = "host"))]
 use {
     crate::{boot::reboot_keyboard, storage::Storage},
@@ -13,10 +15,9 @@ use crate::MACRO_SPACE_SIZE;
 use crate::combo::Combo;
 use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, OneShotModifiersConfig, PositionalConfig};
 use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_event};
-use crate::fork::Fork;
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
-#[cfg(feature = "vial_lock")]
+#[cfg(feature = "host_security")]
 use crate::matrix::MatrixState;
 use crate::morse::Morse;
 
@@ -108,7 +109,7 @@ struct KeyMapInner<'a> {
     /// Timer for held keys (bounded by hold buffer size)
     timer: LinearMap<KeyboardEventPos, Instant, HOLD_BUFFER_SIZE>,
     /// Matrix state for vial lock
-    #[cfg(feature = "vial_lock")]
+    #[cfg(feature = "host_security")]
     matrix_state: MatrixState,
 }
 
@@ -165,8 +166,8 @@ impl KeyMapInner<'_> {
                     let idx = self.encoder_index(layer_num, encoder_pos.id as usize);
                     if let Some(encoder_action) = encoders.get(idx) {
                         return match encoder_pos.direction {
-                            Direction::Clockwise => encoder_action.clockwise(),
-                            Direction::CounterClockwise => encoder_action.counter_clockwise(),
+                            Direction::Clockwise => encoder_action.clockwise,
+                            Direction::CounterClockwise => encoder_action.counter_clockwise,
                             Direction::None => KeyAction::No,
                         };
                     }
@@ -190,8 +191,8 @@ impl KeyMapInner<'_> {
                     && let Some(encoder_action) = encoders.get_mut(idx)
                 {
                     match encoder_pos.direction {
-                        Direction::Clockwise => encoder_action.set_clockwise(action),
-                        Direction::CounterClockwise => encoder_action.set_counter_clockwise(action),
+                        Direction::Clockwise => encoder_action.clockwise = action,
+                        Direction::CounterClockwise => encoder_action.counter_clockwise = action,
                         Direction::None => {}
                     }
                 }
@@ -278,7 +279,7 @@ impl KeyMapInner<'_> {
         if self.num_layer > 3 {
             self.layer_state[3] = self.layer_state[1] && self.layer_state[2];
             let layer = self.get_activated_layer();
-            publish_event(LayerChangeEvent { layer });
+            publish_event(LayerChangeEvent::new(layer));
         }
     }
 
@@ -288,7 +289,7 @@ impl KeyMapInner<'_> {
                 self.layer_state[tri_layer[0] as usize] && self.layer_state[tri_layer[1] as usize];
         }
         let layer = self.get_activated_layer();
-        publish_event(LayerChangeEvent { layer });
+        publish_event(LayerChangeEvent::new(layer));
     }
 
     fn activate_layer(&mut self, layer_num: u8) {
@@ -367,7 +368,7 @@ impl<'a> KeyMap<'a> {
                 hand,
                 mouse_buttons: 0,
                 timer: LinearMap::new(),
-                #[cfg(feature = "vial_lock")]
+                #[cfg(feature = "host_security")]
                 matrix_state: MatrixState::new(ROW, COL),
             }),
         }
@@ -642,7 +643,7 @@ impl<'a> KeyMap<'a> {
         if let Some(encoders) = &mut inner.encoders
             && let Some(encoder_action) = encoders.get_mut(idx)
         {
-            encoder_action.set_clockwise(action);
+            encoder_action.clockwise = action;
             return Some(*encoder_action);
         }
         None
@@ -659,7 +660,7 @@ impl<'a> KeyMap<'a> {
         if let Some(encoders) = &mut inner.encoders
             && let Some(encoder_action) = encoders.get_mut(idx)
         {
-            encoder_action.set_counter_clockwise(action);
+            encoder_action.counter_clockwise = action;
             return Some(*encoder_action);
         }
         None
@@ -713,19 +714,19 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().timer.get(&pos).copied()
     }
 
-    // ── Matrix state (vial_lock) ──
+    // ── Matrix state (host_security) ──
 
-    #[cfg(feature = "vial_lock")]
+    #[cfg(feature = "host_security")]
     pub(crate) fn update_matrix_state(&self, event: &KeyboardEvent) {
         self.inner.borrow_mut().matrix_state.update(event);
     }
 
-    #[cfg(feature = "vial_lock")]
+    #[cfg(feature = "host_security")]
     pub(crate) fn read_matrix_state(&self, target: &mut [u8]) {
         self.inner.borrow().matrix_state.read_all(target);
     }
 
-    #[cfg(feature = "vial_lock")]
+    #[cfg(feature = "host_security")]
     pub(crate) fn read_matrix_key(&self, row: u8, col: u8) -> bool {
         self.inner.borrow().matrix_state.read(row, col)
     }
@@ -733,31 +734,19 @@ impl<'a> KeyMap<'a> {
 
 #[cfg(test)]
 mod test {
+    use rmk_types::fork::{Fork, StateBits};
     use rmk_types::modifier::ModifierCombination;
 
     use crate::combo::{Combo, ComboConfig};
-    use crate::fork::{Fork, StateBits};
     use crate::keymap::fill_vec;
     use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
 
     #[test]
     fn test_fill_vec() {
         let mut combos: heapless::Vec<_, COMBO_MAX_NUM> = heapless::Vec::from_slice(&[
-            Combo::new(ComboConfig {
-                actions: [k!(A), k!(B), k!(C), k!(D)],
-                output: k!(Z),
-                layer: None,
-            }),
-            Combo::new(ComboConfig {
-                actions: [k!(A), k!(B), k!(No), k!(No)],
-                output: k!(X),
-                layer: None,
-            }),
-            Combo::new(ComboConfig {
-                actions: [k!(A), k!(B), k!(C), k!(No)],
-                output: k!(Y),
-                layer: None,
-            }),
+            Combo::new(ComboConfig::new([k!(A), k!(B), k!(C), k!(D)], k!(Z), None)),
+            Combo::new(ComboConfig::new([k!(A), k!(B)], k!(X), None)),
+            Combo::new(ComboConfig::new([k!(A), k!(B), k!(C)], k!(Y), None)),
         ])
         .unwrap();
 

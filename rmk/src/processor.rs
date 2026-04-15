@@ -69,19 +69,19 @@ pub trait Processor: Runnable {
 /// ```rust,ignore
 /// use rmk_macro::processor;
 ///
-/// #[processor(subscribe = [BatteryStateEvent], poll_interval = 1000)]
+/// #[processor(subscribe = [BatteryStatusEvent], poll_interval = 1000)]
 /// struct BatteryLedProcessor {
 ///     led_on: bool,
 /// }
 ///
 /// impl BatteryLedProcessor {
-///     async fn on_battery_state_event(&mut self, event: BatteryStateEvent) {
+///     async fn on_battery_status_event(&mut self, event: BatteryStatusEvent) {
 ///         // Update internal state based on battery event
 ///     }
 ///
 ///     // Called every 1000ms (poll_interval)
 ///     async fn poll(&mut self) {
-///         // Toggle LED based on battery state
+///         // Toggle LED based on battery status
 ///         self.led_on = !self.led_on;
 ///     }
 /// }

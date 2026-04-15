@@ -1,0 +1,21 @@
+# Wire-format value snapshot — DO NOT edit by hand.
+# File: snapshots/wire_values.snap
+# Each entry is the postcard byte encoding of a fixed value. A diff here means
+# the wire format changed (either intentionally or by accident). Regenerate with:
+#   UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rmk_protocol wire_values
+# Format: <label>  <hex bytes>
+
+ConnectionType::Ble                        01
+ConnectionType::Usb                        00
+KeyPosition{layer:0,row:5,col:13}          00 05 0d
+LockStatus{locked:true,await:false,rem:0}  01 00 00
+MatrixState{[0x05,0x00,0x20]}              03 05 00 20
+ProtocolVersion{1,0}                       01 00
+RmkError::BadState                         01
+RmkError::InternalError                    02
+RmkError::InvalidParameter                 00
+RmkResult::Err(BadState)                   01 01
+RmkResult::Ok                              00
+StorageResetMode::Full                     00
+StorageResetMode::LayoutOnly               01
+UnlockChallenge{[]}                        00

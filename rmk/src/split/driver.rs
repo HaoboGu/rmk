@@ -102,10 +102,10 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             let wait_time = if elapsed >= 3000 { 1 } else { 3000 - elapsed };
 
             // Use select_biased_with_feature to handle feature-gated subscriber arms
-            let next_event = async {
+            let next_event_to_peri = async {
                 crate::select_biased_with_feature! {
-                    e = indicator_sub.next_event().fuse() => SplitMessage::KeyboardIndicator(e.indicator.into_bits()),
-                    e = layer_sub.next_event().fuse() => SplitMessage::Layer(e.layer),
+                    e = indicator_sub.next_event().fuse() => SplitMessage::KeyboardIndicator(e.0.into_bits()),
+                    e = layer_sub.next_event().fuse() => SplitMessage::Layer(e.0),
                     with_feature("_ble"): _ = clear_peer_sub.next_event().fuse() => {
                         #[cfg(feature = "storage")]
                         {
@@ -120,13 +120,19 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                         }
                         SplitMessage::ClearPeer
                     },
-                    with_feature("display"): e = wpm_sub.next_event().fuse() => SplitMessage::Wpm(e.wpm),
+                    with_feature("display"): e = wpm_sub.next_event().fuse() => SplitMessage::Wpm(e.0),
                     with_feature("display"): e = modifier_sub.next_event().fuse() => SplitMessage::Modifier(e.modifier.into_bits()),
-                    with_feature("display"): e = sleep_sub.next_event().fuse() => SplitMessage::SleepState(e.sleeping),
+                    with_feature("display"): e = sleep_sub.next_event().fuse() => SplitMessage::SleepState(e.0),
                 }
             };
 
-            match select3(self.transceiver.read(), next_event, Timer::after_millis(wait_time)).await {
+            match select3(
+                self.transceiver.read(),
+                next_event_to_peri,
+                Timer::after_millis(wait_time),
+            )
+            .await
+            {
                 Either3::First(read_result) => match read_result {
                     Ok(split_message) => {
                         self.process_peripheral_message(split_message).await;
@@ -189,7 +195,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 // Non-key events are drop-on-full to keep the split read loop responsive.
                 SplitMessage::Pointing(e) => publish_event(e),
                 #[cfg(feature = "_ble")]
-                SplitMessage::BatteryState(state) => {
+                SplitMessage::BatteryStatus(state) => {
                     // Publish as PeripheralBatteryEvent with the full state
                     use crate::event::PeripheralBatteryEvent;
                     publish_event(PeripheralBatteryEvent { id: self.id, state })

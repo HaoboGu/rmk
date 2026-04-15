@@ -11,11 +11,13 @@ use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::Rectangle;
 use embedded_graphics::primitives::{Circle, Line, PrimitiveStyle};
 use embedded_graphics::text::Text;
+#[cfg(feature = "_ble")]
+use rmk_types::battery::{BatteryStatus, ChargeState};
 
 use super::icons;
 use crate::display::{DisplayRenderer, RenderContext};
 #[cfg(feature = "_ble")]
-use crate::event::BatteryStateEvent;
+use crate::event::BatteryStatusEvent;
 
 const FONT_STYLE: MonoTextStyle<'_, BinaryColor> = MonoTextStyle::new(&FONT_5X8, BinaryColor::On);
 const STROKE: PrimitiveStyle<BinaryColor> = PrimitiveStyle::with_stroke(BinaryColor::On, 1);
@@ -222,7 +224,11 @@ fn draw_lock_dots<D: DrawTarget<Color = BinaryColor>>(ctx: &RenderContext, displ
 }
 
 #[cfg(feature = "_ble")]
-fn draw_battery_icon<D: DrawTarget<Color = BinaryColor>>(battery: BatteryStateEvent, display: &mut D, layout: &Layout) {
+fn draw_battery_icon<D: DrawTarget<Color = BinaryColor>>(
+    battery: BatteryStatusEvent,
+    display: &mut D,
+    layout: &Layout,
+) {
     const NUM_BARS: i32 = 6;
     const BODY_W: i32 = 5;
     const BODY_H: i32 = NUM_BARS + 2;
@@ -256,10 +262,10 @@ fn draw_battery_icon<D: DrawTarget<Color = BinaryColor>>(battery: BatteryStateEv
         .ok();
 
     // Fill bars (bottom-up)
-    let bars: i32 = match battery {
-        BatteryStateEvent::Normal(pct) => ((pct as i32 * NUM_BARS) + 99) / 100,
-        BatteryStateEvent::Charged | BatteryStateEvent::Charging => NUM_BARS,
-        BatteryStateEvent::NotAvailable => 0,
+    let bars: i32 = match *battery {
+        BatteryStatus::Available { level: Some(pct), .. } => ((pct as i32 * NUM_BARS) + 99) / 100,
+        BatteryStatus::Available { level: None, .. } => NUM_BARS,
+        BatteryStatus::Unavailable => 0,
     };
 
     for i in 0..bars {
@@ -280,11 +286,18 @@ fn draw_battery_icon<D: DrawTarget<Color = BinaryColor>>(battery: BatteryStateEv
         let label_style = MonoTextStyle::new(&FONT_6X9, BinaryColor::On);
 
         let mut label: heapless::String<8> = heapless::String::new();
-        match battery {
-            BatteryStateEvent::Normal(pct) => write!(label, "{}%", pct).ok(),
-            BatteryStateEvent::Charging => write!(label, "CHG").ok(),
-            BatteryStateEvent::Charged => write!(label, "FULL").ok(),
-            BatteryStateEvent::NotAvailable => write!(label, "N/A").ok(),
+        match *battery {
+            BatteryStatus::Available {
+                charge_state: ChargeState::Charging,
+                level: Some(pct),
+            } => write!(label, "{}%+", pct).ok(),
+            BatteryStatus::Available {
+                charge_state: ChargeState::Charging,
+                level: None,
+            } => write!(label, "CHG").ok(),
+            BatteryStatus::Available { level: Some(pct), .. } => write!(label, "{}%", pct).ok(),
+            BatteryStatus::Available { level: None, .. } => write!(label, "FULL").ok(),
+            BatteryStatus::Unavailable => write!(label, "N/A").ok(),
         };
 
         let label_w = label.len() as i32 * LABEL_CW;

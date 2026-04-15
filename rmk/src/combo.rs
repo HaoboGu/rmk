@@ -1,27 +1,26 @@
-use heapless::Vec;
-use postcard::experimental::max_size::MaxSize;
 use rmk_types::action::KeyAction;
-use serde::{Deserialize, Serialize};
+use rmk_types::constants::COMBO_MAX_LENGTH;
 
-use crate::COMBO_MAX_LENGTH;
+/// Combo config instantiated with firmware's combo Vec capacity.
+pub type ComboConfig = rmk_types::combo::Combo;
+
 use crate::event::KeyboardEvent;
 
-/// Configuration data for a combo
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct ComboConfig {
-    pub(crate) actions: [KeyAction; COMBO_MAX_LENGTH],
-    pub(crate) output: KeyAction,
-    pub(crate) layer: Option<u8>,
-}
+// Combo.state is a u16 bitmask, so combos are limited to 16 keys.
+// Use core::assert! explicitly — the crate-level `assert!` macro dispatches to
+// defmt::assert! which is not const-compatible.
+const _: () = core::assert!(
+    COMBO_MAX_LENGTH <= 16,
+    "COMBO_MAX_LENGTH exceeds 16 — Combo.state is u16 and cannot track more than 16 keys"
+);
 
 /// Runtime combo instance (config + runtime state)
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Combo {
     pub(crate) config: ComboConfig,
     /// The state records the pressed keys of the combo
-    state: u8,
+    state: u16,
     /// The flag indicates whether the combo is triggered
     is_triggered: bool,
 }
@@ -29,37 +28,6 @@ pub struct Combo {
 impl Default for Combo {
     fn default() -> Self {
         Self::empty()
-    }
-}
-
-impl ComboConfig {
-    pub fn new<I: IntoIterator<Item = KeyAction>>(actions: I, output: KeyAction, layer: Option<u8>) -> Self {
-        let mut combo_actions = [KeyAction::No; COMBO_MAX_LENGTH];
-        for (id, action) in actions.into_iter().enumerate() {
-            if id < COMBO_MAX_LENGTH {
-                combo_actions[id] = action;
-            }
-        }
-        Self {
-            actions: combo_actions,
-            output,
-            layer,
-        }
-    }
-
-    /// Get an empty combo.
-    pub fn empty() -> Self {
-        Self::new(Vec::<KeyAction, COMBO_MAX_LENGTH>::new(), KeyAction::No, None)
-    }
-
-    /// Returns the number of key actions in the combo.
-    pub fn size(&self) -> usize {
-        self.actions.iter().filter(|&&a| a != KeyAction::No).count()
-    }
-
-    /// Find the index of a key action in the combo.
-    pub fn find_key_action_index(&self, key_action: &KeyAction) -> Option<usize> {
-        self.actions.iter().position(|&a| a == *key_action)
     }
 }
 
@@ -79,7 +47,7 @@ impl Combo {
     /// Update the combo's state when a key is pressed.
     /// Returns true if the combo is updated.
     pub(crate) fn update(&mut self, key_action: &KeyAction, key_event: KeyboardEvent, active_layer: u8) -> bool {
-        if !key_event.pressed || self.config.actions.is_empty() || self.is_triggered {
+        if !key_event.pressed || self.config.size() == 0 || self.is_triggered {
             // Ignore combo that without actions
             return false;
         }

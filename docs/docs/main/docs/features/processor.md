@@ -65,18 +65,18 @@ Processors can subscribe to multiple event types and handle them with separate m
 ```rust
 use rmk_macro::processor;
 
-#[processor(subscribe = [LayerChangeEvent, BatteryStateEvent])]
+#[processor(subscribe = [LayerChangeEvent, BatteryStatusEvent])]
 pub struct MultiEventProcessor {
     layer: u8,
 }
 
 impl MultiEventProcessor {
     async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
-        self.layer = event.layer;
+        self.layer = event.0;
         // Update display with new layer
     }
 
-    async fn on_battery_state_event(&mut self, event: BatteryStateEvent) {
+    async fn on_battery_status_event(&mut self, event: BatteryStatusEvent) {
         // Update battery indicator
     }
 }
@@ -107,7 +107,7 @@ impl<D: DrawTarget> DisplayProcessor<D> {
 
     // Event handler - triggered when layer changes
     async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
-        self.layer = event.layer;
+        self.layer = event.0;
         self.needs_refresh = true;
     }
 

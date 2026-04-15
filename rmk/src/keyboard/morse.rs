@@ -1,5 +1,6 @@
 use embassy_time::{Duration, Instant};
-use rmk_types::action::{Action, KeyAction, MorseMode};
+use rmk_types::action::{Action, KeyAction};
+use rmk_types::morse::MorseMode;
 
 use crate::event::KeyboardEvent;
 use crate::keyboard::Keyboard;

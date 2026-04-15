@@ -3,11 +3,6 @@ set -euo pipefail
 # shellcheck source=_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-require_cargo_batch
-ensure_stable_toolchain
-ensure_toolchain beta
-ensure_toolchain nightly
-
 # Single source of truth for the rmk feature-set matrix used by check/clippy.
 # An empty entry means "--no-default-features" with no extra features on top.
 rmk_featuresets=(
@@ -41,11 +36,6 @@ emit_batch_args() {
 log_section "Stable checks"
 # shellcheck disable=SC2046
 cargo +stable batch --target-dir "$target_root/check-stable" $(emit_batch_args check)
-
-log_section "Beta smoke checks"
-cargo +beta batch --target-dir "$target_root/check-beta" \
-    --- check --manifest-path rmk/Cargo.toml --no-default-features \
-    --- check --manifest-path rmk/Cargo.toml --no-default-features --features split,vial,storage,passkey_entry
 
 log_section "Nightly smoke checks"
 cargo +nightly batch --target-dir "$target_root/check-nightly" \
