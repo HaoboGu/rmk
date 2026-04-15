@@ -9,12 +9,12 @@
 //! # Wiring
 //!
 //! ```text
-//!   MCU                  74HC595 (xN)          Matrix
+//!   MCU                   74HC595 (xN)          Matrix
 //!   ---------------------------------------------------
-//!   SPI MOSI  ------->  SER (data in)
-//!   SPI SCK   ------->  SRCLK (shift clock)
-//!   CS / Latch ------>  RCLK (storage clock)    COL 0..N
-//!   GPIO In   <-------------------------------- ROW 0..M
+//!   SPI MOSI  -------->  SER (data in)
+//!   SPI SCK   -------->  SRCLK (shift clock)
+//!   GPIO Out  -------->  RCLK  (storage latch)  COL 0..N
+//!   GPIO In   <------------------------------  ROW 0..M
 //! ```
 //!
 //! # Usage
@@ -24,28 +24,29 @@
 //!
 //! let mut matrix = Hc595Matrix::<_, _, _, _, 2, 16>::new(
 //!     spi_device,   // impl SpiDevice<u8>
-//!     latch_pin,    // impl OutputPin
+//!     latch_pin,    // impl OutputPin (RCLK)
 //!     row_pins,     // [impl InputPin; ROW]
 //!     debouncer,
-//! );
-//! matrix.init().await;
+//! )
+//! .await;
 //! ```
 
-use embassy_time::{Duration, Timer};
+use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
 use embedded_hal_async::spi::SpiDevice;
+use rmk_macro::input_device;
 
 use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::event::{KeyboardEvent, publish_event_async};
-use crate::input_device::{InputDevice, Runnable};
+use crate::event::KeyboardEvent;
 use crate::matrix::{KeyState, MatrixTrait};
 
 const SR_MAX_BYTES: usize = 4;
 const SR_CLEAR_SETTLE_US: u64 = 3;
 const SR_COLUMN_SETTLE_US: u64 = 40;
 
+#[input_device(publish = KeyboardEvent)]
 pub struct Hc595Matrix<
     SPI: SpiDevice<u8>,
     LATCH: OutputPin,
@@ -79,10 +80,15 @@ impl<
     const COL_OFFSET: usize,
 > Hc595Matrix<SPI, LATCH, In, D, ROW, COL, ROW_OFFSET, COL_OFFSET>
 {
-    const NUM_BYTES: usize = (COL + 7) / 8;
+    const NUM_BYTES: usize = {
+        if COL > SR_MAX_BYTES * 8 {
+            panic!("Hc595Matrix supports up to 32 columns");
+        }
+        COL.div_ceil(8)
+    };
 
-    pub fn new(spi: SPI, latch: LATCH, row_pins: [In; ROW], debouncer: D) -> Self {
-        Self {
+    pub async fn new(spi: SPI, latch: LATCH, row_pins: [In; ROW], debouncer: D) -> Self {
+        let mut matrix = Self {
             spi,
             latch,
             row_pins,
@@ -91,27 +97,30 @@ impl<
             scan_pos: (0, 0),
             #[cfg(feature = "async_matrix")]
             rescan_needed: false,
-        }
+        };
+        matrix.clear_columns().await;
+        matrix
     }
 
-    pub async fn init(&mut self) {
-        self.clear_columns().await;
-    }
-
+    /// Keep the latch/write/latch sequence atomic with respect to the executor.
+    ///
+    /// Yielding here lets other devices on the shared SCK/SDIO lines clock data
+    /// into the 74HC595 while RCLK is being prepared, which corrupts both the
+    /// matrix state and the sensor transaction.
     #[inline(always)]
-    fn io_delay() {
+    fn latch_io_delay() {
         for _ in 0..960 {
             core::hint::spin_loop();
         }
     }
 
-    async fn latch(&mut self, data: &[u8]) {
+    async fn pulse_latch(&mut self, data: &[u8]) {
         self.latch.set_low().ok();
-        Self::io_delay();
+        Self::latch_io_delay();
         let _ = self.spi.write(data).await;
-        Self::io_delay();
+        Self::latch_io_delay();
         self.latch.set_high().ok();
-        Self::io_delay();
+        Self::latch_io_delay();
     }
 
     fn col_bitmask(col_idx: usize) -> [u8; SR_MAX_BYTES] {
@@ -124,35 +133,20 @@ impl<
 
     async fn clear_columns(&mut self) {
         let zeros = [0u8; SR_MAX_BYTES];
-        self.latch(&zeros[..Self::NUM_BYTES]).await;
+        self.pulse_latch(&zeros[..Self::NUM_BYTES]).await;
     }
-}
 
-impl<
-    SPI: SpiDevice<u8>,
-    LATCH: OutputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    D: DebouncerTrait<ROW, COL>,
-    const ROW: usize,
-    const COL: usize,
-    const ROW_OFFSET: usize,
-    const COL_OFFSET: usize,
-> InputDevice for Hc595Matrix<SPI, LATCH, In, D, ROW, COL, ROW_OFFSET, COL_OFFSET>
-{
-    type Event = KeyboardEvent;
-
-    async fn read_event(&mut self) -> Self::Event {
+    async fn read_keyboard_event(&mut self) -> KeyboardEvent {
         loop {
             let (col_start, row_start) = self.scan_pos;
 
             for col_idx in col_start..COL {
                 self.clear_columns().await;
-                Timer::after(Duration::from_micros(SR_CLEAR_SETTLE_US)).await;
+                Timer::after_micros(SR_CLEAR_SETTLE_US).await;
 
                 let bitmask = Self::col_bitmask(col_idx);
-                self.latch(&bitmask[..Self::NUM_BYTES]).await;
-                Timer::after(Duration::from_micros(SR_COLUMN_SETTLE_US)).await;
+                self.pulse_latch(&bitmask[..Self::NUM_BYTES]).await;
+                Timer::after_micros(SR_COLUMN_SETTLE_US).await;
 
                 let r_start = if col_idx == col_start { row_start } else { 0 };
 
@@ -198,29 +192,9 @@ impl<
                 self.rescan_needed = false;
             }
 
-            Timer::after(Duration::from_millis(1)).await;
+            Timer::after_millis(1).await;
 
             self.scan_pos = (0, 0);
-        }
-    }
-}
-
-impl<
-    SPI: SpiDevice<u8>,
-    LATCH: OutputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    D: DebouncerTrait<ROW, COL>,
-    const ROW: usize,
-    const COL: usize,
-    const ROW_OFFSET: usize,
-    const COL_OFFSET: usize,
-> Runnable for Hc595Matrix<SPI, LATCH, In, D, ROW, COL, ROW_OFFSET, COL_OFFSET>
-{
-    async fn run(&mut self) -> ! {
-        loop {
-            let event = self.read_event().await;
-            publish_event_async(event).await;
         }
     }
 }
@@ -240,6 +214,6 @@ impl<
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
         self.clear_columns().await;
-        Timer::after(Duration::from_millis(1)).await;
+        Timer::after_millis(1).await;
     }
 }
