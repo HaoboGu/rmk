@@ -14,7 +14,7 @@ use crate::event::{KeyboardEvent, publish_event_async};
 use crate::input_device::{InputDevice, Runnable};
 use crate::state::ConnectionState;
 pub mod bidirectional_matrix;
-pub mod shift_register_matrix;
+pub mod hc595_matrix;
 
 /// Recording the matrix pressed state
 #[cfg(feature = "vial_lock")]

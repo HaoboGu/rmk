@@ -20,35 +20,35 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use rmk::matrix::shift_register_matrix::ShiftRegisterMatrix;
+//! use rmk::matrix::hc595_matrix::Hc595Matrix;
 //!
-//! let mut matrix = ShiftRegisterMatrix::<_, _, _, _, 2, 16>::new(
-//!     spi,          // impl SpiBus
-//!     cs_pin,       // impl OutputPin (active-high latch)
+//! let mut matrix = Hc595Matrix::<_, _, _, _, 2, 16>::new(
+//!     spi_device,   // impl SpiDevice<u8>
+//!     latch_pin,    // impl OutputPin
 //!     row_pins,     // [impl InputPin; ROW]
 //!     debouncer,
-//! )
-//! .await;
+//! );
+//! matrix.init().await;
 //! ```
 
-use embassy_time::Timer;
+use embassy_time::{Duration, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
-use embedded_hal_async::spi::SpiBus;
-use rmk_macro::input_device;
+use embedded_hal_async::spi::SpiDevice;
 
 use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::event::KeyboardEvent;
+use crate::event::{KeyboardEvent, publish_event_async};
+use crate::input_device::{InputDevice, Runnable};
 use crate::matrix::{KeyState, MatrixTrait};
 
 const SR_MAX_BYTES: usize = 4;
 const SR_CLEAR_SETTLE_US: u64 = 3;
 const SR_COLUMN_SETTLE_US: u64 = 40;
-#[input_device(publish = KeyboardEvent)]
-pub struct ShiftRegisterMatrix<
-    SPI: SpiBus,
-    CS: OutputPin,
+
+pub struct Hc595Matrix<
+    SPI: SpiDevice<u8>,
+    LATCH: OutputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     D: DebouncerTrait<ROW, COL>,
@@ -58,7 +58,7 @@ pub struct ShiftRegisterMatrix<
     const COL_OFFSET: usize = 0,
 > {
     spi: SPI,
-    cs: CS,
+    latch: LATCH,
     row_pins: [In; ROW],
     debouncer: D,
     key_states: [[KeyState; ROW]; COL],
@@ -68,8 +68,8 @@ pub struct ShiftRegisterMatrix<
 }
 
 impl<
-    SPI: SpiBus,
-    CS: OutputPin,
+    SPI: SpiDevice<u8>,
+    LATCH: OutputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     D: DebouncerTrait<ROW, COL>,
@@ -77,49 +77,41 @@ impl<
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-> ShiftRegisterMatrix<SPI, CS, In, D, ROW, COL, ROW_OFFSET, COL_OFFSET>
+> Hc595Matrix<SPI, LATCH, In, D, ROW, COL, ROW_OFFSET, COL_OFFSET>
 {
-    const NUM_BYTES: usize = {
-        if COL > SR_MAX_BYTES * 8 {
-            panic!("ShiftRegisterMatrix supports up to 32 columns");
-        }
-        COL.div_ceil(8)
-    };
+    const NUM_BYTES: usize = (COL + 7) / 8;
 
-    pub async fn new(spi: SPI, cs: CS, row_pins: [In; ROW], debouncer: D) -> Self {
-        let mut matrix = Self {
+    pub fn new(spi: SPI, latch: LATCH, row_pins: [In; ROW], debouncer: D) -> Self {
+        Self {
             spi,
-            cs,
+            latch,
             row_pins,
             debouncer,
             key_states: [[KeyState::new(); ROW]; COL],
             scan_pos: (0, 0),
             #[cfg(feature = "async_matrix")]
             rescan_needed: false,
-        };
-        matrix.clear_columns().await;
-        matrix
+        }
     }
 
-    /// Keep the latch/write/latch sequence atomic with respect to the executor.
-    ///
-    /// Yielding here lets other devices on the shared SCK/SDIO lines clock data
-    /// into the 74HC595 while RCLK is being prepared, which corrupts both the
-    /// matrix state and the sensor transaction.
+    pub async fn init(&mut self) {
+        self.clear_columns().await;
+    }
+
     #[inline(always)]
-    fn latch_io_delay() {
+    fn io_delay() {
         for _ in 0..960 {
             core::hint::spin_loop();
         }
     }
 
     async fn latch(&mut self, data: &[u8]) {
-        self.cs.set_low().ok();
-        Self::latch_io_delay();
+        self.latch.set_low().ok();
+        Self::io_delay();
         let _ = self.spi.write(data).await;
-        Self::latch_io_delay();
-        self.cs.set_high().ok();
-        Self::latch_io_delay();
+        Self::io_delay();
+        self.latch.set_high().ok();
+        Self::io_delay();
     }
 
     fn col_bitmask(col_idx: usize) -> [u8; SR_MAX_BYTES] {
@@ -129,22 +121,38 @@ impl<
         buf[Self::NUM_BYTES - 1 - byte_pos] = 1 << bit_pos;
         buf
     }
+
     async fn clear_columns(&mut self) {
         let zeros = [0u8; SR_MAX_BYTES];
         self.latch(&zeros[..Self::NUM_BYTES]).await;
     }
+}
 
-    async fn read_keyboard_event(&mut self) -> KeyboardEvent {
+impl<
+    SPI: SpiDevice<u8>,
+    LATCH: OutputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    D: DebouncerTrait<ROW, COL>,
+    const ROW: usize,
+    const COL: usize,
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+> InputDevice for Hc595Matrix<SPI, LATCH, In, D, ROW, COL, ROW_OFFSET, COL_OFFSET>
+{
+    type Event = KeyboardEvent;
+
+    async fn read_event(&mut self) -> Self::Event {
         loop {
             let (col_start, row_start) = self.scan_pos;
 
             for col_idx in col_start..COL {
                 self.clear_columns().await;
-                Timer::after_micros(SR_CLEAR_SETTLE_US).await;
+                Timer::after(Duration::from_micros(SR_CLEAR_SETTLE_US)).await;
 
                 let bitmask = Self::col_bitmask(col_idx);
                 self.latch(&bitmask[..Self::NUM_BYTES]).await;
-                Timer::after_micros(SR_COLUMN_SETTLE_US).await;
+                Timer::after(Duration::from_micros(SR_COLUMN_SETTLE_US)).await;
 
                 let r_start = if col_idx == col_start { row_start } else { 0 };
 
@@ -190,7 +198,7 @@ impl<
                 self.rescan_needed = false;
             }
 
-            Timer::after_millis(1).await;
+            Timer::after(Duration::from_millis(1)).await;
 
             self.scan_pos = (0, 0);
         }
@@ -198,8 +206,8 @@ impl<
 }
 
 impl<
-    SPI: SpiBus,
-    CS: OutputPin,
+    SPI: SpiDevice<u8>,
+    LATCH: OutputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     D: DebouncerTrait<ROW, COL>,
@@ -207,11 +215,31 @@ impl<
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-> MatrixTrait<ROW, COL> for ShiftRegisterMatrix<SPI, CS, In, D, ROW, COL, ROW_OFFSET, COL_OFFSET>
+> Runnable for Hc595Matrix<SPI, LATCH, In, D, ROW, COL, ROW_OFFSET, COL_OFFSET>
+{
+    async fn run(&mut self) -> ! {
+        loop {
+            let event = self.read_event().await;
+            publish_event_async(event).await;
+        }
+    }
+}
+
+impl<
+    SPI: SpiDevice<u8>,
+    LATCH: OutputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    D: DebouncerTrait<ROW, COL>,
+    const ROW: usize,
+    const COL: usize,
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+> MatrixTrait<ROW, COL> for Hc595Matrix<SPI, LATCH, In, D, ROW, COL, ROW_OFFSET, COL_OFFSET>
 {
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
         self.clear_columns().await;
-        Timer::after_millis(1).await;
+        Timer::after(Duration::from_millis(1)).await;
     }
 }
