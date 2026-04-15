@@ -102,25 +102,10 @@ impl<
         matrix
     }
 
-    /// Keep the latch/write/latch sequence atomic with respect to the executor.
-    ///
-    /// Yielding here lets other devices on the shared SCK/SDIO lines clock data
-    /// into the 74HC595 while RCLK is being prepared, which corrupts both the
-    /// matrix state and the sensor transaction.
-    #[inline(always)]
-    fn latch_io_delay() {
-        for _ in 0..960 {
-            core::hint::spin_loop();
-        }
-    }
-
     async fn pulse_latch(&mut self, data: &[u8]) {
         self.latch.set_low().ok();
-        Self::latch_io_delay();
         let _ = self.spi.write(data).await;
-        Self::latch_io_delay();
         self.latch.set_high().ok();
-        Self::latch_io_delay();
     }
 
     fn col_bitmask(col_idx: usize) -> [u8; SR_MAX_BYTES] {
