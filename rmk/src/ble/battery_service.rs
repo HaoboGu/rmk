@@ -73,10 +73,10 @@ impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
 
             // Check if there's a newer event, if not, use original battery status event
             let state = self.sub.try_next_message_pure().unwrap_or(battery_status);
-            if let BatteryStatus::Available { level: Some(level), .. } = state.0 {
-                if let Err(e) = self.battery_level.notify(self.conn, &level).await {
-                    error!("Failed to notify battery level: {:?}", e);
-                }
+            if let BatteryStatus::Available { level: Some(level), .. } = state.0
+                && let Err(e) = self.battery_level.notify(self.conn, &level).await
+            {
+                error!("Failed to notify battery level: {:?}", e);
             }
         }
     }

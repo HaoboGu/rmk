@@ -11,13 +11,13 @@ use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::Rectangle;
 use embedded_graphics::primitives::{Circle, Line, PrimitiveStyle};
 use embedded_graphics::text::Text;
+#[cfg(feature = "_ble")]
+use rmk_types::battery::{BatteryStatus, ChargeState};
 
 use super::icons;
 use crate::display::{DisplayRenderer, RenderContext};
 #[cfg(feature = "_ble")]
 use crate::event::BatteryStatusEvent;
-#[cfg(feature = "_ble")]
-use rmk_types::battery::{BatteryStatus, ChargeState};
 
 const FONT_STYLE: MonoTextStyle<'_, BinaryColor> = MonoTextStyle::new(&FONT_5X8, BinaryColor::On);
 const STROKE: PrimitiveStyle<BinaryColor> = PrimitiveStyle::with_stroke(BinaryColor::On, 1);
@@ -224,7 +224,11 @@ fn draw_lock_dots<D: DrawTarget<Color = BinaryColor>>(ctx: &RenderContext, displ
 }
 
 #[cfg(feature = "_ble")]
-fn draw_battery_icon<D: DrawTarget<Color = BinaryColor>>(battery: BatteryStatusEvent, display: &mut D, layout: &Layout) {
+fn draw_battery_icon<D: DrawTarget<Color = BinaryColor>>(
+    battery: BatteryStatusEvent,
+    display: &mut D,
+    layout: &Layout,
+) {
     const NUM_BARS: i32 = 6;
     const BODY_W: i32 = 5;
     const BODY_H: i32 = NUM_BARS + 2;
@@ -283,8 +287,14 @@ fn draw_battery_icon<D: DrawTarget<Color = BinaryColor>>(battery: BatteryStatusE
 
         let mut label: heapless::String<8> = heapless::String::new();
         match *battery {
-            BatteryStatus::Available { charge_state: ChargeState::Charging, level: Some(pct) } => write!(label, "{}%+", pct).ok(),
-            BatteryStatus::Available { charge_state: ChargeState::Charging, level: None } => write!(label, "CHG").ok(),
+            BatteryStatus::Available {
+                charge_state: ChargeState::Charging,
+                level: Some(pct),
+            } => write!(label, "{}%+", pct).ok(),
+            BatteryStatus::Available {
+                charge_state: ChargeState::Charging,
+                level: None,
+            } => write!(label, "CHG").ok(),
             BatteryStatus::Available { level: Some(pct), .. } => write!(label, "{}%", pct).ok(),
             BatteryStatus::Available { level: None, .. } => write!(label, "FULL").ok(),
             BatteryStatus::Unavailable => write!(label, "N/A").ok(),

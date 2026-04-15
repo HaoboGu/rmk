@@ -149,7 +149,8 @@ impl Default for RenderContext {
             #[cfg(feature = "split")]
             peripherals_connected: [false; crate::SPLIT_PERIPHERALS_NUM],
             #[cfg(all(feature = "split", feature = "_ble"))]
-            peripheral_batteries: [BatteryStatusEvent(rmk_types::battery::BatteryStatus::Unavailable); crate::SPLIT_PERIPHERALS_NUM],
+            peripheral_batteries: [BatteryStatusEvent(rmk_types::battery::BatteryStatus::Unavailable);
+                crate::SPLIT_PERIPHERALS_NUM],
             modifiers: ModifierCombination::new(),
             key_pressed: false,
             key_press_latch: false,

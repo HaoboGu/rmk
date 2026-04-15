@@ -405,10 +405,8 @@ pub(crate) async fn process_vial<'a>(
                             for i in 0..COMBO_MAX_LENGTH {
                                 let action =
                                     from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
-                                if !action.is_empty() {
-                                    if actions.push(action).is_err() {
-                                        return None;
-                                    }
+                                if !action.is_empty() && actions.push(action).is_err() {
+                                    return None;
                                 }
                             }
                             let output = from_via_keycode(LittleEndian::read_u16(

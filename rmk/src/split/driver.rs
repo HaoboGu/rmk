@@ -126,7 +126,13 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 }
             };
 
-            match select3(self.transceiver.read(), next_event_to_peri, Timer::after_millis(wait_time)).await {
+            match select3(
+                self.transceiver.read(),
+                next_event_to_peri,
+                Timer::after_millis(wait_time),
+            )
+            .await
+            {
                 Either3::First(read_result) => match read_result {
                     Ok(split_message) => {
                         self.process_peripheral_message(split_message).await;
