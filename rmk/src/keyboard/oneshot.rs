@@ -163,10 +163,8 @@ impl<'a> Keyboard<'a> {
     pub(crate) fn update_osm(&mut self, event: KeyboardEvent) {
         match self.osm_state {
             OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
-            OneShotState::Single(_) => {
-                if !event.pressed {
-                    self.osm_state = OneShotState::None;
-                }
+            OneShotState::Single(_) if !event.pressed => {
+                self.osm_state = OneShotState::None;
             }
             _ => (),
         }
@@ -175,11 +173,9 @@ impl<'a> Keyboard<'a> {
     pub(crate) fn update_osl(&mut self, event: KeyboardEvent) {
         match self.osl_state {
             OneShotState::Initial(l) => self.osl_state = OneShotState::Held(l),
-            OneShotState::Single(layer_num) => {
-                if !event.pressed {
-                    self.keymap.deactivate_layer(layer_num);
-                    self.osl_state = OneShotState::None;
-                }
+            OneShotState::Single(layer_num) if !event.pressed => {
+                self.keymap.deactivate_layer(layer_num);
+                self.osl_state = OneShotState::None;
             }
             _ => (),
         }

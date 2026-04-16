@@ -100,20 +100,13 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
                             let layout_option: u32 = 0;
                             BigEndian::write_u32(&mut report.input_data[2..6], layout_option);
                         }
+                        #[cfg(not(feature = "vial_lock"))]
                         ViaKeyboardInfo::SwitchMatrixState => {
-                            #[cfg(feature = "vial_lock")]
-                            {
-                                #[cfg(not(feature = "vial_lock"))]
-                                {
-                                    self.keymap.read_matrix_state(&mut report.input_data[2..]);
-                                    error!("It is not secure to use matrix tester without vial lock");
-                                }
-
-                                #[cfg(feature = "vial_lock")]
-                                if self.locker.is_unlocked() {
-                                    self.keymap.read_matrix_state(&mut report.input_data[2..]);
-                                }
-                            }
+                            error!("It is not secure to use matrix tester without vial lock");
+                        }
+                        #[cfg(feature = "vial_lock")]
+                        ViaKeyboardInfo::SwitchMatrixState if self.locker.is_unlocked() => {
+                            self.keymap.read_matrix_state(&mut report.input_data[2..]);
                         }
                         ViaKeyboardInfo::FirmwareVersion => {
                             BigEndian::write_u32(&mut report.input_data[2..6], VIA_FIRMWARE_VERSION);
