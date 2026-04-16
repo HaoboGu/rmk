@@ -14,8 +14,10 @@ use postcard_schema::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::keycode::HidKeyCode;
+
 /// The bit representation of the modifier combination.
-#[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
+#[bitfield(u8, order = Lsb, debug = false)]
 #[derive(Serialize, Deserialize, MaxSize, Eq, PartialEq)]
 pub struct ModifierCombination {
     #[bits(1)]
@@ -35,6 +37,19 @@ pub struct ModifierCombination {
     #[bits(1)]
     pub right_gui: bool,
 }
+
+crate::impl_debug_list!(ModifierCombination, |self| [
+    (self.left_ctrl(), HidKeyCode::LCtrl),
+    (self.left_shift(), HidKeyCode::LShift),
+    (self.left_alt(), HidKeyCode::LAlt),
+    (self.left_gui(), HidKeyCode::LGui),
+    (self.right_ctrl(), HidKeyCode::RCtrl),
+    (self.right_shift(), HidKeyCode::RShift),
+    (self.right_alt(), HidKeyCode::RAlt),
+    (self.right_gui(), HidKeyCode::RGui),
+]
+.into_iter()
+.filter_map(|(state, label)| state.then_some(label)));
 
 #[cfg(feature = "rmk_protocol")]
 impl Schema for ModifierCombination {

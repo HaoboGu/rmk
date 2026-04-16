@@ -226,7 +226,11 @@ pub async fn run_rmk<
         #[cfg(feature = "usb_log")]
         let logger_fut = {
             let usb_logger = crate::usb::add_usb_logger!(&mut usb_builder);
-            embassy_usb_logger::with_class!(1024, log::LevelFilter::Debug, usb_logger)
+            embassy_usb_logger::with_custom_style!(1024, log::LevelFilter::Debug, usb_logger, |record, writer| {
+                use core::fmt::Write;
+                let ms = embassy_time::Instant::now().as_millis();
+                let _ = write!(writer, "[{:>8}ms {:5}] {}\r\n", ms, record.level(), record.args());
+            })
         };
 
         #[cfg(not(feature = "usb_log"))]

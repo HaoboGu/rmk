@@ -36,6 +36,7 @@ pub mod ble;
 pub mod combo;
 pub mod connection;
 pub mod constants;
+pub mod fmt;
 pub mod fork;
 pub mod keycode;
 pub mod led_indicator;

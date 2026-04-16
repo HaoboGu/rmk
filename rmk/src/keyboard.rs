@@ -1419,7 +1419,7 @@ impl<'a> Keyboard<'a> {
             }
 
             // Update last key code
-            if hid_keycode != HidKeyCode::Again {
+            if hid_keycode != HidKeyCode::Again && self.last_key_code != key {
                 debug!(
                     "Last key code changed from {:?} to {:?}(pressed: {:?})",
                     self.last_key_code, key, event.pressed
@@ -1648,7 +1648,10 @@ impl<'a> Keyboard<'a> {
     pub(crate) async fn send_keyboard_report_with_resolved_modifiers(&mut self, pressed: bool) {
         // all modifier related effects are combined here to be sent with the hid report:
         let modifiers = self.resolve_modifiers(pressed);
-        info!("Sending keyboard report, pressed: {}", pressed);
+        info!(
+            "Sending keyboard report, modifiers: {:?}, keycodes: {:?}",
+            modifiers, &self.held_keycodes,
+        );
         self.send_report(Report::KeyboardReport(KeyboardReport {
             modifier: modifiers.into_bits(),
             reserved: 0,
