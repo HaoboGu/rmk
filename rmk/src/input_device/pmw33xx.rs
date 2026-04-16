@@ -789,11 +789,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use embassy_futures::block_on;
     use embedded_hal_mock::eh1::digital::{Mock as PinMock, State as PinState, Transaction as PinTrans};
     use embedded_hal_mock::eh1::spi::{Mock as SpiMock, Transaction as SpiTrans};
 
     use super::*;
+    use crate::test_support::test_block_on as block_on;
 
     // Init logger for tests
     #[ctor::ctor]

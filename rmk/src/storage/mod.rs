@@ -782,12 +782,12 @@ macro_rules! read_storage {
 
 #[cfg(test)]
 mod tests {
-    use embassy_futures::block_on;
     use sequential_storage::cache::NoCache;
     use sequential_storage::map::{MapConfig, MapStorage};
 
     use super::*;
     use crate::config::{BehaviorConfig as RuntimeBehaviorConfig, StorageConfig as RuntimeStorageConfig};
+    use crate::test_support::test_block_on as block_on;
 
     #[derive(Debug, Clone, Copy)]
     struct TestFlashError;

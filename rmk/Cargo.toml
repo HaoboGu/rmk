@@ -91,7 +91,6 @@ rmk = { path = ".", default-features = false, features = ["std", "log"] }
 critical-section = { version = "1.2", features = ["std"] }
 env_logger = "0.11"
 ctor = "0.6.0"
-rusty-fork = "0.3.0"
 embedded-hal-mock = { version = "0.11.1", features = ["embedded-hal-async"] }
 
 [build-dependencies]
@@ -160,9 +159,12 @@ usb_log = ["dep:embassy-usb-logger", "log"]
 ## Use log, this feature cannot be enabled when defmt is enabled
 log = ["dep:log", "trouble-host?/log"]
 
-## Add std feature for testing
+## Activate the embassy-time mock driver for deterministic, fast test timing.
+## (Despite the historic name, this feature does NOT enable embassy-time/std —
+## it swaps in the manually-advanced mock clock that the test harness drives
+## via `tests/common/test_block_on.rs`.)
 std = [
-    "embassy-time/std",
+    "embassy-time/mock-driver",
     "embassy-time/generic-queue-128",
 ]
 

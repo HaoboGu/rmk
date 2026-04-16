@@ -64,10 +64,8 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard
         ..behavior_config
     };
 
-    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
-    let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
-    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 5>> = static_cell::StaticCell::new();
-    let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
+    let per_key_config: &'static PositionalConfig<1, 5> = Box::leak(Box::new(PositionalConfig::default()));
     Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
 
@@ -126,9 +124,7 @@ pub fn create_morse_keyboard(behavior_config: BehaviorConfig, hand: [[Hand; 5]; 
         ..behavior_config
     };
 
-    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
-    let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
-    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 5>> = static_cell::StaticCell::new();
-    let per_key_config = KEY_CONFIG.init(PositionalConfig::new(hand));
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
+    let per_key_config: &'static PositionalConfig<1, 5> = Box::leak(Box::new(PositionalConfig::new(hand)));
     Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }

@@ -51,6 +51,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-test
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: nextest@0.9
       - name: Install cargo-expand
         run: cargo install --locked cargo-expand
       - run: .github/ci/test.sh

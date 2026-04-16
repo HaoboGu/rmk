@@ -120,6 +120,13 @@ pub mod storage;
 #[cfg(not(feature = "_no_usb"))]
 pub mod usb;
 
+// Test-only helper that drives `embassy-time/mock-driver` from the
+// `#[cfg(test)]` modules under `src/`. Mirrors the same helper at
+// `tests/common/test_block_on.rs` (which is invisible to lib unit tests
+// because integration tests are a separate compilation target).
+#[cfg(test)]
+pub(crate) mod test_support;
+
 pub async fn initialize_keymap<
     'a,
     const ROW: usize,
