@@ -36,7 +36,7 @@ use crate::keymap::KeyMap;
 use crate::morse::{MorsePattern, TAP};
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
-use crate::{FORK_MAX_NUM, MACRO_SPACE_SIZE, boot};
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, boot};
 
 pub(crate) mod combo;
 pub(crate) mod held_buffer;
@@ -1001,6 +1001,28 @@ impl<'a> Keyboard<'a> {
             self.trigger_delayed_combo(key_action, event).await;
         }
 
+        // If this is a re-press of a key belonging to an already-triggered combo
+        // (the user released one chord key and pressed it again while the other
+        // is still down), reassert its bit in the combo state and swallow the
+        // press. Otherwise the press would reach `register_keycode` at the same
+        // pos where the combo output was registered and overwrite it in the
+        // HID report, stranding the re-pressed key after the combo completes.
+        if event.pressed {
+            let reasserted = self.keymap.with_combos_mut(|combos| {
+                let mut any = false;
+                for combo in combos.iter_mut().filter_map(|c| c.as_mut()) {
+                    if combo.reassert_if_triggered(key_action) {
+                        any = true;
+                    }
+                }
+                any
+            });
+            if reasserted {
+                debug!("[Combo] re-press of triggered-combo key swallowed: {:?}", key_action);
+                return (None, true);
+            }
+        }
+
         let max_size_of_updated_combo = self.keymap.with_combos_mut(|combos| {
             combos
                 .iter_mut()
@@ -1055,7 +1077,11 @@ impl<'a> Keyboard<'a> {
             if !event.pressed {
                 info!("Releasing keys in combo: {:?} {:?}", event, key_action);
 
-                let mut combo_output = None;
+                // Overlapping triggered combos can each fully release on the same key
+                // (e.g. `M+,` and `,+.` both sharing Comma), so collect every combo
+                // output that unwinds — not just the first — otherwise the others
+                // stay stuck on the host.
+                let mut combo_outputs: Vec<KeyAction, COMBO_MAX_NUM> = Vec::new();
                 let mut releasing_triggered_combo = false;
 
                 self.keymap.with_combos_mut(|combos| {
@@ -1067,19 +1093,23 @@ impl<'a> Keyboard<'a> {
 
                             // Release the combo key, check whether the combo is fully released
                             if combo.update_released(key_action) {
-                                // If the combo is fully released, update the combo output
                                 debug!("[Combo] {:?} is released", combo.config.output);
-                                combo_output = combo_output.or(Some(combo.config.output));
+                                let _ = combo_outputs.push(combo.config.output);
                             }
                         }
                     }
                 });
 
-                // Releasing a triggered combo
-                // - Return the output of the triggered combo when the combo is fully released
-                // - Return None when the combo is not fully released yet
+                // Releasing a triggered combo:
+                // - Dispatch every combo output whose combo fully unwound, in iteration
+                //   order. Returning `None` tells the caller not to dispatch again.
+                // - Return `(None, true)` on a partial release too (combo output still
+                //   held), which consumes the release event without sending anything.
                 if releasing_triggered_combo {
-                    return (combo_output, true);
+                    for output in &combo_outputs {
+                        self.process_key_action(output, event, true).await;
+                    }
+                    return (None, true);
                 }
             }
 
@@ -1738,26 +1768,26 @@ impl<'a> Keyboard<'a> {
 
     /// Unregister a key from hid report.
     fn unregister_keycode(&mut self, key: HidKeyCode, event: KeyboardEvent) {
-        // First, find the key event slot according to the position
+        // Prefer a slot whose recorded pos AND keycode both match. Combo outputs are
+        // registered under the triggering key's pos, so a pos-only match can hit a
+        // slot that holds a different keycode — and clear the wrong combo output,
+        // leaving the intended one stuck on the host.
         let slot = self.registered_keys.iter().enumerate().find_map(|(i, k)| {
             if let Some(e) = k
                 && event.pos == e.pos
+                && self.held_keycodes[i] == key
             {
                 return Some(i);
             }
             None
         });
 
-        // If the slot is found, update the key in the slot
+        // Fall back to any slot holding the same keycode.
+        let slot = slot.or_else(|| self.held_keycodes.iter().position(|&k| k == key));
+
         if let Some(index) = slot {
             self.held_keycodes[index] = HidKeyCode::No;
             self.registered_keys[index] = None;
-        } else {
-            // Otherwise, release the first same key
-            if let Some(index) = self.held_keycodes.iter().position(|&k| k == key) {
-                self.held_keycodes[index] = HidKeyCode::No;
-                self.registered_keys[index] = None;
-            }
         }
     }
 

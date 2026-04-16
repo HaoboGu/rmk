@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optimize the timing for motion read and sending reports on the PMW3610
 - Correct the delay length of PMW3610 to the precise value
 
+### Fixed
+
+- Fix stuck key when a combo key is re-pressed while the combo is still held. Previously the re-press overwrote the combo output's HID slot, and on combo release the output couldn't be unregistered, leaving the re-pressed key stuck on the host.
+- Fix stuck combo output when overlapping triggered combos share a key (e.g. `M+,` and `,+.` both containing Comma). Releasing the shared key now dispatches the release of every fully-unwound combo output, not just the first.
+- Fix `unregister_keycode` choosing the wrong HID slot when a combo output and another pressed key share a position. Slot lookup now prefers a `(pos, keycode)` match and falls back to keycode-only.
+
 ## [0.8.2] - 2025-12-18
 
 ### Added
