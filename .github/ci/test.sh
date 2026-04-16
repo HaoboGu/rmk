@@ -21,6 +21,10 @@ rmk_test_featuresets=(
 log_section "Running tests"
 cargo +stable test --manifest-path rmk-config/Cargo.toml
 cargo +stable test --manifest-path rmk-types/Cargo.toml
+# Exercise the rmk_protocol module (gated behind `rmk_protocol`) so the wire-format
+# snapshot tests under rmk-types/src/protocol/rmk/snapshots/ run in CI. `host`
+# enables rmk_protocol + bulk + _ble + split, covering every snapshot.
+cargo +stable test --manifest-path rmk-types/Cargo.toml --features host
 cargo +stable test --manifest-path rmk-macro/Cargo.toml
 for feats in "${rmk_test_featuresets[@]}"; do
     if [[ -z "$feats" ]]; then
