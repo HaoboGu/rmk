@@ -334,19 +334,17 @@ impl<'a> Keyboard<'a> {
                     }
                 }
             }
-            KeyState::Pressed(_) | KeyState::Released(_) | KeyState::EarlyFired(_) => {
-                if key.action.is_morse() {
-                    // Wait for timeout or new key event
-                    info!("Waiting morse key: {:?}", key.action);
-                    match with_deadline(key.timeout_time, self.keyboard_event_subscriber.next_message_pure()).await {
-                        Ok(event) => {
-                            debug!("Buffered morse key interrupted by a new key event: {:?}", event);
-                            self.process_inner(event).await;
-                        }
-                        Err(_timeout) => {
-                            debug!("Buffered morse key timeout");
-                            self.handle_morse_timeout(&key).await;
-                        }
+            KeyState::Pressed(_) | KeyState::Released(_) | KeyState::EarlyFired(_) if key.action.is_morse() => {
+                // Wait for timeout or new key event
+                info!("Waiting morse key: {:?}", key.action);
+                match with_deadline(key.timeout_time, self.keyboard_event_subscriber.next_message_pure()).await {
+                    Ok(event) => {
+                        debug!("Buffered morse key interrupted by a new key event: {:?}", event);
+                        self.process_inner(event).await;
+                    }
+                    Err(_timeout) => {
+                        debug!("Buffered morse key timeout");
+                        self.handle_morse_timeout(&key).await;
                     }
                 }
             }
