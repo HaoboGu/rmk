@@ -19,6 +19,7 @@ on:
         type: string
 env:
   LIBSSL: "libssl1.1_1.1.1f-1ubuntu2_amd64.deb"
+  RUST_MIN_STACK: "67108864"
 jobs:
   get_chip_name:
     runs-on: ubuntu-latest
