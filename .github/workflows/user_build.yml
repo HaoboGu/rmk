@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v6
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             libssl*.deb
@@ -57,7 +57,7 @@ jobs:
     steps:
       - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v6
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             libssl*.deb
@@ -78,12 +78,12 @@ jobs:
         working-directory: ./rmk
         run: cargo make uf2 --release
       - name: Upload uf2 artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: firmware_uf2
           path: rmk/*.uf2
       - name: Upload hex artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: firmware_hex
           path: rmk/*.hex
@@ -94,7 +94,7 @@ jobs:
     steps:
       - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v6
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             libssl*.deb
@@ -142,7 +142,7 @@ jobs:
         working-directory: ./rmk
         run: espflash save-image --chip ${{ needs.get_chip_name.outputs.chip_name }} target/${{ steps.arch.outputs.arch }}/release/${{ steps.project_name.outputs.project_name }} --merge ./rmk.bin
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: firmware_bin
           path: rmk/*.bin
