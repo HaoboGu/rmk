@@ -1,0 +1,18 @@
+# cargo-nextest configuration. Passed to `cargo nextest run --config-file`
+# from scripts/test_all.sh and .github/ci/test.sh because each crate is its
+# own cargo workspace, so nextest's default `<workspace>/.config/nextest.toml`
+# lookup misses this shared file.
+#
+# rmk's integration tests run against `embassy-time/mock-driver` (via the
+# dev-only `std` feature in rmk/Cargo.toml) and are driven by
+# `tests/common/test_block_on::test_block_on`. Virtual time eliminates the
+# wall-clock drift that previously caused flaky tap/hold decisions, so no
+# parallelism cap or retry net is needed.
+
+[profile.default]
+fail-fast = false
+failure-output = "immediate-final"
+
+[profile.ci]
+fail-fast = false
+failure-output = "immediate-final"

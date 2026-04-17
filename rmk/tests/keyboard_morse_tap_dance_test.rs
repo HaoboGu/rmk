@@ -10,7 +10,6 @@ use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
 use rmk::types::morse::{MorseMode, MorseProfile};
 use rmk::{k, td};
-use rusty_fork::rusty_fork_test;
 
 use crate::common::wrap_keymap;
 
@@ -58,10 +57,8 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static> {
         ..Default::default()
     };
 
-    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
-    let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
-    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 4>> = static_cell::StaticCell::new();
-    let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
+    let per_key_config: &'static PositionalConfig<1, 4> = Box::leak(Box::new(PositionalConfig::default()));
     Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
 
@@ -107,10 +104,8 @@ fn create_early_fire_keyboard() -> Keyboard<'static> {
         ..Default::default()
     };
 
-    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
-    let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
-    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 6>> = static_cell::StaticCell::new();
-    let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
+    let per_key_config: &'static PositionalConfig<1, 6> = Box::leak(Box::new(PositionalConfig::default()));
     Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
 
@@ -142,449 +137,442 @@ fn create_permissive_hold_keyboard() -> Keyboard<'static> {
         ..Default::default()
     };
 
-    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
-    let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
-    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 4>> = static_cell::StaticCell::new();
-    let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
+    let per_key_config: &'static PositionalConfig<1, 4> = Box::leak(Box::new(PositionalConfig::default()));
     Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
 
-rusty_fork_test! {
-    #[test]
-    fn test_tap() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 0, true, 150],  // Press td!(0)
-                [0, 0, false, 10], // Release td!(0)
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+#[test]
+fn test_tap() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 0, true, 150],  // Press td!(0)
+            [0, 0, false, 10], // Release td!(0)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    #[test]
-    fn test_hold() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 0, true, 150],  // Press td!(0)
-                [0, 0, false, 300], // Release td!(0)
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+#[test]
+fn test_hold() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 0, true, 150],  // Press td!(0)
+            [0, 0, false, 300], // Release td!(0)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    #[test]
-    fn test_hold_after_tap() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 0, true, 150], // Press td!(0)
-                [0, 0, false, 240], // Release td!(0)
-                [0, 0, true, 240], // Press td!(0)
-                [0, 0, false, 300], // Release td!(0)
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+#[test]
+fn test_hold_after_tap() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 0, true, 150], // Press td!(0)
+            [0, 0, false, 240], // Release td!(0)
+            [0, 0, true, 240], // Press td!(0)
+            [0, 0, false, 300], // Release td!(0)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    #[test]
-    fn test_double_tap() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 0, true, 150],  // Press td!(0)
-                [0, 0, false, 200], // Release td!(0)
-                [0, 0, true, 200],  // Press td!(0)
-                [0, 0, false, 200], // Release td!(0)
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+#[test]
+fn test_double_tap() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 0, true, 150],  // Press td!(0)
+            [0, 0, false, 200], // Release td!(0)
+            [0, 0, true, 200],  // Press td!(0)
+            [0, 0, false, 200], // Release td!(0)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    #[test]
-    fn test_tap_on_other_press() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 1, true, 150],  // Press td!(1)
-                [0, 1, false, 10], // Release td!(1)
-                [0, 3, true, 10], // Press A
-                [0, 3, false, 10], // Press A
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+#[test]
+fn test_tap_on_other_press() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 1, true, 150],  // Press td!(1)
+            [0, 1, false, 10], // Release td!(1)
+            [0, 3, true, 10], // Press A
+            [0, 3, false, 10], // Press A
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    #[test]
-    fn test_hold_on_other_press() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 1, true, 150],  // Press td!(1)
-                [0, 3, true, 10], // Press A
-                [0, 3, false, 10], // Press A
-                [0, 1, false, 10], // Release td!(1)
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(Y), 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(Y), kc_to_u8!(A), 0, 0, 0, 0]],
-                [0, [kc_to_u8!(Y), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+#[test]
+fn test_hold_on_other_press() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 1, true, 150],  // Press td!(1)
+            [0, 3, true, 10], // Press A
+            [0, 3, false, 10], // Press A
+            [0, 1, false, 10], // Release td!(1)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(Y), 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(Y), kc_to_u8!(A), 0, 0, 0, 0]],
+            [0, [kc_to_u8!(Y), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    #[test]
-    fn test_hold_after_tap_on_other_press() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 1, true, 150],  // Press td!(1)
-                [0, 1, false, 100], // Release td!(1)
-                [0, 1, true, 100],  // Press td!(1)
-                [0, 3, true, 10], // Press A
-                [0, 3, false, 10], // Press A
-                [0, 1, false, 10], // Release td!(1)
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(Z), 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(Z), kc_to_u8!(A), 0, 0, 0, 0]],
-                [0, [kc_to_u8!(Z), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+#[test]
+fn test_hold_after_tap_on_other_press() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 1, true, 150],  // Press td!(1)
+            [0, 1, false, 100], // Release td!(1)
+            [0, 1, true, 100],  // Press td!(1)
+            [0, 3, true, 10], // Press A
+            [0, 3, false, 10], // Press A
+            [0, 1, false, 10], // Release td!(1)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(Z), 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(Z), kc_to_u8!(A), 0, 0, 0, 0]],
+            [0, [kc_to_u8!(Z), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    #[test]
-    fn test_multiple_tap() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 0, true, 150],  // Press td!(0)
-                [0, 0, false, 10], // Release td!(0)
-                [0, 0, true, 260],  // Press td!(0)
-                [0, 0, false, 10], // Release td!(0)
-                [0, 1, true, 260],  // Press td!(1)
-                [0, 1, false, 10], // Release td!(1)
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+#[test]
+fn test_multiple_tap() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 0, true, 150],  // Press td!(0)
+            [0, 0, false, 10], // Release td!(0)
+            [0, 0, true, 260],  // Press td!(0)
+            [0, 0, false, 10], // Release td!(0)
+            [0, 1, true, 260],  // Press td!(1)
+            [0, 1, false, 10], // Release td!(1)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    #[test]
-    fn test_tap_after_double_tap() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 0, true, 150],  // Press td!(0)
-                [0, 0, false, 10], // Release td!(0)
-                [0, 0, true, 150],  // Press td!(0)
-                [0, 0, false, 10], // Release td!(0)
-                [0, 0, true, 260],  // Press td!(0)
-                [0, 0, false, 10], // Release td!(0)
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+#[test]
+fn test_tap_after_double_tap() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 0, true, 150],  // Press td!(0)
+            [0, 0, false, 10], // Release td!(0)
+            [0, 0, true, 150],  // Press td!(0)
+            [0, 0, false, 10], // Release td!(0)
+            [0, 0, true, 260],  // Press td!(0)
+            [0, 0, false, 10], // Release td!(0)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    #[test]
-    fn test_rolling() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 0, true, 150], // Press td!(0)
-                [0, 0, false, 10], // Release td!(0)
-                [0, 0, true, 150], // Press td!(0)
-                [0, 1, true, 10], // Press td!(1) -> Trigger hold-after-tap of td!(0)
-                [0, 0, false, 100], // Release td!(0)
-                [0, 1, false, 10], // Release td!(1)
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+#[test]
+fn test_rolling() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 0, true, 150], // Press td!(0)
+            [0, 0, false, 10], // Release td!(0)
+            [0, 0, true, 150], // Press td!(0)
+            [0, 1, true, 10], // Press td!(1) -> Trigger hold-after-tap of td!(0)
+            [0, 0, false, 100], // Release td!(0)
+            [0, 1, false, 10], // Release td!(1)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    #[test]
-    fn test_rolling_2() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 0, true, 150], // Press td!(0)
-                [0, 0, false, 10], // Release td!(0)
-                [0, 0, true, 150], // Press td!(0)
-                [0, 1, true, 260], // Press td!(1) -> td!(0) timeout
-                [0, 0, false, 260], // Release td!(0) -> td!(1) timeout
-                [0, 1, false, 10], // Release td!(1)
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(C), kc_to_u8!(Y), 0, 0, 0, 0]],
-                [0, [0, kc_to_u8!(Y), 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+#[test]
+fn test_rolling_2() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 0, true, 150], // Press td!(0)
+            [0, 0, false, 10], // Release td!(0)
+            [0, 0, true, 150], // Press td!(0)
+            [0, 1, true, 260], // Press td!(1) -> td!(0) timeout
+            [0, 0, false, 260], // Release td!(0) -> td!(1) timeout
+            [0, 1, false, 10], // Release td!(1)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(C), kc_to_u8!(Y), 0, 0, 0, 0]],
+            [0, [0, kc_to_u8!(Y), 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    #[test]
-    fn test_rolling_3() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 0, true, 150], // Press td!(0)
-                [0, 0, false, 10], // Release td!(0)
-                [0, 0, true, 150], // Press td!(0)
-                [0, 1, true, 260], // Press td!(1),      td!(0) timeout (tap-hold) -> press "C"
-                [0, 1, false, 260], // Release td!(1) -> td(1) hold, gap -> tap "Y"
-                [0, 0, false, 260], // Release td!(0) -> release "C"
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(C), kc_to_u8!(Y), 0, 0, 0, 0]],
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+#[test]
+fn test_rolling_3() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 0, true, 150], // Press td!(0)
+            [0, 0, false, 10], // Release td!(0)
+            [0, 0, true, 150], // Press td!(0)
+            [0, 1, true, 260], // Press td!(1),      td!(0) timeout (tap-hold) -> press "C"
+            [0, 1, false, 260], // Release td!(1) -> td(1) hold, gap -> tap "Y"
+            [0, 0, false, 260], // Release td!(0) -> release "C"
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(C), kc_to_u8!(Y), 0, 0, 0, 0]],
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    #[test]
-    fn test_multiple_tap_dance_keys() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 0, true, 150], // Press td!(0)
-                [0, 0, false, 10], // Release td!(0)
-                [0, 0, true, 150], // Press td!(0)
-                [0, 1, true, 10], // Press td!(1) -> Trigger hold-after-tap of td!(0)
-                [0, 1, false, 10], // Release td!(1)
-                [0, 0, false, 100], // Release td!(0)
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+#[test]
+fn test_multiple_tap_dance_keys() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 0, true, 150], // Press td!(0)
+            [0, 0, false, 10], // Release td!(0)
+            [0, 0, true, 150], // Press td!(0)
+            [0, 1, true, 10], // Press td!(1) -> Trigger hold-after-tap of td!(0)
+            [0, 1, false, 10], // Release td!(1)
+            [0, 0, false, 100], // Release td!(0)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
+#[test]
+fn test_multiple_tap_dance_keys_2() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 0, true, 150], // Press td!(0)
+            [0, 0, false, 10], // Release td!(0)
+            [0, 0, true, 150], // Press td!(0)
+            [0, 1, true, 10], // Press td!(1) -> Trigger hold-after-tap of td!(0)
+            [0, 1, false, 10], // Release td!(1)
+            [0, 0, false, 300], // Release td!(0) -> td!(1) Timeout!
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(C), kc_to_u8!(X), 0, 0, 0, 0]],
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    #[test]
-    fn test_multiple_tap_dance_keys_2() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 0, true, 150], // Press td!(0)
-                [0, 0, false, 10], // Release td!(0)
-                [0, 0, true, 150], // Press td!(0)
-                [0, 1, true, 10], // Press td!(1) -> Trigger hold-after-tap of td!(0)
-                [0, 1, false, 10], // Release td!(1)
-                [0, 0, false, 300], // Release td!(0) -> td!(1) Timeout!
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(C), kc_to_u8!(X), 0, 0, 0, 0]],
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+#[test]
+fn test_multiple_tap_dance_keys_3() {
+    key_sequence_test! {
+        keyboard: create_tap_dance_test_keyboard(),
+        sequence: [
+            [0, 0, true, 150], // Press td!(0)
+            [0, 0, false, 10], // Release td!(0)
+            [0, 0, true, 150], // Press td!(0)
+            [0, 1, true, 10], // Press td!(1) -> Trigger hold-after-tap of td!(0)
+            [0, 1, false, 310], // Release td!(1) -> td!(1) Timeout!
+            [0, 0, false, 10], // Release td!(0)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(C), kc_to_u8!(Y), 0, 0, 0, 0]],
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    #[test]
-    fn test_multiple_tap_dance_keys_3() {
-        key_sequence_test! {
-            keyboard: create_tap_dance_test_keyboard(),
-            sequence: [
-                [0, 0, true, 150], // Press td!(0)
-                [0, 0, false, 10], // Release td!(0)
-                [0, 0, true, 150], // Press td!(0)
-                [0, 1, true, 10], // Press td!(1) -> Trigger hold-after-tap of td!(0)
-                [0, 1, false, 310], // Release td!(1) -> td!(1) Timeout!
-                [0, 0, false, 10], // Release td!(0)
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(C), kc_to_u8!(Y), 0, 0, 0, 0]],
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+/// Test that early fire does not produce double key press when another key is pressed shortly after.
+///
+/// Scenario: Press td!(0) (tap=Enter, hold_after_tap=Enter), release quickly (early fire triggers Enter),
+/// then press normal key 'A' shortly after.
+///
+/// Expected: Enter press, Enter release, A press (NOT: Enter press, Enter release, Enter press, Enter release, A press)
+#[test]
+fn test_early_fire_no_double_press_on_next_key() {
+    key_sequence_test! {
+        keyboard: create_early_fire_keyboard(),
+        sequence: [
+            [0, 4, true, 10],   // Press td!(0) morse key
+            [0, 4, false, 50],  // Release td!(0) quickly — early fire triggers Enter
+            [0, 0, true, 50],   // Press A shortly after
+            [0, 0, false, 10],  // Release A
+            [0, 0, true, 50],   // Press A shortly after
+            [0, 0, false, 300],  // Release A
+        ],
+        expected_reports: [
+            // Early fire: Enter tap (press + release)
+            [0, [kc_to_u8!(Enter), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            // Normal key A (press + release)
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            // Normal key A (press + release)
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    /// Test that early fire does not produce double key press when another key is pressed shortly after.
-    ///
-    /// Scenario: Press td!(0) (tap=Enter, hold_after_tap=Enter), release quickly (early fire triggers Enter),
-    /// then press normal key 'A' shortly after.
-    ///
-    /// Expected: Enter press, Enter release, A press (NOT: Enter press, Enter release, Enter press, Enter release, A press)
-    #[test]
-    fn test_early_fire_no_double_press_on_next_key() {
-        key_sequence_test! {
-            keyboard: create_early_fire_keyboard(),
-            sequence: [
-                [0, 4, true, 10],   // Press td!(0) morse key
-                [0, 4, false, 50],  // Release td!(0) quickly — early fire triggers Enter
-                [0, 0, true, 50],   // Press A shortly after
-                [0, 0, false, 10],  // Release A
-                [0, 0, true, 50],   // Press A shortly after
-                [0, 0, false, 300],  // Release A
-            ],
-            expected_reports: [
-                // Early fire: Enter tap (press + release)
-                [0, [kc_to_u8!(Enter), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                // Normal key A (press + release)
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                // Normal key A (press + release)
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+/// Test that after early fire, re-pressing and holding the same key triggers hold_after_tap.
+///
+/// Scenario: Press td!(0), release quickly (early fire triggers Enter),
+/// then re-press td!(0) and hold past timeout.
+///
+/// Expected: Enter press, Enter release (early fire), then hold_after_tap triggers Enter again
+#[test]
+fn test_early_fire_then_hold_after_tap() {
+    key_sequence_test! {
+        keyboard: create_early_fire_keyboard(),
+        sequence: [
+            [0, 4, true, 10],    // Press td!(0) morse key
+            [0, 4, false, 50],   // Release td!(0) quickly — early fire triggers Enter
+            [0, 4, true, 50],    // Re-press td!(0)
+            [0, 4, false, 300],  // Hold past timeout, then release — hold_after_tap fires Enter
+        ],
+        expected_reports: [
+            // Early fire: Enter tap (press + release)
+            [0, [kc_to_u8!(Enter), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            // hold_after_tap: Enter (hold, then release)
+            [0, [kc_to_u8!(Enter), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+/// Regression test for permissive hold key ordering bug.
+///
+/// Scenario: Press morse key (td!(0)), press normal key (E), release morse key first, release E.
+/// With permissive hold, the normal key is buffered. When the morse key is released first,
+/// the morse key should resolve as tap before the normal key fires.
+///
+/// Expected: A (morse tap) fires first, then E fires — NOT E then A.
+#[test]
+fn test_permissive_hold_morse_released_first_key_order() {
+    key_sequence_test! {
+        keyboard: create_permissive_hold_keyboard(),
+        sequence: [
+            [0, 0, true, 10],    // Press td!(0) morse key
+            [0, 1, true, 10],    // Press E (buffered due to permissive hold)
+            [0, 0, false, 10],   // Release td!(0) — morse key released first
+            [0, 1, false, 300],  // Release E after gap timeout
+        ],
+        expected_reports: [
+            // Morse tap fires first (A press + release via process_key_action_tap)
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            // Then normal key E fires (press via fire_held_non_morse_keys)
+            [0, [kc_to_u8!(E), 0, 0, 0, 0, 0]],
+            // E release
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    /// Test that after early fire, re-pressing and holding the same key triggers hold_after_tap.
-    ///
-    /// Scenario: Press td!(0), release quickly (early fire triggers Enter),
-    /// then re-press td!(0) and hold past timeout.
-    ///
-    /// Expected: Enter press, Enter release (early fire), then hold_after_tap triggers Enter again
-    #[test]
-    fn test_early_fire_then_hold_after_tap() {
-        key_sequence_test! {
-            keyboard: create_early_fire_keyboard(),
-            sequence: [
-                [0, 4, true, 10],    // Press td!(0) morse key
-                [0, 4, false, 50],   // Release td!(0) quickly — early fire triggers Enter
-                [0, 4, true, 50],    // Re-press td!(0)
-                [0, 4, false, 300],  // Hold past timeout, then release — hold_after_tap fires Enter
-            ],
-            expected_reports: [
-                // Early fire: Enter tap (press + release)
-                [0, [kc_to_u8!(Enter), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                // hold_after_tap: Enter (hold, then release)
-                [0, [kc_to_u8!(Enter), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
-    /// Regression test for permissive hold key ordering bug.
-    ///
-    /// Scenario: Press morse key (td!(0)), press normal key (E), release morse key first, release E.
-    /// With permissive hold, the normal key is buffered. When the morse key is released first,
-    /// the morse key should resolve as tap before the normal key fires.
-    ///
-    /// Expected: A (morse tap) fires first, then E fires — NOT E then A.
-    #[test]
-    fn test_permissive_hold_morse_released_first_key_order() {
-        key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
-            sequence: [
-                [0, 0, true, 10],    // Press td!(0) morse key
-                [0, 1, true, 10],    // Press E (buffered due to permissive hold)
-                [0, 0, false, 10],   // Release td!(0) — morse key released first
-                [0, 1, false, 300],  // Release E after gap timeout
-            ],
-            expected_reports: [
-                // Morse tap fires first (A press + release via process_key_action_tap)
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                // Then normal key E fires (press via fire_held_non_morse_keys)
-                [0, [kc_to_u8!(E), 0, 0, 0, 0, 0]],
-                // E release
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
+/// Test permissive hold: normal key released first triggers hold for the morse key.
+///
+/// Scenario: Press morse key (td!(0)), press normal key (E), release E first (triggers
+/// permissive hold → morse resolves as hold=B), then release morse key.
+#[test]
+fn test_permissive_hold_normal_released_first() {
+    key_sequence_test! {
+        keyboard: create_permissive_hold_keyboard(),
+        sequence: [
+            [0, 0, true, 10],    // Press td!(0) morse key
+            [0, 1, true, 10],    // Press E (buffered due to permissive hold)
+            [0, 1, false, 10],   // Release E — triggers permissive hold for td!(0)
+            [0, 0, false, 10],   // Release td!(0)
+        ],
+        expected_reports: [
+            // Permissive hold: morse key resolves as hold (B press)
+            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+            // E fires after hold resolves (press + release via process_key_action_tap)
+            [0, [kc_to_u8!(B), kc_to_u8!(E), 0, 0, 0, 0]],
+            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+            // Release morse key (B release)
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
-    /// Test permissive hold: normal key released first triggers hold for the morse key.
-    ///
-    /// Scenario: Press morse key (td!(0)), press normal key (E), release E first (triggers
-    /// permissive hold → morse resolves as hold=B), then release morse key.
-    #[test]
-    fn test_permissive_hold_normal_released_first() {
-        key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
-            sequence: [
-                [0, 0, true, 10],    // Press td!(0) morse key
-                [0, 1, true, 10],    // Press E (buffered due to permissive hold)
-                [0, 1, false, 10],   // Release E — triggers permissive hold for td!(0)
-                [0, 0, false, 10],   // Release td!(0)
-            ],
-            expected_reports: [
-                // Permissive hold: morse key resolves as hold (B press)
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-                // E fires after hold resolves (press + release via process_key_action_tap)
-                [0, [kc_to_u8!(B), kc_to_u8!(E), 0, 0, 0, 0]],
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-                // Release morse key (B release)
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
-
-    /// Test that after early fire, re-pressing and release again to produce two taps.
-    ///
-    /// Scenario: Press td!(1), release quickly (early fire triggers E),
-    /// then re-press td!(1) and release quickly again.
-    ///
-    /// Expected: E press, E release (early fire), press E again
-    #[test]
-    fn test_early_fire_then_fire_on_second_tap_with_no_double_tap_config() {
-        key_sequence_test! {
-            keyboard: create_early_fire_keyboard(),
-            sequence: [
-                [0, 5, true, 10],    // Press td!(1) morse key
-                [0, 5, false, 20],   // Release td!(1) quickly — early fire triggers E
-                [0, 5, true, 20],    // Re-press td!(1)
-                [0, 5, false, 20],   // quick tap — early fire triggers E again
-                [0, 0, true, 20],    // Press A after 300ms (early-fired key timeout fires, cleans buffer)
-                [0, 0, false, 20],   // Release A
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(E), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(E), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        };
-    }
-
-
+/// Test that after early fire, re-pressing and release again to produce two taps.
+///
+/// Scenario: Press td!(1), release quickly (early fire triggers E),
+/// then re-press td!(1) and release quickly again.
+///
+/// Expected: E press, E release (early fire), press E again
+#[test]
+fn test_early_fire_then_fire_on_second_tap_with_no_double_tap_config() {
+    key_sequence_test! {
+        keyboard: create_early_fire_keyboard(),
+        sequence: [
+            [0, 5, true, 10],    // Press td!(1) morse key
+            [0, 5, false, 20],   // Release td!(1) quickly — early fire triggers E
+            [0, 5, true, 20],    // Re-press td!(1)
+            [0, 5, false, 20],   // quick tap — early fire triggers E again
+            [0, 0, true, 20],    // Press A after 300ms (early-fired key timeout fires, cleans buffer)
+            [0, 0, false, 20],   // Release A
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(E), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(E), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
 }

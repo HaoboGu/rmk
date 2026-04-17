@@ -311,13 +311,13 @@ impl<'a> PointingProcessor<'a> {
 mod tests {
     use std::cell::Cell;
 
-    use embassy_futures::block_on;
     use embassy_time::Duration;
     use embedded_hal::digital::{ErrorType, InputPin};
     use embedded_hal_async::digital::Wait;
 
     use super::*;
     use crate::input_device::InputDevice;
+    use crate::test_support::test_block_on as block_on;
 
     // Init logger for tests
     #[ctor::ctor]

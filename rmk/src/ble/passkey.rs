@@ -224,9 +224,8 @@ pub fn hid_keycode_to_digit(k: HidKeyCode) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
-    use embassy_futures::block_on;
-
     use super::*;
+    use crate::test_support::test_block_on as block_on;
 
     #[test]
     fn test_passkey_entry_state_basic() {

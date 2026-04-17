@@ -1,7 +1,7 @@
 pub mod morse;
+pub mod test_block_on;
 pub mod test_macro;
 
-use embassy_futures::block_on;
 use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
@@ -149,10 +149,8 @@ pub const fn get_keymap() -> [[[KeyAction; 14]; 5]; 2] {
 }
 
 pub fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'static> {
-    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
-    let behavior_config: &'static mut BehaviorConfig = BEHAVIOR_CONFIG.init(config);
-    static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<5, 14>> = static_cell::StaticCell::new();
-    let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(config));
+    let per_key_config: &'static PositionalConfig<5, 14> = Box::leak(Box::new(PositionalConfig::default()));
     Keyboard::new(wrap_keymap(get_keymap(), per_key_config, behavior_config))
 }
 
@@ -163,7 +161,7 @@ pub fn wrap_keymap<'a, const R: usize, const C: usize, const L: usize>(
 ) -> &'a KeyMap<'static> {
     // Box::leak is acceptable in tests
     let data = Box::leak(Box::new(KeymapData::new(keymap)));
-    let keymap = block_on(KeyMap::new(data, config, per_key_config));
+    let keymap = test_block_on::test_block_on(KeyMap::new(data, config, per_key_config));
     Box::leak(Box::new(keymap))
 }
 
