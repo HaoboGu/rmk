@@ -30,13 +30,13 @@ pub(crate) async fn run_serial_peripheral_manager<
 }
 
 /// Serial driver for BOTH split central and peripheral
-pub(crate) struct SerialSplitDriver<S: Read + Write> {
+pub(crate) struct SerialSplitDriver<S> {
     serial: S,
     buffer: [u8; SPLIT_MESSAGE_MAX_SIZE],
     n_bytes_part: usize,
 }
 
-impl<S: Read + Write> SerialSplitDriver<S> {
+impl<S> SerialSplitDriver<S> {
     pub(crate) fn new(serial: S) -> Self {
         Self {
             serial,
@@ -46,10 +46,13 @@ impl<S: Read + Write> SerialSplitDriver<S> {
     }
 }
 
-impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
+impl<S: Read> SplitReader for SerialSplitDriver<S> {
     async fn read(&mut self) -> Result<SplitMessage, SplitDriverError> {
         const SENTINEL: u8 = 0x00;
-        while self.n_bytes_part < self.buffer.len() {
+        // Check the buffer *before* reading: a prior read() call may have
+        // pulled in more than one complete message, and the next one is
+        // already waiting in `self.buffer[..self.n_bytes_part]`.
+        while !self.buffer[..self.n_bytes_part].contains(&SENTINEL) && self.n_bytes_part < self.buffer.len() {
             let n_bytes = self
                 .serial
                 .read(&mut self.buffer[self.n_bytes_part..])
@@ -61,11 +64,8 @@ impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
             if n_bytes == 0 {
                 return Err(SplitDriverError::EmptyMessage);
             }
-
-            self.n_bytes_part = (self.n_bytes_part + n_bytes).min(self.buffer.len());
-            if self.buffer[..self.n_bytes_part].contains(&SENTINEL) {
-                break;
-            }
+            debug_assert!(self.n_bytes_part + n_bytes <= self.buffer.len());
+            self.n_bytes_part += n_bytes;
         }
 
         let (result, n_bytes_unused) =
@@ -89,7 +89,7 @@ impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
     }
 }
 
-impl<S: Read + Write> SplitWriter for SerialSplitDriver<S> {
+impl<S: Write> SplitWriter for SerialSplitDriver<S> {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError> {
         let mut buf = [0_u8; SPLIT_MESSAGE_MAX_SIZE];
         let bytes = postcard::to_slice_cobs(message, &mut buf).map_err(|e| {
@@ -106,5 +106,127 @@ impl<S: Read + Write> SplitWriter for SerialSplitDriver<S> {
             remaining_bytes -= sent_bytes;
         }
         Ok(bytes.len())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::VecDeque;
+    use std::convert::Infallible;
+
+    use embassy_futures::block_on;
+    use embedded_io_async::ErrorType;
+
+    use super::*;
+
+    /// Fake `embedded_io_async::Read`: each `serial.read()` call returns the
+    /// next scripted chunk. Panics if the driver calls `read()` more times
+    /// than we scripted — that is itself a useful assertion, since #801 is
+    /// about the driver making a `read()` call it should not have made.
+    struct FakeSerial {
+        chunks: VecDeque<Vec<u8>>,
+        read_calls: usize,
+    }
+
+    impl FakeSerial {
+        fn new<I: IntoIterator<Item = Vec<u8>>>(chunks: I) -> Self {
+            Self {
+                chunks: chunks.into_iter().collect(),
+                read_calls: 0,
+            }
+        }
+    }
+
+    impl ErrorType for FakeSerial {
+        type Error = Infallible;
+    }
+
+    impl Read for FakeSerial {
+        async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+            self.read_calls += 1;
+            let chunk = self
+                .chunks
+                .pop_front()
+                .expect("SerialSplitDriver made an unexpected underlying read() call");
+            assert!(
+                chunk.len() <= buf.len(),
+                "scripted chunk larger than driver's read slice"
+            );
+            buf[..chunk.len()].copy_from_slice(&chunk);
+            Ok(chunk.len())
+        }
+    }
+
+    fn encode(msg: &SplitMessage) -> Vec<u8> {
+        let mut buf = [0u8; SPLIT_MESSAGE_MAX_SIZE];
+        let encoded = postcard::to_slice_cobs(msg, &mut buf).unwrap();
+        encoded.to_vec()
+    }
+
+    #[test]
+    fn read_single_message_in_one_chunk() {
+        let fake = FakeSerial::new([encode(&SplitMessage::LedState(true))]);
+        let mut drv = SerialSplitDriver::new(fake);
+
+        let msg = block_on(drv.read()).expect("read should succeed");
+        assert!(matches!(msg, SplitMessage::LedState(true)));
+        assert_eq!(drv.serial.read_calls, 1);
+    }
+
+    #[test]
+    fn read_message_split_across_chunks() {
+        let bytes = encode(&SplitMessage::LedState(true));
+        let (a, b) = bytes.split_at(bytes.len() / 2);
+        let fake = FakeSerial::new([a.to_vec(), b.to_vec()]);
+        let mut drv = SerialSplitDriver::new(fake);
+
+        let msg = block_on(drv.read()).expect("read should succeed");
+        assert!(matches!(msg, SplitMessage::LedState(true)));
+        assert_eq!(drv.serial.read_calls, 2);
+    }
+
+    /// Regression test for https://github.com/HaoboGu/rmk/issues/801: when
+    /// two complete messages arrive in a single underlying read, the driver
+    /// must deliver both without issuing a second underlying read.
+    #[test]
+    fn two_bundled_messages_do_not_trigger_extra_read() {
+        let mut bundled = encode(&SplitMessage::LedState(true));
+        bundled.extend_from_slice(&encode(&SplitMessage::ConnectionState(false)));
+
+        let fake = FakeSerial::new([bundled]);
+        let mut drv = SerialSplitDriver::new(fake);
+
+        let m1 = block_on(drv.read()).expect("first read should succeed");
+        assert!(matches!(m1, SplitMessage::LedState(true)));
+
+        let m2 = block_on(drv.read()).expect("second read should not touch serial");
+        assert!(matches!(m2, SplitMessage::ConnectionState(false)));
+
+        assert_eq!(drv.serial.read_calls, 1);
+    }
+
+    /// Complete message followed by the prefix of a second in one chunk; the
+    /// suffix of the second arrives later. The driver should deliver the
+    /// first immediately, then assemble the second from the carried-over
+    /// prefix plus the next chunk.
+    #[test]
+    fn trailing_partial_message_is_carried_over() {
+        let full1 = encode(&SplitMessage::LedState(true));
+        let full2 = encode(&SplitMessage::ConnectionState(true));
+        let (prefix, suffix) = full2.split_at(full2.len() / 2);
+
+        let mut first_chunk = full1;
+        first_chunk.extend_from_slice(prefix);
+
+        let fake = FakeSerial::new([first_chunk, suffix.to_vec()]);
+        let mut drv = SerialSplitDriver::new(fake);
+
+        let m1 = block_on(drv.read()).expect("first read should succeed");
+        assert!(matches!(m1, SplitMessage::LedState(true)));
+
+        let m2 = block_on(drv.read()).expect("second read should succeed");
+        assert!(matches!(m2, SplitMessage::ConnectionState(true)));
+
+        assert_eq!(drv.serial.read_calls, 2);
     }
 }
