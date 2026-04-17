@@ -51,6 +51,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-test
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: nextest@0.9
       - name: Install cargo-expand
         run: cargo install --locked cargo-expand
       - run: .github/ci/test.sh
@@ -244,10 +247,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-build-esp
+          # Both esp examples share one target dir (see .github/ci/build.sh);
+          # point rust-cache at it so the per-dep artifacts survive between runs.
+          workspaces: |
+            examples/use_config/esp32s3_ble -> ../../../target-esp
+            examples/use_rust/esp32s3_ble -> ../../../target-esp
       - name: Install espup and esp toolchain
         run: |
           cargo install --locked espup
           espup install
-      - name: Install flip-link
-        run: cargo install --locked flip-link
       - run: .github/ci/build.sh
