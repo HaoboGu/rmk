@@ -11,14 +11,12 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = ["async_matrix", "nrf54lm20_ble"] }
-nrf-sdc = { path = "/Users/haobogu/Projects/rust/nrf-sdc/nrf-sdc", default-features = false, features = [
-# nrf-sdc = { git = "https://github.com/HaoboGu/nrf-sdc", rev = "2478dd5c53219a9998251ca117abd5ed100952fc", default-features = false, features = [
+nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "69744a721ec59e985b2c557937eae01593c1997b", default-features = false, features = [
     "defmt",
     "peripheral",
     "nrf54lm20-app-s",
 ] }
-nrf-mpsl = { path = "/Users/haobogu/Projects/rust/nrf-sdc/nrf-mpsl", default-features = false, features = [
-# nrf-mpsl = { git = "https://github.com/HaoboGu/nrf-sdc", rev = "2478dd5c53219a9998251ca117abd5ed100952fc", default-features = false, features = [
+nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "69744a721ec59e985b2c557937eae01593c1997b", default-features = false, features = [
     "defmt",
     "critical-section-impl",
     "nrf54lm20-app-s",
