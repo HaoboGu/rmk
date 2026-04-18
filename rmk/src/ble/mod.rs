@@ -338,7 +338,11 @@ pub(crate) async fn run_ble<
         ble_task(runner),
         select(
             usb_task,
-            embassy_usb_logger::with_class!(1024, log::LevelFilter::Debug, usb_logger),
+            embassy_usb_logger::with_custom_style!(1024, log::LevelFilter::Debug, usb_logger, |record, writer| {
+                use core::fmt::Write;
+                let ms = embassy_time::Instant::now().as_millis();
+                let _ = write!(writer, "[{:>8}ms {:5}] {}\r\n", ms, record.level(), record.args());
+            }),
         ),
     );
     #[cfg(feature = "_no_usb")]
