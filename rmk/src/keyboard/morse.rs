@@ -62,22 +62,26 @@ impl<'a> Keyboard<'a> {
         self.fire_held_non_morse_keys().await;
     }
 
-    pub(crate) async fn process_key_action_morse(&mut self, key_action: &KeyAction, event: KeyboardEvent) {
+    pub(crate) async fn process_key_action_morse(
+        &mut self,
+        key_action: &KeyAction,
+        event: KeyboardEvent,
+        press_time: Instant,
+    ) {
         debug!("Processing morse keys: {:?}", event);
         assert!(key_action.is_morse());
 
         // Process the morse key
         if event.pressed {
             // Pressed, check the held buffer, update the tap state
-            let pressed_time = self.get_timer_value(event).unwrap_or(Instant::now());
-            let timeout_time = pressed_time + Self::morse_timeout(self.keymap, key_action, true);
+            let timeout_time = press_time + Self::morse_timeout(self.keymap, key_action, true);
             match self.held_buffer.find_pos_mut(event.pos) {
                 Some(k) => {
                     // The current key is already in the buffer, update its state
                     match k.state {
                         KeyState::Released(pattern) | KeyState::EarlyFired(pattern) => {
                             k.state = KeyState::Pressed(pattern);
-                            k.press_time = pressed_time;
+                            k.press_time = press_time;
                             k.timeout_time = timeout_time;
                         }
                         _ => {}
@@ -89,7 +93,7 @@ impl<'a> Keyboard<'a> {
                         event,
                         *key_action,
                         KeyState::Pressed(MorsePattern::default()),
-                        pressed_time,
+                        press_time,
                         timeout_time,
                     ));
                 }
@@ -188,8 +192,6 @@ impl<'a> Keyboard<'a> {
                         // Process the release action
                         debug!("[morse] Releasing morse key: {:?}", event);
                         self.process_key_action_normal(action, event).await;
-                        // Clear timer
-                        self.set_timer_value(event, None);
                     }
                     _ => {}
                 };
