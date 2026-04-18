@@ -361,27 +361,32 @@ impl<'a> Keyboard<'a> {
         #[cfg(feature = "host_security")]
         self.keymap.update_matrix_state(&event);
 
-        // Matrix should process key pressed event first, record the timestamp of key changes
-        if event.pressed {
-            self.set_timer_value(event, Some(Instant::now()));
-        }
         // Update activity time for BLE split central sleep management
         #[cfg(all(feature = "split", feature = "_ble"))]
         update_activity_time();
+
+        // Capture the event time once per event and thread it through.
+        let event_time = Instant::now();
 
         // Process key
         let key_action = &self.keymap.get_action_with_layer_cache(event);
 
         if self.combo_on {
-            if let (Some(key_action), is_combo) = self.process_combo(key_action, event).await {
-                self.process_key_action(&key_action, event, is_combo).await
+            if let (Some(key_action), is_combo) = self.process_combo(key_action, event, event_time).await {
+                self.process_key_action(&key_action, event, is_combo, event_time).await
             }
         } else {
-            self.process_key_action(key_action, event, false).await
+            self.process_key_action(key_action, event, false, event_time).await
         }
     }
 
-    async fn process_key_action(&mut self, key_action: &KeyAction, event: KeyboardEvent, is_combo: bool) {
+    async fn process_key_action(
+        &mut self,
+        key_action: &KeyAction,
+        event: KeyboardEvent,
+        is_combo: bool,
+        event_time: Instant,
+    ) {
         // First, make the decision for current key and held keys
         let (decision_for_current_key, decisions) = self.make_decisions_for_keys(key_action, event);
 
@@ -406,21 +411,20 @@ impl<'a> Keyboard<'a> {
                 } else {
                     key_action
                 };
-                self.process_key_action_inner(key_action, event).await
+                self.process_key_action_inner(key_action, event, event_time).await
             }
             KeyBehaviorDecision::Buffer => {
                 debug!("Current key is buffered");
-                let press_time = Instant::now();
                 let timeout_time = if key_action.is_morse() {
-                    press_time + Self::morse_timeout(self.keymap, key_action, true)
+                    event_time + Self::morse_timeout(self.keymap, key_action, true)
                 } else {
-                    press_time
+                    event_time
                 };
                 self.held_buffer.push(HeldKey::new(
                     event,
                     *key_action,
                     KeyState::Pressed(MorsePattern::default()),
-                    press_time,
+                    event_time,
                     timeout_time,
                 ));
             }
@@ -433,7 +437,7 @@ impl<'a> Keyboard<'a> {
                 } else {
                     key_action
                 };
-                self.process_key_action_inner(key_action, event).await
+                self.process_key_action_inner(key_action, event, event_time).await
             }
             KeyBehaviorDecision::FlowTap => {
                 let action = Self::action_from_pattern(self.keymap, key_action, TAP); //tap action
@@ -622,7 +626,8 @@ impl<'a> Keyboard<'a> {
                         // Note: Morse like actions are not expected here.
                         assert!(!action.is_morse());
                         debug!("Tap Key {:?} now press down, action: {:?}", held_key.event, action);
-                        self.process_key_action_inner(&action, held_key.event).await;
+                        self.process_key_action_inner(&action, held_key.event, held_key.press_time)
+                            .await;
                     }
                 }
                 _ => (),
@@ -761,7 +766,12 @@ impl<'a> Keyboard<'a> {
         (decision_for_current_key, decisions)
     }
 
-    async fn process_key_action_inner(&mut self, original_key_action: &KeyAction, event: KeyboardEvent) {
+    async fn process_key_action_inner(
+        &mut self,
+        original_key_action: &KeyAction,
+        event: KeyboardEvent,
+        event_time: Instant,
+    ) {
         // Start forks
         let key_action = self.try_start_forks(original_key_action, event);
 
@@ -784,7 +794,7 @@ impl<'a> Keyboard<'a> {
                 _ => unreachable!(),
             }
         } else {
-            self.process_key_action_morse(&key_action, event).await;
+            self.process_key_action_morse(&key_action, event, event_time).await;
         }
         self.try_finish_forks(original_key_action, event);
     }
@@ -969,7 +979,7 @@ impl<'a> Keyboard<'a> {
 
             let mut new_event = event;
             new_event.pressed = true;
-            self.process_key_action(&action, new_event, true).await;
+            self.process_key_action(&action, new_event, true, Instant::now()).await;
             debug!("[Combo] {:?} triggered", action);
             embassy_time::Timer::after_millis(20).await;
             // Reset other combos' state
@@ -993,7 +1003,12 @@ impl<'a> Keyboard<'a> {
     /// Check combo before process keys.
     ///
     /// This function returns key action after processing combo, and a boolean indicates that if current returned key action is a combo output
-    async fn process_combo(&mut self, key_action: &KeyAction, event: KeyboardEvent) -> (Option<KeyAction>, bool) {
+    async fn process_combo(
+        &mut self,
+        key_action: &KeyAction,
+        event: KeyboardEvent,
+        event_time: Instant,
+    ) -> (Option<KeyAction>, bool) {
         let current_layer = self.keymap.get_activated_layer();
 
         // First, when releasing a key, check whether there's untriggered combo, if so, triggerer it first
@@ -1043,13 +1058,12 @@ impl<'a> Keyboard<'a> {
             && max_size > 0
         {
             // If the max_size > 0, there's at least one combo is updated
-            let pressed_time = self.get_timer_value(event).unwrap_or(Instant::now());
             self.held_buffer.push(HeldKey::new(
                 event,
                 *key_action,
                 KeyState::WaitingCombo,
-                pressed_time,
-                pressed_time + self.keymap.combo_timeout(),
+                event_time,
+                event_time + self.keymap.combo_timeout(),
             ));
 
             // Only one combo is updated, and triggered
@@ -1107,7 +1121,7 @@ impl<'a> Keyboard<'a> {
                 //   held), which consumes the release event without sending anything.
                 if releasing_triggered_combo {
                     for output in &combo_outputs {
-                        self.process_key_action(output, event, true).await;
+                        self.process_key_action(output, event, true, event_time).await;
                     }
                     return (None, true);
                 }
@@ -1129,7 +1143,8 @@ impl<'a> Keyboard<'a> {
             if self.held_buffer.keys[i].state == KeyState::WaitingCombo {
                 let key = self.held_buffer.keys.swap_remove(i);
                 debug!("[Combo] Dispatching combo: {:?}", key);
-                self.process_key_action(&key.action, key.event, false).await;
+                self.process_key_action(&key.action, key.event, false, key.press_time)
+                    .await;
             } else {
                 i += 1;
             }
@@ -1732,16 +1747,6 @@ impl<'a> Keyboard<'a> {
         } else {
             self.unregister_keycode(key, event);
         }
-    }
-
-    /// Set the timer value for a key event
-    fn set_timer_value(&mut self, event: KeyboardEvent, value: Option<Instant>) {
-        self.keymap.set_timer(event.pos, value);
-    }
-
-    /// Get the timer value for a key event, if the key event is not in the timer, return the current time
-    fn get_timer_value(&self, event: KeyboardEvent) -> Option<Instant> {
-        self.keymap.get_timer(event.pos)
     }
 
     /// Register a key to be sent in hid report.
