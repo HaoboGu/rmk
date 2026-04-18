@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optimize the timing for motion read and sending reports on the PMW3610
 - Correct the delay length of PMW3610 to the precise value
 
+### Fixed
+
+- Fix spurious "Timer buffer full" warns after 16 distinct key positions are pressed. The per-position timer `LinearMap` is gone; press time is now threaded as a parameter through the morse-press dispatch.
+
 ## [0.8.2] - 2025-12-18
 
 ### Added
