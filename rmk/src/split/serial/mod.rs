@@ -118,7 +118,7 @@ mod tests {
     use embedded_io_async::ErrorType;
 
     use super::*;
-    use crate::ConnectionState;
+    use crate::state::ConnectionState;
 
     /// Fake `embedded_io_async::Read`: each `serial.read()` call returns the
     /// next scripted chunk. Panics if the driver calls `read()` more times

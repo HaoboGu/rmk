@@ -284,8 +284,6 @@ impl Handler for UsbDeviceHandler {
     }
 
     fn suspended(&mut self, suspended: bool) {
-        // When no logging feature is enabled, `info!` expands to a no-op and
-        // both arms collapse to identical empty blocks — suppress the lint.
         if suspended {
             info!(
                 "Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
