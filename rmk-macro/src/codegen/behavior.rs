@@ -180,15 +180,15 @@ fn expand_macros(macros: &Option<Macros>) -> proc_macro2::TokenStream {
                 let operations = m.operations.iter().map(|op| match op {
                     MacroOperation::Tap { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Tap(::rmk::types::keycode::KeyCode::#key).into_iter() }
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Tap(::rmk::types::keycode::HidKeyCode::#key).into_iter() }
                     }
                     MacroOperation::Down { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Press(::rmk::types::keycode::KeyCode::#key).into_iter() }
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Press(::rmk::types::keycode::HidKeyCode::#key).into_iter() }
                     }
                     MacroOperation::Up { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::types::keycode::KeyCode::#key).into_iter() }
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::types::keycode::HidKeyCode::#key).into_iter() }
                     }
                     MacroOperation::Delay { duration_ms } => {
                         let millis = *duration_ms as u16;
