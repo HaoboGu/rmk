@@ -67,6 +67,26 @@ impl Combo {
         action_idx.is_some()
     }
 
+    /// Re-assert a combo key's bit in the state of an already-triggered combo.
+    ///
+    /// Covers the case where the user releases one key of a held chord and presses
+    /// it again while the other combo key is still down. The re-press must not
+    /// leak to HID (it would overwrite the combo output's slot), and the eventual
+    /// release must still complete the combo — so we re-set the bit here.
+    ///
+    /// Returns true iff this combo is triggered and `key_action` is one of its
+    /// actions, i.e. the caller should swallow the press.
+    pub(crate) fn reassert_if_triggered(&mut self, key_action: &KeyAction) -> bool {
+        if !self.is_triggered {
+            return false;
+        }
+        if let Some(i) = self.config.find_key_action_index(key_action) {
+            self.state |= 1 << i;
+            return true;
+        }
+        false
+    }
+
     /// Update the combo's state when a key is released
     /// When the combo is fully released from triggered state, this function returns true
     pub(crate) fn update_released(&mut self, key_action: &KeyAction) -> bool {
