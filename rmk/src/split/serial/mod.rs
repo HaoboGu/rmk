@@ -1,6 +1,7 @@
 use embedded_io_async::{Read, Write};
 
 use super::driver::SplitDriverError;
+use crate::ConnectionState;
 use crate::split::driver::{PeripheralManager, SplitReader, SplitWriter};
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
 
@@ -202,8 +203,11 @@ mod tests {
         assert!(matches!(m1, SplitMessage::LedState(true)));
 
         let m2 = block_on(drv.read()).expect("second read should not touch serial");
-        // 0 == ConnectionState::Disconnected
-        assert!(matches!(m2, SplitMessage::ConnectionState(0)));
+        assert!(matches!(
+            m2,
+            SplitMessage::ConnectionState(state)
+                if state == u8::from(ConnectionState::Disconnected)
+        ));
 
         assert_eq!(drv.serial.read_calls, 1);
     }
@@ -228,8 +232,11 @@ mod tests {
         assert!(matches!(m1, SplitMessage::LedState(true)));
 
         let m2 = block_on(drv.read()).expect("second read should succeed");
-        // 1 == ConnectionState::Connected
-        assert!(matches!(m2, SplitMessage::ConnectionState(1)));
+        assert!(matches!(
+            m2,
+            SplitMessage::ConnectionState(state)
+                if state == u8::from(ConnectionState::Connected)
+        ));
         assert_eq!(drv.serial.read_calls, 2);
     }
 }

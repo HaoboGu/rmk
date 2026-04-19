@@ -57,8 +57,10 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
             match self.process().await {
                 Ok(_) => continue,
                 Err(e) => {
-                    if ConnectionState::Disconnected == ConnectionState::from(CONNECTION_STATE.load(Ordering::Acquire))
-                    {
+                    if matches!(
+                        ConnectionState::from(CONNECTION_STATE.load(Ordering::Acquire)),
+                        ConnectionState::Disconnected | ConnectionState::Suspended
+                    ) {
                         Timer::after_millis(1000).await;
                     } else {
                         error!("Process vial error: {:?}", e);

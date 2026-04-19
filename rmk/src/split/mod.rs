@@ -30,7 +30,7 @@ pub(crate) enum SplitMessage {
     Pointing(PointingEvent),
     /// Led state, on/off, from central to peripheral
     LedState(bool),
-    /// The central connection state, true if central has been connected to host.
+    /// The central connection state, serialized as a `u8` and synced from central to peripheral: `0 = Disconnected`, `1 = Connected`, `2 = Suspended`.
     /// This message is sync from central to peripheral
     ConnectionState(u8),
     /// BLE Address, used in syncing address between central and peripheral
