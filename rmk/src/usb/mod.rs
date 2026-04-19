@@ -285,15 +285,19 @@ impl Handler for UsbDeviceHandler {
     fn suspended(&mut self, suspended: bool) {
         // When no logging feature is enabled, `info!` expands to a no-op and
         // both arms collapse to identical empty blocks — suppress the lint.
-        #[allow(clippy::if_same_then_else)]
+        #[cfg_attr(feature = "_ble", allow(clippy::if_same_then_else))]
         if suspended {
             info!(
                 "Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
             );
+            #[cfg(not(feature = "_ble"))]
+            CONNECTION_STATE.store(ConnectionState::Suspended.into(), Ordering::Release);
         } else {
             info!(
                 "Device resumed, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
             );
+            #[cfg(not(feature = "_ble"))]
+            CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
         }
     }
 

@@ -18,6 +18,7 @@ use crate::event::{PeripheralConnectedEvent, SleepStateEvent, publish_event};
 use crate::split::ble::PeerAddress;
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
+use crate::state::ConnectionState;
 use crate::storage::{FlashOperationMessage, Storage};
 use crate::{CONNECTION_STATE, SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS};
 
@@ -411,7 +412,7 @@ pub(crate) struct BleSplitCentralDriver<'a, 'b, 'c, C: Controller + ControllerCm
     // Client
     client: &'c GattClient<'a, C, P, 10>,
     // Cached connection state
-    connection_state: bool,
+    connection_state: u8,
 }
 
 impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> BleSplitCentralDriver<'a, 'b, 'c, C, P> {
@@ -543,25 +544,26 @@ async fn sleep_manager_task<
             info!("Entering sleep mode");
 
             // Connection parameters are different when central is broadcasting and connected to host
-            let conn_params = if CONNECTION_STATE.load(Ordering::Acquire) {
-                // Connected, the connection interval is 20ms
-                RequestedConnParams {
-                    min_connection_interval: Duration::from_millis(20),
-                    max_connection_interval: Duration::from_millis(20),
-                    max_latency: 200, // 4s
-                    supervision_timeout: Duration::from_secs(9),
-                    ..Default::default()
-                }
-            } else {
-                // Advertising ,the connection interval can be longer
-                RequestedConnParams {
-                    min_connection_interval: Duration::from_millis(200),
-                    max_connection_interval: Duration::from_millis(200),
-                    max_latency: 25, // 5s
-                    supervision_timeout: Duration::from_secs(11),
-                    ..Default::default()
-                }
-            };
+            let conn_params =
+                if ConnectionState::from(CONNECTION_STATE.load(Ordering::Acquire)) != ConnectionState::Disconnected {
+                    // Connected, the connection interval is 20ms
+                    RequestedConnParams {
+                        min_connection_interval: Duration::from_millis(20),
+                        max_connection_interval: Duration::from_millis(20),
+                        max_latency: 200, // 4s
+                        supervision_timeout: Duration::from_secs(9),
+                        ..Default::default()
+                    }
+                } else {
+                    // Advertising ,the connection interval can be longer
+                    RequestedConnParams {
+                        min_connection_interval: Duration::from_millis(200),
+                        max_connection_interval: Duration::from_millis(200),
+                        max_latency: 25, // 5s
+                        supervision_timeout: Duration::from_secs(11),
+                        ..Default::default()
+                    }
+                };
 
             // Update connection parameters
             update_conn_params(stack, conn, &conn_params).await;

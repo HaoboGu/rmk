@@ -1,4 +1,4 @@
-use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicU8, Ordering};
 
 use rmk_types::connection::ConnectionType;
 
@@ -7,21 +7,29 @@ use rmk_types::connection::ConnectionType;
 /// - 1: BLE
 /// - Other: reserved
 pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
-pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
+pub(crate) static CONNECTION_STATE: AtomicU8 = AtomicU8::new(0);
 
-#[derive(Debug, PartialEq, Eq)]
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionState {
-    Disconnected,
-    Connected,
+    Disconnected = 0,
+    Connected = 1,
+    Suspended = 2,
 }
 
-impl ConnectionState {
-    pub(crate) fn from(state: &AtomicBool) -> Self {
-        if state.load(Ordering::Acquire) {
-            Self::Connected
-        } else {
-            Self::Disconnected
+impl From<u8> for ConnectionState {
+    fn from(value: u8) -> Self {
+        match value {
+            1 => ConnectionState::Connected,
+            2 => ConnectionState::Suspended,
+            _ => ConnectionState::Disconnected,
         }
+    }
+}
+
+impl From<ConnectionState> for u8 {
+    fn from(state: ConnectionState) -> u8 {
+        state as u8
     }
 }
 
@@ -31,23 +39,4 @@ pub fn get_connection_type() -> ConnectionType {
 
 pub fn get_connection_state() -> ConnectionState {
     CONNECTION_STATE.load(Ordering::Acquire).into()
-}
-
-impl From<bool> for ConnectionState {
-    fn from(value: bool) -> Self {
-        if value {
-            ConnectionState::Connected
-        } else {
-            ConnectionState::Disconnected
-        }
-    }
-}
-
-impl From<ConnectionState> for bool {
-    fn from(state: ConnectionState) -> bool {
-        match state {
-            ConnectionState::Connected => true,
-            ConnectionState::Disconnected => false,
-        }
-    }
 }
