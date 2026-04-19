@@ -83,7 +83,7 @@ impl MatrixState {
 pub trait MatrixTrait<const ROW: usize, const COL: usize>: InputDevice {
     // Wait for USB or BLE really connected
     async fn wait_for_connected(&self) {
-        while CONNECTION_STATE.load(Ordering::Acquire) == Into::<bool>::into(ConnectionState::Disconnected) {
+        while ConnectionState::from(CONNECTION_STATE.load(Ordering::Acquire)) == ConnectionState::Disconnected {
             embassy_time::Timer::after_millis(100).await;
         }
         info!("Connected, start scanning matrix");

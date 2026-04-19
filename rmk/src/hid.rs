@@ -69,8 +69,7 @@ pub trait RunnableHidWriter: HidWriterTrait {
                 // Get report to send
                 let report = self.get_report().await;
                 // Only send the report after the connection is established.
-                if CONNECTION_STATE.load(Ordering::Acquire)
-                    == <ConnectionState as Into<bool>>::into(ConnectionState::Connected)
+                if ConnectionState::from(CONNECTION_STATE.load(Ordering::Acquire)) != ConnectionState::Disconnected
                     && let Err(e) = self.write_report(report.clone()).await
                 {
                     error!("Failed to send report: {:?}", e);

@@ -1,4 +1,4 @@
-use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicU8, Ordering};
 
 use rmk_types::connection::ConnectionType;
 
@@ -7,21 +7,34 @@ use rmk_types::connection::ConnectionType;
 /// - 1: BLE
 /// - Other: reserved
 pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
-pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
+pub(crate) static CONNECTION_STATE: AtomicU8 = AtomicU8::new(0);
 
-#[derive(Debug, PartialEq, Eq)]
+/// Represents the current connection state of the device.
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionState {
-    Disconnected,
-    Connected,
+    /// No active connection (default state).
+    Disconnected = 0x0,
+    /// Connection is established and ready to use.
+    Connected = 0x1,
+    /// Connection exists but the device is suspended (e.g. USB suspend).
+    Suspended = 0x2,
 }
 
-impl ConnectionState {
-    pub(crate) fn from(state: &AtomicBool) -> Self {
-        if state.load(Ordering::Acquire) {
-            Self::Connected
-        } else {
-            Self::Disconnected
+impl From<u8> for ConnectionState {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => Self::Disconnected,
+            1 => Self::Connected,
+            2 => Self::Suspended,
+            _ => Self::Disconnected,
         }
+    }
+}
+
+impl From<ConnectionState> for u8 {
+    fn from(state: ConnectionState) -> u8 {
+        state as u8
     }
 }
 
@@ -31,23 +44,4 @@ pub fn get_connection_type() -> ConnectionType {
 
 pub fn get_connection_state() -> ConnectionState {
     CONNECTION_STATE.load(Ordering::Acquire).into()
-}
-
-impl From<bool> for ConnectionState {
-    fn from(value: bool) -> Self {
-        if value {
-            ConnectionState::Connected
-        } else {
-            ConnectionState::Disconnected
-        }
-    }
-}
-
-impl From<ConnectionState> for bool {
-    fn from(state: ConnectionState) -> bool {
-        match state {
-            ConnectionState::Connected => true,
-            ConnectionState::Disconnected => false,
-        }
-    }
 }
