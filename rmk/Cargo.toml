@@ -234,6 +234,9 @@ _esp_ble = ["_ble", "dep:esp-hal"]
 ## Enable feature if you want to use RP2040W with BLE.
 pico_w_ble = ["_ble", "dep:embassy-rp"]
 
+## Enable feature if you want to use SF32LB52x with BLE.
+sf32lb52x_ble = ["_ble", "_no_usb"]
+
 ## Enable passkey entry support for BLE pairing
 passkey_entry = ["_ble", "rmk-types/passkey_entry"]
 
