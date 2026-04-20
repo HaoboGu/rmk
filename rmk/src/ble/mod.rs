@@ -260,9 +260,10 @@ pub(crate) async fn run_ble<
             #[cfg(feature = "_no_usb")]
             CONNECTION_TYPE.store(ConnectionType::Ble.into(), Ordering::SeqCst);
             #[cfg(not(feature = "_no_usb"))]
-            CONNECTION_TYPE.store(ConnectionType::Usb.into(), Ordering::SeqCst);
+            CONNECTION_TYPE.store(ConnectionType::Ble.into(), Ordering::SeqCst);
         }
 
+        CONNECTION_TYPE.store(ConnectionType::Ble.into(), Ordering::SeqCst);
         publish_event(ConnectionChangeEvent::new(
             CONNECTION_TYPE.load(Ordering::SeqCst).into(),
         ));
