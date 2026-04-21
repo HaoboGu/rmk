@@ -235,7 +235,7 @@ _esp_ble = ["_ble", "dep:esp-hal"]
 pico_w_ble = ["_ble", "dep:embassy-rp"]
 
 ## Enable feature if you want to use SF32LB52x with BLE.
-sf32lb52x_ble = ["_ble", "_no_usb"]
+sf32lb52x_ble = ["_ble"]
 
 ## Enable passkey entry support for BLE pairing
 passkey_entry = ["_ble", "rmk-types/passkey_entry"]
