@@ -51,13 +51,24 @@ async fn main(_spawner: Spawner) {
     // Rust equivalent of the SDK's `BSP_System_Config` → `HAL_PMU_LoadCalData`
     // chain; sifli-hal exposes the write path (`pmu::apply_calibration`) but
     // does not auto-call it, so we do it here before any BLE bring-up.
-    match Efuse::new(p.EFUSEC) {
+    //
+    // We also keep the Efuse handle so we can derive a *stable* BLE static
+    // random address from the factory UID — required for reconnects to
+    // succeed with the saved bond info. BLE hosts index bonds by the
+    // remote identity address (our static random addr); if we randomized
+    // it each boot the host would treat us as a fresh device every time
+    // and ignore the bond / force re-pairing.
+    let efuse_opt = match Efuse::new(p.EFUSEC) {
         Ok(efuse) => {
             let applied = pmu::apply_calibration(efuse.calibration());
             info!("PMU calibration applied from eFUSE: {}", applied);
+            Some(efuse)
         }
-        Err(e) => error!("Efuse init failed, PMU trims left at defaults: {:?}", e),
-    }
+        Err(e) => {
+            error!("Efuse init failed, PMU trims left at defaults: {:?}", e);
+            None
+        }
+    };
 
     // Match the sifli-rs ble_advertise example: give probe-rs time to attach
     // before touching the BLE stack.
@@ -117,12 +128,6 @@ async fn main(_spawner: Spawner) {
 
     let async_flash = async_flash_wrapper(blocking_flash);
 
-    // Initialize keymap + storage BEFORE starting the BLE controller. The
-    // XIP-safe page-program path holds PRIMASK off for the duration of each
-    // write; with the LCPU actively heartbeating the mailbox, a single write
-    // from sequential-storage has been observed to stall inside the status
-    // poll even though a standalone program_chunk completes fine. Getting the
-    // storage initialized while the LCPU is still parked avoids that window.
     let storage_config = StorageConfig {
         num_sectors: 16,
         ..Default::default()
@@ -166,13 +171,28 @@ async fn main(_spawner: Spawner) {
     };
 
     // 2. Build BLE stack (trouble-host) with a static random address.
-    // The top two bits must be `11` for BLE "Random Static"; the rest we
-    // derive from the TRNG so each flash gets a fresh address. This sidesteps
-    // stale bonding/cache entries on the host side during development.
+    // Bond-based reconnects require a *stable* identity address, so we derive
+    // it from the factory eFUSE UID (guaranteed-unique per chip, never
+    // changes). The top two bits must be `11` for BLE "Random Static".
+    //
+    // If eFUSE init failed earlier we fall back to TRNG — reconnects
+    // won't work in that degraded case, but the device still advertises
+    // as a fresh peripheral on every boot (same behaviour as before).
     let mut rng = Rng::new_blocking(p.TRNG);
     let mut rng_gen = ChaCha12Rng::from_rng(&mut rng).unwrap();
     let mut ble_addr = [0u8; 6];
-    rand_core::RngCore::fill_bytes(&mut rng_gen, &mut ble_addr);
+    match &efuse_opt {
+        Some(efuse) => {
+            let uid = efuse.uid();
+            let uid_bytes = uid.bytes();
+            // First 6 bytes of UID → BD_ADDR (little-endian byte order
+            // matches the HCI Set_Random_Address command).
+            ble_addr.copy_from_slice(&uid_bytes[..6]);
+        }
+        None => {
+            rand_core::RngCore::fill_bytes(&mut rng_gen, &mut ble_addr);
+        }
+    }
     ble_addr[5] |= 0xC0; // top two bits = 11 → Random Static
     info!(
         "Using BLE address {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
