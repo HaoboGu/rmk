@@ -1,58 +1,80 @@
-pub mod rynk;
+//! Host configurator support (keymap editing, firmware introspection, etc.).
+//!
+//! Organized along two axes:
+//! - **Protocol** — Via/Vial (`via/`) or RMK/rynk (`rynk/`). One picks a
+//!   protocol via the `vial` or `rmk_protocol` Cargo feature (mutually
+//!   exclusive; enforced in `crate::lib`).
+//! - **Transport** — how bytes reach the host: USB HID, BLE HID, USB bulk,
+//!   BLE custom-serial. Implementations live in `transport/`.
+//!
+//! The [`HostService`] trait represents one `(protocol, transport)` pair's
+//! run loop; [`HostRx`] / [`HostTx`] are the byte-level transport halves.
+//! Call sites use the [`HostServiceImpl`] alias to stay protocol-agnostic.
+
+// The `vial` / `rmk_protocol` mutual-exclusivity guard lives in `crate::lib.rs`.
+#[cfg(all(feature = "host", not(any(feature = "vial", feature = "rmk_protocol"))))]
+compile_error!(
+    "Enabling the `host` feature requires selecting a protocol: enable either `vial` or `rmk_protocol`."
+);
+
+#[cfg(feature = "rmk_protocol")]
+pub(crate) mod rynk;
 #[cfg(feature = "storage")]
 pub(crate) mod storage;
-pub mod via;
-
-// TODO: Remove those aliases
-pub use via::UsbVialReaderWriter as UsbHostReaderWriter;
+pub(crate) mod transport;
 #[cfg(feature = "vial")]
-pub(crate) use via::VialService;
+pub(crate) mod via;
 
-#[cfg(feature = "vial")]
-use crate::config::VialConfig;
-use crate::descriptor::ViaReport;
-use crate::hid::{HidReaderTrait, HidWriterTrait};
-use crate::keymap::KeyMap;
+/// Errors that any host transport may surface.
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub(crate) enum HostError {
+    /// The underlying transport is not connected / has been torn down.
+    Disconnected,
+    /// An I/O error occurred while moving bytes.
+    Io,
+    /// The caller-provided recv buffer is too small to hold the incoming frame.
+    BufferTooSmall,
+    /// The caller-provided payload exceeds the transport's maximum frame size.
+    FrameTooLarge,
+    /// The underlying transport overflowed its own buffer before delivery.
+    TransportOverflow,
+}
 
-/// The abstraction of host service.
+/// Receive half of a host transport.
 ///
-/// The host service communicates to the host:
-/// 1. it reads messages from host via USB Hid/USB Serial/BLE
-/// 2. it updates keymaps and configurations according the message
-/// 3. it can also execute some commands from host
-/// 4. it syncs keyboard's state/info to the host
-///
-/// The host should be abstraction to two levels:
-/// 1. The protocol level:
-///     - Via/Vial Protocol
-///     - Rynk Protocol
-/// 2. The transport level:
-///     - USB Hid raw packets(Vial)
-///     - USB Serial/BLE(postcard-rpc)
-trait HostService {
-    // TODO: Finalize the trait
+/// `recv(buf)` returns one complete protocol message. Framing is the
+/// transport's responsibility — packet transports (USB HID, BLE HID) deliver
+/// one report per call; byte-stream transports (USB bulk, BLE serial) apply
+/// COBS internally and hand up one decoded frame per call. Each transport
+/// documents its own required buffer size in its module.
+pub(crate) trait HostRx {
+    async fn recv(&mut self, buf: &mut [u8]) -> Result<usize, HostError>;
 }
+
+/// Send half of a host transport.
+pub(crate) trait HostTx {
+    async fn send(&mut self, bytes: &[u8]) -> Result<(), HostError>;
+}
+
+/// A protocol-level host service. Drives its own receive/process/send loop.
+///
+/// One `(protocol, transport)` pair = one implementer. Because `rmk_protocol`
+/// and `vial` are mutually exclusive (see `Cargo.toml`), at most one
+/// implementer is live per firmware build.
+pub(crate) trait HostService {
+    async fn run(&mut self);
+}
+
+// The active-protocol service type is re-exported as `HostServiceImpl`.
+// Call sites import one name and get the correct service type for whichever
+// protocol is enabled. Construction is still per-protocol — Vial's factories
+// take a `VialConfig`, rynk's take none — so call sites cfg-gate the
+// constructor arguments. The two services are never in scope simultaneously
+// (mutually exclusive features).
 
 #[cfg(feature = "vial")]
-pub(crate) async fn run_host_communicate_task<
-    'a,
-    Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
->(
-    keymap: &'a KeyMap<'a>,
-    reader_writer: Rw,
-    vial_config: VialConfig<'static>,
-) {
-    let mut service = VialService::new(keymap, vial_config, reader_writer);
-    service.run().await
-}
+pub(crate) use via::VialService as HostServiceImpl;
 
-#[cfg(not(feature = "vial"))]
-pub(crate) async fn run_host_communicate_task<
-    'a,
-    Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
->(
-    _keymap: &'a KeyMap<'a>,
-    _reader_writer: Rw,
-) {
-    todo!()
-}
+#[cfg(feature = "rmk_protocol")]
+pub(crate) use rynk::RynkService as HostServiceImpl;

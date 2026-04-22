@@ -1,16 +1,23 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::{Instant, Timer};
-use embassy_usb::class::hid::HidReaderWriter;
+#[cfg(not(feature = "_no_usb"))]
+use embassy_usb::Builder;
+#[cfg(not(feature = "_no_usb"))]
 use embassy_usb::driver::Driver;
 use rmk_types::protocol::vial::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
-use usbd_hid::descriptor::AsInputReport as _;
+#[cfg(feature = "_ble")]
+use trouble_host::prelude::{GattConnection, PacketPool};
 use vial::process_vial;
 
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
 use crate::event::KeyboardEventPos;
-use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
+#[cfg(feature = "_ble")]
+use crate::host::transport::ble_hid::BleHidRxTx;
+#[cfg(not(feature = "_no_usb"))]
+use crate::host::transport::usb_hid::UsbHidRxTx;
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
+use crate::host::{HostError, HostRx, HostService, HostTx};
 use crate::keymap::KeyMap;
 use crate::state::ConnectionState;
 use crate::{CONNECTION_STATE, MACRO_SPACE_SIZE, boot};
@@ -22,7 +29,7 @@ mod vial;
 #[cfg(feature = "vial_lock")]
 mod vial_lock;
 
-pub(crate) struct VialService<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> {
+pub(crate) struct VialService<'a, T: HostRx + HostTx> {
     // VialService holds a reference of keymap, for updating
     keymap: &'a KeyMap<'a>,
 
@@ -33,27 +40,77 @@ pub(crate) struct VialService<'a, RW: HidWriterTrait<ReportType = ViaReport> + H
     #[cfg(feature = "vial_lock")]
     locker: vial_lock::VialLock<'a>,
 
-    // Usb vial hid reader writer
-    pub(crate) reader_writer: RW,
+    transport: T,
 }
 
-impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> VialService<'a, RW> {
+#[cfg(not(feature = "_no_usb"))]
+impl<'a, D: Driver<'static>> VialService<'a, UsbHidRxTx<'static, D>> {
+    /// Allocate the Vial USB HID class on the embassy-usb builder and build
+    /// the service. Must be called before `builder.build()`; the service
+    /// then owns the resulting `HidReaderWriter` (which borrows `'static`
+    /// descriptor/state cells emitted by `add_usb_reader_writer!`).
+    pub(crate) fn from_usb_builder(
+        builder: &mut Builder<'static, D>,
+        keymap: &'a KeyMap<'a>,
+        vial_config: VialConfig<'static>,
+    ) -> Self {
+        let reader_writer = crate::usb::add_usb_reader_writer!(builder, ViaReport, 32, 32);
+        Self::new(keymap, vial_config, UsbHidRxTx::new(reader_writer))
+    }
+}
+
+#[cfg(feature = "_ble")]
+impl<'a, 'stack, 'server, 'conn, P: PacketPool> VialService<'a, BleHidRxTx<'stack, 'server, 'conn, P>> {
+    /// Build a `VialService` bound to the BLE HID characteristic on an
+    /// established GATT connection.
+    pub(crate) fn from_ble(
+        keymap: &'a KeyMap<'a>,
+        vial_config: VialConfig<'static>,
+        server: &crate::ble::ble_server::Server<'_>,
+        conn: &'conn GattConnection<'stack, 'server, P>,
+    ) -> Self {
+        Self::new(keymap, vial_config, BleHidRxTx::new(server, conn))
+    }
+}
+
+impl<'a, T: HostRx + HostTx> VialService<'a, T> {
     // VialService::new() should be called only once.
     // Otherwise the `vial_buf.init()` will panic.
-    pub(crate) fn new(keymap: &'a KeyMap<'a>, vial_config: VialConfig<'static>, reader_writer: RW) -> Self {
+    pub(crate) fn new(keymap: &'a KeyMap<'a>, vial_config: VialConfig<'static>, transport: T) -> Self {
         Self {
             keymap,
             vial_config,
             #[cfg(feature = "vial_lock")]
             locker: vial_lock::VialLock::new(vial_config.unlock_keys, keymap),
-            reader_writer,
+            transport,
         }
     }
 
-    pub(crate) async fn run(&mut self) {
+    pub(crate) async fn process(&mut self) -> Result<(), HostError> {
+        let mut report = ViaReport {
+            input_data: [0u8; 32],
+            output_data: [0u8; 32],
+        };
+        let n = self.transport.recv(&mut report.output_data).await?;
+        if n < report.output_data.len() {
+            error!("Vial recv short read: {} < {}", n, report.output_data.len());
+            return Err(HostError::Io);
+        }
+
+        self.process_via_packet(&mut report, self.keymap).await;
+
+        self.transport.send(&report.input_data).await?;
+
+        Ok(())
+    }
+}
+
+impl<T: HostRx + HostTx> HostService for VialService<'_, T> {
+    async fn run(&mut self) {
         loop {
             match self.process().await {
                 Ok(_) => continue,
+                Err(HostError::Disconnected) => break,
                 Err(e) => {
                     if ConnectionState::Disconnected == ConnectionState::from(&CONNECTION_STATE) {
                         Timer::after_millis(1000).await;
@@ -65,18 +122,9 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
             }
         }
     }
+}
 
-    pub(crate) async fn process(&mut self) -> Result<(), HidError> {
-        let mut via_report = self.reader_writer.read_report().await?;
-
-        self.process_via_packet(&mut via_report, self.keymap).await;
-
-        // Send via report back after processing
-        self.reader_writer.write_report(via_report).await?;
-
-        Ok(())
-    }
-
+impl<'a, T: HostRx + HostTx> VialService<'a, T> {
     async fn process_via_packet(&mut self, report: &mut ViaReport, keymap: &KeyMap<'_>) {
         let command_id = report.output_data[0];
 
@@ -314,47 +362,4 @@ fn get_position_from_offset(offset: usize, max_row: usize, max_col: usize) -> (u
     let row = current_layer_offset / max_col;
     let col = current_layer_offset % max_col;
     (row, col, layer)
-}
-
-pub struct UsbVialReaderWriter<'a, 'd, D: Driver<'d>> {
-    pub(crate) vial_reader_writer: &'a mut HidReaderWriter<'d, D, 32, 32>,
-}
-
-impl<'a, 'd, D: Driver<'d>> UsbVialReaderWriter<'a, 'd, D> {
-    pub(crate) fn new(vial_reader_writer: &'a mut HidReaderWriter<'d, D, 32, 32>) -> Self {
-        Self { vial_reader_writer }
-    }
-}
-
-impl<'d, D: Driver<'d>> HidWriterTrait for UsbVialReaderWriter<'_, 'd, D> {
-    type ReportType = ViaReport;
-
-    async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
-        let mut buffer = [0u8; 32];
-        let n = report
-            .serialize(&mut buffer)
-            .map_err(|_| HidError::ReportSerializeError)?;
-        self.vial_reader_writer
-            .write(&buffer[0..n])
-            .await
-            .map_err(HidError::UsbEndpointError)?;
-        Ok(n)
-    }
-}
-
-impl<'d, D: Driver<'d>> HidReaderTrait for UsbVialReaderWriter<'_, 'd, D> {
-    type ReportType = ViaReport;
-
-    async fn read_report(&mut self) -> Result<ViaReport, HidError> {
-        let mut read_report = ViaReport {
-            input_data: [0; 32],
-            output_data: [0; 32],
-        };
-        self.vial_reader_writer
-            .read(&mut read_report.output_data)
-            .await
-            .map_err(HidError::UsbReadError)?;
-
-        Ok(read_report)
-    }
 }
