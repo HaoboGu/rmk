@@ -1,7 +1,6 @@
 use core::cell::RefCell;
 
-use embassy_time::{Duration, Instant};
-use heapless::LinearMap;
+use embassy_time::Duration;
 use rmk_types::action::{EncoderAction, KeyAction};
 use rmk_types::fork::Fork;
 use rmk_types::morse::MorseProfile;
@@ -106,8 +105,6 @@ struct KeyMapInner<'a> {
     hand: &'a [Hand],
     /// Mouse button state
     mouse_buttons: u8,
-    /// Timer for held keys (bounded by hold buffer size)
-    timer: LinearMap<KeyboardEventPos, Instant, HOLD_BUFFER_SIZE>,
     /// Matrix state for vial lock
     #[cfg(feature = "host_security")]
     matrix_state: MatrixState,
@@ -367,7 +364,6 @@ impl<'a> KeyMap<'a> {
                 behavior,
                 hand,
                 mouse_buttons: 0,
-                timer: LinearMap::new(),
                 #[cfg(feature = "host_security")]
                 matrix_state: MatrixState::new(ROW, COL),
             }),
@@ -692,26 +688,6 @@ impl<'a> KeyMap<'a> {
 
     pub(crate) fn get_macro_sequences(&self) -> [u8; MACRO_SPACE_SIZE] {
         self.inner.borrow().behavior.keyboard_macros.macro_sequences
-    }
-
-    // ── Timers (moved from Keyboard) ──
-
-    pub(crate) fn set_timer(&self, pos: KeyboardEventPos, value: Option<Instant>) {
-        let mut inner = self.inner.borrow_mut();
-        match value {
-            Some(instant) => {
-                if inner.timer.insert(pos, instant).is_err() {
-                    warn!("Timer buffer full, dropping timer for {:?}", pos);
-                }
-            }
-            None => {
-                inner.timer.remove(&pos);
-            }
-        }
-    }
-
-    pub(crate) fn get_timer(&self, pos: KeyboardEventPos) -> Option<Instant> {
-        self.inner.borrow().timer.get(&pos).copied()
     }
 
     // ── Matrix state (host_security) ──
