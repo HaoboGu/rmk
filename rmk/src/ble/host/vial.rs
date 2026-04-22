@@ -26,7 +26,7 @@ pub(crate) struct VialGattService {
 /// Channel from the GATT write handler to the Vial BLE HID transport.
 ///
 /// Fed by [`handle_write`] when the host writes a 32-byte frame to the Vial
-/// output characteristic. Drained by `crate::host::transport::ble_hid::BleHidRxTx`.
+/// output characteristic. Drained by `crate::host::via::transport::ble_hid::BleHidRxTx`.
 pub(crate) static VIAL_OUTPUT_CHANNEL: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE> = Channel::new();
 
 /// GATT attribute handle of Vial's notifiable characteristic's CCCD.

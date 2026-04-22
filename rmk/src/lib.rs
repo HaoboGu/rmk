@@ -78,7 +78,7 @@ use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
 pub use trouble_host::prelude::*;
 #[cfg(feature = "host")]
-use crate::host::HostService;
+use crate::input_device::Runnable;
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
     crate::light::UsbLedReader,
@@ -295,7 +295,7 @@ pub(crate) async fn run_keyboard<
     R: HidReaderTrait<ReportType = LedIndicator>,
     W: RunnableHidWriter,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    #[cfg(feature = "host")] HS: HostService,
+    #[cfg(feature = "host")] HS: Runnable,
     #[cfg(feature = "storage")] const ROW: usize,
     #[cfg(feature = "storage")] const COL: usize,
     #[cfg(feature = "storage")] const NUM_LAYER: usize,

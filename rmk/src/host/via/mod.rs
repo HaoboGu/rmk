@@ -12,12 +12,13 @@ use vial::process_vial;
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
 use crate::event::KeyboardEventPos;
+use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
 #[cfg(feature = "_ble")]
-use crate::host::transport::ble_hid::BleHidRxTx;
+use crate::host::via::transport::ble_hid::BleVialReaderWriter;
 #[cfg(not(feature = "_no_usb"))]
-use crate::host::transport::usb_hid::UsbHidRxTx;
+use crate::host::via::transport::usb_hid::UsbVialReaderWriter;
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
-use crate::host::{HostError, HostRx, HostService, HostTx};
+use crate::input_device::Runnable;
 use crate::keymap::KeyMap;
 use crate::state::ConnectionState;
 use crate::{CONNECTION_STATE, MACRO_SPACE_SIZE, boot};
@@ -25,11 +26,22 @@ use crate::{CONNECTION_STATE, MACRO_SPACE_SIZE, boot};
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 
 pub(crate) mod keycode_convert;
+pub(crate) mod transport;
 mod vial;
 #[cfg(feature = "vial_lock")]
 mod vial_lock;
 
-pub(crate) struct VialService<'a, T: HostRx + HostTx> {
+/// Trait alias: a Vial HID reader/writer pair — what every Vial transport provides.
+pub(crate) trait VialReaderWriter:
+    HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>
+{
+}
+impl<T> VialReaderWriter for T where
+    T: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>
+{
+}
+
+pub(crate) struct VialService<'a, RW: VialReaderWriter> {
     // VialService holds a reference of keymap, for updating
     keymap: &'a KeyMap<'a>,
 
@@ -40,11 +52,11 @@ pub(crate) struct VialService<'a, T: HostRx + HostTx> {
     #[cfg(feature = "vial_lock")]
     locker: vial_lock::VialLock<'a>,
 
-    transport: T,
+    reader_writer: RW,
 }
 
 #[cfg(not(feature = "_no_usb"))]
-impl<'a, D: Driver<'static>> VialService<'a, UsbHidRxTx<'static, D>> {
+impl<'a, D: Driver<'static>> VialService<'a, UsbVialReaderWriter<'static, D>> {
     /// Allocate the Vial USB HID class on the embassy-usb builder and build
     /// the service. Must be called before `builder.build()`; the service
     /// then owns the resulting `HidReaderWriter` (which borrows `'static`
@@ -55,12 +67,12 @@ impl<'a, D: Driver<'static>> VialService<'a, UsbHidRxTx<'static, D>> {
         vial_config: VialConfig<'static>,
     ) -> Self {
         let reader_writer = crate::usb::add_usb_reader_writer!(builder, ViaReport, 32, 32);
-        Self::new(keymap, vial_config, UsbHidRxTx::new(reader_writer))
+        Self::new(keymap, vial_config, UsbVialReaderWriter::new(reader_writer))
     }
 }
 
 #[cfg(feature = "_ble")]
-impl<'a, 'stack, 'server, 'conn, P: PacketPool> VialService<'a, BleHidRxTx<'stack, 'server, 'conn, P>> {
+impl<'a, 'stack, 'server, 'conn, P: PacketPool> VialService<'a, BleVialReaderWriter<'stack, 'server, 'conn, P>> {
     /// Build a `VialService` bound to the BLE HID characteristic on an
     /// established GATT connection.
     pub(crate) fn from_ble(
@@ -69,48 +81,39 @@ impl<'a, 'stack, 'server, 'conn, P: PacketPool> VialService<'a, BleHidRxTx<'stac
         server: &crate::ble::ble_server::Server<'_>,
         conn: &'conn GattConnection<'stack, 'server, P>,
     ) -> Self {
-        Self::new(keymap, vial_config, BleHidRxTx::new(server, conn))
+        Self::new(keymap, vial_config, BleVialReaderWriter::new(server, conn))
     }
 }
 
-impl<'a, T: HostRx + HostTx> VialService<'a, T> {
+impl<'a, RW: VialReaderWriter> VialService<'a, RW> {
     // VialService::new() should be called only once.
     // Otherwise the `vial_buf.init()` will panic.
-    pub(crate) fn new(keymap: &'a KeyMap<'a>, vial_config: VialConfig<'static>, transport: T) -> Self {
+    pub(crate) fn new(keymap: &'a KeyMap<'a>, vial_config: VialConfig<'static>, reader_writer: RW) -> Self {
         Self {
             keymap,
             vial_config,
             #[cfg(feature = "vial_lock")]
             locker: vial_lock::VialLock::new(vial_config.unlock_keys, keymap),
-            transport,
+            reader_writer,
         }
     }
 
-    pub(crate) async fn process(&mut self) -> Result<(), HostError> {
-        let mut report = ViaReport {
-            input_data: [0u8; 32],
-            output_data: [0u8; 32],
-        };
-        let n = self.transport.recv(&mut report.output_data).await?;
-        if n < report.output_data.len() {
-            error!("Vial recv short read: {} < {}", n, report.output_data.len());
-            return Err(HostError::Io);
-        }
+    pub(crate) async fn process(&mut self) -> Result<(), HidError> {
+        let mut report = self.reader_writer.read_report().await?;
 
         self.process_via_packet(&mut report, self.keymap).await;
 
-        self.transport.send(&report.input_data).await?;
+        self.reader_writer.write_report(report).await?;
 
         Ok(())
     }
 }
 
-impl<T: HostRx + HostTx> HostService for VialService<'_, T> {
-    async fn run(&mut self) {
+impl<RW: VialReaderWriter> Runnable for VialService<'_, RW> {
+    async fn run(&mut self) -> ! {
         loop {
             match self.process().await {
                 Ok(_) => continue,
-                Err(HostError::Disconnected) => break,
                 Err(e) => {
                     if ConnectionState::Disconnected == ConnectionState::from(&CONNECTION_STATE) {
                         Timer::after_millis(1000).await;
@@ -124,7 +127,7 @@ impl<T: HostRx + HostTx> HostService for VialService<'_, T> {
     }
 }
 
-impl<'a, T: HostRx + HostTx> VialService<'a, T> {
+impl<'a, RW: VialReaderWriter> VialService<'a, RW> {
     async fn process_via_packet(&mut self, report: &mut ViaReport, keymap: &KeyMap<'_>) {
         let command_id = report.output_data[0];
 
