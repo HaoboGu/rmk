@@ -1,10 +1,10 @@
 //! GATT service definitions for the active host protocol.
 //!
 //! Each protocol's GATT characteristic layout and BLE write dispatch live in
-//! its submodule (`vial`, `rynk`). This module re-exports the active
-//! protocol's type as `HostGattService` and provides two cfg-gated forwarders
-//! (`handle_write`, `host_cccd_handle`) so the BLE event loop doesn't need
-//! to know which protocol is compiled in.
+//! its submodule (`vial`, `rynk`) and implements [`HostGatt`]. This module
+//! re-exports the active protocol's type as `HostGattService` so the BLE
+//! event loop can invoke trait methods without knowing which protocol is
+//! compiled in.
 
 #[cfg(feature = "rmk_protocol")]
 pub(crate) mod rynk;
@@ -17,35 +17,19 @@ pub(crate) use vial::VialGattService as HostGattService;
 #[cfg(feature = "rmk_protocol")]
 pub(crate) use rynk::RynkGattService as HostGattService;
 
-/// Handle a GATT write event targeted at the active host protocol.
+/// Behavior shared by every host protocol's GATT service.
 ///
-/// Returns `true` when the event was consumed.
-#[cfg(feature = "vial")]
-pub(crate) async fn handle_write(
-    server: &crate::ble::ble_server::Server<'_>,
-    event_handle: u16,
-    event_data: &[u8],
-) -> bool {
-    vial::handle_write(&server.host_gatt, event_handle, event_data).await
-}
+/// Implementors expose the CCCD handle of their notifiable characteristic and
+/// consume GATT writes targeted at their own characteristics. The BLE event
+/// loop calls these methods on `server.host_gatt` without caring which
+/// concrete protocol is active.
+pub(crate) trait HostGatt {
+    /// GATT attribute handle of this protocol's notifiable characteristic's
+    /// CCCD. Used by the BLE event loop to recognise CCCD writes.
+    fn host_cccd_handle(&self) -> u16;
 
-#[cfg(feature = "rmk_protocol")]
-pub(crate) async fn handle_write(
-    server: &crate::ble::ble_server::Server<'_>,
-    event_handle: u16,
-    event_data: &[u8],
-) -> bool {
-    rynk::handle_write(&server.host_gatt, event_handle, event_data).await
-}
-
-/// GATT attribute handle of the active host protocol's notifiable
-/// characteristic's CCCD. Used by the BLE event loop to recognise CCCD writes.
-#[cfg(feature = "vial")]
-pub(crate) fn host_cccd_handle(server: &crate::ble::ble_server::Server<'_>) -> u16 {
-    vial::host_cccd_handle(&server.host_gatt)
-}
-
-#[cfg(feature = "rmk_protocol")]
-pub(crate) fn host_cccd_handle(server: &crate::ble::ble_server::Server<'_>) -> u16 {
-    rynk::host_cccd_handle(&server.host_gatt)
+    /// Handle a GATT write targeted at this protocol's service.
+    ///
+    /// Returns `true` when the event was consumed.
+    async fn handle_write(&self, event_handle: u16, event_data: &[u8]) -> bool;
 }

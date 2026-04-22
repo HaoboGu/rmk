@@ -1,5 +1,7 @@
 use trouble_host::prelude::*;
 
+use super::HostGatt;
+
 /// Stub custom GATT service for the rynk protocol.
 ///
 /// The real service will expose a write-without-response "rx" characteristic
@@ -19,18 +21,12 @@ pub(crate) struct RynkGattService {
     pub(crate) tx: [u8; 64],
 }
 
-/// GATT attribute handle of rynk's notifiable characteristic's CCCD.
-///
-/// Not yet wired; the `rmk_protocol` feature is gated behind a
-/// `compile_error!` in `lib.rs` until the transport lands.
-pub(crate) fn host_cccd_handle(_gatt: &RynkGattService) -> u16 {
-    todo!("wire rynk tx CCCD handle when rynk transport is implemented")
-}
+impl HostGatt for RynkGattService {
+    fn host_cccd_handle(&self) -> u16 {
+        todo!("wire rynk tx CCCD handle when rynk transport is implemented")
+    }
 
-/// Handle a GATT write targeted at the rynk service.
-///
-/// Not yet implemented; the `rmk_protocol` feature is gated behind a
-/// `compile_error!` in `lib.rs` until the transport lands.
-pub(crate) async fn handle_write(_gatt: &RynkGattService, _event_handle: u16, _event_data: &[u8]) -> bool {
-    todo!("wire rynk rx characteristic writes into the rynk transport's frame channel")
+    async fn handle_write(&self, _event_handle: u16, _event_data: &[u8]) -> bool {
+        todo!("wire rynk rx characteristic writes into the rynk transport's frame channel")
+    }
 }

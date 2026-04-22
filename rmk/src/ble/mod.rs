@@ -644,7 +644,10 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                     }
                     GattEvent::Write(event) => {
                         #[cfg(feature = "host")]
-                        let is_host_cccd = event.handle() == crate::ble::host::host_cccd_handle(server);
+                        let is_host_cccd = {
+                            use crate::ble::host::HostGatt as _;
+                            event.handle() == server.host_gatt.host_cccd_handle()
+                        };
                         #[cfg(not(feature = "host"))]
                         let is_host_cccd = false;
 
@@ -682,8 +685,10 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             }
                         } else {
                             #[cfg(feature = "host")]
-                            let handled =
-                                crate::ble::host::handle_write(server, event.handle(), event.data()).await;
+                            let handled = {
+                                use crate::ble::host::HostGatt as _;
+                                server.host_gatt.handle_write(event.handle(), event.data()).await
+                            };
                             #[cfg(not(feature = "host"))]
                             let handled = false;
 

@@ -2,13 +2,13 @@
 //!
 //! Transport-agnostic postcard-rpc server driving the ICD declared in
 //! `rmk_types::protocol::rmk`. Implements `crate::input_device::Runnable`
-//! over any `(Rx: WireRx, Tx: WireTx)` pair — USB bulk today, BLE custom
-//! serial tomorrow.
+//! over any `(Rx: WireRx, Tx: WireTx)` pair.
 //!
-//! The module is purely plumbing: endpoint/topic types live in `rmk-types`,
-//! handler bodies live in `dispatch`, transport impls live under
-//! `transport/` and implement postcard-rpc's `WireRx`/`WireTx` directly,
-//! and topic fan-out from existing in-crate pubsubs lives in `topics`.
+//! Each transport under `transport/` impls `postcard_rpc::server::{WireRx,
+//! WireTx}` directly — no shared wire-adapter layer. USB bulk and BLE serial
+//! have different framing realities (stream vs. GATT chunks, interior-mutex
+//! vs. `&self` notify), so a one-size-fits-all wrapper paid more in
+//! generics soup than it saved in code sharing.
 
 #[cfg(feature = "host_security")]
 pub(crate) mod lock;
@@ -87,10 +87,9 @@ impl<'a, Rx: WireRx, Tx: WireTx> RynkService<'a, Rx, Tx> {
 impl<Rx: WireRx, Tx: WireTx> Runnable for RynkService<'_, Rx, Tx> {
     async fn run(&mut self) -> ! {
         // TODO: drive `postcard_rpc::define_dispatch!` against
-        // `rmk_types::protocol::rmk::ENDPOINT_LIST` with `self.rx` as the
-        // `WireRx` and `&self.tx` as the `WireTx`, and race it against
-        // `topics::run(&self.tx)`. No adapter layer needed — the transport
-        // impls `WireRx`/`WireTx` natively.
+        // `rmk_types::protocol::rmk::ENDPOINT_LIST` using `&mut self.rx` as
+        // `WireRx` and `&self.tx` as `WireTx`, raced against
+        // `topics::run(&self.tx)`.
         loop {
             core::future::pending::<()>().await;
         }

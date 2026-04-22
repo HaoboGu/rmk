@@ -2,6 +2,7 @@ use embassy_sync::channel::Channel;
 use trouble_host::prelude::*;
 use usbd_hid::descriptor::SerializedDescriptor;
 
+use super::HostGatt;
 use crate::descriptor::ViaReport;
 use crate::{RawMutex, VIAL_CHANNEL_SIZE};
 
@@ -29,43 +30,38 @@ pub(crate) struct VialGattService {
 /// output characteristic. Drained by `crate::host::via::transport::ble_hid::BleHidRxTx`.
 pub(crate) static VIAL_OUTPUT_CHANNEL: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE> = Channel::new();
 
-/// GATT attribute handle of Vial's notifiable characteristic's CCCD.
-///
-/// Used by the BLE event loop to detect when the host toggles notifications.
-pub(crate) fn host_cccd_handle(gatt: &VialGattService) -> u16 {
-    gatt.input_data.cccd_handle.expect("No CCCD for Vial input_data")
-}
-
-/// Handle a GATT write targeted at the Vial service.
-///
-/// Returns `true` if the event was consumed (write matched a Vial
-/// characteristic), `false` if it belongs to some other service.
-pub(crate) async fn handle_write(gatt: &VialGattService, event_handle: u16, event_data: &[u8]) -> bool {
-    if event_handle == gatt.output_data.handle {
-        debug!("Got host packet: {:?}", event_data);
-        if event_data.len() == 32 {
-            let mut data = [0u8; 32];
-            data.copy_from_slice(event_data);
-            VIAL_OUTPUT_CHANNEL.send(data).await;
-        } else {
-            warn!("Wrong host packet data: {:?}", event_data);
-        }
-        return true;
+impl HostGatt for VialGattService {
+    fn host_cccd_handle(&self) -> u16 {
+        self.input_data.cccd_handle.expect("No CCCD for Vial input_data")
     }
 
-    if event_handle == gatt.hid_control_point.handle {
-        info!("Write GATT Event to host Control Point: {:?}", event_handle);
-        #[cfg(feature = "split")]
-        if event_data.len() == 1 {
-            let data = event_data[0];
-            if data == 0 {
-                crate::split::ble::central::CENTRAL_SLEEP.signal(true);
-            } else if data == 1 {
-                crate::split::ble::central::CENTRAL_SLEEP.signal(false);
+    async fn handle_write(&self, event_handle: u16, event_data: &[u8]) -> bool {
+        if event_handle == self.output_data.handle {
+            debug!("Got host packet: {:?}", event_data);
+            if event_data.len() == 32 {
+                let mut data = [0u8; 32];
+                data.copy_from_slice(event_data);
+                VIAL_OUTPUT_CHANNEL.send(data).await;
+            } else {
+                warn!("Wrong host packet data: {:?}", event_data);
             }
+            return true;
         }
-        return true;
-    }
 
-    false
+        if event_handle == self.hid_control_point.handle {
+            info!("Write GATT Event to host Control Point: {:?}", event_handle);
+            #[cfg(feature = "split")]
+            if event_data.len() == 1 {
+                let data = event_data[0];
+                if data == 0 {
+                    crate::split::ble::central::CENTRAL_SLEEP.signal(true);
+                } else if data == 1 {
+                    crate::split::ble::central::CENTRAL_SLEEP.signal(false);
+                }
+            }
+            return true;
+        }
+
+        false
+    }
 }
