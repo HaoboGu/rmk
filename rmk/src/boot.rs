@@ -9,7 +9,28 @@ pub fn jump_to_bootloader() {
     // Jump to RP2040 bootloader
     embassy_rp::rom_data::reset_to_usb_boot(0, 0);
 
-    #[cfg(not(any(feature = "adafruit_bl", feature = "rp2040")))]
+    #[cfg(all(
+        feature = "zsa_voyager_bl",
+        target_arch = "arm",
+        target_os = "none",
+        any(target_abi = "eabi", target_abi = "eabihf")
+    ))]
+    unsafe {
+        const GPIOA_MODER: *mut u32 = 0x4800_0000 as *mut u32;
+        const GPIOA_ODR: *mut u32 = 0x4800_0014 as *mut u32;
+        // PA8 + PA9: push-pull output, drive high.
+        let m = core::ptr::read_volatile(GPIOA_MODER);
+        core::ptr::write_volatile(GPIOA_MODER, (m & !(0b1111 << 16)) | (0b0101 << 16));
+        let d = core::ptr::read_volatile(GPIOA_ODR);
+        core::ptr::write_volatile(GPIOA_ODR, d | (1 << 8) | (1 << 9));
+        // 500 ms at 72 MHz SYSCLK charges the RC network past the bootloader's threshold.
+        cortex_m::asm::delay(36_000_000);
+        // PA9 low before reset discharges the cap.
+        let d = core::ptr::read_volatile(GPIOA_ODR);
+        core::ptr::write_volatile(GPIOA_ODR, d & !(1 << 9));
+    }
+
+    #[cfg(not(any(feature = "adafruit_bl", feature = "rp2040", feature = "zsa_voyager_bl")))]
     warn!("Please specify a bootloader to jump to!");
 
     reboot_keyboard();

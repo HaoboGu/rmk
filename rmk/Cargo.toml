@@ -201,6 +201,9 @@ rp2040 = [
 ## Enable feature if you're using Adafruit nRF52 bootloader and want bootloader jumping key
 adafruit_bl = ["_nrf_ble"]
 
+## Enable feature if you're using the ZSA Voyager ignition DFU bootloader
+zsa_voyager_bl = []
+
 ## Internal feature that indicates no USB is used, this feature will be auto-activated for some chips
 _no_usb = []
 
