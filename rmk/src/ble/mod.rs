@@ -239,8 +239,6 @@ pub(crate) async fn run_ble<
     #[cfg(all(not(feature = "_no_usb"), feature = "vial"))]
     let mut usb_host_service =
         crate::host::HostServiceImpl::from_usb_builder(&mut _usb_builder, keymap, rmk_config.vial_config);
-    #[cfg(all(not(feature = "_no_usb"), feature = "rmk_protocol"))]
-    let mut usb_host_service = crate::host::HostServiceImpl::from_usb_builder(&mut _usb_builder, keymap);
 
     // Optional usb logger initialization
     #[cfg(all(feature = "usb_log", not(feature = "_no_usb")))]
@@ -987,8 +985,6 @@ async fn run_ble_keyboard<
     #[cfg(feature = "vial")]
     let mut ble_host_service =
         crate::host::HostServiceImpl::from_ble(keymap, rmk_config.vial_config, server, conn);
-    #[cfg(feature = "rmk_protocol")]
-    let mut ble_host_service = crate::host::HostServiceImpl::from_ble(keymap, server, conn);
     let ble_led_reader = BleLedReader {};
     let mut ble_battery_server = BleBatteryServer::new(server, conn);
 

@@ -41,12 +41,6 @@ sequential-storage = { version = "7.1.0", features = ["postcard"] }
 defmt = { version = "1.0", optional = true }
 log = { version = "0.4", optional = true }
 byteorder = { version = "1", default-features = false, optional = true }
-postcard-rpc = { version = "0.12", optional = true }
-# `cobs = "0.4"` is already pulled in transitively by postcard-rpc; declaring
-# it direct at the same version just gives us `cobs::decode` access with zero
-# extra binary footprint. Used on the rynk `WireRx` receive path; postcard's
-# public `Cobs` flavor handles the send path.
-cobs = { version = "0.4", default-features = false, optional = true }
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive"] }
 
@@ -120,17 +114,13 @@ vial = ["host"]
 ## Enable vial lock feature
 vial_lock = ["vial", "host_security"]
 
-## Enable physical key unlock and matrix state tracking (shared between vial_lock and rmk_protocol)
+## Enable physical key unlock and matrix state tracking
 host_security = []
 
-## Enable RMK protocol support (new protocol, mutually exclusive with vial)
-rmk_protocol = [
-    "host",
-    "host_security",
-    "dep:postcard-rpc",
-    "dep:cobs",
-    "rmk-types/rmk_protocol",
-]
+## Enable RMK protocol schema/endpoint definitions from rmk-types.
+## The firmware-side service implementation (formerly "rynk") is not present
+## yet; enabling this feature currently only pulls in the ICD types.
+rmk_protocol = ["rmk-types/rmk_protocol"]
 
 ## Enable bulk transfer endpoints for RMK protocol on MCUs with sufficient RAM
 bulk_transfer = ["rmk_protocol", "rmk-types/bulk"]

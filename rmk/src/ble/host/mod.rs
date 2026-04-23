@@ -1,21 +1,15 @@
 //! GATT service definitions for the active host protocol.
 //!
-//! Each protocol's GATT characteristic layout and BLE write dispatch live in
-//! its submodule (`vial`, `rynk`) and implements [`HostGatt`]. This module
-//! re-exports the active protocol's type as `HostGattService` so the BLE
-//! event loop can invoke trait methods without knowing which protocol is
-//! compiled in.
+//! The active protocol's GATT characteristic layout and BLE write dispatch live
+//! in its submodule (`vial`) and implements [`HostGatt`]. This module re-exports
+//! the active protocol's type as `HostGattService` so the BLE event loop can
+//! invoke trait methods without knowing which protocol is compiled in.
 
-#[cfg(feature = "rmk_protocol")]
-pub(crate) mod rynk;
 #[cfg(feature = "vial")]
 pub(crate) mod vial;
 
 #[cfg(feature = "vial")]
 pub(crate) use vial::VialGattService as HostGattService;
-
-#[cfg(feature = "rmk_protocol")]
-pub(crate) use rynk::RynkGattService as HostGattService;
 
 /// Behavior shared by every host protocol's GATT service.
 ///

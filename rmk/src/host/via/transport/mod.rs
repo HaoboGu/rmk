@@ -8,9 +8,6 @@
 //!
 //! - `usb_hid` — USB HID class, fixed 32-byte reports.
 //! - `ble_hid` — BLE HID custom characteristic, fixed 32-byte reports.
-//!
-//! rynk doesn't use these — its transports impl
-//! `postcard_rpc::server::{WireRx, WireTx}` directly.
 
 #[cfg(feature = "_ble")]
 pub(crate) mod ble_hid;

@@ -17,20 +17,6 @@
 // Enable std for espidf and test
 #![cfg_attr(not(test), no_std)]
 
-// Mutual exclusivity guard
-#[cfg(all(feature = "rmk_protocol", feature = "vial"))]
-compile_error!("features `rmk_protocol` and `vial` are mutually exclusive");
-
-// WIP guard: the rmk_protocol transports (USB bulk, BLE custom serial) and
-// the postcard-rpc dispatcher are skeletons with `todo!()` bodies. Enabling
-// this feature would compile but panic on first host interaction. Remove
-// this guard once the transports and dispatcher land.
-#[cfg(feature = "rmk_protocol")]
-compile_error!(
-    "`rmk_protocol` is a work-in-progress: the bulk/BLE-serial transports and postcard-rpc server \
-     are not implemented yet. Use `vial` for now."
-);
-
 // Re-export self as ::rmk for macro-generated code to work both inside and outside the crate
 extern crate self as rmk;
 
@@ -229,8 +215,6 @@ pub async fn run_rmk<
         #[cfg(feature = "vial")]
         let mut host_service =
             crate::host::HostServiceImpl::from_usb_builder(&mut usb_builder, keymap, rmk_config.vial_config);
-        #[cfg(feature = "rmk_protocol")]
-        let mut host_service = crate::host::HostServiceImpl::from_usb_builder(&mut usb_builder, keymap);
 
         let (mut keyboard_reader, mut keyboard_writer) = keyboard_reader_writer.split();
 
