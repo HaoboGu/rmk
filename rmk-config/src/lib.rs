@@ -866,6 +866,7 @@ pub struct InputDeviceConfig {
     pub joystick: Option<Vec<JoystickConfig>>,
     pub pmw3610: Option<Vec<Pmw3610Config>>,
     pub pmw33xx: Option<Vec<Pmw33xxConfig>>,
+    pub iqs5xx: Option<Vec<Iqs5xxConfig>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -965,6 +966,43 @@ pub struct Pmw33xxConfig {
     /// Report rate (Hz). Motion will be accumulated and emitted at this rate.
     #[serde(default = "default_pointing_report_hz")]
     pub report_hz: u16,
+}
+
+/// Azoteq IQS5xx trackpad configuration.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Iqs5xxConfig {
+    /// Name of the trackpad (used for variable naming).
+    pub name: String,
+    /// RMK pointing-device id (0-255). Defaults to 0.
+    pub id: Option<u8>,
+    /// I²C bus the trackpad is connected to. The bus is dedicated to this
+    /// device — sharing with other I²C peripherals (e.g. an OLED) is not yet
+    /// supported via TOML.
+    pub i2c: Iqs5xxI2cConfig,
+    /// Optional `RDY` pin. Strongly recommended; without it the driver falls
+    /// back to timed polling and may stall the bus through clock-stretching.
+    pub rdy: Option<String>,
+    /// Invert X in the PointingProcessor.
+    #[serde(default)]
+    pub proc_invert_x: bool,
+    /// Invert Y in the PointingProcessor.
+    #[serde(default)]
+    pub proc_invert_y: bool,
+    /// Swap X and Y in the PointingProcessor.
+    #[serde(default)]
+    pub proc_swap_xy: bool,
+}
+
+/// I²C bus configuration for the IQS5xx. Distinct from the generic `I2cConfig`
+/// because the IQS5xx address is fixed (`0x74` by default; can be reprogrammed
+/// at the IC, but not at runtime — exposing it would be misleading).
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Iqs5xxI2cConfig {
+    pub instance: String,
+    pub sda: String,
+    pub scl: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
