@@ -39,7 +39,7 @@ events = [
 features = ["_ble"]
 events = [
     # ble/battery_service.rs: BatteryStatusEvent::subscriber()
-    # builtin_processor/battery_led.rs: subscribe = [BatteryStatusEvent] (user-optional but _ble-gated)
+    # processor/builtin/battery_led.rs: subscribe = [BatteryStatusEvent] (user-optional but _ble-gated)
     { name = "battery_status", count = 2 },
 ]
 

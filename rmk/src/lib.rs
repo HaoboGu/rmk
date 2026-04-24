@@ -40,7 +40,6 @@ use bt_hci::{
     cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy},
     controller::{ControllerCmdAsync, ControllerCmdSync},
 };
-use builtin_processor::wpm::WpmProcessor;
 use config::RmkConfig;
 #[cfg(not(feature = "_ble"))]
 use descriptor::{CompositeReport, KeyboardReport};
@@ -59,6 +58,7 @@ use keymap::KeyMap;
 pub use keymap::KeymapData;
 use matrix::MatrixTrait;
 use processor::PollingProcessor;
+use processor::builtin::wpm::WpmProcessor;
 pub use rmk_macro as macros;
 pub use rmk_types as types;
 #[cfg(all(feature = "storage", feature = "host"))]
@@ -87,7 +87,6 @@ use crate::state::ConnectionState;
 #[cfg(feature = "_ble")]
 pub mod ble;
 pub mod boot;
-pub mod builtin_processor;
 pub mod channel;
 pub mod combo;
 pub mod config;
