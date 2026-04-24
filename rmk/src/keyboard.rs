@@ -42,6 +42,8 @@ pub(crate) mod held_buffer;
 pub(crate) mod morse;
 pub(crate) mod mouse;
 pub(crate) mod oneshot;
+#[cfg(feature = "steno")]
+pub(crate) mod steno;
 
 use crate::keymap::HOLD_BUFFER_SIZE;
 
@@ -232,6 +234,10 @@ pub struct Keyboard<'a> {
     /// Used for temporarily disabling combos
     combo_on: bool,
 
+    /// Plover HID stenography chord accumulator
+    #[cfg(feature = "steno")]
+    steno: crate::keyboard::steno::StenoChord,
+
     /// Passkey entry state for BLE pairing
     #[cfg(feature = "passkey_entry")]
     passkey_entry_state: crate::ble::passkey::PasskeyEntryState,
@@ -261,6 +267,8 @@ impl<'a> Keyboard<'a> {
             system_control_report: SystemControlReport { usage_id: 0 },
             last_key_code: KeyCode::Hid(HidKeyCode::No),
             combo_on: true,
+            #[cfg(feature = "steno")]
+            steno: crate::keyboard::steno::StenoChord::new(),
             #[cfg(feature = "passkey_entry")]
             passkey_entry_state: crate::ble::passkey::PasskeyEntryState::new(),
         }
@@ -1262,6 +1270,12 @@ impl<'a> Keyboard<'a> {
                 // Tri-layer upper, turn layer 2 on and update layer state
                 self.process_action_layer_switch(2, event);
                 self.keymap.update_fn_layer_state();
+            }
+            #[cfg(feature = "steno")]
+            Action::Steno(key) => {
+                if let Some(report) = self.steno.on_event(key, event.pressed) {
+                    crate::keyboard::steno::try_send(report);
+                }
             }
             _ => warn!("Action variant not supported: {:?}", action),
         }

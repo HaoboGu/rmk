@@ -51,11 +51,11 @@ use embassy_usb::driver::Driver;
 pub use futures;
 use futures::FutureExt;
 pub use heapless;
+#[cfg(all(not(feature = "_ble"), feature = "steno"))]
+use hid::StenoReport;
 #[cfg(not(feature = "_ble"))]
 use hid::{CompositeReport, KeyboardReport};
 use hid::{HidReaderTrait, RunnableHidWriter};
-#[cfg(all(not(feature = "_ble"), feature = "steno"))]
-use hid::StenoReport;
 use keymap::KeyMap;
 pub use keymap::KeymapData;
 use processor::PollingProcessor;
