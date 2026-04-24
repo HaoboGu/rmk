@@ -146,6 +146,14 @@ impl<P: PacketPool> HidWriterTrait for BleHidServer<'_, '_, '_, P> {
                 })?;
                 Ok(n)
             }
+            // Plover HID over BLE is not supported: the stock HID-over-GATT service
+            // has no stenography characteristic. Log so the user can see why their
+            // steno strokes aren't reaching the host, then drop.
+            #[cfg(feature = "steno")]
+            Report::StenoReport(_) => {
+                warn!("Steno chord dropped: Plover HID over BLE is not supported");
+                Ok(0)
+            }
         }
     }
 }
