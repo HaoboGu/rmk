@@ -123,12 +123,17 @@ pub mod event {
     }
 }
 
-/// Input device module - mirrors rmk::input_device
-pub mod input_device {
+/// Core traits module - mirrors rmk::core_traits
+pub mod core_traits {
     /// Trait for runnable input devices and processors
     pub trait Runnable {
         async fn run(&mut self) -> !;
     }
+}
+
+/// Input device module - mirrors rmk::input_device
+pub mod input_device {
+    use crate::core_traits::Runnable;
 
     /// Trait for input devices
     pub trait InputDevice: Runnable {
