@@ -20,9 +20,9 @@ use panic_probe as _;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::direct_pin::DirectPinMatrix;
 use rmk::futures::future::join3;
 use rmk::keyboard::Keyboard;
+use rmk::matrix::direct_pin::DirectPinMatrix;
 use rmk::{KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 

@@ -56,7 +56,6 @@ pub use heapless;
 use hid::{HidReaderTrait, RunnableHidWriter};
 use keymap::KeyMap;
 pub use keymap::KeymapData;
-use matrix::MatrixTrait;
 use processor::PollingProcessor;
 use processor::builtin::wpm::WpmProcessor;
 pub use rmk_macro as macros;
@@ -88,17 +87,14 @@ use crate::state::ConnectionState;
 pub mod ble;
 pub mod boot;
 pub mod channel;
-pub mod combo;
 pub mod config;
 pub mod core_traits;
 pub mod debounce;
 pub mod descriptor;
-pub mod direct_pin;
 #[cfg(feature = "display")]
 pub mod display;
 pub mod driver;
 pub mod event;
-pub mod fork;
 pub mod helper_macro;
 pub mod hid;
 #[cfg(feature = "host")]
@@ -110,7 +106,6 @@ pub mod keymap;
 pub mod layout_macro;
 pub mod light;
 pub mod matrix;
-pub mod morse;
 pub mod processor;
 #[cfg(feature = "split")]
 pub mod split;

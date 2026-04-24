@@ -3,17 +3,7 @@ set -euo pipefail
 # shellcheck source=_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-# Single source of truth for the rmk feature-set matrix used by check/clippy.
-# An empty entry means "--no-default-features" with no extra features on top.
-rmk_featuresets=(
-    ""
-    "log,std"
-    "storage"
-    "async_matrix,storage"
-    "split,vial,storage"
-    "passkey_entry"
-    "split,vial,storage,passkey_entry"
-)
+mkdir -p "$target_root"
 
 # Emit "--- <cmd> ..." tuples for rmk (every feature set) plus the other
 # workspace crates. Tokens are literal or feature lists with no whitespace,
@@ -21,7 +11,7 @@ rmk_featuresets=(
 emit_batch_args() {
     local cmd="$1"
     local feats
-    for feats in "${rmk_featuresets[@]}"; do
+    for feats in "${RMK_FEATURESETS[@]}"; do
         if [[ -z "$feats" ]]; then
             printf -- '--- %s --manifest-path rmk/Cargo.toml --no-default-features\n' "$cmd"
         else
@@ -57,7 +47,7 @@ clippy_rmk() {
             --manifest-path rmk/Cargo.toml --no-default-features --features "$feats" -- -D warnings
     fi
 }
-for feats in "${rmk_featuresets[@]}"; do
+for feats in "${RMK_FEATURESETS[@]}"; do
     clippy_rmk "$feats"
 done
 cargo +stable clippy --target-dir "$clippy_target" --manifest-path rmk-config/Cargo.toml -- -D warnings

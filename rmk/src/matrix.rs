@@ -15,6 +15,7 @@ use crate::event::{KeyboardEvent, publish_event_async};
 use crate::input_device::InputDevice;
 use crate::state::ConnectionState;
 pub mod bidirectional_matrix;
+pub mod direct_pin;
 pub mod hc595_matrix;
 
 /// Recording the matrix pressed state

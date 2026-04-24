@@ -1,10 +1,10 @@
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use rmk_types::fork::Fork;
+use rmk_types::morse::Morse;
 use serde::de::{Error as DeError, SeqAccess, Visitor};
 use serde::{Deserializer, Serializer};
 
-use crate::combo::Combo;
-use crate::morse::Morse;
+use crate::keyboard::combo::Combo;
 use crate::storage::{Storage, StorageData, StorageKey, print_storage_error};
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM};
 
@@ -125,7 +125,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     pub(crate) async fn read_combos(&mut self, combos: &mut [Option<Combo>; COMBO_MAX_NUM]) -> Result<(), ()> {
-        use crate::combo::Combo;
+        use crate::keyboard::combo::Combo;
 
         for (i, item) in combos.iter_mut().enumerate() {
             let key = StorageKey::combo(i as u8);
@@ -183,11 +183,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 mod tests {
     use rmk_types::action::Action;
     use rmk_types::keycode::{HidKeyCode, KeyCode};
-    use rmk_types::morse::{MorseMode, MorseProfile};
+    use rmk_types::morse::{HOLD, MorseMode, MorsePattern, MorseProfile, TAP};
     use sequential_storage::map::Value;
 
     use super::*;
-    use crate::morse::{HOLD, MorsePattern, TAP};
 
     #[test]
     fn test_morse_serialization_deserialization() {

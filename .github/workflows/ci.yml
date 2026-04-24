@@ -36,6 +36,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-check
+          # check.sh redirects cargo artifacts to target/ci/ via --target-dir
+          # (so cargo-batch can share compilation across manifests). Tell
+          # rust-cache about it, otherwise it only caches the per-crate
+          # target/ dirs which stay empty.
+          cache-directories: |
+            target/ci
       - name: Install cargo-batch
         run: cargo install --locked --git https://github.com/embassy-rs/cargo-batch cargo --bin cargo-batch
       - run: .github/ci/check.sh
@@ -51,6 +57,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-test
+          # test.sh writes to target/ci/test via CARGO_TARGET_DIR; cache it
+          # explicitly so rust-cache doesn't miss it.
+          cache-directories: |
+            target/ci
       - uses: taiki-e/install-action@v2
         with:
           tool: nextest@0.9
@@ -244,16 +254,23 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      - uses: cargo-bins/cargo-binstall@main
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-build-esp
-          # Both esp examples share one target dir (see .github/ci/build.sh);
-          # point rust-cache at it so the per-dep artifacts survive between runs.
+          # Both esp examples share one target dir (target-esp/, set in the
+          # build step); point rust-cache at it so per-dep artifacts survive.
           workspaces: |
             examples/use_config/esp32s3_ble -> ../../../target-esp
             examples/use_rust/esp32s3_ble -> ../../../target-esp
       - name: Install espup and esp toolchain
         run: |
-          cargo install --locked espup
+          cargo binstall espup -y
           espup install
-      - run: .github/ci/build.sh
+      - name: Build ESP examples
+        run: |
+          source "$HOME/export-esp.sh"
+          export CARGO_TARGET_DIR="$PWD/target-esp"
+          for dir in examples/use_rust/esp32s3_ble examples/use_config/esp32s3_ble; do
+            (cd "$dir" && CARGO_UNSTABLE_BUILD_STD=alloc,core cargo +esp build --release)
+          done

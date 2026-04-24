@@ -1,12 +1,11 @@
 use embassy_time::{Duration, Instant};
 use rmk_types::action::{Action, KeyAction};
-use rmk_types::morse::MorseMode;
+use rmk_types::morse::{HOLD, MorseMode, MorsePattern, TAP};
 
 use crate::event::KeyboardEvent;
 use crate::keyboard::Keyboard;
 use crate::keyboard::held_buffer::{HeldKey, KeyState};
 use crate::keymap::KeyMap;
-use crate::morse::{HOLD, MorsePattern, TAP};
 
 // 'morse' is an alias for the superset of tap dance and tap hold keys, since their handling have many similarities
 impl<'a> Keyboard<'a> {
