@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 #
 # Shared bootstrap for RMK CI scripts. Source this from other scripts in
-# .github/ci/ to pick up common env, cache, and example discovery helpers.
+# .github/ci/ to pick up common env and example discovery helpers.
 #
 #     source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 #
@@ -11,8 +11,8 @@
 #     set -euo pipefail
 #
 # Toolchain + tool installation (rustup components/targets, cargo-batch,
-# cargo-expand, flip-link, espup) is the workflow's responsibility and lives
-# in .github/workflows/ci.yml. Locally the repo's rust-toolchain.toml takes
+# cargo-expand, espup) is the workflow's responsibility and lives in
+# .github/workflows/ci.yml. Locally the repo's rust-toolchain.toml takes
 # care of it, so these scripts stay side-effect-free on your machine.
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -23,32 +23,40 @@ export CARGO_TERM_PROGRESS_WHEN=never
 export CARGO_NET_GIT_FETCH_WITH_CLI=true
 export TERM="${TERM:-dumb}"
 
-# Cache root: if RMK_CI_CACHE_ROOT is set (self-hosted runner or local reuse),
-# redirect the target dir there. Otherwise fall back to an in-tree target/ci
-# dir so local runs don't clobber the default target.
-if [[ -n "${RMK_CI_CACHE_ROOT:-}" ]]; then
-    mkdir -p "$RMK_CI_CACHE_ROOT"
-    target_root="$RMK_CI_CACHE_ROOT/target"
-else
-    target_root="$repo_root/target/ci"
-fi
-mkdir -p "$target_root"
+# Shared target dir for scripts that run cargo. Callers that need it should
+# `mkdir -p "$target_root"` before use; we don't create it here so scripts
+# that don't run cargo (e.g. discover.sh) don't leave an empty directory.
+target_root="$repo_root/target/ci"
 
 log_section() {
     printf "\n==> %s\n" "$1"
 }
 
-# Examples auto-discovery currently skips over:
-#   - nrf54lm20_ble: Cargo.toml references local path deps
-#     (/Users/.../nrf-sdc, /Users/.../nrf-mpsl) that only exist on the author's
-#     workstation. The git-rev alternatives sit commented-out next to them;
-#     once those are swapped in, this entry can be removed.
-#   - esp32_ble_split: dual-target split example that only builds through the
-#     `build-central` / `build-peripheral` cargo aliases (different chip per
-#     bin, no [build].target set). Not buildable via a plain `cargo build`.
+# Feature-set matrix for rmk check/clippy/test. An empty entry means
+# `--no-default-features` with no extra features on top. Kept here so
+# check.sh and test.sh stay in lockstep — a set added for check is also
+# exercised by tests, and vice versa.
+RMK_FEATURESETS=(
+    ""
+    "log,std"
+    "storage"
+    "async_matrix,storage"
+    "split,vial,storage"
+    "passkey_entry"
+    "split,vial,storage,passkey_entry"
+)
+
+# Examples auto-discovery skiplist. Reasons:
+#   - nrf54lm20_ble: Cargo.toml references local path deps that only exist on
+#     the author's workstation.
+#   - esp32_ble_split: dual-target split example; only builds through the
+#     `build-central` / `build-peripheral` cargo aliases.
+#   - py32f07x, sf32lb52x_usb: not currently buildable in CI.
 EXAMPLE_SKIPLIST=(
     "examples/use_rust/nrf54lm20_ble"
     "examples/use_config/esp32_ble_split"
+    "examples/use_rust/py32f07x"
+    "examples/use_rust/sf32lb52x_usb"
 )
 
 # Echoes Cargo.toml paths for every buildable example, one per line.
