@@ -150,7 +150,7 @@ mod basic {
             self.read_battery_event().await
         }
     }
-    impl ::rmk::input_device::Runnable for BatteryReader {
+    impl ::rmk::core_traits::Runnable for BatteryReader {
         async fn run(&mut self) -> ! {
             use ::rmk::event::publish_event_async;
             use ::rmk::input_device::InputDevice;
@@ -186,7 +186,7 @@ mod multi_event {
             self.read_nrf_adc_event().await
         }
     }
-    impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> ::rmk::input_device::Runnable
+    impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> ::rmk::core_traits::Runnable
     for NrfAdc<'a, PIN_NUM, EVENT_NUM> {
         async fn run(&mut self) -> ! {
             use ::rmk::event::publish_event_async;

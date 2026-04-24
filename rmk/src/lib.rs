@@ -91,6 +91,7 @@ pub mod builtin_processor;
 pub mod channel;
 pub mod combo;
 pub mod config;
+pub mod core_traits;
 pub mod debounce;
 pub mod descriptor;
 pub mod direct_pin;

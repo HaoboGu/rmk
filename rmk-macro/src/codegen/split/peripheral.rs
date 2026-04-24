@@ -364,7 +364,7 @@ fn expand_split_peripheral(
 
     // Import Runnable trait so processor.run() calls compile
     let processor_import = if !registered_processors.is_empty() {
-        quote! { use ::rmk::input_device::Runnable; }
+        quote! { use ::rmk::core_traits::Runnable; }
     } else {
         quote! {}
     };

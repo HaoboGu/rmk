@@ -176,7 +176,7 @@ pub(crate) fn rmk_entry_select(
     };
 
     quote! {
-        use ::rmk::input_device::Runnable;
+        use ::rmk::core_traits::Runnable;
         #entry
     }
 }

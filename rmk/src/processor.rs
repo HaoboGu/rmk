@@ -9,7 +9,7 @@
 use embassy_futures::select::{Either, select};
 
 use crate::event::EventSubscriber;
-use crate::input_device::Runnable;
+use crate::core_traits::Runnable;
 
 /// Unified trait for event processors.
 ///

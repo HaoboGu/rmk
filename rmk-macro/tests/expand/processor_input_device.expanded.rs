@@ -110,7 +110,7 @@ mod basic {
             self.read_sensor_event().await
         }
     }
-    impl ::rmk::input_device::Runnable for SensorController {
+    impl ::rmk::core_traits::Runnable for SensorController {
         async fn run(&mut self) -> ! {
             use ::rmk::event::publish_event_async;
             use ::rmk::input_device::InputDevice;
@@ -267,7 +267,7 @@ mod reversed {
             self.on_config_event(event).await
         }
     }
-    impl ::rmk::input_device::Runnable for ReversedSensorController {
+    impl ::rmk::core_traits::Runnable for ReversedSensorController {
         async fn run(&mut self) -> ! {
             use ::rmk::event::publish_event_async;
             use ::rmk::input_device::InputDevice;
@@ -434,7 +434,7 @@ mod polling {
             self.read_sensor_event().await
         }
     }
-    impl ::rmk::input_device::Runnable for PollingSensorController {
+    impl ::rmk::core_traits::Runnable for PollingSensorController {
         async fn run(&mut self) -> ! {
             use ::rmk::event::publish_event_async;
             use ::rmk::input_device::InputDevice;
@@ -792,7 +792,7 @@ mod multi_event {
             self.read_sensor_event().await
         }
     }
-    impl ::rmk::input_device::Runnable for MultiEventSensorController {
+    impl ::rmk::core_traits::Runnable for MultiEventSensorController {
         async fn run(&mut self) -> ! {
             use ::rmk::event::publish_event_async;
             use ::rmk::input_device::InputDevice;
@@ -1125,7 +1125,7 @@ mod multi_event_polling {
             self.read_sensor_event().await
         }
     }
-    impl ::rmk::input_device::Runnable for MultiEventPollingSensorController {
+    impl ::rmk::core_traits::Runnable for MultiEventPollingSensorController {
         async fn run(&mut self) -> ! {
             use ::rmk::event::publish_event_async;
             use ::rmk::input_device::InputDevice;
