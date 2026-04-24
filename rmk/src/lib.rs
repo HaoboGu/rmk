@@ -211,10 +211,10 @@ pub async fn run_rmk<
     #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
     {
         let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.device_config);
-        let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
-        let mut other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
+        let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8, 8);
+        let mut other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9, 16);
         #[cfg(feature = "host")]
-        let mut host_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
+        let mut host_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32, 32);
 
         let (mut keyboard_reader, mut keyboard_writer) = keyboard_reader_writer.split();
 

@@ -174,7 +174,11 @@ macro_rules! add_usb_logger {
 }
 
 macro_rules! add_usb_writer {
-    ($usb_builder:expr, $descriptor:ty, $n:expr) => {{
+    ($usb_builder:expr, $descriptor:ty, $n:expr) => {
+        $crate::usb::add_usb_writer!($usb_builder, $descriptor, $n, 64)
+    };
+    // Size $max_packet to the actual report to conserve Packet Memory Area on tight parts.
+    ($usb_builder:expr, $descriptor:ty, $n:expr, $max_packet:expr) => {{
         // Initialize hid writer
         // Current implementation requires the static STATE, so we need to use the paste crate to generate the static variable name.
         use usbd_hid::descriptor::SerializedDescriptor;
@@ -190,7 +194,7 @@ macro_rules! add_usb_writer {
             report_descriptor: <$descriptor>::desc(),
             request_handler: Some(request_handler),
             poll_ms: 1,
-            max_packet_size: 64,
+            max_packet_size: $max_packet,
             hid_subclass: ::embassy_usb::class::hid::HidSubclass::No,
             hid_boot_protocol: ::embassy_usb::class::hid::HidBootProtocol::None,
         };
@@ -201,7 +205,11 @@ macro_rules! add_usb_writer {
 }
 
 macro_rules! add_usb_reader_writer {
-    ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr) => {{
+    ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr) => {
+        $crate::usb::add_usb_reader_writer!($usb_builder, $descriptor, $read_n, $write_n, 64)
+    };
+    // Size $max_packet to the actual report to conserve Packet Memory Area on tight parts.
+    ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr, $max_packet:expr) => {{
         // Initialize hid reader writer
         // Current implementation requires the static STATE, so we need to use the paste crate to generate the static variable name.
         use usbd_hid::descriptor::SerializedDescriptor;
@@ -217,7 +225,7 @@ macro_rules! add_usb_reader_writer {
             report_descriptor: <$descriptor>::desc(),
             request_handler: Some(request_handler),
             poll_ms: 1,
-            max_packet_size: 64,
+            max_packet_size: $max_packet,
             hid_subclass: ::embassy_usb::class::hid::HidSubclass::No,
             hid_boot_protocol: ::embassy_usb::class::hid::HidBootProtocol::None,
         };
