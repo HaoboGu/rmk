@@ -44,6 +44,8 @@ pub mod modifier;
 pub mod morse;
 pub mod mouse_button;
 pub mod protocol;
+#[cfg(feature = "steno")]
+pub mod steno;
 
 /// Compute the maximum varint-encoded length for a given max value.
 /// Mirrors `postcard`'s internal `varint_size`.

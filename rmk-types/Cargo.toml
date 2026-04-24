@@ -48,3 +48,5 @@ _ble = []
 split = []
 display = []
 passkey_entry = []
+# Stenography (Plover HID) support: `StenoKey` + `Action::Steno` variant.
+steno = []
