@@ -113,6 +113,21 @@ pub struct StenoReport {
     pub keys: [u8; 8],
 }
 
+// `gen_hid_descriptor` skips the `AsInputReport` impl when a `report_id`
+// is present, so the wire format must be assembled by hand: byte 0 is the
+// Plover HID report ID (0x50) followed by the eight chord-bitmap bytes.
+#[cfg(feature = "steno")]
+impl usbd_hid::descriptor::AsInputReport for StenoReport {
+    fn serialize(&self, buffer: &mut [u8]) -> Result<usize, usbd_hid::descriptor::BufferOverflow> {
+        if buffer.len() < 9 {
+            return Err(usbd_hid::descriptor::BufferOverflow);
+        }
+        buffer[0] = 0x50;
+        buffer[1..9].copy_from_slice(&self.keys);
+        Ok(9)
+    }
+}
+
 #[cfg(all(test, feature = "steno"))]
 mod steno_tests {
     use usbd_hid::descriptor::SerializedDescriptor;
@@ -201,6 +216,9 @@ pub enum Report {
     MediaKeyboardReport(MediaKeyboardReport),
     /// System control report
     SystemControlReport(SystemControlReport),
+    /// Plover HID stenography chord report
+    #[cfg(feature = "steno")]
+    StenoReport(StenoReport),
 }
 
 impl AsInputReport for Report {
@@ -210,6 +228,8 @@ impl AsInputReport for Report {
             Report::MouseReport(r) => r.serialize(buffer),
             Report::MediaKeyboardReport(r) => r.serialize(buffer),
             Report::SystemControlReport(r) => r.serialize(buffer),
+            #[cfg(feature = "steno")]
+            Report::StenoReport(r) => r.serialize(buffer),
         }
     }
 }
