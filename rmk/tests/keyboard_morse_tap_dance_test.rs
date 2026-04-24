@@ -4,11 +4,10 @@ pub mod common;
 use heapless::Vec;
 use rmk::config::{BehaviorConfig, MorsesConfig, PositionalConfig};
 use rmk::keyboard::Keyboard;
-use rmk::morse::Morse;
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
-use rmk::types::morse::{MorseMode, MorseProfile};
+use rmk::types::morse::{Morse, MorseMode, MorseProfile};
 use rmk::{k, td};
 
 use crate::common::wrap_keymap;

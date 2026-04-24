@@ -1,8 +1,8 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::combo::{Combo, ComboConfig};
 use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, OneShotConfig};
+use rmk::keyboard::combo::{Combo, ComboConfig};
 use rmk::types::keycode::HidKeyCode;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{k, osm, th};

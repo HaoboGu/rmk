@@ -88,7 +88,6 @@ use crate::state::ConnectionState;
 pub mod ble;
 pub mod boot;
 pub mod channel;
-pub mod combo;
 pub mod config;
 pub mod core_traits;
 pub mod debounce;
@@ -110,7 +109,6 @@ pub mod keymap;
 pub mod layout_macro;
 pub mod light;
 pub mod matrix;
-pub mod morse;
 pub mod processor;
 #[cfg(feature = "split")]
 pub mod split;
