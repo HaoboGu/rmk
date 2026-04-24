@@ -25,9 +25,9 @@ use crate::event::ClearPeerEvent;
 use crate::event::{
     ActionEvent, KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event, publish_event_async,
 };
-use crate::fork::ActiveFork;
 use crate::hid::Report;
 use crate::keyboard::combo::Combo;
+use crate::keyboard::fork::ActiveFork;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard::mouse::{MouseAction, MouseState};
 use crate::keyboard::oneshot::OneShotState;
@@ -38,6 +38,7 @@ use crate::split::ble::central::update_activity_time;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, boot};
 
 pub mod combo;
+pub(crate) mod fork;
 pub(crate) mod held_buffer;
 pub(crate) mod morse;
 pub(crate) mod mouse;

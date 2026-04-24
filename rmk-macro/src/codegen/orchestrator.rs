@@ -440,7 +440,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(hardware: &Hardware) -> TokenStrea
                     quote! {
                         #bootmagic
                         let debouncer = #debouncer_type::new();
-                        let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, #low_active);
+                        let mut matrix = ::rmk::matrix::direct_pin::DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, #low_active);
                     }
                 }
             }
@@ -468,7 +468,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(hardware: &Hardware) -> TokenStrea
                     quote! {
                         #bootmagic
                         let debouncer = #debouncer_type::new();
-                        let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #central_row, #central_col, #size, #central_row_offset, #central_col_offset>::new(direct_pins, debouncer, #low_active);
+                        let mut matrix = ::rmk::matrix::direct_pin::DirectPinMatrix::<_, _, #central_row, #central_col, #size, #central_row_offset, #central_col_offset>::new(direct_pins, debouncer, #low_active);
                     }
                 }
             }
