@@ -9,9 +9,10 @@ use rmk_macro::input_device;
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
 use crate::CONNECTION_STATE;
+use crate::core_traits::Runnable;
 use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::event::{KeyboardEvent, publish_event_async};
-use crate::input_device::{InputDevice, Runnable};
+use crate::input_device::InputDevice;
 use crate::state::ConnectionState;
 pub mod bidirectional_matrix;
 pub mod hc595_matrix;

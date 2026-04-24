@@ -11,8 +11,8 @@ mod my_keyboard {
     use embassy_stm32::Config;
     use embassy_stm32::time::Hertz;
     use embassy_stm32::usb::Driver;
+    use rmk::core_traits::Runnable;
     use rmk::futures::future::join3;
-    use rmk::input_device::Runnable;
     use rmk::{run_all, run_rmk};
     use static_cell::StaticCell;
 

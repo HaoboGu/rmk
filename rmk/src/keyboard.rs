@@ -19,6 +19,7 @@ use usbd_hid::descriptor::{MediaKeyboardReport, SystemControlReport};
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::combo::Combo;
 use crate::config::Hand;
+use crate::core_traits::Runnable;
 use crate::descriptor::KeyboardReport;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::ClearPeerEvent;
@@ -27,7 +28,6 @@ use crate::event::{
 };
 use crate::fork::ActiveFork;
 use crate::hid::Report;
-use crate::input_device::Runnable;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard::mouse::{MouseAction, MouseState};
 use crate::keyboard::oneshot::OneShotState;

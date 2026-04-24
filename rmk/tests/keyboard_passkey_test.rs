@@ -11,8 +11,8 @@ use embassy_time::{Duration, Timer};
 use futures::join;
 use rmk::ble::passkey::{PASSKEY_RESPONSE, begin_passkey_entry_session, end_passkey_entry_session};
 use rmk::channel::KEYBOARD_REPORT_CHANNEL;
+use rmk::core_traits::Runnable;
 use rmk::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEvent};
-use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 
 use crate::common::create_test_keyboard;
