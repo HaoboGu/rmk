@@ -257,14 +257,14 @@ async fn main(spawner: Spawner) {
 
     // Start
     join4(
-        run_all!(matrix, encoder, adc_device),
+        run_all!(matrix, encoder, adc_device, storage),
         run_all! {
             batt_proc
         },
         keyboard.run(),
         join5(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
-            run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+            run_rmk(&keymap, driver, &stack, rmk_config),
             scan_peripherals(&stack, &peripheral_addrs),
             capslock_led.run(),
             peripheral_battery_monitor.run(),

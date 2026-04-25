@@ -163,11 +163,11 @@ async fn main(spawner: Spawner) {
 
     // Start
     join3(
-        run_all!(matrix),
+        run_all!(matrix, storage),
         keyboard.run(),
         join3(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
-            run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+            run_rmk(&keymap, driver, &stack, rmk_config),
             scan_peripherals(&stack, &peripheral_addrs),
         ),
     )

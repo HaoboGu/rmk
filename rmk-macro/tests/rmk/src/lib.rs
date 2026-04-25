@@ -123,7 +123,7 @@ pub mod event {
     }
 }
 
-/// Core traits module - mirrors rmk::core_traits
+/// Core traits module - mirrors rmk::traits
 pub mod core_traits {
     /// Trait for runnable input devices and processors
     pub trait Runnable {

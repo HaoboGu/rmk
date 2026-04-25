@@ -31,9 +31,8 @@ use {
 };
 #[cfg(feature = "storage")]
 use {
-    crate::storage::{Storage, StorageData, StorageKey},
-    crate::{read_storage, state::CONNECTION_TYPE},
-    embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
+    crate::state::CONNECTION_TYPE,
+    crate::storage::{StorageData, StorageKey},
 };
 
 use crate::ble::battery_service::BleBatteryServer;
@@ -210,17 +209,11 @@ pub(crate) async fn run_ble<
     'a,
     'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
-    #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    #[cfg(feature = "storage")] const ROW: usize,
-    #[cfg(feature = "storage")] const COL: usize,
-    #[cfg(feature = "storage")] const NUM_LAYER: usize,
-    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
     #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     stack: &'b Stack<'b, C, DefaultPacketPool>,
-    #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     #[cfg_attr(not(feature = "_nrf_ble"), allow(unused_mut))] mut rmk_config: RmkConfig<'static>,
 ) {
     #[cfg(feature = "_nrf_ble")]
@@ -251,9 +244,9 @@ pub(crate) async fn run_ble<
     // Load current connection type
     #[cfg(feature = "storage")]
     {
-        let mut buf: [u8; 16] = [0; 16];
-        let key = StorageKey::ConnectionType;
-        if let Ok(Some(StorageData::ConnectionType(conn_type))) = read_storage!(storage, &key, buf) {
+        if let Some(StorageData::ConnectionType(conn_type)) =
+            crate::storage::read_storage_data(StorageKey::ConnectionType).await
+        {
             CONNECTION_TYPE.store(conn_type, Ordering::SeqCst);
         } else {
             // If no saved connection type, return default value
@@ -273,7 +266,7 @@ pub(crate) async fn run_ble<
 
     #[cfg(feature = "storage")]
     // Load saved bonding information
-    profile_manager.load_bonded_devices(storage).await;
+    profile_manager.load_bonded_devices().await;
     // Update bonding information in the stack
     profile_manager.update_stack_bonds();
 
@@ -365,9 +358,6 @@ pub(crate) async fn run_ble<
                         match select4(
                             wait_until_usb_configured(),
                             adv_fut,
-                            #[cfg(feature = "storage")]
-                            run_dummy_keyboard(storage),
-                            #[cfg(not(feature = "storage"))]
                             run_dummy_keyboard(),
                             profile_manager.update_profile(),
                         )
@@ -380,8 +370,6 @@ pub(crate) async fn run_ble<
 
                                 set_ble_state(BleState::Inactive);
                                 let usb_fut = run_keyboard(
-                                    #[cfg(feature = "storage")]
-                                    storage,
                                     #[cfg(feature = "host")]
                                     keymap,
                                     #[cfg(feature = "host")]
@@ -404,8 +392,6 @@ pub(crate) async fn run_ble<
                                     keymap,
                                     #[cfg(feature = "host")]
                                     &mut rmk_config,
-                                    #[cfg(feature = "storage")]
-                                    storage,
                                 );
                                 select3(ble_fut, wait_until_usb_configured(), profile_manager.update_profile()).await;
                                 continue;
@@ -435,8 +421,6 @@ pub(crate) async fn run_ble<
                     ConnectionType::Ble => {
                         info!("BLE priority mode, running USB keyboard while advertising");
                         let usb_fut = run_keyboard(
-                            #[cfg(feature = "storage")]
-                            storage,
                             #[cfg(feature = "host")]
                             keymap,
                             #[cfg(feature = "host")]
@@ -459,8 +443,6 @@ pub(crate) async fn run_ble<
                                         keymap,
                                         #[cfg(feature = "host")]
                                         &mut rmk_config,
-                                        #[cfg(feature = "storage")]
-                                        storage,
                                     ),
                                     profile_manager.update_profile(),
                                 )
@@ -505,8 +487,6 @@ pub(crate) async fn run_ble<
                             keymap,
                             #[cfg(feature = "host")]
                             &mut rmk_config,
-                            #[cfg(feature = "storage")]
-                            storage,
                         ),
                         profile_manager.update_profile(),
                     )
@@ -917,22 +897,9 @@ async fn advertise<'a, 'b, C: Controller>(
 
 // Dummy keyboard service is used to monitoring keys when there's no actual connection.
 // It's useful for functions like switching active profiles when there's no connection.
-pub(crate) async fn run_dummy_keyboard<
-    #[cfg(feature = "storage")] F: AsyncNorFlash,
-    #[cfg(feature = "storage")] const ROW: usize,
-    #[cfg(feature = "storage")] const COL: usize,
-    #[cfg(feature = "storage")] const NUM_LAYER: usize,
-    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
->(
-    #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-) {
+pub(crate) async fn run_dummy_keyboard() {
     CONNECTION_STATE.store(ConnectionState::Disconnected.into(), Ordering::Release);
-    #[cfg(feature = "storage")]
-    let storage_fut = storage.run();
     let mut dummy_writer = DummyWriter {};
-    #[cfg(feature = "storage")]
-    select(storage_fut, dummy_writer.run_writer()).await;
-    #[cfg(not(feature = "storage"))]
     dummy_writer.run_writer().await;
 }
 
@@ -996,18 +963,12 @@ async fn run_ble_keyboard<
     'c,
     'd,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
-    #[cfg(feature = "storage")] F: AsyncNorFlash,
-    #[cfg(feature = "storage")] const ROW: usize,
-    #[cfg(feature = "storage")] const COL: usize,
-    #[cfg(feature = "storage")] const NUM_LAYER: usize,
-    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
     server: &'b Server<'_>,
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     stack: &Stack<'_, C, DefaultPacketPool>,
     #[cfg(feature = "host")] keymap: &'c KeyMap<'c>,
     #[cfg(feature = "host")] rmk_config: &'d mut RmkConfig<'static>,
-    #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     let ble_hid_server = BleHidServer::new(server, conn);
     #[cfg(feature = "host")]
@@ -1017,7 +978,7 @@ async fn run_ble_keyboard<
 
     // Load CCCD table from storage
     #[cfg(feature = "storage")]
-    if let Ok(Some(bond_info)) = storage.read_trouble_bond_info(get_current_profile()).await
+    if let Some(bond_info) = crate::storage::read_trouble_bond_info(get_current_profile()).await
         && bond_info.info.identity.match_identity(&conn.raw().peer_identity())
     {
         info!("Loading CCCD table from storage: {:?}", bond_info.cccd_table);
@@ -1040,8 +1001,6 @@ async fn run_ble_keyboard<
     };
 
     run_keyboard(
-        #[cfg(feature = "storage")]
-        storage,
         #[cfg(feature = "host")]
         keymap,
         #[cfg(feature = "host")]

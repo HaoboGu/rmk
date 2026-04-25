@@ -130,11 +130,10 @@ pub async fn scan_peripherals<
     }
 }
 
-/// Read peripheral addresses from storage.
+/// Read peripheral addresses directly from storage at startup.
 ///
-/// # Arguments
-///
-/// * `storage` - The storage to read peripheral addresses from
+/// Must be called BEFORE the storage task is started (i.e. before joining `storage` into the
+/// top-level `run_all!`); once storage is running concurrently nobody else can hold `&mut Storage`.
 pub async fn read_peripheral_addresses<
     const PERI_NUM: usize,
     F: NorFlash,

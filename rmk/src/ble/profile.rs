@@ -192,22 +192,12 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
     /// Load stored bonding information
     #[cfg(feature = "storage")]
-    pub async fn load_bonded_devices<
-        F: embedded_storage_async::nor_flash::NorFlash,
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-        const NUM_ENCODER: usize,
-    >(
-        &mut self,
-        storage: &mut crate::storage::Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-    ) {
-        use crate::read_storage;
-        use crate::storage::{StorageData, StorageKey};
+    pub async fn load_bonded_devices(&mut self) {
+        use crate::storage::{StorageData, StorageKey, read_storage_data, read_trouble_bond_info};
 
         self.bonded_devices.clear();
         for slot_num in 0..NUM_BLE_PROFILE {
-            if let Ok(Some(info)) = storage.read_trouble_bond_info(slot_num as u8).await
+            if let Some(info) = read_trouble_bond_info(slot_num as u8).await
                 && !info.removed
                 && let Err(e) = self.bonded_devices.push(info)
             {
@@ -216,11 +206,10 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
         }
         debug!("Loaded {} bond info", self.bonded_devices.len());
 
-        let mut buf: [u8; 128] = [0; 128];
-
         // Load current active profile, save to `BLE_STATUS`
-        let key = StorageKey::ActiveBleProfile;
-        let profile = if let Ok(Some(StorageData::ActiveBleProfile(profile))) = read_storage!(storage, &key, buf) {
+        let profile = if let Some(StorageData::ActiveBleProfile(profile)) =
+            read_storage_data(StorageKey::ActiveBleProfile).await
+        {
             debug!("Loaded active profile: {}", profile);
             profile
         } else {

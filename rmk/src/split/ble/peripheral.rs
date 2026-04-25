@@ -1,12 +1,11 @@
 use bt_hci::cmd::le::LeSetPhy;
 use bt_hci::controller::ControllerCmdAsync;
 use embassy_futures::join::join;
-use embassy_futures::select::select;
 use embassy_time::{Duration, Timer, with_timeout};
 use trouble_host::prelude::*;
-#[cfg(feature = "storage")]
-use {super::PeerAddress, crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash};
 
+#[cfg(feature = "storage")]
+use super::PeerAddress;
 use crate::CONNECTION_STATE;
 use crate::event::{CentralConnectedEvent, KeyboardEvent, SubscribableEvent, publish_event};
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
@@ -127,18 +126,9 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitWriter for BleSplitPeripheralDrive
 /// * `id` - The id of the peripheral
 /// * `central_addr` - The address of the central
 /// * `stack` - The stack to use
-pub async fn initialize_nrf_ble_split_peripheral_and_run<
-    'stack,
-    C: Controller + ControllerCmdAsync<LeSetPhy>,
-    F: NorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
->(
+pub async fn initialize_nrf_ble_split_peripheral_and_run<'stack, C: Controller + ControllerCmdAsync<LeSetPhy>>(
     id: usize,
     stack: &'stack Stack<'stack, C, DefaultPacketPool>,
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     publish_event(CentralConnectedEvent { connected: false });
 
@@ -148,7 +138,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
 
     // First, read central address from storage
     let mut central_saved = false;
-    let mut central_addr = if let Ok(Some(central_addr)) = storage.read_peer_address(0).await {
+    let mut central_addr = if let Some(central_addr) = crate::storage::read_peer_address(0).await {
         if central_addr.is_valid {
             central_saved = true;
             Some(central_addr.address)
@@ -172,20 +162,21 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
                     // Save central address to storage if the central address is not saved
                     if !central_saved || conn.raw().peer_address().into_inner() != central_addr.unwrap_or_default() {
                         info!("Saving central address to storage");
-                        if let Ok(()) = storage
-                            .write_peer_address(PeerAddress {
+                        let new_addr = conn.raw().peer_address().into_inner();
+                        crate::channel::FLASH_CHANNEL
+                            .send(crate::storage::FlashOperationMessage::PeerAddress(PeerAddress {
                                 peer_id: 0,
                                 is_valid: true,
-                                address: conn.raw().peer_address().into_inner(),
-                            })
-                            .await
-                        {
+                                address: new_addr,
+                            }))
+                            .await;
+                        if crate::storage::FLASH_OPERATION_FINISHED.wait().await {
                             central_saved = true;
-                            central_addr = Some(conn.raw().peer_address().into_inner());
+                            central_addr = Some(new_addr);
                         }
                     }
-                    // Start run peripheral service
-                    select(storage.run(), peripheral.run()).await;
+                    // Start run peripheral service. Storage runs as its own top-level task.
+                    peripheral.run().await;
                     info!("Disconnected from the central");
                 }
                 Err(BleHostError::BleHost(Error::Timeout)) => {

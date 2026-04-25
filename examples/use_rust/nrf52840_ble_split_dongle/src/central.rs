@@ -266,14 +266,15 @@ async fn main(spawner: Spawner) {
             pmw3610_device,
             adc_device,
             batt_proc,
-            pointing_processor
+            pointing_processor,
+            storage
         ),
         join(keyboard.run(), capslock_led.run()),
         join4(
             scan_peripherals(&stack, &peripheral_addrs),
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
             run_peripheral_manager::<4, 7, 4, 0, _>(1, &peripheral_addrs, &stack),
-            run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+            run_rmk(&keymap, driver, &stack, rmk_config),
         ),
     )
     .await;

@@ -33,6 +33,43 @@ use crate::{BUILD_HASH, config};
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
 pub(crate) static FLASH_OPERATION_FINISHED: Signal<crate::RawMutex, bool> = Signal::new();
 
+/// Response signal for `FlashOperationMessage::ReadTroubleBondInfo`.
+#[cfg(feature = "_ble")]
+pub(crate) static BOND_INFO_RESPONSE: Signal<crate::RawMutex, Option<ProfileInfo>> = Signal::new();
+
+/// Response signal for `FlashOperationMessage::ReadPeerAddress`.
+#[cfg(all(feature = "_ble", feature = "split"))]
+pub(crate) static PEER_ADDRESS_RESPONSE: Signal<crate::RawMutex, Option<PeerAddress>> = Signal::new();
+
+/// Response signal for `FlashOperationMessage::ReadStorageKey`.
+pub(crate) static STORAGE_READ_RESPONSE: Signal<crate::RawMutex, Option<StorageData>> = Signal::new();
+
+/// Send a request to read bond info for the given slot, await the response.
+///
+/// Routed through `FLASH_CHANNEL` so the storage task is the sole owner of the flash.
+#[cfg(feature = "_ble")]
+pub(crate) async fn read_trouble_bond_info(slot_num: u8) -> Option<ProfileInfo> {
+    FLASH_CHANNEL
+        .send(FlashOperationMessage::ReadTroubleBondInfo(slot_num))
+        .await;
+    BOND_INFO_RESPONSE.wait().await
+}
+
+/// Send a request to read a peer address for the given peer id, await the response.
+#[cfg(all(feature = "_ble", feature = "split"))]
+pub(crate) async fn read_peer_address(peer_id: u8) -> Option<PeerAddress> {
+    FLASH_CHANNEL
+        .send(FlashOperationMessage::ReadPeerAddress(peer_id))
+        .await;
+    PEER_ADDRESS_RESPONSE.wait().await
+}
+
+/// Generic read by `StorageKey`; storage task fetches and replies with `Option<StorageData>`.
+pub(crate) async fn read_storage_data(key: StorageKey) -> Option<StorageData> {
+    FLASH_CHANNEL.send(FlashOperationMessage::ReadStorageKey(key)).await;
+    STORAGE_READ_RESPONSE.wait().await
+}
+
 // Message send from other tasks, which will do saving or clearing operation
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
@@ -101,6 +138,14 @@ pub(crate) enum FlashOperationMessage {
     PriorIdleTime(u16),
     // Default morse profile containing all morse/tap-hold settings (mode, timeouts, unilateral_tap)
     MorseDefaultProfile(MorseProfile),
+    #[cfg(feature = "_ble")]
+    // Read bond info for the given slot; storage task replies via `BOND_INFO_RESPONSE`.
+    ReadTroubleBondInfo(u8),
+    #[cfg(all(feature = "_ble", feature = "split"))]
+    // Read peer address for the given peer id; storage task replies via `PEER_ADDRESS_RESPONSE`.
+    ReadPeerAddress(u8),
+    // Generic fetch by `StorageKey`; storage task replies via `STORAGE_READ_RESPONSE`.
+    ReadStorageKey(StorageKey),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -428,10 +473,31 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         storage
     }
 
-    pub(crate) async fn run(&mut self) {
+    async fn run_loop(&mut self) -> ! {
         loop {
             let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
             debug!("Flash operation: {:?}", info);
+
+            // Read requests reply on a dedicated response signal and skip
+            // `FLASH_OPERATION_FINISHED` (which is the write-finished signal).
+            #[cfg(feature = "_ble")]
+            if let FlashOperationMessage::ReadTroubleBondInfo(slot_num) = info {
+                let resp = self.read_trouble_bond_info(slot_num).await.ok().flatten();
+                BOND_INFO_RESPONSE.signal(resp);
+                continue;
+            }
+            #[cfg(all(feature = "_ble", feature = "split"))]
+            if let FlashOperationMessage::ReadPeerAddress(peer_id) = info {
+                let resp = self.read_peer_address(peer_id).await.ok().flatten();
+                PEER_ADDRESS_RESPONSE.signal(resp);
+                continue;
+            }
+            if let FlashOperationMessage::ReadStorageKey(key) = info {
+                let resp = self.fetch_data(key).await.ok().flatten();
+                STORAGE_READ_RESPONSE.signal(resp);
+                continue;
+            }
+
             match match info {
                 FlashOperationMessage::LayoutOptions(layout_option) => {
                     // Read out layout options, update layer option and save back
@@ -543,6 +609,12 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 FlashOperationMessage::MorseDefaultProfile(morse_default_profile) => {
                     update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, morse_default_profile)
                 }
+                // Read requests are dispatched above and `continue` before reaching this match.
+                #[cfg(feature = "_ble")]
+                FlashOperationMessage::ReadTroubleBondInfo(_) => Ok(()),
+                #[cfg(all(feature = "_ble", feature = "split"))]
+                FlashOperationMessage::ReadPeerAddress(_) => Ok(()),
+                FlashOperationMessage::ReadStorageKey(_) => Ok(()),
                 #[cfg(not(feature = "_ble"))]
                 _ => Ok(()),
             } {
@@ -734,6 +806,14 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         self.store_data(key, &item)
             .await
             .map_err(|e| print_storage_error::<F>(e))
+    }
+}
+
+impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    crate::core_traits::Runnable for Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>
+{
+    async fn run(&mut self) -> ! {
+        self.run_loop().await
     }
 }
 

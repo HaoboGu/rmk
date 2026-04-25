@@ -21,7 +21,7 @@ fn expand_split_communication_config(chip: &ChipModel, split_config: &SplitConfi
             // We need to create addrs for BLE
             let num_peripheral = split_config.peripheral.len();
             quote! {
-                // Read peripheral address from storage
+                // Read peripheral address from storage (pre-loop, before storage task starts).
                 let peripheral_addrs = ::rmk::split::ble::central::read_peripheral_addresses::<#num_peripheral, _, ROW, COL, NUM_LAYER, NUM_ENCODER>(&mut storage).await;
             }
         }
