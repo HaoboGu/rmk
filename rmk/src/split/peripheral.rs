@@ -1,3 +1,5 @@
+use core::sync::atomic::Ordering;
+
 #[cfg(feature = "_ble")]
 use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
 use embassy_futures::select::{Either, select};
@@ -80,7 +82,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     /// The peripheral uses the general matrix, does scanning and send the key events through `SplitWriter`.
     /// If also receives split messages from the central through `SplitReader`.
     pub(crate) async fn run(&mut self) {
-        CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
+        CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
         let mut key_sub = KeyboardEvent::subscriber();
         #[cfg(feature = "_ble")]
@@ -111,7 +113,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                     Ok(split_message) => match split_message {
                         SplitMessage::ConnectionState(state) => {
                             trace!("Received connection state update: {}", state);
-                            CONNECTION_STATE.store(state, core::sync::atomic::Ordering::Release);
+                            CONNECTION_STATE.store(state, Ordering::Release);
                         }
                         #[cfg(all(feature = "_ble", feature = "storage"))]
                         SplitMessage::ClearPeer => {
@@ -157,7 +159,8 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                 },
                 Either::Second(e) => {
                     // Only send the key event if the connection is established
-                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                    if ConnectionState::from(CONNECTION_STATE.load(Ordering::Acquire)) != ConnectionState::Disconnected
+                    {
                         debug!("Writing split message {:?} to central", e);
                         self.split_driver.write(&e).await.ok();
                     } else {

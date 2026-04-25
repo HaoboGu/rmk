@@ -9,6 +9,7 @@ use futures::FutureExt;
 use super::SplitMessage;
 use crate::CONNECTION_STATE;
 use crate::event::{KeyboardEvent, KeyboardEventPos, SubscribableEvent, publish_event, publish_event_async};
+use crate::state::ConnectionState;
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -170,7 +171,8 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                         return;
                     }
 
-                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                    if ConnectionState::from(CONNECTION_STATE.load(Ordering::Acquire)) != ConnectionState::Disconnected
+                    {
                         // Only when the connection is established, send the key event.
                         let adjusted_key_event = KeyboardEvent::key(
                             key_pos.row + ROW_OFFSET as u8,
@@ -184,24 +186,27 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 }
                 _ => {
                     // For rotary encoder
-                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                    if ConnectionState::from(CONNECTION_STATE.load(Ordering::Acquire)) != ConnectionState::Disconnected
+                    {
                         // Only when the connection is established, send the key event.
                         publish_event_async(e).await;
                     }
                 }
             },
             // Process other split messages which requires connection to host
-            _ if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) => match split_message {
-                // Non-key events are drop-on-full to keep the split read loop responsive.
-                SplitMessage::Pointing(e) => publish_event(e),
-                #[cfg(feature = "_ble")]
-                SplitMessage::BatteryStatus(state) => {
-                    // Publish as PeripheralBatteryEvent with the full state
-                    use crate::event::PeripheralBatteryEvent;
-                    publish_event(PeripheralBatteryEvent { id: self.id, state })
+            _ if ConnectionState::from(CONNECTION_STATE.load(Ordering::Acquire)) != ConnectionState::Disconnected => {
+                match split_message {
+                    // Non-key events are drop-on-full to keep the split read loop responsive.
+                    SplitMessage::Pointing(e) => publish_event(e),
+                    #[cfg(feature = "_ble")]
+                    SplitMessage::BatteryStatus(state) => {
+                        // Publish as PeripheralBatteryEvent with the full state
+                        use crate::event::PeripheralBatteryEvent;
+                        publish_event(PeripheralBatteryEvent { id: self.id, state })
+                    }
+                    _ => warn!("{:?} should not come from peripheral", split_message),
                 }
-                _ => warn!("{:?} should not come from peripheral", split_message),
-            },
+            }
             _ => warn!(
                 "{:?} from peripheral is ignored because the connection is not established.",
                 split_message

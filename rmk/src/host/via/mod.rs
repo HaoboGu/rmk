@@ -1,3 +1,5 @@
+use core::sync::atomic::Ordering;
+
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::{Instant, Timer};
 use embassy_usb::class::hid::HidReaderWriter;
@@ -54,7 +56,10 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
             match self.process().await {
                 Ok(_) => continue,
                 Err(e) => {
-                    if ConnectionState::Disconnected == ConnectionState::from(&CONNECTION_STATE) {
+                    if matches!(
+                        ConnectionState::from(CONNECTION_STATE.load(Ordering::Acquire)),
+                        ConnectionState::Disconnected | ConnectionState::Suspended
+                    ) {
                         Timer::after_millis(1000).await;
                     } else {
                         error!("Process vial error: {:?}", e);

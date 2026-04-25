@@ -6,13 +6,15 @@ use embassy_usb::class::hid::{HidWriter, ReportId, RequestHandler};
 use embassy_usb::control::OutResponse;
 use embassy_usb::driver::Driver;
 use embassy_usb::{Builder, Handler};
+use rmk_types::connection::ConnectionType;
 use static_cell::StaticCell;
 use usbd_hid::descriptor::AsInputReport as _;
 
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::config::DeviceConfig;
+
 use crate::hid::{CompositeReportType, HidError, HidWriterTrait, Report, RunnableHidWriter};
-use crate::state::ConnectionState;
+use crate::state::{ConnectionState, get_connection_type};
 use crate::{CONNECTION_STATE, RawMutex};
 
 pub(crate) static USB_REMOTE_WAKEUP: Signal<RawMutex, ()> = Signal::new();
@@ -282,17 +284,20 @@ impl Handler for UsbDeviceHandler {
     }
 
     fn suspended(&mut self, suspended: bool) {
-        // When no logging feature is enabled, `info!` expands to a no-op and
-        // both arms collapse to identical empty blocks — suppress the lint.
-        #[allow(clippy::if_same_then_else)]
         if suspended {
             info!(
                 "Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
             );
+            if get_connection_type() == ConnectionType::Usb {
+                CONNECTION_STATE.store(ConnectionState::Suspended.into(), Ordering::Release);
+            }
         } else {
             info!(
                 "Device resumed, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
             );
+            if get_connection_type() == ConnectionType::Usb {
+                CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+            }
         }
     }
 
