@@ -17,18 +17,18 @@ rmk = { path = "../../../rmk", default-features = false, features = [
     "vial"
 ] }
 embassy-executor = { version = "0.10" }
-esp-backtrace = { version = "0.18", features = [
+esp-backtrace = { version = "0.19", features = [
     "esp32s3",
     "panic-handler",
     "println",
 ] }
-esp-hal = { version = "1.0", features = ["esp32s3", "unstable"] }
-esp-storage = { version = "0.8.0", features = ["esp32s3"] }
-esp-alloc = { version = "0.9.0" }
-esp-println = { version = "0.16.0", features = ["esp32s3", "log-04"] }
-esp-radio = { version = "0.17", features = ["esp32s3", "unstable", "ble"] }
-esp-rtos = { version = "0.2", features = ["esp32s3", "esp-radio", "embassy"] }
-esp-bootloader-esp-idf = { version = "0.4", features = ["esp32s3", "log-04"] }
+esp-hal = { version = "1.1", features = ["esp32s3", "unstable"] }
+esp-storage = { version = "0.9", features = ["esp32s3"] }
+esp-alloc = { version = "0.10" }
+esp-println = { version = "0.17", features = ["esp32s3", "log-04"] }
+esp-radio = { version = "0.18", features = ["esp32s3", "unstable", "ble"] }
+esp-rtos = { version = "0.3", features = ["esp32s3", "esp-radio", "embassy"] }
+esp-bootloader-esp-idf = { version = "0.5", features = ["esp32s3", "log-04"] }
 bt-hci = { version = "0.8" }
 rand_core = { version = "0.6", default-features = false }
 
@@ -60,13 +60,3 @@ incremental = false
 lto = 'thin'
 opt-level = 3
 overflow-checks = false
-
-[patch.crates-io]
-esp-backtrace = { git = "https://github.com/esp-rs/esp-hal", rev = "20ed2bc36627581e02b227d61db41b11c11891b7" }
-esp-storage = { git = "https://github.com/esp-rs/esp-hal", rev = "20ed2bc36627581e02b227d61db41b11c11891b7" }
-esp-hal = { git = "https://github.com/esp-rs/esp-hal", rev = "20ed2bc36627581e02b227d61db41b11c11891b7" }
-esp-alloc = { git = "https://github.com/esp-rs/esp-hal", rev = "20ed2bc36627581e02b227d61db41b11c11891b7" }
-esp-println = { git = "https://github.com/esp-rs/esp-hal", rev = "20ed2bc36627581e02b227d61db41b11c11891b7" }
-esp-radio = { git = "https://github.com/esp-rs/esp-hal", rev = "20ed2bc36627581e02b227d61db41b11c11891b7" }
-esp-rtos = { git = "https://github.com/esp-rs/esp-hal", rev = "20ed2bc36627581e02b227d61db41b11c11891b7" }
-esp-bootloader-esp-idf = { git = "https://github.com/esp-rs/esp-hal", rev = "20ed2bc36627581e02b227d61db41b11c11891b7" }
