@@ -315,17 +315,17 @@ fn get_position_from_offset(offset: usize, max_row: usize, max_col: usize) -> (u
     (row, col, layer)
 }
 
-pub struct UsbVialReaderWriter<'a, 'd, D: Driver<'d>> {
+pub struct UsbHostReaderWriter<'a, 'd, D: Driver<'d>> {
     pub(crate) vial_reader_writer: &'a mut HidReaderWriter<'d, D, 32, 32>,
 }
 
-impl<'a, 'd, D: Driver<'d>> UsbVialReaderWriter<'a, 'd, D> {
+impl<'a, 'd, D: Driver<'d>> UsbHostReaderWriter<'a, 'd, D> {
     pub(crate) fn new(vial_reader_writer: &'a mut HidReaderWriter<'d, D, 32, 32>) -> Self {
         Self { vial_reader_writer }
     }
 }
 
-impl<'d, D: Driver<'d>> HidWriterTrait for UsbVialReaderWriter<'_, 'd, D> {
+impl<'d, D: Driver<'d>> HidWriterTrait for UsbHostReaderWriter<'_, 'd, D> {
     type ReportType = ViaReport;
 
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
@@ -341,7 +341,7 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbVialReaderWriter<'_, 'd, D> {
     }
 }
 
-impl<'d, D: Driver<'d>> HidReaderTrait for UsbVialReaderWriter<'_, 'd, D> {
+impl<'d, D: Driver<'d>> HidReaderTrait for UsbHostReaderWriter<'_, 'd, D> {
     type ReportType = ViaReport;
 
     async fn read_report(&mut self) -> Result<ViaReport, HidError> {

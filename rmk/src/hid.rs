@@ -165,10 +165,6 @@ impl AsInputReport for Report {
 pub enum HidError {
     UsbReadError(ReadError),
     UsbEndpointError(EndpointError),
-    // FIXME: remove unused errors
-    UsbDisabled,
-    UsbPartialRead,
-    BufferOverflow,
     ReportSerializeError,
     BleError,
 }
