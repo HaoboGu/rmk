@@ -49,7 +49,7 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
         }
     }
 
-    pub(crate) async fn run(&mut self) {
+    async fn run_loop(&mut self) -> ! {
         loop {
             match self.process().await {
                 Ok(_) => continue,
@@ -304,6 +304,14 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
                 report.input_data[0] = ViaCommand::Unhandled as u8
             }
         }
+    }
+}
+
+impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>>
+    crate::core_traits::Runnable for VialService<'a, RW>
+{
+    async fn run(&mut self) -> ! {
+        self.run_loop().await
     }
 }
 

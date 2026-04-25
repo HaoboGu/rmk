@@ -365,17 +365,24 @@ pub(crate) async fn run_ble<
 
                                 set_ble_state(BleState::Inactive);
                                 let usb_fut = run_keyboard(
-                                    #[cfg(feature = "host")]
-                                    keymap,
-                                    #[cfg(feature = "host")]
-                                    UsbHostReaderWriter::new(&mut host_reader_writer),
-                                    #[cfg(feature = "vial")]
-                                    rmk_config.vial_config,
                                     wait_until_usb_disabled(),
                                     UsbLedReader::new(&mut keyboard_reader),
                                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
                                 );
-                                select(usb_fut, profile_manager.update_profile()).await;
+                                #[cfg(feature = "host")]
+                                let mut host_service = crate::host::HostService::new(
+                                    keymap,
+                                    rmk_config.vial_config,
+                                    UsbHostReaderWriter::new(&mut host_reader_writer),
+                                );
+                                #[cfg(feature = "host")]
+                                let usb_with_host_fut = async {
+                                    use crate::core_traits::Runnable;
+                                    select(usb_fut, host_service.run()).await;
+                                };
+                                #[cfg(not(feature = "host"))]
+                                let usb_with_host_fut = usb_fut;
+                                select(usb_with_host_fut, profile_manager.update_profile()).await;
                             }
                             Either4::Second(Ok(conn)) => {
                                 info!("No USB, BLE connected, run BLE keyboard");
@@ -420,17 +427,24 @@ pub(crate) async fn run_ble<
                     ConnectionType::Ble => {
                         info!("BLE priority mode, running USB keyboard while advertising");
                         let usb_fut = run_keyboard(
-                            #[cfg(feature = "host")]
-                            keymap,
-                            #[cfg(feature = "host")]
-                            UsbHostReaderWriter::new(&mut host_reader_writer),
-                            #[cfg(feature = "vial")]
-                            rmk_config.vial_config,
                             core::future::pending::<()>(), // Run forever until BLE connected
                             UsbLedReader::new(&mut keyboard_reader),
                             UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
                         );
-                        match select3(adv_fut, usb_fut, profile_manager.update_profile()).await {
+                        #[cfg(feature = "host")]
+                        let mut host_service = crate::host::HostService::new(
+                            keymap,
+                            rmk_config.vial_config,
+                            UsbHostReaderWriter::new(&mut host_reader_writer),
+                        );
+                        #[cfg(feature = "host")]
+                        let usb_with_host_fut = async {
+                            use crate::core_traits::Runnable;
+                            select(usb_fut, host_service.run()).await;
+                        };
+                        #[cfg(not(feature = "host"))]
+                        let usb_with_host_fut = usb_fut;
+                        match select3(adv_fut, usb_with_host_fut, profile_manager.update_profile()).await {
                             Either3::First(Ok(conn)) => {
                                 info!("BLE connected, running BLE keyboard");
                                 #[cfg(feature = "storage")]
@@ -1009,18 +1023,16 @@ async fn run_ble_keyboard<
         }
     };
 
-    run_keyboard(
-        #[cfg(feature = "host")]
-        keymap,
-        #[cfg(feature = "host")]
-        ble_host_server,
-        #[cfg(feature = "vial")]
-        rmk_config.vial_config,
-        communication_task,
-        ble_led_reader,
-        ble_hid_server,
-    )
-    .await;
+    let kb_fut = run_keyboard(communication_task, ble_led_reader, ble_hid_server);
+
+    #[cfg(feature = "host")]
+    {
+        use crate::core_traits::Runnable;
+        let mut host_service = crate::host::HostService::new(keymap, rmk_config.vial_config, ble_host_server);
+        select(kb_fut, host_service.run()).await;
+    }
+    #[cfg(not(feature = "host"))]
+    kb_fut.await;
 }
 
 #[cfg(test)]
