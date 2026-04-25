@@ -12,33 +12,32 @@ use rmk_types::fork::StateBits;
 use rmk_types::keycode::{ConsumerKey, HidKeyCode, KeyCode, SpecialKey, SystemControlKey};
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
-use rmk_types::morse::MorseMode;
+use rmk_types::morse::{MorseMode, MorsePattern, TAP};
 use rmk_types::mouse_button::MouseButtons;
 use usbd_hid::descriptor::{MediaKeyboardReport, SystemControlReport};
 
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
-use crate::combo::Combo;
 use crate::config::Hand;
-use crate::descriptor::KeyboardReport;
+use crate::core_traits::Runnable;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::ClearPeerEvent;
 use crate::event::{
     ActionEvent, KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event, publish_event_async,
 };
-use crate::fork::ActiveFork;
-use crate::hid::Report;
-use crate::input_device::Runnable;
+use crate::hid::{KeyboardReport, Report};
+use crate::keyboard::combo::Combo;
+use crate::keyboard::fork::ActiveFork;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard::mouse::{MouseAction, MouseState};
 use crate::keyboard::oneshot::OneShotState;
 use crate::keyboard_macros::MacroOperation;
 use crate::keymap::KeyMap;
-use crate::morse::{MorsePattern, TAP};
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, boot};
 
-pub(crate) mod combo;
+pub mod combo;
+pub(crate) mod fork;
 pub(crate) mod held_buffer;
 pub(crate) mod morse;
 pub(crate) mod mouse;
@@ -1889,9 +1888,9 @@ mod test {
     use rmk_types::morse::{MorseMode, MorseProfile};
 
     use super::*;
-    use crate::combo::{Combo, ComboConfig};
     use crate::config::{BehaviorConfig, CombosConfig, ForksConfig, PositionalConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
+    use crate::keyboard::combo::{Combo, ComboConfig};
     use crate::test_support::test_block_on as block_on;
     use crate::{a, k, layer, mo, th, thp};
 

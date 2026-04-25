@@ -38,7 +38,7 @@ For `use_rust` keyboards, initialize the display manually and pass it to `Displa
 
 ```rust
 use rmk::display::DisplayProcessor;
-use rmk::input_device::Runnable;
+use rmk::core_traits::Runnable;
 
 // SSD1306 via ssd1306 crate
 use ssd1306::{I2CDisplayInterface, Ssd1306Async, prelude::*};

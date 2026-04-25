@@ -6,8 +6,9 @@ use super::device_info::DeviceConfigurationService;
 #[cfg(feature = "host")]
 use super::host_service::HostService;
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
-use crate::descriptor::{CompositeReport, CompositeReportType, KeyboardReport};
-use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
+use crate::hid::{
+    CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report, RunnableHidWriter,
+};
 
 // Used for saving the CCCD table
 pub(crate) const CCCD_TABLE_SIZE: usize = _CCCD_TABLE_SIZE;

@@ -40,10 +40,7 @@ use bt_hci::{
     cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy},
     controller::{ControllerCmdAsync, ControllerCmdSync},
 };
-use builtin_processor::wpm::WpmProcessor;
 use config::RmkConfig;
-#[cfg(not(feature = "_ble"))]
-use descriptor::{CompositeReport, KeyboardReport};
 pub use embassy_futures;
 #[cfg(not(any(cortex_m)))]
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
@@ -54,11 +51,13 @@ use embassy_usb::driver::Driver;
 pub use futures;
 use futures::FutureExt;
 pub use heapless;
+#[cfg(not(feature = "_ble"))]
+use hid::{CompositeReport, KeyboardReport};
 use hid::{HidReaderTrait, RunnableHidWriter};
 use keymap::KeyMap;
 pub use keymap::KeymapData;
-use matrix::MatrixTrait;
 use processor::PollingProcessor;
+use processor::builtin::wpm::WpmProcessor;
 pub use rmk_macro as macros;
 pub use rmk_types as types;
 #[cfg(all(feature = "storage", feature = "host"))]
@@ -68,7 +67,7 @@ use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
 pub use trouble_host::prelude::*;
 #[cfg(feature = "host")]
-use {crate::descriptor::ViaReport, crate::hid::HidWriterTrait, crate::host::run_host_communicate_task};
+use {crate::hid::HidWriterTrait, crate::hid::ViaReport, crate::host::run_host_communicate_task};
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
     crate::light::UsbLedReader,
@@ -87,18 +86,14 @@ use crate::state::ConnectionState;
 #[cfg(feature = "_ble")]
 pub mod ble;
 pub mod boot;
-pub mod builtin_processor;
 pub mod channel;
-pub mod combo;
 pub mod config;
+pub mod core_traits;
 pub mod debounce;
-pub mod descriptor;
-pub mod direct_pin;
 #[cfg(feature = "display")]
 pub mod display;
 pub mod driver;
 pub mod event;
-pub mod fork;
 pub mod helper_macro;
 pub mod hid;
 #[cfg(feature = "host")]
@@ -110,7 +105,6 @@ pub mod keymap;
 pub mod layout_macro;
 pub mod light;
 pub mod matrix;
-pub mod morse;
 pub mod processor;
 #[cfg(feature = "split")]
 pub mod split;

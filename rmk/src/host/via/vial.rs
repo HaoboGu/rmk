@@ -2,14 +2,13 @@ use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::Duration;
 use rmk_types::action::KeyAction;
 use rmk_types::constants::{COMBO_MAX_LENGTH, COMBO_MAX_NUM, MORSE_MAX_NUM};
-use rmk_types::morse::MorseMode;
+use rmk_types::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, Morse, MorseMode, TAP};
 use rmk_types::protocol::vial::{SettingKey, VIAL_EP_SIZE, VIAL_PROTOCOL_VERSION, VialCommand, VialDynamic};
 
 use crate::config::VialConfig;
-use crate::descriptor::ViaReport;
+use crate::hid::ViaReport;
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
-use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, Morse, TAP};
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 
@@ -394,7 +393,7 @@ pub(crate) async fn process_vial<'a>(
                     {
                         use rmk_types::combo::Combo as ComboConfig;
 
-                        use crate::combo::Combo;
+                        use crate::keyboard::combo::Combo;
                         let combo_idx = report.output_data[3] as usize;
                         let result = keymap.with_combos_mut(|combos| {
                             if combo_idx >= combos.len() {

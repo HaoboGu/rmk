@@ -2,15 +2,13 @@
 pub(crate) mod storage;
 pub mod via;
 
-// TODO: Remove those aliases
-pub use via::UsbVialReaderWriter as UsbHostReaderWriter;
+pub use via::UsbHostReaderWriter;
 #[cfg(feature = "vial")]
 pub(crate) use via::VialService as HostService;
 
 #[cfg(feature = "vial")]
 use crate::config::VialConfig;
-use crate::descriptor::ViaReport;
-use crate::hid::{HidReaderTrait, HidWriterTrait};
+use crate::hid::{HidReaderTrait, HidWriterTrait, ViaReport};
 use crate::keymap::KeyMap;
 
 #[cfg(feature = "vial")]

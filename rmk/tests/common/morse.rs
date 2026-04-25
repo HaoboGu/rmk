@@ -1,10 +1,10 @@
 use heapless::{LinearMap, Vec};
 use rmk::config::{BehaviorConfig, Hand, MorsesConfig, PositionalConfig};
 use rmk::keyboard::Keyboard;
-use rmk::morse::{Morse, MorsePattern};
 use rmk::types::action::Action;
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
+use rmk::types::morse::{Morse, MorsePattern};
 use rmk::{k, lt, mt, td};
 
 use crate::common::wrap_keymap;

@@ -3,7 +3,7 @@ use core::cell::RefCell;
 use embassy_time::Duration;
 use rmk_types::action::{EncoderAction, KeyAction};
 use rmk_types::fork::Fork;
-use rmk_types::morse::MorseProfile;
+use rmk_types::morse::{Morse, MorseProfile};
 #[cfg(all(feature = "storage", feature = "host"))]
 use {
     crate::{boot::reboot_keyboard, storage::Storage},
@@ -11,14 +11,13 @@ use {
 };
 
 use crate::MACRO_SPACE_SIZE;
-use crate::combo::Combo;
 use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, OneShotModifiersConfig, PositionalConfig};
 use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_event};
 use crate::input_device::rotary_encoder::Direction;
+use crate::keyboard::combo::Combo;
 use crate::keyboard_macros::MacroOperation;
 #[cfg(feature = "host_security")]
 use crate::matrix::MatrixState;
-use crate::morse::Morse;
 
 pub(crate) const HOLD_BUFFER_SIZE: usize = 16;
 
@@ -713,7 +712,7 @@ mod test {
     use rmk_types::fork::{Fork, StateBits};
     use rmk_types::modifier::ModifierCombination;
 
-    use crate::combo::{Combo, ComboConfig};
+    use crate::keyboard::combo::{Combo, ComboConfig};
     use crate::keymap::fill_vec;
     use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
 

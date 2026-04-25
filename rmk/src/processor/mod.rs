@@ -6,10 +6,12 @@
 //! `process`), and `PollingProcessor` extends it with timer-driven `update`
 //! calls interleaved with event handling.
 
+pub mod builtin;
+
 use embassy_futures::select::{Either, select};
 
+use crate::core_traits::Runnable;
 use crate::event::EventSubscriber;
-use crate::input_device::Runnable;
 
 /// Unified trait for event processors.
 ///

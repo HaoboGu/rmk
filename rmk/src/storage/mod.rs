@@ -17,9 +17,10 @@ use {
 };
 #[cfg(feature = "host")]
 use {
-    crate::{MACRO_SPACE_SIZE, combo::ComboConfig, morse::Morse},
+    crate::{MACRO_SPACE_SIZE, keyboard::combo::ComboConfig},
     rmk_types::action::{EncoderAction, KeyAction},
     rmk_types::fork::Fork,
+    rmk_types::morse::Morse,
 };
 
 use crate::channel::FLASH_CHANNEL;

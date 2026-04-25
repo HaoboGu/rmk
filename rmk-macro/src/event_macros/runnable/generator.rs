@@ -105,7 +105,7 @@ pub fn generate_runnable(
     // Helper to wrap body in Runnable impl
     let wrap_runnable = |body: TokenStream| {
         quote! {
-            impl #impl_generics ::rmk::input_device::Runnable for #struct_name #ty_generics #where_clause {
+            impl #impl_generics ::rmk::core_traits::Runnable for #struct_name #ty_generics #where_clause {
                 async fn run(&mut self) -> ! {
                     #body
                 }
