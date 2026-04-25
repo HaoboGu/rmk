@@ -6,7 +6,7 @@ use rmk_types::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, Morse, MorseMode, TAP};
 use rmk_types::protocol::vial::{SettingKey, VIAL_EP_SIZE, VIAL_PROTOCOL_VERSION, VialCommand, VialDynamic};
 
 use crate::config::VialConfig;
-use crate::descriptor::ViaReport;
+use crate::hid::ViaReport;
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
 #[cfg(feature = "storage")]

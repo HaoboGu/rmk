@@ -11,8 +11,7 @@ use usbd_hid::descriptor::AsInputReport as _;
 
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::config::DeviceConfig;
-use crate::descriptor::CompositeReportType;
-use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
+use crate::hid::{CompositeReportType, HidError, HidWriterTrait, Report, RunnableHidWriter};
 use crate::state::ConnectionState;
 use crate::{CONNECTION_STATE, RawMutex};
 

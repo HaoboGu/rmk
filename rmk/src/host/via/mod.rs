@@ -7,9 +7,8 @@ use usbd_hid::descriptor::AsInputReport as _;
 use vial::process_vial;
 
 use crate::config::VialConfig;
-use crate::descriptor::ViaReport;
 use crate::event::KeyboardEventPos;
-use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
+use crate::hid::{HidError, HidReaderTrait, HidWriterTrait, ViaReport};
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
 use crate::state::ConnectionState;

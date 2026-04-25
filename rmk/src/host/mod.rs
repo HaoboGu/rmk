@@ -9,8 +9,7 @@ pub(crate) use via::VialService as HostService;
 
 #[cfg(feature = "vial")]
 use crate::config::VialConfig;
-use crate::descriptor::ViaReport;
-use crate::hid::{HidReaderTrait, HidWriterTrait};
+use crate::hid::{HidReaderTrait, HidWriterTrait, ViaReport};
 use crate::keymap::KeyMap;
 
 #[cfg(feature = "vial")]

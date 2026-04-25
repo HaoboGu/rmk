@@ -3,8 +3,7 @@ use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor};
 
 use crate::ble::Server;
 use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;
-use crate::descriptor::ViaReport;
-use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
+use crate::hid::{HidError, HidReaderTrait, HidWriterTrait, ViaReport};
 
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
 pub(crate) struct VialService {

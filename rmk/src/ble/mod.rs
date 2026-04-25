@@ -19,10 +19,10 @@ use trouble_host::prelude::*;
 #[cfg(feature = "host")]
 use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap};
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
-use {crate::descriptor::ViaReport, crate::host::UsbHostReaderWriter};
+use {crate::hid::ViaReport, crate::host::UsbHostReaderWriter};
 #[cfg(not(feature = "_no_usb"))]
 use {
-    crate::descriptor::{CompositeReport, KeyboardReport},
+    crate::hid::{CompositeReport, KeyboardReport},
     crate::light::UsbLedReader,
     crate::state::get_connection_type,
     crate::usb::{USB_REMOTE_WAKEUP, UsbKeyboardWriter, add_usb_reader_writer, add_usb_writer, new_usb_builder},

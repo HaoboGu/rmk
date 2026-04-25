@@ -19,13 +19,12 @@ use usbd_hid::descriptor::{MediaKeyboardReport, SystemControlReport};
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::config::Hand;
 use crate::core_traits::Runnable;
-use crate::descriptor::KeyboardReport;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::ClearPeerEvent;
 use crate::event::{
     ActionEvent, KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event, publish_event_async,
 };
-use crate::hid::Report;
+use crate::hid::{KeyboardReport, Report};
 use crate::keyboard::combo::Combo;
 use crate::keyboard::fork::ActiveFork;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
