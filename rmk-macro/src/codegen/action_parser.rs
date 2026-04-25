@@ -391,6 +391,17 @@ pub(crate) fn parse_key(
                 ::rmk::td!(#index)
             }
         }
+        s if s.to_lowercase().starts_with("stn(") => {
+            let prefix = s.get(0..4).unwrap();
+            if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
+                let key_ident = format_ident!("{}", internal.trim().to_uppercase());
+                quote! { ::rmk::steno!(#key_ident) }
+            } else {
+                panic!(
+                    "\n\u{274c} keyboard.toml: STN(key) invalid - use a StenoKey name like STN(S1), STN(T), STN(STAR1), etc."
+                );
+            }
+        }
         s if s.to_lowercase().starts_with("user") => {
             // Support both User(X) and UserX formats
             let number_str = if s.to_lowercase().starts_with("user(") {
