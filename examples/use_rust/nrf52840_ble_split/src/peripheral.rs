@@ -169,9 +169,9 @@ async fn main(spawner: Spawner) {
 
     // Start
     join3(
-        run_all!(matrix, encoder, adc_device),
+        run_all!(matrix, encoder, adc_device, storage),
         run_all!(battery_processor),
-        run_rmk_split_peripheral(0, &stack, &mut storage),
+        run_rmk_split_peripheral(0, &stack),
     )
     .await;
 }

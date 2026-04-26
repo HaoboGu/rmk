@@ -37,7 +37,7 @@ use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::processor::builtin::led_indicator::KeyboardIndicatorProcessor;
-use rmk::split::ble::central::{read_peripheral_addresses, scan_peripherals};
+use rmk::split::ble::central::scan_peripherals;
 use rmk::split::central::run_peripheral_manager;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
@@ -210,7 +210,7 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
 
     // Read peripheral address from storage
-    let peripheral_addrs = read_peripheral_addresses::<1, _, 8, 7, 4, 2>(&mut storage).await;
+    let peripheral_addrs = storage.read_peripheral_addresses::<1>().await;
 
     // Initialize the encoder processor
     let mut adc_device = NrfAdc::new(
@@ -257,14 +257,14 @@ async fn main(spawner: Spawner) {
 
     // Start
     join4(
-        run_all!(matrix, encoder, adc_device),
+        run_all!(matrix, encoder, adc_device, storage),
         run_all! {
             batt_proc
         },
         keyboard.run(),
         join5(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
-            run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+            run_rmk(&keymap, driver, &stack, rmk_config),
             scan_peripherals(&stack, &peripheral_addrs),
             capslock_led.run(),
             peripheral_battery_monitor.run(),

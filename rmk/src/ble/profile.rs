@@ -192,22 +192,12 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
     /// Load stored bonding information
     #[cfg(feature = "storage")]
-    pub async fn load_bonded_devices<
-        F: embedded_storage_async::nor_flash::NorFlash,
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-        const NUM_ENCODER: usize,
-    >(
-        &mut self,
-        storage: &mut crate::storage::Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-    ) {
-        use crate::read_storage;
-        use crate::storage::{StorageData, StorageKey};
+    pub async fn load_bonded_devices(&mut self) {
+        use crate::storage::{StorageKey, read_setting, read_trouble_bond_info};
 
         self.bonded_devices.clear();
         for slot_num in 0..NUM_BLE_PROFILE {
-            if let Ok(Some(info)) = storage.read_trouble_bond_info(slot_num as u8).await
+            if let Some(info) = read_trouble_bond_info(slot_num as u8).await
                 && !info.removed
                 && let Err(e) = self.bonded_devices.push(info)
             {
@@ -216,11 +206,8 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
         }
         debug!("Loaded {} bond info", self.bonded_devices.len());
 
-        let mut buf: [u8; 128] = [0; 128];
-
         // Load current active profile, save to `BLE_STATUS`
-        let key = StorageKey::ActiveBleProfile;
-        let profile = if let Ok(Some(StorageData::ActiveBleProfile(profile))) = read_storage!(storage, &key, buf) {
+        let profile = if let Some(profile) = read_setting(StorageKey::ActiveBleProfile).await {
             debug!("Loaded active profile: {}", profile);
             profile
         } else {
@@ -232,6 +219,21 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             profile,
             state: BleState::Inactive,
         });
+    }
+
+    /// Look up the cached bond info for the currently active profile.
+    ///
+    /// Used in place of a flash read when establishing a connection: `bonded_devices`
+    /// is populated once at startup by `load_bonded_devices` and kept in sync by
+    /// `add_profile_info` / `update_profile_cccd_table` / `clear_bond`, so the cache
+    /// is authoritative for connection-time CCCD lookup. Returning a clone keeps the
+    /// caller free of borrow conflicts with concurrent `update_profile()`.
+    pub fn get_active_bond_info(&self) -> Option<ProfileInfo> {
+        let active_profile = get_current_profile();
+        self.bonded_devices
+            .iter()
+            .find(|bond_info| !bond_info.removed && bond_info.slot_num == active_profile)
+            .cloned()
     }
 
     /// Update bonding information in the stack according to the current active profile

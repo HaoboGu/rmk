@@ -157,9 +157,9 @@ async fn main(spawner: Spawner) {
     let stack = build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
     // Start
     join3(
-        run_all!(matrix),
+        run_all!(matrix, storage),
         keyboard.run(),
-        run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+        run_rmk(&keymap, driver, &stack, rmk_config),
     )
     .await;
 }

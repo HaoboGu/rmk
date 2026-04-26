@@ -30,7 +30,7 @@ use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::split::ble::central::{read_peripheral_addresses, scan_peripherals};
+use rmk::split::ble::central::scan_peripherals;
 use rmk::split::central::run_peripheral_manager;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
@@ -151,7 +151,7 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
 
     // Read peripheral address from storage
-    let peripheral_addrs = read_peripheral_addresses::<1, _, 4, 3, 2, 0>(&mut storage).await;
+    let peripheral_addrs = storage.read_peripheral_addresses::<1>().await;
 
     let ble_addr = [0x18, 0xe2, 0x21, 0x88, 0xc0, 0xc7];
 
@@ -163,11 +163,11 @@ async fn main(spawner: Spawner) {
 
     // Start
     join3(
-        run_all!(matrix),
+        run_all!(matrix, storage),
         keyboard.run(),
         join3(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
-            run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+            run_rmk(&keymap, driver, &stack, rmk_config),
             scan_peripherals(&stack, &peripheral_addrs),
         ),
     )

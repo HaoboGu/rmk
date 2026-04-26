@@ -88,9 +88,9 @@ async fn main(_spawner: Spawner) {
 
     // Start
     join3(
-        run_all!(matrix),
+        run_all!(matrix, storage),
         keyboard.run(),
-        run_rmk(&keymap, driver, &mut storage, rmk_config),
+        run_rmk(&keymap, driver, rmk_config),
     )
     .await;
 }

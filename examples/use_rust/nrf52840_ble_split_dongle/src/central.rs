@@ -38,7 +38,7 @@ use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::processor::builtin::led_indicator::KeyboardIndicatorProcessor;
-use rmk::split::ble::central::{read_peripheral_addresses, scan_peripherals};
+use rmk::split::ble::central::scan_peripherals;
 use rmk::split::central::run_peripheral_manager;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
@@ -212,7 +212,7 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
 
     // Read peripheral address from storage
-    let peripheral_addrs = read_peripheral_addresses::<2, _, 8, 7, 4, 2>(&mut storage).await;
+    let peripheral_addrs = storage.read_peripheral_addresses::<2>().await;
 
     // Initialize pointing device
     let pmw3610_config = Pmw3610Config {
@@ -266,14 +266,15 @@ async fn main(spawner: Spawner) {
             pmw3610_device,
             adc_device,
             batt_proc,
-            pointing_processor
+            pointing_processor,
+            storage
         ),
         join(keyboard.run(), capslock_led.run()),
         join4(
             scan_peripherals(&stack, &peripheral_addrs),
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
             run_peripheral_manager::<4, 7, 4, 0, _>(1, &peripheral_addrs, &stack),
-            run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+            run_rmk(&keymap, driver, &stack, rmk_config),
         ),
     )
     .await;

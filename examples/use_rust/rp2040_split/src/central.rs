@@ -97,10 +97,10 @@ async fn main(_spawner: Spawner) {
 
     // Start
     join4(
-        run_all!(matrix),
+        run_all!(matrix, storage),
         keyboard.run(),
         run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver),
-        run_rmk(&keymap, driver, &mut storage, rmk_config),
+        run_rmk(&keymap, driver, rmk_config),
     )
     .await;
 }
