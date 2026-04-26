@@ -30,10 +30,7 @@ use {
     embassy_usb::driver::Driver,
 };
 #[cfg(feature = "storage")]
-use {
-    crate::state::CONNECTION_TYPE,
-    crate::storage::{StorageData, StorageKey},
-};
+use {crate::state::CONNECTION_TYPE, crate::storage::StorageKey};
 
 use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
@@ -244,9 +241,7 @@ pub(crate) async fn run_ble<
     // Load current connection type
     #[cfg(feature = "storage")]
     {
-        if let Some(StorageData::ConnectionType(conn_type)) =
-            crate::storage::read_storage_data(StorageKey::ConnectionType).await
-        {
+        if let Some(conn_type) = crate::storage::read_setting(StorageKey::ConnectionType).await {
             CONNECTION_TYPE.store(conn_type, Ordering::SeqCst);
         } else {
             // If no saved connection type, return default value

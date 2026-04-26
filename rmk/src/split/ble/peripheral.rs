@@ -163,14 +163,13 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'stack, C: Controller +
                     if !central_saved || conn.raw().peer_address().into_inner() != central_addr.unwrap_or_default() {
                         info!("Saving central address to storage");
                         let new_addr = conn.raw().peer_address().into_inner();
-                        crate::channel::FLASH_CHANNEL
-                            .send(crate::storage::FlashOperationMessage::PeerAddress(PeerAddress {
-                                peer_id: 0,
-                                is_valid: true,
-                                address: new_addr,
-                            }))
-                            .await;
-                        if crate::storage::FLASH_OPERATION_FINISHED.wait().await {
+                        if crate::storage::write_peer_address(PeerAddress {
+                            peer_id: 0,
+                            is_valid: true,
+                            address: new_addr,
+                        })
+                        .await
+                        {
                             central_saved = true;
                             central_addr = Some(new_addr);
                         }

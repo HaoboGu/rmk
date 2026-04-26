@@ -193,7 +193,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
     /// Load stored bonding information
     #[cfg(feature = "storage")]
     pub async fn load_bonded_devices(&mut self) {
-        use crate::storage::{StorageData, StorageKey, read_storage_data, read_trouble_bond_info};
+        use crate::storage::{StorageKey, read_setting, read_trouble_bond_info};
 
         self.bonded_devices.clear();
         for slot_num in 0..NUM_BLE_PROFILE {
@@ -207,9 +207,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
         debug!("Loaded {} bond info", self.bonded_devices.len());
 
         // Load current active profile, save to `BLE_STATUS`
-        let profile = if let Some(StorageData::ActiveBleProfile(profile)) =
-            read_storage_data(StorageKey::ActiveBleProfile).await
-        {
+        let profile = if let Some(profile) = read_setting(StorageKey::ActiveBleProfile).await {
             debug!("Loaded active profile: {}", profile);
             profile
         } else {
