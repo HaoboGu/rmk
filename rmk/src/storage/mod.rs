@@ -495,7 +495,13 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         &mut self,
         behavior_config: &mut config::BehaviorConfig,
     ) -> Result<(), ()> {
-        if let Some(StorageData::BehaviorConfig(c)) = self.fetch_data(StorageKey::BehaviorConfig).await {
+        let read_data = self
+            .flash
+            .fetch_item(&mut self.buffer, &StorageKey::BehaviorConfig)
+            .await
+            .map_err(|e| print_storage_error::<F>(e))?;
+
+        if let Some(StorageData::BehaviorConfig(c)) = read_data {
             behavior_config.morse.prior_idle_time = Duration::from_millis(c.prior_idle_time as u64);
             behavior_config.morse.default_profile = c.morse_default_profile;
 

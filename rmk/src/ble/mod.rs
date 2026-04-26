@@ -380,7 +380,7 @@ pub(crate) async fn run_ble<
                             Either4::Second(Ok(conn)) => {
                                 info!("No USB, BLE connected, run BLE keyboard");
                                 #[cfg(feature = "storage")]
-                                let active_bond_info = profile_manager.get_active_bond_info();
+                                let active_bond_info = profile_manager.active_bond_info();
                                 let ble_fut = run_ble_keyboard(
                                     &server,
                                     &conn,
@@ -434,7 +434,7 @@ pub(crate) async fn run_ble<
                             Either3::First(Ok(conn)) => {
                                 info!("BLE connected, running BLE keyboard");
                                 #[cfg(feature = "storage")]
-                                let active_bond_info = profile_manager.get_active_bond_info();
+                                let active_bond_info = profile_manager.active_bond_info();
                                 select(
                                     run_ble_keyboard(
                                         &server,
@@ -482,7 +482,7 @@ pub(crate) async fn run_ble<
                 Ok(conn) => {
                     // BLE connected
                     #[cfg(feature = "storage")]
-                    let active_bond_info = profile_manager.get_active_bond_info();
+                    let active_bond_info = profile_manager.active_bond_info();
                     select(
                         run_ble_keyboard(
                             &server,
@@ -991,7 +991,7 @@ async fn run_ble_keyboard<
         && bond_info.info.identity.match_identity(&conn.raw().peer_identity())
     {
         info!("Loading CCCD table: {:?}", bond_info.cccd_table);
-        server.set_cccd_table(conn.raw(), bond_info.cccd_table.clone());
+        server.set_cccd_table(conn.raw(), bond_info.cccd_table);
     }
 
     // Use 2M Phy

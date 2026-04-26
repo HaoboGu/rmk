@@ -221,28 +221,18 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
         });
     }
 
-    /// Borrow the cached bond info for the currently active profile, if any.
-    fn active_bond_info(&self) -> Option<&ProfileInfo> {
+    /// Cached bond info for the currently active profile, cloned to free the
+    /// caller from borrow conflicts with concurrent `update_profile()`.
+    pub fn active_bond_info(&self) -> Option<ProfileInfo> {
         let active_profile = get_current_profile();
         self.bonded_devices
             .iter()
             .find(|bond_info| !bond_info.removed && bond_info.slot_num == active_profile)
-    }
-
-    /// Look up the cached bond info for the currently active profile.
-    ///
-    /// Used in place of a flash read when establishing a connection: `bonded_devices`
-    /// is populated once at startup by `load_bonded_devices` and kept in sync by
-    /// `add_profile_info` / `update_profile_cccd_table` / `clear_bond`, so the cache
-    /// is authoritative for connection-time CCCD lookup. Returning a clone keeps the
-    /// caller free of borrow conflicts with concurrent `update_profile()`.
-    pub fn get_active_bond_info(&self) -> Option<ProfileInfo> {
-        self.active_bond_info().cloned()
+            .cloned()
     }
 
     /// Update bonding information in the stack according to the current active profile
     pub fn update_stack_bonds(&self) {
-        // Remove current bonding information in the stack
         let current_bond_info = self.stack.get_bond_information();
         for bond in current_bond_info {
             if let Err(e) = self.stack.remove_bond_information(bond.identity) {
@@ -250,10 +240,9 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             }
         }
 
-        // Add bonding information for the active profile
         if let Some(info) = self.active_bond_info() {
             debug!("Add bond info of profile {}: {:?}", info.slot_num, info);
-            if let Err(e) = self.stack.add_bond_information(info.info.clone()) {
+            if let Err(e) = self.stack.add_bond_information(info.info) {
                 debug!("Add bond info error: {:?}", e);
             }
         }
