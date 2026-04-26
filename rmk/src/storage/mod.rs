@@ -33,6 +33,12 @@ use crate::{BUILD_HASH, config};
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
 pub(crate) static FLASH_OPERATION_FINISHED: Signal<crate::RawMutex, bool> = Signal::new();
 
+// TODO(storage-rpc): once `embassy-sync` publishes `RpcService` (currently on
+// main, post-0.8.0), replace these helpers + the `*_RESPONSE` signals + the
+// `Read*` variants of `FlashOperationMessage` with a single
+// `static STORAGE: RpcService<RawMutex, StorageState, S>`. Closure-based calls
+// will collapse the helpers and remove the single-caller hazard noted below.
+
 /// Response signal for `FlashOperationMessage::ReadTroubleBondInfo`.
 #[cfg(feature = "_ble")]
 pub(crate) static BOND_INFO_RESPONSE: Signal<crate::RawMutex, Option<ProfileInfo>> = Signal::new();
@@ -46,32 +52,49 @@ pub(crate) static PEER_ADDRESS_RESPONSE: Signal<crate::RawMutex, Option<PeerAddr
 /// we carry `Option<u8>` instead of `Option<StorageData>` to keep the static small —
 /// otherwise it grows with the largest `StorageData` variant
 /// (`MacroData([u8; MACRO_SPACE_SIZE])`).
+#[cfg(feature = "_ble")]
 pub(crate) static SETTING_RESPONSE: Signal<crate::RawMutex, Option<u8>> = Signal::new();
 
-/// Send a request to read bond info for the given slot, await the response.
+/// Read bond info for `slot_num` via the storage task.
 ///
-/// Routed through `FLASH_CHANNEL` so the storage task is the sole owner of the flash.
+/// **Single-caller contract.** Correct only when at most one task ever has a
+/// roundtrip in flight against `BOND_INFO_RESPONSE`. The `reset → send → wait`
+/// sequence races under concurrent callers because `Signal::signal` silently
+/// overwrites a pending value. All current callers (`load_bonded_devices` in
+/// `ble/profile.rs`) are in a single task; do not call from a new task without
+/// first migrating to `embassy_sync::rpc_service::RpcService` (see TODO above).
 #[cfg(feature = "_ble")]
 pub(crate) async fn read_trouble_bond_info(slot_num: u8) -> Option<ProfileInfo> {
+    BOND_INFO_RESPONSE.reset();
     FLASH_CHANNEL
         .send(FlashOperationMessage::ReadTroubleBondInfo(slot_num))
         .await;
     BOND_INFO_RESPONSE.wait().await
 }
 
-/// Send a request to read a peer address for the given peer id, await the response.
+/// Read the peer address for `peer_id` via the storage task.
+///
+/// **Single-caller contract.** Correct only when at most one task ever has a
+/// roundtrip in flight against `PEER_ADDRESS_RESPONSE`. See
+/// `read_trouble_bond_info` for the rationale and migration note.
 #[cfg(all(feature = "_ble", feature = "split"))]
 pub(crate) async fn read_peer_address(peer_id: u8) -> Option<PeerAddress> {
+    PEER_ADDRESS_RESPONSE.reset();
     FLASH_CHANNEL
         .send(FlashOperationMessage::ReadPeerAddress(peer_id))
         .await;
     PEER_ADDRESS_RESPONSE.wait().await
 }
 
-/// Read a setting by `StorageKey`; storage task fetches it and replies via
-/// `SETTING_RESPONSE`. Used for byte-valued settings (`ConnectionType`,
-/// `ActiveBleProfile`).
+/// Read a byte-valued setting (`ConnectionType`, `ActiveBleProfile`) via the
+/// storage task.
+///
+/// **Single-caller contract.** Correct only when at most one task ever has a
+/// roundtrip in flight against `SETTING_RESPONSE`. See `read_trouble_bond_info`
+/// for the rationale and migration note. Called only at startup today.
+#[cfg(feature = "_ble")]
 pub(crate) async fn read_setting(key: StorageKey) -> Option<u8> {
+    SETTING_RESPONSE.reset();
     FLASH_CHANNEL.send(FlashOperationMessage::ReadSetting(key)).await;
     SETTING_RESPONSE.wait().await
 }
@@ -159,6 +182,7 @@ pub(crate) enum FlashOperationMessage {
     #[cfg(all(feature = "_ble", feature = "split"))]
     // Read peer address for the given peer id; storage task replies via `PEER_ADDRESS_RESPONSE`.
     ReadPeerAddress(u8),
+    #[cfg(feature = "_ble")]
     // Read a byte-valued setting; storage task replies via `SETTING_RESPONSE`.
     ReadSetting(StorageKey),
 }
@@ -635,7 +659,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     /// storage task takes ownership of `&mut Storage`. Once the task is running, peers
     /// must be read through `crate::storage::read_peer_address` (channel-based).
     #[cfg(all(feature = "_ble", feature = "split"))]
-    pub async fn read_peer_address(&mut self, peer_id: u8) -> Result<Option<PeerAddress>, ()> {
+    async fn read_peer_address(&mut self, peer_id: u8) -> Result<Option<PeerAddress>, ()> {
         let read_data = self
             .fetch_data(StorageKey::peer_address(peer_id))
             .await
@@ -645,6 +669,27 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             Some(StorageData::PeerAddress(data)) => Some(data),
             _ => None,
         })
+    }
+
+    /// Read all peripheral addresses from flash at startup, returning a `RefCell`
+    /// suitable for sharing with `scan_peripherals` and `run_peripheral_manager`.
+    ///
+    /// Must be called BEFORE the storage task is started (i.e. before joining `storage`
+    /// into the top-level `run_all!`); once storage is running concurrently nobody
+    /// else can hold `&mut Storage`.
+    #[cfg(all(feature = "_ble", feature = "split"))]
+    pub async fn read_peripheral_addresses<const PERI_NUM: usize>(
+        &mut self,
+    ) -> core::cell::RefCell<heapless::Vec<Option<[u8; 6]>, PERI_NUM>> {
+        let mut peripheral_addresses: heapless::Vec<Option<[u8; 6]>, PERI_NUM> = heapless::Vec::new();
+        for id in 0..PERI_NUM {
+            let entry = match self.read_peer_address(id as u8).await {
+                Ok(Some(addr)) if addr.is_valid => Some(addr.address),
+                _ => None,
+            };
+            peripheral_addresses.push(entry).unwrap();
+        }
+        core::cell::RefCell::new(peripheral_addresses)
     }
 }
 
@@ -686,10 +731,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     PEER_ADDRESS_RESPONSE.signal(resp);
                     continue;
                 }
+                #[cfg(feature = "_ble")]
                 FlashOperationMessage::ReadSetting(key) => {
                     let resp = match self.fetch_data(key).await {
                         Ok(Some(StorageData::ConnectionType(v))) => Some(v),
-                        #[cfg(feature = "_ble")]
                         Ok(Some(StorageData::ActiveBleProfile(v))) => Some(v),
                         Err(e) => {
                             print_storage_error::<F>(e);

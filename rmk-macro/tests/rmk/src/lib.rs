@@ -123,7 +123,7 @@ pub mod event {
     }
 }
 
-/// Core traits module - mirrors rmk::traits
+/// Core traits module - mirrors rmk::core_traits
 pub mod core_traits {
     /// Trait for runnable input devices and processors
     pub trait Runnable {
@@ -147,8 +147,8 @@ pub mod input_device {
 
 /// Processor module - mirrors rmk::processor
 pub mod processor {
-    use crate::event::EventSubscriber;
     use crate::core_traits::Runnable;
+    use crate::event::EventSubscriber;
 
     /// Unified trait for event processors
     pub trait Processor: Runnable {
