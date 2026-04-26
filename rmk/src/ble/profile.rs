@@ -221,6 +221,21 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
         });
     }
 
+    /// Look up the cached bond info for the currently active profile.
+    ///
+    /// Used in place of a flash read when establishing a connection: `bonded_devices`
+    /// is populated once at startup by `load_bonded_devices` and kept in sync by
+    /// `add_profile_info` / `update_profile_cccd_table` / `clear_bond`, so the cache
+    /// is authoritative for connection-time CCCD lookup. Returning a clone keeps the
+    /// caller free of borrow conflicts with concurrent `update_profile()`.
+    pub fn get_active_bond_info(&self) -> Option<ProfileInfo> {
+        let active_profile = get_current_profile();
+        self.bonded_devices
+            .iter()
+            .find(|bond_info| !bond_info.removed && bond_info.slot_num == active_profile)
+            .cloned()
+    }
+
     /// Update bonding information in the stack according to the current active profile
     pub fn update_stack_bonds(&self) {
         let active_profile = get_current_profile();

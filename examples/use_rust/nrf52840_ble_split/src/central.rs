@@ -37,7 +37,7 @@ use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::processor::builtin::led_indicator::KeyboardIndicatorProcessor;
-use rmk::split::ble::central::{read_peripheral_addresses, scan_peripherals};
+use rmk::split::ble::central::scan_peripherals;
 use rmk::split::central::run_peripheral_manager;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
@@ -210,7 +210,7 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
 
     // Read peripheral address from storage
-    let peripheral_addrs = read_peripheral_addresses::<1, _, 8, 7, 4, 2>(&mut storage).await;
+    let peripheral_addrs = storage.read_peripheral_addresses::<1>().await;
 
     // Initialize the encoder processor
     let mut adc_device = NrfAdc::new(

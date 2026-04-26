@@ -49,10 +49,9 @@ pub(crate) static PEER_ADDRESS_RESPONSE: Signal<crate::RawMutex, Option<PeerAddr
 pub(crate) static SETTING_RESPONSE: Signal<crate::RawMutex, Option<u8>> = Signal::new();
 
 /// Send a request to read bond info for the given slot, await the response.
-///
-/// Routed through `FLASH_CHANNEL` so the storage task is the sole owner of the flash.
 #[cfg(feature = "_ble")]
 pub(crate) async fn read_trouble_bond_info(slot_num: u8) -> Option<ProfileInfo> {
+    BOND_INFO_RESPONSE.reset();
     FLASH_CHANNEL
         .send(FlashOperationMessage::ReadTroubleBondInfo(slot_num))
         .await;
@@ -62,6 +61,7 @@ pub(crate) async fn read_trouble_bond_info(slot_num: u8) -> Option<ProfileInfo> 
 /// Send a request to read a peer address for the given peer id, await the response.
 #[cfg(all(feature = "_ble", feature = "split"))]
 pub(crate) async fn read_peer_address(peer_id: u8) -> Option<PeerAddress> {
+    PEER_ADDRESS_RESPONSE.reset();
     FLASH_CHANNEL
         .send(FlashOperationMessage::ReadPeerAddress(peer_id))
         .await;
@@ -71,7 +71,10 @@ pub(crate) async fn read_peer_address(peer_id: u8) -> Option<PeerAddress> {
 /// Read a setting by `StorageKey`; storage task fetches it and replies via
 /// `SETTING_RESPONSE`. Used for byte-valued settings (`ConnectionType`,
 /// `ActiveBleProfile`).
+///
+/// Same single-task contract as `read_trouble_bond_info`. Called only at startup.
 pub(crate) async fn read_setting(key: StorageKey) -> Option<u8> {
+    SETTING_RESPONSE.reset();
     FLASH_CHANNEL.send(FlashOperationMessage::ReadSetting(key)).await;
     SETTING_RESPONSE.wait().await
 }
@@ -635,7 +638,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     /// storage task takes ownership of `&mut Storage`. Once the task is running, peers
     /// must be read through `crate::storage::read_peer_address` (channel-based).
     #[cfg(all(feature = "_ble", feature = "split"))]
-    pub async fn read_peer_address(&mut self, peer_id: u8) -> Result<Option<PeerAddress>, ()> {
+    async fn read_peer_address(&mut self, peer_id: u8) -> Result<Option<PeerAddress>, ()> {
         let read_data = self
             .fetch_data(StorageKey::peer_address(peer_id))
             .await
@@ -645,6 +648,27 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             Some(StorageData::PeerAddress(data)) => Some(data),
             _ => None,
         })
+    }
+
+    /// Read all peripheral addresses from flash at startup, returning a `RefCell`
+    /// suitable for sharing with `scan_peripherals` and `run_peripheral_manager`.
+    ///
+    /// Must be called BEFORE the storage task is started (i.e. before joining `storage`
+    /// into the top-level `run_all!`); once storage is running concurrently nobody
+    /// else can hold `&mut Storage`.
+    #[cfg(all(feature = "_ble", feature = "split"))]
+    pub async fn read_peripheral_addresses<const PERI_NUM: usize>(
+        &mut self,
+    ) -> core::cell::RefCell<heapless::Vec<Option<[u8; 6]>, PERI_NUM>> {
+        let mut peripheral_addresses: heapless::Vec<Option<[u8; 6]>, PERI_NUM> = heapless::Vec::new();
+        for id in 0..PERI_NUM {
+            let entry = match self.read_peer_address(id as u8).await {
+                Ok(Some(addr)) if addr.is_valid => Some(addr.address),
+                _ => None,
+            };
+            peripheral_addresses.push(entry).unwrap();
+        }
+        core::cell::RefCell::new(peripheral_addresses)
     }
 }
 

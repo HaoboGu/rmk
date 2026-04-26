@@ -379,6 +379,8 @@ pub(crate) async fn run_ble<
                             }
                             Either4::Second(Ok(conn)) => {
                                 info!("No USB, BLE connected, run BLE keyboard");
+                                #[cfg(feature = "storage")]
+                                let active_bond_info = profile_manager.get_active_bond_info();
                                 let ble_fut = run_ble_keyboard(
                                     &server,
                                     &conn,
@@ -387,6 +389,8 @@ pub(crate) async fn run_ble<
                                     keymap,
                                     #[cfg(feature = "host")]
                                     &mut rmk_config,
+                                    #[cfg(feature = "storage")]
+                                    active_bond_info,
                                 );
                                 select3(ble_fut, wait_until_usb_configured(), profile_manager.update_profile()).await;
                                 continue;
@@ -429,6 +433,8 @@ pub(crate) async fn run_ble<
                         match select3(adv_fut, usb_fut, profile_manager.update_profile()).await {
                             Either3::First(Ok(conn)) => {
                                 info!("BLE connected, running BLE keyboard");
+                                #[cfg(feature = "storage")]
+                                let active_bond_info = profile_manager.get_active_bond_info();
                                 select(
                                     run_ble_keyboard(
                                         &server,
@@ -438,6 +444,8 @@ pub(crate) async fn run_ble<
                                         keymap,
                                         #[cfg(feature = "host")]
                                         &mut rmk_config,
+                                        #[cfg(feature = "storage")]
+                                        active_bond_info,
                                     ),
                                     profile_manager.update_profile(),
                                 )
@@ -473,6 +481,8 @@ pub(crate) async fn run_ble<
             match adv_fut.await {
                 Ok(conn) => {
                     // BLE connected
+                    #[cfg(feature = "storage")]
+                    let active_bond_info = profile_manager.get_active_bond_info();
                     select(
                         run_ble_keyboard(
                             &server,
@@ -482,6 +492,8 @@ pub(crate) async fn run_ble<
                             keymap,
                             #[cfg(feature = "host")]
                             &mut rmk_config,
+                            #[cfg(feature = "storage")]
+                            active_bond_info,
                         ),
                         profile_manager.update_profile(),
                     )
@@ -964,6 +976,7 @@ async fn run_ble_keyboard<
     stack: &Stack<'_, C, DefaultPacketPool>,
     #[cfg(feature = "host")] keymap: &'c KeyMap<'c>,
     #[cfg(feature = "host")] rmk_config: &'d mut RmkConfig<'static>,
+    #[cfg(feature = "storage")] active_bond_info: Option<crate::ble::profile::ProfileInfo>,
 ) {
     let ble_hid_server = BleHidServer::new(server, conn);
     #[cfg(feature = "host")]
@@ -971,12 +984,15 @@ async fn run_ble_keyboard<
     let ble_led_reader = BleLedReader {};
     let mut ble_battery_server = BleBatteryServer::new(server, conn);
 
-    // Load CCCD table from storage
+    // Load CCCD table from the cached bond info (populated at startup by
+    // `load_bonded_devices` and kept in sync by `ProfileManager`). Reading from
+    // the cache instead of `read_trouble_bond_info` avoids issuing a cancellable
+    // flash read while this future is racing other arms of an outer `select`.
     #[cfg(feature = "storage")]
-    if let Some(bond_info) = crate::storage::read_trouble_bond_info(get_current_profile()).await
+    if let Some(bond_info) = active_bond_info
         && bond_info.info.identity.match_identity(&conn.raw().peer_identity())
     {
-        info!("Loading CCCD table from storage: {:?}", bond_info.cccd_table);
+        info!("Loading CCCD table from cached bond info: {:?}", bond_info.cccd_table);
         server.set_cccd_table(conn.raw(), bond_info.cccd_table.clone());
     }
 
