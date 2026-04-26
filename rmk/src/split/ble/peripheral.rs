@@ -137,17 +137,10 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'stack, C: Controller +
     } = stack.build();
 
     // First, read central address from storage
-    let mut central_saved = false;
-    let mut central_addr = if let Some(central_addr) = crate::storage::read_peer_address(0).await {
-        if central_addr.is_valid {
-            central_saved = true;
-            Some(central_addr.address)
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    let mut central_addr = crate::storage::read_peer_address(0)
+        .await
+        .filter(|a| a.is_valid)
+        .map(|a| a.address);
 
     let peri_task = async {
         let server = BleSplitPeripheralServer::new_default("rmk").unwrap();
@@ -159,10 +152,9 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'stack, C: Controller +
                     info!("Connected to the central");
                     publish_event(CentralConnectedEvent { connected: true });
                     let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
-                    // Save central address to storage if the central address is not saved
-                    if !central_saved || conn.raw().peer_address().into_inner() != central_addr.unwrap_or_default() {
+                    let new_addr = conn.raw().peer_address().into_inner();
+                    if central_addr != Some(new_addr) {
                         info!("Saving central address to storage");
-                        let new_addr = conn.raw().peer_address().into_inner();
                         if crate::storage::write_peer_address(PeerAddress {
                             peer_id: 0,
                             is_valid: true,
@@ -170,11 +162,9 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'stack, C: Controller +
                         })
                         .await
                         {
-                            central_saved = true;
                             central_addr = Some(new_addr);
                         }
                     }
-                    // Start run peripheral service. Storage runs as its own top-level task.
                     peripheral.run().await;
                     info!("Disconnected from the central");
                 }

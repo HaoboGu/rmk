@@ -984,15 +984,13 @@ async fn run_ble_keyboard<
     let ble_led_reader = BleLedReader {};
     let mut ble_battery_server = BleBatteryServer::new(server, conn);
 
-    // Load CCCD table from the cached bond info (populated at startup by
-    // `load_bonded_devices` and kept in sync by `ProfileManager`). Reading from
-    // the cache instead of `read_trouble_bond_info` avoids issuing a cancellable
-    // flash read while this future is racing other arms of an outer `select`.
+    // CCCD lookup uses cached bond info to avoid a cancellable flash read while
+    // this future is racing other arms of an outer `select`.
     #[cfg(feature = "storage")]
     if let Some(bond_info) = active_bond_info
         && bond_info.info.identity.match_identity(&conn.raw().peer_identity())
     {
-        info!("Loading CCCD table from cached bond info: {:?}", bond_info.cccd_table);
+        info!("Loading CCCD table: {:?}", bond_info.cccd_table);
         server.set_cccd_table(conn.raw(), bond_info.cccd_table.clone());
     }
 

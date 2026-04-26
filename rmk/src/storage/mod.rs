@@ -33,76 +33,49 @@ use crate::{BUILD_HASH, config};
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
 pub(crate) static FLASH_OPERATION_FINISHED: Signal<crate::RawMutex, bool> = Signal::new();
 
-// TODO(storage-rpc): once `embassy-sync` publishes `RpcService` (currently on
-// main, post-0.8.0), replace these helpers + the `*_RESPONSE` signals + the
-// `Read*` variants of `FlashOperationMessage` with a single
-// `static STORAGE: RpcService<RawMutex, StorageState, S>`. Closure-based calls
-// will collapse the helpers and remove the single-caller hazard noted below.
-
-/// Response signal for `FlashOperationMessage::ReadTroubleBondInfo`.
+// Request/response over `FLASH_CHANNEL`.
+//
+// All current callers run at startup from a single task; do not call from a new task
+// without first migrating to the upcoming `embassy_sync::rpc_service::RpcService`
+// (currently on embassy-sync main, post-0.8.0), which will collapse these
+// helpers + signals + `Read*` variants into a single typed RPC.
+//
 #[cfg(feature = "_ble")]
 pub(crate) static BOND_INFO_RESPONSE: Signal<crate::RawMutex, Option<ProfileInfo>> = Signal::new();
 
-/// Response signal for `FlashOperationMessage::ReadPeerAddress`.
 #[cfg(all(feature = "_ble", feature = "split"))]
 pub(crate) static PEER_ADDRESS_RESPONSE: Signal<crate::RawMutex, Option<PeerAddress>> = Signal::new();
 
-/// Response signal for `FlashOperationMessage::ReadSetting`. Today every setting routed
-/// through this path encodes as a single byte (`ConnectionType`, `ActiveBleProfile`), so
-/// we carry `Option<u8>` instead of `Option<StorageData>` to keep the static small —
-/// otherwise it grows with the largest `StorageData` variant
-/// (`MacroData([u8; MACRO_SPACE_SIZE])`).
 #[cfg(feature = "_ble")]
 pub(crate) static SETTING_RESPONSE: Signal<crate::RawMutex, Option<u8>> = Signal::new();
 
-/// Read bond info for `slot_num` via the storage task.
-///
-/// **Single-caller contract.** Correct only when at most one task ever has a
-/// roundtrip in flight against `BOND_INFO_RESPONSE`. The `reset → send → wait`
-/// sequence races under concurrent callers because `Signal::signal` silently
-/// overwrites a pending value. All current callers (`load_bonded_devices` in
-/// `ble/profile.rs`) are in a single task; do not call from a new task without
-/// first migrating to `embassy_sync::rpc_service::RpcService` (see TODO above).
 #[cfg(feature = "_ble")]
-pub(crate) async fn read_trouble_bond_info(slot_num: u8) -> Option<ProfileInfo> {
-    BOND_INFO_RESPONSE.reset();
-    FLASH_CHANNEL
-        .send(FlashOperationMessage::ReadTroubleBondInfo(slot_num))
-        .await;
-    BOND_INFO_RESPONSE.wait().await
+async fn request_read<T: Send>(msg: FlashOperationMessage, response: &Signal<crate::RawMutex, T>) -> T {
+    response.reset();
+    FLASH_CHANNEL.send(msg).await;
+    response.wait().await
 }
 
-/// Read the peer address for `peer_id` via the storage task.
-///
-/// **Single-caller contract.** Correct only when at most one task ever has a
-/// roundtrip in flight against `PEER_ADDRESS_RESPONSE`. See
-/// `read_trouble_bond_info` for the rationale and migration note.
+#[cfg(feature = "_ble")]
+pub(crate) async fn read_bond_info(slot_num: u8) -> Option<ProfileInfo> {
+    request_read(FlashOperationMessage::ReadBleBondInfo(slot_num), &BOND_INFO_RESPONSE).await
+}
+
 #[cfg(all(feature = "_ble", feature = "split"))]
 pub(crate) async fn read_peer_address(peer_id: u8) -> Option<PeerAddress> {
-    PEER_ADDRESS_RESPONSE.reset();
-    FLASH_CHANNEL
-        .send(FlashOperationMessage::ReadPeerAddress(peer_id))
-        .await;
-    PEER_ADDRESS_RESPONSE.wait().await
+    request_read(FlashOperationMessage::ReadPeerAddress(peer_id), &PEER_ADDRESS_RESPONSE).await
 }
 
-/// Read a byte-valued setting (`ConnectionType`, `ActiveBleProfile`) via the
-/// storage task.
-///
-/// **Single-caller contract.** Correct only when at most one task ever has a
-/// roundtrip in flight against `SETTING_RESPONSE`. See `read_trouble_bond_info`
-/// for the rationale and migration note. Called only at startup today.
 #[cfg(feature = "_ble")]
 pub(crate) async fn read_setting(key: StorageKey) -> Option<u8> {
-    SETTING_RESPONSE.reset();
-    FLASH_CHANNEL.send(FlashOperationMessage::ReadSetting(key)).await;
-    SETTING_RESPONSE.wait().await
+    request_read(FlashOperationMessage::ReadBleSetting(key), &SETTING_RESPONSE).await
 }
 
 /// Send a peer address to be persisted; wait for the storage task to finish.
 /// Returns `true` if the write completed successfully.
 #[cfg(all(feature = "_ble", feature = "split"))]
 pub(crate) async fn write_peer_address(addr: PeerAddress) -> bool {
+    FLASH_OPERATION_FINISHED.reset();
     FLASH_CHANNEL.send(FlashOperationMessage::PeerAddress(addr)).await;
     FLASH_OPERATION_FINISHED.wait().await
 }
@@ -178,13 +151,13 @@ pub(crate) enum FlashOperationMessage {
     MorseDefaultProfile(MorseProfile),
     #[cfg(feature = "_ble")]
     // Read bond info for the given slot; storage task replies via `BOND_INFO_RESPONSE`.
-    ReadTroubleBondInfo(u8),
+    ReadBleBondInfo(u8),
     #[cfg(all(feature = "_ble", feature = "split"))]
     // Read peer address for the given peer id; storage task replies via `PEER_ADDRESS_RESPONSE`.
     ReadPeerAddress(u8),
     #[cfg(feature = "_ble")]
-    // Read a byte-valued setting; storage task replies via `SETTING_RESPONSE`.
-    ReadSetting(StorageKey),
+    // Read a byte-valued setting: ConnectionType or ActiveBleProfile
+    ReadBleSetting(StorageKey),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -411,8 +384,14 @@ macro_rules! update_storage_field {
 impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
-    async fn fetch_data(&mut self, key: StorageKey) -> Result<Option<StorageData>, SSError<F::Error>> {
-        self.flash.fetch_item(&mut self.buffer, &key).await
+    async fn fetch_data(&mut self, key: StorageKey) -> Option<StorageData> {
+        match self.flash.fetch_item(&mut self.buffer, &key).await {
+            Ok(data) => data,
+            Err(e) => {
+                print_storage_error::<F>(e);
+                None
+            }
+        }
     }
 
     async fn store_data(&mut self, key: StorageKey, data: &StorageData) -> Result<(), SSError<F::Error>> {
@@ -516,11 +495,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         &mut self,
         behavior_config: &mut config::BehaviorConfig,
     ) -> Result<(), ()> {
-        if let Some(StorageData::BehaviorConfig(c)) = self
-            .fetch_data(StorageKey::BehaviorConfig)
-            .await
-            .map_err(|e| print_storage_error::<F>(e))?
-        {
+        if let Some(StorageData::BehaviorConfig(c)) = self.fetch_data(StorageKey::BehaviorConfig).await {
             behavior_config.morse.prior_idle_time = Duration::from_millis(c.prior_idle_time as u64);
             behavior_config.morse.default_profile = c.morse_default_profile;
 
@@ -646,7 +621,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     async fn check_enable(&mut self) -> bool {
-        if let Ok(Some(StorageData::StorageConfig(config))) = self.fetch_data(StorageKey::StorageConfig).await
+        if let Some(StorageData::StorageConfig(config)) = self.fetch_data(StorageKey::StorageConfig).await
             && config.enable
             && config.build_hash == BUILD_HASH
         {
@@ -655,36 +630,19 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         false
     }
 
-    /// Direct flash read used at startup by `read_peripheral_addresses` before the
-    /// storage task takes ownership of `&mut Storage`. Once the task is running, peers
-    /// must be read through `crate::storage::read_peer_address` (channel-based).
-    #[cfg(all(feature = "_ble", feature = "split"))]
-    async fn read_peer_address(&mut self, peer_id: u8) -> Result<Option<PeerAddress>, ()> {
-        let read_data = self
-            .fetch_data(StorageKey::peer_address(peer_id))
-            .await
-            .map_err(|e| print_storage_error::<F>(e))?;
-
-        Ok(match read_data {
-            Some(StorageData::PeerAddress(data)) => Some(data),
-            _ => None,
-        })
-    }
-
     /// Read all peripheral addresses from flash at startup, returning a `RefCell`
     /// suitable for sharing with `scan_peripherals` and `run_peripheral_manager`.
     ///
-    /// Must be called BEFORE the storage task is started (i.e. before joining `storage`
-    /// into the top-level `run_all!`); once storage is running concurrently nobody
-    /// else can hold `&mut Storage`.
+    /// Must be called before the storage task starts; once it is running it owns
+    /// `&mut Storage` and no other reader can hold it.
     #[cfg(all(feature = "_ble", feature = "split"))]
     pub async fn read_peripheral_addresses<const PERI_NUM: usize>(
         &mut self,
     ) -> core::cell::RefCell<heapless::Vec<Option<[u8; 6]>, PERI_NUM>> {
         let mut peripheral_addresses: heapless::Vec<Option<[u8; 6]>, PERI_NUM> = heapless::Vec::new();
         for id in 0..PERI_NUM {
-            let entry = match self.read_peer_address(id as u8).await {
-                Ok(Some(addr)) if addr.is_valid => Some(addr.address),
+            let entry = match self.fetch_data(StorageKey::peer_address(id as u8)).await {
+                Some(StorageData::PeerAddress(addr)) if addr.is_valid => Some(addr.address),
                 _ => None,
             };
             peripheral_addresses.push(entry).unwrap();
@@ -701,18 +659,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
             debug!("Flash operation: {:?}", info);
 
-            // One match: read variants signal their typed response and `continue`
-            // (so they skip `FLASH_OPERATION_FINISHED`); writes/updates yield a
-            // `Result` that flows into the post-match completion signal below.
             let write_result: Result<(), SSError<F::Error>> = match info {
                 #[cfg(feature = "_ble")]
-                FlashOperationMessage::ReadTroubleBondInfo(slot_num) => {
+                FlashOperationMessage::ReadBleBondInfo(slot_num) => {
                     let resp = match self.fetch_data(StorageKey::bond_info(slot_num)).await {
-                        Ok(Some(StorageData::BondInfo(info))) => Some(info),
-                        Err(e) => {
-                            print_storage_error::<F>(e);
-                            None
-                        }
+                        Some(StorageData::BondInfo(info)) => Some(info),
                         _ => None,
                     };
                     BOND_INFO_RESPONSE.signal(resp);
@@ -721,25 +672,16 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 #[cfg(all(feature = "_ble", feature = "split"))]
                 FlashOperationMessage::ReadPeerAddress(peer_id) => {
                     let resp = match self.fetch_data(StorageKey::peer_address(peer_id)).await {
-                        Ok(Some(StorageData::PeerAddress(addr))) => Some(addr),
-                        Err(e) => {
-                            print_storage_error::<F>(e);
-                            None
-                        }
+                        Some(StorageData::PeerAddress(addr)) => Some(addr),
                         _ => None,
                     };
                     PEER_ADDRESS_RESPONSE.signal(resp);
                     continue;
                 }
                 #[cfg(feature = "_ble")]
-                FlashOperationMessage::ReadSetting(key) => {
+                FlashOperationMessage::ReadBleSetting(key) => {
                     let resp = match self.fetch_data(key).await {
-                        Ok(Some(StorageData::ConnectionType(v))) => Some(v),
-                        Ok(Some(StorageData::ActiveBleProfile(v))) => Some(v),
-                        Err(e) => {
-                            print_storage_error::<F>(e);
-                            None
-                        }
+                        Some(StorageData::ConnectionType(v)) | Some(StorageData::ActiveBleProfile(v)) => Some(v),
                         _ => None,
                     };
                     SETTING_RESPONSE.signal(resp);
@@ -1083,17 +1025,17 @@ mod tests {
 
             assert!(matches!(
                 stored_layout,
-                Some(StorageData::LayoutConfig(LayoutConfig {
+                StorageData::LayoutConfig(LayoutConfig {
                     default_layer: 0,
                     layout_option: 0,
-                }))
+                })
             ));
             assert!(matches!(
                 stored_config,
-                Some(StorageData::StorageConfig(LocalStorageConfig {
+                StorageData::StorageConfig(LocalStorageConfig {
                     enable: true,
                     build_hash: BUILD_HASH,
-                }))
+                })
             ));
         });
     }

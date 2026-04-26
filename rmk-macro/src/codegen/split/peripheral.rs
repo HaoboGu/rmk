@@ -405,8 +405,6 @@ fn expand_split_peripheral_entry(
     // Add matrix to devices, and run all devices
     let mut devs = devices.clone();
     devs.push(quote! {matrix});
-    // BLE split peripherals carry their own storage task; co-locate it with the matrix and
-    // other devices in `run_all!` so storage runs concurrently with peripheral.
     if split_config.connection == "ble" {
         devs.push(quote! {storage});
     }

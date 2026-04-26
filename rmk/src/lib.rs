@@ -264,7 +264,6 @@ pub async fn run_rmk<
     unreachable!("Should never reach here, wrong feature gate combination?");
 }
 
-// Run keyboard task for once
 pub(crate) async fn run_keyboard<
     #[cfg(feature = "host")] 'a,
     R: HidReaderTrait<ReportType = LedIndicator>,
