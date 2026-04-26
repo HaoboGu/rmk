@@ -7,8 +7,7 @@ use embassy_futures::select::{Either, Either3, select, select3};
 use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer, with_timeout};
-use embedded_storage_async::nor_flash::NorFlash;
-use heapless::{Vec, VecView};
+use heapless::VecView;
 use trouble_host::prelude::*;
 
 use crate::ble::{SLEEPING_STATE, update_ble_phy, update_conn_params};
@@ -18,7 +17,7 @@ use crate::event::{PeripheralConnectedEvent, SleepStateEvent, publish_event};
 use crate::split::ble::PeerAddress;
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
-use crate::storage::{FlashOperationMessage, Storage};
+use crate::storage::FlashOperationMessage;
 use crate::{CONNECTION_STATE, SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS};
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
@@ -128,34 +127,6 @@ pub async fn scan_peripherals<
             select(scanning_fut, update_addrs_fut).await;
         }
     }
-}
-
-/// Read peripheral addresses from storage.
-///
-/// # Arguments
-///
-/// * `storage` - The storage to read peripheral addresses from
-pub async fn read_peripheral_addresses<
-    const PERI_NUM: usize,
-    F: NorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
->(
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-) -> RefCell<Vec<Option<[u8; 6]>, PERI_NUM>> {
-    let mut peripheral_addresses: heapless::Vec<Option<[u8; 6]>, PERI_NUM> = heapless::Vec::new();
-    for id in 0..PERI_NUM {
-        if let Ok(Some(peer_address)) = storage.read_peer_address(id as u8).await
-            && peer_address.is_valid
-        {
-            peripheral_addresses.push(Some(peer_address.address)).unwrap();
-            continue;
-        }
-        peripheral_addresses.push(None).unwrap();
-    }
-    RefCell::new(peripheral_addresses)
 }
 
 // When no peripheral address is saved, the central should first scan for peripheral.

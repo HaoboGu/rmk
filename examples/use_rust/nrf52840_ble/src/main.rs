@@ -212,12 +212,12 @@ async fn main(spawner: Spawner) {
     let mut batt_proc = BatteryProcessor::new(2000, 2806);
 
     join4(
-        run_all!(matrix, encoder, adc_device),
+        run_all!(matrix, encoder, adc_device, storage),
         run_all! {
             batt_proc
         },
         keyboard.run(), // Keyboard is special
-        run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+        run_rmk(&keymap, driver, &stack, rmk_config),
     )
     .await;
 }

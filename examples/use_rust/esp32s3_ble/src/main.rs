@@ -102,9 +102,9 @@ async fn main(_s: Spawner) {
     let mut keyboard = Keyboard::new(&keymap); // Initialize the light controller
 
     join3(
-        run_all!(matrix),
+        run_all!(matrix, storage),
         keyboard.run(), // Keyboard is special
-        run_rmk(&keymap, usb_driver, &stack, &mut storage, rmk_config),
+        run_rmk(&keymap, usb_driver, &stack, rmk_config),
     )
     .await;
 }

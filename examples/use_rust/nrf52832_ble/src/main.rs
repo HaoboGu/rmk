@@ -161,9 +161,9 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
 
     join3(
-        run_all!(matrix),
+        run_all!(matrix, storage),
         keyboard.run(), // Keyboard is special
-        run_rmk(&keymap, &stack, &mut storage, rmk_config),
+        run_rmk(&keymap, &stack, rmk_config),
     )
     .await;
 }
