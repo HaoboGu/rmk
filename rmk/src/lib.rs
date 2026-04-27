@@ -51,6 +51,8 @@ use embassy_usb::driver::Driver;
 pub use futures;
 use futures::FutureExt;
 pub use heapless;
+#[cfg(all(not(feature = "_ble"), feature = "steno"))]
+use hid::StenoReport;
 #[cfg(not(feature = "_ble"))]
 use hid::{CompositeReport, KeyboardReport};
 use hid::{HidReaderTrait, RunnableHidWriter};
@@ -204,6 +206,8 @@ pub async fn run_rmk<
         let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.device_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8, 8);
         let mut other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9, 16);
+        #[cfg(feature = "steno")]
+        let mut steno_writer = add_usb_writer!(&mut usb_builder, StenoReport, 9, 16);
         #[cfg(feature = "host")]
         let mut host_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32, 32);
 
@@ -253,7 +257,12 @@ pub async fn run_rmk<
                     rmk_config.vial_config,
                     usb_task,
                     UsbLedReader::new(&mut keyboard_reader),
-                    UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
+                    UsbKeyboardWriter::new(
+                        &mut keyboard_writer,
+                        &mut other_writer,
+                        #[cfg(feature = "steno")]
+                        &mut steno_writer,
+                    ),
                 )
                 .await;
             }

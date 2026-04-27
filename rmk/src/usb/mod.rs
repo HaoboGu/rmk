@@ -43,12 +43,20 @@ impl From<u8> for UsbState {
 pub(crate) struct UsbKeyboardWriter<'a, 'd, D: Driver<'d>> {
     pub(crate) keyboard_writer: &'a mut HidWriter<'d, D, 8>,
     pub(crate) other_writer: &'a mut HidWriter<'d, D, 9>,
+    #[cfg(feature = "steno")]
+    pub(crate) steno_writer: &'a mut HidWriter<'d, D, 9>,
 }
 impl<'a, 'd, D: Driver<'d>> UsbKeyboardWriter<'a, 'd, D> {
-    pub(crate) fn new(keyboard_writer: &'a mut HidWriter<'d, D, 8>, other_writer: &'a mut HidWriter<'d, D, 9>) -> Self {
+    pub(crate) fn new(
+        keyboard_writer: &'a mut HidWriter<'d, D, 8>,
+        other_writer: &'a mut HidWriter<'d, D, 9>,
+        #[cfg(feature = "steno")] steno_writer: &'a mut HidWriter<'d, D, 9>,
+    ) -> Self {
         Self {
             keyboard_writer,
             other_writer,
+            #[cfg(feature = "steno")]
+            steno_writer,
         }
     }
 }
@@ -112,6 +120,28 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
                     .map_err(HidError::UsbEndpointError)?;
                 Ok(n)
             }
+            #[cfg(feature = "steno")]
+            Report::StenoReport(steno_report) => {
+                // `AsInputReport` for `StenoReport` emits 9 bytes: report id (0x50) + 8 payload bytes.
+                let mut buf: [u8; 9] = [0; 9];
+                let n = steno_report
+                    .serialize(&mut buf)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                // The USB host only polls the steno IN endpoint when Plover is running.
+                // Without a timeout, write() blocks forever when Plover is absent, which
+                // starves all subsequent keyboard reports and stalls the keyboard.
+                match embassy_time::with_timeout(
+                    embassy_time::Duration::from_millis(5),
+                    self.steno_writer.write(&buf[0..n]),
+                )
+                .await
+                {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => return Err(HidError::UsbEndpointError(e)),
+                    Err(_) => {} // Plover not reading; drop this report and continue
+                }
+                Ok(n)
+            }
         }
     }
 }
@@ -132,9 +162,10 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     usb_config.device_protocol = 0x01;
     usb_config.composite_with_iads = true;
 
-    #[cfg(feature = "usb_log")]
+    // Extra HID interfaces (usb_log, steno) overflow the 128-byte config descriptor buffer.
+    #[cfg(any(feature = "usb_log", feature = "steno"))]
     const USB_BUF_SIZE: usize = 256;
-    #[cfg(not(feature = "usb_log"))]
+    #[cfg(not(any(feature = "usb_log", feature = "steno")))]
     const USB_BUF_SIZE: usize = 128;
 
     // Create embassy-usb DeviceBuilder using the driver and config.

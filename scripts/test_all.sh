@@ -19,6 +19,7 @@ nx=(nextest run --config-file "$repo_root/.config/nextest.toml")
 # snapshot tests under src/protocol/rmk/snapshots/).
 cargo "${nx[@]}" --manifest-path rmk-types/Cargo.toml
 cargo "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features host
+cargo "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features steno
 
 cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "split,vial,async_matrix,_ble"
 cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "split,vial,async_matrix"
@@ -29,6 +30,10 @@ cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features
 cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "vial,_ble"
 cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "passkey_entry"
 cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "split,vial,storage,passkey_entry"
+# Steno (Plover HID): USB-only path runs the chord/descriptor unit tests;
+# the _ble combo verifies the BLE silent-drop arm compiles.
+cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "vial,storage,steno"
+cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "split,vial,storage,async_matrix,_ble,steno"
 cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features
 
 # Doctests: nextest doesn't run them. rmk/ has `doctest = false` so only

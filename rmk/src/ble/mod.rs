@@ -40,6 +40,8 @@ use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDAT
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
 use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, ConnectionType, publish_event};
+#[cfg(all(not(feature = "_no_usb"), feature = "steno"))]
+use crate::hid::StenoReport;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
@@ -228,6 +230,9 @@ pub(crate) async fn run_ble<
         (usb_builder, keyboard_reader, keyboard_writer, other_writer)
     };
 
+    #[cfg(all(not(feature = "_no_usb"), feature = "steno"))]
+    let mut steno_writer = add_usb_writer!(&mut _usb_builder, StenoReport, 9, 16);
+
     #[cfg(all(not(feature = "_no_usb"), feature = "host"))]
     let mut host_reader_writer = add_usb_reader_writer!(&mut _usb_builder, ViaReport, 32, 32, 32);
 
@@ -373,7 +378,12 @@ pub(crate) async fn run_ble<
                                     rmk_config.vial_config,
                                     wait_until_usb_disabled(),
                                     UsbLedReader::new(&mut keyboard_reader),
-                                    UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
+                                    UsbKeyboardWriter::new(
+                                        &mut keyboard_writer,
+                                        &mut other_writer,
+                                        #[cfg(feature = "steno")]
+                                        &mut steno_writer,
+                                    ),
                                 );
                                 select(usb_fut, profile_manager.update_profile()).await;
                             }
@@ -428,7 +438,12 @@ pub(crate) async fn run_ble<
                             rmk_config.vial_config,
                             core::future::pending::<()>(), // Run forever until BLE connected
                             UsbLedReader::new(&mut keyboard_reader),
-                            UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
+                            UsbKeyboardWriter::new(
+                                &mut keyboard_writer,
+                                &mut other_writer,
+                                #[cfg(feature = "steno")]
+                                &mut steno_writer,
+                            ),
                         );
                         match select3(adv_fut, usb_fut, profile_manager.update_profile()).await {
                             Either3::First(Ok(conn)) => {
