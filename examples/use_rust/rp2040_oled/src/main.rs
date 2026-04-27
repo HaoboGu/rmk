@@ -93,7 +93,7 @@ async fn main(_spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
-    let mut host_service = HostService::new(&keymap, vial_config);
+    let mut host_service = HostService::new(&keymap, &rmk_config);
 
     // Initialize I2C1 on PIN_2 (SDA) and PIN_3 (SCL)
     let i2c = i2c::I2c::new_async(p.I2C1, p.PIN_3, p.PIN_2, Irqs, i2c::Config::default());

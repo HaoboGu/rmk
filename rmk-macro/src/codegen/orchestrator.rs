@@ -252,7 +252,7 @@ fn expand_main(
 
     let host_service_init = if host.vial_enabled {
         quote! {
-            let mut host_service = ::rmk::host::HostService::new(&keymap, VIAL_CONFIG);
+            let mut host_service = ::rmk::host::HostService::new(&keymap, &rmk_config);
         }
     } else {
         quote! {}

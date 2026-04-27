@@ -90,7 +90,7 @@ async fn main(_s: Spawner) {
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     // let mut matrix = rmk::matrix::TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap); // Initialize the light controller
-    let mut host_service = HostService::new(&keymap, vial_config);
+    let mut host_service = HostService::new(&keymap, &rmk_config);
 
     join4(
         run_all!(matrix, storage),

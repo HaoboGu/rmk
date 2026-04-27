@@ -8,7 +8,7 @@ use crate::channel::HOST_BLE_TX;
 #[cfg(not(feature = "_no_usb"))]
 use crate::channel::HOST_USB_TX;
 use crate::channel::{HOST_REQUEST_CHANNEL, HostTransport};
-use crate::config::VialConfig;
+use crate::config::{RmkConfig, VialConfig};
 use crate::core_traits::Runnable;
 use crate::event::KeyboardEventPos;
 use crate::hid::ViaReport;
@@ -36,14 +36,12 @@ pub struct VialService<'a> {
 }
 
 impl<'a> VialService<'a> {
-    // VialService::new() should be called only once.
-    // Otherwise the `vial_buf.init()` will panic.
-    pub fn new(keymap: &'a KeyMap<'a>, vial_config: VialConfig<'static>) -> Self {
+    pub fn new(keymap: &'a KeyMap<'a>, config: &RmkConfig<'static>) -> Self {
         Self {
             keymap,
-            vial_config,
+            vial_config: config.vial_config,
             #[cfg(feature = "vial_lock")]
-            locker: vial_lock::VialLock::new(vial_config.unlock_keys, keymap),
+            locker: vial_lock::VialLock::new(config.vial_config.unlock_keys, keymap),
         }
     }
 

@@ -94,7 +94,7 @@ async fn main(_spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, true);
     let mut keyboard = Keyboard::new(&keymap);
-    let mut host_service = HostService::new(&keymap, vial_config);
+    let mut host_service = HostService::new(&keymap, &rmk_config);
 
     // Start
     join4(

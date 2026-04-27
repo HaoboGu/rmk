@@ -31,8 +31,6 @@ use {crate::state::CONNECTION_TYPE, crate::storage::StorageKey};
 use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
 use crate::ble::device_info::{PnPID, VidSource};
-#[cfg(feature = "host")]
-use crate::ble::host_service::run_ble_host;
 use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
@@ -50,8 +48,6 @@ use crate::{CONNECTION_STATE, run_keyboard};
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;
-#[cfg(feature = "host")]
-pub(crate) mod host_service;
 pub(crate) mod led;
 #[cfg(feature = "passkey_entry")]
 pub mod passkey;
@@ -986,7 +982,7 @@ async fn run_ble_keyboard<
     let kb_fut = run_keyboard(communication_task, ble_led_reader, ble_hid_server);
 
     #[cfg(feature = "host")]
-    select(kb_fut, run_ble_host(server.host_service.input_data, conn)).await;
+    select(kb_fut, crate::host::run_ble_host(server.host_service.input_data, conn)).await;
     #[cfg(not(feature = "host"))]
     kb_fut.await;
 }
