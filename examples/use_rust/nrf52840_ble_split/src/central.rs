@@ -30,7 +30,8 @@ use rmk::config::{
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::event::*;
-use rmk::futures::future::{join4, join5};
+use rmk::futures::future::join5;
+use rmk::host::HostService;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
@@ -208,6 +209,7 @@ async fn main(spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer);
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap);
+    let mut host_service = HostService::new(&keymap, &rmk_config);
 
     // Read peripheral address from storage
     let peripheral_addrs = storage.read_peripheral_addresses::<1>().await;
@@ -256,15 +258,16 @@ async fn main(spawner: Spawner) {
     let mut peripheral_battery_monitor = PeripheralBatteryMonitor {};
 
     // Start
-    join4(
+    join5(
         run_all!(matrix, encoder, adc_device, storage),
         run_all! {
             batt_proc
         },
         keyboard.run(),
+        host_service.run(),
         join5(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
-            run_rmk(&keymap, driver, &stack, rmk_config),
+            run_rmk(driver, &stack, rmk_config),
             scan_peripherals(&stack, &peripheral_addrs),
             capslock_led.run(),
             peripheral_battery_monitor.run(),

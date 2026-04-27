@@ -1,36 +1,14 @@
+#[cfg(feature = "_ble")]
+mod ble;
 #[cfg(feature = "storage")]
 pub(crate) mod storage;
+#[cfg(not(feature = "_no_usb"))]
+mod usb;
 pub mod via;
 
-pub use via::UsbHostReaderWriter;
+#[cfg(feature = "_ble")]
+pub(crate) use ble::run_ble_host;
+#[cfg(not(feature = "_no_usb"))]
+pub(crate) use usb::run_usb_host;
 #[cfg(feature = "vial")]
-pub(crate) use via::VialService as HostService;
-
-#[cfg(feature = "vial")]
-use crate::config::VialConfig;
-use crate::hid::{HidReaderTrait, HidWriterTrait, ViaReport};
-use crate::keymap::KeyMap;
-
-#[cfg(feature = "vial")]
-pub(crate) async fn run_host_communicate_task<
-    'a,
-    Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
->(
-    keymap: &'a KeyMap<'a>,
-    reader_writer: Rw,
-    vial_config: VialConfig<'static>,
-) {
-    let mut service = HostService::new(keymap, vial_config, reader_writer);
-    service.run().await
-}
-
-#[cfg(not(feature = "vial"))]
-pub(crate) async fn run_host_communicate_task<
-    'a,
-    Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
->(
-    _keymap: &'a KeyMap<'a>,
-    _reader_writer: Rw,
-) {
-    todo!()
-}
+pub use via::VialService as HostService;

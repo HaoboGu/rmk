@@ -21,7 +21,8 @@ use rmk::ble::build_ble_stack;
 use rmk::config::{BehaviorConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join3;
+use rmk::futures::future::join4;
+use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
@@ -89,11 +90,13 @@ async fn main(_s: Spawner) {
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     // let mut matrix = rmk::matrix::TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap); // Initialize the light controller
+    let mut host_service = HostService::new(&keymap, &rmk_config);
 
-    join3(
+    join4(
         run_all!(matrix, storage),
         keyboard.run(), // Keyboard is special
-        run_rmk(&keymap, &stack, rmk_config),
+        host_service.run(),
+        run_rmk(&stack, rmk_config),
     )
     .await;
 }

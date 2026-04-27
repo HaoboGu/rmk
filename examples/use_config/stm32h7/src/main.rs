@@ -12,7 +12,7 @@ mod my_keyboard {
     use embassy_stm32::time::Hertz;
     use embassy_stm32::usb::Driver;
     use rmk::core_traits::Runnable;
-    use rmk::futures::future::join3;
+    use rmk::futures::future::join4;
     use rmk::{run_all, run_rmk};
     use static_cell::StaticCell;
 
@@ -82,11 +82,11 @@ mod my_keyboard {
     #[Override(entry)]
     fn run() {
         // Start
-        join3(
+        join4(
             run_all!(matrix),
             keyboard.run(),
-            // run_rmk(&keymap, driver, &mut storage, rmk_config),
-            run_rmk(&keymap, driver, rmk_config),
+            host_service.run(),
+            run_rmk(driver, rmk_config),
         )
         .await;
     }

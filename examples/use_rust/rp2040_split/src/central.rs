@@ -20,7 +20,8 @@ use panic_probe as _;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join4;
+use rmk::futures::future::join5;
+use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
@@ -94,13 +95,15 @@ async fn main(_spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, 2, 2, true>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
+    let mut host_service = HostService::new(&keymap, &rmk_config);
 
     // Start
-    join4(
+    join5(
         run_all!(matrix, storage),
         keyboard.run(),
+        host_service.run(),
         run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver),
-        run_rmk(&keymap, driver, rmk_config),
+        run_rmk(driver, rmk_config),
     )
     .await;
 }

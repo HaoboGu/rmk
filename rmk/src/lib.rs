@@ -53,6 +53,8 @@ use futures::FutureExt;
 pub use heapless;
 #[cfg(all(not(feature = "_ble"), feature = "steno"))]
 use hid::StenoReport;
+#[cfg(all(feature = "host", not(feature = "_no_usb"), not(feature = "_ble")))]
+use hid::ViaReport;
 #[cfg(not(feature = "_ble"))]
 use hid::{CompositeReport, KeyboardReport};
 use hid::{HidReaderTrait, RunnableHidWriter};
@@ -68,8 +70,6 @@ use rmk_types::led_indicator::LedIndicator;
 use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
 pub use trouble_host::prelude::*;
-#[cfg(feature = "host")]
-use {crate::hid::HidWriterTrait, crate::hid::ViaReport, crate::host::run_host_communicate_task};
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
     crate::light::UsbLedReader,
@@ -79,8 +79,6 @@ use {
 use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 
 use crate::config::PositionalConfig;
-#[cfg(feature = "vial")]
-use crate::config::VialConfig;
 use crate::event::{LedIndicatorEvent, publish_event};
 use crate::keyboard::LOCK_LED_STATES;
 use crate::state::ConnectionState;
@@ -177,12 +175,10 @@ pub async fn initialize_keymap_and_storage<
 
 #[allow(unreachable_code)]
 pub async fn run_rmk<
-    #[cfg(feature = "host")] 'a,
     #[cfg(feature = "_ble")] 'b,
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
 >(
-    #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(feature = "_ble")] stack: &'b Stack<'b, C, DefaultPacketPool>,
     rmk_config: RmkConfig<'static>,
@@ -190,8 +186,6 @@ pub async fn run_rmk<
     // Dispatch the keyboard runner
     #[cfg(feature = "_ble")]
     crate::ble::run_ble(
-        #[cfg(feature = "host")]
-        keymap,
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
         #[cfg(feature = "_ble")]
@@ -248,13 +242,7 @@ pub async fn run_rmk<
                     }
                 };
 
-                run_keyboard(
-                    #[cfg(feature = "host")]
-                    keymap,
-                    #[cfg(feature = "host")]
-                    crate::host::UsbHostReaderWriter::new(&mut host_reader_writer),
-                    #[cfg(feature = "vial")]
-                    rmk_config.vial_config,
+                let kb_fut = run_keyboard(
                     usb_task,
                     UsbLedReader::new(&mut keyboard_reader),
                     UsbKeyboardWriter::new(
@@ -263,8 +251,12 @@ pub async fn run_rmk<
                         #[cfg(feature = "steno")]
                         &mut steno_writer,
                     ),
-                )
-                .await;
+                );
+
+                #[cfg(feature = "host")]
+                embassy_futures::select::select(kb_fut, crate::host::run_usb_host(&mut host_reader_writer)).await;
+                #[cfg(not(feature = "host"))]
+                kb_fut.await;
             }
         })
         .await;
@@ -273,15 +265,7 @@ pub async fn run_rmk<
     unreachable!("Should never reach here, wrong feature gate combination?");
 }
 
-pub(crate) async fn run_keyboard<
-    #[cfg(feature = "host")] 'a,
-    R: HidReaderTrait<ReportType = LedIndicator>,
-    W: RunnableHidWriter,
-    #[cfg(feature = "host")] Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
->(
-    #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
-    #[cfg(feature = "host")] reader_writer: Rw,
-    #[cfg(feature = "vial")] vial_config: VialConfig<'static>,
+pub(crate) async fn run_keyboard<R: HidReaderTrait<ReportType = LedIndicator>, W: RunnableHidWriter>(
     communication_fut: impl Future<Output = ()>,
     mut led_reader: R,
     mut keyboard_writer: W,
@@ -305,18 +289,8 @@ pub(crate) async fn run_keyboard<
         }
     };
 
-    #[cfg(feature = "host")]
-    let host_fut = run_host_communicate_task(
-        keymap,
-        reader_writer,
-        #[cfg(feature = "vial")]
-        vial_config,
-    );
-
     let mut wpm_processor = WpmProcessor::new();
 
-    #[cfg(feature = "host")]
-    let host_task = core::pin::pin!(host_fut.fuse());
     let mut communication_task = core::pin::pin!(communication_fut.fuse());
     let mut led_task = core::pin::pin!(led_fut.fuse());
     let mut writer_task = core::pin::pin!(writer_fut.fuse());
@@ -325,7 +299,6 @@ pub(crate) async fn run_keyboard<
         _ = communication_task => error!("Communication task has ended"),
         _ = wpm_processor.polling_loop().fuse() => error!("WPM Processor task ended"),
         _ = led_task => error!("Led task has ended"),
-        _ = with_feature!("host", host_task) => error!("Host task ended"),
         _ = writer_task => error!("Writer task has ended"),
     };
 
