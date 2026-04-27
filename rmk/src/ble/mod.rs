@@ -16,8 +16,6 @@ use rmk_types::led_indicator::LedIndicator;
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
-#[cfg(feature = "host")]
-use {crate::ble::host_service::BleHostServer, crate::keymap::KeyMap};
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
 use {crate::hid::ViaReport, crate::host::UsbHostReaderWriter};
 #[cfg(not(feature = "_no_usb"))]
@@ -35,6 +33,8 @@ use {crate::state::CONNECTION_TYPE, crate::storage::StorageKey};
 use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
 use crate::ble::device_info::{PnPID, VidSource};
+#[cfg(feature = "host")]
+use crate::ble::host_service::BleHostReaderWriter;
 use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
@@ -199,16 +199,11 @@ pub fn passkey_entry_enabled() -> bool {
 }
 
 /// Run the BLE stack.
-// `'a` is only used by the `host`-cfg-gated keymap parameter, so when that
-// feature is disabled clippy sees it as unused. Silence it here.
-#[allow(clippy::extra_unused_lifetimes)]
 pub(crate) async fn run_ble<
-    'a,
     'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
 >(
-    #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg_attr(not(feature = "_nrf_ble"), allow(unused_mut))] mut rmk_config: RmkConfig<'static>,
@@ -370,15 +365,13 @@ pub(crate) async fn run_ble<
                                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
                                 );
                                 #[cfg(feature = "host")]
-                                let mut host_service = crate::host::HostService::new(
-                                    keymap,
-                                    rmk_config.vial_config,
-                                    UsbHostReaderWriter::new(&mut host_reader_writer),
-                                );
+                                let mut host_transport = UsbHostReaderWriter::new(&mut host_reader_writer);
+                                #[cfg(feature = "host")]
+                                let mut host_bridge = crate::host::HostBridge::new(&mut host_transport);
                                 #[cfg(feature = "host")]
                                 let usb_with_host_fut = async {
                                     use crate::core_traits::Runnable;
-                                    select(usb_fut, host_service.run()).await;
+                                    select(usb_fut, host_bridge.run()).await;
                                 };
                                 #[cfg(not(feature = "host"))]
                                 let usb_with_host_fut = usb_fut;
@@ -392,10 +385,6 @@ pub(crate) async fn run_ble<
                                     &server,
                                     &conn,
                                     stack,
-                                    #[cfg(feature = "host")]
-                                    keymap,
-                                    #[cfg(feature = "host")]
-                                    &mut rmk_config,
                                     #[cfg(feature = "storage")]
                                     active_bond_info,
                                 );
@@ -432,15 +421,13 @@ pub(crate) async fn run_ble<
                             UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
                         );
                         #[cfg(feature = "host")]
-                        let mut host_service = crate::host::HostService::new(
-                            keymap,
-                            rmk_config.vial_config,
-                            UsbHostReaderWriter::new(&mut host_reader_writer),
-                        );
+                        let mut host_transport = UsbHostReaderWriter::new(&mut host_reader_writer);
+                        #[cfg(feature = "host")]
+                        let mut host_bridge = crate::host::HostBridge::new(&mut host_transport);
                         #[cfg(feature = "host")]
                         let usb_with_host_fut = async {
                             use crate::core_traits::Runnable;
-                            select(usb_fut, host_service.run()).await;
+                            select(usb_fut, host_bridge.run()).await;
                         };
                         #[cfg(not(feature = "host"))]
                         let usb_with_host_fut = usb_fut;
@@ -454,10 +441,6 @@ pub(crate) async fn run_ble<
                                         &server,
                                         &conn,
                                         stack,
-                                        #[cfg(feature = "host")]
-                                        keymap,
-                                        #[cfg(feature = "host")]
-                                        &mut rmk_config,
                                         #[cfg(feature = "storage")]
                                         active_bond_info,
                                     ),
@@ -502,10 +485,6 @@ pub(crate) async fn run_ble<
                             &server,
                             &conn,
                             &stack,
-                            #[cfg(feature = "host")]
-                            keymap,
-                            #[cfg(feature = "host")]
-                            &mut rmk_config,
                             #[cfg(feature = "storage")]
                             active_bond_info,
                         ),
@@ -975,26 +954,19 @@ pub(crate) async fn set_conn_params<
 }
 
 /// Run BLE keyboard with connected device
-// `'c` / `'d` are only used by `host`-cfg-gated parameters; silence the
-// unused-lifetime lint when the host feature is disabled.
-#[allow(clippy::extra_unused_lifetimes)]
 async fn run_ble_keyboard<
     'a,
     'b,
-    'c,
-    'd,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 >(
     server: &'b Server<'_>,
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     stack: &Stack<'_, C, DefaultPacketPool>,
-    #[cfg(feature = "host")] keymap: &'c KeyMap<'c>,
-    #[cfg(feature = "host")] rmk_config: &'d mut RmkConfig<'static>,
     #[cfg(feature = "storage")] active_bond_info: Option<crate::ble::profile::ProfileInfo>,
 ) {
     let ble_hid_server = BleHidServer::new(server, conn);
     #[cfg(feature = "host")]
-    let ble_host_server = BleHostServer::new(server, conn);
+    let mut ble_host_transport = BleHostReaderWriter::new(server, conn);
     let ble_led_reader = BleLedReader {};
     let mut ble_battery_server = BleBatteryServer::new(server, conn);
 
@@ -1028,8 +1000,8 @@ async fn run_ble_keyboard<
     #[cfg(feature = "host")]
     {
         use crate::core_traits::Runnable;
-        let mut host_service = crate::host::HostService::new(keymap, rmk_config.vial_config, ble_host_server);
-        select(kb_fut, host_service.run()).await;
+        let mut host_bridge = crate::host::HostBridge::new(&mut ble_host_transport);
+        select(kb_fut, host_bridge.run()).await;
     }
     #[cfg(not(feature = "host"))]
     kb_fut.await;

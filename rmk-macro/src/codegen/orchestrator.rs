@@ -250,6 +250,14 @@ fn expand_main(
         quote! {}
     };
 
+    let host_service_init = if host.vial_enabled {
+        quote! {
+            let mut host_service = ::rmk::host::HostService::new(&keymap, VIAL_CONFIG);
+        }
+    } else {
+        quote! {}
+    };
+
     let run_rmk = expand_rmk_entry(
         hardware,
         host,
@@ -338,6 +346,9 @@ fn expand_main(
 
             // Initialize the matrix + keyboard, as `matrix` and `keyboard`
             #matrix_and_keyboard
+
+            // Initialize the host (Vial) service, as `host_service`
+            #host_service_init
 
             // Initialize input device config as `input_device_config` and processor as `processor`
             #input_device_config

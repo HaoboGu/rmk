@@ -27,7 +27,8 @@ use rmk::ble::build_ble_stack;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join3;
+use rmk::futures::future::{join3, join4};
+use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::split::ble::central::scan_peripherals;
@@ -149,6 +150,7 @@ async fn main(spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
+    let mut host_service = HostService::new(&keymap, vial_config);
 
     // Read peripheral address from storage
     let peripheral_addrs = storage.read_peripheral_addresses::<1>().await;
@@ -162,12 +164,13 @@ async fn main(spawner: Spawner) {
     let stack = build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
 
     // Start
-    join3(
+    join4(
         run_all!(matrix, storage),
         keyboard.run(),
+        host_service.run(),
         join3(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
-            run_rmk(&keymap, driver, &stack, rmk_config),
+            run_rmk(driver, &stack, rmk_config),
             scan_peripherals(&stack, &peripheral_addrs),
         ),
     )

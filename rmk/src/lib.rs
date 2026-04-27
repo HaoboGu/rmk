@@ -173,12 +173,10 @@ pub async fn initialize_keymap_and_storage<
 
 #[allow(unreachable_code)]
 pub async fn run_rmk<
-    #[cfg(feature = "host")] 'a,
     #[cfg(feature = "_ble")] 'b,
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
 >(
-    #[cfg(feature = "host")] keymap: &'a KeyMap<'a>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(feature = "_ble")] stack: &'b Stack<'b, C, DefaultPacketPool>,
     rmk_config: RmkConfig<'static>,
@@ -186,8 +184,6 @@ pub async fn run_rmk<
     // Dispatch the keyboard runner
     #[cfg(feature = "_ble")]
     crate::ble::run_ble(
-        #[cfg(feature = "host")]
-        keymap,
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
         #[cfg(feature = "_ble")]
@@ -251,12 +247,9 @@ pub async fn run_rmk<
                 #[cfg(feature = "host")]
                 {
                     use crate::core_traits::Runnable;
-                    let mut host_service = crate::host::HostService::new(
-                        keymap,
-                        rmk_config.vial_config,
-                        crate::host::UsbHostReaderWriter::new(&mut host_reader_writer),
-                    );
-                    embassy_futures::select::select(kb_fut, host_service.run()).await;
+                    let mut transport = crate::host::UsbHostReaderWriter::new(&mut host_reader_writer);
+                    let mut bridge = crate::host::HostBridge::new(&mut transport);
+                    embassy_futures::select::select(kb_fut, bridge.run()).await;
                 }
                 #[cfg(not(feature = "host"))]
                 kb_fut.await;

@@ -23,13 +23,13 @@ pub(crate) struct VialService {
     pub(crate) output_data: [u8; 32],
 }
 
-pub(crate) struct BleVialServer<'stack, 'server, 'conn, P: PacketPool> {
+pub(crate) struct BleHostReaderWriter<'stack, 'server, 'conn, P: PacketPool> {
     pub(crate) input_data: Characteristic<[u8; 32]>,
     pub(crate) output_data: Characteristic<[u8; 32]>,
     pub(crate) conn: &'conn GattConnection<'stack, 'server, P>,
 }
 
-impl<'stack, 'server, 'conn, P: PacketPool> BleVialServer<'stack, 'server, 'conn, P> {
+impl<'stack, 'server, 'conn, P: PacketPool> BleHostReaderWriter<'stack, 'server, 'conn, P> {
     pub(crate) fn new(server: &Server, conn: &'conn GattConnection<'stack, 'server, P>) -> Self {
         Self {
             input_data: server.host_service.input_data,
@@ -39,7 +39,7 @@ impl<'stack, 'server, 'conn, P: PacketPool> BleVialServer<'stack, 'server, 'conn
     }
 }
 
-impl<P: PacketPool> HidWriterTrait for BleVialServer<'_, '_, '_, P> {
+impl<P: PacketPool> HidWriterTrait for BleHostReaderWriter<'_, '_, '_, P> {
     type ReportType = ViaReport;
 
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
@@ -54,7 +54,7 @@ impl<P: PacketPool> HidWriterTrait for BleVialServer<'_, '_, '_, P> {
     }
 }
 
-impl<P: PacketPool> HidReaderTrait for BleVialServer<'_, '_, '_, P> {
+impl<P: PacketPool> HidReaderTrait for BleHostReaderWriter<'_, '_, '_, P> {
     type ReportType = ViaReport;
 
     async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {

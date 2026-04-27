@@ -23,7 +23,8 @@ use rmk::ble::build_ble_stack;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::core_traits::Runnable as _;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join3;
+use rmk::futures::future::join4;
+use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::direct_pin::DirectPinMatrix;
 use rmk::{DefaultPacketPool, HostResources, KeymapData, PacketPool, initialize_keymap_and_storage, run_all, run_rmk};
@@ -205,11 +206,13 @@ async fn main(spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, true);
     let mut keyboard = Keyboard::new(&keymap);
+    let mut host_service = HostService::new(&keymap, vial_config);
 
-    join3(
+    join4(
         run_all!(matrix, storage),
         keyboard.run(),
-        run_rmk(&keymap, &stack, rmk_config),
+        host_service.run(),
+        run_rmk(&stack, rmk_config),
     )
     .await;
 }

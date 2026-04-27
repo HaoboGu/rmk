@@ -1,18 +1,18 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use embassy_time::{Instant, Timer};
+use embassy_time::Instant;
 use embassy_usb::class::hid::HidReaderWriter;
 use embassy_usb::driver::Driver;
 use rmk_types::protocol::vial::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
 use usbd_hid::descriptor::AsInputReport as _;
 use vial::process_vial;
 
+use crate::channel::HOST_REQUEST_CHANNEL;
 use crate::config::VialConfig;
 use crate::event::KeyboardEventPos;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait, ViaReport};
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
-use crate::state::ConnectionState;
-use crate::{CONNECTION_STATE, MACRO_SPACE_SIZE, boot};
+use crate::{MACRO_SPACE_SIZE, boot};
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 
@@ -21,7 +21,7 @@ mod vial;
 #[cfg(feature = "vial_lock")]
 mod vial_lock;
 
-pub(crate) struct VialService<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> {
+pub struct VialService<'a> {
     // VialService holds a reference of keymap, for updating
     keymap: &'a KeyMap<'a>,
 
@@ -31,49 +31,18 @@ pub(crate) struct VialService<'a, RW: HidWriterTrait<ReportType = ViaReport> + H
     // Vail lock instance
     #[cfg(feature = "vial_lock")]
     locker: vial_lock::VialLock<'a>,
-
-    // Usb vial hid reader writer
-    pub(crate) reader_writer: RW,
 }
 
-impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> VialService<'a, RW> {
+impl<'a> VialService<'a> {
     // VialService::new() should be called only once.
     // Otherwise the `vial_buf.init()` will panic.
-    pub(crate) fn new(keymap: &'a KeyMap<'a>, vial_config: VialConfig<'static>, reader_writer: RW) -> Self {
+    pub fn new(keymap: &'a KeyMap<'a>, vial_config: VialConfig<'static>) -> Self {
         Self {
             keymap,
             vial_config,
             #[cfg(feature = "vial_lock")]
             locker: vial_lock::VialLock::new(vial_config.unlock_keys, keymap),
-            reader_writer,
         }
-    }
-
-    async fn run_loop(&mut self) -> ! {
-        loop {
-            match self.process().await {
-                Ok(_) => continue,
-                Err(e) => {
-                    if ConnectionState::Disconnected == ConnectionState::from(&CONNECTION_STATE) {
-                        Timer::after_millis(1000).await;
-                    } else {
-                        error!("Process vial error: {:?}", e);
-                        Timer::after_millis(10000).await;
-                    }
-                }
-            }
-        }
-    }
-
-    pub(crate) async fn process(&mut self) -> Result<(), HidError> {
-        let mut via_report = self.reader_writer.read_report().await?;
-
-        self.process_via_packet(&mut via_report, self.keymap).await;
-
-        // Send via report back after processing
-        self.reader_writer.write_report(via_report).await?;
-
-        Ok(())
     }
 
     async fn process_via_packet(&mut self, report: &mut ViaReport, keymap: &KeyMap<'_>) {
@@ -307,11 +276,13 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
     }
 }
 
-impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>>
-    crate::core_traits::Runnable for VialService<'a, RW>
-{
+impl crate::core_traits::Runnable for VialService<'_> {
     async fn run(&mut self) -> ! {
-        self.run_loop().await
+        loop {
+            let (mut report, reply) = HOST_REQUEST_CHANNEL.receive().await;
+            self.process_via_packet(&mut report, self.keymap).await;
+            reply.signal(report);
+        }
     }
 }
 
