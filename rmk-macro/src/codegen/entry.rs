@@ -95,10 +95,10 @@ pub(crate) fn rmk_entry_select(
                 keyboard.run(),
             };
             let mut tasks = vec![devices_task, keyboard_task];
+            tasks.extend(registered_processors);
             if let Some(t) = host_service_task.clone() {
                 tasks.push(t);
             }
-            tasks.extend(registered_processors);
             if split_config.connection == "ble" {
                 let rmk_task = quote! {
                     ::rmk::run_rmk(#usb_driver_arg &stack, rmk_config)

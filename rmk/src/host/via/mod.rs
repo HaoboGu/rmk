@@ -1,16 +1,10 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-#[cfg(not(feature = "_no_usb"))]
-use embassy_futures::select::{Either, select};
 use embassy_time::Instant;
-#[cfg(not(feature = "_no_usb"))]
-use embassy_time::Timer;
-#[cfg(not(feature = "_no_usb"))]
-use embassy_usb::class::hid::HidReaderWriter;
-#[cfg(not(feature = "_no_usb"))]
-use embassy_usb::driver::Driver;
 use rmk_types::protocol::vial::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
 use vial::process_vial;
 
+#[cfg(feature = "_ble")]
+use crate::channel::HOST_BLE_TX;
 #[cfg(not(feature = "_no_usb"))]
 use crate::channel::HOST_USB_TX;
 use crate::channel::{HOST_REQUEST_CHANNEL, HostTransport};
@@ -23,8 +17,6 @@ use crate::keymap::KeyMap;
 use crate::{MACRO_SPACE_SIZE, boot};
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
-#[cfg(feature = "_ble")]
-use crate::channel::HOST_BLE_TX;
 
 pub(crate) mod keycode_convert;
 mod vial;
@@ -295,17 +287,18 @@ impl Runnable for VialService<'_> {
                 output_data,
             };
             self.process_via_packet(&mut report, self.keymap).await;
-            // try_send so the service never blocks on a transport that has gone away
-            // mid-request (e.g. USB unplug between send and reply). The Vial host re-issues
-            // queries; the per-transport drain on next startup discards any stale entry.
             match transport {
                 #[cfg(not(feature = "_no_usb"))]
                 HostTransport::Usb => {
-                    let _ = HOST_USB_TX.try_send(report.input_data);
+                    if HOST_USB_TX.try_send(report.input_data).is_err() {
+                        warn!("Dropping Vial USB reply because the transport reply queue is full");
+                    }
                 }
                 #[cfg(feature = "_ble")]
                 HostTransport::Ble => {
-                    let _ = HOST_BLE_TX.try_send(report.input_data);
+                    if HOST_BLE_TX.try_send(report.input_data).is_err() {
+                        warn!("Dropping Vial BLE reply because the transport reply queue is full");
+                    }
                 }
             }
         }
@@ -318,31 +311,4 @@ fn get_position_from_offset(offset: usize, max_row: usize, max_col: usize) -> (u
     let row = current_layer_offset / max_col;
     let col = current_layer_offset % max_col;
     (row, col, layer)
-}
-
-/// Drives the USB HID Vial endpoint: forwards 32-byte OUT reports into `HOST_REQUEST_CHANNEL`
-/// (tagged `Usb`) and writes replies pulled from `HOST_USB_TX` back to the IN endpoint.
-///
-/// `select`-based so a single `&mut HidReaderWriter` borrow can serve both directions without
-/// `split()` (which consumes by value). Cancellation-safe: dropping this future cleanly aborts
-/// any in-flight read/write, and the `try_receive` drain on the next startup discards any reply
-/// that landed in `HOST_USB_TX` after the previous run was cancelled.
-#[cfg(not(feature = "_no_usb"))]
-pub(crate) async fn run_usb_host<'d, D: Driver<'d>>(rw: &mut HidReaderWriter<'d, D, 32, 32>) -> ! {
-    while HOST_USB_TX.try_receive().is_ok() {}
-    let mut buf = [0u8; 32];
-    loop {
-        match select(rw.read(&mut buf), HOST_USB_TX.receive()).await {
-            Either::First(Ok(_)) => HOST_REQUEST_CHANNEL.send((HostTransport::Usb, buf)).await,
-            Either::First(Err(e)) => {
-                error!("USB host read error: {:?}", e);
-                Timer::after_millis(100).await;
-            }
-            Either::Second(reply) => {
-                if let Err(e) = rw.write(&reply).await {
-                    error!("USB host write error: {:?}", e);
-                }
-            }
-        }
-    }
 }

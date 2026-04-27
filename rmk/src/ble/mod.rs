@@ -16,8 +16,6 @@ use rmk_types::led_indicator::LedIndicator;
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
-#[cfg(all(feature = "host", not(feature = "_no_usb")))]
-use crate::hid::ViaReport;
 #[cfg(not(feature = "_no_usb"))]
 use {
     crate::hid::{CompositeReport, KeyboardReport},
@@ -40,6 +38,8 @@ use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDAT
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
 use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, ConnectionType, publish_event};
+#[cfg(all(feature = "host", not(feature = "_no_usb")))]
+use crate::hid::ViaReport;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
