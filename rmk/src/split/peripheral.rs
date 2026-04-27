@@ -11,8 +11,6 @@ use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 #[cfg(feature = "_ble")]
 use {
     crate::event::{BatteryStatusEvent, ChargingStateEvent, EventSubscriber},
-    crate::storage::Storage,
-    embedded_storage_async::nor_flash::NorFlash,
     rmk_types::battery::BatteryStatus,
     trouble_host::prelude::*,
 };
@@ -44,15 +42,9 @@ pub async fn run_rmk_split_peripheral<
     'a,
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy>,
     #[cfg(not(feature = "_ble"))] S: Write + Read,
-    #[cfg(feature = "_ble")] F: NorFlash,
-    #[cfg(feature = "_ble")] const ROW: usize,
-    #[cfg(feature = "_ble")] const COL: usize,
-    #[cfg(feature = "_ble")] const NUM_LAYER: usize,
-    #[cfg(feature = "_ble")] const NUM_ENCODER: usize,
 >(
     #[cfg(feature = "_ble")] id: usize,
     #[cfg(feature = "_ble")] stack: &'a Stack<'a, C, DefaultPacketPool>,
-    #[cfg(feature = "_ble")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     #[cfg(not(feature = "_ble"))] serial: S,
 ) {
     #[cfg(not(feature = "_ble"))]
@@ -64,7 +56,7 @@ pub async fn run_rmk_split_peripheral<
     }
 
     #[cfg(feature = "_ble")]
-    crate::split::ble::peripheral::initialize_nrf_ble_split_peripheral_and_run(id, stack, storage).await;
+    crate::split::ble::peripheral::initialize_nrf_ble_split_peripheral_and_run(id, stack).await;
 }
 
 /// The split peripheral instance.

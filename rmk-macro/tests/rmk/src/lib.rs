@@ -147,8 +147,8 @@ pub mod input_device {
 
 /// Processor module - mirrors rmk::processor
 pub mod processor {
-    use crate::event::EventSubscriber;
     use crate::core_traits::Runnable;
+    use crate::event::EventSubscriber;
 
     /// Unified trait for event processors
     pub trait Processor: Runnable {
