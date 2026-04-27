@@ -1,9 +1,8 @@
 use trouble_host::prelude::*;
-use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor};
+use usbd_hid::descriptor::SerializedDescriptor;
 
-use crate::ble::Server;
-use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;
-use crate::hid::{HidError, HidReaderTrait, HidWriterTrait, ViaReport};
+use crate::channel::HOST_BLE_TX;
+use crate::hid::ViaReport;
 
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
 pub(crate) struct VialService {
@@ -23,45 +22,23 @@ pub(crate) struct VialService {
     pub(crate) output_data: [u8; 32],
 }
 
-pub(crate) struct BleHostReaderWriter<'stack, 'server, 'conn, P: PacketPool> {
-    pub(crate) input_data: Characteristic<[u8; 32]>,
-    pub(crate) output_data: Characteristic<[u8; 32]>,
-    pub(crate) conn: &'conn GattConnection<'stack, 'server, P>,
-}
-
-impl<'stack, 'server, 'conn, P: PacketPool> BleHostReaderWriter<'stack, 'server, 'conn, P> {
-    pub(crate) fn new(server: &Server, conn: &'conn GattConnection<'stack, 'server, P>) -> Self {
-        Self {
-            input_data: server.host_service.input_data,
-            output_data: server.host_service.output_data,
-            conn,
-        }
-    }
-}
-
-impl<P: PacketPool> HidWriterTrait for BleHostReaderWriter<'_, '_, '_, P> {
-    type ReportType = ViaReport;
-
-    async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
-        let mut buf = [0u8; 32];
-        let n = report.serialize(&mut buf).map_err(|_| HidError::ReportSerializeError)?;
+/// Drains `HOST_BLE_TX` and forwards each reply to the Vial input characteristic via GATT
+/// notify. The receive side (host -> device) lives in `gatt_events_task`, which pushes
+/// directly into `HOST_REQUEST_CHANNEL` tagged `Ble`.
+///
+/// Cancellation-safe: dropping this future aborts any in-flight notify; the `try_receive`
+/// drain on the next startup discards any stale reply queued by `HostService` after the
+/// previous run was cancelled.
+pub(crate) async fn run_ble_host<P: PacketPool>(
+    input: Characteristic<[u8; 32]>,
+    conn: &GattConnection<'_, '_, P>,
+) -> ! {
+    while HOST_BLE_TX.try_receive().is_ok() {}
+    loop {
+        let buf = HOST_BLE_TX.receive().await;
         debug!("Sending via report: {:?}", buf);
-        self.input_data.notify(self.conn, &buf).await.map_err(|e| {
+        if let Err(e) = input.notify(conn, &buf).await {
             error!("Failed to notify via report: {:?}", e);
-            HidError::BleError
-        })?;
-        Ok(n)
-    }
-}
-
-impl<P: PacketPool> HidReaderTrait for BleHostReaderWriter<'_, '_, '_, P> {
-    type ReportType = ViaReport;
-
-    async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
-        let v = HOST_GUI_INPUT_CHANNEL.receive().await;
-        Ok(ViaReport {
-            input_data: [0u8; 32],
-            output_data: v,
-        })
+        }
     }
 }

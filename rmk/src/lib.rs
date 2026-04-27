@@ -245,12 +245,7 @@ pub async fn run_rmk<
                 );
 
                 #[cfg(feature = "host")]
-                {
-                    use crate::core_traits::Runnable;
-                    let mut transport = crate::host::UsbHostReaderWriter::new(&mut host_reader_writer);
-                    let mut bridge = crate::host::HostBridge::new(&mut transport);
-                    embassy_futures::select::select(kb_fut, bridge.run()).await;
-                }
+                embassy_futures::select::select(kb_fut, crate::host::run_usb_host(&mut host_reader_writer)).await;
                 #[cfg(not(feature = "host"))]
                 kb_fut.await;
             }

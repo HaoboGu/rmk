@@ -1,9 +1,8 @@
-pub(crate) mod bridge;
 #[cfg(feature = "storage")]
 pub(crate) mod storage;
 pub mod via;
 
-pub(crate) use bridge::HostBridge;
-pub use via::UsbHostReaderWriter;
+#[cfg(not(feature = "_no_usb"))]
+pub(crate) use via::run_usb_host;
 #[cfg(feature = "vial")]
 pub use via::VialService as HostService;

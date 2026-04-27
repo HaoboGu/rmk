@@ -17,7 +17,7 @@ use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
-use {crate::hid::ViaReport, crate::host::UsbHostReaderWriter};
+use crate::hid::ViaReport;
 #[cfg(not(feature = "_no_usb"))]
 use {
     crate::hid::{CompositeReport, KeyboardReport},
@@ -34,7 +34,7 @@ use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
 use crate::ble::device_info::{PnPID, VidSource};
 #[cfg(feature = "host")]
-use crate::ble::host_service::BleHostReaderWriter;
+use crate::ble::host_service::run_ble_host;
 use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
@@ -365,13 +365,8 @@ pub(crate) async fn run_ble<
                                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
                                 );
                                 #[cfg(feature = "host")]
-                                let mut host_transport = UsbHostReaderWriter::new(&mut host_reader_writer);
-                                #[cfg(feature = "host")]
-                                let mut host_bridge = crate::host::HostBridge::new(&mut host_transport);
-                                #[cfg(feature = "host")]
                                 let usb_with_host_fut = async {
-                                    use crate::core_traits::Runnable;
-                                    select(usb_fut, host_bridge.run()).await;
+                                    select(usb_fut, crate::host::run_usb_host(&mut host_reader_writer)).await;
                                 };
                                 #[cfg(not(feature = "host"))]
                                 let usb_with_host_fut = usb_fut;
@@ -421,13 +416,8 @@ pub(crate) async fn run_ble<
                             UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
                         );
                         #[cfg(feature = "host")]
-                        let mut host_transport = UsbHostReaderWriter::new(&mut host_reader_writer);
-                        #[cfg(feature = "host")]
-                        let mut host_bridge = crate::host::HostBridge::new(&mut host_transport);
-                        #[cfg(feature = "host")]
                         let usb_with_host_fut = async {
-                            use crate::core_traits::Runnable;
-                            select(usb_fut, host_bridge.run()).await;
+                            select(usb_fut, crate::host::run_usb_host(&mut host_reader_writer)).await;
                         };
                         #[cfg(not(feature = "host"))]
                         let usb_with_host_fut = usb_fut;
@@ -672,11 +662,11 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             if event.handle() == output_host.handle {
                                 debug!("Got host packet: {:?}", event.data());
                                 if event.data().len() == 32 {
-                                    use crate::ble::host_service::HOST_GUI_INPUT_CHANNEL;
+                                    use crate::channel::{HOST_REQUEST_CHANNEL, HostTransport};
 
                                     let mut data = [0u8; 32];
                                     data.copy_from_slice(event.data());
-                                    HOST_GUI_INPUT_CHANNEL.send(data).await;
+                                    HOST_REQUEST_CHANNEL.send((HostTransport::Ble, data)).await;
                                 } else {
                                     warn!("Wrong host packet data: {:?}", event.data());
                                 }
@@ -965,8 +955,6 @@ async fn run_ble_keyboard<
     #[cfg(feature = "storage")] active_bond_info: Option<crate::ble::profile::ProfileInfo>,
 ) {
     let ble_hid_server = BleHidServer::new(server, conn);
-    #[cfg(feature = "host")]
-    let mut ble_host_transport = BleHostReaderWriter::new(server, conn);
     let ble_led_reader = BleLedReader {};
     let mut ble_battery_server = BleBatteryServer::new(server, conn);
 
@@ -998,11 +986,7 @@ async fn run_ble_keyboard<
     let kb_fut = run_keyboard(communication_task, ble_led_reader, ble_hid_server);
 
     #[cfg(feature = "host")]
-    {
-        use crate::core_traits::Runnable;
-        let mut host_bridge = crate::host::HostBridge::new(&mut ble_host_transport);
-        select(kb_fut, host_bridge.run()).await;
-    }
+    select(kb_fut, run_ble_host(server.host_service.input_data, conn)).await;
     #[cfg(not(feature = "host"))]
     kb_fut.await;
 }

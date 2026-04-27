@@ -1,20 +1,30 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
+#[cfg(not(feature = "_no_usb"))]
+use embassy_futures::select::{Either, select};
 use embassy_time::Instant;
+#[cfg(not(feature = "_no_usb"))]
+use embassy_time::Timer;
+#[cfg(not(feature = "_no_usb"))]
 use embassy_usb::class::hid::HidReaderWriter;
+#[cfg(not(feature = "_no_usb"))]
 use embassy_usb::driver::Driver;
 use rmk_types::protocol::vial::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
-use usbd_hid::descriptor::AsInputReport as _;
 use vial::process_vial;
 
-use crate::channel::HOST_REQUEST_CHANNEL;
+#[cfg(not(feature = "_no_usb"))]
+use crate::channel::HOST_USB_TX;
+use crate::channel::{HOST_REQUEST_CHANNEL, HostTransport};
 use crate::config::VialConfig;
+use crate::core_traits::Runnable;
 use crate::event::KeyboardEventPos;
-use crate::hid::{HidError, HidReaderTrait, HidWriterTrait, ViaReport};
+use crate::hid::ViaReport;
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
 use crate::{MACRO_SPACE_SIZE, boot};
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
+#[cfg(feature = "_ble")]
+use crate::channel::HOST_BLE_TX;
 
 pub(crate) mod keycode_convert;
 mod vial;
@@ -276,12 +286,28 @@ impl<'a> VialService<'a> {
     }
 }
 
-impl crate::core_traits::Runnable for VialService<'_> {
+impl Runnable for VialService<'_> {
     async fn run(&mut self) -> ! {
         loop {
-            let (mut report, reply) = HOST_REQUEST_CHANNEL.receive().await;
+            let (transport, output_data) = HOST_REQUEST_CHANNEL.receive().await;
+            let mut report = ViaReport {
+                input_data: [0; 32],
+                output_data,
+            };
             self.process_via_packet(&mut report, self.keymap).await;
-            reply.signal(report);
+            // try_send so the service never blocks on a transport that has gone away
+            // mid-request (e.g. USB unplug between send and reply). The Vial host re-issues
+            // queries; the per-transport drain on next startup discards any stale entry.
+            match transport {
+                #[cfg(not(feature = "_no_usb"))]
+                HostTransport::Usb => {
+                    let _ = HOST_USB_TX.try_send(report.input_data);
+                }
+                #[cfg(feature = "_ble")]
+                HostTransport::Ble => {
+                    let _ = HOST_BLE_TX.try_send(report.input_data);
+                }
+            }
         }
     }
 }
@@ -294,45 +320,29 @@ fn get_position_from_offset(offset: usize, max_row: usize, max_col: usize) -> (u
     (row, col, layer)
 }
 
-pub struct UsbHostReaderWriter<'a, 'd, D: Driver<'d>> {
-    pub(crate) vial_reader_writer: &'a mut HidReaderWriter<'d, D, 32, 32>,
-}
-
-impl<'a, 'd, D: Driver<'d>> UsbHostReaderWriter<'a, 'd, D> {
-    pub(crate) fn new(vial_reader_writer: &'a mut HidReaderWriter<'d, D, 32, 32>) -> Self {
-        Self { vial_reader_writer }
-    }
-}
-
-impl<'d, D: Driver<'d>> HidWriterTrait for UsbHostReaderWriter<'_, 'd, D> {
-    type ReportType = ViaReport;
-
-    async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
-        let mut buffer = [0u8; 32];
-        let n = report
-            .serialize(&mut buffer)
-            .map_err(|_| HidError::ReportSerializeError)?;
-        self.vial_reader_writer
-            .write(&buffer[0..n])
-            .await
-            .map_err(HidError::UsbEndpointError)?;
-        Ok(n)
-    }
-}
-
-impl<'d, D: Driver<'d>> HidReaderTrait for UsbHostReaderWriter<'_, 'd, D> {
-    type ReportType = ViaReport;
-
-    async fn read_report(&mut self) -> Result<ViaReport, HidError> {
-        let mut read_report = ViaReport {
-            input_data: [0; 32],
-            output_data: [0; 32],
-        };
-        self.vial_reader_writer
-            .read(&mut read_report.output_data)
-            .await
-            .map_err(HidError::UsbReadError)?;
-
-        Ok(read_report)
+/// Drives the USB HID Vial endpoint: forwards 32-byte OUT reports into `HOST_REQUEST_CHANNEL`
+/// (tagged `Usb`) and writes replies pulled from `HOST_USB_TX` back to the IN endpoint.
+///
+/// `select`-based so a single `&mut HidReaderWriter` borrow can serve both directions without
+/// `split()` (which consumes by value). Cancellation-safe: dropping this future cleanly aborts
+/// any in-flight read/write, and the `try_receive` drain on the next startup discards any reply
+/// that landed in `HOST_USB_TX` after the previous run was cancelled.
+#[cfg(not(feature = "_no_usb"))]
+pub(crate) async fn run_usb_host<'d, D: Driver<'d>>(rw: &mut HidReaderWriter<'d, D, 32, 32>) -> ! {
+    while HOST_USB_TX.try_receive().is_ok() {}
+    let mut buf = [0u8; 32];
+    loop {
+        match select(rw.read(&mut buf), HOST_USB_TX.receive()).await {
+            Either::First(Ok(_)) => HOST_REQUEST_CHANNEL.send((HostTransport::Usb, buf)).await,
+            Either::First(Err(e)) => {
+                error!("USB host read error: {:?}", e);
+                Timer::after_millis(100).await;
+            }
+            Either::Second(reply) => {
+                if let Err(e) = rw.write(&reply).await {
+                    error!("USB host write error: {:?}", e);
+                }
+            }
+        }
     }
 }
