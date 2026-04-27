@@ -36,6 +36,8 @@ use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDAT
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
 use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, ConnectionType, publish_event};
+#[cfg(all(not(feature = "_no_usb"), feature = "steno"))]
+use crate::hid::StenoReport;
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
 use crate::hid::ViaReport;
 use crate::hid::{DummyWriter, RunnableHidWriter};
@@ -219,6 +221,9 @@ pub(crate) async fn run_ble<
         (usb_builder, keyboard_reader, keyboard_writer, other_writer)
     };
 
+    #[cfg(all(not(feature = "_no_usb"), feature = "steno"))]
+    let mut steno_writer = add_usb_writer!(&mut _usb_builder, StenoReport, 9, 16);
+
     #[cfg(all(not(feature = "_no_usb"), feature = "host"))]
     let mut host_reader_writer = add_usb_reader_writer!(&mut _usb_builder, ViaReport, 32, 32, 32);
 
@@ -358,7 +363,12 @@ pub(crate) async fn run_ble<
                                 let usb_fut = run_keyboard(
                                     wait_until_usb_disabled(),
                                     UsbLedReader::new(&mut keyboard_reader),
-                                    UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
+                                    UsbKeyboardWriter::new(
+                                        &mut keyboard_writer,
+                                        &mut other_writer,
+                                        #[cfg(feature = "steno")]
+                                        &mut steno_writer,
+                                    ),
                                 );
                                 #[cfg(feature = "host")]
                                 let usb_with_host_fut = async {
@@ -409,7 +419,12 @@ pub(crate) async fn run_ble<
                         let usb_fut = run_keyboard(
                             core::future::pending::<()>(), // Run forever until BLE connected
                             UsbLedReader::new(&mut keyboard_reader),
-                            UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
+                            UsbKeyboardWriter::new(
+                                &mut keyboard_writer,
+                                &mut other_writer,
+                                #[cfg(feature = "steno")]
+                                &mut steno_writer,
+                            ),
                         );
                         #[cfg(feature = "host")]
                         let usb_with_host_fut = async {

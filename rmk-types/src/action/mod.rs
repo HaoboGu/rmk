@@ -28,6 +28,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::keycode::{KeyCode, SpecialKey};
 use crate::modifier::ModifierCombination;
+#[cfg(feature = "steno")]
+use crate::steno::StenoKey;
 
 /// A single basic action that a keyboard can execute.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
@@ -73,4 +75,9 @@ pub enum Action {
     Special(SpecialKey),
     /// User Keys
     User(u8),
+    /// A Plover HID stenography key. Press/release of this key updates the
+    /// in-progress steno chord; on first release the accumulated chord is
+    /// sent to the host as a vendor HID report.
+    #[cfg(feature = "steno")]
+    Steno(StenoKey),
 }

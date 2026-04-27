@@ -204,6 +204,10 @@ adafruit_bl = ["_nrf_ble"]
 ## Enable feature if you're using the ZSA Voyager ignition DFU bootloader
 zsa_voyager_bl = []
 
+## Enable Plover HID stenography support: adds the steno HID descriptor,
+## the steno USB writer endpoint, and the `Action::Steno` variant.
+steno = ["rmk-types/steno"]
+
 ## Internal feature that indicates no USB is used, this feature will be auto-activated for some chips
 _no_usb = []
 
