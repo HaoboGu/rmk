@@ -11,7 +11,7 @@ use crate::CONNECTION_STATE;
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::state::ConnectionState;
 #[cfg(not(feature = "_no_usb"))]
-use crate::usb::USB_REMOTE_WAKEUP;
+use crate::usb::{USB_REMOTE_WAKEUP, USB_SUSPENDED};
 
 /// KeyboardReport describes a report and its companion descriptor that can be
 /// used to send keyboard button presses to a host and receive the status of the
@@ -266,18 +266,21 @@ pub trait RunnableHidWriter: HidWriterTrait {
                 // Only send the report after the connection is established.
                 if CONNECTION_STATE.load(Ordering::Acquire)
                     == <ConnectionState as Into<bool>>::into(ConnectionState::Connected)
-                    && let Err(e) = self.write_report(report.clone()).await
                 {
-                    error!("Failed to send report: {:?}", e);
                     #[cfg(not(feature = "_no_usb"))]
-                    // If the USB endpoint is disabled, try wakeup
-                    if let HidError::UsbEndpointError(EndpointError::Disabled) = e {
+                    if USB_SUSPENDED.load(Ordering::Acquire) {
                         USB_REMOTE_WAKEUP.signal(());
-                        // Wait 200ms for the wakeup, then send the report again
-                        // Ignore the error for the second send
-                        embassy_time::Timer::after_millis(200).await;
-                        if let Err(e) = self.write_report(report).await {
-                            error!("Failed to send report after wakeup: {:?}", e);
+                    }
+
+                    if let Err(e) = self.write_report(report.clone()).await {
+                        error!("Failed to send report: {:?}", e);
+                        #[cfg(not(feature = "_no_usb"))]
+                        if let HidError::UsbEndpointError(EndpointError::Disabled) = e {
+                            USB_REMOTE_WAKEUP.signal(());
+                            embassy_time::Timer::after_millis(500).await;
+                            if let Err(e) = self.write_report(report).await {
+                                error!("Failed to send report after wakeup: {:?}", e);
+                            }
                         }
                     }
                 };
