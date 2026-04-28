@@ -12,5 +12,6 @@
   "processor",
   "input_device",
   "display",
+  "steno",
   "binary_size_optimization"
 ]

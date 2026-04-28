@@ -23,7 +23,7 @@ macro_rules! key_sequence_test {
             ];
             let expected_reports = vec![
                 $(
-                    rmk::descriptor::KeyboardReport {
+                    rmk::hid::KeyboardReport {
                         modifier: $modifier,
                         keycodes: $keys,
                         leds: 0,

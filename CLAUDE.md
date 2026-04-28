@@ -20,15 +20,17 @@ The `scripts` directory contains useful scripts for checking/formatting code
 ## Commands
 
 ### Testing
-Run from the `rmk/` directory:
 
+Dev loop — one feature set, from `rmk/` (requires `cargo nextest`):
 ```bash
-cargo test --no-default-features --features=split,vial,storage,async_matrix,_ble
+cargo nextest run --no-default-features --features=split,vial,storage,async_matrix,_ble
 ```
 
-Run macro tests from `rmk-macro/` (requires `cargo-expand`):
+Run macro tests from `rmk-macro/` (requires `cargo expand`).
+
+Full feature matrix (what CI runs, ~40 s when clean):
 ```bash
-cargo test
+sh scripts/test_all.sh
 ```
 
 ### Building examples

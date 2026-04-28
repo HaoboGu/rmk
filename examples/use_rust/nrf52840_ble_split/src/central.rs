@@ -24,20 +24,21 @@ use panic_probe as _;
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
-use rmk::builtin_processor::led_indicator::KeyboardIndicatorProcessor;
 use rmk::config::{
     BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
+use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::event::*;
-use rmk::futures::future::{join4, join5};
-use rmk::input_device::Runnable;
+use rmk::futures::future::join5;
+use rmk::host::HostService;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::split::ble::central::{read_peripheral_addresses, scan_peripherals};
+use rmk::processor::builtin::led_indicator::KeyboardIndicatorProcessor;
+use rmk::split::ble::central::scan_peripherals;
 use rmk::split::central::run_peripheral_manager;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
@@ -208,9 +209,10 @@ async fn main(spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer);
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap);
+    let mut host_service = HostService::new(&keymap, &rmk_config);
 
     // Read peripheral address from storage
-    let peripheral_addrs = read_peripheral_addresses::<1, _, 8, 7, 4, 2>(&mut storage).await;
+    let peripheral_addrs = storage.read_peripheral_addresses::<1>().await;
 
     // Initialize the encoder processor
     let mut adc_device = NrfAdc::new(
@@ -256,15 +258,16 @@ async fn main(spawner: Spawner) {
     let mut peripheral_battery_monitor = PeripheralBatteryMonitor {};
 
     // Start
-    join4(
-        run_all!(matrix, encoder, adc_device),
+    join5(
+        run_all!(matrix, encoder, adc_device, storage),
         run_all! {
             batt_proc
         },
         keyboard.run(),
+        host_service.run(),
         join5(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
-            run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+            run_rmk(driver, &stack, rmk_config),
             scan_peripherals(&stack, &peripheral_addrs),
             capslock_led.run(),
             peripheral_battery_monitor.run(),

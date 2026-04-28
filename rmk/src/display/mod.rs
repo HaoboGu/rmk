@@ -71,6 +71,7 @@ use rmk_types::modifier::ModifierCombination;
 #[cfg(feature = "ssd1306")]
 pub use ssd1306;
 
+use crate::core_traits::Runnable;
 #[cfg(feature = "_ble")]
 use crate::event::BleStatusChangeEvent;
 #[cfg(all(feature = "split", feature = "_ble"))]
@@ -81,7 +82,6 @@ use crate::event::{
 };
 #[cfg(feature = "split")]
 use crate::event::{CentralConnectedEvent, PeripheralConnectedEvent};
-use crate::input_device::Runnable;
 use crate::processor::Processor;
 
 /// Snapshot of keyboard state passed to renderers on every redraw.

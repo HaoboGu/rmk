@@ -192,22 +192,12 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
     /// Load stored bonding information
     #[cfg(feature = "storage")]
-    pub async fn load_bonded_devices<
-        F: embedded_storage_async::nor_flash::NorFlash,
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-        const NUM_ENCODER: usize,
-    >(
-        &mut self,
-        storage: &mut crate::storage::Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-    ) {
-        use crate::read_storage;
-        use crate::storage::{StorageData, StorageKey};
+    pub async fn load_bonded_devices(&mut self) {
+        use crate::storage::{StorageKey, read_bond_info, read_setting};
 
         self.bonded_devices.clear();
         for slot_num in 0..NUM_BLE_PROFILE {
-            if let Ok(Some(info)) = storage.read_trouble_bond_info(slot_num as u8).await
+            if let Some(info) = read_bond_info(slot_num as u8).await
                 && !info.removed
                 && let Err(e) = self.bonded_devices.push(info)
             {
@@ -216,11 +206,8 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
         }
         debug!("Loaded {} bond info", self.bonded_devices.len());
 
-        let mut buf: [u8; 128] = [0; 128];
-
         // Load current active profile, save to `BLE_STATUS`
-        let key = StorageKey::ActiveBleProfile;
-        let profile = if let Ok(Some(StorageData::ActiveBleProfile(profile))) = read_storage!(storage, &key, buf) {
+        let profile = if let Some(profile) = read_setting(StorageKey::ActiveBleProfile).await {
             debug!("Loaded active profile: {}", profile);
             profile
         } else {
@@ -234,11 +221,18 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
         });
     }
 
+    /// Cached bond info for the currently active profile, cloned to free the
+    /// caller from borrow conflicts with concurrent `update_profile()`.
+    pub fn active_bond_info(&self) -> Option<ProfileInfo> {
+        let active_profile = get_current_profile();
+        self.bonded_devices
+            .iter()
+            .find(|bond_info| !bond_info.removed && bond_info.slot_num == active_profile)
+            .cloned()
+    }
+
     /// Update bonding information in the stack according to the current active profile
     pub fn update_stack_bonds(&self) {
-        let active_profile = get_current_profile();
-
-        // Remove current bonding information in the stack
         let current_bond_info = self.stack.get_bond_information();
         for bond in current_bond_info {
             if let Err(e) = self.stack.remove_bond_information(bond.identity) {
@@ -246,14 +240,9 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             }
         }
 
-        // Add bonding information for the active profile
-        if let Some(info) = self
-            .bonded_devices
-            .iter()
-            .find(|bond_info| !bond_info.removed && bond_info.slot_num == active_profile)
-        {
-            debug!("Add bond info of profile {}: {:?}", active_profile, info);
-            if let Err(e) = self.stack.add_bond_information(info.info.clone()) {
+        if let Some(info) = self.active_bond_info() {
+            debug!("Add bond info of profile {}: {:?}", info.slot_num, info);
+            if let Err(e) = self.stack.add_bond_information(info.info) {
                 debug!("Add bond info error: {:?}", e);
             }
         }

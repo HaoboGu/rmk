@@ -1,8 +1,8 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::combo::{Combo, ComboConfig};
 use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, OneShotConfig};
+use rmk::keyboard::combo::{Combo, ComboConfig};
 use rmk::types::keycode::HidKeyCode;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{k, osm, th};
@@ -340,4 +340,108 @@ fn test_taphold_with_combo() {
             [0, [0, 0, 0, 0, 0, 0]],
         ]
     };
+}
+// Reproduces a single-combo stuck-key bug: re-pressing a combo key while the
+// combo is still held (one key of the chord was released, same key pressed
+// again) leaked the re-press into the HID report and overwrote the combo
+// output's slot. When the other combo key finally released, the combo output
+// release couldn't find its slot, leaving the re-pressed key stuck.
+#[test]
+fn test_re_press_combo_key_while_triggered_does_not_leak_to_hid() {
+    let combos = CombosConfig {
+        combos: [
+            Some(Combo::new(ComboConfig::new(
+                [k!(Comma), k!(Dot)].to_vec(),
+                k!(Backspace),
+                Some(0),
+            ))),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ],
+        timeout: Duration::from_millis(40),
+    };
+    key_sequence_test! {
+        keyboard: create_test_keyboard_with_config(BehaviorConfig {
+            combo: combos,
+            ..Default::default()
+        }),
+        sequence: [
+            [3, 8, true, 10],   // Comma press
+            [3, 9, true, 10],   // Dot press -> `,+.` triggers -> Backspace pressed
+            [3, 9, false, 10],  // Dot release (partial release, swallowed)
+            [3, 9, true, 10],   // Dot re-press while combo still held
+            [3, 9, false, 10],  // Dot re-release (still part of combo)
+            [3, 8, false, 10],  // Comma release -> combo fully releases -> Backspace released
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(Backspace), 0, 0, 0, 0, 0]],
+            [0, [0; 6]],
+        ]
+    }
+}
+
+// Reproduces a stuck combo-output bug on overlapping triggered combos.
+//
+// Config: `M+,` → RightBracket, `,+.` → Equal. The two combos share Comma.
+//
+// Sequence: typing that ends with two triggered combos whose state bits overlap
+// through Comma. When Comma is finally released, both combo outputs must
+// unregister from the HID report. Previously only one did — the other got
+// stuck on the host until the user pressed another key.
+//
+// The cascade specifically relies on state bits surviving across a prior combo
+// trigger: pressing Dot+Comma triggers `,+.` (→ Equal) but leaves Comma's bit
+// set in `M+,`, so a subsequent M press immediately completes `M+,` without
+// re-pressing Comma.
+#[test]
+fn test_overlapping_triggered_combos_release_all_outputs() {
+    let combos = CombosConfig {
+        combos: [
+            Some(Combo::new(ComboConfig::new(
+                [k!(M), k!(Comma)].to_vec(),
+                k!(RightBracket),
+                Some(0),
+            ))),
+            Some(Combo::new(ComboConfig::new(
+                [k!(Comma), k!(Dot)].to_vec(),
+                k!(Equal),
+                Some(0),
+            ))),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ],
+        timeout: Duration::from_millis(40),
+    };
+    key_sequence_test! {
+        keyboard: create_test_keyboard_with_config(BehaviorConfig {
+            combo: combos,
+            ..Default::default()
+        }),
+        sequence: [
+            [3, 9, true, 10],   // Dot press
+            [3, 8, true, 10],   // Comma press -> `,+.` triggers -> Equal pressed
+            [3, 9, false, 10],  // Dot release (partial release of triggered combo)
+            [3, 7, true, 10],   // M press -> `M+,` triggers (stale Comma bit) -> RightBracket pressed
+            [3, 7, false, 10],  // M release (partial release of triggered combo)
+            [3, 8, false, 10],  // Comma release -> must release BOTH combo outputs
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(Equal), 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(Equal), kc_to_u8!(RightBracket), 0, 0, 0, 0]],
+            // Releasing Comma fully unwinds both triggered combos.
+            // Order of the two release reports depends on combo iteration order;
+            // `M+,` is index 0 so its output (RightBracket) releases first.
+            [0, [kc_to_u8!(Equal), 0, 0, 0, 0, 0]],
+            [0, [0; 6]],
+        ]
+    }
 }

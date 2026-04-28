@@ -1,19 +1,20 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use embassy_time::{Instant, Timer};
-use embassy_usb::class::hid::HidReaderWriter;
-use embassy_usb::driver::Driver;
+use embassy_time::Instant;
 use rmk_types::protocol::vial::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
-use usbd_hid::descriptor::AsInputReport as _;
 use vial::process_vial;
 
-use crate::config::VialConfig;
-use crate::descriptor::ViaReport;
+#[cfg(feature = "_ble")]
+use crate::channel::HOST_BLE_TX;
+#[cfg(not(feature = "_no_usb"))]
+use crate::channel::HOST_USB_TX;
+use crate::channel::{HOST_REQUEST_CHANNEL, HostTransport};
+use crate::config::{RmkConfig, VialConfig};
+use crate::core_traits::Runnable;
 use crate::event::KeyboardEventPos;
-use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
+use crate::hid::ViaReport;
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
-use crate::state::ConnectionState;
-use crate::{CONNECTION_STATE, MACRO_SPACE_SIZE, boot};
+use crate::{MACRO_SPACE_SIZE, boot};
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 
@@ -22,7 +23,7 @@ mod vial;
 #[cfg(feature = "vial_lock")]
 mod vial_lock;
 
-pub(crate) struct VialService<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> {
+pub struct VialService<'a> {
     // VialService holds a reference of keymap, for updating
     keymap: &'a KeyMap<'a>,
 
@@ -32,49 +33,16 @@ pub(crate) struct VialService<'a, RW: HidWriterTrait<ReportType = ViaReport> + H
     // Vail lock instance
     #[cfg(feature = "vial_lock")]
     locker: vial_lock::VialLock<'a>,
-
-    // Usb vial hid reader writer
-    pub(crate) reader_writer: RW,
 }
 
-impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>> VialService<'a, RW> {
-    // VialService::new() should be called only once.
-    // Otherwise the `vial_buf.init()` will panic.
-    pub(crate) fn new(keymap: &'a KeyMap<'a>, vial_config: VialConfig<'static>, reader_writer: RW) -> Self {
+impl<'a> VialService<'a> {
+    pub fn new(keymap: &'a KeyMap<'a>, config: &RmkConfig<'static>) -> Self {
         Self {
             keymap,
-            vial_config,
+            vial_config: config.vial_config,
             #[cfg(feature = "vial_lock")]
-            locker: vial_lock::VialLock::new(vial_config.unlock_keys, keymap),
-            reader_writer,
+            locker: vial_lock::VialLock::new(config.vial_config.unlock_keys, keymap),
         }
-    }
-
-    pub(crate) async fn run(&mut self) {
-        loop {
-            match self.process().await {
-                Ok(_) => continue,
-                Err(e) => {
-                    if ConnectionState::Disconnected == ConnectionState::from(&CONNECTION_STATE) {
-                        Timer::after_millis(1000).await;
-                    } else {
-                        error!("Process vial error: {:?}", e);
-                        Timer::after_millis(10000).await;
-                    }
-                }
-            }
-        }
-    }
-
-    pub(crate) async fn process(&mut self) -> Result<(), HidError> {
-        let mut via_report = self.reader_writer.read_report().await?;
-
-        self.process_via_packet(&mut via_report, self.keymap).await;
-
-        // Send via report back after processing
-        self.reader_writer.write_report(via_report).await?;
-
-        Ok(())
     }
 
     async fn process_via_packet(&mut self, report: &mut ViaReport, keymap: &KeyMap<'_>) {
@@ -308,53 +276,37 @@ impl<'a, RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType 
     }
 }
 
+impl Runnable for VialService<'_> {
+    async fn run(&mut self) -> ! {
+        loop {
+            let (transport, output_data) = HOST_REQUEST_CHANNEL.receive().await;
+            let mut report = ViaReport {
+                input_data: [0; 32],
+                output_data,
+            };
+            self.process_via_packet(&mut report, self.keymap).await;
+            match transport {
+                #[cfg(not(feature = "_no_usb"))]
+                HostTransport::Usb => {
+                    if HOST_USB_TX.try_send(report.input_data).is_err() {
+                        warn!("Dropping Vial USB reply because the transport reply queue is full");
+                    }
+                }
+                #[cfg(feature = "_ble")]
+                HostTransport::Ble => {
+                    if HOST_BLE_TX.try_send(report.input_data).is_err() {
+                        warn!("Dropping Vial BLE reply because the transport reply queue is full");
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn get_position_from_offset(offset: usize, max_row: usize, max_col: usize) -> (usize, usize, usize) {
     let layer = offset / (max_col * max_row);
     let current_layer_offset = offset % (max_col * max_row);
     let row = current_layer_offset / max_col;
     let col = current_layer_offset % max_col;
     (row, col, layer)
-}
-
-pub struct UsbVialReaderWriter<'a, 'd, D: Driver<'d>> {
-    pub(crate) vial_reader_writer: &'a mut HidReaderWriter<'d, D, 32, 32>,
-}
-
-impl<'a, 'd, D: Driver<'d>> UsbVialReaderWriter<'a, 'd, D> {
-    pub(crate) fn new(vial_reader_writer: &'a mut HidReaderWriter<'d, D, 32, 32>) -> Self {
-        Self { vial_reader_writer }
-    }
-}
-
-impl<'d, D: Driver<'d>> HidWriterTrait for UsbVialReaderWriter<'_, 'd, D> {
-    type ReportType = ViaReport;
-
-    async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
-        let mut buffer = [0u8; 32];
-        let n = report
-            .serialize(&mut buffer)
-            .map_err(|_| HidError::ReportSerializeError)?;
-        self.vial_reader_writer
-            .write(&buffer[0..n])
-            .await
-            .map_err(HidError::UsbEndpointError)?;
-        Ok(n)
-    }
-}
-
-impl<'d, D: Driver<'d>> HidReaderTrait for UsbVialReaderWriter<'_, 'd, D> {
-    type ReportType = ViaReport;
-
-    async fn read_report(&mut self) -> Result<ViaReport, HidError> {
-        let mut read_report = ViaReport {
-            input_data: [0; 32],
-            output_data: [0; 32],
-        };
-        self.vial_reader_writer
-            .read(&mut read_report.output_data)
-            .await
-            .map_err(HidError::UsbReadError)?;
-
-        Ok(read_report)
-    }
 }

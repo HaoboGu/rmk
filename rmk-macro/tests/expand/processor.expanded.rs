@@ -114,7 +114,7 @@ mod basic {
             self.on_key_event(event).await
         }
     }
-    impl ::rmk::input_device::Runnable for SingleEventProcessor {
+    impl ::rmk::core_traits::Runnable for SingleEventProcessor {
         async fn run(&mut self) -> ! {
             use ::rmk::processor::Processor;
             self.process_loop().await
@@ -292,7 +292,7 @@ mod multi_sub {
             }
         }
     }
-    impl ::rmk::input_device::Runnable for KeyProcessor {
+    impl ::rmk::core_traits::Runnable for KeyProcessor {
         async fn run(&mut self) -> ! {
             use ::rmk::processor::Processor;
             self.process_loop().await
@@ -322,7 +322,7 @@ mod polling {
             self.poll().await;
         }
     }
-    impl ::rmk::input_device::Runnable for PollingProcessor {
+    impl ::rmk::core_traits::Runnable for PollingProcessor {
         async fn run(&mut self) -> ! {
             use ::rmk::processor::PollingProcessor;
             self.polling_loop().await
@@ -500,7 +500,7 @@ mod multi_attr {
             }
         }
     }
-    impl ::rmk::input_device::Runnable for MultiAttrProcessor {
+    impl ::rmk::core_traits::Runnable for MultiAttrProcessor {
         async fn run(&mut self) -> ! {
             use ::rmk::processor::Processor;
             self.process_loop().await
@@ -728,7 +728,7 @@ mod polling_multi {
             self.poll().await;
         }
     }
-    impl ::rmk::input_device::Runnable for MultiPollingProcessor {
+    impl ::rmk::core_traits::Runnable for MultiPollingProcessor {
         async fn run(&mut self) -> ! {
             use ::rmk::processor::PollingProcessor;
             self.polling_loop().await

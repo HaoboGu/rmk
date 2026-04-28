@@ -308,7 +308,7 @@ fn expand_split_peripheral(
             matrix_config.extend(quote! {
                 #bootmagic
                 let debouncer = #debouncer_type::new();
-                let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #row, #col, #size>::new(direct_pins, debouncer, #low_active);
+                let mut matrix = ::rmk::matrix::direct_pin::DirectPinMatrix::<_, _, #row, #col, #size>::new(direct_pins, debouncer, #low_active);
             });
         }
     }
@@ -364,7 +364,7 @@ fn expand_split_peripheral(
 
     // Import Runnable trait so processor.run() calls compile
     let processor_import = if !registered_processors.is_empty() {
-        quote! { use ::rmk::input_device::Runnable; }
+        quote! { use ::rmk::core_traits::Runnable; }
     } else {
         quote! {}
     };
@@ -405,6 +405,9 @@ fn expand_split_peripheral_entry(
     // Add matrix to devices, and run all devices
     let mut devs = devices.clone();
     devs.push(quote! {matrix});
+    if split_config.connection == "ble" {
+        devs.push(quote! {storage});
+    }
     let device_task = quote! {
         ::rmk::run_all! (
             #(#devs),*
@@ -427,7 +430,6 @@ fn expand_split_peripheral_entry(
             ::rmk::split::peripheral::run_rmk_split_peripheral(
                 #id,
                 &stack,
-                &mut storage,
             )
         };
         // Build task list: device, processor (if any), peripheral, registered_processors

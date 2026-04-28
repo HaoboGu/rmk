@@ -5,20 +5,11 @@
 #   esp     — JSON array of {dir, target} for xtensa/ESP examples
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$repo_root"
+# shellcheck source=_lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-# Inline the discovery + target-extraction logic so this script stays
-# lightweight (no toolchain install, no target-dir mkdir).
-
-EXAMPLE_SKIPLIST=(
-    "examples/use_rust/nrf54lm20_ble"
-    "examples/use_config/esp32_ble_split"
-    "examples/use_rust/py32f07x"
-)
 
 # Examples tracked for binary-size regression (bloat) reports on PRs.
-# Keep in sync with the comment in the array — changes are rare.
 BLOAT_DIRS=(
     # use_config — TOML-driven path
     "examples/use_config/nrf52832_ble"
@@ -40,7 +31,7 @@ BLOAT_DIRS=(
     "examples/use_rust/stm32h7"
 )
 
-# nrf52840_ble_split produces two binaries; list them comma-separated.
+# nrf52840_ble_split / rp2040_split produce two binaries; list them comma-separated.
 bloat_bins_for() {
     case "$1" in
         */nrf52840_ble_split|*/rp2040_split) echo "central,peripheral" ;;
@@ -61,27 +52,9 @@ esp='['
 first_stable=1
 first_esp=1
 
-for dir_slash in examples/use_rust/*/ examples/use_config/*/; do
-    [[ -d "$dir_slash/src" && -f "$dir_slash/Cargo.toml" ]] || continue
-    dir="${dir_slash%/}"
-
-    skip=0
-    for entry in "${EXAMPLE_SKIPLIST[@]}"; do
-        [[ "$dir" == "$entry" ]] && { skip=1; break; }
-    done
-    (( skip )) && continue
-
-    config="$dir/.cargo/config.toml"
-    [[ -f "$config" ]] || continue
-    target="$(awk '
-        /^\[/ { section = $0; next }
-        section == "[build]" && /^[[:space:]]*target[[:space:]]*=/ {
-            sub(/^[[:space:]]*target[[:space:]]*=[[:space:]]*/, "")
-            sub(/[[:space:]]*#.*$/, "")
-            sub(/^"/, ""); sub(/"[[:space:]]*$/, "")
-            print; exit
-        }
-    ' "$config")"
+while IFS= read -r manifest; do
+    dir="$(dirname "$manifest")"
+    target="$(get_example_target "$manifest")"
     [[ -z "$target" ]] && continue
 
     case "$dir" in
@@ -102,7 +75,7 @@ for dir_slash in examples/use_rust/*/ examples/use_config/*/; do
             stable+="$entry"
             ;;
     esac
-done
+done < <(list_example_manifests)
 
 stable+=']'
 esp+=']'

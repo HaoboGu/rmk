@@ -24,11 +24,12 @@ use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::core_traits::Runnable as _;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::direct_pin::DirectPinMatrix;
-use rmk::futures::future::join3;
-use rmk::input_device::Runnable as _;
+use rmk::futures::future::join4;
+use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
+use rmk::matrix::direct_pin::DirectPinMatrix;
 use rmk::{DefaultPacketPool, HostResources, KeymapData, PacketPool, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -220,11 +221,13 @@ async fn main(spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, true);
     let mut keyboard = Keyboard::new(&keymap);
+    let mut host_service = HostService::new(&keymap, &rmk_config);
 
-    join3(
-        run_all!(matrix),
+    join4(
+        run_all!(matrix, storage),
         keyboard.run(),
-        run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+        host_service.run(),
+        run_rmk(driver, &stack, rmk_config),
     )
     .await;
 }

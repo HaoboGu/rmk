@@ -57,6 +57,9 @@ pub(crate) fn rmk_entry_select(
     let devices_task = {
         let mut devs = devices.clone();
         devs.push(quote! {matrix});
+        if hardware.storage.is_some() {
+            devs.push(quote! {storage});
+        }
         quote! {
             ::rmk::run_all! (
                 #(#devs),*
@@ -73,16 +76,10 @@ pub(crate) fn rmk_entry_select(
         }
     };
 
-    // Remove the storage argument if disabled in config. The feature also needs to be disabled.
-    let storage = if hardware.storage.is_some() {
-        quote! {&mut storage,}
+    let host_service_task = if host.vial_enabled {
+        Some(quote! { host_service.run() })
     } else {
-        TokenStream2::new()
-    };
-    let keymap = if host.vial_enabled {
-        quote! { &keymap, }
-    } else {
-        quote! {}
+        None
     };
     let board = &hardware.board;
     let communication = &hardware.communication;
@@ -99,9 +96,12 @@ pub(crate) fn rmk_entry_select(
             };
             let mut tasks = vec![devices_task, keyboard_task];
             tasks.extend(registered_processors);
+            if let Some(t) = host_service_task.clone() {
+                tasks.push(t);
+            }
             if split_config.connection == "ble" {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(#keymap #usb_driver_arg &stack, #storage rmk_config)
+                    ::rmk::run_rmk(#usb_driver_arg &stack, rmk_config)
                 };
                 tasks.push(rmk_task);
                 if !processors.is_empty() {
@@ -127,7 +127,7 @@ pub(crate) fn rmk_entry_select(
                 join_all_tasks(tasks)
             } else if split_config.connection == "serial" {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(#keymap #usb_driver_arg #storage rmk_config),
+                    ::rmk::run_rmk(#usb_driver_arg rmk_config),
                 };
                 tasks.push(rmk_task);
                 if !processors.is_empty() {
@@ -176,7 +176,7 @@ pub(crate) fn rmk_entry_select(
     };
 
     quote! {
-        use ::rmk::input_device::Runnable;
+        use ::rmk::core_traits::Runnable;
         #entry
     }
 }
@@ -193,41 +193,32 @@ pub(crate) fn rmk_entry_unibody(
     };
 
     let mut tasks = vec![devices_task, keyboard_task];
+    if host.vial_enabled {
+        tasks.push(quote! { host_service.run() });
+    }
     if !processors_task.is_empty() {
         tasks.push(processors_task);
     }
     tasks.extend(registered_processors);
-    // Remove the storage argument if disabled in config. The feature also needs to be disabled.
-    let storage = if hardware.storage.is_some() {
-        quote! {&mut storage,}
-    } else {
-        TokenStream2::new()
-    };
-    // Remove the keymap argument if the vial is disabled
-    let keymap = if host.vial_enabled {
-        quote! { &keymap, }
-    } else {
-        quote! {}
-    };
     let communication = &hardware.communication;
     match communication {
         CommunicationConfig::Usb(_) => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(#keymap driver, #storage rmk_config)
+                ::rmk::run_rmk(driver, rmk_config)
             };
             tasks.push(rmk_task);
             join_all_tasks(tasks)
         }
         CommunicationConfig::Ble(_) => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(#keymap &stack, #storage rmk_config)
+                ::rmk::run_rmk(&stack, rmk_config)
             };
             tasks.push(rmk_task);
             join_all_tasks(tasks)
         }
         CommunicationConfig::Both(_, _) => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(#keymap driver, &stack, #storage rmk_config)
+                ::rmk::run_rmk(driver, &stack, rmk_config)
             };
             tasks.push(rmk_task);
             join_all_tasks(tasks)

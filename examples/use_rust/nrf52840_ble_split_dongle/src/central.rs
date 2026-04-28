@@ -24,13 +24,13 @@ use panic_probe as _;
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
-use rmk::builtin_processor::led_indicator::KeyboardIndicatorProcessor;
 use rmk::config::{
     BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
+use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::{join, join4};
-use rmk::input_device::Runnable;
+use rmk::futures::future::{join, join4, join5};
+use rmk::host::HostService;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::pmw3610::{BitBangSpiBus, Pmw3610, Pmw3610Config};
@@ -38,7 +38,8 @@ use rmk::input_device::pointing::{PointingDevice, PointingProcessor, PointingPro
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::split::ble::central::{read_peripheral_addresses, scan_peripherals};
+use rmk::processor::builtin::led_indicator::KeyboardIndicatorProcessor;
+use rmk::split::ble::central::scan_peripherals;
 use rmk::split::central::run_peripheral_manager;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use static_cell::StaticCell;
@@ -210,9 +211,10 @@ async fn main(spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer);
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap);
+    let mut host_service = HostService::new(&keymap, &rmk_config);
 
     // Read peripheral address from storage
-    let peripheral_addrs = read_peripheral_addresses::<2, _, 8, 7, 4, 2>(&mut storage).await;
+    let peripheral_addrs = storage.read_peripheral_addresses::<2>().await;
 
     // Initialize pointing device
     let pmw3610_config = Pmw3610Config {
@@ -258,7 +260,7 @@ async fn main(spawner: Spawner) {
     );
 
     // Start
-    join4(
+    join5(
         async {},
         run_all!(
             matrix,
@@ -266,14 +268,16 @@ async fn main(spawner: Spawner) {
             pmw3610_device,
             adc_device,
             batt_proc,
-            pointing_processor
+            pointing_processor,
+            storage
         ),
         join(keyboard.run(), capslock_led.run()),
+        host_service.run(),
         join4(
             scan_peripherals(&stack, &peripheral_addrs),
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
             run_peripheral_manager::<4, 7, 4, 0, _>(1, &peripheral_addrs, &stack),
-            run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+            run_rmk(driver, &stack, rmk_config),
         ),
     )
     .await;

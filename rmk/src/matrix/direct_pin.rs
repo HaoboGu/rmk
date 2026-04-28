@@ -5,10 +5,9 @@ use rmk_macro::input_device;
 #[cfg(feature = "async_matrix")]
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
-use crate::MatrixTrait;
+use super::{KeyState, MatrixTrait};
 use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::event::KeyboardEvent;
-use crate::matrix::KeyState;
 
 /// DirectPinMartex only has input pins.
 #[input_device(publish = KeyboardEvent)]

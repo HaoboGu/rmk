@@ -17,9 +17,10 @@ use {
 };
 #[cfg(feature = "host")]
 use {
-    crate::{MACRO_SPACE_SIZE, combo::ComboConfig, morse::Morse},
+    crate::{MACRO_SPACE_SIZE, keyboard::combo::ComboConfig},
     rmk_types::action::{EncoderAction, KeyAction},
     rmk_types::fork::Fork,
+    rmk_types::morse::Morse,
 };
 
 use crate::channel::FLASH_CHANNEL;
@@ -31,6 +32,53 @@ use crate::{BUILD_HASH, config};
 /// Signal to synchronize the flash operation status, usually used outside of the flash task.
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
 pub(crate) static FLASH_OPERATION_FINISHED: Signal<crate::RawMutex, bool> = Signal::new();
+
+// Request/response over `FLASH_CHANNEL`.
+//
+// All current callers run at startup from a single task; do not call from a new task
+// without first migrating to the upcoming `embassy_sync::rpc_service::RpcService`
+// (currently on embassy-sync main, post-0.8.0), which will collapse these
+// helpers + signals + `Read*` variants into a single typed RPC.
+//
+#[cfg(feature = "_ble")]
+pub(crate) static BOND_INFO_RESPONSE: Signal<crate::RawMutex, Option<ProfileInfo>> = Signal::new();
+
+#[cfg(all(feature = "_ble", feature = "split"))]
+pub(crate) static PEER_ADDRESS_RESPONSE: Signal<crate::RawMutex, Option<PeerAddress>> = Signal::new();
+
+#[cfg(feature = "_ble")]
+pub(crate) static SETTING_RESPONSE: Signal<crate::RawMutex, Option<u8>> = Signal::new();
+
+#[cfg(feature = "_ble")]
+async fn request_read<T: Send>(msg: FlashOperationMessage, response: &Signal<crate::RawMutex, T>) -> T {
+    response.reset();
+    FLASH_CHANNEL.send(msg).await;
+    response.wait().await
+}
+
+#[cfg(feature = "_ble")]
+pub(crate) async fn read_bond_info(slot_num: u8) -> Option<ProfileInfo> {
+    request_read(FlashOperationMessage::ReadBleBondInfo(slot_num), &BOND_INFO_RESPONSE).await
+}
+
+#[cfg(all(feature = "_ble", feature = "split"))]
+pub(crate) async fn read_peer_address(peer_id: u8) -> Option<PeerAddress> {
+    request_read(FlashOperationMessage::ReadPeerAddress(peer_id), &PEER_ADDRESS_RESPONSE).await
+}
+
+#[cfg(feature = "_ble")]
+pub(crate) async fn read_setting(key: StorageKey) -> Option<u8> {
+    request_read(FlashOperationMessage::ReadBleSetting(key), &SETTING_RESPONSE).await
+}
+
+/// Send a peer address to be persisted; wait for the storage task to finish.
+/// Returns `true` if the write completed successfully.
+#[cfg(all(feature = "_ble", feature = "split"))]
+pub(crate) async fn write_peer_address(addr: PeerAddress) -> bool {
+    FLASH_OPERATION_FINISHED.reset();
+    FLASH_CHANNEL.send(FlashOperationMessage::PeerAddress(addr)).await;
+    FLASH_OPERATION_FINISHED.wait().await
+}
 
 // Message send from other tasks, which will do saving or clearing operation
 #[allow(clippy::large_enum_variant)]
@@ -50,6 +98,7 @@ pub(crate) enum FlashOperationMessage {
     Reset,
     // Clear the layout info
     ResetLayout,
+    #[cfg(feature = "_ble")]
     // Clear info of given slot number
     ClearSlot(u8),
     // Layout option
@@ -100,6 +149,15 @@ pub(crate) enum FlashOperationMessage {
     PriorIdleTime(u16),
     // Default morse profile containing all morse/tap-hold settings (mode, timeouts, unilateral_tap)
     MorseDefaultProfile(MorseProfile),
+    #[cfg(feature = "_ble")]
+    // Read bond info for the given slot; storage task replies via `BOND_INFO_RESPONSE`.
+    ReadBleBondInfo(u8),
+    #[cfg(all(feature = "_ble", feature = "split"))]
+    // Read peer address for the given peer id; storage task replies via `PEER_ADDRESS_RESPONSE`.
+    ReadPeerAddress(u8),
+    #[cfg(feature = "_ble")]
+    // Read a byte-valued setting: ConnectionType or ActiveBleProfile
+    ReadBleSetting(StorageKey),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -326,8 +384,14 @@ macro_rules! update_storage_field {
 impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
-    async fn fetch_data(&mut self, key: StorageKey) -> Result<Option<StorageData>, SSError<F::Error>> {
-        self.flash.fetch_item(&mut self.buffer, &key).await
+    async fn fetch_data(&mut self, key: StorageKey) -> Option<StorageData> {
+        match self.flash.fetch_item(&mut self.buffer, &key).await {
+            Ok(data) => data,
+            Err(e) => {
+                print_storage_error::<F>(e);
+                None
+            }
+        }
     }
 
     async fn store_data(&mut self, key: StorageKey, data: &StorageData) -> Result<(), SSError<F::Error>> {
@@ -427,144 +491,17 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         storage
     }
 
-    pub(crate) async fn run(&mut self) {
-        loop {
-            let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
-            debug!("Flash operation: {:?}", info);
-            match match info {
-                FlashOperationMessage::LayoutOptions(layout_option) => {
-                    // Read out layout options, update layer option and save back
-                    update_storage_field!(&mut self.flash, &mut self.buffer, LayoutConfig, layout_option)
-                }
-                FlashOperationMessage::Reset => self.flash.erase_all().await,
-                FlashOperationMessage::ResetLayout => {
-                    info!("Ignoring ResetLayout at runtime (handled at startup via clear_layout).");
-                    Ok(())
-                }
-                FlashOperationMessage::DefaultLayer(default_layer) => {
-                    // Read out layout options, update layer option and save back
-                    update_storage_field!(&mut self.flash, &mut self.buffer, LayoutConfig, default_layer)
-                }
-                #[cfg(feature = "host")]
-                FlashOperationMessage::MacroData(data) => {
-                    self.store_data(StorageKey::MacroData, &StorageData::MacroData(data))
-                        .await
-                }
-                #[cfg(feature = "host")]
-                FlashOperationMessage::KeymapKey {
-                    layer,
-                    row,
-                    col,
-                    action,
-                } => {
-                    self.store_data(StorageKey::keymap(layer, row, col), &StorageData::KeyAction(action))
-                        .await
-                }
-                #[cfg(feature = "host")]
-                FlashOperationMessage::Encoder { layer, idx, action } => {
-                    self.store_data(StorageKey::encoder(idx, layer), &StorageData::EncoderAction(action))
-                        .await
-                }
-                #[cfg(feature = "host")]
-                FlashOperationMessage::Combo { idx, config } => {
-                    self.store_data(StorageKey::combo(idx), &StorageData::Combo(config))
-                        .await
-                }
-                #[cfg(feature = "host")]
-                FlashOperationMessage::Fork { idx, fork } => {
-                    self.store_data(StorageKey::fork(idx), &StorageData::Fork(fork)).await
-                }
-                #[cfg(feature = "host")]
-                FlashOperationMessage::Morse { idx, morse } => {
-                    self.store_data(StorageKey::morse(idx), &StorageData::Morse(morse))
-                        .await
-                }
-                FlashOperationMessage::ConnectionType(ty) => {
-                    self.store_data(StorageKey::ConnectionType, &StorageData::ConnectionType(ty))
-                        .await
-                }
-                #[cfg(all(feature = "_ble", feature = "split"))]
-                FlashOperationMessage::PeerAddress(peer) => {
-                    self.store_data(StorageKey::peer_address(peer.peer_id), &StorageData::PeerAddress(peer))
-                        .await
-                }
-                #[cfg(feature = "_ble")]
-                FlashOperationMessage::ActiveBleProfile(profile) => {
-                    self.store_data(StorageKey::ActiveBleProfile, &StorageData::ActiveBleProfile(profile))
-                        .await
-                }
-                #[cfg(feature = "_ble")]
-                FlashOperationMessage::ClearSlot(slot_num) => {
-                    use bt_hci::param::BdAddr;
-                    use trouble_host::prelude::{CCCD, SecurityLevel};
-                    use trouble_host::{BondInformation, Identity, LongTermKey};
-
-                    info!("Clearing bond info slot_num: {}", slot_num);
-                    // Remove item in `sequential-storage` is quite expensive, so just override the item with `removed = true`
-                    let empty = ProfileInfo {
-                        removed: true,
-                        slot_num,
-                        info: BondInformation::new(
-                            Identity {
-                                bd_addr: BdAddr::new([0; 6]),
-                                irk: None,
-                            },
-                            LongTermKey::from_le_bytes([0; 16]),
-                            SecurityLevel::NoEncryption,
-                            false,
-                        ),
-                        cccd_table: CccdTable::new([(0u16, CCCD::default()); CCCD_TABLE_SIZE]),
-                    };
-                    self.store_data(StorageKey::bond_info(slot_num), &StorageData::BondInfo(empty))
-                        .await
-                }
-                #[cfg(feature = "_ble")]
-                FlashOperationMessage::ProfileInfo(b) => {
-                    debug!("Saving profile info: {:?}", b);
-                    self.store_data(StorageKey::bond_info(b.slot_num), &StorageData::BondInfo(b))
-                        .await
-                }
-                FlashOperationMessage::ComboTimeout(combo_timeout) => {
-                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, combo_timeout)
-                }
-                FlashOperationMessage::OneShotTimeout(one_shot_timeout) => {
-                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, one_shot_timeout)
-                }
-                FlashOperationMessage::TapInterval(tap_interval) => {
-                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, tap_interval)
-                }
-                FlashOperationMessage::TapCapslockInterval(tap_capslock_interval) => {
-                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, tap_capslock_interval)
-                }
-                FlashOperationMessage::PriorIdleTime(prior_idle_time) => {
-                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, prior_idle_time)
-                }
-                FlashOperationMessage::MorseDefaultProfile(morse_default_profile) => {
-                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, morse_default_profile)
-                }
-                #[cfg(not(feature = "_ble"))]
-                _ => Ok(()),
-            } {
-                Err(e) => {
-                    print_storage_error::<F>(e);
-                    FLASH_OPERATION_FINISHED.signal(false);
-                }
-                _ => {
-                    FLASH_OPERATION_FINISHED.signal(true);
-                }
-            }
-        }
-    }
-
     pub(crate) async fn read_behavior_config(
         &mut self,
         behavior_config: &mut config::BehaviorConfig,
     ) -> Result<(), ()> {
-        if let Some(StorageData::BehaviorConfig(c)) = self
-            .fetch_data(StorageKey::BehaviorConfig)
+        let read_data = self
+            .flash
+            .fetch_item(&mut self.buffer, &StorageKey::BehaviorConfig)
             .await
-            .map_err(|e| print_storage_error::<F>(e))?
-        {
+            .map_err(|e| print_storage_error::<F>(e))?;
+
+        if let Some(StorageData::BehaviorConfig(c)) = read_data {
             behavior_config.morse.prior_idle_time = Duration::from_millis(c.prior_idle_time as u64);
             behavior_config.morse.default_profile = c.morse_default_profile;
 
@@ -690,7 +627,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     async fn check_enable(&mut self) -> bool {
-        if let Ok(Some(StorageData::StorageConfig(config))) = self.fetch_data(StorageKey::StorageConfig).await
+        if let Some(StorageData::StorageConfig(config)) = self.fetch_data(StorageKey::StorageConfig).await
             && config.enable
             && config.build_hash == BUILD_HASH
         {
@@ -699,40 +636,182 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         false
     }
 
-    #[cfg(feature = "_ble")]
-    pub(crate) async fn read_trouble_bond_info(&mut self, slot_num: u8) -> Result<Option<ProfileInfo>, ()> {
-        let read_data = self
-            .fetch_data(StorageKey::bond_info(slot_num))
-            .await
-            .map_err(|e| print_storage_error::<F>(e))?;
-
-        Ok(match read_data {
-            Some(StorageData::BondInfo(info)) => Some(info),
-            _ => None,
-        })
-    }
-
+    /// Read all peripheral addresses from flash at startup, returning a `RefCell`
+    /// suitable for sharing with `scan_peripherals` and `run_peripheral_manager`.
+    ///
+    /// Must be called before the storage task starts; once it is running it owns
+    /// `&mut Storage` and no other reader can hold it.
     #[cfg(all(feature = "_ble", feature = "split"))]
-    pub async fn read_peer_address(&mut self, peer_id: u8) -> Result<Option<PeerAddress>, ()> {
-        let read_data = self
-            .fetch_data(StorageKey::peer_address(peer_id))
-            .await
-            .map_err(|e| print_storage_error::<F>(e))?;
-
-        Ok(match read_data {
-            Some(StorageData::PeerAddress(data)) => Some(data),
-            _ => None,
-        })
+    pub async fn read_peripheral_addresses<const PERI_NUM: usize>(
+        &mut self,
+    ) -> core::cell::RefCell<heapless::Vec<Option<[u8; 6]>, PERI_NUM>> {
+        let mut peripheral_addresses: heapless::Vec<Option<[u8; 6]>, PERI_NUM> = heapless::Vec::new();
+        for id in 0..PERI_NUM {
+            let entry = match self.fetch_data(StorageKey::peer_address(id as u8)).await {
+                Some(StorageData::PeerAddress(addr)) if addr.is_valid => Some(addr.address),
+                _ => None,
+            };
+            peripheral_addresses.push(entry).unwrap();
+        }
+        core::cell::RefCell::new(peripheral_addresses)
     }
+}
 
-    #[cfg(all(feature = "_ble", feature = "split"))]
-    pub async fn write_peer_address(&mut self, peer_address: PeerAddress) -> Result<(), ()> {
-        let key = StorageKey::peer_address(peer_address.peer_id);
-        let item = StorageData::PeerAddress(peer_address);
+impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    crate::core_traits::Runnable for Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>
+{
+    async fn run(&mut self) -> ! {
+        loop {
+            let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
+            debug!("Flash operation: {:?}", info);
 
-        self.store_data(key, &item)
-            .await
-            .map_err(|e| print_storage_error::<F>(e))
+            let write_result: Result<(), SSError<F::Error>> = match info {
+                #[cfg(feature = "_ble")]
+                FlashOperationMessage::ReadBleBondInfo(slot_num) => {
+                    let resp = match self.fetch_data(StorageKey::bond_info(slot_num)).await {
+                        Some(StorageData::BondInfo(info)) => Some(info),
+                        _ => None,
+                    };
+                    BOND_INFO_RESPONSE.signal(resp);
+                    continue;
+                }
+                #[cfg(all(feature = "_ble", feature = "split"))]
+                FlashOperationMessage::ReadPeerAddress(peer_id) => {
+                    let resp = match self.fetch_data(StorageKey::peer_address(peer_id)).await {
+                        Some(StorageData::PeerAddress(addr)) => Some(addr),
+                        _ => None,
+                    };
+                    PEER_ADDRESS_RESPONSE.signal(resp);
+                    continue;
+                }
+                #[cfg(feature = "_ble")]
+                FlashOperationMessage::ReadBleSetting(key) => {
+                    let resp = match self.fetch_data(key).await {
+                        Some(StorageData::ConnectionType(v)) | Some(StorageData::ActiveBleProfile(v)) => Some(v),
+                        _ => None,
+                    };
+                    SETTING_RESPONSE.signal(resp);
+                    continue;
+                }
+
+                FlashOperationMessage::LayoutOptions(layout_option) => {
+                    update_storage_field!(&mut self.flash, &mut self.buffer, LayoutConfig, layout_option)
+                }
+                FlashOperationMessage::Reset => self.flash.erase_all().await,
+                FlashOperationMessage::ResetLayout => {
+                    info!("Ignoring ResetLayout at runtime (handled at startup via clear_layout).");
+                    Ok(())
+                }
+                FlashOperationMessage::DefaultLayer(default_layer) => {
+                    update_storage_field!(&mut self.flash, &mut self.buffer, LayoutConfig, default_layer)
+                }
+                #[cfg(feature = "host")]
+                FlashOperationMessage::MacroData(data) => {
+                    self.store_data(StorageKey::MacroData, &StorageData::MacroData(data))
+                        .await
+                }
+                #[cfg(feature = "host")]
+                FlashOperationMessage::KeymapKey {
+                    layer,
+                    row,
+                    col,
+                    action,
+                } => {
+                    self.store_data(StorageKey::keymap(layer, row, col), &StorageData::KeyAction(action))
+                        .await
+                }
+                #[cfg(feature = "host")]
+                FlashOperationMessage::Encoder { layer, idx, action } => {
+                    self.store_data(StorageKey::encoder(idx, layer), &StorageData::EncoderAction(action))
+                        .await
+                }
+                #[cfg(feature = "host")]
+                FlashOperationMessage::Combo { idx, config } => {
+                    self.store_data(StorageKey::combo(idx), &StorageData::Combo(config))
+                        .await
+                }
+                #[cfg(feature = "host")]
+                FlashOperationMessage::Fork { idx, fork } => {
+                    self.store_data(StorageKey::fork(idx), &StorageData::Fork(fork)).await
+                }
+                #[cfg(feature = "host")]
+                FlashOperationMessage::Morse { idx, morse } => {
+                    self.store_data(StorageKey::morse(idx), &StorageData::Morse(morse))
+                        .await
+                }
+                FlashOperationMessage::ConnectionType(ty) => {
+                    self.store_data(StorageKey::ConnectionType, &StorageData::ConnectionType(ty))
+                        .await
+                }
+                #[cfg(all(feature = "_ble", feature = "split"))]
+                FlashOperationMessage::PeerAddress(peer) => {
+                    self.store_data(StorageKey::peer_address(peer.peer_id), &StorageData::PeerAddress(peer))
+                        .await
+                }
+                #[cfg(feature = "_ble")]
+                FlashOperationMessage::ActiveBleProfile(profile) => {
+                    self.store_data(StorageKey::ActiveBleProfile, &StorageData::ActiveBleProfile(profile))
+                        .await
+                }
+                #[cfg(feature = "_ble")]
+                FlashOperationMessage::ClearSlot(slot_num) => {
+                    use bt_hci::param::BdAddr;
+                    use trouble_host::prelude::{CCCD, SecurityLevel};
+                    use trouble_host::{BondInformation, Identity, LongTermKey};
+
+                    info!("Clearing bond info slot_num: {}", slot_num);
+                    // Remove item in `sequential-storage` is quite expensive, so just override the item with `removed = true`
+                    let empty = ProfileInfo {
+                        removed: true,
+                        slot_num,
+                        info: BondInformation::new(
+                            Identity {
+                                bd_addr: BdAddr::new([0; 6]),
+                                irk: None,
+                            },
+                            LongTermKey::from_le_bytes([0; 16]),
+                            SecurityLevel::NoEncryption,
+                            false,
+                        ),
+                        cccd_table: CccdTable::new([(0u16, CCCD::default()); CCCD_TABLE_SIZE]),
+                    };
+                    self.store_data(StorageKey::bond_info(slot_num), &StorageData::BondInfo(empty))
+                        .await
+                }
+                #[cfg(feature = "_ble")]
+                FlashOperationMessage::ProfileInfo(b) => {
+                    debug!("Saving profile info: {:?}", b);
+                    self.store_data(StorageKey::bond_info(b.slot_num), &StorageData::BondInfo(b))
+                        .await
+                }
+                FlashOperationMessage::ComboTimeout(combo_timeout) => {
+                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, combo_timeout)
+                }
+                FlashOperationMessage::OneShotTimeout(one_shot_timeout) => {
+                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, one_shot_timeout)
+                }
+                FlashOperationMessage::TapInterval(tap_interval) => {
+                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, tap_interval)
+                }
+                FlashOperationMessage::TapCapslockInterval(tap_capslock_interval) => {
+                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, tap_capslock_interval)
+                }
+                FlashOperationMessage::PriorIdleTime(prior_idle_time) => {
+                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, prior_idle_time)
+                }
+                FlashOperationMessage::MorseDefaultProfile(morse_default_profile) => {
+                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, morse_default_profile)
+                }
+            };
+
+            match write_result {
+                Ok(()) => FLASH_OPERATION_FINISHED.signal(true),
+                Err(e) => {
+                    print_storage_error::<F>(e);
+                    FLASH_OPERATION_FINISHED.signal(false);
+                }
+            }
+        }
     }
 }
 
@@ -770,14 +849,6 @@ const fn get_buffer_size() -> usize {
 
     #[cfg(not(feature = "host"))]
     256
-}
-
-#[macro_export]
-/// Helper macro for reading storage config
-macro_rules! read_storage {
-    ($storage: ident, $key: expr, $buf: expr) => {
-        $storage.flash.fetch_item(&mut $buf, $key).await
-    };
 }
 
 #[cfg(test)]
@@ -960,17 +1031,17 @@ mod tests {
 
             assert!(matches!(
                 stored_layout,
-                Some(StorageData::LayoutConfig(LayoutConfig {
+                StorageData::LayoutConfig(LayoutConfig {
                     default_layer: 0,
                     layout_option: 0,
-                }))
+                })
             ));
             assert!(matches!(
                 stored_config,
-                Some(StorageData::StorageConfig(LocalStorageConfig {
+                StorageData::StorageConfig(LocalStorageConfig {
                     enable: true,
                     build_hash: BUILD_HASH,
-                }))
+                })
             ));
         });
     }

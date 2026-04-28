@@ -156,9 +156,5 @@ async fn main(spawner: Spawner) {
     let mut encoder = RotaryEncoder::with_resolution(pin_a, pin_b, 4, true, 1);
 
     // Start
-    join(
-        run_all!(matrix, encoder),
-        run_rmk_split_peripheral(1, &stack, &mut storage),
-    )
-    .await;
+    join(run_all!(matrix, encoder, storage), run_rmk_split_peripheral(1, &stack)).await;
 }

@@ -1,8 +1,8 @@
 use embassy_time::Instant;
 use rmk_types::action::{Action, KeyAction};
+use rmk_types::morse::MorsePattern;
 
 use crate::event::{KeyboardEvent, KeyboardEventPos};
-use crate::morse::MorsePattern;
 
 /// The buffer of held keys.
 #[derive(Debug, Default, Clone)]

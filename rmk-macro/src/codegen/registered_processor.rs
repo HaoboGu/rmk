@@ -118,7 +118,7 @@ fn create_keyboard_indicator_processor(
         let p = convert_gpio_str_to_output_pin(chip, c.pin.clone(), c.low_active);
         let low_active = c.low_active;
         let processor_init = quote! {
-            let mut #processor_ident = ::rmk::builtin_processor::led_indicator::KeyboardIndicatorProcessor::new(
+            let mut #processor_ident = ::rmk::processor::builtin::led_indicator::KeyboardIndicatorProcessor::new(
                 #p,
                 #low_active,
                 ::rmk::types::led_indicator::LedIndicatorType::#led_indicator_variant,

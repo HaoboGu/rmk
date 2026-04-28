@@ -10,15 +10,35 @@ use futures::join;
 use log::debug;
 use rmk::channel::KEYBOARD_REPORT_CHANNEL;
 use rmk::config::{BehaviorConfig, PositionalConfig};
-use rmk::descriptor::KeyboardReport;
+use rmk::core_traits::Runnable;
 use rmk::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEvent};
-use rmk::hid::Report;
-use rmk::input_device::Runnable;
+use rmk::hid::{KeyboardReport, Report};
 use rmk::keyboard::Keyboard;
 use rmk::keymap::KeyMap;
 use rmk::types::action::KeyAction;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{KeymapData, a, k, layer, lt, mo, shifted, th, wm};
+
+// `embassy-time`'s MockDriver is a process-global singleton, so running the
+// suite under plain `cargo test` lets tests race on it and hang at the 60 s
+// virtual-time kill switch in `test_block_on`. Abort at test-binary startup
+// with a pointer to the right runner instead of making the user wait for that
+// timeout.
+#[ctor::ctor]
+fn require_nextest() {
+    if std::env::var_os("NEXTEST").is_none() {
+        eprintln!(
+            "\nrmk tests must run under cargo-nextest (embassy-time's MockDriver \
+             is a process-global singleton and needs per-test process isolation).\n\
+             \n  cargo install cargo-nextest --locked\n\n\
+             Then from rmk/:\n\n  \
+             cargo nextest run --no-default-features \
+             --features=split,vial,storage,async_matrix,_ble\n\n\
+             Or for the full feature matrix: `sh scripts/test_all.sh` from the repo root.\n"
+        );
+        std::process::exit(1);
+    }
+}
 
 // Init logger for tests
 #[ctor::ctor]

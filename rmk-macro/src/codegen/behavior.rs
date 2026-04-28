@@ -75,7 +75,7 @@ fn expand_morse_action_pair(
         }
     }
     let action = parse_key(action_pair.action.to_owned(), profiles);
-    quote! { (rmk::morse::MorsePattern::from_u16(#pattern), #action.to_action()) }
+    quote! { (rmk::types::morse::MorsePattern::from_u16(#pattern), #action.to_action()) }
 }
 
 fn expand_morse_actions(
@@ -140,7 +140,7 @@ fn expand_combos(
                     Some(layer) => quote! { ::core::option::Option::Some(#layer) },
                     None => quote! { ::core::option::Option::None },
                 };
-                quote! { ::rmk::combo::Combo::new(::rmk::combo::ComboConfig::new([#(#actions),*], #output, #layer)) }
+                quote! { ::rmk::keyboard::combo::Combo::new(::rmk::keyboard::combo::ComboConfig::new([#(#actions),*], #output, #layer)) }
             });
 
             let timeout = match &combos.timeout_ms {
@@ -180,15 +180,15 @@ fn expand_macros(macros: &Option<Macros>) -> proc_macro2::TokenStream {
                 let operations = m.operations.iter().map(|op| match op {
                     MacroOperation::Tap { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Tap(::rmk::types::keycode::KeyCode::#key).into_iter() }
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Tap(::rmk::types::keycode::HidKeyCode::#key).into_iter() }
                     }
                     MacroOperation::Down { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Press(::rmk::types::keycode::KeyCode::#key).into_iter() }
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Press(::rmk::types::keycode::HidKeyCode::#key).into_iter() }
                     }
                     MacroOperation::Up { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::types::keycode::KeyCode::#key).into_iter() }
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::types::keycode::HidKeyCode::#key).into_iter() }
                     }
                     MacroOperation::Delay { duration_ms } => {
                         let millis = *duration_ms as u16;
@@ -231,7 +231,7 @@ fn expand_morses(
             let actions_def = expand_morse_actions(morse_actions, profiles);
 
             quote! {
-                ::rmk::morse::Morse {
+                ::rmk::types::morse::Morse {
                     profile: #profile,
                     #actions_def
                     ..Default::default()
@@ -267,7 +267,7 @@ fn expand_morses(
             };
 
             quote! {
-                ::rmk::morse::Morse::new_with_actions(
+                ::rmk::types::morse::Morse::new_with_actions(
                     #tap_actions_def,
                     #hold_actions_def,
                     #profile,
@@ -280,7 +280,7 @@ fn expand_morses(
             let double_tap = parse_key(morse.double_tap.clone().unwrap_or_else(|| "No".to_string()), profiles);
 
             quote! {
-                ::rmk::morse::Morse::new_from_vial(
+                ::rmk::types::morse::Morse::new_from_vial(
                     #tap.to_action(),
                     #hold.to_action(),
                     #hold_after_tap.to_action(),

@@ -667,3 +667,13 @@ macro_rules! special {
         ))
     };
 }
+
+#[cfg(feature = "steno")]
+#[macro_export]
+macro_rules! steno {
+    ($key: ident) => {
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::Steno(
+            $crate::types::steno::StenoKey::$key,
+        ))
+    };
+}

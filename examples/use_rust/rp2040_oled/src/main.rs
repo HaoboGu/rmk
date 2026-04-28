@@ -23,10 +23,11 @@ use oled_async::displays::sh1106::Sh1106_128_64;
 use oled_async::mode::graphics::GraphicsMode;
 use panic_probe as _;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::display::DisplayProcessor;
-use rmk::futures::future::join3;
-use rmk::input_device::Runnable;
+use rmk::futures::future::join4;
+use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::{KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
@@ -92,6 +93,7 @@ async fn main(_spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
+    let mut host_service = HostService::new(&keymap, &rmk_config);
 
     // Initialize I2C1 on PIN_2 (SDA) and PIN_3 (SCL)
     let i2c = i2c::I2c::new_async(p.I2C1, p.PIN_3, p.PIN_2, Irqs, i2c::Config::default());
@@ -103,10 +105,11 @@ async fn main(_spawner: Spawner) {
     let mut oled = DisplayProcessor::new(display);
 
     // Start
-    join3(
-        run_all!(matrix, oled),
+    join4(
+        run_all!(matrix, oled, storage),
         keyboard.run(),
-        run_rmk(&keymap, driver, &mut storage, rmk_config),
+        host_service.run(),
+        run_rmk(driver, rmk_config),
     )
     .await;
 }

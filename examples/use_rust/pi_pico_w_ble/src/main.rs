@@ -25,9 +25,10 @@ use panic_probe as _;
 use rand::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join3;
-use rmk::input_device::Runnable;
+use rmk::futures::future::join4;
+use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
@@ -147,6 +148,7 @@ async fn main(spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
+    let mut host_service = HostService::new(&keymap, &rmk_config);
 
     let ble_addr = [0x18, 0xe2, 0x21, 0x88, 0xc0, 0xc7];
 
@@ -156,10 +158,11 @@ async fn main(spawner: Spawner) {
 
     let stack = build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
     // Start
-    join3(
-        run_all!(matrix),
+    join4(
+        run_all!(matrix, storage),
         keyboard.run(),
-        run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+        host_service.run(),
+        run_rmk(driver, &stack, rmk_config),
     )
     .await;
 }

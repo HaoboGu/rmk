@@ -13,17 +13,6 @@ mkdir -p "$CARGO_TARGET_DIR"
 nextest_cfg="$repo_root/.config/nextest.toml"
 nx=(nextest run --config-file "$nextest_cfg" --profile ci)
 
-# Feature-set matrix for rmk unit tests. Empty entry = --no-default-features only.
-rmk_test_featuresets=(
-    ""
-    "log,std"
-    "storage"
-    "async_matrix,storage"
-    "split,vial,storage"
-    "passkey_entry"
-    "split,vial,storage,passkey_entry"
-)
-
 log_section "Running tests"
 cargo +stable "${nx[@]}" --manifest-path rmk-config/Cargo.toml
 cargo +stable "${nx[@]}" --manifest-path rmk-types/Cargo.toml
@@ -32,7 +21,7 @@ cargo +stable "${nx[@]}" --manifest-path rmk-types/Cargo.toml
 # enables rmk_protocol + bulk + _ble + split, covering every snapshot.
 cargo +stable "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features host
 cargo +stable "${nx[@]}" --manifest-path rmk-macro/Cargo.toml
-for feats in "${rmk_test_featuresets[@]}"; do
+for feats in "${RMK_FEATURESETS[@]}"; do
     if [[ -z "$feats" ]]; then
         cargo +stable "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features
     else

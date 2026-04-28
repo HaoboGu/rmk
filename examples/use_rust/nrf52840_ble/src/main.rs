@@ -28,9 +28,10 @@ use rmk::ble::build_ble_stack;
 use rmk::config::{
     BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
+use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join4;
-use rmk::input_device::Runnable;
+use rmk::futures::future::join5;
+use rmk::host::HostService;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::{DefaultPhase, RotaryEncoder};
@@ -197,6 +198,7 @@ async fn main(spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap);
+    let mut host_service = HostService::new(&keymap, &rmk_config);
 
     // Initialize the encoder
     let pin_a = Input::new(p.P1_06, embassy_nrf::gpio::Pull::None);
@@ -211,13 +213,14 @@ async fn main(spawner: Spawner) {
     );
     let mut batt_proc = BatteryProcessor::new(2000, 2806);
 
-    join4(
-        run_all!(matrix, encoder, adc_device),
+    join5(
+        run_all!(matrix, encoder, adc_device, storage),
         run_all! {
             batt_proc
         },
         keyboard.run(), // Keyboard is special
-        run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
+        host_service.run(),
+        run_rmk(driver, &stack, rmk_config),
     )
     .await;
 }

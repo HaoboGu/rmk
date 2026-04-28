@@ -20,9 +20,10 @@ use embassy_stm32::{Config, bind_interrupts};
 use keymap::{COL, ROW};
 use panic_halt as _;
 use rmk::config::{BehaviorConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join3;
-use rmk::input_device::Runnable;
+use rmk::futures::future::join4;
+use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
@@ -126,12 +127,14 @@ async fn main(_spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
+    let mut host_service = HostService::new(&keymap, &rmk_config);
 
     // Start
-    join3(
-        run_all!(matrix),
+    join4(
+        run_all!(matrix, storage),
         keyboard.run(),
-        run_rmk(&keymap, driver, &mut storage, rmk_config),
+        host_service.run(),
+        run_rmk(driver, rmk_config),
     )
     .await;
 }

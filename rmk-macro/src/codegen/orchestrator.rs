@@ -250,6 +250,14 @@ fn expand_main(
         quote! {}
     };
 
+    let host_service_init = if host.vial_enabled {
+        quote! {
+            let mut host_service = ::rmk::host::HostService::new(&keymap, &rmk_config);
+        }
+    } else {
+        quote! {}
+    };
+
     let run_rmk = expand_rmk_entry(
         hardware,
         host,
@@ -338,6 +346,9 @@ fn expand_main(
 
             // Initialize the matrix + keyboard, as `matrix` and `keyboard`
             #matrix_and_keyboard
+
+            // Initialize the host (Vial) service, as `host_service`
+            #host_service_init
 
             // Initialize input device config as `input_device_config` and processor as `processor`
             #input_device_config
@@ -440,7 +451,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(hardware: &Hardware) -> TokenStrea
                     quote! {
                         #bootmagic
                         let debouncer = #debouncer_type::new();
-                        let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, #low_active);
+                        let mut matrix = ::rmk::matrix::direct_pin::DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, #low_active);
                     }
                 }
             }
@@ -468,7 +479,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(hardware: &Hardware) -> TokenStrea
                     quote! {
                         #bootmagic
                         let debouncer = #debouncer_type::new();
-                        let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #central_row, #central_col, #size, #central_row_offset, #central_col_offset>::new(direct_pins, debouncer, #low_active);
+                        let mut matrix = ::rmk::matrix::direct_pin::DirectPinMatrix::<_, _, #central_row, #central_col, #size, #central_row_offset, #central_col_offset>::new(direct_pins, debouncer, #low_active);
                     }
                 }
             }
