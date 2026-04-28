@@ -15,7 +15,6 @@ EXAMPLE_SKIPLIST=(
     "examples/use_rust/nrf54lm20_ble"
     "examples/use_config/esp32_ble_split"
     "examples/use_rust/py32f07x"
-    "examples/use_rust/sf32lb52x_usb"
 )
 
 # Examples tracked for binary-size regression (bloat) reports on PRs.
