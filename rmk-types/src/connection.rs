@@ -54,47 +54,44 @@ pub enum UsbState {
 }
 
 /// Unified connection status: the single source of truth for transport
-/// availability and routing.
+/// availability and routing. The active transport is derived on demand via
+/// [`Self::decide_active`] from the input fields below.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ConnectionStatus {
     pub usb: UsbState,
     pub ble: BleStatus,
-    /// Derived by [`Self::decide_active`] — never set directly.
-    pub active: Option<ConnectionType>,
     /// Tiebreaker when both transports are ready.
     pub preferred: ConnectionType,
 }
 
-impl Default for ConnectionStatus {
-    fn default() -> Self {
+impl ConnectionStatus {
+    pub const fn new() -> Self {
         Self {
             usb: UsbState::Disabled,
-            ble: BleStatus::default(),
-            active: None,
+            ble: BleStatus {
+                profile: 0,
+                state: BleState::Inactive,
+            },
             preferred: ConnectionType::Usb,
         }
     }
 }
 
+impl Default for ConnectionStatus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConnectionStatus {
-    pub fn usb_ready(&self) -> bool {
+    fn usb_ready(&self) -> bool {
         matches!(self.usb, UsbState::Configured)
     }
 
-    pub fn ble_ready(&self) -> bool {
+    fn ble_ready(&self) -> bool {
         matches!(self.ble.state, BleState::Connected)
-    }
-
-    /// Suspended USB still counts here so the first wake key can reach the
-    /// USB writer and trigger remote wakeup.
-    pub fn any_ready(&self) -> bool {
-        self.decide_active().is_some()
-    }
-
-    pub fn writable_on(&self, t: ConnectionType) -> bool {
-        self.active == Some(t)
     }
 
     /// Pick the active transport from current readiness + preference. Ready
@@ -123,7 +120,6 @@ mod tests {
                 profile: 0,
                 state: ble_state,
             },
-            active: None,
             preferred,
         }
     }
@@ -158,25 +154,15 @@ mod tests {
     fn suspended_usb_stays_routable_for_remote_wakeup() {
         let s = status(UsbState::Suspended, BleState::Advertising, ConnectionType::Ble);
         assert_eq!(s.decide_active(), Some(ConnectionType::Usb));
-        assert!(s.any_ready());
         assert!(!s.usb_ready());
     }
 
     #[test]
     fn suspended_usb_yields_to_connected_ble() {
         // Laptop sleep with phone still BLE-connected: cascade picks BLE.
-        let mut s = status(UsbState::Suspended, BleState::Connected, ConnectionType::Usb);
-        s.active = s.decide_active();
-        assert_eq!(s.active, Some(ConnectionType::Ble));
+        let s = status(UsbState::Suspended, BleState::Connected, ConnectionType::Usb);
+        assert_eq!(s.decide_active(), Some(ConnectionType::Ble));
         assert!(!s.usb_ready());
         assert!(s.ble_ready());
-    }
-
-    #[test]
-    fn writable_on_requires_active_match() {
-        let mut s = status(UsbState::Configured, BleState::Connected, ConnectionType::Usb);
-        s.active = s.decide_active();
-        assert!(s.writable_on(ConnectionType::Usb));
-        assert!(!s.writable_on(ConnectionType::Ble));
     }
 }

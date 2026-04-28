@@ -9,6 +9,7 @@ use trouble_host::prelude::*;
 
 use super::ble_server::Server;
 use crate::ble::SLEEPING_STATE;
+use crate::core_traits::Runnable;
 use crate::event::{BatteryStatusEvent, SubscribableEvent};
 use crate::keyboard::LAST_KEY_TIMESTAMP;
 
@@ -22,9 +23,9 @@ pub(crate) struct BatteryService {
 }
 
 pub(crate) struct BleBatteryServer<'stack, 'server, 'conn, P: PacketPool> {
-    pub(crate) battery_level: Characteristic<u8>,
-    pub(crate) conn: &'conn GattConnection<'stack, 'server, P>,
-    pub(crate) sub: Subscriber<
+    battery_level: Characteristic<u8>,
+    conn: &'conn GattConnection<'stack, 'server, P>,
+    sub: Subscriber<
         'static,
         crate::RawMutex,
         BatteryStatusEvent,
@@ -44,8 +45,8 @@ impl<'stack, 'server, 'conn, P: PacketPool> BleBatteryServer<'stack, 'server, 'c
     }
 }
 
-impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
-    pub(crate) async fn run(&mut self) {
+impl<P: PacketPool> Runnable for BleBatteryServer<'_, '_, '_, P> {
+    async fn run(&mut self) -> ! {
         // Wait 2 seconds, ensure that gatt server has been started
         Timer::after_secs(2).await;
 
@@ -80,7 +81,9 @@ impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
             }
         }
     }
+}
 
+impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
     /// Wait until the battery status is available.
     /// To avoid unexpected wakeup, before reporting battery level, all conditions should be satistied:
     ///

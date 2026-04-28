@@ -19,16 +19,17 @@ use crate::{REPORT_CHANNEL_SIZE, RawMutex};
 #[cfg(feature = "_ble")]
 pub(crate) static LED_SIGNAL: Signal<RawMutex, LedIndicator> = Signal::new();
 
-/// Drained by `UsbKeyboardWriter::run_writer`. Single-producer, single-consumer.
+/// Drained by `UsbKeyboardWriter::run_writer`. Routed through `dispatch_report`
+/// from the keyboard task and ad-hoc producers (e.g. steno chord output).
 #[cfg(not(feature = "_no_usb"))]
 pub static USB_REPORT_CHANNEL: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE> = Channel::new();
 
-/// Drained by `BleHidServer::run_writer`. Single-producer, single-consumer.
+/// Drained by `BleHidServer::run_writer`. Routed through `dispatch_report`.
 #[cfg(feature = "_ble")]
-pub static BLE_REPORT_CHANNEL: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE> = Channel::new();
+pub(crate) static BLE_REPORT_CHANNEL: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE> = Channel::new();
 
 fn active_report_channel() -> Option<&'static Channel<RawMutex, Report, REPORT_CHANNEL_SIZE>> {
-    match crate::state::connection_status().active? {
+    match crate::state::active_transport()? {
         #[cfg(not(feature = "_no_usb"))]
         ConnectionType::Usb => Some(&USB_REPORT_CHANNEL),
         #[cfg(feature = "_ble")]
@@ -39,7 +40,7 @@ fn active_report_channel() -> Option<&'static Channel<RawMutex, Report, REPORT_C
 }
 
 /// Reports generated while no transport is selected are dropped on the floor.
-pub async fn dispatch_report(report: Report) {
+pub(crate) async fn dispatch_report(report: Report) {
     if let Some(ch) = active_report_channel() {
         ch.send(report).await;
     }
@@ -48,9 +49,22 @@ pub async fn dispatch_report(report: Report) {
 /// Drops the report when the active transport's queue is full or no
 /// transport is selected. Use for producers where back-pressure would block
 /// the matrix scan (e.g. steno chord output).
-pub fn try_dispatch_report(report: Report) {
+pub(crate) fn try_dispatch_report(report: Report) {
     if let Some(ch) = active_report_channel() {
         let _ = ch.try_send(report);
+    }
+}
+
+/// Drains queued reports for `transport`. Called on active-transport flips so
+/// a future re-activation doesn't replay stale presses without their releases.
+pub(crate) fn clear_report_channel(transport: ConnectionType) {
+    match transport {
+        #[cfg(not(feature = "_no_usb"))]
+        ConnectionType::Usb => USB_REPORT_CHANNEL.clear(),
+        #[cfg(feature = "_ble")]
+        ConnectionType::Ble => BLE_REPORT_CHANNEL.clear(),
+        #[allow(unreachable_patterns)]
+        _ => {}
     }
 }
 
@@ -60,35 +74,52 @@ pub(crate) static FLASH_CHANNEL: Channel<RawMutex, FlashOperationMessage, FLASH_
 #[cfg(feature = "_ble")]
 pub(crate) static BLE_PROFILE_CHANNEL: Channel<RawMutex, BleProfileAction, 1> = Channel::new();
 
-/// Identifies which transport produced a Vial host request, so `HostService` can route
-/// the reply back to the right per-transport TX channel.
-#[cfg(feature = "host")]
-#[derive(Copy, Clone, Debug)]
-pub(crate) enum HostTransport {
-    #[cfg(not(feature = "_no_usb"))]
-    Usb,
-    #[cfg(feature = "_ble")]
-    Ble,
-}
-
 /// Vial host requests from any active transport (USB or BLE) to the central `HostService`.
 /// Items carry the originating transport tag so replies can be routed back to the right
-/// per-transport TX channel.
+/// per-transport reply channel.
 ///
 /// Note: `HostService` processes requests strictly serially, so a slow request from one
 /// transport (e.g. flash-bound `process_vial`) blocks queries from the other transport
 /// queued behind it until it completes.
 #[cfg(feature = "host")]
-pub(crate) static HOST_REQUEST_CHANNEL: Channel<RawMutex, (HostTransport, [u8; 32]), VIAL_CHANNEL_SIZE> =
+pub(crate) static HOST_REQUEST_CHANNEL: Channel<RawMutex, (ConnectionType, [u8; 32]), VIAL_CHANNEL_SIZE> =
     Channel::new();
 
-/// Per-transport replies for USB. Capacity matches `HOST_REQUEST_CHANNEL`, so `HostService`
-/// can enqueue replies for every already-buffered request even if the transport task is
-/// cancelled before it drains them. The transport's I/O loop drains this on startup to discard
-/// stale entries left over from a previously-cancelled run.
+/// Per-transport reply for USB. Capacity matches the request queue so bursts of
+/// host requests can keep their replies queued until the transport drains them.
 #[cfg(all(feature = "host", not(feature = "_no_usb")))]
-pub(crate) static HOST_USB_TX: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE> = Channel::new();
+pub(crate) static HOST_USB_REPLY: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE> = Channel::new();
 
-/// Per-transport replies for BLE. See `HOST_USB_TX` for the queueing/draining rationale.
+/// Per-transport reply for BLE. See `HOST_USB_REPLY` for the sizing/draining rationale.
 #[cfg(all(feature = "host", feature = "_ble"))]
-pub(crate) static HOST_BLE_TX: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE> = Channel::new();
+pub(crate) static HOST_BLE_REPLY: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE> = Channel::new();
+
+/// Routes a Vial reply back to the channel owned by the originating transport.
+/// Drops with a warning when the destination queue already has a pending reply
+/// (the `HostService` produced faster than the transport drained it).
+#[cfg(feature = "host")]
+pub(crate) fn try_send_host_reply(transport: ConnectionType, reply: [u8; 32]) {
+    let ok = match transport {
+        #[cfg(not(feature = "_no_usb"))]
+        ConnectionType::Usb => HOST_USB_REPLY.try_send(reply).is_ok(),
+        #[cfg(feature = "_ble")]
+        ConnectionType::Ble => HOST_BLE_REPLY.try_send(reply).is_ok(),
+        #[allow(unreachable_patterns)]
+        _ => false,
+    };
+    if !ok {
+        warn!("Dropping Vial {:?} reply: reply queue full", transport);
+    }
+}
+
+/// Enqueues a Vial request from a transport into `HOST_REQUEST_CHANNEL`. Logs
+/// and drops when the queue is full.
+#[cfg(feature = "host")]
+pub(crate) fn try_enqueue_host_request(transport: ConnectionType, data: [u8; 32]) {
+    if HOST_REQUEST_CHANNEL.try_send((transport, data)).is_err() {
+        warn!(
+            "Dropping Vial {:?} request because the request queue is full",
+            transport
+        );
+    }
+}

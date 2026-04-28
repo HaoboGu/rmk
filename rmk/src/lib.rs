@@ -165,6 +165,13 @@ pub async fn run_rmk<
     use crate::processor::PollingProcessor;
     use crate::processor::builtin::wpm::WpmProcessor;
 
+    #[cfg(feature = "_nrf_ble")]
+    let rmk_config = {
+        let mut config = rmk_config;
+        crate::ble::apply_nrf_serial_number(&mut config);
+        config
+    };
+
     #[cfg(not(feature = "_no_usb"))]
     let device_config = rmk_config.device_config;
 

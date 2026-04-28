@@ -15,8 +15,9 @@ use rmk::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEvent};
 use rmk::hid::{KeyboardReport, Report};
 use rmk::keyboard::Keyboard;
 use rmk::keymap::KeyMap;
-use rmk::state::{UsbState, set_usb_state};
+use rmk::state::set_usb_state;
 use rmk::types::action::KeyAction;
+use rmk::types::connection::UsbState;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{KeymapData, a, k, layer, lt, mo, shifted, th, wm};
 

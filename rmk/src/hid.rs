@@ -118,14 +118,14 @@ pub struct StenoReport {
 
 // `gen_hid_descriptor` skips the `AsInputReport` impl when a `report_id`
 // is present, so the wire format must be assembled by hand: byte 0 is the
-// Plover HID report ID (0x50) followed by the eight chord-bitmap bytes.
+// Plover HID report ID followed by the eight chord-bitmap bytes.
 #[cfg(feature = "steno")]
 impl usbd_hid::descriptor::AsInputReport for StenoReport {
     fn serialize(&self, buffer: &mut [u8]) -> Result<usize, usbd_hid::descriptor::BufferOverflow> {
         if buffer.len() < 9 {
             return Err(usbd_hid::descriptor::BufferOverflow);
         }
-        buffer[0] = 0x50;
+        buffer[0] = rmk_types::steno::PLOVER_HID_REPORT_ID;
         buffer[1..9].copy_from_slice(&self.keys);
         Ok(9)
     }
@@ -249,10 +249,10 @@ pub enum HidError {
 /// HidWriter trait is used for reporting HID messages to the host, via USB, BLE, etc.
 pub trait HidWriterTrait {
     /// The report type that the reporter receives from input processors.
-    type ReportType: AsInputReport + Clone;
+    type ReportType: AsInputReport;
 
     /// Write report to the host, return the number of bytes written if success.
-    fn write_report(&mut self, report: Self::ReportType) -> impl Future<Output = Result<usize, HidError>>;
+    fn write_report(&mut self, report: &Self::ReportType) -> impl Future<Output = Result<usize, HidError>>;
 }
 
 /// Runnable writer. The default `run_writer` gates wire writes on
@@ -271,17 +271,15 @@ pub trait RunnableHidWriter: HidWriterTrait {
             loop {
                 let report = self.get_report().await;
                 if writable_on(Self::KIND)
-                    && let Err(e) = self.write_report(report.clone()).await
+                    && let Err(e) = self.write_report(&report).await
                 {
                     error!("Failed to send report: {:?}", e);
                     #[cfg(not(feature = "_no_usb"))]
-                    // If the USB endpoint is disabled, try wakeup
+                    // If the USB endpoint is disabled, try wakeup and resend the same report.
                     if let HidError::UsbEndpointError(EndpointError::Disabled) = e {
                         USB_REMOTE_WAKEUP.signal(());
-                        // Wait 200ms for the wakeup, then send the report again
-                        // Ignore the error for the second send
                         embassy_time::Timer::after_millis(200).await;
-                        if let Err(e) = self.write_report(report).await {
+                        if let Err(e) = self.write_report(&report).await {
                             error!("Failed to send report after wakeup: {:?}", e);
                         }
                     }
@@ -328,12 +326,12 @@ pub(crate) async fn run_led_reader<R: HidReaderTrait<ReportType = LedIndicator>>
 
 #[cfg(feature = "_nrf_ble")]
 pub(crate) fn get_serial_number() -> &'static str {
+    use embassy_sync::once_lock::OnceLock;
     use heapless::String;
-    use static_cell::StaticCell;
 
-    static SERIAL: StaticCell<String<20>> = StaticCell::new();
+    static SERIAL: OnceLock<String<20>> = OnceLock::new();
 
-    let serial = SERIAL.init_with(|| {
+    let serial = SERIAL.get_or_init(|| {
         let ficr = embassy_nrf::pac::FICR;
         #[cfg(any(feature = "nrf54l15_ble", feature = "nrf54lm20_ble"))]
         let device_id = (u64::from(ficr.deviceaddr(1).read()) << 32) | u64::from(ficr.deviceaddr(0).read());

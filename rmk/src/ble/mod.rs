@@ -1,15 +1,15 @@
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::AtomicBool;
 
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join;
-#[cfg(feature = "passkey_entry")]
-use embassy_futures::select::Either;
-use embassy_futures::select::{Either3, select, select3};
+use embassy_futures::select::{Either, Either3, select, select3};
 use embassy_time::{Duration, Timer, with_timeout};
 #[cfg(feature = "passkey_entry")]
 use embassy_time::{Instant, with_deadline};
 use rand_core::{CryptoRng, RngCore};
+use rmk_types::ble::BleState;
+use rmk_types::connection::ConnectionType;
 use rmk_types::led_indicator::LedIndicator;
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
@@ -23,12 +23,14 @@ use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDAT
 use crate::channel::LED_SIGNAL;
 use crate::config::RmkConfig;
 use crate::core_traits::Runnable;
-use crate::event::{ConnectionType, SubscribableEvent};
+use crate::event::SubscribableEvent;
 use crate::hid::{RunnableHidWriter, run_led_reader};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
+use crate::state::set_ble_state;
 #[cfg(feature = "storage")]
 use crate::storage::StorageKey;
+
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;
@@ -37,18 +39,34 @@ pub(crate) mod led;
 pub mod passkey;
 pub(crate) mod profile;
 
-use rmk_types::ble::BleState;
-
-use crate::state::set_ble_state;
-
-pub(crate) fn get_current_profile() -> u8 {
-    crate::state::connection_status().ble.profile
-}
-
 /// Global state of sleep management
 /// - `true`: Indicates central is sleeping
 /// - `false`: Indicates central is awake
 pub(crate) static SLEEPING_STATE: AtomicBool = AtomicBool::new(false);
+
+#[cfg(feature = "_nrf_ble")]
+pub(crate) fn apply_nrf_serial_number(rmk_config: &mut RmkConfig<'_>) {
+    rmk_config.device_config.serial_number = crate::hid::get_serial_number();
+}
+
+/// HID Class spec opcodes for the HID Control Point characteristic.
+#[cfg(feature = "split")]
+const HID_CTRL_SUSPEND: u8 = 0x00;
+#[cfg(feature = "split")]
+const HID_CTRL_EXIT_SUSPEND: u8 = 0x01;
+
+/// Forward an HID Control Point write to the split central's sleep signal.
+#[cfg(feature = "split")]
+fn handle_hid_control_point(data: &[u8]) {
+    if data.len() != 1 {
+        return;
+    }
+    match data[0] {
+        HID_CTRL_SUSPEND => CENTRAL_SLEEP.signal(true),
+        HID_CTRL_EXIT_SUSPEND => CENTRAL_SLEEP.signal(false),
+        _ => {}
+    }
+}
 
 // TODO: Add documentation about how to define split peripheral num in Rust code
 /// Max number of connections
@@ -166,9 +184,7 @@ async fn wait_for_wake_activity() {
     let mut key_wake = crate::event::KeyboardEvent::subscriber();
     let mut pointing_wake = crate::event::PointingEvent::subscriber();
 
-    match select(key_wake.next_message_pure(), pointing_wake.next_message_pure()).await {
-        _ => {}
-    }
+    let _ = select(key_wake.next_message_pure(), pointing_wake.next_message_pure()).await;
 }
 
 /// BLE transport runnable. Owns the trouble-host server and profile manager;
@@ -193,9 +209,7 @@ where
         #[cfg_attr(not(feature = "_nrf_ble"), allow(unused_mut))] mut rmk_config: RmkConfig<'static>,
     ) -> Self {
         #[cfg(feature = "_nrf_ble")]
-        {
-            rmk_config.device_config.serial_number = crate::hid::get_serial_number();
-        }
+        apply_nrf_serial_number(&mut rmk_config);
 
         #[cfg(feature = "storage")]
         let stored = crate::storage::read_setting(StorageKey::ConnectionType).await;
@@ -273,10 +287,21 @@ where
         let connection_loop = async {
             loop {
                 set_ble_state(BleState::Advertising);
-                match advertise(product_name, &mut peripheral, server).await {
+                let advertise_result = match select(
+                    advertise(product_name, &mut peripheral, server),
+                    profile_manager.update_profile(),
+                )
+                .await
+                {
+                    Either::First(result) => result,
+                    Either::Second(()) => {
+                        set_ble_state(BleState::Inactive);
+                        continue;
+                    }
+                };
+
+                match advertise_result {
                     Ok(conn) => {
-                        // Promote BLE to connected as soon as the GATT link is
-                        // established so the first post-connect key can route.
                         set_ble_state(BleState::Connected);
                         #[cfg(feature = "storage")]
                         let active_bond_info = profile_manager.active_bond_info();
@@ -300,7 +325,7 @@ where
                         // keep scanning the matrix across all subsequent
                         // advertise/connect cycles so reconnect-window keys
                         // aren't dropped.
-                        crate::state::MATRIX_SCAN_OVERRIDE.store(true, Ordering::Release);
+                        crate::state::enable_matrix_scan_override();
 
                         #[cfg(feature = "split")]
                         CENTRAL_SLEEP.signal(true);
@@ -314,10 +339,10 @@ where
                         #[cfg(feature = "defmt")]
                         let e = defmt::Debug2Format(&e);
                         error!("Advertise error: {:?}", e);
+                        // Avoid pegging the CPU on a tight advertise-failure loop.
+                        Timer::after_millis(200).await;
                     }
                 }
-                // Avoid pegging the CPU on a tight advertise-failure loop.
-                Timer::after_millis(200).await;
             }
         };
 
@@ -367,7 +392,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let input_host = server.host_service.input_data;
     #[cfg(feature = "host")]
     let host_control_point = server.host_service.hid_control_point;
-    let battery_level = server.battery_service.level;
     let mouse = server.composite_service.mouse_report;
     let media = server.composite_service.media_report;
     let media_control_point = server.composite_service.hid_control_point;
@@ -395,7 +419,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 #[cfg(feature = "passkey_entry")]
                 passkey_state.clear();
                 info!("[gatt] pairing complete: {:?}", security_level);
-                let profile = get_current_profile();
+                let profile = crate::state::current_profile();
                 if let Some(bond_info) = bond {
                     let profile_info = ProfileInfo {
                         slot_num: profile,
@@ -429,6 +453,11 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         }
                     }
                     GattEvent::Write(event) => {
+                        #[cfg(feature = "host")]
+                        let host_control_point_match = event.handle() == host_control_point.handle;
+                        #[cfg(not(feature = "host"))]
+                        let host_control_point_match = false;
+
                         if event.handle() == output_keyboard.handle {
                             if event.data().len() == 1 {
                                 let led_indicator = LedIndicator::from_bits(event.data()[0]);
@@ -441,54 +470,29 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
                             || event.handle() == media.cccd_handle.expect("No CCCD for media report")
                             || event.handle() == system_control.cccd_handle.expect("No CCCD for system report")
-                            || event.handle() == battery_level.cccd_handle.expect("No CCCD for battery level")
+                            || event.handle() == level.cccd_handle.expect("No CCCD for battery level")
                         {
-                            // CCCD write event
                             cccd_updated = true;
                         } else if event.handle() == hid_control_point.handle
                             || event.handle() == media_control_point.handle
+                            || host_control_point_match
                         {
                             info!("Write GATT Event to Control Point: {:?}", event.handle());
                             #[cfg(feature = "split")]
-                            if event.data().len() == 1 {
-                                let data = event.data()[0];
-                                if data == 0 {
-                                    // Enter sleep mode
-                                    CENTRAL_SLEEP.signal(true);
-                                } else if data == 1 {
-                                    // Wake up
-                                    CENTRAL_SLEEP.signal(false);
-                                }
-                            }
+                            handle_hid_control_point(event.data());
                         } else {
                             #[cfg(feature = "host")]
                             if event.handle() == output_host.handle {
                                 debug!("Got host packet: {:?}", event.data());
                                 if event.data().len() == 32 {
-                                    use crate::channel::{HOST_REQUEST_CHANNEL, HostTransport};
-
                                     let mut data = [0u8; 32];
                                     data.copy_from_slice(event.data());
-                                    HOST_REQUEST_CHANNEL.send((HostTransport::Ble, data)).await;
+                                    crate::channel::try_enqueue_host_request(ConnectionType::Ble, data);
                                 } else {
                                     warn!("Wrong host packet data: {:?}", event.data());
                                 }
                             } else if event.handle() == input_host.cccd_handle.expect("No CCCD for input host") {
-                                // CCCD write event
                                 cccd_updated = true;
-                            } else if event.handle() == host_control_point.handle {
-                                info!("Write GATT Event to Control Point: {:?}", event.handle());
-                                #[cfg(feature = "split")]
-                                if event.data().len() == 1 {
-                                    let data = event.data()[0];
-                                    if data == 0 {
-                                        // Enter sleep mode
-                                        CENTRAL_SLEEP.signal(true);
-                                    } else if data == 1 {
-                                        // Wake up
-                                        CENTRAL_SLEEP.signal(false);
-                                    }
-                                }
                             } else {
                                 debug!("Write GATT Event to Unknown: {:?}", event.handle());
                             }
@@ -765,7 +769,7 @@ async fn run_ble_keyboard<
     let led_task = run_led_reader(&mut ble_led_reader, ConnectionType::Ble);
 
     #[cfg(feature = "host")]
-    let host_task = crate::host::run_ble_host(server.host_service.input_data, conn);
+    let host_task = crate::host::ble::run_ble_host(server.host_service.input_data, conn);
     #[cfg(not(feature = "host"))]
     let host_task = core::future::pending::<()>();
 
@@ -844,7 +848,7 @@ mod tests {
     use embassy_time::Timer;
     use rmk_types::ble::{BleState, BleStatus};
 
-    use crate::event::{publish_event, Axis, AxisEvent, AxisValType, PointingEvent};
+    use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent, publish_event};
     use crate::state::{connection_status, set_ble_state, set_ble_status};
     use crate::test_support::test_block_on as block_on;
 

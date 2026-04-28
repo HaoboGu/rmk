@@ -96,7 +96,7 @@ pub(crate) fn rmk_entry_select(
             };
             let mut tasks = vec![devices_task, keyboard_task];
             tasks.extend(registered_processors);
-            if let Some(t) = host_service_task.clone() {
+            if let Some(t) = host_service_task {
                 tasks.push(t);
             }
             if split_config.connection == "ble" {
@@ -168,7 +168,7 @@ pub(crate) fn rmk_entry_select(
         }
         BoardConfig::UniBody(_) => rmk_entry_unibody(
             hardware,
-            host,
+            host_service_task,
             devices_task,
             processors_task,
             registered_processors,
@@ -183,7 +183,7 @@ pub(crate) fn rmk_entry_select(
 
 pub(crate) fn rmk_entry_unibody(
     hardware: &Hardware,
-    host: &Host,
+    host_service_task: Option<TokenStream2>,
     devices_task: TokenStream2,
     processors_task: TokenStream2,
     registered_processors: Vec<TokenStream2>,
@@ -193,8 +193,8 @@ pub(crate) fn rmk_entry_unibody(
     };
 
     let mut tasks = vec![devices_task, keyboard_task];
-    if host.vial_enabled {
-        tasks.push(quote! { host_service.run() });
+    if let Some(t) = host_service_task {
+        tasks.push(t);
     }
     if !processors_task.is_empty() {
         tasks.push(processors_task);
@@ -227,7 +227,7 @@ pub(crate) fn rmk_entry_unibody(
     }
 }
 
-pub fn expand_tasks(tasks: Vec<TokenStream2>) -> TokenStream2 {
+pub(crate) fn expand_tasks(tasks: Vec<TokenStream2>) -> TokenStream2 {
     let mut current_joined = quote! {};
     tasks.iter().enumerate().for_each(|(id, task)| {
         if id == 0 {

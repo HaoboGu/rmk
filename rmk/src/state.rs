@@ -1,8 +1,10 @@
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use embassy_sync::watch::Watch;
-use rmk_types::ble::{BleState, BleStatus};
-pub use rmk_types::connection::{ConnectionStatus, ConnectionType, UsbState};
+use rmk_types::ble::BleState;
+#[cfg(test)]
+use rmk_types::ble::BleStatus;
+use rmk_types::connection::{ConnectionStatus, ConnectionType, UsbState};
 
 use crate::RawMutex;
 #[cfg(feature = "_ble")]
@@ -15,7 +17,12 @@ const CONNECTION_STATUS_RECEIVERS: usize = 2;
 ///
 /// Sticky: once set by the BLE sleep-wake path, stays set across subsequent
 /// advertise/connect cycles so the user can keep typing through reconnects.
-pub(crate) static MATRIX_SCAN_OVERRIDE: AtomicBool = AtomicBool::new(false);
+static MATRIX_SCAN_OVERRIDE: AtomicBool = AtomicBool::new(false);
+
+#[cfg(feature = "_ble")]
+pub(crate) fn enable_matrix_scan_override() {
+    MATRIX_SCAN_OVERRIDE.store(true, Ordering::Release);
+}
 
 /// True when the keyboard should keep processing input events.
 ///
@@ -23,17 +30,46 @@ pub(crate) static MATRIX_SCAN_OVERRIDE: AtomicBool = AtomicBool::new(false);
 /// now". USB-capable builds keep the input pipeline alive from boot to
 /// preserve the old dummy/disconnected path, and the BLE wake override keeps
 /// it alive through reconnect windows after advertising timeout.
-pub fn input_processing_ready() -> bool {
+pub(crate) fn input_processing_ready() -> bool {
     any_transport_ready() || MATRIX_SCAN_OVERRIDE.load(Ordering::Acquire) || cfg!(not(feature = "_no_usb"))
 }
 
 /// Single source of truth for transport state and routing. All writes go
 /// through the mutator helpers below so the active-output cascade runs and
 /// change events fire on every transition.
-pub(crate) static CONNECTION_STATUS: Watch<RawMutex, ConnectionStatus, CONNECTION_STATUS_RECEIVERS> = Watch::new();
+pub(crate) static CONNECTION_STATUS: Watch<RawMutex, ConnectionStatus, CONNECTION_STATUS_RECEIVERS> =
+    Watch::new_with(ConnectionStatus::new());
 
-pub fn connection_status() -> ConnectionStatus {
-    CONNECTION_STATUS.try_get().unwrap_or_default()
+/// Lock-free mirror of `ConnectionStatus::decide_active`. The HID writer hot
+/// path consults this on every report; reading the full `ConnectionStatus`
+/// would take a mutex per dispatch.
+static ACTIVE_TRANSPORT: AtomicU8 = AtomicU8::new(ACTIVE_NONE);
+const ACTIVE_NONE: u8 = 0;
+const ACTIVE_USB: u8 = 1;
+const ACTIVE_BLE: u8 = 2;
+
+fn encode_active(a: Option<ConnectionType>) -> u8 {
+    match a {
+        None => ACTIVE_NONE,
+        Some(ConnectionType::Usb) => ACTIVE_USB,
+        Some(ConnectionType::Ble) => ACTIVE_BLE,
+    }
+}
+
+pub(crate) fn active_transport() -> Option<ConnectionType> {
+    match ACTIVE_TRANSPORT.load(Ordering::Acquire) {
+        ACTIVE_USB => Some(ConnectionType::Usb),
+        ACTIVE_BLE => Some(ConnectionType::Ble),
+        _ => None,
+    }
+}
+
+pub(crate) fn connection_status() -> ConnectionStatus {
+    // `CONNECTION_STATUS` is constructed via `Watch::new_with`, so
+    // `try_get` is always `Some`.
+    CONNECTION_STATUS
+        .try_get()
+        .expect("CONNECTION_STATUS initialized via new_with")
 }
 
 // Non-atomic read-modify-write: relies on embassy's cooperative scheduling so
@@ -42,9 +78,16 @@ fn update_status(f: impl FnOnce(&mut ConnectionStatus)) {
     let prev = connection_status();
     let mut new = prev;
     f(&mut new);
-    new.active = new.decide_active();
     if prev == new {
         return;
+    }
+    let prev_active = prev.decide_active();
+    let new_active = new.decide_active();
+    if prev_active != new_active {
+        ACTIVE_TRANSPORT.store(encode_active(new_active), Ordering::Release);
+        if let Some(prev) = prev_active {
+            crate::channel::clear_report_channel(prev);
+        }
     }
     CONNECTION_STATUS.sender().send(new);
 
@@ -61,17 +104,18 @@ pub fn set_usb_state(s: UsbState) {
     update_status(|c| c.usb = s);
 }
 
-pub fn set_ble_state(s: BleState) {
+pub(crate) fn set_ble_state(s: BleState) {
     update_status(|c| c.ble.state = s);
 }
 
-pub fn set_ble_status(s: BleStatus) {
+#[cfg(test)]
+pub(crate) fn set_ble_status(s: BleStatus) {
     update_status(|c| c.ble = s);
 }
 
 /// Switching profiles always drops the BLE state back to `Inactive`; the
 /// connection loop re-advertises and updates state from there.
-pub fn set_ble_profile(profile: u8) {
+pub(crate) fn set_ble_profile(profile: u8) {
     update_status(|c| {
         c.ble.profile = profile;
         c.ble.state = BleState::Inactive;
@@ -80,31 +124,40 @@ pub fn set_ble_profile(profile: u8) {
 
 /// Persistence is the caller's responsibility — enqueue
 /// `FlashOperationMessage::ConnectionType` on `FLASH_CHANNEL`.
-pub fn set_preferred(t: ConnectionType) {
+pub(crate) fn set_preferred(t: ConnectionType) {
     update_status(|c| c.preferred = t);
 }
 
-pub fn toggle_preferred() -> ConnectionType {
-    let new = match connection_status().preferred {
-        ConnectionType::Usb => ConnectionType::Ble,
-        ConnectionType::Ble => ConnectionType::Usb,
-    };
-    update_status(|c| c.preferred = new);
+pub(crate) fn toggle_preferred() -> ConnectionType {
+    let mut new = ConnectionType::Usb;
+    update_status(|c| {
+        c.preferred = match c.preferred {
+            ConnectionType::Usb => ConnectionType::Ble,
+            ConnectionType::Ble => ConnectionType::Usb,
+        };
+        new = c.preferred;
+    });
     new
 }
 
 /// Suspended USB counts here so the first wake key can reach the USB writer
 /// and trigger remote wakeup.
-pub fn any_transport_ready() -> bool {
-    connection_status().any_ready()
+pub(crate) fn any_transport_ready() -> bool {
+    active_transport().is_some()
 }
 
-pub fn writable_on(t: ConnectionType) -> bool {
-    connection_status().writable_on(t)
+pub(crate) fn writable_on(t: ConnectionType) -> bool {
+    active_transport() == Some(t)
+}
+
+#[cfg(feature = "_ble")]
+pub(crate) fn current_profile() -> u8 {
+    connection_status().ble.profile
 }
 
 #[cfg(test)]
 mod tests {
+    use core::sync::atomic::Ordering;
     use std::sync::{Mutex, OnceLock};
 
     use embassy_futures::select::{Either, select};
@@ -114,7 +167,6 @@ mod tests {
         CONNECTION_STATUS, ConnectionStatus, ConnectionType, MATRIX_SCAN_OVERRIDE, UsbState, input_processing_ready,
         set_preferred, set_usb_state,
     };
-    use core::sync::atomic::Ordering;
     use crate::event::{ConnectionChangeEvent, EventSubscriber, SubscribableEvent};
     use crate::test_support::test_block_on as block_on;
 
@@ -124,7 +176,9 @@ mod tests {
     }
 
     fn reset_state() {
-        CONNECTION_STATUS.sender().send(ConnectionStatus::default());
+        let initial = ConnectionStatus::default();
+        super::ACTIVE_TRANSPORT.store(super::encode_active(initial.decide_active()), Ordering::Release);
+        CONNECTION_STATUS.sender().send(initial);
         MATRIX_SCAN_OVERRIDE.store(false, Ordering::Release);
     }
 
@@ -171,5 +225,35 @@ mod tests {
             Either::First(_) => {}
             Either::Second(event) => panic!("unexpected connection change event: {:?}", event),
         }
+    }
+
+    #[cfg(not(feature = "_no_usb"))]
+    #[test]
+    fn flipping_away_from_active_clears_its_report_channel() {
+        use crate::channel::USB_REPORT_CHANNEL;
+        use crate::hid::{KeyboardReport, Report};
+
+        let _guard = state_test_lock().lock().unwrap();
+        reset_state();
+        set_usb_state(UsbState::Configured);
+        assert_eq!(super::active_transport(), Some(ConnectionType::Usb));
+
+        // Drain anything left over from earlier tests, then queue a sentinel
+        // that would otherwise persist across a flip.
+        USB_REPORT_CHANNEL.clear();
+        USB_REPORT_CHANNEL
+            .try_send(Report::KeyboardReport(KeyboardReport::default()))
+            .expect("channel should have capacity for sentinel");
+        assert!(USB_REPORT_CHANNEL.try_receive().is_ok());
+        USB_REPORT_CHANNEL
+            .try_send(Report::KeyboardReport(KeyboardReport::default()))
+            .expect("channel should have capacity for sentinel");
+
+        set_usb_state(UsbState::Disabled);
+        assert!(super::active_transport().is_none());
+        assert!(
+            USB_REPORT_CHANNEL.try_receive().is_err(),
+            "USB_REPORT_CHANNEL should be drained when USB stops being active"
+        );
     }
 }

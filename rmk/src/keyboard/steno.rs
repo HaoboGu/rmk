@@ -27,22 +27,26 @@ impl StenoChord {
         Self { state: 0 }
     }
 
-    /// Update live state for a steno key event. Returns a report reflecting
-    /// the new state of all held keys (sent on every change).
-    pub(crate) fn on_event(&mut self, key: StenoKey, pressed: bool) -> Option<Report> {
-        let idx = key.chart_index();
-        if idx >= 64 {
-            return None;
-        }
-        let mask = 1u64 << (63 - idx);
+    /// Update live state for a steno key event. Returns `true` only when the
+    /// bitmap actually changed, so callers can skip the report dispatch on
+    /// no-op edges (re-press of a held key, re-release of an already-released
+    /// key, or out-of-range chart indices).
+    pub(crate) fn update(&mut self, key: StenoKey, pressed: bool) -> bool {
+        let Some(mask) = key.bit_mask() else { return false };
+        let prev = self.state;
         if pressed {
             self.state |= mask;
         } else {
             self.state &= !mask;
         }
-        Some(Report::StenoReport(StenoReport {
+        prev != self.state
+    }
+
+    /// Build a report reflecting the current bitmap of held steno keys.
+    pub(crate) fn current_report(&self) -> Report {
+        Report::StenoReport(StenoReport {
             keys: self.state.to_be_bytes(),
-        }))
+        })
     }
 }
 
@@ -50,57 +54,68 @@ impl StenoChord {
 mod tests {
     use super::*;
 
-    fn report_bytes(report: Option<Report>) -> [u8; 8] {
-        match report.expect("expected a report") {
+    fn report_bytes(s: &StenoChord) -> [u8; 8] {
+        match s.current_report() {
             Report::StenoReport(r) => r.keys,
             _ => panic!("expected StenoReport"),
         }
     }
 
-    fn bitmap(report: Option<Report>) -> u64 {
-        u64::from_be_bytes(report_bytes(report))
+    fn bitmap(s: &StenoChord) -> u64 {
+        u64::from_be_bytes(report_bytes(s))
     }
 
     fn msb_bit(key: StenoKey) -> u64 {
-        1u64 << (63 - key.chart_index())
+        key.bit_mask().expect("test key must be in range")
     }
 
     #[test]
     fn press_sends_live_state() {
         let mut s = StenoChord::new();
-        let b = bitmap(s.on_event(StenoKey::S1, true));
-        assert_eq!(b, msb_bit(StenoKey::S1));
+        s.update(StenoKey::S1, true);
+        assert_eq!(bitmap(&s), msb_bit(StenoKey::S1));
 
-        let b = bitmap(s.on_event(StenoKey::T, true));
-        assert_eq!(b, msb_bit(StenoKey::S1) | msb_bit(StenoKey::T));
+        s.update(StenoKey::T, true);
+        assert_eq!(bitmap(&s), msb_bit(StenoKey::S1) | msb_bit(StenoKey::T));
     }
 
     #[test]
     fn release_clears_bit() {
         let mut s = StenoChord::new();
-        s.on_event(StenoKey::S1, true);
-        s.on_event(StenoKey::T, true);
+        s.update(StenoKey::S1, true);
+        s.update(StenoKey::T, true);
 
-        let b = bitmap(s.on_event(StenoKey::T, false));
-        assert_eq!(b, msb_bit(StenoKey::S1), "T bit should be cleared");
+        s.update(StenoKey::T, false);
+        assert_eq!(bitmap(&s), msb_bit(StenoKey::S1), "T bit should be cleared");
 
-        let b = bitmap(s.on_event(StenoKey::S1, false));
-        assert_eq!(b, 0, "all bits should be cleared");
+        s.update(StenoKey::S1, false);
+        assert_eq!(bitmap(&s), 0, "all bits should be cleared");
     }
 
     #[test]
-    fn every_event_produces_a_report() {
+    fn real_edges_signal_change() {
         let mut s = StenoChord::new();
-        assert!(s.on_event(StenoKey::S1, true).is_some());
-        assert!(s.on_event(StenoKey::T, true).is_some());
-        assert!(s.on_event(StenoKey::T, false).is_some());
-        assert!(s.on_event(StenoKey::S1, false).is_some());
+        assert!(s.update(StenoKey::S1, true));
+        assert!(s.update(StenoKey::T, true));
+        assert!(s.update(StenoKey::T, false));
+        assert!(s.update(StenoKey::S1, false));
+    }
+
+    #[test]
+    fn no_op_edges_skip_dispatch() {
+        let mut s = StenoChord::new();
+        assert!(s.update(StenoKey::S1, true));
+        assert!(!s.update(StenoKey::S1, true), "re-press of held key is a no-op");
+        assert!(s.update(StenoKey::S1, false));
+        assert!(!s.update(StenoKey::S1, false), "re-release of cleared key is a no-op");
+        assert!(!s.update(StenoKey::T, false), "release of never-pressed key is a no-op");
     }
 
     #[test]
     fn s1_is_msb_of_first_byte() {
         let mut s = StenoChord::new();
-        let bytes = report_bytes(s.on_event(StenoKey::S1, true));
+        s.update(StenoKey::S1, true);
+        let bytes = report_bytes(&s);
         assert_eq!(bytes[0], 0x80);
         assert_eq!(&bytes[1..], &[0; 7]);
     }
@@ -108,38 +123,40 @@ mod tests {
     #[test]
     fn x26_is_lsb_of_last_byte() {
         let mut s = StenoChord::new();
-        let bytes = report_bytes(s.on_event(StenoKey::X26, true));
+        s.update(StenoKey::X26, true);
+        let bytes = report_bytes(&s);
         assert_eq!(&bytes[..7], &[0; 7]);
         assert_eq!(bytes[7], 0x01);
     }
 
     #[test]
-    fn out_of_range_index_returns_none() {
+    fn out_of_range_index_is_skipped() {
         let mut s = StenoChord::new();
-        assert!(s.on_event(StenoKey(64), true).is_none());
+        assert!(!s.update(StenoKey(64), true));
     }
 
     #[test]
     fn repeated_chord_produces_zero_between() {
         let mut s = StenoChord::new();
         for _ in 0..3 {
-            s.on_event(StenoKey::S1, true);
-            s.on_event(StenoKey::T, true);
-            s.on_event(StenoKey::T, false);
-            let b = bitmap(s.on_event(StenoKey::S1, false));
-            assert_eq!(b, 0, "all-up must produce zero bitmap");
+            s.update(StenoKey::S1, true);
+            s.update(StenoKey::T, true);
+            s.update(StenoKey::T, false);
+            s.update(StenoKey::S1, false);
+            assert_eq!(bitmap(&s), 0, "all-up must produce zero bitmap");
         }
     }
 
-    /// Press all keys, release all keys, return the final all-up bitmap
-    /// (should be zero) and collect the sequence of live-state bitmaps.
+    /// Press all keys, release all keys, return the peak bitmap held during
+    /// the stroke (when all keys were pressed).
     fn stroke(s: &mut StenoChord, keys: &[StenoKey]) -> u64 {
         let mut peak = 0u64;
         for &k in keys {
-            peak = bitmap(s.on_event(k, true));
+            s.update(k, true);
+            peak = bitmap(s);
         }
         for &k in keys {
-            s.on_event(k, false);
+            s.update(k, false);
         }
         peak
     }

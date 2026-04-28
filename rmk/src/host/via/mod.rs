@@ -3,11 +3,7 @@ use embassy_time::Instant;
 use rmk_types::protocol::vial::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
 use vial::process_vial;
 
-#[cfg(feature = "_ble")]
-use crate::channel::HOST_BLE_TX;
-#[cfg(not(feature = "_no_usb"))]
-use crate::channel::HOST_USB_TX;
-use crate::channel::{HOST_REQUEST_CHANNEL, HostTransport};
+use crate::channel::{HOST_REQUEST_CHANNEL, try_send_host_reply};
 use crate::config::{RmkConfig, VialConfig};
 use crate::core_traits::Runnable;
 use crate::event::KeyboardEventPos;
@@ -24,13 +20,8 @@ mod vial;
 mod vial_lock;
 
 pub struct VialService<'a> {
-    // VialService holds a reference of keymap, for updating
     keymap: &'a KeyMap<'a>,
-
-    // Vial config
     vial_config: VialConfig<'static>,
-
-    // Vail lock instance
     #[cfg(feature = "vial_lock")]
     locker: vial_lock::VialLock<'a>,
 }
@@ -45,12 +36,11 @@ impl<'a> VialService<'a> {
         }
     }
 
-    async fn process_via_packet(&mut self, report: &mut ViaReport, keymap: &KeyMap<'_>) {
+    async fn process_via_packet(&mut self, report: &mut ViaReport) {
         let command_id = report.output_data[0];
 
-        // `report.input_data` is initialized using `report.output_data`
-        report.input_data = report.output_data;
-        // debug!("Received via command: {}, report: {:02X?}", via_command, report.output_data);
+        // Caller pre-fills `input_data` from `output_data`, so individual arms
+        // only need to overwrite the bytes they actually change.
         match command_id.into() {
             ViaCommand::GetProtocolVersion => {
                 BigEndian::write_u16(&mut report.input_data[1..3], VIA_PROTOCOL_VERSION);
@@ -108,7 +98,9 @@ impl<'a> VialService<'a> {
                 let layer = report.output_data[1] as usize;
                 let row = report.output_data[2] as usize;
                 let col = report.output_data[3] as usize;
-                let action = keymap.get_action_at(KeyboardEventPos::key_pos(col as u8, row as u8), layer);
+                let action = self
+                    .keymap
+                    .get_action_at(KeyboardEventPos::key_pos(col as u8, row as u8), layer);
                 let keycode = to_via_keycode(action);
                 info!("Getting keycode: {:02X} at ({},{}), layer {}", keycode, row, col, layer);
                 BigEndian::write_u16(&mut report.input_data[4..6], keycode);
@@ -123,7 +115,8 @@ impl<'a> VialService<'a> {
                     "Setting keycode: 0x{:02X} at ({},{}), layer {} as {:?}",
                     keycode, row, col, layer, action
                 );
-                keymap.set_action_at(KeyboardEventPos::key_pos(col, row), layer as usize, action);
+                self.keymap
+                    .set_action_at(KeyboardEventPos::key_pos(col, row), layer as usize, action);
                 #[cfg(feature = "storage")]
                 FLASH_CHANNEL
                     .send(FlashOperationMessage::KeymapKey {
@@ -206,7 +199,7 @@ impl<'a> VialService<'a> {
                 warn!("Macro reset -- to be implemented")
             }
             ViaCommand::DynamicKeymapGetLayerCount => {
-                report.input_data[1] = keymap.get_keymap_config().2 as u8;
+                report.input_data[1] = self.keymap.get_keymap_config().2 as u8;
             }
             ViaCommand::DynamicKeymapGetBuffer => {
                 let offset = BigEndian::read_u16(&report.output_data[1..3]);
@@ -217,7 +210,7 @@ impl<'a> VialService<'a> {
                 let start = (offset / 2) as usize;
                 let count = (size / 2) as usize;
                 for i in 0..count {
-                    let a = keymap.get_action_by_flat_index(start + i);
+                    let a = self.keymap.get_action_by_flat_index(start + i);
                     let kc = to_via_keycode(a);
                     BigEndian::write_u16(&mut report.input_data[idx..idx + 2], kc);
                     idx += 2;
@@ -229,15 +222,15 @@ impl<'a> VialService<'a> {
                 // size <= 28
                 let size = report.output_data[3];
                 let mut idx = 4;
-                let (row_num, col_num, _layer_num) = keymap.get_keymap_config();
+                let (row_num, col_num, _layer_num) = self.keymap.get_keymap_config();
                 for i in 0..(size as usize) {
                     let via_keycode = LittleEndian::read_u16(&report.output_data[idx..idx + 2]);
                     let action: rmk_types::action::KeyAction = from_via_keycode(via_keycode);
                     let flat_index = offset as usize + i;
-                    keymap.set_action_by_flat_index(flat_index, action);
+                    self.keymap.set_action_by_flat_index(flat_index, action);
                     idx += 2;
                     let (row, col, layer) = get_position_from_offset(flat_index, row_num, col_num);
-                    info!(
+                    debug!(
                         "Setting keymap buffer of offset: {}, row,col,layer: {},{},{}",
                         offset, row, col, layer
                     );
@@ -264,7 +257,7 @@ impl<'a> VialService<'a> {
                     &self.vial_config,
                     #[cfg(feature = "vial_lock")]
                     &mut self.locker,
-                    keymap,
+                    self.keymap,
                 )
                 .await
             }
@@ -281,24 +274,11 @@ impl Runnable for VialService<'_> {
         loop {
             let (transport, output_data) = HOST_REQUEST_CHANNEL.receive().await;
             let mut report = ViaReport {
-                input_data: [0; 32],
+                input_data: output_data,
                 output_data,
             };
-            self.process_via_packet(&mut report, self.keymap).await;
-            match transport {
-                #[cfg(not(feature = "_no_usb"))]
-                HostTransport::Usb => {
-                    if HOST_USB_TX.try_send(report.input_data).is_err() {
-                        warn!("Dropping Vial USB reply because the transport reply queue is full");
-                    }
-                }
-                #[cfg(feature = "_ble")]
-                HostTransport::Ble => {
-                    if HOST_BLE_TX.try_send(report.input_data).is_err() {
-                        warn!("Dropping Vial BLE reply because the transport reply queue is full");
-                    }
-                }
-            }
+            self.process_via_packet(&mut report).await;
+            try_send_host_reply(transport, report.input_data);
         }
     }
 }

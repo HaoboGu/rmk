@@ -17,6 +17,11 @@ use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
+/// Report ID byte that prefixes every Plover HID input report on the wire.
+/// Must match the `report_id` literal in the `gen_hid_descriptor!` macro
+/// invocation for `StenoReport`.
+pub const PLOVER_HID_REPORT_ID: u8 = 0x50;
+
 /// A single steno key, identified by its position (0..=63) in the canonical
 /// Plover HID key chart. See module docs for the full list.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
@@ -103,5 +108,16 @@ impl StenoKey {
     #[inline]
     pub const fn chart_index(self) -> u8 {
         self.0
+    }
+
+    /// Bit mask for this key in the Plover HID 64-bit chord bitmap.
+    ///
+    /// Chart index 0 (`S1-`) is the most significant bit so that
+    /// `bitmap.to_be_bytes()` matches the wire-format byte ordering. Returns
+    /// `None` when the underlying index is out of range — callers must accept
+    /// that `StenoKey(N)` for `N >= 64` doesn't appear in the chord bitmap.
+    #[inline]
+    pub const fn bit_mask(self) -> Option<u64> {
+        if self.0 < 64 { Some(1u64 << (63 - self.0)) } else { None }
     }
 }

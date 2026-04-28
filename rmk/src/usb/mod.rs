@@ -9,7 +9,7 @@ use embassy_usb::driver::Driver;
 use embassy_usb::{Builder, Handler, UsbDevice};
 use rmk_types::connection::{ConnectionType, UsbState};
 use static_cell::StaticCell;
-use usbd_hid::descriptor::AsInputReport as _;
+use usbd_hid::descriptor::AsInputReport;
 
 use crate::RawMutex;
 use crate::channel::USB_REPORT_CHANNEL;
@@ -27,6 +27,13 @@ use crate::light::UsbLedReader;
 use crate::state::set_usb_state;
 
 pub(crate) static USB_REMOTE_WAKEUP: Signal<RawMutex, ()> = Signal::new();
+
+/// Cap on how long a steno report write is allowed to block. The host only
+/// drains the steno IN endpoint while Plover is running; without this cap the
+/// writer task stalls indefinitely (and starves keyboard reports) whenever
+/// Plover is absent.
+#[cfg(feature = "steno")]
+const STENO_WRITE_TIMEOUT_MS: u64 = 5;
 
 pub(crate) struct UsbKeyboardWriter<'a, 'd, D: Driver<'d>> {
     pub(crate) keyboard_writer: &'a mut HidWriter<'d, D, 8>,
@@ -47,6 +54,23 @@ impl<'a, 'd, D: Driver<'d>> UsbKeyboardWriter<'a, 'd, D> {
             steno_writer,
         }
     }
+
+    async fn write_composite<R: AsInputReport>(
+        &mut self,
+        kind: CompositeReportType,
+        report: &R,
+    ) -> Result<usize, HidError> {
+        let mut buf = [0u8; 9];
+        buf[0] = kind as u8;
+        let n = report
+            .serialize(&mut buf[1..])
+            .map_err(|_| HidError::ReportSerializeError)?;
+        self.other_writer
+            .write(&buf[0..n + 1])
+            .await
+            .map_err(HidError::UsbEndpointError)?;
+        Ok(n)
+    }
 }
 
 impl<'d, D: Driver<'d>> RunnableHidWriter for UsbKeyboardWriter<'_, 'd, D> {
@@ -60,8 +84,7 @@ impl<'d, D: Driver<'d>> RunnableHidWriter for UsbKeyboardWriter<'_, 'd, D> {
 impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
     type ReportType = Report;
 
-    async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
-        // Write report to USB
+    async fn write_report(&mut self, report: &Self::ReportType) -> Result<usize, HidError> {
         match report {
             Report::KeyboardReport(keyboard_report) => {
                 let mut buf: [u8; 8] = [0; 8];
@@ -74,54 +97,17 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
                     .map_err(HidError::UsbEndpointError)?;
                 Ok(n)
             }
-            Report::MouseReport(mouse_report) => {
-                let mut buf: [u8; 9] = [0; 9];
-                buf[0] = CompositeReportType::Mouse as u8;
-                let n = mouse_report
-                    .serialize(&mut buf[1..])
-                    .map_err(|_| HidError::ReportSerializeError)?;
-                self.other_writer
-                    .write(&buf[0..n + 1])
-                    .await
-                    .map_err(HidError::UsbEndpointError)?;
-                Ok(n)
-            }
-            Report::MediaKeyboardReport(media_keyboard_report) => {
-                let mut buf: [u8; 9] = [0; 9];
-                buf[0] = CompositeReportType::Media as u8;
-                let n = media_keyboard_report
-                    .serialize(&mut buf[1..])
-                    .map_err(|_| HidError::ReportSerializeError)?;
-                self.other_writer
-                    .write(&buf[0..n + 1])
-                    .await
-                    .map_err(HidError::UsbEndpointError)?;
-                Ok(n)
-            }
-            Report::SystemControlReport(system_control_report) => {
-                let mut buf: [u8; 9] = [0; 9];
-                buf[0] = CompositeReportType::System as u8;
-                let n = system_control_report
-                    .serialize(&mut buf[1..])
-                    .map_err(|_| HidError::ReportSerializeError)?;
-                self.other_writer
-                    .write(&buf[0..n + 1])
-                    .await
-                    .map_err(HidError::UsbEndpointError)?;
-                Ok(n)
-            }
+            Report::MouseReport(r) => self.write_composite(CompositeReportType::Mouse, r).await,
+            Report::MediaKeyboardReport(r) => self.write_composite(CompositeReportType::Media, r).await,
+            Report::SystemControlReport(r) => self.write_composite(CompositeReportType::System, r).await,
             #[cfg(feature = "steno")]
             Report::StenoReport(steno_report) => {
-                // `AsInputReport` for `StenoReport` emits 9 bytes: report id (0x50) + 8 payload bytes.
                 let mut buf: [u8; 9] = [0; 9];
                 let n = steno_report
                     .serialize(&mut buf)
                     .map_err(|_| HidError::ReportSerializeError)?;
-                // The USB host only polls the steno IN endpoint when Plover is running.
-                // Without a timeout, write() blocks forever when Plover is absent, which
-                // starves all subsequent keyboard reports and stalls the keyboard.
                 match embassy_time::with_timeout(
-                    embassy_time::Duration::from_millis(5),
+                    embassy_time::Duration::from_millis(STENO_WRITE_TIMEOUT_MS),
                     self.steno_writer.write(&buf[0..n]),
                 )
                 .await
@@ -137,7 +123,6 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
 }
 
 pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: DeviceConfig<'d>) -> Builder<'d, D> {
-    // Create embassy-usb Config
     let mut usb_config = embassy_usb::Config::new(keyboard_config.vid, keyboard_config.pid);
     usb_config.manufacturer = Some(keyboard_config.manufacturer);
     usb_config.product = Some(keyboard_config.product_name);
@@ -158,13 +143,11 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     #[cfg(not(any(feature = "usb_log", feature = "steno")))]
     const USB_BUF_SIZE: usize = 128;
 
-    // Create embassy-usb DeviceBuilder using the driver and config.
     static CONFIG_DESC: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
     static BOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
     static MSOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
     static CONTROL_BUF: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
 
-    // UsbDevice builder
     let mut builder = Builder::new(
         driver,
         usb_config,
@@ -269,7 +252,7 @@ impl<D: Driver<'static>> Runnable for UsbTransport<D> {
 
         let host_and_extras = async {
             #[cfg(feature = "host")]
-            let host_task = crate::host::run_usb_host(host_rw);
+            let host_task = crate::host::usb::run_usb_host(host_rw);
             #[cfg(not(feature = "host"))]
             let host_task = core::future::pending::<()>();
 
@@ -316,8 +299,7 @@ macro_rules! add_usb_writer {
     };
     // Size $max_packet to the actual report to conserve Packet Memory Area on tight parts.
     ($usb_builder:expr, $descriptor:ty, $n:expr, $max_packet:expr) => {{
-        // Initialize hid writer
-        // Current implementation requires the static STATE, so we need to use the paste crate to generate the static variable name.
+        // `paste` generates per-descriptor `static`s so each writer keeps its own State/Handler.
         use usbd_hid::descriptor::SerializedDescriptor;
         paste::paste! {
             static [<$descriptor:snake:upper _STATE>]: ::static_cell::StaticCell<::embassy_usb::class::hid::State> = ::static_cell::StaticCell::new();
@@ -347,8 +329,7 @@ macro_rules! add_usb_reader_writer {
     };
     // Size $max_packet to the actual report to conserve Packet Memory Area on tight parts.
     ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr, $max_packet:expr) => {{
-        // Initialize hid reader writer
-        // Current implementation requires the static STATE, so we need to use the paste crate to generate the static variable name.
+        // `paste` generates per-descriptor `static`s so each reader/writer keeps its own State/Handler.
         use usbd_hid::descriptor::SerializedDescriptor;
         paste::paste! {
             static [<$descriptor:snake:upper _STATE>]: ::static_cell::StaticCell<::embassy_usb::class::hid::State> = ::static_cell::StaticCell::new();

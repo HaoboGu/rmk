@@ -14,7 +14,8 @@ use rmk::channel::USB_REPORT_CHANNEL;
 use rmk::core_traits::Runnable;
 use rmk::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEvent};
 use rmk::keyboard::Keyboard;
-use rmk::state::{UsbState, set_usb_state};
+use rmk::state::set_usb_state;
+use rmk::types::connection::UsbState;
 
 use crate::common::create_test_keyboard;
 
