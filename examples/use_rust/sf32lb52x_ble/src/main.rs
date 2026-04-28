@@ -20,18 +20,17 @@ use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::direct_pin::DirectPinMatrix;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
+use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
 use rmk::storage::async_flash_wrapper;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
-use sifli_hal::bind_interrupts;
 use sifli_hal::efuse::Efuse;
 use sifli_hal::gpio::Input;
-use sifli_hal::ipc;
 use sifli_hal::mpi::{BlockingNorFlash, BuiltInProfile, NorConfig, ProfileSource};
 use sifli_hal::peripherals::{EFUSEC, USBC};
-use sifli_hal::pmu;
 use sifli_hal::rng::Rng;
 use sifli_hal::usb::{Driver, InterruptHandler as UsbInterruptHandler};
+use sifli_hal::{bind_interrupts, ipc, pmu};
 use sifli_radio::bluetooth::{BleController, BleInitConfig};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -78,7 +77,6 @@ async fn main(_spawner: Spawner) {
     // Give probe-rs time to attach before touching the BLE stack.
     embassy_time::Timer::after_millis(500).await;
 
-
     // Enable MPI2 NOR while running from its XIP window.
     let blocking_flash = match BlockingNorFlash::new_blocking_without_reset(
         p.MPI2,
@@ -100,7 +98,7 @@ async fn main(_spawner: Spawner) {
         num_sectors: 16,
         ..Default::default()
     };
-    let mut keymap_data = KeymapData::new(keymap::get_default_keymap());
+    let mut keymap_data = KeymapData::new_with_encoder(keymap::get_default_keymap(), keymap::get_default_encoder_map());
     let mut behavior_config = BehaviorConfig::default();
     let per_key_config = PositionalConfig::default();
     let (keymap, mut storage) = initialize_keymap_and_storage(
@@ -111,7 +109,6 @@ async fn main(_spawner: Spawner) {
         &per_key_config,
     )
     .await;
-
 
     // Initialize BLE controller (LCPU + IPC + HCI).
     let controller: BleController = match BleController::new(
@@ -139,8 +136,9 @@ async fn main(_spawner: Spawner) {
     // Initialize USB driver (dual-mode USB + BLE). PA35/PA36 are the USB D+/D- pins.
     let usb_driver = Driver::new(p.USBC, Irqs, p.PA35, p.PA36);
 
-    // Pin config: KEY2 on the SF32LB52-DevKit-LCD
-    let direct_pins = config_direct_pins_sifli!(peripherals: p, direct_pins: [[PA11]]);
+    // Pin config: SF32 SuperKey macro keyboard (https://github.com/SiFliSparks/SuperKey)
+    // KEY1=PA26, KEY2=PA33, KEY3=PA32, KEY4=PA40 — active-low with pull-ups.
+    let direct_pins = config_direct_pins_sifli!(peripherals: p, direct_pins: [[PA26, PA33, PA32, PA40]]);
 
     let keyboard_device_config = DeviceConfig {
         vid: 0x4c4b,
@@ -150,7 +148,7 @@ async fn main(_spawner: Spawner) {
         serial_number: "vial:f64c2b3c:000002",
     };
 
-    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]);
+    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (0, 3)]);
 
     let rmk_config = RmkConfig {
         device_config: keyboard_device_config,
@@ -160,13 +158,20 @@ async fn main(_spawner: Spawner) {
     };
 
     let debouncer = DefaultDebouncer::new();
-    let mut matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, false);
+    let mut matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, true);
     let mut keyboard = Keyboard::new(&keymap);
+
+    // Rotary encoder: PA43 = phase A, PA41 = phase B. Detents short to GND, so pull-ups are required.
+    // Resolution 4 collapses the 4 quadrature transitions per detent into a single event;
+    // reverse = true matches the SuperKey's mechanical orientation.
+    let encoder_a = Input::new(p.PA43, sifli_hal::gpio::Pull::Up);
+    let encoder_b = Input::new(p.PA41, sifli_hal::gpio::Pull::Up);
+    let mut encoder = RotaryEncoder::with_resolution(encoder_a, encoder_b, 4, true, 0).with_debounce(2);
 
     info!("Starting RMK dual-mode (USB + BLE) runner...");
 
     join3(
-        run_all!(matrix),
+        run_all!(matrix, encoder),
         keyboard.run(),
         run_rmk(&keymap, usb_driver, &stack, &mut storage, rmk_config),
     )

@@ -15,15 +15,16 @@ rmk = { path = "../../../rmk", default-features = false, features = [
     "defmt",
     "storage",
     "vial",
+    "async_matrix",
 ] }
 
-sifli-hal = { path = "/Users/haobogu/Projects/rust/sifli-rs/sifli-hal", features = [
+sifli-hal = { git = "https://github.com/OpenSiFli/sifli-rs", rev = "8b9da60c616a945d444fdd18b80c773f903d2796", features = [
     "defmt",
     "sf32lb52x",
     "unstable-pac",
     "time-driver-gptim2",
 ] }
-sifli-radio = { path = "/Users/haobogu/Projects/rust/sifli-rs/sifli-radio", features = [
+sifli-radio = { git = "https://github.com/OpenSiFli/sifli-rs", rev = "8b9da60c616a945d444fdd18b80c773f903d2796", features = [
     "sf32lb52x-lcpu",
     "defmt",
 ] }

@@ -2105,6 +2105,7 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 [[package]]
 name = "sifli-hal"
 version = "0.1.1"
+source = "git+https://github.com/OpenSiFli/sifli-rs?rev=8b9da60c616a945d444fdd18b80c773f903d2796#8b9da60c616a945d444fdd18b80c773f903d2796"
 dependencies = [
  "bitfield-struct",
  "cfg-if",
@@ -2157,6 +2158,7 @@ dependencies = [
 [[package]]
 name = "sifli-radio"
 version = "0.1.0"
+source = "git+https://github.com/OpenSiFli/sifli-rs?rev=8b9da60c616a945d444fdd18b80c773f903d2796#8b9da60c616a945d444fdd18b80c773f903d2796"
 dependencies = [
  "bt-hci",
  "cortex-m",

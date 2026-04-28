@@ -1,36 +1,25 @@
 {
-    "name": "RMK Keyboard",
+    "name": "RMK SF32 SuperKey",
     "vendorId": "0x4C4B",
-    "productId": "0x4643",
+    "productId": "0x4644",
     "lighting": "none",
     "matrix": {
-        "rows": 4,
-        "cols": 3
+        "rows": 1,
+        "cols": 4
     },
     "layouts": {
         "keymap": [
             [
                 "0,0",
                 "0,1",
-                "0,2"
+                "0,2",
+                {"x":0.25},
+                "0,0\n\n\n\n\n\n\n\n\ne",
+                "0,1\n\n\n\n\n\n\n\n\ne"
             ],
             [
-                "1,0",
-                "1,1",
-                "1,2"
-            ],
-            [
-                "2,0",
-                "2,1",
-                "2,2"
-            ],
-            [
-                {
-                    "y": -2,
-                    "x": 4
-                },
-                "3,0",
-                "3,2"
+                {"x":3.75},
+                "0,3"
             ]
         ]
     }

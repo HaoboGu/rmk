@@ -11,8 +11,10 @@ macro_rules! config_direct_pins_sifli {
 }
 
 macro_rules! config_direct_pin_sifli {
-    (@pin $p:ident, _) => { None };
+    (@pin $p:ident, _) => {
+        None
+    };
     (@pin $p:ident, $pin:ident) => {
-        Some(Input::new($p.$pin, sifli_hal::gpio::Pull::None))
+        Some(Input::new($p.$pin, sifli_hal::gpio::Pull::Up))
     };
 }
