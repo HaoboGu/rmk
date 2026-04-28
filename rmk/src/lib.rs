@@ -198,7 +198,15 @@ pub async fn run_rmk<
     #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
     {
         let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.device_config);
-        let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8, 8);
+        let keyboard_reader_writer = add_usb_reader_writer!(
+            &mut usb_builder,
+            KeyboardReport,
+            1,
+            8,
+            8,
+            ::embassy_usb::class::hid::HidSubclass::Boot,
+            ::embassy_usb::class::hid::HidBootProtocol::Keyboard
+        );
         let mut other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9, 16);
         #[cfg(feature = "steno")]
         let mut steno_writer = add_usb_writer!(&mut usb_builder, StenoReport, 9, 16);
