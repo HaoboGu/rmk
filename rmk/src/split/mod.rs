@@ -1,9 +1,16 @@
+use core::sync::atomic::AtomicBool;
+
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "_ble")]
 use crate::event::BatteryStatusEvent;
 use crate::event::{KeyboardEvent, PointingEvent};
+
+/// Peripheral-side flag: the central has told us (over the split link) that
+/// its input pipeline is active and it can accept our key events.
+/// Mirrors the value carried by `SplitMessage::ConnectionState`.
+pub(crate) static SPLIT_CENTRAL_READY: AtomicBool = AtomicBool::new(false);
 
 #[cfg(feature = "_ble")]
 pub mod ble;
@@ -30,8 +37,9 @@ pub(crate) enum SplitMessage {
     Pointing(PointingEvent),
     /// Led state, on/off, from central to peripheral
     LedState(bool),
-    /// The central connection state, true if central has been connected to host.
-    /// This message is sync from central to peripheral
+    /// The central input-processing state, true if the central can accept
+    /// peripheral key events right now. This message is synced from central to
+    /// peripheral.
     ConnectionState(bool),
     /// BLE Address, used in syncing address between central and peripheral
     Address([u8; 6]),

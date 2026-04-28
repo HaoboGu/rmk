@@ -4,6 +4,7 @@ use embassy_sync::channel::Channel;
 #[cfg(feature = "_ble")]
 use embassy_sync::signal::Signal;
 pub use embassy_sync::{blocking_mutex, channel, pubsub, zerocopy_channel};
+use rmk_types::connection::ConnectionType;
 #[cfg(feature = "_ble")]
 use {crate::ble::profile::BleProfileAction, rmk_types::led_indicator::LedIndicator};
 
@@ -17,8 +18,41 @@ use crate::{REPORT_CHANNEL_SIZE, RawMutex};
 /// Signal for LED indicator, used in BLE keyboards only since BLE receiving is not async
 #[cfg(feature = "_ble")]
 pub(crate) static LED_SIGNAL: Signal<RawMutex, LedIndicator> = Signal::new();
-/// Channel for keyboard report from input processors to hid writer/reader
-pub static KEYBOARD_REPORT_CHANNEL: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE> = Channel::new();
+
+/// Drained by `UsbKeyboardWriter::run_writer`. Single-producer, single-consumer.
+#[cfg(not(feature = "_no_usb"))]
+pub static USB_REPORT_CHANNEL: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE> = Channel::new();
+
+/// Drained by `BleHidServer::run_writer`. Single-producer, single-consumer.
+#[cfg(feature = "_ble")]
+pub static BLE_REPORT_CHANNEL: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE> = Channel::new();
+
+fn active_report_channel() -> Option<&'static Channel<RawMutex, Report, REPORT_CHANNEL_SIZE>> {
+    match crate::state::connection_status().active? {
+        #[cfg(not(feature = "_no_usb"))]
+        ConnectionType::Usb => Some(&USB_REPORT_CHANNEL),
+        #[cfg(feature = "_ble")]
+        ConnectionType::Ble => Some(&BLE_REPORT_CHANNEL),
+        #[allow(unreachable_patterns)]
+        _ => None,
+    }
+}
+
+/// Reports generated while no transport is selected are dropped on the floor.
+pub async fn dispatch_report(report: Report) {
+    if let Some(ch) = active_report_channel() {
+        ch.send(report).await;
+    }
+}
+
+/// Drops the report when the active transport's queue is full or no
+/// transport is selected. Use for producers where back-pressure would block
+/// the matrix scan (e.g. steno chord output).
+pub fn try_dispatch_report(report: Report) {
+    if let Some(ch) = active_report_channel() {
+        let _ = ch.try_send(report);
+    }
+}
 
 // Sync messages from server to flash
 #[cfg(feature = "storage")]

@@ -32,9 +32,6 @@ pub(crate) use rmk_types::constants::*;
 // This mod MUST go first, so that the others see its macros.
 pub(crate) mod fmt;
 
-use core::future::Future;
-use core::sync::atomic::Ordering;
-
 #[cfg(feature = "_ble")]
 use bt_hci::{
     cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy},
@@ -49,39 +46,19 @@ use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 #[cfg(not(feature = "_no_usb"))]
 use embassy_usb::driver::Driver;
 pub use futures;
-use futures::FutureExt;
 pub use heapless;
-#[cfg(all(not(feature = "_ble"), feature = "steno"))]
-use hid::StenoReport;
-#[cfg(all(feature = "host", not(feature = "_no_usb"), not(feature = "_ble")))]
-use hid::ViaReport;
-#[cfg(not(feature = "_ble"))]
-use hid::{CompositeReport, KeyboardReport};
-use hid::{HidReaderTrait, RunnableHidWriter};
 use keymap::KeyMap;
 pub use keymap::KeymapData;
-use processor::PollingProcessor;
-use processor::builtin::wpm::WpmProcessor;
 pub use rmk_macro as macros;
 pub use rmk_types as types;
 #[cfg(all(feature = "storage", feature = "host"))]
 use rmk_types::action::EncoderAction;
-use rmk_types::led_indicator::LedIndicator;
-use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
 pub use trouble_host::prelude::*;
-#[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
-use {
-    crate::light::UsbLedReader,
-    crate::usb::{UsbKeyboardWriter, add_usb_reader_writer, add_usb_writer, new_usb_builder},
-};
 #[cfg(feature = "storage")]
 use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 
 use crate::config::PositionalConfig;
-use crate::event::{LedIndicatorEvent, publish_event};
-use crate::keyboard::LOCK_LED_STATES;
-use crate::state::ConnectionState;
 
 #[cfg(feature = "_ble")]
 pub mod ble;
@@ -183,124 +160,34 @@ pub async fn run_rmk<
     #[cfg(feature = "_ble")] stack: &'b Stack<'b, C, DefaultPacketPool>,
     rmk_config: RmkConfig<'static>,
 ) -> ! {
-    // Dispatch the keyboard runner
-    #[cfg(feature = "_ble")]
-    crate::ble::run_ble(
-        #[cfg(not(feature = "_no_usb"))]
-        usb_driver,
-        #[cfg(feature = "_ble")]
-        stack,
-        rmk_config,
-    )
-    .await;
+    use core_traits::Runnable as _;
 
-    // USB keyboard
-    #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
+    use crate::processor::PollingProcessor;
+    use crate::processor::builtin::wpm::WpmProcessor;
+
+    #[cfg(not(feature = "_no_usb"))]
+    let device_config = rmk_config.device_config;
+
+    let mut wpm = WpmProcessor::new();
+
+    #[cfg(all(feature = "_ble", not(feature = "_no_usb")))]
     {
-        let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.device_config);
-        let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8, 8);
-        let mut other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9, 16);
-        #[cfg(feature = "steno")]
-        let mut steno_writer = add_usb_writer!(&mut usb_builder, StenoReport, 9, 16);
-        #[cfg(feature = "host")]
-        let mut host_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32, 32);
+        let mut usb = crate::usb::UsbTransport::new(usb_driver, device_config);
+        let mut ble = crate::ble::BleTransport::new(stack, rmk_config).await;
+        embassy_futures::join::join3(usb.run(), ble.run(), wpm.polling_loop()).await;
+    }
 
-        let (mut keyboard_reader, mut keyboard_writer) = keyboard_reader_writer.split();
+    #[cfg(all(feature = "_ble", feature = "_no_usb"))]
+    {
+        let mut ble = crate::ble::BleTransport::new(stack, rmk_config).await;
+        embassy_futures::join::join(ble.run(), wpm.polling_loop()).await;
+    }
 
-        #[cfg(feature = "usb_log")]
-        let logger_fut = {
-            let usb_logger = crate::usb::add_usb_logger!(&mut usb_builder);
-            embassy_usb_logger::with_custom_style!(1024, log::LevelFilter::Debug, usb_logger, |record, writer| {
-                use core::fmt::Write;
-                let ms = embassy_time::Instant::now().as_millis();
-                let _ = write!(writer, "[{:>8}ms {:5}] {}\r\n", ms, record.level(), record.args());
-            })
-        };
-
-        #[cfg(not(feature = "usb_log"))]
-        let logger_fut = async {};
-        let mut usb_device = usb_builder.build();
-
-        // Run all tasks, if one of them fails, wait 1 second and then restart
-        embassy_futures::join::join(logger_fut, async {
-            loop {
-                let usb_task = async {
-                    loop {
-                        use embassy_futures::select::{Either, select};
-
-                        use crate::usb::USB_REMOTE_WAKEUP;
-
-                        // Run
-                        usb_device.run_until_suspend().await;
-                        // Suspended, wait resume or remote wakeup
-                        match select(usb_device.wait_resume(), USB_REMOTE_WAKEUP.wait()).await {
-                            Either::First(_) => continue,
-                            Either::Second(_) => {
-                                info!("USB wakeup remote");
-                            }
-                        }
-                    }
-                };
-
-                let kb_fut = run_keyboard(
-                    usb_task,
-                    UsbLedReader::new(&mut keyboard_reader),
-                    UsbKeyboardWriter::new(
-                        &mut keyboard_writer,
-                        &mut other_writer,
-                        #[cfg(feature = "steno")]
-                        &mut steno_writer,
-                    ),
-                );
-
-                #[cfg(feature = "host")]
-                embassy_futures::select::select(kb_fut, crate::host::run_usb_host(&mut host_reader_writer)).await;
-                #[cfg(not(feature = "host"))]
-                kb_fut.await;
-            }
-        })
-        .await;
+    #[cfg(all(not(feature = "_ble"), not(feature = "_no_usb")))]
+    {
+        let mut usb = crate::usb::UsbTransport::new(usb_driver, device_config);
+        embassy_futures::join::join(usb.run(), wpm.polling_loop()).await;
     }
 
     unreachable!("Should never reach here, wrong feature gate combination?");
-}
-
-pub(crate) async fn run_keyboard<R: HidReaderTrait<ReportType = LedIndicator>, W: RunnableHidWriter>(
-    communication_fut: impl Future<Output = ()>,
-    mut led_reader: R,
-    mut keyboard_writer: W,
-) {
-    // The state will be changed to true after the keyboard starts running
-    CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
-    let writer_fut = keyboard_writer.run_writer();
-    let led_fut = async {
-        loop {
-            match led_reader.read_report().await {
-                Ok(led_indicator) => {
-                    info!("Got led indicator");
-                    LOCK_LED_STATES.store(led_indicator.into_bits(), core::sync::atomic::Ordering::Relaxed);
-                    publish_event(LedIndicatorEvent::new(led_indicator));
-                }
-                Err(e) => {
-                    debug!("Read HID LED indicator error: {:?}", e);
-                    embassy_time::Timer::after_millis(1000).await
-                }
-            }
-        }
-    };
-
-    let mut wpm_processor = WpmProcessor::new();
-
-    let mut communication_task = core::pin::pin!(communication_fut.fuse());
-    let mut led_task = core::pin::pin!(led_fut.fuse());
-    let mut writer_task = core::pin::pin!(writer_fut.fuse());
-
-    futures::select_biased! {
-        _ = communication_task => error!("Communication task has ended"),
-        _ = wpm_processor.polling_loop().fuse() => error!("WPM Processor task ended"),
-        _ = led_task => error!("Led task has ended"),
-        _ = writer_task => error!("Writer task has ended"),
-    };
-
-    CONNECTION_STATE.store(ConnectionState::Disconnected.into(), Ordering::Release);
 }

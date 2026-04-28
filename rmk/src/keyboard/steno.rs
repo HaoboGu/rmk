@@ -12,7 +12,6 @@
 
 use rmk_types::steno::StenoKey;
 
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::hid::{Report, StenoReport};
 
 #[derive(Debug, Default)]
@@ -45,14 +44,6 @@ impl StenoChord {
             keys: self.state.to_be_bytes(),
         }))
     }
-}
-
-/// Try to send a steno report without blocking. The Plover HID writer drains
-/// the report channel; if it can't keep up we drop the report rather than
-/// stall the keyboard task - a missed chord is recoverable, a stalled
-/// keyboard is not.
-pub(crate) fn try_send(report: Report) {
-    let _ = KEYBOARD_REPORT_CHANNEL.try_send(report);
 }
 
 #[cfg(test)]

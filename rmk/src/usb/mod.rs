@@ -1,44 +1,32 @@
-use core::sync::atomic::Ordering;
-
+use embassy_futures::join::join4;
+use embassy_futures::select::{Either, select};
 use embassy_sync::signal::Signal;
-use embassy_sync::watch::{Watch, WatchBehavior};
-use embassy_usb::class::hid::{HidWriter, ReportId, RequestHandler};
+#[cfg(feature = "host")]
+use embassy_usb::class::hid::HidReaderWriter;
+use embassy_usb::class::hid::{HidReader, HidWriter, ReportId, RequestHandler};
 use embassy_usb::control::OutResponse;
 use embassy_usb::driver::Driver;
-use embassy_usb::{Builder, Handler};
+use embassy_usb::{Builder, Handler, UsbDevice};
+use rmk_types::connection::{ConnectionType, UsbState};
 use static_cell::StaticCell;
 use usbd_hid::descriptor::AsInputReport as _;
 
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::RawMutex;
+use crate::channel::USB_REPORT_CHANNEL;
 use crate::config::DeviceConfig;
-use crate::hid::{CompositeReportType, HidError, HidWriterTrait, Report, RunnableHidWriter};
-use crate::state::ConnectionState;
-use crate::{CONNECTION_STATE, RawMutex};
+use crate::core_traits::Runnable;
+#[cfg(feature = "steno")]
+use crate::hid::StenoReport;
+#[cfg(feature = "host")]
+use crate::hid::ViaReport;
+use crate::hid::{
+    CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report, RunnableHidWriter,
+    run_led_reader,
+};
+use crate::light::UsbLedReader;
+use crate::state::set_usb_state;
 
 pub(crate) static USB_REMOTE_WAKEUP: Signal<RawMutex, ()> = Signal::new();
-
-/// USB state
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum UsbState {
-    // Disconnected
-    Disabled = 0x0,
-    // Connected, but NOT ready
-    Enabled = 0x1,
-    // Connected, ready to use
-    Configured = 0x2,
-}
-
-impl From<u8> for UsbState {
-    fn from(state: u8) -> Self {
-        match state {
-            0 => UsbState::Disabled,
-            1 => UsbState::Enabled,
-            2 => UsbState::Configured,
-            _ => UsbState::Disabled,
-        }
-    }
-}
 
 pub(crate) struct UsbKeyboardWriter<'a, 'd, D: Driver<'d>> {
     pub(crate) keyboard_writer: &'a mut HidWriter<'d, D, 8>,
@@ -62,8 +50,10 @@ impl<'a, 'd, D: Driver<'d>> UsbKeyboardWriter<'a, 'd, D> {
 }
 
 impl<'d, D: Driver<'d>> RunnableHidWriter for UsbKeyboardWriter<'_, 'd, D> {
+    const KIND: ConnectionType = ConnectionType::Usb;
+
     async fn get_report(&mut self) -> Self::ReportType {
-        KEYBOARD_REPORT_CHANNEL.receive().await
+        USB_REPORT_CHANNEL.receive().await
     }
 }
 
@@ -190,6 +180,123 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     builder
 }
 
+/// USB transport runnable. Owns the embassy-usb device + every HID
+/// reader/writer pair and runs them concurrently for the lifetime of the
+/// program.
+pub struct UsbTransport<D: Driver<'static>> {
+    device: UsbDevice<'static, D>,
+    keyboard_reader: HidReader<'static, D, 1>,
+    keyboard_writer: HidWriter<'static, D, 8>,
+    other_writer: HidWriter<'static, D, 9>,
+    #[cfg(feature = "steno")]
+    steno_writer: HidWriter<'static, D, 9>,
+    #[cfg(feature = "host")]
+    host_rw: HidReaderWriter<'static, D, 32, 32>,
+    #[cfg(feature = "usb_log")]
+    logger: Option<embassy_usb::class::cdc_acm::CdcAcmClass<'static, D>>,
+}
+
+impl<D: Driver<'static>> UsbTransport<D> {
+    pub fn new(driver: D, device_config: DeviceConfig<'static>) -> Self {
+        let mut builder: Builder<'static, D> = new_usb_builder(driver, device_config);
+        let keyboard_rw = add_usb_reader_writer!(&mut builder, KeyboardReport, 1, 8, 8);
+        let other_writer = add_usb_writer!(&mut builder, CompositeReport, 9, 16);
+        #[cfg(feature = "steno")]
+        let steno_writer = add_usb_writer!(&mut builder, StenoReport, 9, 16);
+        #[cfg(feature = "host")]
+        let host_rw = add_usb_reader_writer!(&mut builder, ViaReport, 32, 32, 32);
+        #[cfg(feature = "usb_log")]
+        let logger = Some(add_usb_logger!(&mut builder));
+
+        let (keyboard_reader, keyboard_writer) = keyboard_rw.split();
+        let device = builder.build();
+
+        Self {
+            device,
+            keyboard_reader,
+            keyboard_writer,
+            other_writer,
+            #[cfg(feature = "steno")]
+            steno_writer,
+            #[cfg(feature = "host")]
+            host_rw,
+            #[cfg(feature = "usb_log")]
+            logger,
+        }
+    }
+}
+
+impl<D: Driver<'static>> Runnable for UsbTransport<D> {
+    async fn run(&mut self) -> ! {
+        let Self {
+            device,
+            keyboard_reader,
+            keyboard_writer,
+            other_writer,
+            #[cfg(feature = "steno")]
+            steno_writer,
+            #[cfg(feature = "host")]
+            host_rw,
+            #[cfg(feature = "usb_log")]
+            logger,
+        } = self;
+
+        let usb_device_task = async {
+            loop {
+                device.run_until_suspend().await;
+                match select(device.wait_resume(), USB_REMOTE_WAKEUP.wait()).await {
+                    Either::First(_) => continue,
+                    Either::Second(_) => {
+                        info!("USB wakeup remote");
+                        if let Err(e) = device.remote_wakeup().await {
+                            info!("USB wakeup remote error: {:?}", e);
+                        }
+                    }
+                }
+            }
+        };
+
+        let mut writer = UsbKeyboardWriter::new(
+            keyboard_writer,
+            other_writer,
+            #[cfg(feature = "steno")]
+            steno_writer,
+        );
+        let writer_task = writer.run_writer();
+
+        let mut led_reader = UsbLedReader::new(keyboard_reader);
+        let led_task = run_led_reader(&mut led_reader, ConnectionType::Usb);
+
+        let host_and_extras = async {
+            #[cfg(feature = "host")]
+            let host_task = crate::host::run_usb_host(host_rw);
+            #[cfg(not(feature = "host"))]
+            let host_task = core::future::pending::<()>();
+
+            #[cfg(feature = "usb_log")]
+            {
+                let logger_class = logger.take().expect("UsbTransport::run called twice");
+                let logger_fut = embassy_usb_logger::with_custom_style!(
+                    1024,
+                    log::LevelFilter::Debug,
+                    logger_class,
+                    |record, writer| {
+                        use core::fmt::Write;
+                        let ms = embassy_time::Instant::now().as_millis();
+                        let _ = write!(writer, "[{:>8}ms {:5}] {}\r\n", ms, record.level(), record.args());
+                    }
+                );
+                embassy_futures::join::join(host_task, logger_fut).await;
+            }
+            #[cfg(not(feature = "usb_log"))]
+            host_task.await;
+        };
+
+        join4(usb_device_task, writer_task, led_task, host_and_extras).await;
+        unreachable!("UsbTransport sub-tasks must run forever");
+    }
+}
+
 #[cfg(feature = "usb_log")]
 macro_rules! add_usb_logger {
     ($usb_builder:expr) => {{
@@ -287,17 +394,14 @@ impl UsbDeviceHandler {
     }
 }
 
-static USB_CONFIGURED: Watch<crate::RawMutex, (), 1> = Watch::new();
-static USB_DISABLED: Watch<crate::RawMutex, (), 1> = Watch::new();
-
 impl Handler for UsbDeviceHandler {
     fn enabled(&mut self, enabled: bool) {
         if enabled {
             info!("Device enabled");
+            set_usb_state(UsbState::Enabled);
         } else {
             info!("Device disabled");
-            USB_CONFIGURED.sender().clear();
-            USB_DISABLED.sender().send(());
+            set_usb_state(UsbState::Disabled);
         }
     }
 
@@ -311,11 +415,10 @@ impl Handler for UsbDeviceHandler {
 
     fn configured(&mut self, configured: bool) {
         if configured {
-            CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
-            USB_DISABLED.sender().clear();
-            USB_CONFIGURED.sender().send(());
+            set_usb_state(UsbState::Configured);
             info!("Device configured, it may now draw up to the configured current from Vbus.")
         } else {
+            set_usb_state(UsbState::Enabled);
             info!("Device is no longer configured, the Vbus current limit is 100mA.");
         }
     }
@@ -325,10 +428,12 @@ impl Handler for UsbDeviceHandler {
         // both arms collapse to identical empty blocks — suppress the lint.
         #[allow(clippy::if_same_then_else)]
         if suspended {
+            set_usb_state(UsbState::Suspended);
             info!(
                 "Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
             );
         } else {
+            set_usb_state(UsbState::Configured);
             info!(
                 "Device resumed, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
             );
@@ -337,21 +442,5 @@ impl Handler for UsbDeviceHandler {
 
     fn remote_wakeup_enabled(&mut self, enabled: bool) {
         info!("Remote wakeup enabled state: {}", enabled);
-    }
-}
-
-pub(crate) async fn wait_until_usb_configured() {
-    if !USB_CONFIGURED.contains_value()
-        && let Some(mut r) = USB_CONFIGURED.receiver()
-    {
-        r.changed().await
-    }
-}
-
-pub(crate) async fn wait_until_usb_disabled() {
-    if !USB_DISABLED.contains_value()
-        && let Some(mut r) = USB_DISABLED.receiver()
-    {
-        r.changed().await
     }
 }

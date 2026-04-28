@@ -7,7 +7,7 @@ use futures::future::pending;
 use rmk_macro::{input_device, processor};
 use usbd_hid::descriptor::MouseReport;
 
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::channel::dispatch_report;
 use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent, PointingSetCpiEvent};
 use crate::hid::Report;
 use crate::keymap::KeyMap;
@@ -303,7 +303,7 @@ impl<'a> PointingProcessor<'a> {
             wheel: 0,
             pan: 0,
         };
-        KEYBOARD_REPORT_CHANNEL.send(Report::MouseReport(mouse_report)).await;
+        dispatch_report(Report::MouseReport(mouse_report)).await;
     }
 }
 

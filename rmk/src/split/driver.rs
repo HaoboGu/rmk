@@ -1,14 +1,12 @@
 //! The abstracted driver layer of the split keyboard.
 //!
-use core::sync::atomic::Ordering;
-
 use embassy_futures::select::{Either3, select3};
 use embassy_time::Instant;
 use futures::FutureExt;
 
 use super::SplitMessage;
-use crate::CONNECTION_STATE;
 use crate::event::{KeyboardEvent, KeyboardEventPos, SubscribableEvent, publish_event, publish_event_async};
+use crate::state::input_processing_ready;
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -74,13 +72,14 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
     /// Run the manager.
     ///
     /// The manager receives from the peripheral and publishes input events.
-    /// It also syncs the `ConnectionState` to the peripheral periodically.
+    /// It also syncs the central's input-processing state to the peripheral
+    /// periodically.
     pub(crate) async fn run(mut self) {
         use embassy_time::Timer;
 
         use crate::event::EventSubscriber;
 
-        let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
+        let mut conn_state = input_processing_ready();
         if self.send(&SplitMessage::ConnectionState(conn_state)).await.is_err() {
             return;
         }
@@ -147,7 +146,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                     }
                 }
                 Either3::Third(_) => {
-                    conn_state = CONNECTION_STATE.load(Ordering::Acquire);
+                    conn_state = input_processing_ready();
                     trace!("Syncing connection state to peripheral: {}", conn_state);
                     if self.send(&SplitMessage::ConnectionState(conn_state)).await.is_err() {
                         return;
@@ -170,8 +169,9 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                         return;
                     }
 
-                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                        // Only when the connection is established, send the key event.
+                    if input_processing_ready() {
+                        // Only forward peripheral input when the central is
+                        // actively processing keyboard events.
                         let adjusted_key_event = KeyboardEvent::key(
                             key_pos.row + ROW_OFFSET as u8,
                             key_pos.col + COL_OFFSET as u8,
@@ -179,19 +179,17 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                         );
                         publish_event_async(adjusted_key_event).await;
                     } else {
-                        warn!("Key event from peripheral is ignored because the connection is not established.");
+                        warn!("Key event from peripheral is ignored because the central input path is inactive.");
                     }
                 }
                 _ => {
                     // For rotary encoder
-                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                        // Only when the connection is established, send the key event.
+                    if input_processing_ready() {
                         publish_event_async(e).await;
                     }
                 }
             },
-            // Process other split messages which requires connection to host
-            _ if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) => match split_message {
+            _ if input_processing_ready() => match split_message {
                 // Non-key events are drop-on-full to keep the split read loop responsive.
                 SplitMessage::Pointing(e) => publish_event(e),
                 #[cfg(feature = "_ble")]
@@ -203,7 +201,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 _ => warn!("{:?} should not come from peripheral", split_message),
             },
             _ => warn!(
-                "{:?} from peripheral is ignored because the connection is not established.",
+                "{:?} from peripheral is ignored because the central input path is inactive.",
                 split_message
             ),
         }

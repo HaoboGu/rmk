@@ -1,13 +1,11 @@
-use core::cell::Cell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join;
-#[cfg(any(not(feature = "_no_usb"), feature = "passkey_entry"))]
+#[cfg(feature = "passkey_entry")]
 use embassy_futures::select::Either;
 use embassy_futures::select::{Either3, select, select3};
-use embassy_sync::blocking_mutex::Mutex;
 use embassy_time::{Duration, Timer, with_timeout};
 #[cfg(feature = "passkey_entry")]
 use embassy_time::{Instant, with_deadline};
@@ -16,37 +14,21 @@ use rmk_types::led_indicator::LedIndicator;
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
-#[cfg(not(feature = "_no_usb"))]
-use {
-    crate::hid::{CompositeReport, KeyboardReport},
-    crate::light::UsbLedReader,
-    crate::state::get_connection_type,
-    crate::usb::{USB_REMOTE_WAKEUP, UsbKeyboardWriter, add_usb_reader_writer, add_usb_writer, new_usb_builder},
-    embassy_futures::select::{Either4, select4},
-    embassy_usb::driver::Driver,
-};
-#[cfg(feature = "storage")]
-use {crate::state::CONNECTION_TYPE, crate::storage::StorageKey};
 
 use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
 use crate::ble::device_info::{PnPID, VidSource};
 use crate::ble::led::BleLedReader;
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
-use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
+use crate::channel::LED_SIGNAL;
 use crate::config::RmkConfig;
-use crate::event::{BleStatusChangeEvent, ConnectionChangeEvent, ConnectionType, publish_event};
-#[cfg(all(not(feature = "_no_usb"), feature = "steno"))]
-use crate::hid::StenoReport;
-#[cfg(all(feature = "host", not(feature = "_no_usb")))]
-use crate::hid::ViaReport;
-use crate::hid::{DummyWriter, RunnableHidWriter};
+use crate::core_traits::Runnable;
+use crate::event::{ConnectionType, SubscribableEvent};
+use crate::hid::{RunnableHidWriter, run_led_reader};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
-use crate::state::ConnectionState;
-#[cfg(feature = "usb_log")]
-use crate::usb::add_usb_logger;
-use crate::{CONNECTION_STATE, run_keyboard};
+#[cfg(feature = "storage")]
+use crate::storage::StorageKey;
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;
@@ -55,30 +37,12 @@ pub(crate) mod led;
 pub mod passkey;
 pub(crate) mod profile;
 
-use rmk_types::ble::{BleState, BleStatus};
+use rmk_types::ble::BleState;
 
-/// Global BLE status: tracks the active profile and current BLE state.
-pub static BLE_STATUS: Mutex<crate::RawMutex, Cell<BleStatus>> = Mutex::new(Cell::new(BleStatus {
-    profile: 0,
-    state: BleState::Inactive,
-}));
+use crate::state::set_ble_state;
 
-/// Get current profile number
 pub(crate) fn get_current_profile() -> u8 {
-    BLE_STATUS.lock(|c| c.get().profile)
-}
-
-/// Update the BLE status and publish an event.
-pub(crate) fn set_ble_status(status: BleStatus) {
-    BLE_STATUS.lock(|c| c.set(status));
-    publish_event(BleStatusChangeEvent(status));
-}
-
-/// Update the BLE state while preserving the current profile.
-pub(crate) fn set_ble_state(state: BleState) {
-    let profile = get_current_profile();
-    let status = BleStatus { profile, state };
-    set_ble_status(status);
+    crate::state::connection_status().ble.profile
 }
 
 /// Global state of sleep management
@@ -196,334 +160,170 @@ pub fn passkey_entry_enabled() -> bool {
     }
 }
 
-/// Run the BLE stack.
-pub(crate) async fn run_ble<
-    'b,
+/// Wait for local input activity that should wake the BLE transport back up
+/// after an advertising timeout.
+async fn wait_for_wake_activity() {
+    let mut key_wake = crate::event::KeyboardEvent::subscriber();
+    let mut pointing_wake = crate::event::PointingEvent::subscriber();
+
+    match select(key_wake.next_message_pure(), pointing_wake.next_message_pure()).await {
+        _ => {}
+    }
+}
+
+/// BLE transport runnable. Owns the trouble-host server and profile manager;
+/// `run` joins the background `ble_task` runner with the advertise→connect→serve
+/// loop and runs forever.
+pub struct BleTransport<'a, C>
+where
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
-    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
->(
-    #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    stack: &'b Stack<'b, C, DefaultPacketPool>,
-    #[cfg_attr(not(feature = "_nrf_ble"), allow(unused_mut))] mut rmk_config: RmkConfig<'static>,
-) {
-    #[cfg(feature = "_nrf_ble")]
-    {
-        rmk_config.device_config.serial_number = crate::hid::get_serial_number();
-    }
+{
+    stack: &'a Stack<'a, C, DefaultPacketPool>,
+    server: Server<'static>,
+    profile_manager: ProfileManager<'a, C, DefaultPacketPool>,
+    product_name: &'static str,
+}
 
-    // Initialize usb device and usb hid reader/writer
-    #[cfg(not(feature = "_no_usb"))]
-    let (mut _usb_builder, mut keyboard_reader, mut keyboard_writer, mut other_writer) = {
-        let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.device_config);
-        let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8, 8);
-        let other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9, 16);
-        let (keyboard_reader, keyboard_writer) = keyboard_reader_writer.split();
-        (usb_builder, keyboard_reader, keyboard_writer, other_writer)
-    };
+impl<'a, C> BleTransport<'a, C>
+where
+    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+{
+    pub async fn new(
+        stack: &'a Stack<'a, C, DefaultPacketPool>,
+        #[cfg_attr(not(feature = "_nrf_ble"), allow(unused_mut))] mut rmk_config: RmkConfig<'static>,
+    ) -> Self {
+        #[cfg(feature = "_nrf_ble")]
+        {
+            rmk_config.device_config.serial_number = crate::hid::get_serial_number();
+        }
 
-    #[cfg(all(not(feature = "_no_usb"), feature = "steno"))]
-    let mut steno_writer = add_usb_writer!(&mut _usb_builder, StenoReport, 9, 16);
-
-    #[cfg(all(not(feature = "_no_usb"), feature = "host"))]
-    let mut host_reader_writer = add_usb_reader_writer!(&mut _usb_builder, ViaReport, 32, 32, 32);
-
-    // Optional usb logger initialization
-    #[cfg(all(feature = "usb_log", not(feature = "_no_usb")))]
-    let usb_logger = add_usb_logger!(&mut _usb_builder);
-
-    #[cfg(not(feature = "_no_usb"))]
-    let mut usb_device = _usb_builder.build();
-
-    // Load current connection type
-    #[cfg(feature = "storage")]
-    {
-        if let Some(conn_type) = crate::storage::read_setting(StorageKey::ConnectionType).await {
-            CONNECTION_TYPE.store(conn_type, Ordering::SeqCst);
-        } else {
-            // If no saved connection type, return default value
+        #[cfg(feature = "storage")]
+        let stored = crate::storage::read_setting(StorageKey::ConnectionType).await;
+        #[cfg(not(feature = "storage"))]
+        let stored: Option<u8> = None;
+        let preferred = match stored {
+            Some(c) => c.into(),
             #[cfg(feature = "_no_usb")]
-            CONNECTION_TYPE.store(ConnectionType::Ble.into(), Ordering::SeqCst);
+            None => ConnectionType::Ble,
             #[cfg(not(feature = "_no_usb"))]
-            CONNECTION_TYPE.store(ConnectionType::Usb.into(), Ordering::SeqCst);
-        }
+            None => ConnectionType::Usb,
+        };
+        crate::state::set_preferred(preferred);
 
-        publish_event(ConnectionChangeEvent::new(
-            CONNECTION_TYPE.load(Ordering::SeqCst).into(),
-        ));
+        let mut profile_manager = ProfileManager::new(stack);
+        #[cfg(feature = "storage")]
+        profile_manager.load_bonded_devices().await;
+        profile_manager.update_stack_bonds();
+
+        info!("Starting advertising and GATT service");
+        let server = Server::new_with_config(GapConfig::Peripheral(PeripheralConfig {
+            name: rmk_config.device_config.product_name,
+            appearance: &appearance::human_interface_device::KEYBOARD,
+        }))
+        .unwrap();
+
+        server
+            .set(
+                &server.device_config_service.pnp_id,
+                &PnPID {
+                    vid_source: VidSource::UsbIF,
+                    vendor_id: rmk_config.device_config.vid,
+                    product_id: rmk_config.device_config.pid,
+                    product_version: 0x0001,
+                },
+            )
+            .unwrap();
+        server
+            .set(
+                &server.device_config_service.serial_number,
+                &heapless::String::try_from(rmk_config.device_config.serial_number).unwrap(),
+            )
+            .unwrap();
+        server
+            .set(
+                &server.device_config_service.manufacturer_name,
+                &heapless::String::try_from(rmk_config.device_config.manufacturer).unwrap(),
+            )
+            .unwrap();
+
+        Self {
+            stack,
+            server,
+            profile_manager,
+            product_name: rmk_config.device_config.product_name,
+        }
     }
+}
 
-    // Create profile manager
-    let mut profile_manager = ProfileManager::new(stack);
+impl<'a, C> Runnable for BleTransport<'a, C>
+where
+    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+{
+    async fn run(&mut self) -> ! {
+        // Copy the &Stack reference so it doesn't tie a borrow to &mut self.
+        let stack: &'a Stack<'a, C, DefaultPacketPool> = self.stack;
+        let Host {
+            mut peripheral, runner, ..
+        } = stack.build();
 
-    #[cfg(feature = "storage")]
-    // Load saved bonding information
-    profile_manager.load_bonded_devices().await;
-    // Update bonding information in the stack
-    profile_manager.update_stack_bonds();
+        let server = &self.server;
+        let profile_manager = &mut self.profile_manager;
+        let product_name = self.product_name;
 
-    // Build trouble host stack
-    let Host {
-        mut peripheral, runner, ..
-    } = stack.build();
-
-    info!("Starting advertising and GATT service");
-    let server = Server::new_with_config(GapConfig::Peripheral(PeripheralConfig {
-        name: rmk_config.device_config.product_name,
-        appearance: &appearance::human_interface_device::KEYBOARD,
-    }))
-    .unwrap();
-
-    server
-        .set(
-            &server.device_config_service.pnp_id,
-            &PnPID {
-                vid_source: VidSource::UsbIF,
-                vendor_id: rmk_config.device_config.vid,
-                product_id: rmk_config.device_config.pid,
-                product_version: 0x0001,
-            },
-        )
-        .unwrap();
-
-    server
-        .set(
-            &server.device_config_service.serial_number,
-            &heapless::String::try_from(rmk_config.device_config.serial_number).unwrap(),
-        )
-        .unwrap();
-
-    server
-        .set(
-            &server.device_config_service.manufacturer_name,
-            &heapless::String::try_from(rmk_config.device_config.manufacturer).unwrap(),
-        )
-        .unwrap();
-
-    #[cfg(not(feature = "_no_usb"))]
-    let usb_task = async {
-        loop {
-            usb_device.run_until_suspend().await;
-            match select(usb_device.wait_resume(), USB_REMOTE_WAKEUP.wait()).await {
-                Either::First(_) => continue,
-                Either::Second(_) => {
-                    info!("USB wakeup remote");
-                    if let Err(e) = usb_device.remote_wakeup().await {
-                        info!("USB wakeup remote error: {:?}", e)
-                    }
-                }
-            }
-        }
-    };
-
-    #[cfg(all(not(feature = "usb_log"), not(feature = "_no_usb")))]
-    let background_task = join(ble_task(runner), usb_task);
-    #[cfg(all(feature = "usb_log", not(feature = "_no_usb")))]
-    let background_task = join(
-        ble_task(runner),
-        select(
-            usb_task,
-            embassy_usb_logger::with_custom_style!(1024, log::LevelFilter::Debug, usb_logger, |record, writer| {
-                use core::fmt::Write;
-                let ms = embassy_time::Instant::now().as_millis();
-                let _ = write!(writer, "[{:>8}ms {:5}] {}\r\n", ms, record.level(), record.args());
-            }),
-        ),
-    );
-    #[cfg(feature = "_no_usb")]
-    let background_task = ble_task(runner);
-
-    // Main loop
-    join(background_task, async {
-        loop {
-            // Advertising state
-            set_ble_state(BleState::Advertising);
-            let adv_fut = advertise(rmk_config.device_config.product_name, &mut peripheral, &server);
-            // USB + BLE dual mode
-            #[cfg(not(feature = "_no_usb"))]
-            {
-                match get_connection_type() {
-                    ConnectionType::Usb => {
-                        use crate::usb::wait_until_usb_configured;
-
-                        info!("USB priority mode, waiting for USB enabled or BLE connection");
-                        match select4(
-                            wait_until_usb_configured(),
-                            adv_fut,
-                            run_dummy_keyboard(),
+        let connection_loop = async {
+            loop {
+                set_ble_state(BleState::Advertising);
+                match advertise(product_name, &mut peripheral, server).await {
+                    Ok(conn) => {
+                        // Promote BLE to connected as soon as the GATT link is
+                        // established so the first post-connect key can route.
+                        set_ble_state(BleState::Connected);
+                        #[cfg(feature = "storage")]
+                        let active_bond_info = profile_manager.active_bond_info();
+                        select(
+                            run_ble_keyboard(
+                                server,
+                                &conn,
+                                stack,
+                                #[cfg(feature = "storage")]
+                                active_bond_info,
+                            ),
                             profile_manager.update_profile(),
                         )
-                        .await
-                        {
-                            Either4::First(_) => {
-                                use crate::usb::wait_until_usb_disabled;
-
-                                info!("USB enabled, run USB keyboard");
-
-                                set_ble_state(BleState::Inactive);
-                                let usb_fut = run_keyboard(
-                                    wait_until_usb_disabled(),
-                                    UsbLedReader::new(&mut keyboard_reader),
-                                    UsbKeyboardWriter::new(
-                                        &mut keyboard_writer,
-                                        &mut other_writer,
-                                        #[cfg(feature = "steno")]
-                                        &mut steno_writer,
-                                    ),
-                                );
-                                #[cfg(feature = "host")]
-                                let usb_with_host_fut = async {
-                                    select(usb_fut, crate::host::run_usb_host(&mut host_reader_writer)).await;
-                                };
-                                #[cfg(not(feature = "host"))]
-                                let usb_with_host_fut = usb_fut;
-                                select(usb_with_host_fut, profile_manager.update_profile()).await;
-                            }
-                            Either4::Second(Ok(conn)) => {
-                                info!("No USB, BLE connected, run BLE keyboard");
-                                #[cfg(feature = "storage")]
-                                let active_bond_info = profile_manager.active_bond_info();
-                                let ble_fut = run_ble_keyboard(
-                                    &server,
-                                    &conn,
-                                    stack,
-                                    #[cfg(feature = "storage")]
-                                    active_bond_info,
-                                );
-                                select3(ble_fut, wait_until_usb_configured(), profile_manager.update_profile()).await;
-                                continue;
-                            }
-                            Either4::Second(Err(BleHostError::BleHost(Error::Timeout))) => {
-                                warn!("Advertising timeout, sleep and wait for any key");
-
-                                set_ble_state(BleState::Inactive);
-                                // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
-                                CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
-
-                                // Enter sleep mode to reduce the power consumption
-                                #[cfg(feature = "split")]
-                                CENTRAL_SLEEP.signal(true);
-
-                                // Wait for the keyboard report for wake the keyboard
-                                let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
-
-                                // Quit from sleep mode
-                                #[cfg(feature = "split")]
-                                CENTRAL_SLEEP.signal(false);
-                                continue;
-                            }
-                            _ => {}
-                        }
+                        .await;
+                        set_ble_state(BleState::Inactive);
                     }
-                    ConnectionType::Ble => {
-                        info!("BLE priority mode, running USB keyboard while advertising");
-                        let usb_fut = run_keyboard(
-                            core::future::pending::<()>(), // Run forever until BLE connected
-                            UsbLedReader::new(&mut keyboard_reader),
-                            UsbKeyboardWriter::new(
-                                &mut keyboard_writer,
-                                &mut other_writer,
-                                #[cfg(feature = "steno")]
-                                &mut steno_writer,
-                            ),
-                        );
-                        #[cfg(feature = "host")]
-                        let usb_with_host_fut = async {
-                            select(usb_fut, crate::host::run_usb_host(&mut host_reader_writer)).await;
-                        };
-                        #[cfg(not(feature = "host"))]
-                        let usb_with_host_fut = usb_fut;
-                        match select3(adv_fut, usb_with_host_fut, profile_manager.update_profile()).await {
-                            Either3::First(Ok(conn)) => {
-                                info!("BLE connected, running BLE keyboard");
-                                #[cfg(feature = "storage")]
-                                let active_bond_info = profile_manager.active_bond_info();
-                                select(
-                                    run_ble_keyboard(
-                                        &server,
-                                        &conn,
-                                        stack,
-                                        #[cfg(feature = "storage")]
-                                        active_bond_info,
-                                    ),
-                                    profile_manager.update_profile(),
-                                )
-                                .await;
-                            }
-                            Either3::First(Err(BleHostError::BleHost(Error::Timeout))) => {
-                                warn!("Advertising timeout, sleep and wait for any key");
+                    Err(BleHostError::BleHost(Error::Timeout)) => {
+                        warn!("Advertising timeout, sleep and wait for any key");
+                        set_ble_state(BleState::Inactive);
+                        // Once the user has typed at least one key post-sleep,
+                        // keep scanning the matrix across all subsequent
+                        // advertise/connect cycles so reconnect-window keys
+                        // aren't dropped.
+                        crate::state::MATRIX_SCAN_OVERRIDE.store(true, Ordering::Release);
 
-                                set_ble_state(BleState::Inactive);
-                                // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
-                                CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+                        #[cfg(feature = "split")]
+                        CENTRAL_SLEEP.signal(true);
 
-                                // Enter sleep mode to reduce the power consumption
-                                #[cfg(feature = "split")]
-                                CENTRAL_SLEEP.signal(true);
+                        wait_for_wake_activity().await;
 
-                                // Wait for the keyboard report for wake the keyboard
-                                let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
-
-                                // Quit from sleep mode
-                                #[cfg(feature = "split")]
-                                CENTRAL_SLEEP.signal(false);
-
-                                continue;
-                            }
-                            _ => {}
-                        }
+                        #[cfg(feature = "split")]
+                        CENTRAL_SLEEP.signal(false);
+                    }
+                    Err(e) => {
+                        #[cfg(feature = "defmt")]
+                        let e = defmt::Debug2Format(&e);
+                        error!("Advertise error: {:?}", e);
                     }
                 }
+                // Avoid pegging the CPU on a tight advertise-failure loop.
+                Timer::after_millis(200).await;
             }
+        };
 
-            #[cfg(feature = "_no_usb")]
-            match adv_fut.await {
-                Ok(conn) => {
-                    // BLE connected
-                    #[cfg(feature = "storage")]
-                    let active_bond_info = profile_manager.active_bond_info();
-                    select(
-                        run_ble_keyboard(
-                            &server,
-                            &conn,
-                            &stack,
-                            #[cfg(feature = "storage")]
-                            active_bond_info,
-                        ),
-                        profile_manager.update_profile(),
-                    )
-                    .await;
-                }
-                Err(BleHostError::BleHost(Error::Timeout)) => {
-                    warn!("Advertising timeout, sleep and wait for any key");
-
-                    set_ble_state(BleState::Inactive);
-                    // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
-                    CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
-
-                    // Enter sleep mode to reduce the power consumption
-                    #[cfg(feature = "split")]
-                    CENTRAL_SLEEP.signal(true);
-
-                    // Wait for the keyboard report for wake the keyboard
-                    let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
-
-                    // Quit from sleep mode
-                    #[cfg(feature = "split")]
-                    CENTRAL_SLEEP.signal(false);
-                    continue;
-                }
-                Err(e) => {
-                    #[cfg(feature = "defmt")]
-                    let e = defmt::Debug2Format(&e);
-                    error!("Advertise error: {:?}", e);
-                }
-            }
-
-            // Retry after 200 ms
-            Timer::after_millis(200).await;
-        }
-    })
-    .await;
+        join(ble_task(runner), connection_loop).await;
+        unreachable!("BleTransport sub-tasks must run forever")
+    }
 }
 
 /// This is a background task that is required to run forever alongside any other BLE tasks.
@@ -573,10 +373,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let media_control_point = server.composite_service.hid_control_point;
     let system_control = server.composite_service.system_report;
 
-    CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
-
-    let mut connected = false;
-    let mut published_connected_state = false;
     #[cfg(feature = "passkey_entry")]
     let mut passkey_state = PasskeyInputState::new();
 
@@ -608,10 +404,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         cccd_table: server.get_cccd_table(conn.raw()).unwrap(),
                     };
                     UPDATED_PROFILE.signal(profile_info);
-                }
-
-                {
-                    connected = true;
                 }
             }
             GattConnectionEvent::PairingFailed(err) => {
@@ -746,9 +538,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 peripheral_latency,
                 supervision_timeout,
             } => {
-                {
-                    connected = true;
-                }
                 info!(
                     "[gatt] ConnectionParamsUpdated: {:?}ms, {:?}, {:?}ms",
                     conn_interval.as_millis(),
@@ -769,9 +558,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 max_rx_octets,
                 max_rx_time,
             } => {
-                {
-                    connected = true;
-                }
                 info!(
                     "[gatt] DataLengthUpdated: tx/rx octets: ({:?}, {:?}), tx/rx time: ({:?}, {:?})",
                     max_tx_octets, max_rx_octets, max_tx_time, max_rx_time
@@ -783,9 +569,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 phys,
                 spacing_types,
             } => {
-                {
-                    connected = true;
-                }
                 info!(
                     "[gatt] FrameSpaceUpdated: {:?}, {:?}, {:?}, {:?}",
                     frame_space, initiator, phys, spacing_types
@@ -798,9 +581,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 continuation_number,
                 supervision_timeout,
             } => {
-                {
-                    connected = true;
-                }
                 info!(
                     "[gatt] ConnectionRateChanged: {:?}ms, {:?}, {:?}, {:?}, {:?}ms",
                     conn_interval.as_millis(),
@@ -827,13 +607,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 warn!("[gatt] PassKeyInput event, should not happen")
             }
             GattConnectionEvent::BondLost => warn!("[gatt] BondLost"),
-        }
-
-        // Publish the BLE connected event
-
-        if connected && !published_connected_state {
-            set_ble_state(BleState::Connected);
-            published_connected_state = true;
         }
     }
     info!("[gatt] task finished");
@@ -896,14 +669,6 @@ async fn advertise<'a, 'b, C: Controller>(
     }
 }
 
-// Dummy keyboard service is used to monitoring keys when there's no actual connection.
-// It's useful for functions like switching active profiles when there's no connection.
-pub(crate) async fn run_dummy_keyboard() {
-    CONNECTION_STATE.store(ConnectionState::Disconnected.into(), Ordering::Release);
-    let mut dummy_writer = DummyWriter {};
-    dummy_writer.run_writer().await;
-}
-
 pub(crate) async fn set_conn_params<
     'a,
     'b,
@@ -954,7 +719,8 @@ pub(crate) async fn set_conn_params<
     core::future::pending::<()>().await;
 }
 
-/// Run BLE keyboard with connected device
+/// Run BLE keyboard with connected device. Returns when any inner task ends —
+/// typically the GATT events task on disconnect.
 async fn run_ble_keyboard<
     'a,
     'b,
@@ -965,8 +731,8 @@ async fn run_ble_keyboard<
     stack: &Stack<'_, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] active_bond_info: Option<crate::ble::profile::ProfileInfo>,
 ) {
-    let ble_hid_server = BleHidServer::new(server, conn);
-    let ble_led_reader = BleLedReader {};
+    let mut ble_hid_server = BleHidServer::new(server, conn);
+    let mut ble_led_reader = BleLedReader {};
     let mut ble_battery_server = BleBatteryServer::new(server, conn);
 
     // CCCD lookup uses cached bond info to avoid a cancellable flash read while
@@ -994,69 +760,17 @@ async fn run_ble_keyboard<
         }
     };
 
-    let kb_fut = run_keyboard(communication_task, ble_led_reader, ble_hid_server);
+    let writer_task = ble_hid_server.run_writer();
+
+    let led_task = run_led_reader(&mut ble_led_reader, ConnectionType::Ble);
 
     #[cfg(feature = "host")]
-    select(kb_fut, crate::host::run_ble_host(server.host_service.input_data, conn)).await;
+    let host_task = crate::host::run_ble_host(server.host_service.input_data, conn);
     #[cfg(not(feature = "host"))]
-    kb_fut.await;
-}
+    let host_task = core::future::pending::<()>();
 
-#[cfg(test)]
-mod tests {
-    use std::sync::{Mutex, OnceLock};
-
-    use super::{BLE_STATUS, BleState, BleStatus, set_ble_state, set_ble_status};
-
-    fn ble_status_test_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
-    #[test]
-    fn set_ble_state_preserves_current_profile() {
-        let _guard = ble_status_test_lock().lock().unwrap();
-
-        BLE_STATUS.lock(|c| {
-            c.set(BleStatus {
-                profile: 2,
-                state: BleState::Inactive,
-            })
-        });
-        set_ble_state(BleState::Advertising);
-
-        assert_eq!(
-            BLE_STATUS.lock(|c| c.get()),
-            BleStatus {
-                profile: 2,
-                state: BleState::Advertising,
-            }
-        );
-    }
-
-    #[test]
-    fn set_ble_status_can_reset_state_when_profile_changes() {
-        let _guard = ble_status_test_lock().lock().unwrap();
-
-        BLE_STATUS.lock(|c| {
-            c.set(BleStatus {
-                profile: 1,
-                state: BleState::Connected,
-            })
-        });
-        set_ble_status(BleStatus {
-            profile: 3,
-            state: BleState::Inactive,
-        });
-
-        assert_eq!(
-            BLE_STATUS.lock(|c| c.get()),
-            BleStatus {
-                profile: 3,
-                state: BleState::Inactive,
-            }
-        );
-    }
+    let inner = embassy_futures::join::join3(writer_task, led_task, host_task);
+    select(communication_task, inner).await;
 }
 
 // Update the PHY to 2M
@@ -1119,5 +833,93 @@ pub(crate) async fn update_conn_params<
             _ => (),
         }
         break;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Mutex, OnceLock};
+
+    use embassy_futures::join::join;
+    use embassy_time::Timer;
+    use rmk_types::ble::{BleState, BleStatus};
+
+    use crate::event::{publish_event, Axis, AxisEvent, AxisValType, PointingEvent};
+    use crate::state::{connection_status, set_ble_state, set_ble_status};
+    use crate::test_support::test_block_on as block_on;
+
+    fn ble_status_test_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[test]
+    fn set_ble_state_preserves_current_profile() {
+        let _guard = ble_status_test_lock().lock().unwrap();
+
+        set_ble_status(BleStatus {
+            profile: 2,
+            state: BleState::Inactive,
+        });
+        set_ble_state(BleState::Advertising);
+
+        assert_eq!(
+            connection_status().ble,
+            BleStatus {
+                profile: 2,
+                state: BleState::Advertising,
+            }
+        );
+    }
+
+    #[test]
+    fn set_ble_status_can_reset_state_when_profile_changes() {
+        let _guard = ble_status_test_lock().lock().unwrap();
+
+        set_ble_status(BleStatus {
+            profile: 1,
+            state: BleState::Connected,
+        });
+        set_ble_status(BleStatus {
+            profile: 3,
+            state: BleState::Inactive,
+        });
+
+        assert_eq!(
+            connection_status().ble,
+            BleStatus {
+                profile: 3,
+                state: BleState::Inactive,
+            }
+        );
+    }
+
+    #[test]
+    fn wake_activity_includes_pointing_events() {
+        let _guard = ble_status_test_lock().lock().unwrap();
+
+        block_on(async {
+            join(super::wait_for_wake_activity(), async {
+                Timer::after_millis(1).await;
+                publish_event(PointingEvent([
+                    AxisEvent {
+                        typ: AxisValType::Rel,
+                        axis: Axis::X,
+                        value: 1,
+                    },
+                    AxisEvent {
+                        typ: AxisValType::Rel,
+                        axis: Axis::Y,
+                        value: 0,
+                    },
+                    AxisEvent {
+                        typ: AxisValType::Rel,
+                        axis: Axis::Z,
+                        value: 0,
+                    },
+                ]));
+            })
+            .await;
+        });
     }
 }

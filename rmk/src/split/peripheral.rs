@@ -15,15 +15,14 @@ use {
 
 use super::SplitMessage;
 use super::driver::{SplitReader, SplitWriter};
-use crate::CONNECTION_STATE;
 use crate::event::{
     KeyboardEvent, LayerChangeEvent, LedIndicatorEvent, PointingEvent, SubscribableEvent, publish_event,
 };
 #[cfg(feature = "display")]
 use crate::event::{ModifierEvent, SleepStateEvent, WpmUpdateEvent};
+use crate::split::SPLIT_CENTRAL_READY;
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
-use crate::state::ConnectionState;
 
 /// Run the split peripheral service.
 ///
@@ -72,7 +71,9 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     /// The peripheral uses the general matrix, does scanning and send the key events through `SplitWriter`.
     /// If also receives split messages from the central through `SplitReader`.
     pub(crate) async fn run(&mut self) {
-        CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
+        // Default to ready until the central sends an authoritative
+        // `SplitMessage::ConnectionState` update.
+        SPLIT_CENTRAL_READY.store(true, core::sync::atomic::Ordering::Release);
 
         let mut key_sub = KeyboardEvent::subscriber();
         #[cfg(feature = "_ble")]
@@ -103,7 +104,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                     Ok(split_message) => match split_message {
                         SplitMessage::ConnectionState(state) => {
                             trace!("Received connection state update: {}", state);
-                            CONNECTION_STATE.store(state, core::sync::atomic::Ordering::Release);
+                            SPLIT_CENTRAL_READY.store(state, core::sync::atomic::Ordering::Release);
                         }
                         #[cfg(all(feature = "_ble", feature = "storage"))]
                         SplitMessage::ClearPeer => {
@@ -148,12 +149,13 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                     }
                 },
                 Either::Second(e) => {
-                    // Only send the key event if the connection is established
-                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                    // Only send input when the central says its input pipeline
+                    // is active.
+                    if SPLIT_CENTRAL_READY.load(core::sync::atomic::Ordering::Acquire) {
                         debug!("Writing split message {:?} to central", e);
                         self.split_driver.write(&e).await.ok();
                     } else {
-                        debug!("Connection not established, skipping key event");
+                        debug!("Central input inactive, skipping split message");
                     }
                 }
             }

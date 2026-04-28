@@ -1,15 +1,18 @@
 /// Traits and types for HID message reporting and listening.
-use core::{future::Future, sync::atomic::Ordering};
+use core::future::Future;
+use core::sync::atomic::Ordering;
 
 use embassy_usb::class::hid::ReadError;
 use embassy_usb::driver::EndpointError;
+use rmk_types::connection::ConnectionType;
+use rmk_types::led_indicator::LedIndicator;
 use serde::Serialize;
 use usbd_hid::descriptor::generator_prelude::*;
 use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
 
-use crate::CONNECTION_STATE;
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
-use crate::state::ConnectionState;
+use crate::event::{LedIndicatorEvent, publish_event};
+use crate::keyboard::LOCK_LED_STATES;
+use crate::state::writable_on;
 #[cfg(not(feature = "_no_usb"))]
 use crate::usb::USB_REMOTE_WAKEUP;
 
@@ -252,8 +255,13 @@ pub trait HidWriterTrait {
     fn write_report(&mut self, report: Self::ReportType) -> impl Future<Output = Result<usize, HidError>>;
 }
 
-/// Runnable writer
+/// Runnable writer. The default `run_writer` gates wire writes on
+/// `writable_on(Self::KIND)` so reports queued before an active-output flip
+/// are dropped instead of written to the wrong wire.
 pub trait RunnableHidWriter: HidWriterTrait {
+    /// The transport this writer serves.
+    const KIND: ConnectionType;
+
     /// Get the report to be sent to the host
     fn get_report(&mut self) -> impl Future<Output = Self::ReportType>;
 
@@ -261,11 +269,8 @@ pub trait RunnableHidWriter: HidWriterTrait {
     fn run_writer(&mut self) -> impl Future<Output = ()> {
         async {
             loop {
-                // Get report to send
                 let report = self.get_report().await;
-                // Only send the report after the connection is established.
-                if CONNECTION_STATE.load(Ordering::Acquire)
-                    == <ConnectionState as Into<bool>>::into(ConnectionState::Connected)
+                if writable_on(Self::KIND)
                     && let Err(e) = self.write_report(report.clone()).await
                 {
                     error!("Failed to send report: {:?}", e);
@@ -298,27 +303,26 @@ pub trait HidReaderTrait {
     fn read_report(&mut self) -> impl Future<Output = Result<Self::ReportType, HidError>>;
 }
 
-pub struct DummyWriter {}
-
-impl HidWriterTrait for DummyWriter {
-    type ReportType = Report;
-
-    async fn write_report(&mut self, _report: Self::ReportType) -> Result<usize, HidError> {
-        Ok(0)
-    }
-}
-
-impl RunnableHidWriter for DummyWriter {
-    async fn run_writer(&mut self) {
-        // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
-        CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
-        loop {
-            let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+/// Drain LED indicator OUT reports from `reader` and republish them as
+/// [`LedIndicatorEvent`]s whenever `kind` is the active output transport.
+pub(crate) async fn run_led_reader<R: HidReaderTrait<ReportType = LedIndicator>>(
+    reader: &mut R,
+    kind: ConnectionType,
+) -> ! {
+    loop {
+        match reader.read_report().await {
+            Ok(led_indicator) => {
+                info!("Got led indicator");
+                if writable_on(kind) {
+                    LOCK_LED_STATES.store(led_indicator.into_bits(), Ordering::Relaxed);
+                    publish_event(LedIndicatorEvent::new(led_indicator));
+                }
+            }
+            Err(e) => {
+                debug!("Read HID LED indicator error: {:?}", e);
+                embassy_time::Timer::after_millis(1000).await;
+            }
         }
-    }
-
-    async fn get_report(&mut self) -> Self::ReportType {
-        panic!("`get_report` in Dummy writer should not be used");
     }
 }
 

@@ -1,9 +1,10 @@
+use rmk_types::connection::ConnectionType;
 use trouble_host::prelude::*;
 use usbd_hid::descriptor::{AsInputReport as _, SerializedDescriptor};
 
 use super::battery_service::BatteryService;
 use super::device_info::DeviceConfigurationService;
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::channel::BLE_REPORT_CHANNEL;
 #[cfg(feature = "host")]
 use crate::hid::ViaReport;
 use crate::hid::{
@@ -182,7 +183,9 @@ impl<P: PacketPool> HidWriterTrait for BleHidServer<'_, '_, '_, P> {
 }
 
 impl<P: PacketPool> RunnableHidWriter for BleHidServer<'_, '_, '_, P> {
+    const KIND: ConnectionType = ConnectionType::Ble;
+
     async fn get_report(&mut self) -> Self::ReportType {
-        KEYBOARD_REPORT_CHANNEL.receive().await
+        BLE_REPORT_CHANNEL.receive().await
     }
 }

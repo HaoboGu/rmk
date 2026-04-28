@@ -1,12 +1,9 @@
 //! Manage BLE profiles and bonding information
 
-use core::sync::atomic::Ordering;
-
 #[cfg(feature = "_ble")]
 use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
 use embassy_futures::select::{Either3, select3};
 use embassy_sync::signal::Signal;
-use rmk_types::ble::{BleState, BleStatus};
 use trouble_host::prelude::*;
 use trouble_host::{BondInformation, LongTermKey};
 #[cfg(feature = "storage")]
@@ -16,11 +13,10 @@ use {
 };
 
 use super::ble_server::CCCD_TABLE_SIZE;
-use super::{get_current_profile, set_ble_status};
+use super::get_current_profile;
 use crate::NUM_BLE_PROFILE;
 use crate::channel::BLE_PROFILE_CHANNEL;
-use crate::event::{ConnectionChangeEvent, ConnectionType, publish_event};
-use crate::state::CONNECTION_TYPE;
+use crate::state::set_ble_profile;
 
 pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal::new();
 pub(crate) static UPDATED_CCCD_TABLE: Signal<crate::RawMutex, CccdTable<CCCD_TABLE_SIZE>> = Signal::new();
@@ -206,19 +202,14 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
         }
         debug!("Loaded {} bond info", self.bonded_devices.len());
 
-        // Load current active profile, save to `BLE_STATUS`
         let profile = if let Some(profile) = read_setting(StorageKey::ActiveBleProfile).await {
             debug!("Loaded active profile: {}", profile);
             profile
         } else {
-            // If no saved active profile, use 0 as default
             debug!("Loaded default active profile",);
             0
         };
-        set_ble_status(BleStatus {
-            profile,
-            state: BleState::Inactive,
-        });
+        set_ble_profile(profile);
     }
 
     /// Cached bond info for the currently active profile, cloned to free the
@@ -343,10 +334,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             return false;
         }
 
-        set_ble_status(BleStatus {
-            profile,
-            state: BleState::Inactive,
-        });
+        set_ble_profile(profile);
 
         // Update the active bonding information in the stack
         self.update_stack_bonds();
@@ -409,16 +397,11 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             self.clear_bond(profile).await;
                         }
                         BleProfileAction::ToggleConnection => {
-                            let current: ConnectionType = CONNECTION_TYPE.load(Ordering::SeqCst).into();
-                            let updated = match current {
-                                ConnectionType::Ble => ConnectionType::Usb,
-                                _ => ConnectionType::Ble,
-                            };
-                            CONNECTION_TYPE.store(updated.into(), Ordering::SeqCst);
+                            // Flips the persisted transport preference and lets
+                            // the routing cascade recompute `active`.
+                            let updated = crate::state::toggle_preferred();
 
-                            info!("Switching connection type to: {:?}", updated);
-
-                            publish_event(ConnectionChangeEvent::new(updated));
+                            info!("Switching preferred transport to: {:?}", updated);
 
                             #[cfg(feature = "storage")]
                             FLASH_CHANNEL

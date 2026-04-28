@@ -16,7 +16,7 @@ use rmk_types::morse::{MorseMode, MorsePattern, TAP};
 use rmk_types::mouse_button::MouseButtons;
 use usbd_hid::descriptor::{MediaKeyboardReport, SystemControlReport};
 
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::channel::dispatch_report;
 use crate::config::Hand;
 use crate::core_traits::Runnable;
 #[cfg(all(feature = "split", feature = "_ble"))]
@@ -274,7 +274,7 @@ impl<'a> Keyboard<'a> {
         }
     }
 
-    /// Send a keyboard report to the host
+    /// Send a keyboard report to the host.
     async fn send_report(&self, report: Report) {
         // Do not report keypresses to Host in passkey mode
         #[cfg(feature = "passkey_entry")]
@@ -282,7 +282,7 @@ impl<'a> Keyboard<'a> {
             return;
         }
 
-        KEYBOARD_REPORT_CHANNEL.sender().send(report).await
+        dispatch_report(report).await;
     }
 
     /// Get a copy of the next timeout key in the buffer,
@@ -1274,7 +1274,7 @@ impl<'a> Keyboard<'a> {
             #[cfg(feature = "steno")]
             Action::Steno(key) => {
                 if let Some(report) = self.steno.on_event(key, event.pressed) {
-                    crate::keyboard::steno::try_send(report);
+                    crate::channel::try_dispatch_report(report);
                 }
             }
             _ => warn!("Action variant not supported: {:?}", action),

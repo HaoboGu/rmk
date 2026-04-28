@@ -10,6 +10,7 @@ use embassy_time::{Duration, Timer, with_timeout};
 use heapless::VecView;
 use trouble_host::prelude::*;
 
+use crate::SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS;
 use crate::ble::{SLEEPING_STATE, update_ble_phy, update_conn_params};
 use crate::channel::FLASH_CHANNEL;
 use crate::event::{PeripheralConnectedEvent, SleepStateEvent, publish_event};
@@ -17,8 +18,8 @@ use crate::event::{PeripheralConnectedEvent, SleepStateEvent, publish_event};
 use crate::split::ble::PeerAddress;
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
+use crate::state::any_transport_ready;
 use crate::storage::FlashOperationMessage;
-use crate::{CONNECTION_STATE, SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS};
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
 pub(crate) static PERIPHERAL_FOUND: Signal<crate::RawMutex, (u8, BdAddr)> = Signal::new();
@@ -381,8 +382,6 @@ pub(crate) struct BleSplitCentralDriver<'a, 'b, 'c, C: Controller + ControllerCm
     message_to_peripheral: Characteristic<[u8; SPLIT_MESSAGE_MAX_SIZE]>,
     // Client
     client: &'c GattClient<'a, C, P, 10>,
-    // Cached connection state
-    connection_state: bool,
 }
 
 impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> BleSplitCentralDriver<'a, 'b, 'c, C, P> {
@@ -395,7 +394,6 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> Bl
             listener,
             message_to_peripheral,
             client,
-            connection_state: CONNECTION_STATE.load(Ordering::Acquire),
         }
     }
 }
@@ -422,13 +420,6 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> Sp
     for BleSplitCentralDriver<'a, 'b, 'c, C, P>
 {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError> {
-        if let SplitMessage::ConnectionState(state) = message {
-            // ConnectionState changed, update cached state and notify peripheral
-            if self.connection_state != *state {
-                self.connection_state = *state;
-            }
-        }
-        // Always sync the connection state to peripheral since central doesn't know the CONNECTION_STATE of the peripheral.
         let mut buf = [0_u8; SPLIT_MESSAGE_MAX_SIZE];
         match postcard::to_slice(&message, &mut buf) {
             Ok(_bytes) => {
@@ -514,7 +505,7 @@ async fn sleep_manager_task<
             info!("Entering sleep mode");
 
             // Connection parameters are different when central is broadcasting and connected to host
-            let conn_params = if CONNECTION_STATE.load(Ordering::Acquire) {
+            let conn_params = if any_transport_ready() {
                 // Connected, the connection interval is 20ms
                 RequestedConnParams {
                     min_connection_interval: Duration::from_millis(20),
