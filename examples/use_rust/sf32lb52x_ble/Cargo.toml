@@ -59,6 +59,8 @@ defmt-rtt = "1.0"
 panic-probe = { version = "1.0", features = ["print-defmt"] }
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 static_cell = "2"
+embedded-graphics = "0.8"
+u8g2-fonts = { version = "0.5", features = ["embedded_graphics_textstyle"] }
 
 [build-dependencies]
 xz2 = "0.1.7"
