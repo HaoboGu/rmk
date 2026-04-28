@@ -16,12 +16,13 @@ use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::direct_pin::DirectPinMatrix;
-use rmk::futures::future::join3;
-use rmk::input_device::Runnable;
+use rmk::futures::future::join4;
+use rmk::host::HostService;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
+use rmk::matrix::direct_pin::DirectPinMatrix;
 use rmk::storage::async_flash_wrapper;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use sifli_hal::efuse::Efuse;
@@ -160,6 +161,7 @@ async fn main(_spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, true);
     let mut keyboard = Keyboard::new(&keymap);
+    let mut host_service = HostService::new(&keymap, &rmk_config);
 
     // Rotary encoder: PA43 = phase A, PA41 = phase B. Detents short to GND, so pull-ups are required.
     // Resolution 4 collapses the 4 quadrature transitions per detent into a single event;
@@ -170,10 +172,11 @@ async fn main(_spawner: Spawner) {
 
     info!("Starting RMK dual-mode (USB + BLE) runner...");
 
-    join3(
-        run_all!(matrix, encoder),
+    join4(
+        run_all!(matrix, encoder, storage),
         keyboard.run(),
-        run_rmk(&keymap, usb_driver, &stack, &mut storage, rmk_config),
+        host_service.run(),
+        run_rmk(usb_driver, &stack, rmk_config),
     )
     .await;
 }
