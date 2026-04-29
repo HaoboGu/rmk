@@ -11,6 +11,7 @@ use syn::ItemMod;
 
 use crate::codegen::display::expand_display_interrupt;
 use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
+use crate::codegen::input_device::iqs5xx::expand_iqs5xx_interrupts;
 
 /// Expand `bind_interrupt!` stuffs, and other code before `main` function
 pub(crate) fn expand_bind_interrupt(hardware: &Hardware, item_mod: &ItemMod) -> TokenStream2 {
@@ -75,6 +76,22 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
     } else {
         quote! {}
     };
+
+    // IQS5xx devices on the unibody / central side need an I²C interrupt
+    // binding so the async I²C driver can service the bus.
+    let iqs5xx_config = match board {
+        BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => {
+            input_device.clone().iqs5xx.unwrap_or(Vec::new())
+        }
+        BoardConfig::Split(split_config) => split_config
+            .central
+            .input_device
+            .clone()
+            .unwrap_or(InputDeviceConfig::default())
+            .iqs5xx
+            .unwrap_or(Vec::new()),
+    };
+    let iqs5xx_interrupt = expand_iqs5xx_interrupts(&chip.series, &iqs5xx_config);
 
     match chip.series {
         rmk_config::resolved::hardware::ChipSeries::Stm32 => {
@@ -228,6 +245,7 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
                     TIMER0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     RTC0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     #pmw33xx_spi_interrupts
+                    #iqs5xx_interrupt
                     #display_interrupt
                     #extern_irqs
                 });
@@ -285,6 +303,7 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
                     #interrupt_name => ::embassy_rp::usb::InterruptHandler<::embassy_rp::peripherals::#peripheral_name>;
                     #dma_irq_0
                     #pio0_irq_0
+                    #iqs5xx_interrupt
                     #display_interrupt
                 });
                 #ble_task

@@ -1,7 +1,7 @@
 #![macro_use]
 #![allow(unused)]
 
-use core::fmt::{Debug, Display, LowerHex};
+use core::fmt::{Display, LowerHex};
 
 #[cfg(all(feature = "defmt", feature = "log"))]
 compile_error!("You may not enable both `defmt` and `log` features.");
@@ -248,7 +248,7 @@ impl<T, E> Try for Result<T, E> {
 
 pub(crate) struct Bytes<'a>(pub &'a [u8]);
 
-impl Debug for Bytes<'_> {
+impl core::fmt::Debug for Bytes<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{:#02x?}", self.0)
     }
@@ -272,3 +272,12 @@ impl defmt::Format for Bytes<'_> {
         defmt::write!(fmt, "{:02x}", self.0)
     }
 }
+
+// Define a `Debug` trait which implies both `core::fmt::Debug` and (if `defmt` is enabled): `defmt::Format`.
+// It can be used to constrain something to a loggable type.
+#[cfg(feature = "defmt")]
+pub trait Debug: defmt::Format + core::fmt::Debug {}
+#[cfg(feature = "defmt")]
+impl<T> Debug for T where T: defmt::Format + core::fmt::Debug {}
+#[cfg(not(feature = "defmt"))]
+pub use core::fmt::Debug;
