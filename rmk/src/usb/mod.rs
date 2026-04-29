@@ -240,9 +240,14 @@ macro_rules! add_usb_reader_writer {
         $crate::usb::add_usb_reader_writer!($usb_builder, $descriptor, $read_n, $write_n, 64)
     };
     // Size $max_packet to the actual report to conserve Packet Memory Area on tight parts.
-    ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr, $max_packet:expr) => {{
-        // Initialize hid reader writer
-        // Current implementation requires the static STATE, so we need to use the paste crate to generate the static variable name.
+    ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr, $max_packet:expr) => {
+        $crate::usb::add_usb_reader_writer!(
+            $usb_builder, $descriptor, $read_n, $write_n, $max_packet,
+            ::embassy_usb::class::hid::HidSubclass::No,
+            ::embassy_usb::class::hid::HidBootProtocol::None
+        )
+    };
+    ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr, $max_packet:expr, $subclass:expr, $protocol:expr) => {{
         use usbd_hid::descriptor::SerializedDescriptor;
         paste::paste! {
             static [<$descriptor:snake:upper _STATE>]: ::static_cell::StaticCell<::embassy_usb::class::hid::State> = ::static_cell::StaticCell::new();
@@ -257,8 +262,8 @@ macro_rules! add_usb_reader_writer {
             request_handler: Some(request_handler),
             poll_ms: 1,
             max_packet_size: $max_packet,
-            hid_subclass: ::embassy_usb::class::hid::HidSubclass::No,
-            hid_boot_protocol: ::embassy_usb::class::hid::HidBootProtocol::None,
+            hid_subclass: $subclass,
+            hid_boot_protocol: $protocol,
         };
 
         let rw: ::embassy_usb::class::hid::HidReaderWriter<_, $read_n, $write_n> = ::embassy_usb::class::hid::HidReaderWriter::new($usb_builder, state, hid_config);
