@@ -1,4 +1,4 @@
-use core::sync::atomic::Ordering;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use embassy_sync::signal::Signal;
 use embassy_sync::watch::{Watch, WatchBehavior};
@@ -16,6 +16,7 @@ use crate::state::ConnectionState;
 use crate::{CONNECTION_STATE, RawMutex};
 
 pub(crate) static USB_REMOTE_WAKEUP: Signal<RawMutex, ()> = Signal::new();
+pub(crate) static USB_SUSPENDED: AtomicBool = AtomicBool::new(false);
 
 /// USB state
 #[repr(u8)]
@@ -321,6 +322,7 @@ impl Handler for UsbDeviceHandler {
     }
 
     fn suspended(&mut self, suspended: bool) {
+        USB_SUSPENDED.store(suspended, Ordering::Release);
         // When no logging feature is enabled, `info!` expands to a no-op and
         // both arms collapse to identical empty blocks — suppress the lint.
         #[allow(clippy::if_same_then_else)]
