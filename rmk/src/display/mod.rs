@@ -53,7 +53,7 @@
 //! run_all!(matrix, oled);
 //! ```
 
-mod drivers;
+pub mod drivers;
 mod renderers;
 
 #[cfg(feature = "oled_async")]
@@ -61,6 +61,8 @@ pub use display_interface_i2c;
 use embassy_futures::select::{Either, Either3, select, select3};
 use embassy_time::{Duration, Instant, Ticker, Timer};
 use embedded_graphics::prelude::*;
+#[cfg(feature = "lcd_async")]
+pub use lcd_async;
 #[cfg(feature = "oled_async")]
 pub use oled_async;
 pub use renderers::{LogoRenderer, OledRenderer};
