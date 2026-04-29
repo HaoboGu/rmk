@@ -1,6 +1,8 @@
 //! Exposed channels which can be used to share data across devices & processors
 
-use embassy_sync::channel::Channel;
+use core::future::poll_fn;
+
+use embassy_sync::channel::{Channel, TrySendError};
 #[cfg(feature = "_ble")]
 use embassy_sync::signal::Signal;
 pub use embassy_sync::{blocking_mutex, channel, pubsub, zerocopy_channel};
@@ -15,42 +17,56 @@ use crate::hid::Report;
 use crate::{FLASH_CHANNEL_SIZE, storage::FlashOperationMessage};
 use crate::{REPORT_CHANNEL_SIZE, RawMutex};
 
+type ReportChannel = Channel<RawMutex, Report, REPORT_CHANNEL_SIZE>;
+
 /// Signal for LED indicator, used in BLE keyboards only since BLE receiving is not async
 #[cfg(feature = "_ble")]
 pub(crate) static LED_SIGNAL: Signal<RawMutex, LedIndicator> = Signal::new();
 
-/// Drained by `UsbKeyboardWriter::run_writer`. Routed through `dispatch_report`
+/// Drained by `UsbKeyboardWriter::run_writer`. Routed through `send_hid_report`
 /// from the keyboard task and ad-hoc producers (e.g. steno chord output).
 #[cfg(not(feature = "_no_usb"))]
-pub static USB_REPORT_CHANNEL: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE> = Channel::new();
+pub static USB_REPORT_CHANNEL: ReportChannel = Channel::new();
 
-/// Drained by `BleHidServer::run_writer`. Routed through `dispatch_report`.
+/// Drained by `BleHidServer::run_writer`. Routed through `send_hid_report`.
 #[cfg(feature = "_ble")]
-pub(crate) static BLE_REPORT_CHANNEL: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE> = Channel::new();
+pub static BLE_REPORT_CHANNEL: ReportChannel = Channel::new();
 
-fn active_report_channel() -> Option<&'static Channel<RawMutex, Report, REPORT_CHANNEL_SIZE>> {
+fn active_report_channel() -> Option<(ConnectionType, &'static ReportChannel)> {
     match crate::state::active_transport()? {
         #[cfg(not(feature = "_no_usb"))]
-        ConnectionType::Usb => Some(&USB_REPORT_CHANNEL),
+        ConnectionType::Usb => Some((ConnectionType::Usb, &USB_REPORT_CHANNEL)),
         #[cfg(feature = "_ble")]
-        ConnectionType::Ble => Some(&BLE_REPORT_CHANNEL),
+        ConnectionType::Ble => Some((ConnectionType::Ble, &BLE_REPORT_CHANNEL)),
         #[allow(unreachable_patterns)]
         _ => None,
     }
 }
 
 /// Reports generated while no transport is selected are dropped on the floor.
-pub(crate) async fn dispatch_report(report: Report) {
-    if let Some(ch) = active_report_channel() {
-        ch.send(report).await;
+pub(crate) async fn send_hid_report(mut report: Report) {
+    let Some((transport, ch)) = active_report_channel() else {
+        return;
+    };
+
+    loop {
+        match ch.try_send(report) {
+            Ok(()) => return,
+            Err(TrySendError::Full(r)) => report = r,
+        }
+
+        poll_fn(|cx| ch.poll_ready_to_send(cx)).await;
+        if crate::state::active_transport() != Some(transport) {
+            return;
+        }
     }
 }
 
 /// Drops the report when the active transport's queue is full or no
 /// transport is selected. Use for producers where back-pressure would block
 /// the matrix scan (e.g. steno chord output).
-pub(crate) fn try_dispatch_report(report: Report) {
-    if let Some(ch) = active_report_channel() {
+pub(crate) fn try_send_hid_report(report: Report) {
+    if let Some((_, ch)) = active_report_channel() {
         let _ = ch.try_send(report);
     }
 }

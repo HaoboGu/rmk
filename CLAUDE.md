@@ -70,3 +70,4 @@ Config is loaded in three layers (later overrides earlier): `event_default.toml`
 ## Rules
 
 - Don't use `pub use` for convenient usage **within** the crate
+- Don't add a small helper function (≤ 10 lines) that has only one call site — inline it at the call site

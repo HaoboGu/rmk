@@ -142,9 +142,7 @@ impl<P: PacketPool> HidWriterTrait for BleHidServer<'_, '_, '_, P> {
             Report::MediaKeyboardReport(r) => self.notify_report(self.media_report, r).await,
             Report::SystemControlReport(r) => self.notify_report(self.system_report, r).await,
             // Plover HID over BLE is not supported: the stock HID-over-GATT service
-            // has no stenography characteristic. The keyboard task gates on
-            // `writable_on(Usb)` before dispatching, so reaching this arm means a
-            // transport flip raced the writer; debug-only to avoid log spam.
+            // has no stenography characteristic. Drop silently at the writer.
             #[cfg(feature = "steno")]
             Report::StenoReport(_) => {
                 debug!("Steno chord dropped: Plover HID over BLE is not supported");

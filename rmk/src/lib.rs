@@ -165,10 +165,11 @@ pub async fn run_rmk<
     use crate::processor::PollingProcessor;
     use crate::processor::builtin::wpm::WpmProcessor;
 
+    // Apply the nrf-specific serial number
     #[cfg(feature = "_nrf_ble")]
     let rmk_config = {
         let mut config = rmk_config;
-        crate::ble::apply_nrf_serial_number(&mut config);
+        config.device_config.serial_number = crate::ble::nrf::get_serial_number();
         config
     };
 

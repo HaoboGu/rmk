@@ -182,7 +182,18 @@ pub struct UsbTransport<D: Driver<'static>> {
 impl<D: Driver<'static>> UsbTransport<D> {
     pub fn new(driver: D, device_config: DeviceConfig<'static>) -> Self {
         let mut builder: Builder<'static, D> = new_usb_builder(driver, device_config);
-        let keyboard_rw = add_usb_reader_writer!(&mut builder, KeyboardReport, 1, 8, 8);
+        // Linux's usbhid driver auto-enables power/wakeup when it probes a
+        // boot-protocol keyboard, so advertise Boot/Keyboard on the primary
+        // HID interface.
+        let keyboard_rw = add_usb_reader_writer!(
+            &mut builder,
+            KeyboardReport,
+            1,
+            8,
+            8,
+            ::embassy_usb::class::hid::HidSubclass::Boot,
+            ::embassy_usb::class::hid::HidBootProtocol::Keyboard
+        );
         let other_writer = add_usb_writer!(&mut builder, CompositeReport, 9, 16);
         #[cfg(feature = "steno")]
         let steno_writer = add_usb_writer!(&mut builder, StenoReport, 9, 16);
@@ -329,7 +340,14 @@ macro_rules! add_usb_reader_writer {
         $crate::usb::add_usb_reader_writer!($usb_builder, $descriptor, $read_n, $write_n, 64)
     };
     // Size $max_packet to the actual report to conserve Packet Memory Area on tight parts.
-    ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr, $max_packet:expr) => {{
+    ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr, $max_packet:expr) => {
+        $crate::usb::add_usb_reader_writer!(
+            $usb_builder, $descriptor, $read_n, $write_n, $max_packet,
+            ::embassy_usb::class::hid::HidSubclass::No,
+            ::embassy_usb::class::hid::HidBootProtocol::None
+        )
+    };
+    ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr, $max_packet:expr, $subclass:expr, $protocol:expr) => {{
         // `paste` generates per-descriptor `static`s so each reader/writer keeps its own State/Handler.
         use usbd_hid::descriptor::SerializedDescriptor;
         paste::paste! {
@@ -345,8 +363,8 @@ macro_rules! add_usb_reader_writer {
             request_handler: Some(request_handler),
             poll_ms: 1,
             max_packet_size: $max_packet,
-            hid_subclass: ::embassy_usb::class::hid::HidSubclass::No,
-            hid_boot_protocol: ::embassy_usb::class::hid::HidBootProtocol::None,
+            hid_subclass: $subclass,
+            hid_boot_protocol: $protocol,
         };
 
         let rw: ::embassy_usb::class::hid::HidReaderWriter<_, $read_n, $write_n> = ::embassy_usb::class::hid::HidReaderWriter::new($usb_builder, state, hid_config);

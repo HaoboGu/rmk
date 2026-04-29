@@ -14,7 +14,6 @@ use crate::event::{LedIndicatorEvent, publish_event};
 use crate::keyboard::LOCK_LED_STATES;
 #[cfg(not(feature = "_no_usb"))]
 use crate::state::usb_suspended;
-use crate::state::writable_on;
 #[cfg(not(feature = "_no_usb"))]
 use crate::usb::USB_REMOTE_WAKEUP;
 
@@ -257,9 +256,8 @@ pub trait HidWriterTrait {
     fn write_report(&mut self, report: &Self::ReportType) -> impl Future<Output = Result<usize, HidError>>;
 }
 
-/// Runnable writer. The default `run_writer` gates wire writes on
-/// `writable_on(Self::KIND)` so reports queued before an active-output flip
-/// are dropped instead of written to the wrong wire.
+/// Runnable writer. Reports are already routed to the transport-specific queue,
+/// so the default `run_writer` only drains that queue and writes to the wire.
 pub trait RunnableHidWriter: HidWriterTrait {
     /// The transport this writer serves.
     const KIND: ConnectionType;
@@ -272,30 +270,30 @@ pub trait RunnableHidWriter: HidWriterTrait {
         async {
             loop {
                 let report = self.get_report().await;
-                if writable_on(Self::KIND) {
-                    #[cfg(not(feature = "_no_usb"))]
-                    // EndpointError::Disabled never fires on non-OTG STM32/GD32
-                    // peripherals during suspend, so signal wakeup proactively
-                    // when a report is pending and the bus is suspended.
-                    if usb_suspended() {
-                        USB_REMOTE_WAKEUP.signal(());
-                    }
+                #[cfg(not(feature = "_no_usb"))]
+                // EndpointError::Disabled never fires on non-OTG STM32/GD32
+                // peripherals during suspend, so signal wakeup proactively
+                // when a USB report is pending and the bus is suspended.
+                if Self::KIND == ConnectionType::Usb && usb_suspended() {
+                    USB_REMOTE_WAKEUP.signal(());
+                }
 
-                    if let Err(e) = self.write_report(&report).await {
-                        error!("Failed to send report: {:?}", e);
-                        #[cfg(not(feature = "_no_usb"))]
-                        // Belt-and-braces for OTG peripherals where Disabled is
-                        // the correct suspend indicator: signal wakeup, give the
-                        // host a moment, then retry the same report once.
-                        if let HidError::UsbEndpointError(EndpointError::Disabled) = e {
-                            USB_REMOTE_WAKEUP.signal(());
-                            embassy_time::Timer::after_millis(500).await;
-                            if let Err(e) = self.write_report(&report).await {
-                                error!("Failed to send report after wakeup: {:?}", e);
-                            }
+                if let Err(e) = self.write_report(&report).await {
+                    error!("Failed to send report: {:?}", e);
+                    #[cfg(not(feature = "_no_usb"))]
+                    // Belt-and-braces for OTG peripherals where Disabled is
+                    // the correct suspend indicator: signal wakeup, give the
+                    // host a moment, then retry the same report once.
+                    if Self::KIND == ConnectionType::Usb
+                        && let HidError::UsbEndpointError(EndpointError::Disabled) = e
+                    {
+                        USB_REMOTE_WAKEUP.signal(());
+                        embassy_time::Timer::after_millis(500).await;
+                        if let Err(e) = self.write_report(&report).await {
+                            error!("Failed to send report after wakeup: {:?}", e);
                         }
                     }
-                };
+                }
             }
         }
     }
@@ -323,7 +321,7 @@ pub(crate) async fn run_led_reader<R: HidReaderTrait<ReportType = LedIndicator>>
         match reader.read_report().await {
             Ok(led_indicator) => {
                 info!("Got led indicator");
-                if writable_on(kind) {
+                if crate::state::active_transport() == Some(kind) {
                     LOCK_LED_STATES.store(led_indicator.into_bits(), Ordering::Relaxed);
                     publish_event(LedIndicatorEvent::new(led_indicator));
                 }
@@ -334,37 +332,4 @@ pub(crate) async fn run_led_reader<R: HidReaderTrait<ReportType = LedIndicator>>
             }
         }
     }
-}
-
-#[cfg(feature = "_nrf_ble")]
-pub(crate) fn get_serial_number() -> &'static str {
-    use embassy_sync::once_lock::OnceLock;
-    use heapless::String;
-
-    static SERIAL: OnceLock<String<20>> = OnceLock::new();
-
-    let serial = SERIAL.get_or_init(|| {
-        let ficr = embassy_nrf::pac::FICR;
-        #[cfg(any(feature = "nrf54l15_ble", feature = "nrf54lm20_ble"))]
-        let device_id = (u64::from(ficr.deviceaddr(1).read()) << 32) | u64::from(ficr.deviceaddr(0).read());
-        #[cfg(not(any(feature = "nrf54l15_ble", feature = "nrf54lm20_ble")))]
-        let device_id = (u64::from(ficr.deviceid(1).read()) << 32) | u64::from(ficr.deviceid(0).read());
-
-        let mut result = String::new();
-        let _ = result.push_str("vial:f64c2b3c:");
-
-        // Hex lookup table
-        const HEX_TABLE: &[u8] = b"0123456789abcdef";
-        // Add 6 hex digits to the serial number, as the serial str in BLE Device Information Service is limited to 20 bytes
-        for i in 0..6 {
-            let digit = (device_id >> (60 - i * 4)) & 0xF;
-            // This index access is safe because digit is guaranteed to be in the range of 0-15
-            let hex_char = HEX_TABLE[digit as usize] as char;
-            let _ = result.push(hex_char);
-        }
-
-        result
-    });
-
-    serial.as_str()
 }

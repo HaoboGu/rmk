@@ -5,8 +5,6 @@ use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join;
 use embassy_futures::select::{Either, Either3, select, select3};
 use embassy_time::{Duration, Timer, with_timeout};
-#[cfg(feature = "passkey_entry")]
-use embassy_time::{Instant, with_deadline};
 use rand_core::{CryptoRng, RngCore};
 use rmk_types::ble::BleState;
 use rmk_types::connection::ConnectionType;
@@ -19,6 +17,8 @@ use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
 use crate::ble::device_info::{PnPID, VidSource};
 use crate::ble::led::BleLedReader;
+#[cfg(feature = "passkey_entry")]
+use crate::ble::passkey::{PasskeyInputState, next_gatt_event};
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use crate::channel::LED_SIGNAL;
 use crate::config::RmkConfig;
@@ -28,14 +28,13 @@ use crate::hid::{RunnableHidWriter, run_led_reader};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
 use crate::state::set_ble_state;
-#[cfg(feature = "storage")]
-use crate::storage::StorageKey;
 
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;
 pub(crate) mod led;
-#[cfg(feature = "passkey_entry")]
+#[cfg(feature = "_nrf_ble")]
+pub(crate) mod nrf;
 pub mod passkey;
 pub(crate) mod profile;
 
@@ -44,109 +43,11 @@ pub(crate) mod profile;
 /// - `false`: Indicates central is awake
 pub(crate) static SLEEPING_STATE: AtomicBool = AtomicBool::new(false);
 
-#[cfg(feature = "_nrf_ble")]
-pub(crate) fn apply_nrf_serial_number(rmk_config: &mut RmkConfig<'_>) {
-    rmk_config.device_config.serial_number = crate::hid::get_serial_number();
-}
-
-/// HID Class spec opcodes for the HID Control Point characteristic.
-#[cfg(feature = "split")]
-const HID_CTRL_SUSPEND: u8 = 0x00;
-#[cfg(feature = "split")]
-const HID_CTRL_EXIT_SUSPEND: u8 = 0x01;
-
-/// Forward an HID Control Point write to the split central's sleep signal.
-#[cfg(feature = "split")]
-fn handle_hid_control_point(data: &[u8]) {
-    if data.len() != 1 {
-        return;
-    }
-    match data[0] {
-        HID_CTRL_SUSPEND => CENTRAL_SLEEP.signal(true),
-        HID_CTRL_EXIT_SUSPEND => CENTRAL_SLEEP.signal(false),
-        _ => {}
-    }
-}
-
-// TODO: Add documentation about how to define split peripheral num in Rust code
 /// Max number of connections
 pub(crate) const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + 1;
 
 /// Max number of L2CAP channels
 pub(crate) const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
-
-#[cfg(feature = "passkey_entry")]
-struct PasskeyInputState {
-    deadline: Option<Instant>,
-    cleanup: Option<crate::ble::passkey::PasskeyCleanupGuard>,
-}
-
-#[cfg(feature = "passkey_entry")]
-impl PasskeyInputState {
-    const fn new() -> Self {
-        Self {
-            deadline: None,
-            cleanup: None,
-        }
-    }
-
-    fn clear(&mut self) {
-        self.deadline = None;
-        drop(self.cleanup.take());
-    }
-
-    fn begin(&mut self) {
-        use crate::ble::passkey::{PasskeyCleanupGuard, begin_passkey_entry_session};
-
-        self.clear();
-        begin_passkey_entry_session();
-        self.cleanup = Some(PasskeyCleanupGuard::new());
-        self.deadline = Some(Instant::now() + Duration::from_secs(crate::PASSKEY_ENTRY_TIMEOUT_SECS as u64));
-    }
-}
-
-#[cfg(feature = "passkey_entry")]
-async fn next_gatt_event<'a, 'b>(
-    conn: &GattConnection<'a, 'b, DefaultPacketPool>,
-    passkey_state: &mut PasskeyInputState,
-) -> Option<GattConnectionEvent<'a, 'b, DefaultPacketPool>> {
-    if crate::PASSKEY_ENTRY_ENABLED
-        && let Some(deadline) = passkey_state.deadline
-    {
-        use crate::ble::passkey::PASSKEY_RESPONSE;
-
-        return match select(conn.next(), with_deadline(deadline, PASSKEY_RESPONSE.wait())).await {
-            Either::First(event) => Some(event),
-            Either::Second(Ok(Some(passkey))) => {
-                passkey_state.clear();
-
-                info!("[gatt] Passkey entered: submitting");
-                if let Err(e) = conn.raw().pass_key_input(passkey) {
-                    error!("[gatt] pass_key_input error: {:?}", e);
-                }
-                None
-            }
-            Either::Second(Ok(None)) => {
-                passkey_state.clear();
-
-                info!("[gatt] Passkey entry cancelled");
-                if let Err(e) = conn.raw().pass_key_cancel() {
-                    error!("[gatt] pass_key_cancel error: {:?}", e);
-                }
-                None
-            }
-            Either::Second(Err(_)) => {
-                passkey_state.clear();
-
-                warn!("[gatt] Passkey entry timeout");
-                let _ = conn.raw().pass_key_cancel();
-                None
-            }
-        };
-    }
-
-    Some(conn.next().await)
-}
 
 /// Build the BLE stack.
 pub async fn build_ble_stack<
@@ -166,27 +67,6 @@ pub async fn build_ble_stack<
         .set_random_generator_seed(random_generator)
 }
 
-#[doc(hidden)]
-pub fn passkey_entry_enabled() -> bool {
-    #[cfg(feature = "passkey_entry")]
-    {
-        crate::PASSKEY_ENTRY_ENABLED
-    }
-    #[cfg(not(feature = "passkey_entry"))]
-    {
-        false
-    }
-}
-
-/// Wait for local input activity that should wake the BLE transport back up
-/// after an advertising timeout.
-async fn wait_for_wake_activity() {
-    let mut key_wake = crate::event::KeyboardEvent::subscriber();
-    let mut pointing_wake = crate::event::PointingEvent::subscriber();
-
-    let _ = select(key_wake.next_message_pure(), pointing_wake.next_message_pure()).await;
-}
-
 /// BLE transport runnable. Owns the trouble-host server and profile manager;
 /// `run` joins the background `ble_task` runner with the advertise→connect→serve
 /// loop and runs forever.
@@ -204,25 +84,9 @@ impl<'a, C> BleTransport<'a, C>
 where
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
-    pub async fn new(
-        stack: &'a Stack<'a, C, DefaultPacketPool>,
-        #[cfg_attr(not(feature = "_nrf_ble"), allow(unused_mut))] mut rmk_config: RmkConfig<'static>,
-    ) -> Self {
-        #[cfg(feature = "_nrf_ble")]
-        apply_nrf_serial_number(&mut rmk_config);
-
-        #[cfg(feature = "storage")]
-        let stored = crate::storage::read_setting(StorageKey::ConnectionType).await;
-        #[cfg(not(feature = "storage"))]
-        let stored: Option<u8> = None;
-        let preferred = match stored {
-            Some(c) => c.into(),
-            #[cfg(feature = "_no_usb")]
-            None => ConnectionType::Ble,
-            #[cfg(not(feature = "_no_usb"))]
-            None => ConnectionType::Usb,
-        };
-        crate::state::set_preferred(preferred);
+    pub async fn new(stack: &'a Stack<'a, C, DefaultPacketPool>, rmk_config: RmkConfig<'static>) -> Self {
+        let preferred = crate::state::load_preferred_connection().await;
+        crate::state::set_preferred_connection(preferred);
 
         let mut profile_manager = ProfileManager::new(stack);
         #[cfg(feature = "storage")]
@@ -330,7 +194,10 @@ where
                         #[cfg(feature = "split")]
                         CENTRAL_SLEEP.signal(true);
 
-                        wait_for_wake_activity().await;
+                        // Wake on key or pointing activity after the advertising timeout.
+                        let mut key_wake = crate::event::KeyboardEvent::subscriber();
+                        let mut pointing_wake = crate::event::PointingEvent::subscriber();
+                        let _ = select(key_wake.next_message_pure(), pointing_wake.next_message_pure()).await;
 
                         #[cfg(feature = "split")]
                         CENTRAL_SLEEP.signal(false);
@@ -339,7 +206,6 @@ where
                         #[cfg(feature = "defmt")]
                         let e = defmt::Debug2Format(&e);
                         error!("Advertise error: {:?}", e);
-                        // Avoid pegging the CPU on a tight advertise-failure loop.
                         Timer::after_millis(200).await;
                     }
                 }
@@ -387,11 +253,11 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let hid_control_point = server.hid_service.hid_control_point;
     let input_keyboard = server.hid_service.input_keyboard;
     #[cfg(feature = "host")]
-    let output_host = server.host_service.output_data;
-    #[cfg(feature = "host")]
-    let input_host = server.host_service.input_data;
-    #[cfg(feature = "host")]
-    let host_control_point = server.host_service.hid_control_point;
+    let (output_host, input_host, host_control_point) = (
+        server.host_service.output_data,
+        server.host_service.input_data,
+        server.host_service.hid_control_point,
+    );
     let mouse = server.composite_service.mouse_report;
     let media = server.composite_service.media_report;
     let media_control_point = server.composite_service.hid_control_point;
@@ -479,7 +345,20 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         {
                             info!("Write GATT Event to Control Point: {:?}", event.handle());
                             #[cfg(feature = "split")]
-                            handle_hid_control_point(event.data());
+                            {
+                                // Forward an HID Control Point write to the split central's sleep signal.
+                                // HID Class spec opcodes for the HID Control Point characteristic:
+                                //   - 0: HID_CTRL_SUSPEND
+                                //   - 1: HID_CTRL_EXIT_SUSPEND
+                                let data = event.data();
+                                if data.len() == 1 {
+                                    match data[0] {
+                                        0 => CENTRAL_SLEEP.signal(true),
+                                        1 => CENTRAL_SLEEP.signal(false),
+                                        _ => {}
+                                    }
+                                }
+                            }
                         } else {
                             #[cfg(feature = "host")]
                             if event.handle() == output_host.handle {
@@ -845,10 +724,11 @@ mod tests {
     use std::sync::{Mutex, OnceLock};
 
     use embassy_futures::join::join;
+    use embassy_futures::select::select;
     use embassy_time::Timer;
     use rmk_types::ble::{BleState, BleStatus};
 
-    use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent, publish_event};
+    use crate::event::{Axis, AxisEvent, AxisValType, KeyboardEvent, PointingEvent, SubscribableEvent, publish_event};
     use crate::state::{connection_status, set_ble_state, set_ble_status};
     use crate::test_support::test_block_on as block_on;
 
@@ -903,7 +783,12 @@ mod tests {
         let _guard = ble_status_test_lock().lock().unwrap();
 
         block_on(async {
-            join(super::wait_for_wake_activity(), async {
+            let wake = async {
+                let mut key_wake = KeyboardEvent::subscriber();
+                let mut pointing_wake = PointingEvent::subscriber();
+                let _ = select(key_wake.next_message_pure(), pointing_wake.next_message_pure()).await;
+            };
+            join(wake, async {
                 Timer::after_millis(1).await;
                 publish_event(PointingEvent([
                     AxisEvent {

@@ -8,8 +8,6 @@ use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Timer, with_deadline};
 use heapless::Vec;
 use rmk_types::action::{Action, KeyAction, KeyboardAction};
-#[cfg(feature = "steno")]
-use rmk_types::connection::ConnectionType;
 use rmk_types::fork::StateBits;
 use rmk_types::keycode::{ConsumerKey, HidKeyCode, KeyCode, SpecialKey, SystemControlKey};
 use rmk_types::led_indicator::LedIndicator;
@@ -18,7 +16,7 @@ use rmk_types::morse::{MorseMode, MorsePattern, TAP};
 use rmk_types::mouse_button::MouseButtons;
 use usbd_hid::descriptor::{MediaKeyboardReport, SystemControlReport};
 
-use crate::channel::dispatch_report;
+use crate::channel::send_hid_report;
 use crate::config::Hand;
 use crate::core_traits::Runnable;
 #[cfg(all(feature = "split", feature = "_ble"))]
@@ -284,7 +282,7 @@ impl<'a> Keyboard<'a> {
             return;
         }
 
-        dispatch_report(report).await;
+        send_hid_report(report).await;
     }
 
     /// Get a copy of the next timeout key in the buffer,
@@ -1275,10 +1273,8 @@ impl<'a> Keyboard<'a> {
             }
             #[cfg(feature = "steno")]
             Action::Steno(key) => {
-                // USB-only: Plover HID has no BLE characteristic. See `Report::StenoReport`
-                // in `BleHidServer::write_report`.
-                if self.steno.update(key, event.pressed) && crate::state::writable_on(ConnectionType::Usb) {
-                    crate::channel::try_dispatch_report(self.steno.current_report());
+                if let Some(report) = self.steno.on_event(key, event.pressed) {
+                    crate::channel::try_send_hid_report(report);
                 }
             }
             _ => warn!("Action variant not supported: {:?}", action),

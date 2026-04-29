@@ -109,15 +109,4 @@ impl StenoKey {
     pub const fn chart_index(self) -> u8 {
         self.0
     }
-
-    /// Bit mask for this key in the Plover HID 64-bit chord bitmap.
-    ///
-    /// Chart index 0 (`S1-`) is the most significant bit so that
-    /// `bitmap.to_be_bytes()` matches the wire-format byte ordering. Returns
-    /// `None` when the underlying index is out of range — callers must accept
-    /// that `StenoKey(N)` for `N >= 64` doesn't appear in the chord bitmap.
-    #[inline]
-    pub const fn bit_mask(self) -> Option<u64> {
-        if self.0 < 64 { Some(1u64 << (63 - self.0)) } else { None }
-    }
 }
