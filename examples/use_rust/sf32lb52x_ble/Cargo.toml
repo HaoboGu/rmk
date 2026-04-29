@@ -16,7 +16,10 @@ rmk = { path = "../../../rmk", default-features = false, features = [
     "storage",
     "vial",
     "async_matrix",
+    "gc9107",
 ] }
+lcd-async = { version = "0.1", default-features = false }
+embedded-hal = "1.0"
 
 sifli-hal = { git = "https://github.com/OpenSiFli/sifli-rs", rev = "8b9da60c616a945d444fdd18b80c773f903d2796", features = [
     "defmt",

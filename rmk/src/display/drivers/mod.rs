@@ -1,5 +1,7 @@
 //! Built-in [`DisplayDriver`](super::DisplayDriver) implementations.
 
+#[cfg(feature = "lcd_async")]
+pub mod lcd_async;
 #[cfg(feature = "oled_async")]
 mod oled_async;
 #[cfg(feature = "ssd1306")]

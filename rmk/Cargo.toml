@@ -51,6 +51,7 @@ paste = "1"
 # Display dependencies
 ssd1306 = { version = "0.10", optional = true, features = ["async"] }
 oled_async = { version = "0.2.1", optional = true, features = ["i2c"] }
+lcd-async = { version = "0.1", optional = true, default-features = false }
 embedded-graphics = { version = "0.8", optional = true }
 display-interface = { version = "0.5", optional = true }
 display-interface-i2c = { version = "0.5", optional = true }
@@ -178,6 +179,19 @@ sh1106 = ["oled_async"]
 sh1107 = ["oled_async"]
 sh1108 = ["oled_async"]
 ssd1309 = ["oled_async"]
+## Enable TFT drivers via lcd-async (GC9107, GC9A01, ILI9225, ILI9341, ILI9342C, ILI9486, ILI9488, RM67162, ST7735, ST7789, ST7796).
+lcd_async = ["display", "dep:lcd-async"]
+gc9107 = ["lcd_async"]
+gc9a01 = ["lcd_async"]
+ili9225 = ["lcd_async"]
+ili9341 = ["lcd_async"]
+ili9342c = ["lcd_async"]
+ili9486 = ["lcd_async"]
+ili9488 = ["lcd_async"]
+rm67162 = ["lcd_async"]
+st7735 = ["lcd_async"]
+st7789 = ["lcd_async"]
+st7796 = ["lcd_async"]
 
 ## Enable async matrix scanning
 async_matrix = []

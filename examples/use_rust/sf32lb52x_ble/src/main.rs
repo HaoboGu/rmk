@@ -6,32 +6,37 @@ mod keymap;
 #[macro_use]
 mod macros;
 mod display;
+mod renderers;
 mod vial;
 
 use defmt::{error, info};
 use defmt_rtt as _;
-use display::{Framebuffer, LCD_H, LCD_W, LcdcBus, TripleDisplay};
+use display::{AlignedFb, LCD_H, LCD_W, LcdcBus, LockingLcdcInterface, power_cycle};
 use embassy_executor::Spawner;
-use embassy_time::Timer;
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::mutex::Mutex;
+use embassy_time::Delay;
 use embedded_graphics::pixelcolor::Rgb565;
-use embedded_graphics::prelude::*;
-use embedded_graphics::primitives::{PrimitiveStyleBuilder, Rectangle};
+use embedded_graphics::prelude::WebColors;
 use keymap::{COL, ROW, SIZE};
+use lcd_async::Builder;
+use lcd_async::models::GC9107;
 use panic_probe as _;
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
+use renderers::KeyLabelRenderer;
 use rmk::ble::build_ble_stack;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join5;
+use rmk::display::DisplayProcessor;
+use rmk::display::drivers::lcd_async::LcdAsyncDisplay;
+use rmk::futures::future::join4;
 use rmk::host::HostService;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::direct_pin::DirectPinMatrix;
 use rmk::storage::async_flash_wrapper;
-use rmk::types::action::{Action, KeyAction};
-use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use sifli_hal::efuse::Efuse;
 use sifli_hal::gpio::{Input, Level, Output};
@@ -42,17 +47,11 @@ use sifli_hal::usb::{Driver, InterruptHandler as UsbInterruptHandler};
 use sifli_hal::{bind_interrupts, ipc, pmu};
 use sifli_radio::bluetooth::{BleController, BleInitConfig};
 use static_cell::StaticCell;
-use u8g2_fonts::types::{FontColor, HorizontalAlignment, VerticalPosition};
-use u8g2_fonts::{FontRenderer, fonts};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 /// Background colour per display, in CS-pin order
 /// (idx 0 → PA03/CS1, idx 1 → PA02/CS2, idx 2 → PA01/CS3).
 const PALETTE: [Rgb565; 3] = [Rgb565::CSS_DARK_RED, Rgb565::CSS_DARK_GREEN, Rgb565::CSS_DARK_BLUE];
-
-/// 46-pixel-tall bold Inconsolata. Roughly fills the 128×128 panel without
-/// running into the inset frame.
-static BIG_FONT: FontRenderer = FontRenderer::new::<fonts::u8g2_font_inb46_mr>();
 
 bind_interrupts!(struct Irqs {
     MAILBOX2_CH1 => ipc::InterruptHandler;
@@ -192,141 +191,73 @@ async fn main(_spawner: Spawner) {
     // ── 3× GC9107 displays (SuperKey 3-screen module) ──
     // PA00 RST · PA01/PA02/PA03 CS · PA04/PA05/PA06 LCDC1 SPI · PA07 3V3_EN.
     info!("Initializing displays...");
-    let lcd_power = Output::new(p.PA7, Level::High);
-    let lcd_rst = Output::new(p.PA0, Level::High);
+    let _lcd_power = Output::new(p.PA7, Level::High);
+    let mut lcd_rst = Output::new(p.PA0, Level::High);
     let lcd_cs0 = Output::new(p.PA3, Level::High); // CS1 — leftmost screen
     let lcd_cs1 = Output::new(p.PA2, Level::High); // CS2 — middle screen
     let lcd_cs2 = Output::new(p.PA1, Level::High); // CS3 — rightmost screen
     let lcdc_bus = LcdcBus::new(p.LCDC1, p.PA4, p.PA5, p.PA6);
-    let displays = TripleDisplay::new(lcdc_bus, lcd_rst, lcd_cs0, lcd_cs1, lcd_cs2, lcd_power).await;
 
-    static FB: StaticCell<Framebuffer> = StaticCell::new();
-    let fb = FB.init(Framebuffer::new());
+    // One reset pulse for all 3 panels at once; the per-panel `Builder::init`
+    // below runs each chip's init sequence sequentially under the bus mutex.
+    power_cycle(&mut lcd_rst).await;
+
+    static SHARED_BUS: StaticCell<Mutex<NoopRawMutex, LcdcBus>> = StaticCell::new();
+    let bus = SHARED_BUS.init(Mutex::new(lcdc_bus));
+
+    static FB0: StaticCell<AlignedFb> = StaticCell::new();
+    static FB1: StaticCell<AlignedFb> = StaticCell::new();
+    static FB2: StaticCell<AlignedFb> = StaticCell::new();
+    let fb0 = FB0.init(AlignedFb::new());
+    let fb1 = FB1.init(AlignedFb::new());
+    let fb2 = FB2.init(AlignedFb::new());
+
+    // GC9107's framebuffer is 128×160; the SuperKey panel only exposes a
+    // 128×128 viewport, mapped to the bottom of the framebuffer (chip rows
+    // 32..159). `display_offset(0, 32)` shifts CASET/RASET so writes land in
+    // the visible region.
+    let display0 = Builder::new(GC9107, LockingLcdcInterface::new(bus, lcd_cs0))
+        .display_size(LCD_W, LCD_H)
+        .display_offset(0, 32)
+        .init(&mut Delay)
+        .await
+        .unwrap();
+    let display1 = Builder::new(GC9107, LockingLcdcInterface::new(bus, lcd_cs1))
+        .display_size(LCD_W, LCD_H)
+        .display_offset(0, 32)
+        .init(&mut Delay)
+        .await
+        .unwrap();
+    let display2 = Builder::new(GC9107, LockingLcdcInterface::new(bus, lcd_cs2))
+        .display_size(LCD_W, LCD_H)
+        .display_offset(0, 32)
+        .init(&mut Delay)
+        .await
+        .unwrap();
+
+    const W: usize = LCD_W as usize;
+    const H: usize = LCD_H as usize;
+
+    let mut disp0 = DisplayProcessor::with_renderer(
+        LcdAsyncDisplay::<_, _, _, _, W, H>::new(display0, fb0),
+        KeyLabelRenderer::new(&keymap, 0, 0, PALETTE[0]),
+    );
+    let mut disp1 = DisplayProcessor::with_renderer(
+        LcdAsyncDisplay::<_, _, _, _, W, H>::new(display1, fb1),
+        KeyLabelRenderer::new(&keymap, 0, 1, PALETTE[1]),
+    );
+    let mut disp2 = DisplayProcessor::with_renderer(
+        LcdAsyncDisplay::<_, _, _, _, W, H>::new(display2, fb2),
+        KeyLabelRenderer::new(&keymap, 0, 2, PALETTE[2]),
+    );
 
     info!("Starting RMK dual-mode (USB + BLE) runner...");
 
-    join5(
-        run_all!(matrix, encoder, storage),
+    join4(
+        run_all!(matrix, encoder, storage, disp0, disp1, disp2),
         keyboard.run(),
         host_service.run(),
         run_rmk(usb_driver, &stack, rmk_config),
-        run_displays(displays, fb, &keymap),
     )
     .await;
-}
-
-/// Draw a single label centered on a coloured background.
-fn render_key_label(fb: &mut Framebuffer, label: &str, bg: Rgb565) {
-    let _ = fb.clear(bg);
-
-    // Decorative inset frame so the rendering reads as "this is a key" even
-    // when the label is short.
-    let frame = PrimitiveStyleBuilder::new()
-        .stroke_color(Rgb565::WHITE)
-        .stroke_width(2)
-        .build();
-    let _ = Rectangle::new(Point::new(6, 6), Size::new(LCD_W as u32 - 12, LCD_H as u32 - 12))
-        .into_styled(frame)
-        .draw(fb);
-
-    let _ = BIG_FONT.render_aligned(
-        label,
-        Point::new((LCD_W as i32) / 2, (LCD_H as i32) / 2),
-        VerticalPosition::Center,
-        HorizontalAlignment::Center,
-        FontColor::Transparent(Rgb565::WHITE),
-        fb,
-    );
-}
-
-fn action_label(action: KeyAction) -> &'static str {
-    match action.to_action() {
-        Action::Key(KeyCode::Hid(hid)) => hid_keycode_label(hid),
-        _ => "?",
-    }
-}
-
-/// Returns a short label for the most common HID keycodes. Anything not
-/// covered renders as "?" — extend as your keymap grows.
-fn hid_keycode_label(hid: HidKeyCode) -> &'static str {
-    match hid {
-        HidKeyCode::A => "A",
-        HidKeyCode::B => "B",
-        HidKeyCode::C => "C",
-        HidKeyCode::D => "D",
-        HidKeyCode::E => "E",
-        HidKeyCode::F => "F",
-        HidKeyCode::G => "G",
-        HidKeyCode::H => "H",
-        HidKeyCode::I => "I",
-        HidKeyCode::J => "J",
-        HidKeyCode::K => "K",
-        HidKeyCode::L => "L",
-        HidKeyCode::M => "M",
-        HidKeyCode::N => "N",
-        HidKeyCode::O => "O",
-        HidKeyCode::P => "P",
-        HidKeyCode::Q => "Q",
-        HidKeyCode::R => "R",
-        HidKeyCode::S => "S",
-        HidKeyCode::T => "T",
-        HidKeyCode::U => "U",
-        HidKeyCode::V => "V",
-        HidKeyCode::W => "W",
-        HidKeyCode::X => "X",
-        HidKeyCode::Y => "Y",
-        HidKeyCode::Z => "Z",
-        HidKeyCode::Kc1 => "1",
-        HidKeyCode::Kc2 => "2",
-        HidKeyCode::Kc3 => "3",
-        HidKeyCode::Kc4 => "4",
-        HidKeyCode::Kc5 => "5",
-        HidKeyCode::Kc6 => "6",
-        HidKeyCode::Kc7 => "7",
-        HidKeyCode::Kc8 => "8",
-        HidKeyCode::Kc9 => "9",
-        HidKeyCode::Kc0 => "0",
-        HidKeyCode::Enter => "ENT",
-        HidKeyCode::Escape => "ESC",
-        HidKeyCode::Backspace => "BS",
-        HidKeyCode::Tab => "TAB",
-        HidKeyCode::Space => "SPC",
-        HidKeyCode::Left => "<",
-        HidKeyCode::Right => ">",
-        HidKeyCode::Up => "^",
-        HidKeyCode::Down => "v",
-        _ => "?",
-    }
-}
-
-/// Drive the 3 displays. On boot, render whatever the keymap currently holds
-/// for row 0 / cols 0..2 (this is post-storage, so Vial-saved bindings show up
-/// immediately). After that, poll the keymap every 250 ms and re-render any
-/// position whose action has changed (covers Vial remaps and layer changes).
-async fn run_displays<'a>(
-    mut displays: TripleDisplay<'a>,
-    fb: &'static mut Framebuffer,
-    keymap: &rmk::keymap::KeyMap<'_>,
-) {
-    const POSITIONS: [(u8, u8); 3] = [(0, 0), (0, 1), (0, 2)];
-    let mut current: [&'static str; 3] = ["", "", ""];
-    let mut current_layer: u8 = 255;
-
-    loop {
-        let layer = keymap.active_layer();
-        let layer_changed = layer != current_layer;
-        current_layer = layer;
-
-        for (idx, &(row, col)) in POSITIONS.iter().enumerate() {
-            let action = keymap.action_at_pos(layer as usize, row, col);
-            let label = action_label(action);
-            if layer_changed || label != current[idx] {
-                current[idx] = label;
-                render_key_label(fb, label, PALETTE[idx]);
-                displays.write_frame(idx, &fb.data).await;
-                info!("Display {} → '{}' (layer {})", idx, label, layer);
-            }
-        }
-        Timer::after(embassy_time::Duration::from_millis(250)).await;
-    }
 }
