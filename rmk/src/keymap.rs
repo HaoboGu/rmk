@@ -431,6 +431,23 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().get_action_at(pos, layer)
     }
 
+    /// Read the action currently bound to a `(layer, row, col)` position.
+    ///
+    /// This is the post-storage, post-Vial state — i.e. what the keyboard will
+    /// actually emit when that key fires, not the compile-time default. Useful
+    /// for accessory displays / status surfaces that want to mirror the live
+    /// keymap.
+    pub fn action_at_pos(&self, layer: usize, row: u8, col: u8) -> KeyAction {
+        self.inner
+            .borrow()
+            .get_action_at(KeyboardEventPos::key_pos(col, row), layer)
+    }
+
+    /// Active layer index (after layer-toggle/momentary updates).
+    pub fn active_layer(&self) -> u8 {
+        self.inner.borrow().get_activated_layer()
+    }
+
     pub(crate) fn set_action_at(&self, pos: KeyboardEventPos, layer: usize, action: KeyAction) {
         self.inner.borrow_mut().set_action_at(pos, layer, action);
     }

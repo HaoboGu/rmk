@@ -8,6 +8,7 @@ use crate::core_traits::Runnable;
 pub mod adc;
 #[cfg(feature = "_ble")]
 pub mod battery;
+pub mod iqs5xx;
 pub mod joystick;
 pub mod pmw33xx;
 pub mod pmw3610;

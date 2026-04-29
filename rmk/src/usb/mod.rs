@@ -230,10 +230,11 @@ impl<D: Driver<'static>> Runnable for UsbTransport<D> {
                 match select(device.wait_resume(), USB_REMOTE_WAKEUP.wait()).await {
                     Either::First(_) => continue,
                     Either::Second(_) => {
-                        info!("USB wakeup remote");
-                        if let Err(e) = device.remote_wakeup().await {
-                            info!("USB wakeup remote error: {:?}", e);
+                        info!("USB remote wakeup requested");
+                        if device.remote_wakeup().await.is_ok() {
+                            continue;
                         }
+                        device.wait_resume().await;
                     }
                 }
             }

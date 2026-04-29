@@ -1,9 +1,9 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = 'sftool -c SF32LB52 --port <YOUR_PORT_HERE> write_flash ftab.bin@0x12000000'
+runner = '.cargo/flash_and_debug.sh'
 
 # Currently, probe-rs can only execute `attach`, not `run` or `download`.
 # Refer to https://github.com/OpenSiFli/sifli-rs/blob/main/docs/flash_and_debug.md
-# runner = "probe-rs attach --chip SF32LB52" 
+# runner = "probe-rs attach --chip SF32LB52"
 
 # Cortex-M33 has MSPLIM, so we don't need flip-link
 
@@ -11,6 +11,7 @@ runner = 'sftool -c SF32LB52 --port <YOUR_PORT_HERE> write_flash ftab.bin@0x1200
 target = "thumbv8m.main-none-eabihf"
 
 [env]
-DEFMT_LOG = "info"
-KEYBOARD_TOML_PATH =  { value = "keyboard.toml", relative = true }
+DEFMT_LOG = "debug"
+KEYBOARD_TOML_PATH = { value = "keyboard.toml", relative = true }
 SIFLI_UART_DEBUG = "1"
+# SIFLI_SFTOOL_PORT = "/dev/cu.wchusbserial59810930261"

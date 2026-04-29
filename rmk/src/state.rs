@@ -150,6 +150,11 @@ pub(crate) fn writable_on(t: ConnectionType) -> bool {
     active_transport() == Some(t)
 }
 
+#[cfg(not(feature = "_no_usb"))]
+pub(crate) fn usb_suspended() -> bool {
+    connection_status().usb == UsbState::Suspended
+}
+
 #[cfg(feature = "_ble")]
 pub(crate) fn current_profile() -> u8 {
     connection_status().ble.profile

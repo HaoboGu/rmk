@@ -17,6 +17,7 @@ use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
 use crate::codegen::import::expand_custom_imports;
 use crate::codegen::input_device::adc::expand_adc_device;
 use crate::codegen::input_device::encoder::expand_encoder_device;
+use crate::codegen::input_device::iqs5xx::{expand_iqs5xx_device, expand_iqs5xx_interrupts};
 use crate::codegen::input_device::pmw33xx::expand_pmw33xx_device;
 use crate::codegen::input_device::pmw3610::expand_pmw3610_device;
 use crate::codegen::keyboard_config::read_keyboard_toml_config;
@@ -92,6 +93,17 @@ fn expand_bind_interrupt_for_split_peripheral(
         _ => quote! {},
     };
 
+    let iqs5xx_config_for_irq = match &hardware.board {
+        BoardConfig::Split(split_config) => split_config.peripheral[peripheral_id]
+            .input_device
+            .clone()
+            .unwrap_or(InputDeviceConfig::default())
+            .iqs5xx
+            .unwrap_or(Vec::new()),
+        _ => Vec::new(),
+    };
+    let iqs5xx_interrupt = expand_iqs5xx_interrupts(&chip.series, &iqs5xx_config_for_irq);
+
     match chip.series {
         ChipSeries::Nrf52 => {
             let ble_config = communication.get_ble_config().unwrap();
@@ -157,6 +169,7 @@ fn expand_bind_interrupt_for_split_peripheral(
                     TIMER0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     RTC0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     #pmw33xx_spi_interrupts
+                    #iqs5xx_interrupt
                     #display_interrupt
                 });
 
@@ -200,6 +213,7 @@ fn expand_bind_interrupt_for_split_peripheral(
                     bind_interrupts!(struct Irqs {
                         PIO0_IRQ_0 => ::embassy_rp::pio::InterruptHandler<::embassy_rp::peripherals::PIO0>;
                         DMA_IRQ_0 => ::embassy_rp::dma::InterruptHandler<::embassy_rp::peripherals::DMA_CH0>, ::embassy_rp::dma::InterruptHandler<::embassy_rp::peripherals::DMA_CH1>;
+                        #iqs5xx_interrupt
                         #display_interrupt
                     });
                     #[::embassy_executor::task]
@@ -207,10 +221,11 @@ fn expand_bind_interrupt_for_split_peripheral(
                         runner.run().await
                     }
                 }
-            } else if !display_interrupt.is_empty() {
+            } else if !display_interrupt.is_empty() || !iqs5xx_interrupt.is_empty() {
                 quote! {
                     use ::embassy_rp::bind_interrupts;
                     bind_interrupts!(struct Irqs {
+                        #iqs5xx_interrupt
                         #display_interrupt
                     });
                 }
@@ -605,6 +620,26 @@ pub(crate) fn expand_peripheral_input_device_config(
     };
 
     for initializer in pmw33xx_devices {
+        initializations.extend(initializer.initializer);
+        let device_name = initializer.var_name;
+        devices.push(quote! { #device_name });
+    }
+
+    // generate IQS5xx configuration
+    let (iqs5xx_devices, _iqs5xx_processors) = match board {
+        BoardConfig::Split(split_config) => expand_iqs5xx_device(
+            split_config.peripheral[id]
+                .input_device
+                .clone()
+                .unwrap_or(InputDeviceConfig::default())
+                .iqs5xx
+                .unwrap_or(Vec::new()),
+            chip,
+        ),
+        _ => (vec![], vec![]),
+    };
+
+    for initializer in iqs5xx_devices {
         initializations.extend(initializer.initializer);
         let device_name = initializer.var_name;
         devices.push(quote! { #device_name });

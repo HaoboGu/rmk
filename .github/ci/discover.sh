@@ -4,8 +4,10 @@
 #   stable  — JSON array of {dir, target, bloat, bloat_bins} for stable-toolchain examples
 #   esp     — JSON array of {dir, target} for xtensa/ESP examples
 set -euo pipefail
+
 # shellcheck source=_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
 
 # Examples tracked for binary-size regression (bloat) reports on PRs.
 BLOAT_DIRS=(

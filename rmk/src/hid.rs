@@ -12,6 +12,8 @@ use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, Syst
 
 use crate::event::{LedIndicatorEvent, publish_event};
 use crate::keyboard::LOCK_LED_STATES;
+#[cfg(not(feature = "_no_usb"))]
+use crate::state::usb_suspended;
 use crate::state::writable_on;
 #[cfg(not(feature = "_no_usb"))]
 use crate::usb::USB_REMOTE_WAKEUP;
@@ -270,17 +272,27 @@ pub trait RunnableHidWriter: HidWriterTrait {
         async {
             loop {
                 let report = self.get_report().await;
-                if writable_on(Self::KIND)
-                    && let Err(e) = self.write_report(&report).await
-                {
-                    error!("Failed to send report: {:?}", e);
+                if writable_on(Self::KIND) {
                     #[cfg(not(feature = "_no_usb"))]
-                    // If the USB endpoint is disabled, try wakeup and resend the same report.
-                    if let HidError::UsbEndpointError(EndpointError::Disabled) = e {
+                    // EndpointError::Disabled never fires on non-OTG STM32/GD32
+                    // peripherals during suspend, so signal wakeup proactively
+                    // when a report is pending and the bus is suspended.
+                    if usb_suspended() {
                         USB_REMOTE_WAKEUP.signal(());
-                        embassy_time::Timer::after_millis(200).await;
-                        if let Err(e) = self.write_report(&report).await {
-                            error!("Failed to send report after wakeup: {:?}", e);
+                    }
+
+                    if let Err(e) = self.write_report(&report).await {
+                        error!("Failed to send report: {:?}", e);
+                        #[cfg(not(feature = "_no_usb"))]
+                        // Belt-and-braces for OTG peripherals where Disabled is
+                        // the correct suspend indicator: signal wakeup, give the
+                        // host a moment, then retry the same report once.
+                        if let HidError::UsbEndpointError(EndpointError::Disabled) = e {
+                            USB_REMOTE_WAKEUP.signal(());
+                            embassy_time::Timer::after_millis(500).await;
+                            if let Err(e) = self.write_report(&report).await {
+                                error!("Failed to send report after wakeup: {:?}", e);
+                            }
                         }
                     }
                 };
