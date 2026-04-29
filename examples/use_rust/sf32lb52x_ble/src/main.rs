@@ -10,6 +10,7 @@ mod vial;
 
 use defmt::{error, info};
 use defmt_rtt as _;
+use display::{Framebuffer, LCD_H, LCD_W, LcdcBus, TripleDisplay};
 use embassy_executor::Spawner;
 use embassy_time::Timer;
 use embedded_graphics::pixelcolor::Rgb565;
@@ -29,9 +30,9 @@ use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::direct_pin::DirectPinMatrix;
 use rmk::storage::async_flash_wrapper;
-use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
+use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
 use sifli_hal::efuse::Efuse;
 use sifli_hal::gpio::{Input, Level, Output};
 use sifli_hal::mpi::{BlockingNorFlash, BuiltInProfile, NorConfig, ProfileSource};
@@ -42,10 +43,8 @@ use sifli_hal::{bind_interrupts, ipc, pmu};
 use sifli_radio::bluetooth::{BleController, BleInitConfig};
 use static_cell::StaticCell;
 use u8g2_fonts::types::{FontColor, HorizontalAlignment, VerticalPosition};
-use u8g2_fonts::{fonts, FontRenderer};
+use u8g2_fonts::{FontRenderer, fonts};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
-
-use display::{Framebuffer, LcdcBus, TripleDisplay, LCD_H, LCD_W};
 
 /// Background colour per display, in CS-pin order
 /// (idx 0 → PA03/CS1, idx 1 → PA02/CS2, idx 2 → PA01/CS3).
@@ -199,8 +198,7 @@ async fn main(_spawner: Spawner) {
     let lcd_cs1 = Output::new(p.PA2, Level::High); // CS2 — middle screen
     let lcd_cs2 = Output::new(p.PA1, Level::High); // CS3 — rightmost screen
     let lcdc_bus = LcdcBus::new(p.LCDC1, p.PA4, p.PA5, p.PA6);
-    let displays =
-        TripleDisplay::new(lcdc_bus, lcd_rst, lcd_cs0, lcd_cs1, lcd_cs2, lcd_power).await;
+    let displays = TripleDisplay::new(lcdc_bus, lcd_rst, lcd_cs0, lcd_cs1, lcd_cs2, lcd_power).await;
 
     static FB: StaticCell<Framebuffer> = StaticCell::new();
     let fb = FB.init(Framebuffer::new());
@@ -252,16 +250,41 @@ fn action_label(action: KeyAction) -> &'static str {
 /// covered renders as "?" — extend as your keymap grows.
 fn hid_keycode_label(hid: HidKeyCode) -> &'static str {
     match hid {
-        HidKeyCode::A => "A", HidKeyCode::B => "B", HidKeyCode::C => "C", HidKeyCode::D => "D",
-        HidKeyCode::E => "E", HidKeyCode::F => "F", HidKeyCode::G => "G", HidKeyCode::H => "H",
-        HidKeyCode::I => "I", HidKeyCode::J => "J", HidKeyCode::K => "K", HidKeyCode::L => "L",
-        HidKeyCode::M => "M", HidKeyCode::N => "N", HidKeyCode::O => "O", HidKeyCode::P => "P",
-        HidKeyCode::Q => "Q", HidKeyCode::R => "R", HidKeyCode::S => "S", HidKeyCode::T => "T",
-        HidKeyCode::U => "U", HidKeyCode::V => "V", HidKeyCode::W => "W", HidKeyCode::X => "X",
-        HidKeyCode::Y => "Y", HidKeyCode::Z => "Z",
-        HidKeyCode::Kc1 => "1", HidKeyCode::Kc2 => "2", HidKeyCode::Kc3 => "3",
-        HidKeyCode::Kc4 => "4", HidKeyCode::Kc5 => "5", HidKeyCode::Kc6 => "6",
-        HidKeyCode::Kc7 => "7", HidKeyCode::Kc8 => "8", HidKeyCode::Kc9 => "9",
+        HidKeyCode::A => "A",
+        HidKeyCode::B => "B",
+        HidKeyCode::C => "C",
+        HidKeyCode::D => "D",
+        HidKeyCode::E => "E",
+        HidKeyCode::F => "F",
+        HidKeyCode::G => "G",
+        HidKeyCode::H => "H",
+        HidKeyCode::I => "I",
+        HidKeyCode::J => "J",
+        HidKeyCode::K => "K",
+        HidKeyCode::L => "L",
+        HidKeyCode::M => "M",
+        HidKeyCode::N => "N",
+        HidKeyCode::O => "O",
+        HidKeyCode::P => "P",
+        HidKeyCode::Q => "Q",
+        HidKeyCode::R => "R",
+        HidKeyCode::S => "S",
+        HidKeyCode::T => "T",
+        HidKeyCode::U => "U",
+        HidKeyCode::V => "V",
+        HidKeyCode::W => "W",
+        HidKeyCode::X => "X",
+        HidKeyCode::Y => "Y",
+        HidKeyCode::Z => "Z",
+        HidKeyCode::Kc1 => "1",
+        HidKeyCode::Kc2 => "2",
+        HidKeyCode::Kc3 => "3",
+        HidKeyCode::Kc4 => "4",
+        HidKeyCode::Kc5 => "5",
+        HidKeyCode::Kc6 => "6",
+        HidKeyCode::Kc7 => "7",
+        HidKeyCode::Kc8 => "8",
+        HidKeyCode::Kc9 => "9",
         HidKeyCode::Kc0 => "0",
         HidKeyCode::Enter => "ENT",
         HidKeyCode::Escape => "ESC",

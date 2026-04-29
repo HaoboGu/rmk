@@ -17,15 +17,15 @@
 //!  - PA07 — 3V3_EN (GPIO, drive high)
 
 use embassy_time::{Duration, Timer};
-use embedded_graphics::pixelcolor::raw::RawU16;
 use embedded_graphics::pixelcolor::Rgb565;
+use embedded_graphics::pixelcolor::raw::RawU16;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::Rectangle;
 use sifli_hal::gpio::Output;
 use sifli_hal::pac;
 use sifli_hal::pac::lcdc::vals::{
-    AlphaSel, LayerFormat, LcdFormat, LcdIntfSel, Polarity, SingleAccessType, SpiAccessLen,
-    SpiClkInit, SpiClkPol, SpiLcdFormat, SpiLineMode, SpiRdMode, TargetLcd,
+    AlphaSel, LayerFormat, LcdFormat, LcdIntfSel, Polarity, SingleAccessType, SpiAccessLen, SpiClkInit, SpiClkPol,
+    SpiLcdFormat, SpiLineMode, SpiRdMode, TargetLcd,
 };
 use sifli_hal::peripherals::LCDC1;
 use sifli_hal::rcc::enable_and_reset;
@@ -344,15 +344,7 @@ impl<'a> TripleDisplay<'a> {
     }
 
     /// Set the column/row address windows, then start a pixel transfer.
-    async fn write_window(
-        &mut self,
-        idx: usize,
-        x0: u16,
-        y0: u16,
-        x1: u16,
-        y1: u16,
-        buffer: &[u8],
-    ) {
+    async fn write_window(&mut self, idx: usize, x0: u16, y0: u16, x1: u16, y1: u16, buffer: &[u8]) {
         self.select_one(idx);
         // CASET
         self.bus.write_cmd_with(
@@ -464,4 +456,3 @@ impl DrawTarget for Framebuffer {
         Ok(())
     }
 }
-
