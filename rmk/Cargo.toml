@@ -180,7 +180,6 @@ sh1107 = ["oled_async"]
 sh1108 = ["oled_async"]
 ssd1309 = ["oled_async"]
 ## Enable TFT drivers via lcd-async (GC9107, GC9A01, ILI9225, ILI9341, ILI9342C, ILI9486, ILI9488, RM67162, ST7735, ST7789, ST7796).
-## Internal umbrella — users typically enable a per-chip feature instead.
 lcd_async = ["display", "dep:lcd-async"]
 gc9107 = ["lcd_async"]
 gc9a01 = ["lcd_async"]

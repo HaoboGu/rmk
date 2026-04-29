@@ -1,17 +1,4 @@
-//! [`DisplayDriver`] adapter for displays driven by the [`lcd-async`] crate
-//! (an async-first fork of `mipidsi`).
-//!
-//! Works with any of the chips lcd-async supports — GC9107, GC9A01, ILI9225,
-//! ILI9341, ILI9342C, ILI9486, ILI9488, RM67162, ST7735, ST7789, ST7796 — and
-//! any user-supplied [`Interface`] implementation (built-in SPI / parallel,
-//! or a custom hardware-peripheral wrapper).
-//!
-//! lcd-async is framebuffer-centric: drawing happens into an in-memory buffer
-//! and is flushed to the panel in a single async transfer. This adapter owns
-//! both the framebuffer storage and the underlying [`Display`], letting the
-//! processor draw via [`DrawTarget`] and flush via [`DisplayDriver::flush`].
-//!
-//! [`lcd-async`]: https://crates.io/crates/lcd-async
+//! [`DisplayDriver`] adapter for displays driven by the [`lcd-async`](https://crates.io/crates/lcd-async) crate.
 //!
 //! # Example
 //!
@@ -58,7 +45,7 @@ use super::super::DisplayDriver;
 ///
 /// # Lifecycle
 ///
-/// The wrapped [`Display`] must already be initialised by [`lcd_async::Builder::init`]
+/// The wrapped [`Display`] must already be initialized by [`lcd_async::Builder::init`]
 /// before being passed to [`new`](Self::new). [`DisplayDriver::init`] is therefore a no-op.
 pub struct LcdAsyncDisplay<DI, MOD, RST, BUF, const W: usize, const H: usize>
 where
@@ -78,7 +65,7 @@ where
     RST: OutputPin,
     BUF: AsMut<[u8]> + AsRef<[u8]>,
 {
-    /// Wrap an already-initialised [`Display`] and its framebuffer storage.
+    /// Wrap an already-initialized [`Display`] and its framebuffer storage.
     ///
     /// `buffer` length must be exactly `W * H * 2` bytes (Rgb565 = 2 bytes/pixel).
     pub fn new(display: Display<DI, MOD, RST>, buffer: BUF) -> Self {

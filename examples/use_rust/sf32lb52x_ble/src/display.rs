@@ -1,4 +1,4 @@
-//! 3× GC9107 display driver for the SuperKey hardware.
+//! LCDC1 SPI bus + lcd-async `Interface` adapter for the SuperKey 3-screen module.
 //!
 //! sifli-hal's stock `Lcdc::new_qspi` constructor reserves PA07 / PA08 for the
 //! LCDC's DIO2 / DIO3 alt-functions, but PA07 is wired to the LCD 3V3 enable
@@ -15,12 +15,17 @@
 //!  - PA05 — LCDC1_SPI_DIO0 — data (alt-1)
 //!  - PA06 — LCDC1_SPI_DIO1 — DCX (alt-1)
 //!  - PA07 — 3V3_EN (GPIO, drive high)
+//!
+//! The 3 panels share the LCDC1 bus through an `embassy_sync::Mutex`. Each panel
+//! gets its own `LockingLcdcInterface`, which implements `lcd_async::Interface`
+//! and snoops CASET (0x2A) / RASET (0x2B) commands so it can program LCDC1's
+//! DMA window when `send_data_slice` streams pixels.
 
+use embassy_sync::blocking_mutex::raw::RawMutex;
+use embassy_sync::mutex::{Mutex, MutexGuard};
 use embassy_time::{Duration, Timer};
-use embedded_graphics::pixelcolor::Rgb565;
-use embedded_graphics::pixelcolor::raw::RawU16;
-use embedded_graphics::prelude::*;
-use embedded_graphics::primitives::Rectangle;
+use embedded_hal::digital::OutputPin;
+use lcd_async::interface::{Interface, InterfaceKind};
 use sifli_hal::gpio::Output;
 use sifli_hal::pac;
 use sifli_hal::pac::lcdc::vals::{
@@ -38,6 +43,34 @@ pub const LCD_H: u16 = 128;
 pub const FB_BYTES: usize = (LCD_W as usize) * (LCD_H as usize) * 2;
 
 const PIN_AF_LCDC1_SPI: u8 = 1;
+
+/// 4-byte-aligned framebuffer storage so LCDC1's layer-0 DMA can stream from it.
+#[repr(align(4))]
+pub struct AlignedFb(pub [u8; FB_BYTES]);
+
+impl AlignedFb {
+    pub const fn new() -> Self {
+        Self([0; FB_BYTES])
+    }
+}
+
+impl Default for AlignedFb {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AsRef<[u8]> for AlignedFb {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl AsMut<[u8]> for AlignedFb {
+    fn as_mut(&mut self) -> &mut [u8] {
+        &mut self.0
+    }
+}
 
 /// LCDC1 SPI bus driving the 3 displays. CS is handled externally.
 pub struct LcdcBus {
@@ -137,14 +170,6 @@ impl LcdcBus {
         });
     }
 
-    /// Send `cmd` followed by N data parameters.
-    pub fn write_cmd_with(&mut self, cmd: u8, params: &[u8]) {
-        self.write_cmd(cmd);
-        for &b in params {
-            self.write_data(b);
-        }
-    }
-
     /// Stream a pixel buffer via the LCDC layer-0 DMA.
     ///
     /// The buffer must be 4-byte aligned and contain RGB565 pixels in big-endian
@@ -217,242 +242,134 @@ impl LcdcBus {
     }
 }
 
-/// Three GC9107 displays sharing the LCDC1 SPI bus, addressed by individual CS pins.
-pub struct TripleDisplay<'a> {
-    pub bus: LcdcBus,
-    rst: Output<'a>,
-    cs: [Output<'a>; 3],
-    _power: Output<'a>,
-}
-
-impl<'a> TripleDisplay<'a> {
-    /// Power up the LCD rail, hardware-reset every display, then run the GC9107
-    /// init sequence simultaneously on all 3 panels.
-    pub async fn new(
-        bus: LcdcBus,
-        rst: Output<'a>,
-        cs0: Output<'a>,
-        cs1: Output<'a>,
-        cs2: Output<'a>,
-        power: Output<'a>,
-    ) -> Self {
-        let mut me = Self {
-            bus,
-            rst,
-            cs: [cs0, cs1, cs2],
-            _power: power,
-        };
-        me.power_cycle().await;
-        me.init_all().await;
-        me
-    }
-
-    async fn power_cycle(&mut self) {
-        // Power was already enabled by the caller; just give the rail time to
-        // settle before pulsing reset.
-        Timer::after(Duration::from_millis(20)).await;
-        self.rst.set_low();
-        Timer::after(Duration::from_millis(20)).await;
-        self.rst.set_high();
-        Timer::after(Duration::from_millis(120)).await;
-    }
-
-    fn select_one(&mut self, idx: usize) {
-        for (i, cs) in self.cs.iter_mut().enumerate() {
-            if i == idx {
-                cs.set_low();
-            } else {
-                cs.set_high();
-            }
-        }
-    }
-
-    fn select_all(&mut self) {
-        for cs in self.cs.iter_mut() {
-            cs.set_low();
-        }
-    }
-
-    fn deselect_all(&mut self) {
-        for cs in self.cs.iter_mut() {
-            cs.set_high();
-        }
-    }
-
-    /// Send `cmd` (with optional params) to ALL 3 panels in a single
-    /// transaction. Mirrors `LCD_WriteReg_More` from the SuperKey C SDK:
-    /// every chip select goes low, the LCDC clocks the bytes, every CS goes
-    /// high once the LCDC reports idle.
-    fn write_cmd_all(&mut self, cmd: u8, params: &[u8]) {
-        self.select_all();
-        self.bus.write_cmd(cmd);
-        for &b in params {
-            self.bus.write_data(b);
-        }
-        // Make sure the transaction has fully drained before lifting CS,
-        // otherwise the trailing byte can be cut off mid-clock.
-        self.bus.wait_busy();
-        self.deselect_all();
-    }
-
-    /// GC9107 init sequence (lifted from `SiFliSparks/SuperKey` / SiFli SDK).
-    async fn init_all(&mut self) {
-        self.write_cmd_all(0x11, &[]); // sleep out
-        Timer::after(Duration::from_millis(120)).await;
-
-        self.write_cmd_all(0xFE, &[]); // internal reg enable
-        self.write_cmd_all(0xEF, &[]); // internal reg enable
-
-        self.write_cmd_all(0xB0, &[0xC0]);
-        self.write_cmd_all(0xB1, &[0x80]);
-        self.write_cmd_all(0xB2, &[0x27]);
-        self.write_cmd_all(0xB3, &[0x13]);
-        self.write_cmd_all(0xB6, &[0x19]);
-        self.write_cmd_all(0xB7, &[0x05]);
-        self.write_cmd_all(0xAC, &[0xC8]);
-        self.write_cmd_all(0xAB, &[0x0F]);
-        self.write_cmd_all(0x3A, &[0x05]); // 16-bit RGB565
-        self.write_cmd_all(0xB4, &[0x04]);
-        self.write_cmd_all(0xA8, &[0x08]);
-        self.write_cmd_all(0xB8, &[0x08]);
-        self.write_cmd_all(0xEA, &[0x02]);
-        self.write_cmd_all(0xE8, &[0x2A]);
-        self.write_cmd_all(0xE9, &[0x47]);
-        self.write_cmd_all(0xE7, &[0x5F]);
-        self.write_cmd_all(0xC6, &[0x21]);
-        self.write_cmd_all(0xC7, &[0x15]);
-
-        self.write_cmd_all(
-            0xF0,
-            &[
-                0x1D, 0x38, 0x09, 0x4D, 0x92, 0x2F, 0x35, 0x52, 0x1E, 0x0C, 0x04, 0x12, 0x14, 0x1F,
-            ],
-        );
-        self.write_cmd_all(
-            0xF1,
-            &[
-                0x16, 0x40, 0x1C, 0x54, 0xA9, 0x2D, 0x2E, 0x56, 0x10, 0x0D, 0x0C, 0x1A, 0x14, 0x1E,
-            ],
-        );
-
-        self.write_cmd_all(0xF4, &[0x00, 0x00, 0xFF]);
-        self.write_cmd_all(0xBA, &[0xFF, 0xFF]);
-        self.write_cmd_all(0x36, &[0x00]); // MADCTL — 0° rotation
-        self.write_cmd_all(0x11, &[]); // sleep out (again, matches SDK)
-        Timer::after(Duration::from_millis(20)).await;
-        self.write_cmd_all(0x29, &[]); // display on
-    }
-
-    /// Set the column/row address windows, then start a pixel transfer.
-    async fn write_window(&mut self, idx: usize, x0: u16, y0: u16, x1: u16, y1: u16, buffer: &[u8]) {
-        self.select_one(idx);
-        // CASET
-        self.bus.write_cmd_with(
-            0x2A,
-            &[(x0 >> 8) as u8, (x0 & 0xFF) as u8, (x1 >> 8) as u8, (x1 & 0xFF) as u8],
-        );
-        // RASET
-        self.bus.write_cmd_with(
-            0x2B,
-            &[(y0 >> 8) as u8, (y0 & 0xFF) as u8, (y1 >> 8) as u8, (y1 & 0xFF) as u8],
-        );
-        self.bus.write_cmd(0x2C); // RAMWR
-        self.bus.wait_busy();
-        self.bus.write_pixels(x0, y0, x1, y1, buffer).await;
-        self.deselect_all();
-    }
-
-    /// Push a full-screen framebuffer to the selected display.
-    pub async fn write_frame(&mut self, idx: usize, fb: &[u8]) {
-        self.write_window(idx, 0, 0, LCD_W - 1, LCD_H - 1, fb).await;
-    }
-}
-
-/// Software framebuffer that draws into a 4-byte-aligned RGB565 buffer.
+/// One-shot LCD power + reset pulse.
 ///
-/// Implements `embedded_graphics::DrawTarget<Color = Rgb565>` so the standard
-/// text/primitive APIs can target it. Pixels are stored big-endian to match
-/// the GC9107's wire format.
-#[repr(align(4))]
-pub struct Framebuffer {
-    pub data: [u8; FB_BYTES],
+/// Power is driven high by the caller before this runs (the `lcd_power` pin is
+/// initialized at `Level::High`). Pulsing reset wakes all 3 GC9107 panels at
+/// once; after this, the per-panel `lcd-async` `Builder::init` runs the chip
+/// init sequence sequentially under the shared bus mutex.
+pub async fn power_cycle(rst: &mut Output<'_>) {
+    Timer::after(Duration::from_millis(20)).await;
+    rst.set_low();
+    Timer::after(Duration::from_millis(20)).await;
+    rst.set_high();
+    Timer::after(Duration::from_millis(120)).await;
 }
 
-impl Framebuffer {
-    pub const fn new() -> Self {
-        Self { data: [0; FB_BYTES] }
-    }
+/// `lcd-async` [`Interface`] adapter that owns one CS pin and shares an
+/// `LcdcBus` through a mutex.
+///
+/// The GC9107 expects the entire `CASET → RASET → RAMWR → pixels` sequence
+/// inside a single CS-low window: deasserting CS between RAMWR and the pixel
+/// stream causes the panel to drop the address window, and pixels land in the
+/// default `(0, 0)` location — visible as a "shifted" image.
+///
+/// To match the working SuperKey C driver behaviour, this adapter acquires the
+/// bus mutex and asserts CS low when CASET (`0x2A`) arrives, holds them across
+/// RASET/RAMWR, and releases them only at the end of the following
+/// `send_data_slice`. Standalone commands (init sequence, `0x29`, etc.) lock
+/// and release per-call as before.
+///
+/// CASET/RASET are also snooped so `send_data_slice` can program LCDC1's
+/// hardware DMA window — the chip and the LCDC must agree on the active rect.
+pub struct LockingLcdcInterface<'a, M, CS>
+where
+    M: RawMutex,
+    CS: OutputPin,
+{
+    bus: &'a Mutex<M, LcdcBus>,
+    cs: CS,
+    /// Last address window programmed via CASET/RASET, in (x0, y0, x1, y1) order.
+    window: (u16, u16, u16, u16),
+    /// Mutex guard held across a `CASET → RASET → RAMWR → pixels` sequence.
+    /// `Some` once CASET is received, `None` again after `send_data_slice`.
+    held: Option<MutexGuard<'a, M, LcdcBus>>,
+}
 
-    pub fn fill(&mut self, color: Rgb565) {
-        let raw: u16 = RawU16::from(color).into_inner();
-        let bytes = raw.to_be_bytes();
-        for chunk in self.data.chunks_exact_mut(2) {
-            chunk[0] = bytes[0];
-            chunk[1] = bytes[1];
+impl<'a, M, CS> LockingLcdcInterface<'a, M, CS>
+where
+    M: RawMutex,
+    CS: OutputPin,
+{
+    pub fn new(bus: &'a Mutex<M, LcdcBus>, cs: CS) -> Self {
+        Self {
+            bus,
+            cs,
+            window: (0, 0, LCD_W - 1, LCD_H - 1),
+            held: None,
         }
     }
-
-    fn put_pixel(&mut self, x: i32, y: i32, color: Rgb565) {
-        if x < 0 || y < 0 || x >= LCD_W as i32 || y >= LCD_H as i32 {
-            return;
-        }
-        let idx = (y as usize * LCD_W as usize + x as usize) * 2;
-        let raw: u16 = RawU16::from(color).into_inner();
-        let bytes = raw.to_be_bytes();
-        self.data[idx] = bytes[0];
-        self.data[idx + 1] = bytes[1];
-    }
 }
 
-impl Default for Framebuffer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl OriginDimensions for Framebuffer {
-    fn size(&self) -> Size {
-        Size::new(LCD_W as u32, LCD_H as u32)
-    }
-}
-
-impl DrawTarget for Framebuffer {
-    type Color = Rgb565;
+impl<'a, M, CS> Interface for LockingLcdcInterface<'a, M, CS>
+where
+    M: RawMutex,
+    CS: OutputPin,
+{
+    type Word = u8;
     type Error = core::convert::Infallible;
+    const KIND: InterfaceKind = InterfaceKind::Serial4Line;
 
-    fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
-    where
-        I: IntoIterator<Item = Pixel<Self::Color>>,
-    {
-        for Pixel(p, c) in pixels {
-            self.put_pixel(p.x, p.y, c);
-        }
-        Ok(())
-    }
-
-    fn fill_solid(&mut self, area: &Rectangle, color: Self::Color) -> Result<(), Self::Error> {
-        let area = area.intersection(&self.bounding_box());
-        if area.is_zero_sized() {
-            return Ok(());
-        }
-        let raw: u16 = RawU16::from(color).into_inner();
-        let bytes = raw.to_be_bytes();
-        let x0 = area.top_left.x as usize;
-        let y0 = area.top_left.y as usize;
-        let w = area.size.width as usize;
-        let h = area.size.height as usize;
-        for y in y0..(y0 + h) {
-            for x in x0..(x0 + w) {
-                let idx = (y * LCD_W as usize + x) * 2;
-                self.data[idx] = bytes[0];
-                self.data[idx + 1] = bytes[1];
+    async fn send_command(&mut self, command: u8, args: &[u8]) -> Result<(), Self::Error> {
+        // Snoop CASET / RASET coordinates for LCDC1's DMA window. Both carry 4
+        // big-endian bytes: start_hi, start_lo, end_hi, end_lo.
+        match command {
+            0x2A if args.len() >= 4 => {
+                self.window.0 = u16::from_be_bytes([args[0], args[1]]);
+                self.window.2 = u16::from_be_bytes([args[2], args[3]]);
             }
+            0x2B if args.len() >= 4 => {
+                self.window.1 = u16::from_be_bytes([args[0], args[1]]);
+                self.window.3 = u16::from_be_bytes([args[2], args[3]]);
+            }
+            _ => {}
         }
+
+        // CASET (0x2A) starts a pixel-write sequence. Acquire the bus + CS once
+        // and hold both across RASET and RAMWR.
+        if command == 0x2A && self.held.is_none() {
+            self.held = Some(self.bus.lock().await);
+            let _ = self.cs.set_low();
+        }
+
+        if let Some(bus) = self.held.as_mut() {
+            // Inside a held sequence — use the existing guard, do not toggle CS.
+            bus.write_cmd(command);
+            for &b in args {
+                bus.write_data(b);
+            }
+            bus.wait_busy();
+        } else {
+            // Standalone command (init, sleep-out, display-on, etc.).
+            let mut bus = self.bus.lock().await;
+            let _ = self.cs.set_low();
+            bus.write_cmd(command);
+            for &b in args {
+                bus.write_data(b);
+            }
+            bus.wait_busy();
+            let _ = self.cs.set_high();
+        }
+
         Ok(())
     }
 
-    fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
-        self.fill(color);
+    async fn send_data_slice(&mut self, data: &[Self::Word]) -> Result<(), Self::Error> {
+        let (x0, y0, x1, y1) = self.window;
+
+        // Re-use the guard acquired in CASET if we're inside a pixel sequence;
+        // otherwise (defensive) acquire fresh.
+        if let Some(bus) = self.held.as_mut() {
+            bus.write_pixels(x0, y0, x1, y1, data).await;
+        } else {
+            let mut bus = self.bus.lock().await;
+            let _ = self.cs.set_low();
+            bus.write_pixels(x0, y0, x1, y1, data).await;
+        }
+
+        let _ = self.cs.set_high();
+        // Drop the held guard to release the bus mutex for the next display.
+        self.held = None;
         Ok(())
     }
 }
