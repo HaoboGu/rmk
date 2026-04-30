@@ -1,15 +1,11 @@
-use rmk_types::connection::ConnectionType;
 use trouble_host::prelude::*;
 use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor};
 
 use super::battery_service::BatteryService;
 use super::device_info::DeviceConfigurationService;
-use crate::channel::BLE_REPORT_CHANNEL;
 #[cfg(feature = "host")]
 use crate::hid::ViaReport;
-use crate::hid::{
-    CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report, RunnableHidWriter,
-};
+use crate::hid::{CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report};
 
 // Used for saving the CCCD table
 pub(crate) const CCCD_TABLE_SIZE: usize = _CCCD_TABLE_SIZE;
@@ -149,13 +145,5 @@ impl<P: PacketPool> HidWriterTrait for BleHidServer<'_, '_, '_, P> {
                 Ok(0)
             }
         }
-    }
-}
-
-impl<P: PacketPool> RunnableHidWriter for BleHidServer<'_, '_, '_, P> {
-    const KIND: ConnectionType = ConnectionType::Ble;
-
-    async fn get_report(&mut self) -> Self::ReportType {
-        BLE_REPORT_CHANNEL.receive().await
     }
 }

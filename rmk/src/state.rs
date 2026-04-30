@@ -3,8 +3,6 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 use embassy_sync::blocking_mutex::Mutex;
 use rmk_types::ble::BleState;
-#[cfg(test)]
-use rmk_types::ble::BleStatus;
 use rmk_types::connection::{ConnectionStatus, ConnectionType, UsbState};
 
 use crate::RawMutex;
@@ -14,8 +12,9 @@ use crate::event::{ConnectionChangeEvent, publish_event};
 
 /// Override flag for the matrix scan gate.
 ///
-/// Sticky: once set by the BLE sleep-wake path, stays set across subsequent
-/// advertise/connect cycles so the user can keep typing through reconnects.
+/// Set by the BLE advertising-timeout path so the matrix keeps scanning
+/// during the reconnect window. Cleared automatically once a BLE connection
+/// is re-established
 static MATRIX_SCAN_OVERRIDE: AtomicBool = AtomicBool::new(false);
 
 #[cfg(feature = "_ble")]
@@ -30,7 +29,7 @@ pub(crate) fn enable_matrix_scan_override() {
 /// preserve the old dummy/disconnected path, and the BLE wake override keeps
 /// it alive through reconnect windows after advertising timeout.
 pub(crate) fn input_processing_ready() -> bool {
-    any_transport_ready() || MATRIX_SCAN_OVERRIDE.load(Ordering::Acquire) || cfg!(not(feature = "_no_usb"))
+    active_transport().is_some() || MATRIX_SCAN_OVERRIDE.load(Ordering::Acquire) || cfg!(not(feature = "_no_usb"))
 }
 
 /// Single source of truth for transport state and routing. All writes go
@@ -47,20 +46,32 @@ pub(crate) fn connection_status() -> ConnectionStatus {
     CONNECTION_STATUS.lock(|c| c.get())
 }
 
-// Non-atomic read-modify-write: relies on embassy's cooperative scheduling so
-// concurrent calls on the same executor can't interleave.
+/// Read-modify-write the connection status atomically.
 fn update_status(f: impl FnOnce(&mut ConnectionStatus)) {
-    let prev = connection_status();
-    let mut new = prev;
-    f(&mut new);
-    if prev == new {
+    let Some((prev, new)) = CONNECTION_STATUS.lock(|c| {
+        let prev = c.get();
+        let mut new = prev;
+        f(&mut new);
+        if prev == new {
+            return None;
+        }
+        c.set(new);
+        Some((prev, new))
+    }) else {
         return;
-    }
+    };
+
     let prev_active = prev.decide_active();
-    if prev_active != new.decide_active() && let Some(prev) = prev_active {
-        crate::channel::clear_report_channel(prev);
+    let new_active = new.decide_active();
+    // TODO: Is it really needed?
+    if prev_active != new_active
+        && let Some(prev_active) = prev_active
+    {
+        // Drain after the commit so any producer racing past the mutex reads
+        // the new state and routes to the new channel rather than the one
+        // about to be cleared.
+        crate::channel::clear_report_channel(prev_active);
     }
-    CONNECTION_STATUS.lock(|c| c.set(new));
 
     #[cfg(feature = "_ble")]
     if prev.ble != new.ble {
@@ -76,12 +87,12 @@ pub fn set_usb_state(s: UsbState) {
 }
 
 pub(crate) fn set_ble_state(s: BleState) {
+    // Reaching Connected means the reconnect window we set the override for
+    // is over. The next advertising-timeout cycle will set it again if needed.
+    if s == BleState::Connected {
+        MATRIX_SCAN_OVERRIDE.store(false, Ordering::Release);
+    }
     update_status(|c| c.ble.state = s);
-}
-
-#[cfg(test)]
-pub(crate) fn set_ble_status(s: BleStatus) {
-    update_status(|c| c.ble = s);
 }
 
 /// Switching profiles always drops the BLE state back to `Inactive`; the
@@ -103,9 +114,10 @@ pub(crate) fn set_preferred_connection(t: ConnectionType) {
 ///
 /// With the `storage` feature, reads the persisted `ConnectionType` from flash;
 /// otherwise falls back to a build-time default — `Ble` when USB is disabled, `Usb` otherwise.
+#[cfg(feature = "_ble")]
 pub(crate) async fn load_preferred_connection() -> ConnectionType {
     #[cfg(feature = "storage")]
-    let stored = crate::storage::read_setting(crate::storage::StorageKey::ConnectionType).await;
+    let stored = crate::storage::read_connection_type().await;
     #[cfg(not(feature = "storage"))]
     let stored: Option<u8> = None;
     match stored {
@@ -129,17 +141,6 @@ pub(crate) fn toggle_preferred() -> ConnectionType {
     new
 }
 
-/// Suspended USB counts here so the first wake key can reach the USB writer
-/// and trigger remote wakeup.
-pub(crate) fn any_transport_ready() -> bool {
-    active_transport().is_some()
-}
-
-#[cfg(not(feature = "_no_usb"))]
-pub(crate) fn usb_suspended() -> bool {
-    connection_status().usb == UsbState::Suspended
-}
-
 #[cfg(feature = "_ble")]
 pub(crate) fn current_profile() -> u8 {
     connection_status().ble.profile
@@ -152,10 +153,11 @@ mod tests {
 
     use embassy_futures::select::{Either, select};
     use embassy_time::{Duration, Timer};
+    use rmk_types::ble::BleState;
 
     use super::{
         CONNECTION_STATUS, ConnectionStatus, ConnectionType, MATRIX_SCAN_OVERRIDE, UsbState, input_processing_ready,
-        set_preferred_connection, set_usb_state,
+        set_ble_state, set_preferred_connection, set_usb_state,
     };
     use crate::event::{ConnectionChangeEvent, EventSubscriber, SubscribableEvent};
     use crate::test_support::test_block_on as block_on;
@@ -276,6 +278,25 @@ mod tests {
         ));
 
         assert!(USB_REPORT_CHANNEL.try_receive().is_err());
+    }
+
+    #[test]
+    fn ble_connected_clears_matrix_scan_override() {
+        let _guard = state_test_lock().lock().unwrap();
+        reset_state();
+        MATRIX_SCAN_OVERRIDE.store(true, Ordering::Release);
+
+        set_ble_state(BleState::Advertising);
+        assert!(
+            MATRIX_SCAN_OVERRIDE.load(Ordering::Acquire),
+            "Advertising should not clear the override"
+        );
+
+        set_ble_state(BleState::Connected);
+        assert!(
+            !MATRIX_SCAN_OVERRIDE.load(Ordering::Acquire),
+            "Connected should clear the override"
+        );
     }
 
     #[cfg(not(feature = "_no_usb"))]

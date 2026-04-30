@@ -18,7 +18,6 @@ use crate::event::{PeripheralConnectedEvent, SleepStateEvent, publish_event};
 use crate::split::ble::PeerAddress;
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
-use crate::state::any_transport_ready;
 use crate::storage::FlashOperationMessage;
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
@@ -504,25 +503,15 @@ async fn sleep_manager_task<
             // Timeout or received true from CENTRAL_SLEEP signal, enter sleep mode
             info!("Entering sleep mode");
 
-            // Connection parameters are different when central is broadcasting and connected to host
-            let conn_params = if any_transport_ready() {
-                // Connected, the connection interval is 20ms
-                RequestedConnParams {
-                    min_connection_interval: Duration::from_millis(20),
-                    max_connection_interval: Duration::from_millis(20),
-                    max_latency: 200, // 4s
-                    supervision_timeout: Duration::from_secs(9),
-                    ..Default::default()
-                }
-            } else {
-                // Advertising ,the connection interval can be longer
-                RequestedConnParams {
-                    min_connection_interval: Duration::from_millis(200),
-                    max_connection_interval: Duration::from_millis(200),
-                    max_latency: 25, // 5s
-                    supervision_timeout: Duration::from_secs(11),
-                    ..Default::default()
-                }
+            // `conn` is the split central -> peripheral BLE link. While the
+            // central is sleeping, use a longer interval to reduce central-side
+            // radio wakeups; normal params are restored on activity.
+            let conn_params = RequestedConnParams {
+                min_connection_interval: Duration::from_millis(200),
+                max_connection_interval: Duration::from_millis(200),
+                max_latency: 25, // 5s
+                supervision_timeout: Duration::from_secs(11),
+                ..Default::default()
             };
 
             // Update connection parameters

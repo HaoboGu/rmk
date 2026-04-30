@@ -20,11 +20,11 @@ use crate::ble::led::BleLedReader;
 #[cfg(feature = "passkey_entry")]
 use crate::ble::passkey::{PasskeyInputState, next_gatt_event};
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
-use crate::channel::LED_SIGNAL;
+use crate::channel::{BLE_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
 use crate::core_traits::Runnable;
-use crate::event::SubscribableEvent;
-use crate::hid::{RunnableHidWriter, run_led_reader};
+use crate::event::{ConnectionChangeEvent, SubscribableEvent, publish_event};
+use crate::hid::{HidWriterTrait, run_led_reader};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
 use crate::state::set_ble_state;
@@ -87,6 +87,7 @@ where
     pub async fn new(stack: &'a Stack<'a, C, DefaultPacketPool>, rmk_config: RmkConfig<'static>) -> Self {
         let preferred = crate::state::load_preferred_connection().await;
         crate::state::set_preferred_connection(preferred);
+        publish_event(ConnectionChangeEvent::new(preferred));
 
         let mut profile_manager = ProfileManager::new(stack);
         #[cfg(feature = "storage")]
@@ -602,8 +603,12 @@ pub(crate) async fn set_conn_params<
     core::future::pending::<()>().await;
 }
 
-/// Run BLE keyboard with connected device. Returns when any inner task ends —
-/// typically the GATT events task on disconnect.
+/// Run BLE keyboard for one connection.
+///
+/// Returns when the GATT events task ends (i.e. the connection drops).
+/// `writer_task`, `led_task`, and `host_task` are all infinite, so the outer
+/// `select(communication_task, inner)` cancels them as a side-effect of
+/// `communication_task` returning. `inner` itself never completes.
 async fn run_ble_keyboard<
     'a,
     'b,
@@ -643,7 +648,14 @@ async fn run_ble_keyboard<
         }
     };
 
-    let writer_task = ble_hid_server.run_writer();
+    let writer_task = async {
+        loop {
+            let report = BLE_REPORT_CHANNEL.receive().await;
+            if let Err(e) = ble_hid_server.write_report(&report).await {
+                error!("Failed to send report: {:?}", e);
+            }
+        }
+    };
 
     let led_task = run_led_reader(&mut ble_led_reader, ConnectionType::Ble);
 
@@ -729,7 +741,7 @@ mod tests {
     use rmk_types::ble::{BleState, BleStatus};
 
     use crate::event::{Axis, AxisEvent, AxisValType, KeyboardEvent, PointingEvent, SubscribableEvent, publish_event};
-    use crate::state::{connection_status, set_ble_state, set_ble_status};
+    use crate::state::{connection_status, set_ble_profile, set_ble_state};
     use crate::test_support::test_block_on as block_on;
 
     fn ble_status_test_lock() -> &'static Mutex<()> {
@@ -741,10 +753,7 @@ mod tests {
     fn set_ble_state_preserves_current_profile() {
         let _guard = ble_status_test_lock().lock().unwrap();
 
-        set_ble_status(BleStatus {
-            profile: 2,
-            state: BleState::Inactive,
-        });
+        set_ble_profile(2);
         set_ble_state(BleState::Advertising);
 
         assert_eq!(
@@ -757,17 +766,12 @@ mod tests {
     }
 
     #[test]
-    fn set_ble_status_can_reset_state_when_profile_changes() {
+    fn set_ble_profile_resets_state_when_profile_changes() {
         let _guard = ble_status_test_lock().lock().unwrap();
 
-        set_ble_status(BleStatus {
-            profile: 1,
-            state: BleState::Connected,
-        });
-        set_ble_status(BleStatus {
-            profile: 3,
-            state: BleState::Inactive,
-        });
+        set_ble_profile(1);
+        set_ble_state(BleState::Connected);
+        set_ble_profile(3);
 
         assert_eq!(
             connection_status().ble,

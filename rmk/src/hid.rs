@@ -12,10 +12,6 @@ use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, Syst
 
 use crate::event::{LedIndicatorEvent, publish_event};
 use crate::keyboard::LOCK_LED_STATES;
-#[cfg(not(feature = "_no_usb"))]
-use crate::state::usb_suspended;
-#[cfg(not(feature = "_no_usb"))]
-use crate::usb::USB_REMOTE_WAKEUP;
 
 /// KeyboardReport describes a report and its companion descriptor that can be
 /// used to send keyboard button presses to a host and receive the status of the
@@ -254,49 +250,6 @@ pub trait HidWriterTrait {
 
     /// Write report to the host, return the number of bytes written if success.
     fn write_report(&mut self, report: &Self::ReportType) -> impl Future<Output = Result<usize, HidError>>;
-}
-
-/// Runnable writer. Reports are already routed to the transport-specific queue,
-/// so the default `run_writer` only drains that queue and writes to the wire.
-pub trait RunnableHidWriter: HidWriterTrait {
-    /// The transport this writer serves.
-    const KIND: ConnectionType;
-
-    /// Get the report to be sent to the host
-    fn get_report(&mut self) -> impl Future<Output = Self::ReportType>;
-
-    /// Run the writer task.
-    fn run_writer(&mut self) -> impl Future<Output = ()> {
-        async {
-            loop {
-                let report = self.get_report().await;
-                #[cfg(not(feature = "_no_usb"))]
-                // EndpointError::Disabled never fires on non-OTG STM32/GD32
-                // peripherals during suspend, so signal wakeup proactively
-                // when a USB report is pending and the bus is suspended.
-                if Self::KIND == ConnectionType::Usb && usb_suspended() {
-                    USB_REMOTE_WAKEUP.signal(());
-                }
-
-                if let Err(e) = self.write_report(&report).await {
-                    error!("Failed to send report: {:?}", e);
-                    #[cfg(not(feature = "_no_usb"))]
-                    // Belt-and-braces for OTG peripherals where Disabled is
-                    // the correct suspend indicator: signal wakeup, give the
-                    // host a moment, then retry the same report once.
-                    if Self::KIND == ConnectionType::Usb
-                        && let HidError::UsbEndpointError(EndpointError::Disabled) = e
-                    {
-                        USB_REMOTE_WAKEUP.signal(());
-                        embassy_time::Timer::after_millis(500).await;
-                        if let Err(e) = self.write_report(&report).await {
-                            error!("Failed to send report after wakeup: {:?}", e);
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 /// HidReader trait is used for listening to HID messages from the host, via USB, BLE, etc.

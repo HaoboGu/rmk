@@ -23,12 +23,12 @@ type ReportChannel = Channel<RawMutex, Report, REPORT_CHANNEL_SIZE>;
 #[cfg(feature = "_ble")]
 pub(crate) static LED_SIGNAL: Signal<RawMutex, LedIndicator> = Signal::new();
 
-/// Drained by `UsbKeyboardWriter::run_writer`. Routed through `send_hid_report`
+/// Drained by the USB HID writer task. Routed through `send_hid_report`
 /// from the keyboard task and ad-hoc producers (e.g. steno chord output).
 #[cfg(not(feature = "_no_usb"))]
 pub static USB_REPORT_CHANNEL: ReportChannel = Channel::new();
 
-/// Drained by `BleHidServer::run_writer`. Routed through `send_hid_report`.
+/// Drained by the BLE HID writer task. Routed through `send_hid_report`.
 #[cfg(feature = "_ble")]
 pub static BLE_REPORT_CHANNEL: ReportChannel = Channel::new();
 

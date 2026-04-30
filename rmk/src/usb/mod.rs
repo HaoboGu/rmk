@@ -5,7 +5,7 @@ use embassy_sync::signal::Signal;
 use embassy_usb::class::hid::HidReaderWriter;
 use embassy_usb::class::hid::{HidReader, HidWriter, ReportId, RequestHandler};
 use embassy_usb::control::OutResponse;
-use embassy_usb::driver::Driver;
+use embassy_usb::driver::{Driver, EndpointError};
 use embassy_usb::{Builder, Handler, UsbDevice};
 use rmk_types::connection::{ConnectionType, UsbState};
 use static_cell::StaticCell;
@@ -20,27 +20,25 @@ use crate::hid::StenoReport;
 #[cfg(feature = "host")]
 use crate::hid::ViaReport;
 use crate::hid::{
-    CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report, RunnableHidWriter,
-    run_led_reader,
+    CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report, run_led_reader,
 };
 use crate::light::UsbLedReader;
-use crate::state::set_usb_state;
+use crate::state::{connection_status, set_usb_state};
 
 pub(crate) static USB_REMOTE_WAKEUP: Signal<RawMutex, ()> = Signal::new();
 
-/// Cap on how long a steno report write is allowed to block. The host only
-/// drains the steno IN endpoint while Plover is running; without this cap the
-/// writer task stalls indefinitely (and starves keyboard reports) whenever
-/// Plover is absent.
-#[cfg(feature = "steno")]
-const STENO_WRITE_TIMEOUT_MS: u64 = 5;
-
+/// Borrowed view over the USB HID IN endpoints used by the report writer task.
+///
+/// `UsbTransport` owns the USB device, readers, writers, host interface, and
+/// optional logger; `run` borrows those fields separately so they can run
+/// concurrently without moving the whole transport into one task.
 pub(crate) struct UsbKeyboardWriter<'a, 'd, D: Driver<'d>> {
     pub(crate) keyboard_writer: &'a mut HidWriter<'d, D, 8>,
     pub(crate) other_writer: &'a mut HidWriter<'d, D, 9>,
     #[cfg(feature = "steno")]
     pub(crate) steno_writer: &'a mut HidWriter<'d, D, 9>,
 }
+
 impl<'a, 'd, D: Driver<'d>> UsbKeyboardWriter<'a, 'd, D> {
     pub(crate) fn new(
         keyboard_writer: &'a mut HidWriter<'d, D, 8>,
@@ -52,6 +50,34 @@ impl<'a, 'd, D: Driver<'d>> UsbKeyboardWriter<'a, 'd, D> {
             other_writer,
             #[cfg(feature = "steno")]
             steno_writer,
+        }
+    }
+
+    pub(crate) async fn run_writer(&mut self) -> ! {
+        loop {
+            let report = USB_REPORT_CHANNEL.receive().await;
+
+            // EndpointError::Disabled never fires on non-OTG STM32/GD32
+            // peripherals during suspend, so signal wakeup proactively when a
+            // USB report is pending and the bus is suspended.
+            if connection_status().usb == UsbState::Suspended {
+                USB_REMOTE_WAKEUP.signal(());
+            }
+
+            if let Err(e) = self.write_report(&report).await {
+                error!("Failed to send report: {:?}", e);
+
+                // Belt-and-braces for OTG peripherals where Disabled is the
+                // correct suspend indicator: signal wakeup, give the host a
+                // moment, then retry the same report once.
+                if let HidError::UsbEndpointError(EndpointError::Disabled) = e {
+                    USB_REMOTE_WAKEUP.signal(());
+                    embassy_time::Timer::after_millis(500).await;
+                    if let Err(e) = self.write_report(&report).await {
+                        error!("Failed to send report after wakeup: {:?}", e);
+                    }
+                }
+            }
         }
     }
 
@@ -70,14 +96,6 @@ impl<'a, 'd, D: Driver<'d>> UsbKeyboardWriter<'a, 'd, D> {
             .await
             .map_err(HidError::UsbEndpointError)?;
         Ok(n)
-    }
-}
-
-impl<'d, D: Driver<'d>> RunnableHidWriter for UsbKeyboardWriter<'_, 'd, D> {
-    const KIND: ConnectionType = ConnectionType::Usb;
-
-    async fn get_report(&mut self) -> Self::ReportType {
-        USB_REPORT_CHANNEL.receive().await
     }
 }
 
@@ -106,8 +124,13 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
                 let n = steno_report
                     .serialize(&mut buf)
                     .map_err(|_| HidError::ReportSerializeError)?;
+
+                // Cap on how long a steno report write is allowed to block. The host only
+                // drains the steno IN endpoint while Plover is running; without this cap the
+                // writer task stalls indefinitely (and starves keyboard reports) whenever
+                // Plover is absent.
                 match embassy_time::with_timeout(
-                    embassy_time::Duration::from_millis(STENO_WRITE_TIMEOUT_MS),
+                    embassy_time::Duration::from_millis(5),
                     self.steno_writer.write(&buf[0..n]),
                 )
                 .await
