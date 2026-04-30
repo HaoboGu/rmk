@@ -367,7 +367,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 if event.data().len() == 32 {
                                     let mut data = [0u8; 32];
                                     data.copy_from_slice(event.data());
-                                    crate::channel::try_enqueue_host_request(ConnectionType::Ble, data);
+                                    crate::channel::enqueue_host_request(ConnectionType::Ble, data).await;
                                 } else {
                                     warn!("Wrong host packet data: {:?}", event.data());
                                 }

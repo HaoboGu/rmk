@@ -128,14 +128,9 @@ pub(crate) fn try_send_host_reply(transport: ConnectionType, reply: [u8; 32]) {
     }
 }
 
-/// Enqueues a Vial request from a transport into `HOST_REQUEST_CHANNEL`. Logs
-/// and drops when the queue is full.
+/// Enqueues a Vial request from a transport into `HOST_REQUEST_CHANNEL`,
+/// back-pressuring the transport task when the queue is full.
 #[cfg(feature = "host")]
-pub(crate) fn try_enqueue_host_request(transport: ConnectionType, data: [u8; 32]) {
-    if HOST_REQUEST_CHANNEL.try_send((transport, data)).is_err() {
-        warn!(
-            "Dropping Vial {:?} request because the request queue is full",
-            transport
-        );
-    }
+pub(crate) async fn enqueue_host_request(transport: ConnectionType, data: [u8; 32]) {
+    HOST_REQUEST_CHANNEL.send((transport, data)).await;
 }
