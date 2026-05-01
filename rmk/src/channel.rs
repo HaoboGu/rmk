@@ -12,7 +12,7 @@ use {crate::ble::profile::BleProfileAction, rmk_types::led_indicator::LedIndicat
 
 #[cfg(feature = "host")]
 use crate::VIAL_CHANNEL_SIZE;
-use crate::hid::Report;
+use crate::hid::{KeyboardReport, Report};
 #[cfg(feature = "storage")]
 use crate::{FLASH_CHANNEL_SIZE, storage::FlashOperationMessage};
 use crate::{REPORT_CHANNEL_SIZE, RawMutex};
@@ -32,15 +32,20 @@ pub static USB_REPORT_CHANNEL: ReportChannel = Channel::new();
 #[cfg(feature = "_ble")]
 pub static BLE_REPORT_CHANNEL: ReportChannel = Channel::new();
 
-fn active_report_channel() -> Option<(ConnectionType, &'static ReportChannel)> {
-    match crate::state::active_transport()? {
+fn report_channel(transport: ConnectionType) -> Option<&'static ReportChannel> {
+    match transport {
         #[cfg(not(feature = "_no_usb"))]
-        ConnectionType::Usb => Some((ConnectionType::Usb, &USB_REPORT_CHANNEL)),
+        ConnectionType::Usb => Some(&USB_REPORT_CHANNEL),
         #[cfg(feature = "_ble")]
-        ConnectionType::Ble => Some((ConnectionType::Ble, &BLE_REPORT_CHANNEL)),
+        ConnectionType::Ble => Some(&BLE_REPORT_CHANNEL),
         #[allow(unreachable_patterns)]
         _ => None,
     }
+}
+
+fn active_report_channel() -> Option<(ConnectionType, &'static ReportChannel)> {
+    let transport = crate::state::active_transport()?;
+    report_channel(transport).map(|ch| (transport, ch))
 }
 
 /// Reports generated while no transport is selected are dropped on the floor.
@@ -71,16 +76,13 @@ pub(crate) fn try_send_hid_report(report: Report) {
     }
 }
 
-/// Drains queued reports for `transport`. Called on active-transport flips so
-/// a future re-activation doesn't replay stale presses without their releases.
-pub(crate) fn clear_report_channel(transport: ConnectionType) {
-    match transport {
-        #[cfg(not(feature = "_no_usb"))]
-        ConnectionType::Usb => USB_REPORT_CHANNEL.clear(),
-        #[cfg(feature = "_ble")]
-        ConnectionType::Ble => BLE_REPORT_CHANNEL.clear(),
-        #[allow(unreachable_patterns)]
-        _ => {}
+/// Drains queued reports for `transport` and leaves an all-up keyboard report
+/// for its writer. Called on active-transport flips so the previous host
+/// releases any pressed keys without replaying stale queued reports later.
+pub(crate) fn clear_and_release_report_channel(transport: ConnectionType) {
+    if let Some(ch) = report_channel(transport) {
+        ch.clear();
+        let _ = ch.try_send(Report::KeyboardReport(KeyboardReport::default()));
     }
 }
 

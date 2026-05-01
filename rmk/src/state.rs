@@ -70,7 +70,7 @@ fn update_status(f: impl FnOnce(&mut ConnectionStatus)) {
         // Drain after the commit so any producer racing past the mutex reads
         // the new state and routes to the new channel rather than the one
         // about to be cleared.
-        crate::channel::clear_report_channel(prev_active);
+        crate::channel::clear_and_release_report_channel(prev_active);
     }
 
     #[cfg(feature = "_ble")]
@@ -119,9 +119,9 @@ pub(crate) async fn load_preferred_connection() -> ConnectionType {
     #[cfg(feature = "storage")]
     let stored = crate::storage::read_connection_type().await;
     #[cfg(not(feature = "storage"))]
-    let stored: Option<u8> = None;
+    let stored: Option<ConnectionType> = None;
     match stored {
-        Some(c) => c.into(),
+        Some(c) => c,
         #[cfg(feature = "_no_usb")]
         None => ConnectionType::Ble,
         #[cfg(not(feature = "_no_usb"))]
@@ -160,6 +160,7 @@ mod tests {
         set_ble_state, set_preferred_connection, set_usb_state,
     };
     use crate::event::{ConnectionChangeEvent, EventSubscriber, SubscribableEvent};
+    use crate::hid::{KeyboardReport, Report};
     use crate::test_support::test_block_on as block_on;
 
     fn state_test_lock() -> &'static Mutex<()> {
@@ -174,6 +175,27 @@ mod tests {
         crate::channel::USB_REPORT_CHANNEL.clear();
         #[cfg(feature = "_ble")]
         crate::channel::BLE_REPORT_CHANNEL.clear();
+    }
+
+    fn pressed_keyboard_report() -> Report {
+        Report::KeyboardReport(KeyboardReport {
+            modifier: 0x02,
+            reserved: 0,
+            leds: 0,
+            keycodes: [4, 0, 0, 0, 0, 0],
+        })
+    }
+
+    fn assert_all_up_keyboard_report(report: Report) {
+        match report {
+            Report::KeyboardReport(r) => {
+                assert_eq!(r.modifier, 0);
+                assert_eq!(r.reserved, 0);
+                assert_eq!(r.leds, 0);
+                assert_eq!(r.keycodes, [0; 6]);
+            }
+            _ => panic!("expected keyboard all-up report"),
+        }
     }
 
     #[cfg(not(feature = "_no_usb"))]
@@ -223,9 +245,8 @@ mod tests {
 
     #[cfg(not(feature = "_no_usb"))]
     #[test]
-    fn flipping_away_from_active_clears_its_report_channel() {
+    fn flipping_away_from_active_clears_stale_reports_and_queues_all_up() {
         use crate::channel::USB_REPORT_CHANNEL;
-        use crate::hid::{KeyboardReport, Report};
 
         let _guard = state_test_lock().lock().unwrap();
         reset_state();
@@ -236,18 +257,23 @@ mod tests {
         // that would otherwise persist across a flip.
         USB_REPORT_CHANNEL.clear();
         USB_REPORT_CHANNEL
-            .try_send(Report::KeyboardReport(KeyboardReport::default()))
+            .try_send(pressed_keyboard_report())
             .expect("channel should have capacity for sentinel");
         assert!(USB_REPORT_CHANNEL.try_receive().is_ok());
         USB_REPORT_CHANNEL
-            .try_send(Report::KeyboardReport(KeyboardReport::default()))
+            .try_send(pressed_keyboard_report())
             .expect("channel should have capacity for sentinel");
 
         set_usb_state(UsbState::Disabled);
         assert!(super::active_transport().is_none());
+        assert_all_up_keyboard_report(
+            USB_REPORT_CHANNEL
+                .try_receive()
+                .expect("USB_REPORT_CHANNEL should contain keyboard all-up report"),
+        );
         assert!(
             USB_REPORT_CHANNEL.try_receive().is_err(),
-            "USB_REPORT_CHANNEL should be drained when USB stops being active"
+            "USB_REPORT_CHANNEL should contain only the all-up report"
         );
     }
 
@@ -257,7 +283,6 @@ mod tests {
         use embassy_futures::join::join;
 
         use crate::channel::{USB_REPORT_CHANNEL, send_hid_report};
-        use crate::hid::{KeyboardReport, Report};
 
         let _guard = state_test_lock().lock().unwrap();
         reset_state();
@@ -265,7 +290,7 @@ mod tests {
 
         for _ in 0..crate::REPORT_CHANNEL_SIZE {
             USB_REPORT_CHANNEL
-                .try_send(Report::KeyboardReport(KeyboardReport::default()))
+                .try_send(pressed_keyboard_report())
                 .expect("channel should have capacity while filling");
         }
 
@@ -277,7 +302,43 @@ mod tests {
             },
         ));
 
-        assert!(USB_REPORT_CHANNEL.try_receive().is_err());
+        assert_all_up_keyboard_report(
+            USB_REPORT_CHANNEL
+                .try_receive()
+                .expect("USB_REPORT_CHANNEL should contain keyboard all-up report"),
+        );
+        assert!(
+            USB_REPORT_CHANNEL.try_receive().is_err(),
+            "USB_REPORT_CHANNEL should contain only the all-up report"
+        );
+    }
+
+    #[cfg(all(not(feature = "_no_usb"), feature = "_ble"))]
+    #[test]
+    fn usb_preference_flip_releases_previous_ble_transport() {
+        use crate::channel::BLE_REPORT_CHANNEL;
+
+        let _guard = state_test_lock().lock().unwrap();
+        reset_state();
+        set_preferred_connection(ConnectionType::Usb);
+        set_ble_state(BleState::Connected);
+        assert_eq!(super::active_transport(), Some(ConnectionType::Ble));
+
+        BLE_REPORT_CHANNEL
+            .try_send(pressed_keyboard_report())
+            .expect("BLE report channel should have capacity for sentinel");
+
+        set_usb_state(UsbState::Configured);
+        assert_eq!(super::active_transport(), Some(ConnectionType::Usb));
+        assert_all_up_keyboard_report(
+            BLE_REPORT_CHANNEL
+                .try_receive()
+                .expect("BLE_REPORT_CHANNEL should contain keyboard all-up report"),
+        );
+        assert!(
+            BLE_REPORT_CHANNEL.try_receive().is_err(),
+            "BLE_REPORT_CHANNEL should contain only the all-up report"
+        );
     }
 
     #[test]
@@ -305,7 +366,6 @@ mod tests {
         use embassy_futures::join::join;
 
         use crate::channel::{USB_REPORT_CHANNEL, send_hid_report};
-        use crate::hid::{KeyboardReport, Report};
 
         let _guard = state_test_lock().lock().unwrap();
         reset_state();

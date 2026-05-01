@@ -395,9 +395,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             info!("Switching preferred transport to: {:?}", updated);
 
                             #[cfg(feature = "storage")]
-                            FLASH_CHANNEL
-                                .send(FlashOperationMessage::ConnectionType(updated.into()))
-                                .await;
+                            FLASH_CHANNEL.send(FlashOperationMessage::ConnectionType(updated)).await;
                         }
                     }
                     #[cfg(feature = "storage")]

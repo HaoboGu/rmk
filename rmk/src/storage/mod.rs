@@ -6,6 +6,7 @@ use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use postcard::experimental::max_size::MaxSize;
+use rmk_types::connection::ConnectionType;
 use rmk_types::morse::MorseProfile;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
@@ -40,7 +41,7 @@ static BOND_INFO_RESPONSE: Signal<crate::RawMutex, Option<ProfileInfo>> = Signal
 #[cfg(all(feature = "_ble", feature = "split"))]
 static PEER_ADDRESS_RESPONSE: Signal<crate::RawMutex, Option<PeerAddress>> = Signal::new();
 #[cfg(feature = "_ble")]
-static CONNECTION_TYPE_RESPONSE: Signal<crate::RawMutex, Option<u8>> = Signal::new();
+static CONNECTION_TYPE_RESPONSE: Signal<crate::RawMutex, Option<ConnectionType>> = Signal::new();
 #[cfg(feature = "_ble")]
 static ACTIVE_BLE_PROFILE_RESPONSE: Signal<crate::RawMutex, Option<u8>> = Signal::new();
 
@@ -62,7 +63,7 @@ pub(crate) async fn read_peer_address(peer_id: u8) -> Option<PeerAddress> {
 }
 
 #[cfg(feature = "_ble")]
-pub(crate) async fn read_connection_type() -> Option<u8> {
+pub(crate) async fn read_connection_type() -> Option<ConnectionType> {
     request_read(FlashOperationMessage::ReadConnectionType, &CONNECTION_TYPE_RESPONSE).await
 }
 
@@ -140,7 +141,7 @@ pub(crate) enum FlashOperationMessage {
         morse: Morse,
     },
     // Current saved connection type
-    ConnectionType(u8),
+    ConnectionType(ConnectionType),
     // Timeout time for combos
     ComboTimeout(u16),
     // Timeout time for one-shot keys
@@ -261,7 +262,7 @@ pub(crate) enum StorageData {
     StorageConfig(LocalStorageConfig),
     LayoutConfig(LayoutConfig),
     BehaviorConfig(BehaviorConfig),
-    ConnectionType(u8),
+    ConnectionType(ConnectionType),
     #[cfg(feature = "host")]
     MacroData(#[serde(with = "crate::host::storage::macro_bytes_serde")] [u8; MACRO_SPACE_SIZE]),
     #[cfg(feature = "host")]

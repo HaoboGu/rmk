@@ -16,28 +16,6 @@ pub enum ConnectionType {
     Ble,
 }
 
-/// Unknown stored values default to [`ConnectionType::Usb`] so a downgrade
-/// from a newer firmware that wrote an unknown variant falls back to USB
-/// rather than refusing to boot.
-impl From<u8> for ConnectionType {
-    fn from(value: u8) -> Self {
-        match value {
-            0 => ConnectionType::Usb,
-            1 => ConnectionType::Ble,
-            _ => ConnectionType::Usb,
-        }
-    }
-}
-
-impl From<ConnectionType> for u8 {
-    fn from(value: ConnectionType) -> Self {
-        match value {
-            ConnectionType::Usb => 0,
-            ConnectionType::Ble => 1,
-        }
-    }
-}
-
 /// USB device lifecycle. `Suspended` is distinct from `Configured` because
 /// the bus is enumerated but transmission is gated on remote wakeup — the
 /// first key still needs to reach the USB writer to trigger that wakeup.
