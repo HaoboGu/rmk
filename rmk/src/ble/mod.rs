@@ -23,7 +23,7 @@ use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDAT
 use crate::channel::{BLE_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
 use crate::core_traits::Runnable;
-use crate::event::{ConnectionChangeEvent, SubscribableEvent, publish_event};
+use crate::event::SubscribableEvent;
 use crate::hid::{HidWriterTrait, run_led_reader};
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
@@ -87,7 +87,6 @@ where
     pub async fn new(stack: &'a Stack<'a, C, DefaultPacketPool>, rmk_config: RmkConfig<'static>) -> Self {
         let preferred = crate::state::load_preferred_connection().await;
         crate::state::set_preferred_connection(preferred);
-        publish_event(ConnectionChangeEvent::new(preferred));
 
         let mut profile_manager = ProfileManager::new(stack);
         #[cfg(feature = "storage")]
@@ -741,7 +740,7 @@ mod tests {
     use rmk_types::ble::{BleState, BleStatus};
 
     use crate::event::{Axis, AxisEvent, AxisValType, KeyboardEvent, PointingEvent, SubscribableEvent, publish_event};
-    use crate::state::{connection_status, set_ble_profile, set_ble_state};
+    use crate::state::{current_ble_status, set_ble_profile, set_ble_state};
     use crate::test_support::test_block_on as block_on;
 
     fn ble_status_test_lock() -> &'static Mutex<()> {
@@ -757,7 +756,7 @@ mod tests {
         set_ble_state(BleState::Advertising);
 
         assert_eq!(
-            connection_status().ble,
+            current_ble_status(),
             BleStatus {
                 profile: 2,
                 state: BleState::Advertising,
@@ -774,7 +773,7 @@ mod tests {
         set_ble_profile(3);
 
         assert_eq!(
-            connection_status().ble,
+            current_ble_status(),
             BleStatus {
                 profile: 3,
                 state: BleState::Inactive,

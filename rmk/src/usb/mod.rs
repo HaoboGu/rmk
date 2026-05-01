@@ -23,7 +23,7 @@ use crate::hid::{
     CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report, run_led_reader,
 };
 use crate::light::UsbLedReader;
-use crate::state::{connection_status, set_usb_state};
+use crate::state::{current_usb_state, set_usb_state};
 
 pub(crate) static USB_REMOTE_WAKEUP: Signal<RawMutex, ()> = Signal::new();
 
@@ -60,7 +60,7 @@ impl<'a, 'd, D: Driver<'d>> UsbKeyboardWriter<'a, 'd, D> {
             // EndpointError::Disabled never fires on non-OTG STM32/GD32
             // peripherals during suspend, so signal wakeup proactively when a
             // USB report is pending and the bus is suspended.
-            if connection_status().usb == UsbState::Suspended {
+            if current_usb_state() == UsbState::Suspended {
                 USB_REMOTE_WAKEUP.signal(());
             }
 

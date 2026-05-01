@@ -3,6 +3,8 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 use embassy_sync::blocking_mutex::Mutex;
 use rmk_types::ble::BleState;
+#[cfg(feature = "_ble")]
+use rmk_types::ble::BleStatus;
 use rmk_types::connection::{ConnectionStatus, ConnectionType, UsbState};
 
 use crate::RawMutex;
@@ -16,6 +18,12 @@ use crate::event::{ConnectionChangeEvent, publish_event};
 /// during the reconnect window. Cleared automatically once a BLE connection
 /// is re-established
 static MATRIX_SCAN_OVERRIDE: AtomicBool = AtomicBool::new(false);
+
+/// Single source of truth for transport state and routing. All writes go
+/// through the mutator helpers below so the active-output cascade runs and
+/// change events fire on every transition.
+pub(crate) static CONNECTION_STATUS: Mutex<RawMutex, Cell<ConnectionStatus>> =
+    Mutex::new(Cell::new(ConnectionStatus::new()));
 
 #[cfg(feature = "_ble")]
 pub(crate) fn enable_matrix_scan_override() {
@@ -32,18 +40,17 @@ pub(crate) fn input_processing_ready() -> bool {
     active_transport().is_some() || MATRIX_SCAN_OVERRIDE.load(Ordering::Acquire) || cfg!(not(feature = "_no_usb"))
 }
 
-/// Single source of truth for transport state and routing. All writes go
-/// through the mutator helpers below so the active-output cascade runs and
-/// change events fire on every transition.
-pub(crate) static CONNECTION_STATUS: Mutex<RawMutex, Cell<ConnectionStatus>> =
-    Mutex::new(Cell::new(ConnectionStatus::new()));
-
 pub(crate) fn active_transport() -> Option<ConnectionType> {
-    connection_status().decide_active()
+    CONNECTION_STATUS.lock(|c| c.get().decide_active())
 }
 
-pub(crate) fn connection_status() -> ConnectionStatus {
-    CONNECTION_STATUS.lock(|c| c.get())
+pub(crate) fn current_usb_state() -> UsbState {
+    CONNECTION_STATUS.lock(|c| c.get().usb)
+}
+
+#[cfg(feature = "_ble")]
+pub(crate) fn current_ble_status() -> BleStatus {
+    CONNECTION_STATUS.lock(|c| c.get().ble)
 }
 
 /// Read-modify-write the connection status atomically.
@@ -63,7 +70,7 @@ fn update_status(f: impl FnOnce(&mut ConnectionStatus)) {
 
     let prev_active = prev.decide_active();
     let new_active = new.decide_active();
-    // TODO: Is it really needed?
+
     if prev_active != new_active
         && let Some(prev_active) = prev_active
     {
@@ -129,7 +136,8 @@ pub(crate) async fn load_preferred_connection() -> ConnectionType {
     }
 }
 
-pub(crate) fn toggle_preferred() -> ConnectionType {
+#[cfg(all(feature = "_ble", not(feature = "_no_usb")))]
+pub(crate) async fn toggle_preferred() {
     let mut new = ConnectionType::Usb;
     update_status(|c| {
         c.preferred = match c.preferred {
@@ -138,12 +146,16 @@ pub(crate) fn toggle_preferred() -> ConnectionType {
         };
         new = c.preferred;
     });
-    new
+    info!("Switching preferred transport to: {:?}", new);
+    #[cfg(feature = "storage")]
+    crate::channel::FLASH_CHANNEL
+        .send(crate::storage::FlashOperationMessage::ConnectionType(new))
+        .await;
 }
 
 #[cfg(feature = "_ble")]
 pub(crate) fn current_profile() -> u8 {
-    connection_status().ble.profile
+    CONNECTION_STATUS.lock(|c| c.get().ble.profile)
 }
 
 #[cfg(test)]

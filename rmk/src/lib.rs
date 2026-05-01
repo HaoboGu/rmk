@@ -193,9 +193,6 @@ pub async fn run_rmk<
 
     #[cfg(all(not(feature = "_ble"), not(feature = "_no_usb")))]
     {
-        crate::event::publish_event(crate::event::ConnectionChangeEvent::new(
-            rmk_types::connection::ConnectionType::Usb,
-        ));
         let mut usb = crate::usb::UsbTransport::new(usb_driver, device_config);
         embassy_futures::join::join(usb.run(), wpm.polling_loop()).await;
     }

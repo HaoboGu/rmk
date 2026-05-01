@@ -7,10 +7,7 @@ use embassy_sync::signal::Signal;
 use trouble_host::prelude::*;
 use trouble_host::{BondInformation, LongTermKey};
 #[cfg(feature = "storage")]
-use {
-    crate::channel::FLASH_CHANNEL,
-    crate::storage::{FLASH_OPERATION_FINISHED, FlashOperationMessage},
-};
+use {crate::channel::FLASH_CHANNEL, crate::storage::FLASH_OPERATION_FINISHED};
 
 use super::ble_server::CCCD_TABLE_SIZE;
 use crate::NUM_BLE_PROFILE;
@@ -153,11 +150,10 @@ impl Default for ProfileInfo {
 
 /// BLE profile switch action
 pub(crate) enum BleProfileAction {
-    SwitchProfile(u8),
-    PreviousProfile,
-    NextProfile,
-    ClearProfile,
-    ToggleConnection,
+    Switch(u8),
+    Previous,
+    Next,
+    ClearBond,
 }
 
 /// Manage BLE profiles and bonding information
@@ -362,13 +358,13 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                         FLASH_OPERATION_FINISHED.reset();
                     }
                     match action {
-                        BleProfileAction::SwitchProfile(profile) => {
+                        BleProfileAction::Switch(profile) => {
                             if !self.switch_profile(profile).await {
                                 // If the profile is the same as the current profile, do nothing
                                 continue;
                             }
                         }
-                        BleProfileAction::PreviousProfile => {
+                        BleProfileAction::Previous => {
                             let mut profile = current_profile();
                             profile = if profile == 0 {
                                 NUM_BLE_PROFILE as u8 - 1
@@ -378,24 +374,14 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
                             self.switch_profile(profile).await;
                         }
-                        BleProfileAction::NextProfile => {
+                        BleProfileAction::Next => {
                             let mut profile = current_profile() + 1;
                             profile %= NUM_BLE_PROFILE as u8;
 
                             self.switch_profile(profile).await;
                         }
-                        BleProfileAction::ClearProfile => {
+                        BleProfileAction::ClearBond => {
                             self.clear_bond(current_profile()).await;
-                        }
-                        BleProfileAction::ToggleConnection => {
-                            // Flips the persisted transport preference and lets
-                            // the routing cascade recompute `active`.
-                            let updated = crate::state::toggle_preferred();
-
-                            info!("Switching preferred transport to: {:?}", updated);
-
-                            #[cfg(feature = "storage")]
-                            FLASH_CHANNEL.send(FlashOperationMessage::ConnectionType(updated)).await;
                         }
                     }
                     #[cfg(feature = "storage")]
