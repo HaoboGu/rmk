@@ -71,6 +71,11 @@ jobs:
       - name: Create firmware project
         working-directory: .
         run: rmkit create --keyboard-toml-path ${{ inputs.keyboard_toml_path }} --vial-json-path ${{ inputs.vial_json_path }} --version ${{ inputs.rmk_version }} --target-dir rmk
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "rmk -> target"
+          key: ${{ needs.get_chip_name.outputs.chip_name }}
       - name: Build firmware
         working-directory: ./rmk
         run: cargo build --release
@@ -105,11 +110,25 @@ jobs:
           sudo dpkg -i $LIBSSL
       - name: Install rmkit, espflash and espup
         run: cargo binstall rmkit espflash espup -y
+      - name: Cache ESP Rust toolchain
+        id: esp-toolchain-cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.rustup/toolchains/esp
+            ~/export-esp.sh
+          key: ${{ runner.os }}-esp-toolchain-${{ needs.get_chip_name.outputs.chip_name }}-v1
       - name: Prepare esp environment
+        if: steps.esp-toolchain-cache.outputs.cache-hit != 'true'
         run: espup install
       - name: Create firmware project
         working-directory: .
         run: rmkit create --keyboard-toml-path ${{ inputs.keyboard_toml_path }} --vial-json-path ${{ inputs.vial_json_path }} --version ${{ inputs.rmk_version }} --target-dir rmk
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "rmk -> target"
+          key: ${{ needs.get_chip_name.outputs.chip_name }}
       - name: Build firmware for esp32
         working-directory: ./rmk
         run: . /home/runner/export-esp.sh && cargo +esp build --release
