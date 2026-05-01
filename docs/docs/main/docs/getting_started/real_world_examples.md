@@ -30,6 +30,10 @@ A modular split 66-key keyboard
 
 <img src="https://raw.githubusercontent.com/zongxin1993/zx66-keybord/refs/heads/master/Images/zx66-keybord_03.jpg">
 
+## [rmk-zsa-voyager](https://github.com/jpds/rmk-zsa-voyager)
+
+![zsa-voyager](../../images/zsa-voyager.webp)
+
 ## Show your keyboard!
 
 If you're using RMK to build your keyboard, feel free to open a PR adding your project to this page!
