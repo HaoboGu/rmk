@@ -65,22 +65,21 @@ impl Default for ConnectionStatus {
 
 impl ConnectionStatus {
     fn usb_ready(&self) -> bool {
-        matches!(self.usb, UsbState::Configured)
+        matches!(self.usb, UsbState::Configured | UsbState::Suspended)
     }
 
     fn ble_ready(&self) -> bool {
         matches!(self.ble.state, BleState::Connected)
     }
 
-    /// Pick the active transport from current readiness + preference. Ready
-    /// transports win first; suspended USB stays selected when nothing else
-    /// is so remote wakeup remains reachable.
+    /// Pick the active transport from current readiness + preference. Suspended
+    /// USB remains routable for remote wakeup, so it participates in the same
+    /// preference tie-break as configured USB.
     pub fn decide_active(&self) -> Option<ConnectionType> {
         match (self.usb_ready(), self.ble_ready()) {
             (true, false) => Some(ConnectionType::Usb),
             (false, true) => Some(ConnectionType::Ble),
             (true, true) => Some(self.preferred),
-            (false, false) if matches!(self.usb, UsbState::Suspended) => Some(ConnectionType::Usb),
             (false, false) => None,
         }
     }
@@ -132,15 +131,19 @@ mod tests {
     fn suspended_usb_stays_routable_for_remote_wakeup() {
         let s = status(UsbState::Suspended, BleState::Advertising, ConnectionType::Ble);
         assert_eq!(s.decide_active(), Some(ConnectionType::Usb));
-        assert!(!s.usb_ready());
+        assert!(s.usb_ready());
     }
 
     #[test]
-    fn suspended_usb_yields_to_connected_ble() {
-        // Laptop sleep with phone still BLE-connected: cascade picks BLE.
+    fn suspended_usb_with_connected_ble_prefers_preference() {
         let s = status(UsbState::Suspended, BleState::Connected, ConnectionType::Usb);
+        assert_eq!(s.decide_active(), Some(ConnectionType::Usb));
+        assert!(s.usb_ready());
+        assert!(s.ble_ready());
+
+        let s = status(UsbState::Suspended, BleState::Connected, ConnectionType::Ble);
         assert_eq!(s.decide_active(), Some(ConnectionType::Ble));
-        assert!(!s.usb_ready());
+        assert!(s.usb_ready());
         assert!(s.ble_ready());
     }
 }
