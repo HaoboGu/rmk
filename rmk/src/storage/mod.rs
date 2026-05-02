@@ -969,7 +969,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "host")]
     #[test]
     fn storage_key_round_trip() {
         let cases = [
@@ -977,16 +976,28 @@ mod tests {
             StorageKey::LayoutConfig,
             StorageKey::BehaviorConfig,
             StorageKey::ConnectionType,
+            #[cfg(feature = "host")]
             StorageKey::MacroData,
+            #[cfg(feature = "host")]
             StorageKey::Keymap {
                 layer: 2,
                 row: 3,
                 col: 4,
             },
+            #[cfg(feature = "host")]
             StorageKey::Encoder { layer: 1, idx: 5 },
+            #[cfg(feature = "host")]
             StorageKey::Combo(6),
+            #[cfg(feature = "host")]
             StorageKey::Fork(7),
+            #[cfg(feature = "host")]
             StorageKey::Morse(8),
+            #[cfg(all(feature = "_ble", feature = "split"))]
+            StorageKey::PeerAddress(0),
+            #[cfg(feature = "_ble")]
+            StorageKey::ActiveBleProfile,
+            #[cfg(feature = "_ble")]
+            StorageKey::BondInfo(0),
         ];
 
         let mut buffer = [0u8; 64];
@@ -998,7 +1009,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "host")]
     #[test]
     fn build_hash_mismatch_reinitializes_storage() {
         block_on(async {
@@ -1031,12 +1041,16 @@ mod tests {
             .unwrap();
 
             let (flash, _) = map.destroy();
+            #[cfg(feature = "host")]
             let keymap = [[[KeyAction::No; 1]; 1]; 1];
+            #[cfg(feature = "host")]
             let encoder_map: Option<&mut [[EncoderAction; 0]; 1]> = None;
 
             let mut storage = Storage::<Flash, 1, 1, 1, 0>::new(
                 flash,
+                #[cfg(feature = "host")]
                 &keymap,
+                #[cfg(feature = "host")]
                 &encoder_map,
                 &RuntimeStorageConfig::default(),
                 &RuntimeBehaviorConfig::default(),

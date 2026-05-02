@@ -11,9 +11,9 @@ mod my_keyboard {
     use embassy_stm32::Config;
     use embassy_stm32::time::Hertz;
     use embassy_stm32::usb::Driver;
-    use rmk::core_traits::Runnable;
-    use rmk::futures::future::join4;
-    use rmk::{run_all, run_rmk};
+    use rmk::processor::builtin::wpm::WpmProcessor;
+    use rmk::run_all;
+    use rmk::usb::UsbTransport;
     use static_cell::StaticCell;
 
     // If you want customize interrupte binding , use `#[Override(bind_interrupt)]` to override default interrupt binding
@@ -81,13 +81,10 @@ mod my_keyboard {
     // Use `#[Override(entry)]` to override default rmk keyboard runner
     #[Override(entry)]
     fn run() {
+        let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config);
+        let mut wpm_processor = WpmProcessor::new();
+
         // Start
-        join4(
-            run_all!(matrix),
-            keyboard.run(),
-            host_service.run(),
-            run_rmk(driver, rmk_config),
-        )
-        .await;
+        run_all!(matrix, usb_transport, wpm_processor, keyboard, host_service).await;
     }
 }

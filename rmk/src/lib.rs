@@ -32,19 +32,11 @@ pub(crate) use rmk_types::constants::*;
 // This mod MUST go first, so that the others see its macros.
 pub(crate) mod fmt;
 
-#[cfg(feature = "_ble")]
-use bt_hci::{
-    cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy},
-    controller::{ControllerCmdAsync, ControllerCmdSync},
-};
-use config::RmkConfig;
 pub use embassy_futures;
 #[cfg(not(any(cortex_m)))]
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
 #[cfg(cortex_m)]
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
-#[cfg(not(feature = "_no_usb"))]
-use embassy_usb::driver::Driver;
 pub use futures;
 pub use heapless;
 use keymap::KeyMap;
@@ -148,54 +140,4 @@ pub async fn initialize_keymap_and_storage<
         let keymap = KeyMap::new(data, behavior_config, positional_config).await;
         (keymap, storage)
     }
-}
-
-#[allow(unreachable_code)]
-pub async fn run_rmk<
-    #[cfg(feature = "_ble")] 'b,
-    #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
-    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
->(
-    #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    #[cfg(feature = "_ble")] stack: &'b Stack<'b, C, DefaultPacketPool>,
-    rmk_config: RmkConfig<'static>,
-) -> ! {
-    use core_traits::Runnable as _;
-
-    use crate::processor::PollingProcessor;
-    use crate::processor::builtin::wpm::WpmProcessor;
-
-    // Apply the nrf-specific serial number
-    #[cfg(feature = "_nrf_ble")]
-    let rmk_config = {
-        let mut config = rmk_config;
-        config.device_config.serial_number = crate::ble::nrf::get_serial_number();
-        config
-    };
-
-    #[cfg(not(feature = "_no_usb"))]
-    let device_config = rmk_config.device_config;
-
-    let mut wpm = WpmProcessor::new();
-
-    #[cfg(all(feature = "_ble", not(feature = "_no_usb")))]
-    {
-        let mut usb = crate::usb::UsbTransport::new(usb_driver, device_config);
-        let mut ble = crate::ble::BleTransport::new(stack, rmk_config).await;
-        embassy_futures::join::join3(usb.run(), ble.run(), wpm.polling_loop()).await;
-    }
-
-    #[cfg(all(feature = "_ble", feature = "_no_usb"))]
-    {
-        let mut ble = crate::ble::BleTransport::new(stack, rmk_config).await;
-        embassy_futures::join::join(ble.run(), wpm.polling_loop()).await;
-    }
-
-    #[cfg(all(not(feature = "_ble"), not(feature = "_no_usb")))]
-    {
-        let mut usb = crate::usb::UsbTransport::new(usb_driver, device_config);
-        embassy_futures::join::join(usb.run(), wpm.polling_loop()).await;
-    }
-
-    unreachable!("Should never reach here, wrong feature gate combination?");
 }

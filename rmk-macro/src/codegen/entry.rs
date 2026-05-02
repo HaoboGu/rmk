@@ -83,11 +83,7 @@ pub(crate) fn rmk_entry_select(
     };
     let board = &hardware.board;
     let communication = &hardware.communication;
-    let usb_driver_arg = match communication {
-        CommunicationConfig::Usb(_) | CommunicationConfig::Both(_, _) => quote! { driver, },
-        CommunicationConfig::Ble(_) => quote! {},
-        CommunicationConfig::None => panic!("USB and BLE are both disabled"),
-    };
+    let (transport_prelude, transport_tasks) = transport_setup(communication);
 
     let entry = match board {
         BoardConfig::Split(split_config) => {
@@ -99,11 +95,8 @@ pub(crate) fn rmk_entry_select(
             if let Some(t) = host_service_task {
                 tasks.push(t);
             }
+            tasks.extend(transport_tasks);
             if split_config.connection == "ble" {
-                let rmk_task = quote! {
-                    ::rmk::run_rmk(#usb_driver_arg &stack, rmk_config)
-                };
-                tasks.push(rmk_task);
                 if !processors.is_empty() {
                     tasks.push(processors_task);
                 };
@@ -124,12 +117,12 @@ pub(crate) fn rmk_entry_select(
                     ::rmk::split::ble::central::scan_peripherals(&stack, &peripheral_addrs)
                 };
                 tasks.push(scan_task);
-                join_all_tasks(tasks)
+                let joined = join_all_tasks(tasks);
+                quote! {
+                    #transport_prelude
+                    #joined
+                }
             } else if split_config.connection == "serial" {
-                let rmk_task = quote! {
-                    ::rmk::run_rmk(#usb_driver_arg rmk_config),
-                };
-                tasks.push(rmk_task);
                 if !processors.is_empty() {
                     tasks.push(processors_task);
                 };
@@ -158,7 +151,11 @@ pub(crate) fn rmk_entry_select(
                         )
                     });
                 });
-                join_all_tasks(tasks)
+                let joined = join_all_tasks(tasks);
+                quote! {
+                    #transport_prelude
+                    #joined
+                }
             } else {
                 panic!(
                     "Invalid split connection type: {}, only \"ble\" and \"serial\" are supported",
@@ -167,7 +164,8 @@ pub(crate) fn rmk_entry_select(
             }
         }
         BoardConfig::UniBody(_) => rmk_entry_unibody(
-            hardware,
+            transport_prelude,
+            transport_tasks,
             host_service_task,
             devices_task,
             processors_task,
@@ -182,7 +180,8 @@ pub(crate) fn rmk_entry_select(
 }
 
 pub(crate) fn rmk_entry_unibody(
-    hardware: &Hardware,
+    transport_prelude: TokenStream2,
+    transport_tasks: Vec<TokenStream2>,
     host_service_task: Option<TokenStream2>,
     devices_task: TokenStream2,
     processors_task: TokenStream2,
@@ -200,28 +199,52 @@ pub(crate) fn rmk_entry_unibody(
         tasks.push(processors_task);
     }
     tasks.extend(registered_processors);
-    let communication = &hardware.communication;
+    tasks.extend(transport_tasks);
+    let joined = join_all_tasks(tasks);
+    quote! {
+        #transport_prelude
+        #joined
+    }
+}
+
+/// Build (`let mut transport = ...;` prelude, transport `.run()` tasks) for the
+/// active communication config. The prelude must be emitted before the join so
+/// that `transport.run()` can borrow each transport for the lifetime of the
+/// program.
+fn transport_setup(communication: &CommunicationConfig) -> (TokenStream2, Vec<TokenStream2>) {
+    let wpm_prelude = quote! {
+        let mut wpm_processor = ::rmk::processor::builtin::wpm::WpmProcessor::new();
+    };
+    let wpm_task = quote! { wpm_processor.run() };
     match communication {
         CommunicationConfig::Usb(_) => {
-            let rmk_task = quote! {
-                ::rmk::run_rmk(driver, rmk_config)
+            let prelude = quote! {
+                #wpm_prelude
+                let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config);
             };
-            tasks.push(rmk_task);
-            join_all_tasks(tasks)
+            (prelude, vec![quote! { usb_transport.run() }, wpm_task])
         }
         CommunicationConfig::Ble(_) => {
-            let rmk_task = quote! {
-                ::rmk::run_rmk(&stack, rmk_config)
+            let prelude = quote! {
+                #wpm_prelude
+                let mut ble_transport = ::rmk::ble::BleTransport::new(&stack, rmk_config).await;
             };
-            tasks.push(rmk_task);
-            join_all_tasks(tasks)
+            (prelude, vec![quote! { ble_transport.run() }, wpm_task])
         }
         CommunicationConfig::Both(_, _) => {
-            let rmk_task = quote! {
-                ::rmk::run_rmk(driver, &stack, rmk_config)
+            let prelude = quote! {
+                #wpm_prelude
+                let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config);
+                let mut ble_transport = ::rmk::ble::BleTransport::new(&stack, rmk_config).await;
             };
-            tasks.push(rmk_task);
-            join_all_tasks(tasks)
+            (
+                prelude,
+                vec![
+                    quote! { usb_transport.run() },
+                    quote! { ble_transport.run() },
+                    wpm_task,
+                ],
+            )
         }
         CommunicationConfig::None => panic!("USB and BLE are both disabled"),
     }

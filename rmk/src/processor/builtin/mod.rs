@@ -5,4 +5,4 @@
 #[cfg(feature = "_ble")]
 pub mod battery_led;
 pub mod led_indicator;
-pub(crate) mod wpm;
+pub mod wpm;

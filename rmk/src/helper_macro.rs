@@ -15,11 +15,44 @@ macro_rules! join_all {
     ($f1:expr, $f2:expr, $f3:expr, $f4:expr$(,)?) => {
         $crate::embassy_futures::join::join4($f1, $f2, $f3, $f4)
     };
-    ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $($rest:expr),+$(,)?) => {{
-        let head = $crate::embassy_futures::join::join4($f1, $f2, $f3, $f4);
-        let tail = $crate::join_all!($($rest),+);
-        $crate::embassy_futures::join::join(head, tail)
-    }};
+    ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr$(,)?) => {
+        $crate::embassy_futures::join::join5($f1, $f2, $f3, $f4, $f5)
+    };
+    // 6+: chunk into groups of 5, then recurse on the chunk list so
+    // the outer combinator widens (join, join3, join4, join5) before
+    // nesting again.
+    ($($all:expr),+ $(,)?) => {
+        $crate::__join_all_chunked!(chunks=[] $($all,)+)
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __join_all_chunked {
+    // Peel a full chunk of 5 when more inputs remain.
+    (chunks=[$($chunks:expr,)*] $f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr, $($rest:tt)+) => {
+        $crate::__join_all_chunked!(
+            chunks=[$($chunks,)* $crate::embassy_futures::join::join5($f1, $f2, $f3, $f4, $f5),]
+            $($rest)+
+        )
+    };
+    // Final partial chunk (1..=5 remaining): re-invoke join_all on the chunk list,
+    // which widens the outer combinator and recurses if there are more than 5 chunks.
+    (chunks=[$($chunks:expr,)*] $f1:expr $(,)?) => {
+        $crate::join_all!($($chunks,)* $f1)
+    };
+    (chunks=[$($chunks:expr,)*] $f1:expr, $f2:expr $(,)?) => {
+        $crate::join_all!($($chunks,)* $crate::embassy_futures::join::join($f1, $f2))
+    };
+    (chunks=[$($chunks:expr,)*] $f1:expr, $f2:expr, $f3:expr $(,)?) => {
+        $crate::join_all!($($chunks,)* $crate::embassy_futures::join::join3($f1, $f2, $f3))
+    };
+    (chunks=[$($chunks:expr,)*] $f1:expr, $f2:expr, $f3:expr, $f4:expr $(,)?) => {
+        $crate::join_all!($($chunks,)* $crate::embassy_futures::join::join4($f1, $f2, $f3, $f4))
+    };
+    (chunks=[$($chunks:expr,)*] $f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr $(,)?) => {
+        $crate::join_all!($($chunks,)* $crate::embassy_futures::join::join5($f1, $f2, $f3, $f4, $f5))
+    };
 }
 
 #[macro_export]

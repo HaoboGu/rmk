@@ -204,6 +204,14 @@ pub struct UsbTransport<D: Driver<'static>> {
 
 impl<D: Driver<'static>> UsbTransport<D> {
     pub fn new(driver: D, device_config: DeviceConfig<'static>) -> Self {
+        // nRF chips don't have a stable USB serial number unless one is derived
+        // from the FICR. Override here so user code doesn't have to know.
+        #[cfg(feature = "_nrf_ble")]
+        let device_config = {
+            let mut device_config = device_config;
+            device_config.serial_number = crate::ble::nrf::get_serial_number();
+            device_config
+        };
         let mut builder: Builder<'static, D> = new_usb_builder(driver, device_config);
         // Linux's usbhid driver auto-enables power/wakeup when it probes a
         // boot-protocol keyboard, so advertise Boot/Keyboard on the primary
