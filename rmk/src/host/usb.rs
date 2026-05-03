@@ -19,7 +19,6 @@ pub(crate) async fn run_usb_host<'d, D: Driver<'d>>(rw: &mut HidReaderWriter<'d,
         rw.ready().await;
         // Drop any reply queued by `HostService` from a prior, now-stale session.
         HOST_USB_REPLY.clear();
-        error!("Start wait");
         loop {
             match select(rw.read(&mut buf), HOST_USB_REPLY.receive()).await {
                 Either::First(Ok(_)) => enqueue_host_request(ConnectionType::Usb, buf).await,

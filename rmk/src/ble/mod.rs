@@ -88,6 +88,11 @@ where
         let preferred = crate::state::load_preferred_connection().await;
         crate::state::set_preferred_connection(preferred);
 
+        #[cfg(feature = "_nrf_ble")]
+        let serial_number = crate::ble::nrf::get_serial_number();
+        #[cfg(not(feature = "_nrf_ble"))]
+        let serial_number = rmk_config.device_config.serial_number;
+
         let mut profile_manager = ProfileManager::new(stack);
         #[cfg(feature = "storage")]
         profile_manager.load_bonded_devices().await;
@@ -114,7 +119,7 @@ where
         server
             .set(
                 &server.device_config_service.serial_number,
-                &heapless::String::try_from(rmk_config.device_config.serial_number).unwrap(),
+                &heapless::String::try_from(serial_number).unwrap(),
             )
             .unwrap();
         server

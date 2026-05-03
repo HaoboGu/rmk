@@ -417,11 +417,17 @@ impl RequestHandler for UsbRequestHandler {
     }
 }
 
-pub(crate) struct UsbDeviceHandler {}
+pub(crate) struct UsbDeviceHandler {
+    /// State to restore on resume. Captured at suspend so an Enabled-but-not-yet-Configured
+    /// device that suspends/resumes doesn't get incorrectly upgraded to Configured.
+    pre_suspend: UsbState,
+}
 
 impl UsbDeviceHandler {
     fn new() -> Self {
-        UsbDeviceHandler {}
+        UsbDeviceHandler {
+            pre_suspend: UsbState::Disabled,
+        }
     }
 }
 
@@ -459,12 +465,23 @@ impl Handler for UsbDeviceHandler {
         // both arms collapse to identical empty blocks — suppress the lint.
         #[allow(clippy::if_same_then_else)]
         if suspended {
+            // Snapshot the live state so resume can restore it. Skip the snapshot
+            // if a stray duplicate `suspended(true)` ever fires while we're already
+            // Suspended — otherwise we'd lose the original pre-suspend state.
+            let live = current_usb_state();
+            if live != UsbState::Suspended {
+                self.pre_suspend = live;
+            }
             set_usb_state(UsbState::Suspended);
             info!(
                 "Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
             );
         } else {
-            set_usb_state(UsbState::Configured);
+            // Only restore from Suspended; if we're somehow not in Suspended (out-of-order
+            // callbacks), don't overwrite — `configured()`/`enabled()` will resync.
+            if current_usb_state() == UsbState::Suspended {
+                set_usb_state(self.pre_suspend);
+            }
             info!(
                 "Device resumed, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
             );
