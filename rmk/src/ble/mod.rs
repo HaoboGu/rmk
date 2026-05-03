@@ -85,18 +85,12 @@ where
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
     pub async fn new(stack: &'a Stack<'a, C, DefaultPacketPool>, rmk_config: RmkConfig<'static>) -> Self {
-        let preferred = crate::state::load_preferred_connection().await;
-        crate::state::set_preferred_connection(preferred);
-
         #[cfg(feature = "_nrf_ble")]
         let serial_number = crate::ble::nrf::get_serial_number();
         #[cfg(not(feature = "_nrf_ble"))]
         let serial_number = rmk_config.device_config.serial_number;
 
-        let mut profile_manager = ProfileManager::new(stack);
-        #[cfg(feature = "storage")]
-        profile_manager.load_bonded_devices().await;
-        profile_manager.update_stack_bonds();
+        let profile_manager = ProfileManager::new(stack);
 
         info!("Starting advertising and GATT service");
         let server = Server::new_with_config(GapConfig::Peripheral(PeripheralConfig {
@@ -143,6 +137,15 @@ where
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
     async fn run(&mut self) -> ! {
+        // Storage RPCs deferred from `new()` — `Storage::run` is joined with
+        // us via `run_all!`, so it only starts polling once we yield. Doing
+        // these here (not in the constructor) avoids a startup deadlock.
+        let preferred = crate::state::load_preferred_connection().await;
+        crate::state::set_preferred_connection(preferred);
+        #[cfg(feature = "storage")]
+        self.profile_manager.load_bonded_devices().await;
+        self.profile_manager.update_stack_bonds();
+
         // Copy the &Stack reference so it doesn't tie a borrow to &mut self.
         let stack: &'a Stack<'a, C, DefaultPacketPool> = self.stack;
         let Host {
@@ -190,11 +193,6 @@ where
                     Err(BleHostError::BleHost(Error::Timeout)) => {
                         warn!("Advertising timeout, sleep and wait for any key");
                         set_ble_state(BleState::Inactive);
-                        // Once the user has typed at least one key post-sleep,
-                        // keep scanning the matrix across all subsequent
-                        // advertise/connect cycles so reconnect-window keys
-                        // aren't dropped.
-                        crate::state::enable_matrix_scan_override();
 
                         #[cfg(feature = "split")]
                         CENTRAL_SLEEP.signal(true);

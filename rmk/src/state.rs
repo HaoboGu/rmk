@@ -1,5 +1,4 @@
 use core::cell::Cell;
-use core::sync::atomic::{AtomicBool, Ordering};
 
 use embassy_sync::blocking_mutex::Mutex;
 use rmk_types::ble::BleState;
@@ -12,33 +11,11 @@ use crate::RawMutex;
 use crate::event::BleStatusChangeEvent;
 use crate::event::{ConnectionChangeEvent, publish_event};
 
-/// Override flag for the matrix scan gate.
-///
-/// Set by the BLE advertising-timeout path so the matrix keeps scanning
-/// during the reconnect window. Cleared automatically once a BLE connection
-/// is re-established
-static MATRIX_SCAN_OVERRIDE: AtomicBool = AtomicBool::new(false);
-
 /// Single source of truth for transport state and routing. All writes go
 /// through the mutator helpers below so the active-output cascade runs and
 /// change events fire on every transition.
 pub(crate) static CONNECTION_STATUS: Mutex<RawMutex, Cell<ConnectionStatus>> =
     Mutex::new(Cell::new(ConnectionStatus::new()));
-
-#[cfg(feature = "_ble")]
-pub(crate) fn enable_matrix_scan_override() {
-    MATRIX_SCAN_OVERRIDE.store(true, Ordering::Release);
-}
-
-/// True when the keyboard should keep processing input events.
-///
-/// This is intentionally broader than "a host transport is writable right
-/// now". USB-capable builds keep the input pipeline alive from boot to
-/// preserve the old dummy/disconnected path, and the BLE wake override keeps
-/// it alive through reconnect windows after advertising timeout.
-pub(crate) fn input_processing_ready() -> bool {
-    active_transport().is_some() || MATRIX_SCAN_OVERRIDE.load(Ordering::Acquire) || cfg!(not(feature = "_no_usb"))
-}
 
 pub(crate) fn active_transport() -> Option<ConnectionType> {
     CONNECTION_STATUS.lock(|c| c.get().decide_active())
@@ -94,11 +71,6 @@ pub fn set_usb_state(s: UsbState) {
 }
 
 pub(crate) fn set_ble_state(s: BleState) {
-    // Reaching Connected means the reconnect window we set the override for
-    // is over. The next advertising-timeout cycle will set it again if needed.
-    if s == BleState::Connected {
-        MATRIX_SCAN_OVERRIDE.store(false, Ordering::Release);
-    }
     update_status(|c| c.ble.state = s);
 }
 
@@ -160,7 +132,6 @@ pub(crate) fn current_profile() -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use core::sync::atomic::Ordering;
     use std::sync::{Mutex, OnceLock};
 
     use embassy_futures::select::{Either, select};
@@ -168,8 +139,8 @@ mod tests {
     use rmk_types::ble::BleState;
 
     use super::{
-        CONNECTION_STATUS, ConnectionStatus, ConnectionType, MATRIX_SCAN_OVERRIDE, UsbState, input_processing_ready,
-        set_ble_state, set_preferred_connection, set_usb_state,
+        CONNECTION_STATUS, ConnectionStatus, ConnectionType, UsbState, set_ble_state, set_preferred_connection,
+        set_usb_state,
     };
     use crate::event::{ConnectionChangeEvent, EventSubscriber, SubscribableEvent};
     use crate::hid::{KeyboardReport, Report};
@@ -182,7 +153,6 @@ mod tests {
 
     fn reset_state() {
         CONNECTION_STATUS.lock(|c| c.set(ConnectionStatus::default()));
-        MATRIX_SCAN_OVERRIDE.store(false, Ordering::Release);
         #[cfg(not(feature = "_no_usb"))]
         crate::channel::USB_REPORT_CHANNEL.clear();
         #[cfg(feature = "_ble")]
@@ -208,24 +178,6 @@ mod tests {
             }
             _ => panic!("expected keyboard all-up report"),
         }
-    }
-
-    #[cfg(not(feature = "_no_usb"))]
-    #[test]
-    fn usb_builds_keep_input_processing_active_without_transport() {
-        let _guard = state_test_lock().lock().unwrap();
-        reset_state();
-
-        assert!(input_processing_ready());
-    }
-
-    #[test]
-    fn override_keeps_input_processing_active_without_transport() {
-        let _guard = state_test_lock().lock().unwrap();
-        reset_state();
-        MATRIX_SCAN_OVERRIDE.store(true, Ordering::Release);
-
-        assert!(input_processing_ready());
     }
 
     #[test]
@@ -350,25 +302,6 @@ mod tests {
         assert!(
             BLE_REPORT_CHANNEL.try_receive().is_err(),
             "BLE_REPORT_CHANNEL should contain only the all-up report"
-        );
-    }
-
-    #[test]
-    fn ble_connected_clears_matrix_scan_override() {
-        let _guard = state_test_lock().lock().unwrap();
-        reset_state();
-        MATRIX_SCAN_OVERRIDE.store(true, Ordering::Release);
-
-        set_ble_state(BleState::Advertising);
-        assert!(
-            MATRIX_SCAN_OVERRIDE.load(Ordering::Acquire),
-            "Advertising should not clear the override"
-        );
-
-        set_ble_state(BleState::Connected);
-        assert!(
-            !MATRIX_SCAN_OVERRIDE.load(Ordering::Acquire),
-            "Connected should clear the override"
         );
     }
 

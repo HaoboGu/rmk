@@ -7,10 +7,12 @@ use serde::{Deserialize, Serialize};
 use crate::event::BatteryStatusEvent;
 use crate::event::{KeyboardEvent, PointingEvent};
 
-/// Peripheral-side flag: the central has told us (over the split link) that
-/// its input pipeline is active and it can accept our key events.
-/// Mirrors the value carried by `SplitMessage::ConnectionState`.
-pub(crate) static SPLIT_CENTRAL_READY: AtomicBool = AtomicBool::new(false);
+/// Mirror of the central's `active_transport().is_some()` on the peripheral
+/// MCU. The central syncs this over the split link via `SplitMessage::ConnectionState`
+/// so peripheral-side consumers (e.g. a status display) can show whether the
+/// central currently has a host transport. Read-only signal — nothing in the
+/// input pipeline gates on it.
+pub(crate) static CENTRAL_HOST_CONNECTED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(feature = "_ble")]
 pub mod ble;
@@ -37,9 +39,10 @@ pub(crate) enum SplitMessage {
     Pointing(PointingEvent),
     /// Led state, on/off, from central to peripheral
     LedState(bool),
-    /// The central input-processing state, true if the central can accept
-    /// peripheral key events right now. This message is synced from central to
-    /// peripheral.
+    /// `true` when the central has an active host transport (USB Configured/
+    /// Suspended or BLE Connected). Synced central→peripheral periodically and
+    /// on change. Informational only — nothing in the input pipeline gates on
+    /// this; consumers are peripheral-side display/status code.
     ConnectionState(bool),
     /// BLE Address, used in syncing address between central and peripheral
     Address([u8; 6]),

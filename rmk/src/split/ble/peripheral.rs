@@ -9,7 +9,7 @@ use super::PeerAddress;
 use crate::event::{CentralConnectedEvent, KeyboardEvent, SubscribableEvent, publish_event};
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
-use crate::split::{SPLIT_CENTRAL_READY, SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
+use crate::split::{CENTRAL_HOST_CONNECTED, SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
 
 /// Gatt service used in split peripheral to send split message to central
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -50,7 +50,7 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitReader for BleSplitPeripheralDrive
             match self.conn.next().await {
                 GattConnectionEvent::Disconnected { reason } => {
                     error!("Disconnected from central: {:?}", reason);
-                    SPLIT_CENTRAL_READY.store(false, core::sync::atomic::Ordering::Release);
+                    CENTRAL_HOST_CONNECTED.store(false, core::sync::atomic::Ordering::Release);
                     return Err(SplitDriverError::Disconnected);
                 }
                 GattConnectionEvent::Gatt { event: gatt_event } => {
@@ -144,7 +144,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'stack, C: Controller +
     let peri_task = async {
         let server = BleSplitPeripheralServer::new_default("rmk").unwrap();
         loop {
-            SPLIT_CENTRAL_READY.store(false, core::sync::atomic::Ordering::Release);
+            CENTRAL_HOST_CONNECTED.store(false, core::sync::atomic::Ordering::Release);
             publish_event(CentralConnectedEvent { connected: false });
             match split_peripheral_advertise(id, central_addr, &mut peripheral, &server).await {
                 Ok(conn) => {
