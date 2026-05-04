@@ -137,11 +137,10 @@ where
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
     async fn run(&mut self) -> ! {
-        // Storage RPCs deferred from `new()` — `Storage::run` is joined with
-        // us via `run_all!`, so it only starts polling once we yield. Doing
-        // these here (not in the constructor) avoids a startup deadlock.
+        // Load the preferred connection from storage
         let preferred = crate::state::load_preferred_connection().await;
         crate::state::set_preferred_connection(preferred);
+        // Load the bonded devices from storage
         #[cfg(feature = "storage")]
         self.profile_manager.load_bonded_devices().await;
         self.profile_manager.update_stack_bonds();
@@ -158,22 +157,13 @@ where
 
         let connection_loop = async {
             loop {
-                set_ble_state(BleState::Advertising);
-                let advertise_result = match select(
+                match select(
                     advertise(product_name, &mut peripheral, server),
                     profile_manager.update_profile(),
                 )
                 .await
                 {
-                    Either::First(result) => result,
-                    Either::Second(()) => {
-                        set_ble_state(BleState::Inactive);
-                        continue;
-                    }
-                };
-
-                match advertise_result {
-                    Ok(conn) => {
+                    Either::First(Ok(conn)) => {
                         set_ble_state(BleState::Connected);
                         #[cfg(feature = "storage")]
                         let active_bond_info = profile_manager.active_bond_info();
@@ -188,9 +178,8 @@ where
                             profile_manager.update_profile(),
                         )
                         .await;
-                        set_ble_state(BleState::Inactive);
                     }
-                    Err(BleHostError::BleHost(Error::Timeout)) => {
+                    Either::First(Err(BleHostError::BleHost(Error::Timeout))) => {
                         warn!("Advertising timeout, sleep and wait for any key");
                         set_ble_state(BleState::Inactive);
 
@@ -205,13 +194,16 @@ where
                         #[cfg(feature = "split")]
                         CENTRAL_SLEEP.signal(false);
                     }
-                    Err(e) => {
+                    Either::First(Err(e)) => {
                         #[cfg(feature = "defmt")]
                         let e = defmt::Debug2Format(&e);
                         error!("Advertise error: {:?}", e);
                         Timer::after_millis(200).await;
                     }
-                }
+                    Either::Second(()) => {}
+                };
+
+                set_ble_state(BleState::Inactive);
             }
         };
 
@@ -531,6 +523,7 @@ async fn advertise<'a, 'b, C: Controller>(
     };
 
     info!("[adv] advertising");
+    set_ble_state(BleState::Advertising);
     let advertiser = peripheral
         .advertise(
             &advertise_config,

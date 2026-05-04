@@ -354,9 +354,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             {
                 Either3::First(action) => {
                     #[cfg(feature = "storage")]
-                    if FLASH_OPERATION_FINISHED.signaled() {
-                        FLASH_OPERATION_FINISHED.reset();
-                    }
+                    FLASH_OPERATION_FINISHED.reset();
                     match action {
                         BleProfileAction::Switch(profile) => {
                             if !self.switch_profile(profile).await {
