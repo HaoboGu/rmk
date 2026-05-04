@@ -189,7 +189,7 @@ mod steno_tests {
     },
     (collection = APPLICATION, usage_page = GENERIC_DESKTOP, usage = SYSTEM_CONTROL) = {
         (report_id = 0x03,) = {
-            (usage_min = 0x81, usage_max = 0xB7, logical_min = 1) = {
+            (usage_min = 0x01, usage_max = 0xB7, logical_min = 1) = {
                 #[item_settings(data,array,absolute,not_null)] system_usage_id=input;
             };
         };
