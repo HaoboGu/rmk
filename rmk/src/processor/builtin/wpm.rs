@@ -8,10 +8,16 @@ const SAMPLES: u8 = 5;
 
 /// Processor to estimate typing speed in words per minute (WPM)
 #[processor(subscribe = [KeyboardEvent], poll_interval = 1000)]
-pub(crate) struct WpmProcessor {
+pub struct WpmProcessor {
     keys_pressed: u8,
     wpm: u16,
     update_count: u8,
+}
+
+impl Default for WpmProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl WpmProcessor {

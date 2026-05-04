@@ -19,7 +19,7 @@
 //! - [`led_indicator`] — `LedIndicator` bitfield
 //! - [`battery`] — `BatteryStatus`, `ChargeState`
 //! - [`ble`] — `BleStatus`, `BleState`
-//! - [`connection`] — `ConnectionType` (USB/BLE)
+//! - [`connection`] — `ConnectionType` (USB/BLE), `UsbState`, `ConnectionStatus`
 //!
 //! ### Protocol
 //! - [`protocol::vial`] — Vial/Via protocol types

@@ -17,6 +17,11 @@ use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
+/// Report ID byte that prefixes every Plover HID input report on the wire.
+/// Must match the `report_id` literal in the `gen_hid_descriptor!` macro
+/// invocation for `StenoReport`.
+pub const PLOVER_HID_REPORT_ID: u8 = 0x50;
+
 /// A single steno key, identified by its position (0..=63) in the canonical
 /// Plover HID key chart. See module docs for the full list.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]

@@ -1,7 +1,94 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 
+#[cfg(feature = "passkey_entry")]
+use embassy_futures::select::{Either, select};
 use embassy_sync::signal::Signal;
+#[cfg(feature = "passkey_entry")]
+use embassy_time::{Duration, Instant, with_deadline};
 use rmk_types::keycode::HidKeyCode;
+#[cfg(feature = "passkey_entry")]
+use trouble_host::prelude::{DefaultPacketPool, GattConnection, GattConnectionEvent};
+
+#[doc(hidden)]
+pub fn passkey_entry_enabled() -> bool {
+    #[cfg(feature = "passkey_entry")]
+    {
+        crate::PASSKEY_ENTRY_ENABLED
+    }
+    #[cfg(not(feature = "passkey_entry"))]
+    {
+        false
+    }
+}
+
+#[cfg(feature = "passkey_entry")]
+pub(crate) struct PasskeyInputState {
+    pub(crate) deadline: Option<Instant>,
+    cleanup: Option<PasskeyCleanupGuard>,
+}
+
+#[cfg(feature = "passkey_entry")]
+impl PasskeyInputState {
+    pub(crate) const fn new() -> Self {
+        Self {
+            deadline: None,
+            cleanup: None,
+        }
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.deadline = None;
+        drop(self.cleanup.take());
+    }
+
+    pub(crate) fn begin(&mut self) {
+        self.clear();
+        begin_passkey_entry_session();
+        self.cleanup = Some(PasskeyCleanupGuard::new());
+        self.deadline = Some(Instant::now() + Duration::from_secs(crate::PASSKEY_ENTRY_TIMEOUT_SECS as u64));
+    }
+}
+
+#[cfg(feature = "passkey_entry")]
+pub(crate) async fn next_gatt_event<'a, 'b>(
+    conn: &GattConnection<'a, 'b, DefaultPacketPool>,
+    passkey_state: &mut PasskeyInputState,
+) -> Option<GattConnectionEvent<'a, 'b, DefaultPacketPool>> {
+    if crate::PASSKEY_ENTRY_ENABLED
+        && let Some(deadline) = passkey_state.deadline
+    {
+        return match select(conn.next(), with_deadline(deadline, PASSKEY_RESPONSE.wait())).await {
+            Either::First(event) => Some(event),
+            Either::Second(Ok(Some(passkey))) => {
+                passkey_state.clear();
+
+                info!("[gatt] Passkey entered: submitting");
+                if let Err(e) = conn.raw().pass_key_input(passkey) {
+                    error!("[gatt] pass_key_input error: {:?}", e);
+                }
+                None
+            }
+            Either::Second(Ok(None)) => {
+                passkey_state.clear();
+
+                info!("[gatt] Passkey entry cancelled");
+                if let Err(e) = conn.raw().pass_key_cancel() {
+                    error!("[gatt] pass_key_cancel error: {:?}", e);
+                }
+                None
+            }
+            Either::Second(Err(_)) => {
+                passkey_state.clear();
+
+                warn!("[gatt] Passkey entry timeout");
+                let _ = conn.raw().pass_key_cancel();
+                None
+            }
+        };
+    }
+
+    Some(conn.next().await)
+}
 
 /// Maximum number of digits in a BLE passkey.
 pub const PASSKEY_LENGTH: usize = 6;

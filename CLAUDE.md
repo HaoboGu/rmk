@@ -28,6 +28,11 @@ cargo nextest run --no-default-features --features=split,vial,storage,async_matr
 
 Run macro tests from `rmk-macro/` (requires `cargo expand`).
 
+Run format test from root:
+```bash
+sh scripts/format_all.sh
+```
+
 Full feature matrix (what CI runs, ~40 s when clean):
 ```bash
 sh scripts/test_all.sh
@@ -38,16 +43,6 @@ Examples target specific MCUs; build from an example directory, e.g.:
 ```bash
 cd examples/use_config/nrf52840_ble
 cargo build --release
-```
-
-### Checks
-```bash
-# Format all Rust files
-sh scripts/format_all.sh
-# Run clippy for all examples and crates
-sh scripts/clippy_all.sh
-# Build all examples to check
-sh scripts/check_all.sh
 ```
 
 ## Architecture
@@ -70,3 +65,4 @@ Config is loaded in three layers (later overrides earlier): `event_default.toml`
 ## Rules
 
 - Don't use `pub use` for convenient usage **within** the crate
+- Don't add a small helper function (≤ 10 lines) that has only one call site — inline it at the call site

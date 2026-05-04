@@ -14,12 +14,12 @@ use embassy_time::Timer;
 use keymap::{COL, ROW};
 use panic_halt as _;
 use rmk::config::{BehaviorConfig, PositionalConfig, RmkConfig};
-use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join3;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::{KeymapData, initialize_keymap, run_all, run_rmk};
+use rmk::processor::builtin::wpm::WpmProcessor;
+use rmk::usb::UsbTransport;
+use rmk::{KeymapData, initialize_keymap, run_all};
 
 bind_interrupts!(struct Irqs {
     USB_LP_CAN1_RX0 => InterruptHandler<USB>;
@@ -62,6 +62,9 @@ async fn main(_spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
 
+    let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config);
+    let mut wpm_processor = WpmProcessor::new();
+
     // Start
-    join3(run_all!(matrix), keyboard.run(), run_rmk(driver, rmk_config)).await;
+    run_all!(matrix, usb_transport, wpm_processor, keyboard).await;
 }

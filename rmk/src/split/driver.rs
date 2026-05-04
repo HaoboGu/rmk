@@ -1,13 +1,10 @@
 //! The abstracted driver layer of the split keyboard.
 //!
-use core::sync::atomic::Ordering;
-
 use embassy_futures::select::{Either3, select3};
-use embassy_time::Instant;
+use embassy_time::{Instant, Timer};
 use futures::FutureExt;
 
 use super::SplitMessage;
-use crate::CONNECTION_STATE;
 use crate::event::{KeyboardEvent, KeyboardEventPos, SubscribableEvent, publish_event, publish_event_async};
 
 #[derive(Debug, Clone, Copy)]
@@ -74,18 +71,23 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
     /// Run the manager.
     ///
     /// The manager receives from the peripheral and publishes input events.
-    /// It also syncs the `ConnectionState` to the peripheral periodically.
+    /// It also syncs the central's host-connection state (`active_transport().is_some()`)
+    /// to the peripheral periodically as informational signal — peripheral-side
+    /// consumers (e.g. status display) read it from `CENTRAL_HOST_CONNECTED`.
     pub(crate) async fn run(mut self) {
-        use embassy_time::Timer;
-
         use crate::event::EventSubscriber;
 
-        let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
-        if self.send(&SplitMessage::ConnectionState(conn_state)).await.is_err() {
+        if self
+            .send(&SplitMessage::ConnectionState(
+                crate::state::active_transport().is_some(),
+            ))
+            .await
+            .is_err()
+        {
             return;
         }
-
         let mut last_sync_time = Instant::now();
+
         let mut indicator_sub = crate::event::LedIndicatorEvent::subscriber();
         let mut layer_sub = crate::event::LayerChangeEvent::subscriber();
         #[cfg(feature = "_ble")]
@@ -147,7 +149,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                     }
                 }
                 Either3::Third(_) => {
-                    conn_state = CONNECTION_STATE.load(Ordering::Acquire);
+                    let conn_state = crate::state::active_transport().is_some();
                     trace!("Syncing connection state to peripheral: {}", conn_state);
                     if self.send(&SplitMessage::ConnectionState(conn_state)).await.is_err() {
                         return;
@@ -170,42 +172,26 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                         return;
                     }
 
-                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                        // Only when the connection is established, send the key event.
-                        let adjusted_key_event = KeyboardEvent::key(
-                            key_pos.row + ROW_OFFSET as u8,
-                            key_pos.col + COL_OFFSET as u8,
-                            e.pressed,
-                        );
-                        publish_event_async(adjusted_key_event).await;
-                    } else {
-                        warn!("Key event from peripheral is ignored because the connection is not established.");
-                    }
+                    let adjusted_key_event = KeyboardEvent::key(
+                        key_pos.row + ROW_OFFSET as u8,
+                        key_pos.col + COL_OFFSET as u8,
+                        e.pressed,
+                    );
+                    publish_event_async(adjusted_key_event).await;
                 }
                 _ => {
                     // For rotary encoder
-                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                        // Only when the connection is established, send the key event.
-                        publish_event_async(e).await;
-                    }
+                    publish_event_async(e).await;
                 }
             },
-            // Process other split messages which requires connection to host
-            _ if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) => match split_message {
-                // Non-key events are drop-on-full to keep the split read loop responsive.
-                SplitMessage::Pointing(e) => publish_event(e),
-                #[cfg(feature = "_ble")]
-                SplitMessage::BatteryStatus(state) => {
-                    // Publish as PeripheralBatteryEvent with the full state
-                    use crate::event::PeripheralBatteryEvent;
-                    publish_event(PeripheralBatteryEvent { id: self.id, state })
-                }
-                _ => warn!("{:?} should not come from peripheral", split_message),
-            },
-            _ => warn!(
-                "{:?} from peripheral is ignored because the connection is not established.",
-                split_message
-            ),
+            // Non-key events are drop-on-full to keep the split read loop responsive.
+            SplitMessage::Pointing(e) => publish_event(e),
+            #[cfg(feature = "_ble")]
+            SplitMessage::BatteryStatus(state) => {
+                use crate::event::PeripheralBatteryEvent;
+                publish_event(PeripheralBatteryEvent { id: self.id, state })
+            }
+            _ => warn!("{:?} should not come from peripheral", split_message),
         }
     }
 }

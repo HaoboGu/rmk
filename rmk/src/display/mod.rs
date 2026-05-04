@@ -417,6 +417,13 @@ where
         use crate::event::EventSubscriber;
         let mut sub = <Self as Processor>::subscriber();
 
+        // Prime from current state after subscribing, so the first render
+        // reflects state that was set before the processor started.
+        #[cfg(feature = "_ble")]
+        {
+            self.ctx.ble_status = crate::state::current_ble_status();
+        }
+
         self.pending_render = true;
         self.render().await;
         let mut ticker = self.render_interval.map(Ticker::every);

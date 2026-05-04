@@ -25,19 +25,19 @@ use panic_probe as _;
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use renderers::KeyLabelRenderer;
-use rmk::ble::build_ble_stack;
+use rmk::ble::{BleTransport, build_ble_stack};
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
-use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::display::DisplayProcessor;
 use rmk::display::drivers::lcd_async::LcdAsyncDisplay;
-use rmk::futures::future::join4;
 use rmk::host::HostService;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::direct_pin::DirectPinMatrix;
+use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::storage::async_flash_wrapper;
-use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
+use rmk::usb::UsbTransport;
+use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all};
 use sifli_hal::efuse::Efuse;
 use sifli_hal::gpio::{Input, Level, Output};
 use sifli_hal::mpi::{BlockingNorFlash, BuiltInProfile, NorConfig, ProfileSource};
@@ -253,11 +253,22 @@ async fn main(_spawner: Spawner) {
 
     info!("Starting RMK dual-mode (USB + BLE) runner...");
 
-    join4(
-        run_all!(matrix, encoder, storage, disp0, disp1, disp2),
-        keyboard.run(),
-        host_service.run(),
-        run_rmk(usb_driver, &stack, rmk_config),
+    let mut usb_transport = UsbTransport::new(usb_driver, rmk_config.device_config);
+    let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
+    let mut wpm_processor = WpmProcessor::new();
+
+    run_all!(
+        matrix,
+        encoder,
+        storage,
+        disp0,
+        disp1,
+        disp2,
+        usb_transport,
+        ble_transport,
+        wpm_processor,
+        keyboard,
+        host_service
     )
     .await;
 }

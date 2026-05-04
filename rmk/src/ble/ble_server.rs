@@ -1,24 +1,18 @@
 use trouble_host::prelude::*;
-use usbd_hid::descriptor::{AsInputReport as _, SerializedDescriptor};
+use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor};
 
 use super::battery_service::BatteryService;
 use super::device_info::DeviceConfigurationService;
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
 #[cfg(feature = "host")]
 use crate::hid::ViaReport;
-use crate::hid::{
-    CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report, RunnableHidWriter,
-};
+use crate::hid::{CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report};
 
 // Used for saving the CCCD table
 pub(crate) const CCCD_TABLE_SIZE: usize = _CCCD_TABLE_SIZE;
 
-// GATT Server definition
-// NOTE: ideally we would conditionally add the `via_service` member, based on the
-// `vial` feature flag. But when doing that, rust still compiles the member as if
-// the flag was on, for some reason. I suspect it might have something to do with
-// the `gatt_server` macro, but I'm not sure. So we need 2 versions of the Server
-// struct, one with vial support, and one without.
+// `gatt_server` compiles every member regardless of the surrounding `cfg` —
+// gating an individual field with `#[cfg(feature = "host")]` doesn't work. So
+// the whole struct is duplicated, with and without `host_service`.
 #[cfg(feature = "host")]
 #[gatt_server]
 pub(crate) struct Server {
@@ -32,7 +26,7 @@ pub(crate) struct Server {
 /// GATT service exposing the Vial-over-HID protocol. The keyboard writes replies via
 /// `input_data` notify; hosts push requests through `output_data`. `gatt_events_task`
 /// forwards `output_data` writes into `HOST_REQUEST_CHANNEL`, and `host::run_ble_host`
-/// drains `HOST_BLE_TX` to notify `input_data`.
+/// drains `HOST_BLE_REPLY` to notify `input_data`.
 #[cfg(feature = "host")]
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
 pub(crate) struct VialService {
@@ -101,11 +95,11 @@ pub(crate) struct CompositeService {
 }
 
 pub(crate) struct BleHidServer<'stack, 'server, 'conn, P: PacketPool> {
-    pub(crate) input_keyboard: Characteristic<[u8; 8]>,
-    pub(crate) mouse_report: Characteristic<[u8; 5]>,
-    pub(crate) media_report: Characteristic<[u8; 2]>,
-    pub(crate) system_report: Characteristic<[u8; 1]>,
-    pub(crate) conn: &'conn GattConnection<'stack, 'server, P>,
+    input_keyboard: Characteristic<[u8; 8]>,
+    mouse_report: Characteristic<[u8; 5]>,
+    media_report: Characteristic<[u8; 2]>,
+    system_report: Characteristic<[u8; 1]>,
+    conn: &'conn GattConnection<'stack, 'server, P>,
 }
 
 impl<'stack, 'server, 'conn, P: PacketPool> BleHidServer<'stack, 'server, 'conn, P> {
@@ -118,71 +112,38 @@ impl<'stack, 'server, 'conn, P: PacketPool> BleHidServer<'stack, 'server, 'conn,
             conn,
         }
     }
+
+    async fn notify_report<R: AsInputReport, const N: usize>(
+        &self,
+        characteristic: Characteristic<[u8; N]>,
+        report: &R,
+    ) -> Result<usize, HidError> {
+        let mut buf = [0u8; N];
+        let n = report.serialize(&mut buf).map_err(|_| HidError::ReportSerializeError)?;
+        characteristic.notify(self.conn, &buf).await.map_err(|e| {
+            error!("Failed to notify HID report: {:?}", e);
+            HidError::BleError
+        })?;
+        Ok(n)
+    }
 }
 
 impl<P: PacketPool> HidWriterTrait for BleHidServer<'_, '_, '_, P> {
     type ReportType = Report;
 
-    async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
+    async fn write_report(&mut self, report: &Self::ReportType) -> Result<usize, HidError> {
         match report {
-            Report::KeyboardReport(keyboard_report) => {
-                let mut buf = [0u8; 8];
-                let n = keyboard_report
-                    .serialize(&mut buf)
-                    .map_err(|_| HidError::ReportSerializeError)?;
-                self.input_keyboard.notify(self.conn, &buf).await.map_err(|e| {
-                    error!("Failed to notify keyboard report: {:?}", e);
-                    HidError::BleError
-                })?;
-                Ok(n)
-            }
-            Report::MouseReport(mouse_report) => {
-                let mut buf = [0u8; 5];
-                let n = mouse_report
-                    .serialize(&mut buf)
-                    .map_err(|_| HidError::ReportSerializeError)?;
-                self.mouse_report.notify(self.conn, &buf).await.map_err(|e| {
-                    error!("Failed to notify mouse report: {:?}", e);
-                    HidError::BleError
-                })?;
-                Ok(n)
-            }
-            Report::MediaKeyboardReport(media_keyboard_report) => {
-                let mut buf = [0u8; 2];
-                let n = media_keyboard_report
-                    .serialize(&mut buf)
-                    .map_err(|_| HidError::ReportSerializeError)?;
-                self.media_report.notify(self.conn, &buf).await.map_err(|e| {
-                    error!("Failed to notify media report: {:?}", e);
-                    HidError::BleError
-                })?;
-                Ok(n)
-            }
-            Report::SystemControlReport(system_control_report) => {
-                let mut buf = [0u8; 1];
-                let n = system_control_report
-                    .serialize(&mut buf)
-                    .map_err(|_| HidError::ReportSerializeError)?;
-                self.system_report.notify(self.conn, &buf).await.map_err(|e| {
-                    error!("Failed to notify system report: {:?}", e);
-                    HidError::BleError
-                })?;
-                Ok(n)
-            }
+            Report::KeyboardReport(r) => self.notify_report(self.input_keyboard, r).await,
+            Report::MouseReport(r) => self.notify_report(self.mouse_report, r).await,
+            Report::MediaKeyboardReport(r) => self.notify_report(self.media_report, r).await,
+            Report::SystemControlReport(r) => self.notify_report(self.system_report, r).await,
             // Plover HID over BLE is not supported: the stock HID-over-GATT service
-            // has no stenography characteristic. Log so the user can see why their
-            // steno strokes aren't reaching the host, then drop.
+            // has no stenography characteristic. Drop silently at the writer.
             #[cfg(feature = "steno")]
             Report::StenoReport(_) => {
-                warn!("Steno chord dropped: Plover HID over BLE is not supported");
+                debug!("Steno chord dropped: Plover HID over BLE is not supported");
                 Ok(0)
             }
         }
-    }
-}
-
-impl<P: PacketPool> RunnableHidWriter for BleHidServer<'_, '_, '_, P> {
-    async fn get_report(&mut self) -> Self::ReportType {
-        KEYBOARD_REPORT_CHANNEL.receive().await
     }
 }

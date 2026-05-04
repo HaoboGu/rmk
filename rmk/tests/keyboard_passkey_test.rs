@@ -10,10 +10,12 @@ use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
 use futures::join;
 use rmk::ble::passkey::{PASSKEY_RESPONSE, begin_passkey_entry_session, end_passkey_entry_session};
-use rmk::channel::KEYBOARD_REPORT_CHANNEL;
+use rmk::channel::USB_REPORT_CHANNEL;
 use rmk::core_traits::Runnable;
 use rmk::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEvent};
 use rmk::keyboard::Keyboard;
+use rmk::state::set_usb_state;
+use rmk::types::connection::UsbState;
 
 use crate::common::create_test_keyboard;
 
@@ -30,7 +32,8 @@ async fn run_passkey_test<'a>(
     static TEST_DONE: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
     let sender = KeyboardEvent::publisher_async();
     sender.clear();
-    KEYBOARD_REPORT_CHANNEL.clear();
+    USB_REPORT_CHANNEL.clear();
+    set_usb_state(UsbState::Configured);
     let max_timeout = Duration::from_secs(5);
 
     // Start passkey entry session before sending keys
@@ -79,12 +82,7 @@ async fn run_passkey_test<'a>(
 
             // Verify no keyboard reports were sent during passkey mode
             // Try to receive — should timeout because no reports were sent
-            match select(
-                Timer::after(Duration::from_millis(200)),
-                KEYBOARD_REPORT_CHANNEL.receive(),
-            )
-            .await
-            {
+            match select(Timer::after(Duration::from_millis(200)), USB_REPORT_CHANNEL.receive()).await {
                 Either::First(_) => {
                     // Good — no reports sent
                 }

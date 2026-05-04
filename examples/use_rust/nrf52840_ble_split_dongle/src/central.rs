@@ -23,13 +23,12 @@ use nrf_sdc::{self as sdc, mpsl};
 use panic_probe as _;
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
-use rmk::ble::build_ble_stack;
+use rmk::ble::{BleTransport, build_ble_stack};
 use rmk::config::{
     BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
-use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::{join, join4, join5};
+use rmk::futures::future::join;
 use rmk::host::HostService;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
@@ -39,9 +38,11 @@ use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::processor::builtin::led_indicator::KeyboardIndicatorProcessor;
+use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::split::ble::central::scan_peripherals;
 use rmk::split::central::run_peripheral_manager;
-use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
+use rmk::usb::UsbTransport;
+use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -259,9 +260,12 @@ async fn main(spawner: Spawner) {
         rmk::types::led_indicator::LedIndicatorType::CapsLock,
     );
 
+    let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config);
+    let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
+    let mut wpm_processor = WpmProcessor::new();
+
     // Start
-    join5(
-        async {},
+    join(
         run_all!(
             matrix,
             encoder,
@@ -269,15 +273,20 @@ async fn main(spawner: Spawner) {
             adc_device,
             batt_proc,
             pointing_processor,
-            storage
+            storage,
+            usb_transport,
+            ble_transport,
+            wpm_processor,
+            keyboard,
+            capslock_led,
+            host_service
         ),
-        join(keyboard.run(), capslock_led.run()),
-        host_service.run(),
-        join4(
+        join(
             scan_peripherals(&stack, &peripheral_addrs),
-            run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
-            run_peripheral_manager::<4, 7, 4, 0, _>(1, &peripheral_addrs, &stack),
-            run_rmk(driver, &stack, rmk_config),
+            join(
+                run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
+                run_peripheral_manager::<4, 7, 4, 0, _>(1, &peripheral_addrs, &stack),
+            ),
         ),
     )
     .await;

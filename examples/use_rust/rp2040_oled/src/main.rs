@@ -23,14 +23,14 @@ use oled_async::displays::sh1106::Sh1106_128_64;
 use oled_async::mode::graphics::GraphicsMode;
 use panic_probe as _;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
-use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::display::DisplayProcessor;
-use rmk::futures::future::join4;
 use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::{KeymapData, initialize_keymap_and_storage, run_all, run_rmk};
+use rmk::processor::builtin::wpm::WpmProcessor;
+use rmk::usb::UsbTransport;
+use rmk::{KeymapData, initialize_keymap_and_storage, run_all};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 bind_interrupts!(struct Irqs {
@@ -104,12 +104,18 @@ async fn main(_spawner: Spawner) {
         .into();
     let mut oled = DisplayProcessor::new(display);
 
+    let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config);
+    let mut wpm_processor = WpmProcessor::new();
+
     // Start
-    join4(
-        run_all!(matrix, oled, storage),
-        keyboard.run(),
-        host_service.run(),
-        run_rmk(driver, rmk_config),
+    run_all!(
+        matrix,
+        oled,
+        storage,
+        usb_transport,
+        wpm_processor,
+        keyboard,
+        host_service
     )
     .await;
 }

@@ -1,17 +1,17 @@
 /// Traits and types for HID message reporting and listening.
-use core::{future::Future, sync::atomic::Ordering};
+use core::future::Future;
+use core::sync::atomic::Ordering;
 
 use embassy_usb::class::hid::ReadError;
 use embassy_usb::driver::EndpointError;
+use rmk_types::connection::ConnectionType;
+use rmk_types::led_indicator::LedIndicator;
 use serde::Serialize;
 use usbd_hid::descriptor::generator_prelude::*;
 use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
 
-use crate::CONNECTION_STATE;
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
-use crate::state::ConnectionState;
-#[cfg(not(feature = "_no_usb"))]
-use crate::usb::{USB_REMOTE_WAKEUP, USB_SUSPENDED};
+use crate::event::{LedIndicatorEvent, publish_event};
+use crate::keyboard::LOCK_LED_STATES;
 
 /// KeyboardReport describes a report and its companion descriptor that can be
 /// used to send keyboard button presses to a host and receive the status of the
@@ -115,14 +115,14 @@ pub struct StenoReport {
 
 // `gen_hid_descriptor` skips the `AsInputReport` impl when a `report_id`
 // is present, so the wire format must be assembled by hand: byte 0 is the
-// Plover HID report ID (0x50) followed by the eight chord-bitmap bytes.
+// Plover HID report ID followed by the eight chord-bitmap bytes.
 #[cfg(feature = "steno")]
 impl usbd_hid::descriptor::AsInputReport for StenoReport {
     fn serialize(&self, buffer: &mut [u8]) -> Result<usize, usbd_hid::descriptor::BufferOverflow> {
         if buffer.len() < 9 {
             return Err(usbd_hid::descriptor::BufferOverflow);
         }
-        buffer[0] = 0x50;
+        buffer[0] = rmk_types::steno::PLOVER_HID_REPORT_ID;
         buffer[1..9].copy_from_slice(&self.keys);
         Ok(9)
     }
@@ -246,47 +246,10 @@ pub enum HidError {
 /// HidWriter trait is used for reporting HID messages to the host, via USB, BLE, etc.
 pub trait HidWriterTrait {
     /// The report type that the reporter receives from input processors.
-    type ReportType: AsInputReport + Clone;
+    type ReportType: AsInputReport;
 
     /// Write report to the host, return the number of bytes written if success.
-    fn write_report(&mut self, report: Self::ReportType) -> impl Future<Output = Result<usize, HidError>>;
-}
-
-/// Runnable writer
-pub trait RunnableHidWriter: HidWriterTrait {
-    /// Get the report to be sent to the host
-    fn get_report(&mut self) -> impl Future<Output = Self::ReportType>;
-
-    /// Run the writer task.
-    fn run_writer(&mut self) -> impl Future<Output = ()> {
-        async {
-            loop {
-                // Get report to send
-                let report = self.get_report().await;
-                // Only send the report after the connection is established.
-                if CONNECTION_STATE.load(Ordering::Acquire)
-                    == <ConnectionState as Into<bool>>::into(ConnectionState::Connected)
-                {
-                    #[cfg(not(feature = "_no_usb"))]
-                    if USB_SUSPENDED.load(Ordering::Acquire) {
-                        USB_REMOTE_WAKEUP.signal(());
-                    }
-
-                    if let Err(e) = self.write_report(report.clone()).await {
-                        error!("Failed to send report: {:?}", e);
-                        #[cfg(not(feature = "_no_usb"))]
-                        if let HidError::UsbEndpointError(EndpointError::Disabled) = e {
-                            USB_REMOTE_WAKEUP.signal(());
-                            embassy_time::Timer::after_millis(500).await;
-                            if let Err(e) = self.write_report(report).await {
-                                error!("Failed to send report after wakeup: {:?}", e);
-                            }
-                        }
-                    }
-                };
-            }
-        }
-    }
+    fn write_report(&mut self, report: &Self::ReportType) -> impl Future<Output = Result<usize, HidError>>;
 }
 
 /// HidReader trait is used for listening to HID messages from the host, via USB, BLE, etc.
@@ -301,59 +264,25 @@ pub trait HidReaderTrait {
     fn read_report(&mut self) -> impl Future<Output = Result<Self::ReportType, HidError>>;
 }
 
-pub struct DummyWriter {}
-
-impl HidWriterTrait for DummyWriter {
-    type ReportType = Report;
-
-    async fn write_report(&mut self, _report: Self::ReportType) -> Result<usize, HidError> {
-        Ok(0)
-    }
-}
-
-impl RunnableHidWriter for DummyWriter {
-    async fn run_writer(&mut self) {
-        // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
-        CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
-        loop {
-            let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+/// Drain LED indicator OUT reports from `reader` and republish them as
+/// [`LedIndicatorEvent`]s whenever `kind` is the active output transport.
+pub(crate) async fn run_led_reader<R: HidReaderTrait<ReportType = LedIndicator>>(
+    reader: &mut R,
+    kind: ConnectionType,
+) -> ! {
+    loop {
+        match reader.read_report().await {
+            Ok(led_indicator) => {
+                info!("Got led indicator");
+                if crate::state::active_transport() == Some(kind) {
+                    LOCK_LED_STATES.store(led_indicator.into_bits(), Ordering::Relaxed);
+                    publish_event(LedIndicatorEvent::new(led_indicator));
+                }
+            }
+            Err(e) => {
+                debug!("Read HID LED indicator error: {:?}", e);
+                embassy_time::Timer::after_millis(1000).await;
+            }
         }
     }
-
-    async fn get_report(&mut self) -> Self::ReportType {
-        panic!("`get_report` in Dummy writer should not be used");
-    }
-}
-
-#[cfg(feature = "_nrf_ble")]
-pub(crate) fn get_serial_number() -> &'static str {
-    use heapless::String;
-    use static_cell::StaticCell;
-
-    static SERIAL: StaticCell<String<20>> = StaticCell::new();
-
-    let serial = SERIAL.init_with(|| {
-        let ficr = embassy_nrf::pac::FICR;
-        #[cfg(any(feature = "nrf54l15_ble", feature = "nrf54lm20_ble"))]
-        let device_id = (u64::from(ficr.deviceaddr(1).read()) << 32) | u64::from(ficr.deviceaddr(0).read());
-        #[cfg(not(any(feature = "nrf54l15_ble", feature = "nrf54lm20_ble")))]
-        let device_id = (u64::from(ficr.deviceid(1).read()) << 32) | u64::from(ficr.deviceid(0).read());
-
-        let mut result = String::new();
-        let _ = result.push_str("vial:f64c2b3c:");
-
-        // Hex lookup table
-        const HEX_TABLE: &[u8] = b"0123456789abcdef";
-        // Add 6 hex digits to the serial number, as the serial str in BLE Device Information Service is limited to 20 bytes
-        for i in 0..6 {
-            let digit = (device_id >> (60 - i * 4)) & 0xF;
-            // This index access is safe because digit is guaranteed to be in the range of 0-15
-            let hex_char = HEX_TABLE[digit as usize] as char;
-            let _ = result.push(hex_char);
-        }
-
-        result
-    });
-
-    serial.as_str()
 }

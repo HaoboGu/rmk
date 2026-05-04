@@ -6,6 +6,7 @@ use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use postcard::experimental::max_size::MaxSize;
+use rmk_types::connection::ConnectionType;
 use rmk_types::morse::MorseProfile;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
@@ -33,21 +34,16 @@ use crate::{BUILD_HASH, config};
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
 pub(crate) static FLASH_OPERATION_FINISHED: Signal<crate::RawMutex, bool> = Signal::new();
 
-// Request/response over `FLASH_CHANNEL`.
-//
-// All current callers run at startup from a single task; do not call from a new task
-// without first migrating to the upcoming `embassy_sync::rpc_service::RpcService`
-// (currently on embassy-sync main, post-0.8.0), which will collapse these
-// helpers + signals + `Read*` variants into a single typed RPC.
-//
+// Request/response over `FLASH_CHANNEL`. One `Signal` per read variant; the
+// storage task fires the matching one once it has the result.
 #[cfg(feature = "_ble")]
-pub(crate) static BOND_INFO_RESPONSE: Signal<crate::RawMutex, Option<ProfileInfo>> = Signal::new();
-
+static BOND_INFO_RESPONSE: Signal<crate::RawMutex, Option<ProfileInfo>> = Signal::new();
 #[cfg(all(feature = "_ble", feature = "split"))]
-pub(crate) static PEER_ADDRESS_RESPONSE: Signal<crate::RawMutex, Option<PeerAddress>> = Signal::new();
-
+static PEER_ADDRESS_RESPONSE: Signal<crate::RawMutex, Option<PeerAddress>> = Signal::new();
 #[cfg(feature = "_ble")]
-pub(crate) static SETTING_RESPONSE: Signal<crate::RawMutex, Option<u8>> = Signal::new();
+static CONNECTION_TYPE_RESPONSE: Signal<crate::RawMutex, Option<ConnectionType>> = Signal::new();
+#[cfg(feature = "_ble")]
+static ACTIVE_BLE_PROFILE_RESPONSE: Signal<crate::RawMutex, Option<u8>> = Signal::new();
 
 #[cfg(feature = "_ble")]
 async fn request_read<T: Send>(msg: FlashOperationMessage, response: &Signal<crate::RawMutex, T>) -> T {
@@ -67,8 +63,17 @@ pub(crate) async fn read_peer_address(peer_id: u8) -> Option<PeerAddress> {
 }
 
 #[cfg(feature = "_ble")]
-pub(crate) async fn read_setting(key: StorageKey) -> Option<u8> {
-    request_read(FlashOperationMessage::ReadBleSetting(key), &SETTING_RESPONSE).await
+pub(crate) async fn read_connection_type() -> Option<ConnectionType> {
+    request_read(FlashOperationMessage::ReadConnectionType, &CONNECTION_TYPE_RESPONSE).await
+}
+
+#[cfg(feature = "_ble")]
+pub(crate) async fn read_active_ble_profile() -> Option<u8> {
+    request_read(
+        FlashOperationMessage::ReadActiveBleProfile,
+        &ACTIVE_BLE_PROFILE_RESPONSE,
+    )
+    .await
 }
 
 /// Send a peer address to be persisted; wait for the storage task to finish.
@@ -136,7 +141,7 @@ pub(crate) enum FlashOperationMessage {
         morse: Morse,
     },
     // Current saved connection type
-    ConnectionType(u8),
+    ConnectionType(ConnectionType),
     // Timeout time for combos
     ComboTimeout(u16),
     // Timeout time for one-shot keys
@@ -156,8 +161,11 @@ pub(crate) enum FlashOperationMessage {
     // Read peer address for the given peer id; storage task replies via `PEER_ADDRESS_RESPONSE`.
     ReadPeerAddress(u8),
     #[cfg(feature = "_ble")]
-    // Read a byte-valued setting: ConnectionType or ActiveBleProfile
-    ReadBleSetting(StorageKey),
+    // Read the persisted `ConnectionType`; storage task replies via `CONNECTION_TYPE_RESPONSE`.
+    ReadConnectionType,
+    #[cfg(feature = "_ble")]
+    // Read the persisted active BLE profile number; storage task replies via `ACTIVE_BLE_PROFILE_RESPONSE`.
+    ReadActiveBleProfile,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -254,7 +262,7 @@ pub(crate) enum StorageData {
     StorageConfig(LocalStorageConfig),
     LayoutConfig(LayoutConfig),
     BehaviorConfig(BehaviorConfig),
-    ConnectionType(u8),
+    ConnectionType(ConnectionType),
     #[cfg(feature = "host")]
     MacroData(#[serde(with = "crate::host::storage::macro_bytes_serde")] [u8; MACRO_SPACE_SIZE]),
     #[cfg(feature = "host")]
@@ -685,12 +693,21 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     continue;
                 }
                 #[cfg(feature = "_ble")]
-                FlashOperationMessage::ReadBleSetting(key) => {
-                    let resp = match self.fetch_data(key).await {
-                        Some(StorageData::ConnectionType(v)) | Some(StorageData::ActiveBleProfile(v)) => Some(v),
+                FlashOperationMessage::ReadConnectionType => {
+                    let resp = match self.fetch_data(StorageKey::ConnectionType).await {
+                        Some(StorageData::ConnectionType(v)) => Some(v),
                         _ => None,
                     };
-                    SETTING_RESPONSE.signal(resp);
+                    CONNECTION_TYPE_RESPONSE.signal(resp);
+                    continue;
+                }
+                #[cfg(feature = "_ble")]
+                FlashOperationMessage::ReadActiveBleProfile => {
+                    let resp = match self.fetch_data(StorageKey::ActiveBleProfile).await {
+                        Some(StorageData::ActiveBleProfile(v)) => Some(v),
+                        _ => None,
+                    };
+                    ACTIVE_BLE_PROFILE_RESPONSE.signal(resp);
                     continue;
                 }
 
@@ -952,7 +969,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "host")]
     #[test]
     fn storage_key_round_trip() {
         let cases = [
@@ -960,16 +976,28 @@ mod tests {
             StorageKey::LayoutConfig,
             StorageKey::BehaviorConfig,
             StorageKey::ConnectionType,
+            #[cfg(feature = "host")]
             StorageKey::MacroData,
+            #[cfg(feature = "host")]
             StorageKey::Keymap {
                 layer: 2,
                 row: 3,
                 col: 4,
             },
+            #[cfg(feature = "host")]
             StorageKey::Encoder { layer: 1, idx: 5 },
+            #[cfg(feature = "host")]
             StorageKey::Combo(6),
+            #[cfg(feature = "host")]
             StorageKey::Fork(7),
+            #[cfg(feature = "host")]
             StorageKey::Morse(8),
+            #[cfg(all(feature = "_ble", feature = "split"))]
+            StorageKey::PeerAddress(0),
+            #[cfg(feature = "_ble")]
+            StorageKey::ActiveBleProfile,
+            #[cfg(feature = "_ble")]
+            StorageKey::BondInfo(0),
         ];
 
         let mut buffer = [0u8; 64];
@@ -981,7 +1009,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "host")]
     #[test]
     fn build_hash_mismatch_reinitializes_storage() {
         block_on(async {
@@ -1014,12 +1041,16 @@ mod tests {
             .unwrap();
 
             let (flash, _) = map.destroy();
+            #[cfg(feature = "host")]
             let keymap = [[[KeyAction::No; 1]; 1]; 1];
+            #[cfg(feature = "host")]
             let encoder_map: Option<&mut [[EncoderAction; 0]; 1]> = None;
 
             let mut storage = Storage::<Flash, 1, 1, 1, 0>::new(
                 flash,
+                #[cfg(feature = "host")]
                 &keymap,
+                #[cfg(feature = "host")]
                 &encoder_map,
                 &RuntimeStorageConfig::default(),
                 &RuntimeBehaviorConfig::default(),

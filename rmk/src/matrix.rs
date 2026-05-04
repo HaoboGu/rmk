@@ -1,6 +1,5 @@
 #[cfg(feature = "async_matrix")]
 use core::pin::pin;
-use core::sync::atomic::Ordering;
 
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -8,12 +7,10 @@ use rmk_macro::input_device;
 #[cfg(feature = "async_matrix")]
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
-use crate::CONNECTION_STATE;
 use crate::core_traits::Runnable;
 use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::event::{KeyboardEvent, publish_event_async};
 use crate::input_device::InputDevice;
-use crate::state::ConnectionState;
 pub mod bidirectional_matrix;
 pub mod direct_pin;
 pub mod hc595_matrix;
@@ -83,14 +80,6 @@ impl MatrixState {
 ///
 /// The keyboard matrix is a 2D matrix of keys, the matrix does the scanning and saves the result to each key's `KeyState`.
 pub trait MatrixTrait<const ROW: usize, const COL: usize>: InputDevice {
-    // Wait for USB or BLE really connected
-    async fn wait_for_connected(&self) {
-        while CONNECTION_STATE.load(Ordering::Acquire) == Into::<bool>::into(ConnectionState::Disconnected) {
-            embassy_time::Timer::after_millis(100).await;
-        }
-        info!("Connected, start scanning matrix");
-    }
-
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self);
 }

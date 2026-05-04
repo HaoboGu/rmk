@@ -1,7 +1,7 @@
 use rmk_macro::processor;
 use usbd_hid::descriptor::MouseReport;
 
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::channel::send_hid_report;
 use crate::event::PointingEvent;
 use crate::hid::Report;
 use crate::keymap::KeyMap;
@@ -65,6 +65,6 @@ impl<'a, const N: usize> JoystickProcessor<'a, N> {
         };
 
         // Send mouse report directly
-        KEYBOARD_REPORT_CHANNEL.send(Report::MouseReport(mouse_report)).await;
+        send_hid_report(Report::MouseReport(mouse_report)).await;
     }
 }
