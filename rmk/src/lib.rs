@@ -37,6 +37,7 @@ pub use embassy_futures;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
 #[cfg(cortex_m)]
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
+pub use embassy_time;
 pub use futures;
 pub use heapless;
 use keymap::KeyMap;
@@ -82,6 +83,8 @@ pub mod state;
 pub mod storage;
 #[cfg(not(feature = "_no_usb"))]
 pub mod usb;
+#[cfg(feature = "watchdog")]
+pub mod watchdog;
 
 // Test-only helper that drives `embassy-time/mock-driver` from the
 // `#[cfg(test)]` modules under `src/`. Mirrors the same helper at

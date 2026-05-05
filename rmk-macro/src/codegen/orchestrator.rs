@@ -22,6 +22,7 @@ use super::layout::expand_default_keymap;
 use super::matrix::{expand_bootmagic_check, expand_matrix_config};
 use super::registered_processor::expand_registered_processor_init;
 use super::split::central::expand_split_central_config;
+use super::watchdog::expand_watchdog_init;
 
 /// Parse keyboard mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
@@ -259,6 +260,8 @@ fn expand_main(
         quote! {}
     };
 
+    let (watchdog_init, watchdog_task) = expand_watchdog_init(hardware);
+
     let run_rmk = expand_rmk_entry(
         hardware,
         host,
@@ -266,6 +269,7 @@ fn expand_main(
         devices,
         processors,
         registered_processors,
+        watchdog_task,
     );
 
     let vial_config = if host.vial_enabled {
@@ -359,6 +363,9 @@ fn expand_main(
 
             // Initialize split central config(if needed)
             #split_central_config
+
+            // Initialize watchdog
+            #watchdog_init
 
             // Start
             #run_rmk
