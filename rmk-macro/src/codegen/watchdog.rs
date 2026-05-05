@@ -23,7 +23,21 @@ pub(crate) fn expand_watchdog_init(hardware: &Hardware) -> (TokenStream2, Option
             let mut watchdog_runner =
                 ::rmk::watchdog::Nrf52Watchdog::default_runner(p.WDT);
         },
-        ChipSeries::Stm32 | ChipSeries::Esp32 => quote! {},
+        ChipSeries::Esp32 => quote! {
+            let timg1 = ::esp_hal::timer::timg::TimerGroup::new(p.TIMG1);
+            let mut esp_wdt_inner = timg1.wdt;
+            esp_wdt_inner.set_timeout(
+                ::esp_hal::timer::timg::MwdtStage::Stage0,
+                ::esp_hal::time::Duration::from_secs(10),
+            );
+            esp_wdt_inner.enable();
+            let esp_wdt = ::rmk::watchdog::Esp32Watchdog::new(esp_wdt_inner);
+            let mut watchdog_runner = ::rmk::watchdog::WatchdogRunner::new(
+                esp_wdt,
+                ::rmk::embassy_time::Duration::from_secs(5),
+            );
+        },
+        ChipSeries::Stm32 => quote! {},
     };
 
     if init.is_empty() {
