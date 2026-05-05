@@ -19,7 +19,11 @@ pub(crate) fn expand_watchdog_init(hardware: &Hardware) -> (TokenStream2, Option
                 ::embassy_rp::watchdog::Watchdog::new(p.WATCHDOG),
             );
         },
-        ChipSeries::Stm32 | ChipSeries::Nrf52 | ChipSeries::Esp32 => quote! {},
+        ChipSeries::Nrf52 => quote! {
+            let mut watchdog_runner =
+                ::rmk::watchdog::Nrf52Watchdog::default_runner(p.WDT);
+        },
+        ChipSeries::Stm32 | ChipSeries::Esp32 => quote! {},
     };
 
     if init.is_empty() {

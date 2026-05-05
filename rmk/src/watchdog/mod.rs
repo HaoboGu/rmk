@@ -2,8 +2,13 @@ use embassy_time::{Duration, Timer};
 
 use crate::core_traits::Runnable;
 
+#[cfg(all(feature = "_nrf_ble", not(any(feature = "nrf54l15_ble", feature = "nrf54lm20_ble"))))]
+mod nrf52;
 #[cfg(feature = "rp2040")]
 mod rp2040;
+
+#[cfg(all(feature = "_nrf_ble", not(any(feature = "nrf54l15_ble", feature = "nrf54lm20_ble"))))]
+pub use nrf52::Nrf52Watchdog;
 #[cfg(feature = "rp2040")]
 pub use rp2040::Rp2040Watchdog;
 
