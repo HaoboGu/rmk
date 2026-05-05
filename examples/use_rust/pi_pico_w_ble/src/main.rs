@@ -31,6 +31,7 @@ use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::usb::UsbTransport;
+use rmk::watchdog::Rp2040Watchdog;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -162,6 +163,7 @@ async fn main(spawner: Spawner) {
     let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config);
     let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
     let mut wpm_processor = WpmProcessor::new();
+    let mut watchdog_runner = Rp2040Watchdog::default_runner(embassy_rp::watchdog::Watchdog::new(p.WATCHDOG));
 
     // Start
     run_all!(
@@ -171,7 +173,8 @@ async fn main(spawner: Spawner) {
         ble_transport,
         wpm_processor,
         keyboard,
-        host_service
+        host_service,
+        watchdog_runner
     )
     .await;
 }

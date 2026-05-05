@@ -14,7 +14,12 @@ use rmk_config::resolved::hardware::ChipSeries;
 #[cfg(feature = "watchdog")]
 pub(crate) fn expand_watchdog_init(hardware: &Hardware) -> (TokenStream2, Option<TokenStream2>) {
     let init = match hardware.chip.series {
-        ChipSeries::Stm32 | ChipSeries::Rp2040 | ChipSeries::Nrf52 | ChipSeries::Esp32 => quote! {},
+        ChipSeries::Rp2040 => quote! {
+            let mut watchdog_runner = ::rmk::watchdog::Rp2040Watchdog::default_runner(
+                ::embassy_rp::watchdog::Watchdog::new(p.WATCHDOG),
+            );
+        },
+        ChipSeries::Stm32 | ChipSeries::Nrf52 | ChipSeries::Esp32 => quote! {},
     };
 
     if init.is_empty() {

@@ -2,6 +2,11 @@ use embassy_time::{Duration, Timer};
 
 use crate::core_traits::Runnable;
 
+#[cfg(feature = "rp2040")]
+mod rp2040;
+#[cfg(feature = "rp2040")]
+pub use rp2040::Rp2040Watchdog;
+
 /// Chip-agnostic watchdog feeding. Implement this for your platform's
 /// watchdog peripheral, then pass it to [`WatchdogRunner`].
 pub trait WatchdogFeed: Send {

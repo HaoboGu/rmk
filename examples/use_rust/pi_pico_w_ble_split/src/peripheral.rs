@@ -25,6 +25,7 @@ use rmk::futures::future::join;
 use rmk::matrix::Matrix;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
+use rmk::watchdog::Rp2040Watchdog;
 use rmk::{HostResources, run_all};
 use static_cell::StaticCell;
 
@@ -108,6 +109,12 @@ async fn main(spawner: Spawner) {
     let mut rng = rand_chacha::ChaCha12Rng::from_rng(&mut rosc_rng).unwrap();
 
     let stack = build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
+    let mut watchdog_runner = Rp2040Watchdog::default_runner(embassy_rp::watchdog::Watchdog::new(p.WATCHDOG));
+
     // Start
-    join(run_all!(matrix, storage), run_rmk_split_peripheral(0, &stack)).await;
+    join(
+        run_all!(matrix, storage, watchdog_runner),
+        run_rmk_split_peripheral(0, &stack),
+    )
+    .await;
 }
