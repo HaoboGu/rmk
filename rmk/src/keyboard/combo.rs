@@ -137,10 +137,6 @@ impl Combo {
         self.config.size()
     }
 
-    pub(crate) fn started(&self) -> bool {
-        self.state != 0
-    }
-
     pub(crate) fn keys_pressed(&self) -> u32 {
         self.state.count_ones()
     }

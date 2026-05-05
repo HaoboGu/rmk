@@ -1,4 +1,4 @@
-use embassy_time::{Instant, Timer};
+use embassy_time::Timer;
 use rmk_macro::input_device;
 
 use crate::debounce::{DebounceState, DebouncerTrait};
@@ -26,8 +26,6 @@ pub struct BidirectionalMatrix<
     debouncer: D,
     /// Key state matrix
     key_state: [[KeyState; COL]; ROW],
-    /// Start scanning
-    scan_start: Option<Instant>,
     /// Current scan pos: (row_idx, col_idx)
     scan_pos: (usize, usize),
     /// Scan map
@@ -43,7 +41,6 @@ impl<Pin: FlexPin, D: DebouncerTrait<ROW, COL>, const PIN_NUM: usize, const ROW:
             pins,
             debouncer,
             key_state: [[KeyState::new(); COL]; ROW],
-            scan_start: None,
             scan_pos: (0, 0),
             scan_map,
         }

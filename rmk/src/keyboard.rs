@@ -297,23 +297,6 @@ impl<'a> Keyboard<'a> {
         })
     }
 
-    // Clean up for leak keys, remove non morse keys in ProcessedButReleaseNotReportedYet state from the buffer
-    pub(crate) fn clean_buffered_processed_keys(&mut self) {
-        self.held_buffer.keys.retain(|k| {
-            if k.action.is_morse() {
-                true
-            } else {
-                match k.state {
-                    KeyState::ProcessedButReleaseNotReportedYet(_) => {
-                        warn!("NEED CLEAN: Processing buffering TAP keys with post tap: {:?}", k.event);
-                        false
-                    }
-                    _ => true,
-                }
-            }
-        });
-    }
-
     /// Process the latest buffered key.
     ///
     /// The given holding key is a copy of the buffered key. Only tap-hold keys are considered now.
@@ -1905,9 +1888,8 @@ mod test {
     use rmk_types::morse::{MorseMode, MorseProfile};
 
     use super::*;
-    use crate::config::{BehaviorConfig, CombosConfig, ForksConfig, PositionalConfig};
+    use crate::config::{BehaviorConfig, ForksConfig, PositionalConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
-    use crate::keyboard::combo::{Combo, ComboConfig};
     use crate::test_support::test_block_on as block_on;
     use crate::{a, k, layer, mo, th, thp};
 
@@ -1940,19 +1922,6 @@ mod test {
         ]
     }
 
-    #[rustfmt::skip]
-    fn get_combos_config() -> CombosConfig {
-        // Define the function to return the appropriate combo configuration
-        CombosConfig {
-            combos: [
-                Some(Combo::new(ComboConfig::new([k!(V), k!(B)], k!(LShift), Some(0)))),
-                Some(Combo::new(ComboConfig::new([k!(R), k!(T)], k!(LAlt), Some(0)))),
-                None, None, None, None, None, None
-            ],
-            timeout: Duration::from_millis(100),
-        }
-    }
-
     fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'static> {
         // Box::leak is acceptable in tests: nextest runs each #[test] in its own process,
         // so the leaked memory is reclaimed when the process exits.
@@ -1982,10 +1951,6 @@ mod test {
             fork: cfg,
             ..BehaviorConfig::default()
         })
-    }
-
-    fn event(row: u8, col: u8, pressed: bool) -> KeyboardEvent {
-        KeyboardEvent::key(row, col, pressed)
     }
 
     #[test]

@@ -72,17 +72,6 @@ pub enum CompositeReportType {
     System = 0x03,
 }
 
-impl CompositeReportType {
-    fn from_u8(report_id: u8) -> Self {
-        match report_id {
-            0x01 => Self::Mouse,
-            0x02 => Self::Media,
-            0x03 => Self::System,
-            _ => Self::None,
-        }
-    }
-}
-
 /// Plover HID stenography report.
 ///
 /// Plover (v5.1+) enumerates the keyboard as a stenography machine when it
