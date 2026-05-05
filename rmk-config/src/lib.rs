@@ -10,7 +10,6 @@ const EVENT_DEFAULT_CONFIG: &str = include_str!("default_config/event_default.to
 
 pub(crate) mod chip;
 pub(crate) mod communication;
-pub(crate) mod keyboard;
 pub mod resolved;
 #[rustfmt::skip]
 pub mod usb_interrupt_map;
@@ -340,14 +339,6 @@ impl Default for EventChannelConfig {
             pubs: 1,
             subs: 1,
         }
-    }
-}
-
-#[allow(dead_code)]
-impl EventChannelConfig {
-    /// Extract values as tuple
-    pub fn into_values(self) -> (usize, usize, usize) {
-        (self.channel_size, self.pubs, self.subs)
     }
 }
 
@@ -1140,6 +1131,10 @@ impl KeyboardTomlConfig {
             (None, None) => Ok(Default::default()),
             _ => Err("Use [[split.output]] to define outputs for split in your keyboard.toml!".to_string()),
         }
+    }
+
+    pub(crate) fn get_dependency_config(&self) -> DependencyConfig {
+        self.dependency.clone().unwrap_or_default()
     }
 }
 
