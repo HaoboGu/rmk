@@ -18,6 +18,7 @@ pub struct OneShot {
 pub struct Combos {
     pub combos: Vec<Combo>,
     pub timeout_ms: Option<u64>,
+    pub require_prior_idle_ms: Option<u64>,
 }
 
 pub struct Combo {
@@ -116,6 +117,7 @@ impl crate::KeyboardTomlConfig {
                 })
                 .collect(),
             timeout_ms: c.timeout.map(|t| t.0),
+            require_prior_idle_ms: c.require_prior_idle_ms,
         });
 
         let macros = toml_behavior.macros.map(|m| Macros {
