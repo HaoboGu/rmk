@@ -102,12 +102,7 @@ fn parse_hex_u16(s: &str) -> std::result::Result<u16, String> {
 }
 
 fn parse_key_action(s: &str) -> std::result::Result<KeyAction, String> {
-    match s {
-        "no" => Ok(KeyAction::No),
-        other => Err(format!(
-            "Only `no` accepted in v1; got `{other}`. Friendly KeyAction parsing is a follow-up."
-        )),
-    }
+    rmk_host::keycode::parse_key_action(s)
 }
 
 #[tokio::main(flavor = "current_thread")]

@@ -152,14 +152,9 @@ async fn scan_for_device(
                 adv_data,
                 ..
             } = adv;
-            let name = adv_data
-                .local_name
-                .as_deref()
-                .or_else(|| device.name().ok().as_deref().map(|s| s.to_string().leak() as &'static str));
-            let _ = name; // not used directly; check via match below
-            let dev_name = device.name().ok();
             let local_name = adv_data.local_name.as_deref();
-            let candidate = local_name.or(dev_name.as_deref());
+            let dev_name = device.name().ok();
+            let candidate: Option<&str> = local_name.or(dev_name.as_deref());
             match (name_filter, candidate) {
                 (Some(needle), Some(n)) if n.contains(needle) => {
                     return Ok::<_, BleError>(device);

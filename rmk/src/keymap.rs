@@ -488,6 +488,10 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().get_keymap_config()
     }
 
+    pub(crate) fn num_encoders(&self) -> usize {
+        self.inner.borrow().num_encoder
+    }
+
     pub(crate) fn hand_at(&self, row: usize, col: usize) -> Hand {
         let inner = self.inner.borrow();
         let idx = inner.cache_index(row, col);

@@ -9,5 +9,7 @@ pub(crate) mod usb;
 #[cfg(feature = "vial")]
 pub(crate) mod via;
 
+#[cfg(feature = "rmk_protocol")]
+pub use rmk_protocol::RmkProtocolService as HostService;
 #[cfg(feature = "vial")]
 pub use via::VialService as HostService;

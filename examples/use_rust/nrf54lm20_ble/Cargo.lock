@@ -665,7 +665,6 @@ dependencies = [
 [[package]]
 name = "embassy-embedded-hal"
 version = "0.6.0"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
 dependencies = [
  "defmt 1.0.1",
  "embassy-futures",
@@ -683,7 +682,6 @@ dependencies = [
 [[package]]
 name = "embassy-executor"
 version = "0.10.0"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
 dependencies = [
  "cordyceps",
  "cortex-m",
@@ -697,7 +695,6 @@ dependencies = [
 [[package]]
 name = "embassy-executor-macros"
 version = "0.8.0"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
 dependencies = [
  "darling 0.20.11",
  "proc-macro2",
@@ -708,12 +705,10 @@ dependencies = [
 [[package]]
 name = "embassy-executor-timer-queue"
 version = "0.1.0"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
 
 [[package]]
 name = "embassy-futures"
 version = "0.1.2"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
 dependencies = [
  "defmt 1.0.1",
 ]
@@ -721,7 +716,6 @@ dependencies = [
 [[package]]
 name = "embassy-hal-internal"
 version = "0.5.0"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
 dependencies = [
  "cortex-m",
  "critical-section",
@@ -732,12 +726,10 @@ dependencies = [
 [[package]]
 name = "embassy-net-driver"
 version = "0.2.0"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
 
 [[package]]
 name = "embassy-net-driver-channel"
 version = "0.4.0"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
 dependencies = [
  "embassy-futures",
  "embassy-net-driver",
@@ -747,7 +739,6 @@ dependencies = [
 [[package]]
 name = "embassy-nrf"
 version = "0.10.0"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
 dependencies = [
  "bitflags 2.11.0",
  "cfg-if",
@@ -796,7 +787,6 @@ dependencies = [
 [[package]]
 name = "embassy-sync"
 version = "0.8.0"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -810,7 +800,6 @@ dependencies = [
 [[package]]
 name = "embassy-time"
 version = "0.5.1"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -826,15 +815,13 @@ dependencies = [
 [[package]]
 name = "embassy-time-driver"
 version = "0.2.2"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
 dependencies = [
  "document-features",
 ]
 
 [[package]]
 name = "embassy-time-queue-utils"
-version = "0.3.0"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
+version = "0.3.2"
 dependencies = [
  "embassy-executor-timer-queue",
  "heapless 0.9.2",
@@ -843,7 +830,6 @@ dependencies = [
 [[package]]
 name = "embassy-usb"
 version = "0.6.0"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
 dependencies = [
  "bitflags 2.11.0",
  "defmt 1.0.1",
@@ -860,8 +846,7 @@ dependencies = [
 
 [[package]]
 name = "embassy-usb-driver"
-version = "0.2.0"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
+version = "0.2.1"
 dependencies = [
  "defmt 1.0.1",
  "embedded-io-async 0.7.0",
@@ -869,13 +854,14 @@ dependencies = [
 
 [[package]]
 name = "embassy-usb-synopsys-otg"
-version = "0.3.2"
-source = "git+https://github.com/HaoboGu/embassy?rev=49fb7c2cfb26ded88d0b0bb330eda51e29edc35e#49fb7c2cfb26ded88d0b0bb330eda51e29edc35e"
+version = "0.3.3"
 dependencies = [
  "critical-section",
  "defmt 1.0.1",
  "embassy-sync 0.8.0",
+ "embassy-time",
  "embassy-usb-driver",
+ "portable-atomic",
 ]
 
 [[package]]
@@ -1499,8 +1485,7 @@ dependencies = [
 [[package]]
 name = "nrf-pac"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bddd547fab92b0553ff37032034fd04ce8b8b60d3f9a83f89ea815dfd0400336"
+source = "git+https://github.com/embassy-rs/nrf-pac?rev=dcbec3723fa14fc81e004ab288c9b2e454dba802#dcbec3723fa14fc81e004ab288c9b2e454dba802"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",

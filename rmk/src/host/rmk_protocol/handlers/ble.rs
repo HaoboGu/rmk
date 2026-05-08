@@ -15,6 +15,9 @@ pub(crate) async fn get_ble_status(_ctx: &mut Ctx<'_>, _hdr: VarHeader, _req: ()
 }
 
 pub(crate) async fn switch_ble_profile(_ctx: &mut Ctx<'_>, _hdr: VarHeader, profile: u8) -> RmkResult {
+    if (profile as usize) >= crate::NUM_BLE_PROFILE {
+        return Err(RmkError::InvalidParameter);
+    }
     crate::channel::BLE_PROFILE_CHANNEL
         .send(BleProfileAction::Switch(profile))
         .await;
@@ -22,10 +25,13 @@ pub(crate) async fn switch_ble_profile(_ctx: &mut Ctx<'_>, _hdr: VarHeader, prof
 }
 
 pub(crate) async fn clear_ble_profile(_ctx: &mut Ctx<'_>, _hdr: VarHeader, profile: u8) -> RmkResult {
-    // The internal `BleProfileAction::ClearBond` clears the active profile only,
-    // so target-by-index clears require the v2 lock-gated workflow.
-    let _ = profile;
-    Err(RmkError::BadState)
+    if (profile as usize) >= crate::NUM_BLE_PROFILE {
+        return Err(RmkError::InvalidParameter);
+    }
+    crate::channel::BLE_PROFILE_CHANNEL
+        .send(BleProfileAction::ClearBond(profile))
+        .await;
+    Ok(())
 }
 
 pub(crate) async fn get_battery_status(_ctx: &mut Ctx<'_>, _hdr: VarHeader, _req: ()) -> BatteryStatus {

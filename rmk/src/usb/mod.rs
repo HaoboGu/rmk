@@ -299,15 +299,25 @@ impl<D: Driver<'static>> UsbTransport<D> {
         }
     }
 
-    /// Take the rmk_protocol bulk endpoints. Returns `None` after the first
-    /// call. Caller (typically the macro-generated entry point) wires them
-    /// into a `host::rmk_protocol::wire_usb` adapter.
+    /// Take the rmk_protocol bulk endpoints. Must be called exactly once,
+    /// before [`UsbTransport::run`]; the returned endpoints are wired into a
+    /// `host::rmk_protocol::wire_usb` adapter by the caller (typically the
+    /// macro-generated entry point or, for hand-rolled examples, `main`).
+    ///
+    /// Panics if called more than once — that indicates a programming error
+    /// (the endpoints have already been moved into the wire adapter and
+    /// claiming them again is impossible).
     #[cfg(feature = "rmk_protocol")]
-    pub fn take_rmk_protocol_endpoints(&mut self) -> Option<(D::EndpointIn, D::EndpointOut)> {
-        match (self.rmk_protocol_ep_in.take(), self.rmk_protocol_ep_out.take()) {
-            (Some(i), Some(o)) => Some((i, o)),
-            _ => None,
-        }
+    pub fn take_rmk_protocol_endpoints(&mut self) -> (D::EndpointIn, D::EndpointOut) {
+        let ep_in = self
+            .rmk_protocol_ep_in
+            .take()
+            .expect("take_rmk_protocol_endpoints called twice — endpoints already moved");
+        let ep_out = self
+            .rmk_protocol_ep_out
+            .take()
+            .expect("take_rmk_protocol_endpoints called twice — endpoints already moved");
+        (ep_in, ep_out)
     }
 }
 

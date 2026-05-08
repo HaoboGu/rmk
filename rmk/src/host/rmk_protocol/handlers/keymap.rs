@@ -2,18 +2,36 @@
 
 use postcard_rpc::header::VarHeader;
 use rmk_types::action::KeyAction;
-use rmk_types::protocol::rmk::{KeyPosition, RmkResult, SetKeyRequest};
+use rmk_types::protocol::rmk::{KeyPosition, RmkError, RmkResult, SetKeyRequest};
 
 use super::super::Ctx;
 use crate::event::KeyboardEventPos;
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 
+/// Bounds-check a `KeyPosition` against the live keymap dimensions. Without
+/// this gate `KeyMap::action_at_pos` / `set_action_at` index `self.layers[idx]`
+/// directly and panic on out-of-range, which a buggy or hostile host could
+/// trigger with one frame.
+fn position_in_bounds(ctx: &Ctx<'_>, pos: &KeyPosition) -> bool {
+    let (rows, cols, layers) = ctx.keymap.get_keymap_config();
+    (pos.layer as usize) < layers && (pos.row as usize) < rows && (pos.col as usize) < cols
+}
+
 pub(crate) async fn get_key_action(ctx: &mut Ctx<'_>, _hdr: VarHeader, pos: KeyPosition) -> KeyAction {
+    // The endpoint type is `KeyAction` (no `Result`), so signal out-of-range
+    // by returning `KeyAction::No`. Hosts must consult `GetCapabilities` for
+    // the actual layout dimensions before iterating.
+    if !position_in_bounds(ctx, &pos) {
+        return KeyAction::No;
+    }
     ctx.keymap.action_at_pos(pos.layer as usize, pos.row, pos.col)
 }
 
 pub(crate) async fn set_key_action(ctx: &mut Ctx<'_>, _hdr: VarHeader, req: SetKeyRequest) -> RmkResult {
+    if !position_in_bounds(ctx, &req.position) {
+        return Err(RmkError::InvalidParameter);
+    }
     ctx.keymap.set_action_at(
         KeyboardEventPos::key_pos(req.position.col, req.position.row),
         req.position.layer as usize,
@@ -36,6 +54,10 @@ pub(crate) async fn get_default_layer(ctx: &mut Ctx<'_>, _hdr: VarHeader, _req: 
 }
 
 pub(crate) async fn set_default_layer(ctx: &mut Ctx<'_>, _hdr: VarHeader, layer: u8) -> RmkResult {
+    let (_, _, layers) = ctx.keymap.get_keymap_config();
+    if (layer as usize) >= layers {
+        return Err(RmkError::InvalidParameter);
+    }
     ctx.keymap.set_default_layer(layer);
     #[cfg(feature = "storage")]
     FLASH_CHANNEL.send(FlashOperationMessage::DefaultLayer(layer)).await;
@@ -67,7 +89,11 @@ pub(crate) mod bulk {
     ) -> GetKeymapBulkResponse {
         let (rows, cols, layers) = ctx.keymap.get_keymap_config();
         let mut actions: Vec<KeyAction, BULK_SIZE> = Vec::new();
-        if (req.layer as usize) >= layers {
+        // Reject any out-of-range start position. Without the col gate the
+        // first call would index `self.layers[layer_idx + start_col]` with
+        // `start_col` beyond the row width, silently reading from the wrong
+        // cell (or panicking for very large `start_col`).
+        if (req.layer as usize) >= layers || (req.start_row as usize) >= rows || (req.start_col as usize) >= cols {
             return GetKeymapBulkResponse { actions };
         }
         let mut row = req.start_row as usize;
@@ -91,7 +117,7 @@ pub(crate) mod bulk {
 
     pub(crate) async fn set_keymap_bulk(ctx: &mut Ctx<'_>, _hdr: VarHeader, req: SetKeymapBulkRequest) -> RmkResult {
         let (rows, cols, layers) = ctx.keymap.get_keymap_config();
-        if (req.layer as usize) >= layers {
+        if (req.layer as usize) >= layers || (req.start_row as usize) >= rows || (req.start_col as usize) >= cols {
             return Err(RmkError::InvalidParameter);
         }
         let mut row = req.start_row as usize;

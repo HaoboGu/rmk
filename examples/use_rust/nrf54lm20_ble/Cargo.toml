@@ -24,6 +24,7 @@ rmk = { path = "../../../rmk", default-features = false, features = [
 nrf-sdc = { path = "/Users/haobogu/Projects/rust/nrf-sdc/nrf-sdc", default-features = false, features = [
     "defmt",
     "peripheral",
+    "central",
     "nrf54lm20-app-s",
 ] }
 # nrf-mpsl = { git = "https://github.com/haobogu/nrf-sdc", rev = "79a971c4388ed26b54ff09a990673e8af0871b1b", default-features = false, features = [
@@ -84,11 +85,12 @@ overflow-checks = false
 lto = "fat"
 
 [patch.crates-io]
-embassy-executor = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
-embassy-futures = {git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
-embassy-embedded-hal = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
-embassy-hal-internal = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" } 
-embassy-nrf = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
-embassy-sync = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
-embassy-time = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
-embassy-usb = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
+embassy-executor = { path = "/Users/haobogu/Projects/rust/embassy/embassy-executor" }
+embassy-futures = { path = "/Users/haobogu/Projects/rust/embassy/embassy-futures" }
+embassy-embedded-hal = { path = "/Users/haobogu/Projects/rust/embassy/embassy-embedded-hal" }
+embassy-hal-internal = { path = "/Users/haobogu/Projects/rust/embassy/embassy-hal-internal" }
+embassy-nrf = { path = "/Users/haobogu/Projects/rust/embassy/embassy-nrf" }
+embassy-sync = { path = "/Users/haobogu/Projects/rust/embassy/embassy-sync" }
+embassy-time = { path = "/Users/haobogu/Projects/rust/embassy/embassy-time" }
+embassy-usb = { path = "/Users/haobogu/Projects/rust/embassy/embassy-usb" }
+embassy-usb-synopsys-otg = { path = "/Users/haobogu/Projects/rust/embassy/embassy-usb-synopsys-otg" }

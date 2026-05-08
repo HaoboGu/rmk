@@ -292,33 +292,13 @@ fn expand_main(
         quote! {}
     };
 
-    // rmk_protocol's per-transport storage statics — declared once at the
-    // entry-point level. The concrete USB driver type comes from the
-    // `RmkUsbDriverTy` typedef emitted in `expand_usb_init`.
+    // The single `Runnable` host service — Vial or rmk_protocol depending on
+    // `host.*_enabled`. For rmk_protocol the USB endpoints come out of
+    // `UsbTransport::take_rmk_protocol_endpoints` after the transport is built;
+    // see `expand_rmk_entry` in `entry.rs` for the call-site wiring.
     let host_service_init = if host.vial_enabled {
         quote! {
             let mut host_service = ::rmk::host::HostService::new(&keymap, &rmk_config);
-        }
-    } else if host.rmk_protocol_enabled {
-        let usb_storage = if hardware.communication.usb_enabled() {
-            quote! {
-                static RMK_PROTOCOL_USB_STORAGE: ::rmk::host::rmk_protocol::UsbServerStorage<RmkUsbDriverTy> =
-                    ::rmk::host::rmk_protocol::UsbServerStorage::new();
-            }
-        } else {
-            quote! {}
-        };
-        let ble_storage = if hardware.communication.ble_enabled() {
-            quote! {
-                static RMK_PROTOCOL_BLE_STORAGE: ::rmk::host::rmk_protocol::BleServerStorage =
-                    ::rmk::host::rmk_protocol::BleServerStorage::new();
-            }
-        } else {
-            quote! {}
-        };
-        quote! {
-            #usb_storage
-            #ble_storage
         }
     } else {
         quote! {}

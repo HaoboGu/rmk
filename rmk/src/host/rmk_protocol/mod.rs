@@ -22,27 +22,19 @@
 //! See `handlers/mod.rs` for the full rule.
 
 pub(crate) mod handlers;
-pub(crate) mod spawn;
-pub mod topics;
+mod service;
+pub(crate) mod topics;
 #[cfg(feature = "_ble")]
 pub(crate) mod wire_ble;
 #[cfg(not(feature = "_no_usb"))]
 pub(crate) mod wire_usb;
 
-#[cfg(feature = "_ble")]
-mod entry_ble;
-#[cfg(not(feature = "_no_usb"))]
-mod entry_usb;
-
-#[cfg(feature = "_ble")]
-pub use entry_ble::{BleServerStorage, run_ble_server};
-#[cfg(not(feature = "_no_usb"))]
-pub use entry_usb::{UsbServerStorage, run_usb_server};
 use postcard_rpc::header::{VarHeader, VarKey, VarKeyKind};
 use postcard_rpc::server::{Dispatch, Sender, WireTx};
 use postcard_rpc::standard_icd::{ERROR_KEY, PingEndpoint, WireError};
 use postcard_rpc::{Endpoint, Key};
 use rmk_types::protocol::rmk::*;
+pub use service::RmkProtocolService;
 
 use crate::keymap::KeyMap;
 
@@ -68,8 +60,11 @@ impl<'a> Ctx<'a> {
 /// `KeyMap`'s `RefCell` only borrows within sync method calls (see
 /// `handlers/mod.rs`).
 ///
-/// Parameterized on the `Tx` impl so the generic `Dispatch` impl can name a
-/// concrete `type Tx = Tx`. `_tx` exists only to constrain the parameter.
+/// Parameterized on the `Tx` impl so the blanket `Dispatch` impl below can
+/// name a concrete `type Tx = Tx`. The `_tx` `PhantomData` only constrains
+/// the parameter; the app holds no transport-specific state. Using
+/// `PhantomData<fn() -> Tx>` makes the marker invariant in `Tx` without
+/// requiring `Tx: Send`.
 pub struct RmkProtocolApp<'a, Tx: WireTx> {
     pub ctx: Ctx<'a>,
     _tx: core::marker::PhantomData<fn() -> Tx>,

@@ -38,35 +38,41 @@ const TIMEOUT_MS_PER_FRAME: u64 = 2;
 // TX
 // ---------------------------------------------------------------------------
 
-pub struct UsbWireTxInner<D: Driver<'static>> {
+pub(crate) struct UsbWireTxInner<'b, D: Driver<'static>> {
     pub(crate) ep_in: D::EndpointIn,
-    pub(crate) tx_buf: &'static mut [u8],
+    pub(crate) tx_buf: &'b mut [u8],
     pub(crate) pending_frame: bool,
 }
 
-/// `WireTx` impl over an embassy-usb bulk-IN endpoint.
-pub(crate) struct UsbWireTx<M: RawMutex + 'static, D: Driver<'static> + 'static> {
-    inner: &'static Mutex<M, UsbWireTxInner<D>>,
+/// `WireTx` impl over an embassy-usb bulk-IN endpoint. The wire holds a
+/// shared reference to a [`Mutex`] guarding its inner state; the mutex is
+/// allocated by `RmkProtocolService::run` for the lifetime of the run task.
+pub(crate) struct UsbWireTx<'a, 'b, M: RawMutex + 'static, D: Driver<'static> + 'static> {
+    inner: &'a Mutex<M, UsbWireTxInner<'b, D>>,
 }
 
-impl<M: RawMutex + 'static, D: Driver<'static> + 'static> UsbWireTx<M, D> {
-    pub(crate) fn new(inner: &'static Mutex<M, UsbWireTxInner<D>>) -> Self {
+impl<'m, 'b, M: RawMutex + 'static, D: Driver<'static> + 'static> UsbWireTx<'m, 'b, M, D> {
+    pub(crate) fn new(inner: &'m Mutex<M, UsbWireTxInner<'b, D>>) -> Self {
         Self { inner }
     }
 }
 
-impl<M: RawMutex + 'static, D: Driver<'static> + 'static> Clone for UsbWireTx<M, D> {
+impl<'m, 'b, M: RawMutex + 'static, D: Driver<'static> + 'static> Clone for UsbWireTx<'m, 'b, M, D> {
     fn clone(&self) -> Self {
         Self { inner: self.inner }
     }
 }
 
-impl<M: RawMutex + 'static, D: Driver<'static> + 'static> WireTx for UsbWireTx<M, D> {
+impl<'m, 'b, M: RawMutex + 'static, D: Driver<'static> + 'static> WireTx for UsbWireTx<'m, 'b, M, D> {
     type Error = WireTxErrorKind;
 
     async fn wait_connection(&self) {
         let mut guard = self.inner.lock().await;
         guard.ep_in.wait_enabled().await;
+        // After a reconnect any leftover `pending_frame` flag is meaningless —
+        // the host's reframer is reset by re-enumeration. Clear it so the next
+        // `send_all` doesn't emit a stray ZLP into the new session.
+        guard.pending_frame = false;
     }
 
     async fn send<T: Serialize + ?Sized>(&self, hdr: VarHeader, msg: &T) -> Result<(), Self::Error> {

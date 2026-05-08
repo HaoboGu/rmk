@@ -60,12 +60,15 @@ events = [
 
 # --- RMK protocol-gated internal subscribers ---
 # host/rmk_protocol/topics.rs publishes outgoing events on a per-transport task.
-# USB build adds one subscriber per base topic; BLE build also adds the BLE-only topics.
+# Each active publisher (USB and/or BLE) adds one subscriber per topic it
+# republishes. Base topics are republished by both publishers; BLE-only
+# topics are republished only by `run_ble_topic_publisher`.
 
+# `run_usb_topic_publisher` — base topics only. Skipped on USB-disabled builds.
 [[subscriber]]
 features = ["rmk_protocol"]
+not_features = ["_no_usb"]
 events = [
-    # host/rmk_protocol/topics.rs::usb_topic_pub: subscribes to each base topic
     { name = "layer_change" },
     { name = "connection_change" },
     { name = "sleep_state" },
@@ -73,10 +76,11 @@ events = [
     { name = "led_indicator" },
 ]
 
+# `run_ble_topic_publisher` — base topics (1 sub each) plus the two BLE-only
+# topics (1 sub each, since the USB publisher does NOT subscribe to those).
 [[subscriber]]
 features = ["rmk_protocol", "_ble"]
 events = [
-    # host/rmk_protocol/topics.rs::ble_topic_pub: subscribes to base + BLE-only topics
     { name = "layer_change" },
     { name = "connection_change" },
     { name = "sleep_state" },

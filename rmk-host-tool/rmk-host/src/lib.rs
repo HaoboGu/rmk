@@ -10,6 +10,7 @@
 use std::time::Duration;
 
 pub mod ble;
+pub mod keycode;
 
 pub use nusb;
 use postcard_rpc::header::VarSeqKind;

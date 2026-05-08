@@ -19,27 +19,48 @@ pub(crate) async fn get_version(_ctx: &mut Ctx<'_>, _hdr: VarHeader, _req: ()) -
 
 pub(crate) async fn get_capabilities(ctx: &mut Ctx<'_>, _hdr: VarHeader, _req: ()) -> DeviceCapabilities {
     let (rows, cols, layers) = ctx.keymap.get_keymap_config();
+
+    // `BULK_SIZE` is only emitted by `rmk-types/build.rs` when the `bulk`
+    // feature is on (rmk's `bulk_transfer` pulls `rmk-types/bulk`).
+    #[cfg(feature = "bulk_transfer")]
+    let max_bulk_keys = rmk_types::constants::BULK_SIZE.min(u8::MAX as usize) as u8;
+    #[cfg(not(feature = "bulk_transfer"))]
+    let max_bulk_keys: u8 = 0;
+
     DeviceCapabilities {
         num_layers: layers as u8,
         num_rows: rows as u8,
         num_cols: cols as u8,
-        num_encoders: 0,
-        max_combos: 0,
-        max_combo_keys: 0,
+        num_encoders: ctx.keymap.num_encoders().min(u8::MAX as usize) as u8,
+        max_combos: crate::COMBO_MAX_NUM.min(u8::MAX as usize) as u8,
+        max_combo_keys: crate::COMBO_MAX_LENGTH.min(u8::MAX as usize) as u8,
+        // RMK stores macros as a packed sequence buffer rather than a fixed
+        // slot count; hosts should consult `macro_space_size` for the cap.
         max_macros: 0,
-        macro_space_size: crate::MACRO_SPACE_SIZE as u16,
-        max_morse: 0,
-        max_patterns_per_key: 0,
-        max_forks: 0,
+        macro_space_size: crate::MACRO_SPACE_SIZE.min(u16::MAX as usize) as u16,
+        max_morse: crate::MORSE_MAX_NUM.min(u8::MAX as usize) as u8,
+        max_patterns_per_key: crate::MAX_PATTERNS_PER_KEY.min(u8::MAX as usize) as u8,
+        max_forks: crate::FORK_MAX_NUM.min(u8::MAX as usize) as u8,
         storage_enabled: cfg!(feature = "storage"),
         lighting_enabled: false,
         is_split: cfg!(feature = "split"),
-        num_split_peripherals: 0,
+        num_split_peripherals: crate::SPLIT_PERIPHERALS_NUM.min(u8::MAX as usize) as u8,
         ble_enabled: cfg!(feature = "_ble"),
-        num_ble_profiles: 0,
-        max_payload_size: 0,
-        max_bulk_keys: 0,
-        macro_chunk_size: 0,
+        num_ble_profiles: {
+            #[cfg(feature = "_ble")]
+            {
+                crate::NUM_BLE_PROFILE.min(u8::MAX as usize) as u8
+            }
+            #[cfg(not(feature = "_ble"))]
+            {
+                0
+            }
+        },
+        // Both the USB and BLE wire transports buffer one full frame in a 512-byte
+        // RX scratch (see entry_usb.rs::USB_RX_BUF_LEN, entry_ble.rs::BLE_RX_BUF).
+        max_payload_size: 512,
+        max_bulk_keys,
+        macro_chunk_size: rmk_types::constants::MACRO_DATA_SIZE.min(u16::MAX as usize) as u16,
         bulk_transfer_supported: cfg!(feature = "bulk_transfer"),
     }
 }

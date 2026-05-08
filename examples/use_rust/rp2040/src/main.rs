@@ -18,12 +18,12 @@ use keymap::{COL, ROW};
 use panic_probe as _;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::host::rmk_protocol::{UsbServerStorage, run_usb_server};
+use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::usb::UsbTransport;
-use rmk::{KeymapData, initialize_keymap_and_storage, join_all, run_all};
+use rmk::{KeymapData, initialize_keymap_and_storage, run_all};
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
@@ -34,13 +34,8 @@ const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
 /// Concrete USB driver type used by this example. Surfaces the same alias the
 /// orchestrator macro emits in the `keyboard.toml`-driven path so the
-/// `UsbServerStorage<RmkUsbDriverTy>` static can be declared once with a
-/// fixed type.
+/// `HostService<RmkUsbDriverTy>` turbofish at construction has one fixed name.
 type RmkUsbDriverTy = Driver<'static, USB>;
-
-/// Static storage for the rmk_protocol USB server. Picked up by
-/// `run_usb_server` and lives forever.
-static RMK_PROTOCOL_USB_STORAGE: UsbServerStorage<RmkUsbDriverTy> = UsbServerStorage::new();
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -94,16 +89,9 @@ async fn main(_spawner: Spawner) {
     let mut wpm_processor = WpmProcessor::new();
 
     // The rmk_protocol USB bulk endpoints have to be taken out of the
-    // UsbTransport once it has been built; the resulting future drives the
-    // server while UsbTransport::run drives the underlying USB device.
-    let (rmk_ep_in, rmk_ep_out) = usb_transport
-        .take_rmk_protocol_endpoints()
-        .expect("rmk_protocol USB endpoints not available");
-    let rmk_protocol_server =
-        run_usb_server::<RmkUsbDriverTy>(&RMK_PROTOCOL_USB_STORAGE, &keymap, rmk_ep_in, rmk_ep_out);
+    // UsbTransport once it has been built; `HostService` drives the protocol
+    // dispatch while `UsbTransport::run` drives the underlying USB device.
+    let mut host_service = HostService::<RmkUsbDriverTy>::new(&keymap, usb_transport.take_rmk_protocol_endpoints());
 
-    // Start. `run_all!` calls `.run()` on each task, but `rmk_protocol_server`
-    // is a bare future, so combine via `join_all!` directly.
-    let runnables = run_all!(matrix, storage, usb_transport, wpm_processor, keyboard);
-    join_all!(runnables, rmk_protocol_server).await;
+    run_all!(matrix, storage, usb_transport, wpm_processor, keyboard, host_service).await;
 }

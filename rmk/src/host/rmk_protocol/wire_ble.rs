@@ -54,75 +54,83 @@ pub(crate) type BleReplyFrame = Vec<u8, BLE_FRAME_MAX>;
 // TX
 // ---------------------------------------------------------------------------
 
-pub struct BleWireTxInner {
+pub(crate) struct BleWireTxInner<'b> {
     /// Scratch buffer used to serialize header + body before COBS-encoding.
-    pub(crate) tx_buf: &'static mut [u8],
+    pub(crate) tx_buf: &'b mut [u8],
     /// Scratch buffer used to hold the COBS-encoded frame.
-    pub(crate) cobs_buf: &'static mut [u8],
+    pub(crate) cobs_buf: &'b mut [u8],
     /// Reply channel sender (heapless `Channel` provides `try_send`/`send`).
     pub(crate) replies: &'static embassy_sync::channel::Channel<crate::RawMutex, BleReplyFrame, 4>,
 }
 
-pub(crate) struct BleWireTx<M: RawMutex + 'static> {
-    inner: &'static Mutex<M, BleWireTxInner>,
+pub(crate) struct BleWireTx<'m, 'b, M: RawMutex + 'static> {
+    inner: &'m Mutex<M, BleWireTxInner<'b>>,
 }
 
-impl<M: RawMutex + 'static> BleWireTx<M> {
-    pub(crate) fn new(inner: &'static Mutex<M, BleWireTxInner>) -> Self {
+impl<'m, 'b, M: RawMutex + 'static> BleWireTx<'m, 'b, M> {
+    pub(crate) fn new(inner: &'m Mutex<M, BleWireTxInner<'b>>) -> Self {
         Self { inner }
     }
 }
 
-impl<M: RawMutex + 'static> Clone for BleWireTx<M> {
+impl<'m, 'b, M: RawMutex + 'static> Clone for BleWireTx<'m, 'b, M> {
     fn clone(&self) -> Self {
         Self { inner: self.inner }
     }
 }
 
-impl<M: RawMutex + 'static> WireTx for BleWireTx<M> {
+impl<'m, 'b, M: RawMutex + 'static> WireTx for BleWireTx<'m, 'b, M> {
     type Error = WireTxErrorKind;
 
     async fn send<T: Serialize + ?Sized>(&self, hdr: VarHeader, msg: &T) -> Result<(), Self::Error> {
-        let mut guard = self.inner.lock().await;
-        let BleWireTxInner {
-            tx_buf,
-            cobs_buf,
-            replies,
-        } = &mut *guard;
+        // Build the encoded frame inside the lock, then drop the guard before
+        // awaiting the replies channel — otherwise a slow notify task would
+        // hold the Tx mutex across `replies.send().await` and stall the topic
+        // publisher and any other reply behind it.
+        let (owned, replies) = {
+            let mut guard = self.inner.lock().await;
+            let BleWireTxInner {
+                tx_buf,
+                cobs_buf,
+                replies,
+            } = &mut *guard;
 
-        // 1. Serialize header + body into tx_buf.
-        let (hdr_used, remain) = hdr.write_to_slice(tx_buf).ok_or(WireTxErrorKind::Other)?;
-        let hdr_len = hdr_used.len();
-        let body_used = postcard::to_slice(msg, remain).map_err(|_| WireTxErrorKind::Other)?;
-        let total = hdr_len + body_used.len();
+            let (hdr_used, remain) = hdr.write_to_slice(tx_buf).ok_or(WireTxErrorKind::Other)?;
+            let hdr_len = hdr_used.len();
+            let body_used = postcard::to_slice(msg, remain).map_err(|_| WireTxErrorKind::Other)?;
+            let total = hdr_len + body_used.len();
 
-        // 2. COBS-encode in place into cobs_buf and append the 0x00 sentinel.
-        let encoded = cobs::try_encode(&tx_buf[..total], cobs_buf).map_err(|_| WireTxErrorKind::Other)?;
-        if encoded + 1 > cobs_buf.len() {
-            return Err(WireTxErrorKind::Other);
-        }
-        cobs_buf[encoded] = 0;
-        let frame = &cobs_buf[..encoded + 1];
+            let encoded = cobs::try_encode(&tx_buf[..total], cobs_buf).map_err(|_| WireTxErrorKind::Other)?;
+            if encoded + 1 > cobs_buf.len() {
+                return Err(WireTxErrorKind::Other);
+            }
+            cobs_buf[encoded] = 0;
 
-        // 3. Build a single owned frame and enqueue it for the notify task.
-        let mut owned: BleReplyFrame = Vec::new();
-        owned.extend_from_slice(frame).map_err(|_| WireTxErrorKind::Other)?;
+            let mut owned: BleReplyFrame = Vec::new();
+            owned
+                .extend_from_slice(&cobs_buf[..encoded + 1])
+                .map_err(|_| WireTxErrorKind::Other)?;
+            (owned, *replies)
+        };
         replies.send(owned).await;
         Ok(())
     }
 
     async fn send_raw(&self, buf: &[u8]) -> Result<(), Self::Error> {
-        let mut guard = self.inner.lock().await;
-        let BleWireTxInner { cobs_buf, replies, .. } = &mut *guard;
-        let encoded = cobs::try_encode(buf, cobs_buf).map_err(|_| WireTxErrorKind::Other)?;
-        if encoded + 1 > cobs_buf.len() {
-            return Err(WireTxErrorKind::Other);
-        }
-        cobs_buf[encoded] = 0;
-        let mut owned: BleReplyFrame = Vec::new();
-        owned
-            .extend_from_slice(&cobs_buf[..encoded + 1])
-            .map_err(|_| WireTxErrorKind::Other)?;
+        let (owned, replies) = {
+            let mut guard = self.inner.lock().await;
+            let BleWireTxInner { cobs_buf, replies, .. } = &mut *guard;
+            let encoded = cobs::try_encode(buf, cobs_buf).map_err(|_| WireTxErrorKind::Other)?;
+            if encoded + 1 > cobs_buf.len() {
+                return Err(WireTxErrorKind::Other);
+            }
+            cobs_buf[encoded] = 0;
+            let mut owned: BleReplyFrame = Vec::new();
+            owned
+                .extend_from_slice(&cobs_buf[..encoded + 1])
+                .map_err(|_| WireTxErrorKind::Other)?;
+            (owned, *replies)
+        };
         replies.send(owned).await;
         Ok(())
     }
@@ -143,18 +151,21 @@ impl<M: RawMutex + 'static> WireTx for BleWireTx<M> {
 /// `WireRx` impl over an MTU-sized inbound request channel. Each channel item
 /// is one BLE write payload; we accumulate until a `0x00` sentinel is found,
 /// then COBS-decode the bytes up to the sentinel into the dispatcher's buffer.
-pub(crate) struct BleWireRx {
+pub(crate) struct BleWireRx<'b> {
     /// Source channel filled by `gatt_events_task` on every write to
     /// `output_data`.
     pub(crate) requests: &'static embassy_sync::channel::Channel<crate::RawMutex, BleRequestChunk, 4>,
     /// Scratch accumulator: holds the unconsumed tail of the most recent chunk
     /// plus any bytes carried over from the previous frame's leftover.
-    pub(crate) scratch: &'static mut [u8],
+    pub(crate) scratch: &'b mut [u8],
     /// Number of valid bytes currently in `scratch`.
     pub(crate) scratch_len: usize,
+    /// True after an oversize frame: ignore inbound bytes until we've seen a
+    /// `0x00` sentinel and resynchronized to the next frame boundary.
+    pub(crate) draining: bool,
 }
 
-impl BleWireRx {
+impl<'b> BleWireRx<'b> {
     fn copy_back(&mut self, start: usize) {
         if start >= self.scratch_len {
             self.scratch_len = 0;
@@ -166,13 +177,30 @@ impl BleWireRx {
     }
 }
 
-impl WireRx for BleWireRx {
+impl<'b> WireRx for BleWireRx<'b> {
     type Error = WireRxErrorKind;
 
     async fn wait_connection(&mut self) {}
 
     async fn receive<'a>(&mut self, buf: &'a mut [u8]) -> Result<&'a mut [u8], Self::Error> {
         loop {
+            // While draining, swallow inbound chunks until one contains a
+            // sentinel; the bytes after that sentinel start a fresh frame.
+            if self.draining {
+                let chunk = self.requests.receive().await;
+                if let Some(pos) = chunk.iter().position(|&b| b == 0) {
+                    self.draining = false;
+                    let tail = &chunk[pos + 1..];
+                    // Tail can never overflow: chunk size ≤ BLE_NOTIFY_PAYLOAD
+                    // and that's strictly less than the scratch capacity.
+                    debug_assert!(tail.len() <= self.scratch.len());
+                    let take = tail.len().min(self.scratch.len());
+                    self.scratch[..take].copy_from_slice(&tail[..take]);
+                    self.scratch_len = take;
+                }
+                continue;
+            }
+
             // First check: do we already have a full frame in scratch?
             if let Some(zero_pos) = self.scratch[..self.scratch_len].iter().position(|&b| b == 0) {
                 let frame = &self.scratch[..zero_pos]; // COBS-encoded body, sentinel excluded
@@ -189,15 +217,17 @@ impl WireRx for BleWireRx {
             let chunk = self.requests.receive().await;
             let needed = self.scratch_len + chunk.len();
             if needed > self.scratch.len() {
-                // Frame exceeds scratch capacity; drop accumulated state and
-                // continue from the next sentinel boundary.
+                // Frame exceeds scratch capacity. Drop the accumulated state
+                // and enter draining mode; we'll resync to the next sentinel.
                 self.scratch_len = 0;
                 if let Some(pos) = chunk.iter().position(|&b| b == 0) {
                     let tail = &chunk[pos + 1..];
-                    if tail.len() <= self.scratch.len() {
-                        self.scratch[..tail.len()].copy_from_slice(tail);
-                        self.scratch_len = tail.len();
-                    }
+                    debug_assert!(tail.len() <= self.scratch.len());
+                    let take = tail.len().min(self.scratch.len());
+                    self.scratch[..take].copy_from_slice(&tail[..take]);
+                    self.scratch_len = take;
+                } else {
+                    self.draining = true;
                 }
                 return Err(WireRxErrorKind::ReceivedMessageTooLarge);
             }
@@ -233,6 +263,7 @@ mod tests {
             requests: req_ch,
             scratch,
             scratch_len: 0,
+            draining: false,
         };
 
         let mut buf: StdVec<u8> = vec![0u8; frame_buf_len];
@@ -314,5 +345,41 @@ mod tests {
         assert_eq!(res.len(), 2);
         assert_eq!(res[0].as_ref().unwrap(), p1);
         assert_eq!(res[1].as_ref().unwrap(), p2);
+    }
+
+    /// An oversize frame whose terminating sentinel is in the *same* chunk as
+    /// the overflow point: the receiver returns `MessageTooLarge`, then on the
+    /// next call decodes the frame that follows the sentinel.
+    #[test]
+    fn oversize_frame_with_inline_sentinel_recovers_to_next_frame() {
+        // Build a > scratch-capacity COBS payload, then a sentinel, then a
+        // valid following frame. Send the whole thing in one chunk.
+        let oversize = vec![0xAAu8; BLE_RX_BUF + 8];
+        let recovery = b"after-overflow";
+
+        let mut chunk: StdVec<u8> = StdVec::new();
+        chunk.extend_from_slice(&oversize);
+        chunk.push(0); // sentinel terminating the oversize frame
+        chunk.extend_from_slice(&cobs_encode_with_sentinel(recovery));
+
+        // Chunks are bounded by `BLE_NOTIFY_PAYLOAD`; split the oversize
+        // payload across multiple chunks. The split boundary doesn't matter
+        // for the test as long as the eventual chunk crossing scratch_len
+        // exceeds capacity.
+        let chunks: StdVec<&[u8]> = chunk.chunks(BLE_NOTIFY_PAYLOAD).collect();
+        let res = run_receive(&chunks, 256);
+
+        // Expect: at least one Err(MessageTooLarge) followed by Ok(recovery).
+        let mut saw_err = false;
+        let mut saw_recovery = false;
+        for r in &res {
+            match r {
+                Err(WireRxErrorKind::ReceivedMessageTooLarge) => saw_err = true,
+                Ok(b) if b.as_slice() == recovery => saw_recovery = true,
+                _ => {}
+            }
+        }
+        assert!(saw_err, "expected a MessageTooLarge for the oversize frame");
+        assert!(saw_recovery, "expected the next frame to decode after recovery");
     }
 }

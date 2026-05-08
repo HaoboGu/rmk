@@ -148,12 +148,15 @@ impl Default for ProfileInfo {
     }
 }
 
-/// BLE profile switch action
+/// BLE profile switch action.
+///
+/// `ClearBond` carries an explicit slot index; pass `current_profile()` from
+/// the caller when the user means "clear the active profile".
 pub(crate) enum BleProfileAction {
     Switch(u8),
     Previous,
     Next,
-    ClearBond,
+    ClearBond(u8),
 }
 
 /// Manage BLE profiles and bonding information
@@ -378,8 +381,8 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
                             self.switch_profile(profile).await;
                         }
-                        BleProfileAction::ClearBond => {
-                            self.clear_bond(current_profile()).await;
+                        BleProfileAction::ClearBond(slot) => {
+                            self.clear_bond(slot).await;
                         }
                     }
                     #[cfg(feature = "storage")]

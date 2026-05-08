@@ -147,6 +147,27 @@ async fn handshake_returns_protocol_version_and_capabilities_inner() {
     assert_eq!(caps.is_split, cfg!(feature = "split"));
     assert_eq!(caps.ble_enabled, cfg!(feature = "_ble"));
     assert_eq!(caps.bulk_transfer_supported, cfg!(feature = "bulk_transfer"));
+    // Numeric limits should reflect the build defaults, not zero.
+    assert!(caps.max_combos > 0, "max_combos should be wired from COMBO_MAX_NUM");
+    assert!(
+        caps.max_combo_keys > 0,
+        "max_combo_keys should be wired from COMBO_MAX_LENGTH"
+    );
+    assert!(caps.max_morse > 0, "max_morse should be wired from MORSE_MAX_NUM");
+    assert!(caps.max_patterns_per_key > 0, "max_patterns_per_key should be wired");
+    assert!(caps.max_forks > 0, "max_forks should be wired from FORK_MAX_NUM");
+    assert!(caps.macro_space_size > 0, "macro_space_size should be wired");
+    assert!(caps.max_payload_size > 0, "max_payload_size should be set");
+    #[cfg(feature = "bulk_transfer")]
+    assert!(
+        caps.max_bulk_keys > 0,
+        "max_bulk_keys should be wired when bulk_transfer is on"
+    );
+    #[cfg(feature = "_ble")]
+    assert!(
+        caps.num_ble_profiles > 0,
+        "num_ble_profiles should be wired when _ble is on"
+    );
 }
 
 #[test]
@@ -208,4 +229,50 @@ async fn key_action_round_trips_through_dispatch_inner() {
     let (_, resp) = dispatch_one::<GetKeyAction>(&mut app, &tx, 2, &body).await;
     let action: KeyAction = postcard::from_bytes(&resp).unwrap();
     assert!(matches!(action, KeyAction::No));
+}
+
+#[test]
+fn out_of_range_keymap_position_does_not_panic_dispatcher() {
+    test_block_on(out_of_range_keymap_position_does_not_panic_dispatcher_inner());
+}
+
+async fn out_of_range_keymap_position_does_not_panic_dispatcher_inner() {
+    let (mut app, tx) = build_app();
+
+    // Test keymap is 2 layers × 5 rows × 14 cols. (255, 255, 255) is way out
+    // of range. Without the bounds gate `KeyMap::action_at_pos` indexes
+    // `self.layers[idx]` directly and panics.
+    let bad_pos = KeyPosition {
+        layer: 255,
+        row: 255,
+        col: 255,
+    };
+
+    // GetKeyAction → must not panic; protocol shape forces a `KeyAction::No`.
+    let body = to_vec_helper(&bad_pos);
+    let (_, resp) = dispatch_one::<GetKeyAction>(&mut app, &tx, 0, &body).await;
+    let action: KeyAction = postcard::from_bytes(&resp).unwrap();
+    assert!(matches!(action, KeyAction::No), "out-of-range get returns No");
+
+    // SetKeyAction → must reject with `InvalidParameter`.
+    let bad_req = SetKeyRequest {
+        position: bad_pos,
+        action: KeyAction::No,
+    };
+    let body = to_vec_helper(&bad_req);
+    let (_, resp) = dispatch_one::<SetKeyAction>(&mut app, &tx, 1, &body).await;
+    let result: rmk_types::protocol::rmk::RmkResult = postcard::from_bytes(&resp).unwrap();
+    assert!(matches!(result, Err(_)), "out-of-range set returns Err");
+}
+
+#[test]
+fn out_of_range_default_layer_is_rejected() {
+    test_block_on(async {
+        let (mut app, tx) = build_app();
+        // Test keymap has 2 layers; layer 99 is out of range.
+        let body = to_vec_helper(&99u8);
+        let (_, resp) = dispatch_one::<rmk_types::protocol::rmk::SetDefaultLayer>(&mut app, &tx, 0, &body).await;
+        let result: rmk_types::protocol::rmk::RmkResult = postcard::from_bytes(&resp).unwrap();
+        assert!(matches!(result, Err(_)));
+    });
 }

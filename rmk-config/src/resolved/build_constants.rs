@@ -10,10 +10,13 @@ struct SubscriberConfig {
     subscriber: Vec<SubscriberEntry>,
 }
 
-/// A single entry: bump `subs` for each listed event when all `features` are enabled.
+/// A single entry: bump `subs` for each listed event when all `features` are
+/// enabled and none of `not_features` are.
 #[derive(Deserialize)]
 struct SubscriberEntry {
     features: Vec<String>,
+    #[serde(default)]
+    not_features: Vec<String>,
     events: Vec<SubscriberEventEntry>,
 }
 
@@ -189,7 +192,11 @@ fn apply_feature_subscriber_bumps(events: &mut [EventChannel], active_features: 
 
     for entry in &sub_config.subscriber {
         let all_enabled = entry.features.iter().all(|f| active_features.contains(&f.as_str()));
-        if all_enabled {
+        let none_excluded = entry
+            .not_features
+            .iter()
+            .all(|f| !active_features.contains(&f.as_str()));
+        if all_enabled && none_excluded {
             for sub_event in &entry.events {
                 if let Some(event) = events.iter_mut().find(|e| e.name == sub_event.name) {
                     event.subs += sub_event.count;

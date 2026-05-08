@@ -24,15 +24,12 @@ use rand_core::SeedableRng;
 use rmk::ble::{BleTransport, build_ble_stack};
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::host::rmk_protocol::{BleServerStorage, UsbServerStorage, run_ble_server, run_usb_server};
+use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::direct_pin::DirectPinMatrix;
 use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::usb::UsbTransport;
-use rmk::{
-    DefaultPacketPool, HostResources, KeymapData, PacketPool, initialize_keymap_and_storage, join_all,
-    run_all,
-};
+use rmk::{DefaultPacketPool, HostResources, KeymapData, PacketPool, initialize_keymap_and_storage, run_all};
 use static_cell::StaticCell;
 
 type RandomSource = cracen::Cracen<'static, Blocking>;
@@ -60,18 +57,9 @@ const L2CAP_TXQ: u8 = 4;
 const L2CAP_RXQ: u8 = 4;
 
 /// Concrete USB driver type. Surfaces the same alias the orchestrator macro
-/// emits in the `keyboard.toml`-driven path so the
-/// `UsbServerStorage<RmkUsbDriverTy>` static can be declared once with a
-/// fixed type.
+/// emits in the `keyboard.toml`-driven path so the `HostService<RmkUsbDriverTy>`
+/// turbofish at construction has one fixed name.
 type RmkUsbDriverTy = Driver<'static, HardwareVbusDetect>;
-
-/// Static storage for the rmk_protocol USB server. Lives forever; consumed by
-/// the first call to `run_usb_server`.
-static RMK_PROTOCOL_USB_STORAGE: UsbServerStorage<RmkUsbDriverTy> = UsbServerStorage::new();
-
-/// Static storage for the rmk_protocol BLE server. Lives forever; consumed by
-/// the first call to `run_ble_server`.
-static RMK_PROTOCOL_BLE_STORAGE: BleServerStorage = BleServerStorage::new();
 
 fn build_sdc<'d, const N: usize>(
     p: nrf_sdc::Peripherals<'d>,
@@ -251,15 +239,18 @@ async fn main(spawner: Spawner) {
     let mut wpm_processor = WpmProcessor::new();
 
     // Take the rmk_protocol USB endpoints out of UsbTransport (must happen
-    // exactly once). USB and BLE servers run as bare futures alongside the
-    // `Runnable`-based tasks.
-    let (rmk_ep_in, rmk_ep_out) = usb_transport
-        .take_rmk_protocol_endpoints()
-        .expect("rmk_protocol USB endpoints not available");
-    let usb_protocol_server =
-        run_usb_server::<RmkUsbDriverTy>(&RMK_PROTOCOL_USB_STORAGE, &keymap, rmk_ep_in, rmk_ep_out);
-    let ble_protocol_server = run_ble_server(&RMK_PROTOCOL_BLE_STORAGE, &keymap);
+    // exactly once, before `usb_transport.run()`). One transport-agnostic
+    // host service drives both USB and BLE protocol dispatch.
+    let mut host_service = HostService::<RmkUsbDriverTy>::new(&keymap, usb_transport.take_rmk_protocol_endpoints());
 
-    let runnables = run_all!(matrix, storage, usb_transport, ble_transport, wpm_processor, keyboard);
-    join_all!(runnables, usb_protocol_server, ble_protocol_server).await;
+    run_all!(
+        matrix,
+        storage,
+        usb_transport,
+        ble_transport,
+        wpm_processor,
+        keyboard,
+        host_service
+    )
+    .await;
 }

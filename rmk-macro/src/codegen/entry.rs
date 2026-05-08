@@ -76,42 +76,48 @@ pub(crate) fn rmk_entry_select(
         }
     };
 
-    let host_service_task = if host.vial_enabled {
+    let board = &hardware.board;
+    let communication = &hardware.communication;
+
+    // The host service (Vial or rmk_protocol) is constructed inline before the
+    // join — for rmk_protocol the USB endpoints have to be taken out of
+    // `usb_transport` *after* it's built but *before* `usb_transport.run()` is
+    // joined, so the prelude order matters. Skip on split-peripheral builds.
+    let host_service_prelude = if host.vial_enabled {
+        quote! {}
+    } else if host.rmk_protocol_enabled
+        && !matches!(board, BoardConfig::Split(s) if s.connection == "_peripheral")
+    {
+        if communication.usb_enabled() {
+            quote! {
+                let mut host_service = ::rmk::host::HostService::<RmkUsbDriverTy>::new(
+                    &keymap,
+                    usb_transport.take_rmk_protocol_endpoints(),
+                );
+            }
+        } else {
+            quote! {
+                let mut host_service = ::rmk::host::HostService::new(&keymap);
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let host_service_task = if host.vial_enabled
+        || (host.rmk_protocol_enabled
+            && !matches!(board, BoardConfig::Split(s) if s.connection == "_peripheral"))
+    {
         Some(quote! { host_service.run() })
     } else {
         None
     };
-    let board = &hardware.board;
-    let communication = &hardware.communication;
-    let (transport_prelude, transport_tasks) = transport_setup(communication);
 
-    // rmk_protocol server tasks: one per active transport. Skipped on
-    // split-peripheral builds (peripherals do not host the protocol).
-    let mut rmk_protocol_tasks: Vec<TokenStream2> = Vec::new();
-    if host.rmk_protocol_enabled
-        && !matches!(board, BoardConfig::Split(s) if s.connection == "_peripheral")
-    {
-        if communication.usb_enabled() {
-            rmk_protocol_tasks.push(quote! {
-                async {
-                    let (ep_in, ep_out) = usb_transport
-                        .take_rmk_protocol_endpoints()
-                        .expect("rmk_protocol USB endpoints already taken");
-                    ::rmk::host::rmk_protocol::run_usb_server::<RmkUsbDriverTy>(
-                        &RMK_PROTOCOL_USB_STORAGE,
-                        &keymap,
-                        ep_in,
-                        ep_out,
-                    ).await
-                }
-            });
-        }
-        if communication.ble_enabled() {
-            rmk_protocol_tasks.push(quote! {
-                ::rmk::host::rmk_protocol::run_ble_server(&RMK_PROTOCOL_BLE_STORAGE, &keymap)
-            });
-        }
-    }
+    let (transport_prelude, transport_tasks) = transport_setup(communication);
+    let transport_prelude = quote! {
+        #transport_prelude
+        #host_service_prelude
+    };
 
     let entry = match board {
         BoardConfig::Split(split_config) => {
@@ -124,7 +130,6 @@ pub(crate) fn rmk_entry_select(
                 tasks.push(t);
             }
             tasks.extend(transport_tasks);
-            tasks.extend(rmk_protocol_tasks.clone());
             if split_config.connection == "ble" {
                 if !processors.is_empty() {
                     tasks.push(processors_task);
@@ -196,7 +201,6 @@ pub(crate) fn rmk_entry_select(
             transport_prelude,
             transport_tasks,
             host_service_task,
-            rmk_protocol_tasks,
             devices_task,
             processors_task,
             registered_processors,
@@ -213,7 +217,6 @@ pub(crate) fn rmk_entry_unibody(
     transport_prelude: TokenStream2,
     transport_tasks: Vec<TokenStream2>,
     host_service_task: Option<TokenStream2>,
-    rmk_protocol_tasks: Vec<TokenStream2>,
     devices_task: TokenStream2,
     processors_task: TokenStream2,
     registered_processors: Vec<TokenStream2>,
@@ -231,7 +234,6 @@ pub(crate) fn rmk_entry_unibody(
     }
     tasks.extend(registered_processors);
     tasks.extend(transport_tasks);
-    tasks.extend(rmk_protocol_tasks);
     let joined = join_all_tasks(tasks);
     quote! {
         #transport_prelude

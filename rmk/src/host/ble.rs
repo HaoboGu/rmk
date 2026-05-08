@@ -22,22 +22,28 @@ pub(crate) async fn run_ble_host<P: PacketPool>(
 }
 
 /// Drains `RMK_PROTOCOL_REPLY_CHANNEL` and forwards each COBS-encoded frame to
-/// the rmk_protocol input characteristic via GATT notify. Frames longer than
-/// one MTU − 3 are sent across multiple notifies; the host's reframer
-/// reassembles by COBS sentinel.
+/// the rmk_protocol input characteristic via GATT notify.
 ///
-/// Each notify is sent as a borrowed slice (via `to_raw()`), so partial
-/// chunks at the end of a frame are sent at their actual length — no zero
-/// padding that could be misinterpreted as a sentinel.
+/// Wire framing: each frame is COBS-encoded with a `0x00` sentinel and may
+/// span multiple BLE notifications (frame length > MTU − 3). The host's
+/// reframer accumulates chunks until it sees the sentinel; we send each chunk
+/// as a borrowed slice (`to_raw()`) at its true length, so a sub-MTU final
+/// chunk does not get zero-padded into a spurious sentinel.
+///
+/// On connection drop we clear both the request and reply channels and reset
+/// the ready signal so frames queued during the previous session are not
+/// delivered to the new client.
 #[cfg(feature = "rmk_protocol")]
 pub(crate) async fn run_ble_rmk_protocol<P: PacketPool>(
     input: Characteristic<[u8; 244]>,
     conn: &GattConnection<'_, '_, P>,
 ) -> ! {
-    use crate::channel::RMK_PROTOCOL_REPLY_CHANNEL;
+    use crate::channel::{BLE_RMK_PROTOCOL_READY, RMK_PROTOCOL_REPLY_CHANNEL, RMK_PROTOCOL_REQUEST_CHANNEL};
     use crate::host::rmk_protocol::wire_ble::BLE_NOTIFY_PAYLOAD;
     let raw = input.to_raw();
     RMK_PROTOCOL_REPLY_CHANNEL.clear();
+    RMK_PROTOCOL_REQUEST_CHANNEL.clear();
+    BLE_RMK_PROTOCOL_READY.reset();
     loop {
         let frame = RMK_PROTOCOL_REPLY_CHANNEL.receive().await;
         let mut offset = 0;

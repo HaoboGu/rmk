@@ -33,9 +33,9 @@ pub(crate) fn expand_usb_init(hardware: &Hardware, item_mod: &ItemMod) -> TokenS
 /// Default implementation of usb initialization.
 ///
 /// Also emits a `type RmkUsbDriverTy = ...;` aliased to the chip's concrete
-/// `Driver` type so downstream codegen (e.g. `rmk_protocol`'s static
-/// `UsbServerStorage<RmkUsbDriverTy>`) can reference it without duplicating
-/// chip-specific knowledge.
+/// `Driver` type so downstream codegen (e.g. `rmk_protocol`'s
+/// `HostService::<RmkUsbDriverTy>::new(...)`) can reference it without
+/// duplicating chip-specific knowledge.
 pub(crate) fn usb_config_default(hardware: &Hardware) -> TokenStream2 {
     if let Some(usb_info) = hardware.communication.get_usb_info() {
         let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
