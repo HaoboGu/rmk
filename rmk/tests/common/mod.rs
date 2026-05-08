@@ -26,7 +26,7 @@ use rmk::{KeymapData, a, k, layer, lt, mo, shifted, th, wm};
 // virtual-time kill switch in `test_block_on`. Abort at test-binary startup
 // with a pointer to the right runner instead of making the user wait for that
 // timeout.
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 fn require_nextest() {
     if std::env::var_os("NEXTEST").is_none() {
         eprintln!(
@@ -43,7 +43,7 @@ fn require_nextest() {
 }
 
 // Init logger for tests
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 pub fn init_log() {
     let _ = env_logger::builder()
         .filter_level(log::LevelFilter::Debug)

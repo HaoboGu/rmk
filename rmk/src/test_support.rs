@@ -19,7 +19,7 @@ use embassy_time::{Duration, MockDriver};
 // suite under plain `cargo test` lets tests race on it and hang at the 60 s
 // virtual-time kill switch below. Abort at test-binary startup with a pointer
 // to the right runner instead of making the user wait for that timeout.
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 fn require_nextest() {
     if std::env::var_os("NEXTEST").is_none() {
         eprintln!(
