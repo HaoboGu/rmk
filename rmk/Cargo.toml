@@ -91,7 +91,7 @@ document-features = "0.2"
 rmk = { path = ".", default-features = false, features = ["std", "log"] }
 critical-section = { version = "1.2", features = ["std"] }
 env_logger = "0.11"
-ctor = "0.6.0"
+ctor = "1.0"
 embedded-hal-mock = { version = "0.11.1", features = ["embedded-hal-async"] }
 
 [build-dependencies]

@@ -1894,7 +1894,7 @@ mod test {
     use crate::{a, k, layer, mo, th, thp};
 
     // Init logger for tests
-    #[ctor::ctor]
+    #[ctor::ctor(unsafe)]
     fn init_log() {
         let _ = env_logger::builder()
             .filter_level(log::LevelFilter::Debug)

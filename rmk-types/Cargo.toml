@@ -19,7 +19,7 @@ postcard-rpc = { version = "0.12", default-features = false, optional = true }
 heapless = { version = "0.9", default-features = false, features = ["serde"] }
 strum = { version = "0.28", default-features = false, features = ["derive"] }
 
-bitfield-struct = "0.12"
+bitfield-struct = "0.13"
 
 [build-dependencies]
 rmk-config = { path = "../rmk-config", version = "=0.6.1" }
