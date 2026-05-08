@@ -3,7 +3,7 @@ use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor};
 
 use super::battery_service::BatteryService;
 use super::device_info::DeviceConfigurationService;
-#[cfg(feature = "host")]
+#[cfg(feature = "vial")]
 use crate::hid::ViaReport;
 use crate::hid::{CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report};
 
@@ -11,9 +11,10 @@ use crate::hid::{CompositeReport, CompositeReportType, HidError, HidWriterTrait,
 pub(crate) const CCCD_TABLE_SIZE: usize = _CCCD_TABLE_SIZE;
 
 // `gatt_server` compiles every member regardless of the surrounding `cfg` —
-// gating an individual field with `#[cfg(feature = "host")]` doesn't work. So
-// the whole struct is duplicated, with and without `host_service`.
-#[cfg(feature = "host")]
+// gating an individual field with a Cargo feature doesn't work. So the whole
+// struct is duplicated, with and without the `host_service` field, and again
+// for the rmk_protocol GATT service when that's the active host protocol.
+#[cfg(feature = "vial")]
 #[gatt_server]
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
@@ -27,7 +28,7 @@ pub(crate) struct Server {
 /// `input_data` notify; hosts push requests through `output_data`. `gatt_events_task`
 /// forwards `output_data` writes into `HOST_REQUEST_CHANNEL`, and `host::run_ble_host`
 /// drains `HOST_BLE_REPLY` to notify `input_data`.
-#[cfg(feature = "host")]
+#[cfg(feature = "vial")]
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
 pub(crate) struct VialService {
     #[characteristic(uuid = "2a4a", read, value = [0x01, 0x01, 0x00, 0x03])]
@@ -46,7 +47,41 @@ pub(crate) struct VialService {
     pub(crate) output_data: [u8; 32],
 }
 
-#[cfg(not(feature = "host"))]
+// --- rmk_protocol Server variant ---
+
+#[cfg(feature = "rmk_protocol")]
+#[gatt_server]
+pub(crate) struct Server {
+    pub(crate) battery_service: BatteryService,
+    pub(crate) hid_service: HidService,
+    pub(crate) rmk_protocol_service: RmkProtocolService,
+    pub(crate) composite_service: CompositeService,
+    pub(crate) device_config_service: DeviceConfigurationService,
+}
+
+/// GATT service exposing the RMK protocol over a custom 128-bit UUID
+/// (deliberately NOT under `service::HUMAN_INTERFACE_DEVICE` per plan §3.4).
+/// Two characteristics:
+/// * `output_data` — write / write-without-response (host → device)
+/// * `input_data`  — notify (device → host)
+///
+/// Both are sized to a typical MTU − 3 (244 bytes).
+#[cfg(feature = "rmk_protocol")]
+#[gatt_service(uuid = "9d44e000-3582-4f23-a39c-37e0c9bd6b00")]
+pub(crate) struct RmkProtocolService {
+    #[descriptor(uuid = "2908", read, value = [0u8, 1u8])]
+    #[characteristic(uuid = "9d44e002-3582-4f23-a39c-37e0c9bd6b00", read, notify, value = [0u8; 244])]
+    pub(crate) input_data: [u8; 244],
+    #[characteristic(
+        uuid = "9d44e001-3582-4f23-a39c-37e0c9bd6b00",
+        write,
+        write_without_response,
+        value = [0u8; 244],
+    )]
+    pub(crate) output_data: [u8; 244],
+}
+
+#[cfg(not(any(feature = "vial", feature = "rmk_protocol")))]
 #[gatt_server]
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,

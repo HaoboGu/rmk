@@ -34,6 +34,11 @@ cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features
 # the _ble combo verifies the BLE silent-drop arm compiles.
 cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "vial,storage,steno"
 cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "split,vial,storage,async_matrix,_ble,steno"
+# rmk_protocol matrix: USB-only and split+BLE combos. The std build also runs
+# the rmk_protocol_loopback integration test and the COBS reframer unit tests
+# in src/host/rmk_protocol/wire_ble.rs.
+cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "rmk_protocol,bulk_transfer,storage"
+cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "rmk_protocol,bulk_transfer,storage,_ble,split,async_matrix"
 cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features
 
 # Doctests: nextest doesn't run them. rmk/ has `doctest = false` so only

@@ -58,6 +58,34 @@ events = [
     { name = "layer_change" },
 ]
 
+# --- RMK protocol-gated internal subscribers ---
+# host/rmk_protocol/topics.rs publishes outgoing events on a per-transport task.
+# USB build adds one subscriber per base topic; BLE build also adds the BLE-only topics.
+
+[[subscriber]]
+features = ["rmk_protocol"]
+events = [
+    # host/rmk_protocol/topics.rs::usb_topic_pub: subscribes to each base topic
+    { name = "layer_change" },
+    { name = "connection_change" },
+    { name = "sleep_state" },
+    { name = "wpm_update" },
+    { name = "led_indicator" },
+]
+
+[[subscriber]]
+features = ["rmk_protocol", "_ble"]
+events = [
+    # host/rmk_protocol/topics.rs::ble_topic_pub: subscribes to base + BLE-only topics
+    { name = "layer_change" },
+    { name = "connection_change" },
+    { name = "sleep_state" },
+    { name = "wpm_update" },
+    { name = "led_indicator" },
+    { name = "battery_status" },
+    { name = "ble_status_change" },
+]
+
 # --- Split + BLE-gated internal subscribers ---
 
 [[subscriber]]

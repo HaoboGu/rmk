@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 
-mod vial;
 #[macro_use]
 mod macros;
 mod keymap;
@@ -23,16 +22,18 @@ use panic_probe as _;
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::{BleTransport, build_ble_stack};
-use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::host::HostService;
+use rmk::host::rmk_protocol::{BleServerStorage, UsbServerStorage, run_ble_server, run_usb_server};
 use rmk::keyboard::Keyboard;
 use rmk::matrix::direct_pin::DirectPinMatrix;
 use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::usb::UsbTransport;
-use rmk::{DefaultPacketPool, HostResources, KeymapData, PacketPool, initialize_keymap_and_storage, run_all};
+use rmk::{
+    DefaultPacketPool, HostResources, KeymapData, PacketPool, initialize_keymap_and_storage, join_all,
+    run_all,
+};
 use static_cell::StaticCell;
-use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 type RandomSource = cracen::Cracen<'static, Blocking>;
 
@@ -51,14 +52,26 @@ async fn mpsl_task(mpsl: &'static MultiprotocolServiceLayer<'static>) -> ! {
     mpsl.run().await
 }
 
-const SDC_MEM_SIZE: usize = 5688;
+const SDC_MEM_SIZE: usize = 8192;
 const FLASH_START_ADDR: usize = 0x120000;
 const FLASH_SECTORS: u8 = 6;
 
 const L2CAP_TXQ: u8 = 4;
 const L2CAP_RXQ: u8 = 4;
 
-const UNLOCK_KEYS: &[(u8, u8)] = &[(0, 0), (0, 1)];
+/// Concrete USB driver type. Surfaces the same alias the orchestrator macro
+/// emits in the `keyboard.toml`-driven path so the
+/// `UsbServerStorage<RmkUsbDriverTy>` static can be declared once with a
+/// fixed type.
+type RmkUsbDriverTy = Driver<'static, HardwareVbusDetect>;
+
+/// Static storage for the rmk_protocol USB server. Lives forever; consumed by
+/// the first call to `run_usb_server`.
+static RMK_PROTOCOL_USB_STORAGE: UsbServerStorage<RmkUsbDriverTy> = UsbServerStorage::new();
+
+/// Static storage for the rmk_protocol BLE server. Lives forever; consumed by
+/// the first call to `run_ble_server`.
+static RMK_PROTOCOL_BLE_STORAGE: BleServerStorage = BleServerStorage::new();
 
 fn build_sdc<'d, const N: usize>(
     p: nrf_sdc::Peripherals<'d>,
@@ -69,9 +82,6 @@ fn build_sdc<'d, const N: usize>(
     sdc::Builder::new()?
         .support_adv()
         .support_peripheral()
-        // .support_dle_peripheral()
-        // .support_phy_update_peripheral()
-        // .support_le_2m_phy()
         .peripheral_count(1)?
         .buffer_cfg(
             DefaultPacketPool::MTU as u16,
@@ -96,8 +106,17 @@ async fn main(spawner: Spawner) {
 
     let mut nrf_config = NrfConfig::default();
     nrf_config.clock_speed = ClockSpeed::CK128;
-    nrf_config.hfclk_source = HfclkSource::ExternalXtal;
-    nrf_config.lfclk_source = LfclkSource::ExternalXtal;
+    // HFXO is owned by MPSL (the softdevice controller) once it starts. If we
+    // also ask embassy-nrf to start the HF crystal, its busy-wait at
+    // `embassy-nrf/src/lib.rs:1110` (`while events_xostarted == 0 {}`) hangs
+    // forever when USB VBUS is absent (the regulator path the HFXO bias
+    // depends on is gated by VREGUSB on this DK). Leaving HFCLK as Internal
+    // here lets MPSL kick HFXO on demand for the radio.
+    nrf_config.hfclk_source = HfclkSource::Internal;
+    // LFXO crystal on this DK doesn't oscillate without USB VBUS, so we can't
+    // use `ExternalXtal`. Synthesized LFCLK is derived from HFCLK and starts
+    // immediately. MPSL has matching `MPSL_CLOCK_LF_SRC_SYNTH` below.
+    nrf_config.lfclk_source = LfclkSource::Synthesized;
     let p = embassy_nrf::init(nrf_config);
     info!("nRF initialized");
 
@@ -115,11 +134,14 @@ async fn main(spawner: Spawner) {
         p.PPIB11_CH0,
         p.PPIB21_CH0,
     );
+    // Match the Synthesized LFCLK selected above. The synthesized clock is
+    // generated from HFCLK so its accuracy depends on the HF source; with
+    // HFCLK64M_RC we use a generous 250 ppm budget.
     let lfclk_cfg = mpsl::raw::mpsl_clock_lfclk_cfg_t {
-        source: mpsl::raw::MPSL_CLOCK_LF_SRC_XTAL as u8,
+        source: mpsl::raw::MPSL_CLOCK_LF_SRC_SYNTH as u8,
         rc_ctiv: 0,
         rc_temp_ctiv: 0,
-        accuracy_ppm: 50,
+        accuracy_ppm: 250,
         skip_wait_lfclk_started: false,
     };
     static MPSL: StaticCell<MultiprotocolServiceLayer> = StaticCell::new();
@@ -158,6 +180,7 @@ async fn main(spawner: Spawner) {
     let mut rng = cracen::Cracen::new_blocking(p.CRACEN);
     let mut rng_gen = ChaCha12Rng::from_rng(&mut rng).unwrap();
     let mut sdc_mem = sdc::Mem::<SDC_MEM_SIZE>::new();
+    info!("SDC mem size: {}", SDC_MEM_SIZE);
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
     info!("SDC built");
     let mut host_resources = HostResources::new();
@@ -165,7 +188,7 @@ async fn main(spawner: Spawner) {
     info!("BLE stack ready");
 
     static EP_OUT_BUFFER: StaticCell<[u8; 2048]> = StaticCell::new();
-    let driver = Driver::new(
+    let driver: RmkUsbDriverTy = Driver::new(
         p.USBHS,
         Irqs,
         HardwareVbusDetect::new(Irqs),
@@ -183,13 +206,15 @@ async fn main(spawner: Spawner) {
     };
 
     let keyboard_device_config = DeviceConfig {
-        vid: 0x4c4b,
-        pid: 0x4643,
+        // RMK protocol's reserved test VID:PID. Match what `rmk-cli` looks up
+        // by default; override on the command line if you have a real one
+        // assigned (e.g. via pid.codes).
+        vid: 0xc0de,
+        pid: 0xcafe,
         manufacturer: "Haobo",
         product_name: "RMK nRF54LM20A",
-        serial_number: "vial:f64c2b3c:000054",
+        serial_number: "rmk:nrf54lm20:000054",
     };
-    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, UNLOCK_KEYS);
     let storage_config = StorageConfig {
         start_addr: FLASH_START_ADDR,
         num_sectors: FLASH_SECTORS,
@@ -197,7 +222,6 @@ async fn main(spawner: Spawner) {
     };
     let rmk_config = RmkConfig {
         device_config: keyboard_device_config,
-        vial_config,
         storage_config,
         ..Default::default()
     };
@@ -221,20 +245,21 @@ async fn main(spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, true);
     let mut keyboard = Keyboard::new(&keymap);
-    let mut host_service = HostService::new(&keymap, &rmk_config);
 
     let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config);
     let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
     let mut wpm_processor = WpmProcessor::new();
 
-    run_all!(
-        matrix,
-        storage,
-        usb_transport,
-        ble_transport,
-        wpm_processor,
-        keyboard,
-        host_service
-    )
-    .await;
+    // Take the rmk_protocol USB endpoints out of UsbTransport (must happen
+    // exactly once). USB and BLE servers run as bare futures alongside the
+    // `Runnable`-based tasks.
+    let (rmk_ep_in, rmk_ep_out) = usb_transport
+        .take_rmk_protocol_endpoints()
+        .expect("rmk_protocol USB endpoints not available");
+    let usb_protocol_server =
+        run_usb_server::<RmkUsbDriverTy>(&RMK_PROTOCOL_USB_STORAGE, &keymap, rmk_ep_in, rmk_ep_out);
+    let ble_protocol_server = run_ble_server(&RMK_PROTOCOL_BLE_STORAGE, &keymap);
+
+    let runnables = run_all!(matrix, storage, usb_transport, ble_transport, wpm_processor, keyboard);
+    join_all!(runnables, usb_protocol_server, ble_protocol_server).await;
 }

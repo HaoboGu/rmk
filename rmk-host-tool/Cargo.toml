@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = ["rmk-host", "rmk-cli"]
+
+# Standalone workspace deliberately separate from the firmware tree so it can
+# build with std, depend on tokio/nusb, and not interfere with the firmware
+# crate's no_std + embedded toolchain.
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/haobogu/rmk"
+
+[workspace.dependencies]
+rmk-types = { path = "../rmk-types", features = ["host"] }
+postcard-rpc = { version = "0.12", default-features = false, features = ["use-std", "raw-nusb", "cobs-serial"] }
+postcard = { version = "1", features = ["use-std"] }
+nusb = "0.1"
+bluest = "0.6"
+cobs = "0.4"
+uuid = "1"
+tokio = { version = "1", features = ["full"] }
+thiserror = "2"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }

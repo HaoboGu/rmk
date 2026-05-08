@@ -834,6 +834,10 @@ pub(crate) struct HostConfig {
     /// Whether Vial is enabled
     #[serde_inline_default(true)]
     pub vial_enabled: bool,
+    /// Whether the RMK protocol host service is enabled.
+    /// Mutually exclusive with `vial_enabled`.
+    #[serde_inline_default(false)]
+    pub rmk_protocol_enabled: bool,
     /// Unlock keys for Vial (optional)
     pub unlock_keys: Option<Vec<[u8; 2]>>,
 }
@@ -842,6 +846,7 @@ impl Default for HostConfig {
     fn default() -> Self {
         Self {
             vial_enabled: true,
+            rmk_protocol_enabled: false,
             unlock_keys: None,
         }
     }

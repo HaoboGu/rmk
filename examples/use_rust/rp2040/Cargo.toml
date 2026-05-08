@@ -10,7 +10,18 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = ["rp2040"] }
+# Flipped to the new rmk_protocol host service: drops Vial in favour of the
+# postcard-rpc-based protocol declared in rmk-types/src/protocol/rmk/.
+# `default-features = false` is required because rmk's default features pull
+# `vial` (mutually exclusive with `rmk_protocol`).
+rmk = { path = "../../../rmk", default-features = false, features = [
+    "rmk_protocol",
+    "bulk_transfer",
+    "rp2040",
+    "defmt",
+    "storage",
+    "async_matrix",
+] }
 embassy-time = { version = "0.5", features = ["defmt"] }
 embassy-rp = { version = "0.10", features = [
     "rp2040",

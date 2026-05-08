@@ -10,13 +10,24 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = ["async_matrix", "nrf54lm20_ble"] }
-nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "131ff2088ed2bb4f6e50ba49e4976aced21fe7ba", default-features = false, features = [
+# Flipped to the new rmk_protocol host service (USB bulk + BLE GATT). Default
+# rmk features include `vial`, which is mutually exclusive with `rmk_protocol`,
+# so disable defaults and re-add `defmt` + `storage` by hand.
+rmk = { path = "../../../rmk", default-features = false, features = [
+    "async_matrix",
+    "nrf54lm20_ble",
+    "rmk_protocol",
+    "bulk_transfer",
+    "defmt",
+    "storage",
+] }
+nrf-sdc = { path = "/Users/haobogu/Projects/rust/nrf-sdc/nrf-sdc", default-features = false, features = [
     "defmt",
     "peripheral",
     "nrf54lm20-app-s",
 ] }
-nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "131ff2088ed2bb4f6e50ba49e4976aced21fe7ba", default-features = false, features = [
+# nrf-mpsl = { git = "https://github.com/haobogu/nrf-sdc", rev = "79a971c4388ed26b54ff09a990673e8af0871b1b", default-features = false, features = [
+nrf-mpsl = { path = "/Users/haobogu/Projects/rust/nrf-sdc/nrf-mpsl", default-features = false, features = [
     "defmt",
     "critical-section-impl",
     "nrf54lm20-app-s",

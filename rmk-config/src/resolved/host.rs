@@ -1,6 +1,7 @@
 /// Resolved host-tool configuration.
 pub struct Host {
     pub vial_enabled: bool,
+    pub rmk_protocol_enabled: bool,
     pub unlock_keys: Vec<[u8; 2]>,
 }
 
@@ -10,6 +11,7 @@ impl crate::KeyboardTomlConfig {
         let host_toml = self.get_host_config();
         Host {
             vial_enabled: host_toml.vial_enabled,
+            rmk_protocol_enabled: host_toml.rmk_protocol_enabled,
             unlock_keys: host_toml.unlock_keys.unwrap_or_default(),
         }
     }

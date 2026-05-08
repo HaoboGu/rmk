@@ -1,0 +1,21 @@
+[package]
+name = "rmk-host"
+description = "Host-side library for the RMK protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rmk-types.workspace = true
+postcard-rpc.workspace = true
+postcard.workspace = true
+nusb.workspace = true
+bluest.workspace = true
+cobs.workspace = true
+uuid.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+futures.workspace = true
+serde.workspace = true

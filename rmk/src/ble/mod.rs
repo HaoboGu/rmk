@@ -247,11 +247,16 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let output_keyboard = server.hid_service.output_keyboard;
     let hid_control_point = server.hid_service.hid_control_point;
     let input_keyboard = server.hid_service.input_keyboard;
-    #[cfg(feature = "host")]
+    #[cfg(feature = "vial")]
     let (output_host, input_host, host_control_point) = (
         server.host_service.output_data,
         server.host_service.input_data,
         server.host_service.hid_control_point,
+    );
+    #[cfg(feature = "rmk_protocol")]
+    let (output_rmk_protocol, input_rmk_protocol) = (
+        server.rmk_protocol_service.output_data,
+        server.rmk_protocol_service.input_data,
     );
     let mouse = server.composite_service.mouse_report;
     let media = server.composite_service.media_report;
@@ -314,9 +319,9 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         }
                     }
                     GattEvent::Write(event) => {
-                        #[cfg(feature = "host")]
+                        #[cfg(feature = "vial")]
                         let host_control_point_match = event.handle() == host_control_point.handle;
-                        #[cfg(not(feature = "host"))]
+                        #[cfg(not(feature = "vial"))]
                         let host_control_point_match = false;
 
                         if event.handle() == output_keyboard.handle {
@@ -355,7 +360,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 }
                             }
                         } else {
-                            #[cfg(feature = "host")]
+                            #[cfg(feature = "vial")]
                             if event.handle() == output_host.handle {
                                 debug!("Got host packet: {:?}", event.data());
                                 if event.data().len() == 32 {
@@ -370,7 +375,25 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             } else {
                                 debug!("Write GATT Event to Unknown: {:?}", event.handle());
                             }
-                            #[cfg(not(feature = "host"))]
+                            // rmk_protocol: write payloads → request channel; CCCD subscribes
+                            // to input_data → BLE_RMK_PROTOCOL_READY signal (per plan §3.2).
+                            #[cfg(feature = "rmk_protocol")]
+                            if event.handle() == output_rmk_protocol.handle {
+                                let payload = event.data();
+                                let mut chunk: crate::host::rmk_protocol::wire_ble::BleRequestChunk =
+                                    heapless::Vec::new();
+                                if chunk.extend_from_slice(payload).is_ok() {
+                                    let _ = crate::channel::RMK_PROTOCOL_REQUEST_CHANNEL.try_send(chunk);
+                                } else {
+                                    warn!("rmk_protocol payload too large for chunk: {}", payload.len());
+                                }
+                            } else if event.handle()
+                                == input_rmk_protocol.cccd_handle.expect("No CCCD for rmk_protocol input")
+                            {
+                                cccd_updated = true;
+                                crate::channel::BLE_RMK_PROTOCOL_READY.signal(());
+                            }
+                            #[cfg(not(any(feature = "vial", feature = "rmk_protocol")))]
                             debug!("Write GATT Event to Unknown: {:?}", event.handle());
                         }
 
@@ -654,9 +677,11 @@ async fn run_ble_keyboard<
 
     let led_task = run_led_reader(&mut ble_led_reader, ConnectionType::Ble);
 
-    #[cfg(feature = "host")]
+    #[cfg(feature = "vial")]
     let host_task = crate::host::ble::run_ble_host(server.host_service.input_data, conn);
-    #[cfg(not(feature = "host"))]
+    #[cfg(feature = "rmk_protocol")]
+    let host_task = crate::host::ble::run_ble_rmk_protocol(server.rmk_protocol_service.input_data, conn);
+    #[cfg(not(any(feature = "vial", feature = "rmk_protocol")))]
     let host_task = core::future::pending::<()>();
 
     let inner = embassy_futures::join::join3(writer_task, led_task, host_task);

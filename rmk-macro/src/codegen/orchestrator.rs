@@ -49,6 +49,8 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
         is_feature_enabled(&rmk_features, "storage"),
         host.vial_enabled,
         is_feature_enabled(&rmk_features, "vial"),
+        host.rmk_protocol_enabled,
+        is_feature_enabled(&rmk_features, "rmk_protocol"),
     )
     .unwrap_or_else(|err| panic!("{err}"));
 
@@ -78,6 +80,8 @@ fn validate_feature_config_parity(
     storage_enabled_in_features: bool,
     vial_enabled_in_config: bool,
     vial_enabled_in_features: bool,
+    rmk_protocol_enabled_in_config: bool,
+    rmk_protocol_enabled_in_features: bool,
 ) -> Result<(), &'static str> {
     if storage_enabled_in_config != storage_enabled_in_features {
         if storage_enabled_in_config {
@@ -98,6 +102,23 @@ fn validate_feature_config_parity(
         }
         return Err(
             "`host.vial_enabled = false` in keyboard.toml requires disabling the \"vial\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need).",
+        );
+    }
+
+    if rmk_protocol_enabled_in_config != rmk_protocol_enabled_in_features {
+        if rmk_protocol_enabled_in_config {
+            return Err(
+                "If the \"rmk_protocol\" Cargo feature is disabled, `host.rmk_protocol_enabled` must be set to false in keyboard.toml.",
+            );
+        }
+        return Err(
+            "`host.rmk_protocol_enabled = false` in keyboard.toml requires disabling the \"rmk_protocol\" Cargo feature for rmk in Cargo.toml.",
+        );
+    }
+
+    if vial_enabled_in_config && rmk_protocol_enabled_in_config {
+        return Err(
+            "`host.vial_enabled` and `host.rmk_protocol_enabled` are mutually exclusive — pick at most one host protocol.",
         );
     }
 
@@ -165,14 +186,16 @@ mod tests {
 
     #[test]
     fn accepts_matching_storage_and_vial_feature_states() {
-        assert!(validate_feature_config_parity(true, true, true, true).is_ok());
-        assert!(validate_feature_config_parity(false, false, false, false).is_ok());
-        assert!(validate_feature_config_parity(true, true, false, false).is_ok());
+        assert!(validate_feature_config_parity(true, true, true, true, false, false).is_ok());
+        assert!(validate_feature_config_parity(false, false, false, false, false, false).is_ok());
+        assert!(validate_feature_config_parity(true, true, false, false, false, false).is_ok());
+        assert!(validate_feature_config_parity(true, true, false, false, true, true).is_ok());
     }
 
     #[test]
     fn rejects_storage_enabled_in_config_without_feature() {
-        let err = validate_feature_config_parity(true, false, false, false).unwrap_err();
+        let err =
+            validate_feature_config_parity(true, false, false, false, false, false).unwrap_err();
         assert_eq!(
             err,
             "If the \"storage\" Cargo feature is disabled, `storage.enabled` must be set to false in keyboard.toml."
@@ -181,7 +204,8 @@ mod tests {
 
     #[test]
     fn rejects_storage_feature_without_config() {
-        let err = validate_feature_config_parity(false, true, false, false).unwrap_err();
+        let err =
+            validate_feature_config_parity(false, true, false, false, false, false).unwrap_err();
         assert_eq!(
             err,
             "`storage.enabled = false` in keyboard.toml requires disabling the \"storage\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need)."
@@ -190,7 +214,8 @@ mod tests {
 
     #[test]
     fn rejects_vial_enabled_in_config_without_feature() {
-        let err = validate_feature_config_parity(false, false, true, false).unwrap_err();
+        let err =
+            validate_feature_config_parity(false, false, true, false, false, false).unwrap_err();
         assert_eq!(
             err,
             "If the \"vial\" Cargo feature is disabled, `host.vial_enabled` must be set to false in keyboard.toml."
@@ -199,11 +224,28 @@ mod tests {
 
     #[test]
     fn rejects_vial_feature_without_config() {
-        let err = validate_feature_config_parity(false, false, false, true).unwrap_err();
+        let err =
+            validate_feature_config_parity(false, false, false, true, false, false).unwrap_err();
         assert_eq!(
             err,
             "`host.vial_enabled = false` in keyboard.toml requires disabling the \"vial\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need)."
         );
+    }
+
+    #[test]
+    fn rejects_rmk_protocol_enabled_without_feature() {
+        let err =
+            validate_feature_config_parity(false, false, false, false, true, false).unwrap_err();
+        assert_eq!(
+            err,
+            "If the \"rmk_protocol\" Cargo feature is disabled, `host.rmk_protocol_enabled` must be set to false in keyboard.toml."
+        );
+    }
+
+    #[test]
+    fn rejects_vial_and_rmk_protocol_both_enabled() {
+        let err = validate_feature_config_parity(false, false, true, true, true, true).unwrap_err();
+        assert!(err.contains("mutually exclusive"));
     }
 }
 
@@ -250,9 +292,33 @@ fn expand_main(
         quote! {}
     };
 
+    // rmk_protocol's per-transport storage statics — declared once at the
+    // entry-point level. The concrete USB driver type comes from the
+    // `RmkUsbDriverTy` typedef emitted in `expand_usb_init`.
     let host_service_init = if host.vial_enabled {
         quote! {
             let mut host_service = ::rmk::host::HostService::new(&keymap, &rmk_config);
+        }
+    } else if host.rmk_protocol_enabled {
+        let usb_storage = if hardware.communication.usb_enabled() {
+            quote! {
+                static RMK_PROTOCOL_USB_STORAGE: ::rmk::host::rmk_protocol::UsbServerStorage<RmkUsbDriverTy> =
+                    ::rmk::host::rmk_protocol::UsbServerStorage::new();
+            }
+        } else {
+            quote! {}
+        };
+        let ble_storage = if hardware.communication.ble_enabled() {
+            quote! {
+                static RMK_PROTOCOL_BLE_STORAGE: ::rmk::host::rmk_protocol::BleServerStorage =
+                    ::rmk::host::rmk_protocol::BleServerStorage::new();
+            }
+        } else {
+            quote! {}
+        };
+        quote! {
+            #usb_storage
+            #ble_storage
         }
     } else {
         quote! {}

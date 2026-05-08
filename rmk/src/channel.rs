@@ -112,6 +112,31 @@ pub(crate) static HOST_USB_REPLY: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE>
 #[cfg(all(feature = "host", feature = "_ble"))]
 pub(crate) static HOST_BLE_REPLY: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE> = Channel::new();
 
+// ---------------------------------------------------------------------------
+// rmk_protocol transport channels (BLE only — USB drains its bulk-OUT endpoint
+// directly via embassy_usb::driver::EndpointOut).
+// ---------------------------------------------------------------------------
+
+/// Carries one BLE write payload (MTU − 3) from `gatt_events_task` to
+/// `BleWireRx`. Channel depth 4: one in-flight + headroom for pipelined writes.
+#[cfg(all(feature = "rmk_protocol", feature = "_ble"))]
+pub(crate) static RMK_PROTOCOL_REQUEST_CHANNEL: Channel<
+    RawMutex,
+    crate::host::rmk_protocol::wire_ble::BleRequestChunk,
+    4,
+> = Channel::new();
+
+/// Carries one COBS-encoded outbound RPC frame from `BleWireTx` to the
+/// per-connection notify task. Same depth rationale as the request channel.
+#[cfg(all(feature = "rmk_protocol", feature = "_ble"))]
+pub(crate) static RMK_PROTOCOL_REPLY_CHANNEL: Channel<RawMutex, crate::host::rmk_protocol::wire_ble::BleReplyFrame, 4> =
+    Channel::new();
+
+/// Set by `gatt_events_task` on the first CCCD subscribe to `input_data`.
+/// Awaited by the BLE rmk_protocol Server's outer reentry loop.
+#[cfg(all(feature = "rmk_protocol", feature = "_ble"))]
+pub(crate) static BLE_RMK_PROTOCOL_READY: Signal<RawMutex, ()> = Signal::new();
+
 /// Routes a Vial reply back to the channel owned by the originating transport.
 /// Drops with a warning when the destination queue already has a pending reply
 /// (the `HostService` produced faster than the transport drained it).

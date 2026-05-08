@@ -1,7 +1,7 @@
 use embassy_futures::join::join4;
 use embassy_futures::select::{Either, select};
 use embassy_sync::signal::Signal;
-#[cfg(feature = "host")]
+#[cfg(feature = "vial")]
 use embassy_usb::class::hid::HidReaderWriter;
 use embassy_usb::class::hid::{HidReader, HidWriter, ReportId, RequestHandler};
 use embassy_usb::control::OutResponse;
@@ -17,7 +17,7 @@ use crate::config::DeviceConfig;
 use crate::core_traits::Runnable;
 #[cfg(feature = "steno")]
 use crate::hid::StenoReport;
-#[cfg(feature = "host")]
+#[cfg(feature = "vial")]
 use crate::hid::ViaReport;
 use crate::hid::{
     CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report, run_led_reader,
@@ -160,23 +160,37 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     usb_config.device_protocol = 0x01;
     usb_config.composite_with_iads = true;
 
-    // Extra HID interfaces (usb_log, steno) overflow the 128-byte config descriptor buffer.
-    #[cfg(any(feature = "usb_log", feature = "steno"))]
+    // Extra HID interfaces (usb_log, steno) and the rmk_protocol vendor bulk
+    // function overflow the 128-byte config descriptor buffer.
+    #[cfg(any(feature = "usb_log", feature = "steno", feature = "rmk_protocol"))]
     const USB_BUF_SIZE: usize = 256;
-    #[cfg(not(any(feature = "usb_log", feature = "steno")))]
+    #[cfg(not(any(feature = "usb_log", feature = "steno", feature = "rmk_protocol")))]
     const USB_BUF_SIZE: usize = 128;
+    // WinUSB MSOS 2.0 descriptors (compatible-ID + DeviceInterfaceGUIDs
+    // RegistryProperty) easily exceed 16 bytes; rmk_protocol needs ~256.
+    #[cfg(feature = "rmk_protocol")]
+    const MSOS_BUF_SIZE: usize = 256;
+    #[cfg(not(feature = "rmk_protocol"))]
+    const MSOS_BUF_SIZE: usize = 16;
+
+    // BOS descriptor: needs ~33 bytes when MSOS 2.0 platform capability is
+    // emitted (rmk_protocol's WinUSB descriptors do this).
+    #[cfg(feature = "rmk_protocol")]
+    const BOS_BUF_SIZE: usize = 64;
+    #[cfg(not(feature = "rmk_protocol"))]
+    const BOS_BUF_SIZE: usize = 16;
 
     static CONFIG_DESC: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
-    static BOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
-    static MSOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
+    static BOS_DESC: StaticCell<[u8; BOS_BUF_SIZE]> = StaticCell::new();
+    static MSOS_DESC: StaticCell<[u8; MSOS_BUF_SIZE]> = StaticCell::new();
     static CONTROL_BUF: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
 
     let mut builder = Builder::new(
         driver,
         usb_config,
         &mut CONFIG_DESC.init([0; USB_BUF_SIZE])[..],
-        &mut BOS_DESC.init([0; 16])[..],
-        &mut MSOS_DESC.init([0; 16])[..],
+        &mut BOS_DESC.init([0; BOS_BUF_SIZE])[..],
+        &mut MSOS_DESC.init([0; MSOS_BUF_SIZE])[..],
         &mut CONTROL_BUF.init([0; USB_BUF_SIZE])[..],
     );
 
@@ -196,8 +210,15 @@ pub struct UsbTransport<D: Driver<'static>> {
     other_writer: HidWriter<'static, D, 9>,
     #[cfg(feature = "steno")]
     steno_writer: HidWriter<'static, D, 9>,
-    #[cfg(feature = "host")]
+    #[cfg(feature = "vial")]
     host_rw: HidReaderWriter<'static, D, 32, 32>,
+    /// rmk_protocol bulk-IN / bulk-OUT pair. Taken once by
+    /// `take_rmk_protocol_endpoints` to construct the per-transport `WireTx`
+    /// and `WireRx`; left as `None` for any future call.
+    #[cfg(feature = "rmk_protocol")]
+    rmk_protocol_ep_in: Option<D::EndpointIn>,
+    #[cfg(feature = "rmk_protocol")]
+    rmk_protocol_ep_out: Option<D::EndpointOut>,
     #[cfg(feature = "usb_log")]
     logger: Option<embassy_usb::class::cdc_acm::CdcAcmClass<'static, D>>,
 }
@@ -228,10 +249,34 @@ impl<D: Driver<'static>> UsbTransport<D> {
         let other_writer = add_usb_writer!(&mut builder, CompositeReport, 9, 16);
         #[cfg(feature = "steno")]
         let steno_writer = add_usb_writer!(&mut builder, StenoReport, 9, 16);
-        #[cfg(feature = "host")]
+        #[cfg(feature = "vial")]
         let host_rw = add_usb_reader_writer!(&mut builder, ViaReport, 32, 32, 32);
         #[cfg(feature = "usb_log")]
         let logger = Some(add_usb_logger!(&mut builder));
+
+        // rmk_protocol vendor-class bulk pair (0xFF/0x00/0x00) + WinUSB MSOS 2.0
+        // descriptors so Windows binds the WinUSB driver automatically. The
+        // matching DeviceInterfaceGUID lives in `rmk-host-tool/`'s README and
+        // the host CLI's USB selector.
+        #[cfg(feature = "rmk_protocol")]
+        let (rmk_protocol_ep_in, rmk_protocol_ep_out) = {
+            use embassy_usb::msos::{self, windows_version};
+            const RMK_PROTOCOL_INTERFACE_GUID: &[&str] = &["{C8B9F0E2-9D4A-4B4C-AAFB-1C3F2D10A8E5}"];
+
+            builder.msos_descriptor(windows_version::WIN8_1, 0);
+            let mut function = builder.function(0xFF, 0x00, 0x00);
+            function.msos_feature(msos::CompatibleIdFeatureDescriptor::new("WINUSB", ""));
+            function.msos_feature(msos::RegistryPropertyFeatureDescriptor::new(
+                "DeviceInterfaceGUIDs",
+                msos::PropertyData::RegMultiSz(RMK_PROTOCOL_INTERFACE_GUID),
+            ));
+            let mut interface = function.interface();
+            let mut alt = interface.alt_setting(0xFF, 0x00, 0x00, None);
+            let ep_out = alt.endpoint_bulk_out(None, 64);
+            let ep_in = alt.endpoint_bulk_in(None, 64);
+            drop(function);
+            (Some(ep_in), Some(ep_out))
+        };
 
         let (keyboard_reader, keyboard_writer) = keyboard_rw.split();
         let device = builder.build();
@@ -243,10 +288,25 @@ impl<D: Driver<'static>> UsbTransport<D> {
             other_writer,
             #[cfg(feature = "steno")]
             steno_writer,
-            #[cfg(feature = "host")]
+            #[cfg(feature = "vial")]
             host_rw,
+            #[cfg(feature = "rmk_protocol")]
+            rmk_protocol_ep_in,
+            #[cfg(feature = "rmk_protocol")]
+            rmk_protocol_ep_out,
             #[cfg(feature = "usb_log")]
             logger,
+        }
+    }
+
+    /// Take the rmk_protocol bulk endpoints. Returns `None` after the first
+    /// call. Caller (typically the macro-generated entry point) wires them
+    /// into a `host::rmk_protocol::wire_usb` adapter.
+    #[cfg(feature = "rmk_protocol")]
+    pub fn take_rmk_protocol_endpoints(&mut self) -> Option<(D::EndpointIn, D::EndpointOut)> {
+        match (self.rmk_protocol_ep_in.take(), self.rmk_protocol_ep_out.take()) {
+            (Some(i), Some(o)) => Some((i, o)),
+            _ => None,
         }
     }
 }
@@ -260,10 +320,11 @@ impl<D: Driver<'static>> Runnable for UsbTransport<D> {
             other_writer,
             #[cfg(feature = "steno")]
             steno_writer,
-            #[cfg(feature = "host")]
+            #[cfg(feature = "vial")]
             host_rw,
             #[cfg(feature = "usb_log")]
             logger,
+            ..
         } = self;
 
         let usb_device_task = async {
@@ -294,9 +355,9 @@ impl<D: Driver<'static>> Runnable for UsbTransport<D> {
         let led_task = run_led_reader(&mut led_reader, ConnectionType::Usb);
 
         let host_and_extras = async {
-            #[cfg(feature = "host")]
+            #[cfg(feature = "vial")]
             let host_task = crate::host::usb::run_usb_host(host_rw);
-            #[cfg(not(feature = "host"))]
+            #[cfg(not(feature = "vial"))]
             let host_task = core::future::pending::<()>();
 
             #[cfg(feature = "usb_log")]

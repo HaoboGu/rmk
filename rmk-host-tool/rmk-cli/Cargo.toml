@@ -1,0 +1,17 @@
+[package]
+name = "rmk-cli"
+description = "Command-line client for the RMK protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rmk-host = { path = "../rmk-host" }
+rmk-types.workspace = true
+clap.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+futures.workspace = true
+bluest.workspace = true
