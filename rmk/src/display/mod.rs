@@ -372,6 +372,7 @@ where
 
     async fn on_modifier_event(&mut self, event: ModifierEvent) {
         self.ctx.modifiers = event.modifier;
+        self.render().await;
     }
 
     async fn on_sleep_state_event(&mut self, event: SleepStateEvent) {
