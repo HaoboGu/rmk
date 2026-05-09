@@ -24,6 +24,16 @@ jobs:
           components: rustfmt
       - run: .github/ci/format.sh
 
+  # Verify every Cargo.lock is in sync with its Cargo.toml. Catches the
+  # case where a deps bump in rmk/rmk-types is merged without refreshing
+  # example lockfiles (see scripts/fetch_all.sh).
+  fetch-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: bash scripts/fetch_all.sh --check
+
   check:
     runs-on: ubuntu-latest
     steps:
