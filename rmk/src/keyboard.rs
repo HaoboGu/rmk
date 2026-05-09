@@ -1036,21 +1036,32 @@ impl<'a> Keyboard<'a> {
                 return (None, true);
             }
         }
+        // Combo idle cooldown: skip combo recording if within idle window
+        // Equivalent to ZMK's require-prior-idle-ms. Key still dispatches normally.
+        let skip_combo = event.pressed
+            && self
+                .keymap
+                .combo_prior_idle_time()
+                .is_some_and(|idle_time| self.last_press_time.elapsed() < idle_time);
 
-        let max_size_of_updated_combo = self.keymap.with_combos_mut(|combos| {
-            combos
-                .iter_mut()
-                .filter_map(|c| c.as_mut())
-                .map(|c| {
-                    if c.update(key_action, event, current_layer) {
-                        info!("Updated combo: {:?}", c);
-                        c.size()
-                    } else {
-                        0
-                    }
-                })
-                .max()
-        });
+        let max_size_of_updated_combo = if skip_combo {
+            None
+        } else {
+            self.keymap.with_combos_mut(|combos| {
+                combos
+                    .iter_mut()
+                    .filter_map(|c| c.as_mut())
+                    .map(|c| {
+                        if c.update(key_action, event, current_layer) {
+                            info!("Updated combo: {:?}", c);
+                            c.size()
+                        } else {
+                            0
+                        }
+                    })
+                    .max()
+            })
+        };
 
         if event.pressed
             && let Some(max_size) = max_size_of_updated_combo

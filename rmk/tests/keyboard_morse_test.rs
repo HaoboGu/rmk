@@ -733,6 +733,7 @@ fn test_morse_with_combo() {
                         ))), None, None, None, None, None, None, None
                     ],
                     timeout: Duration::from_millis(50),
+                    prior_idle_time: None,
                 },
                 ..BehaviorConfig::default()
             }),
@@ -765,6 +766,7 @@ fn test_morse_with_combo_2() {
                         ))), None, None, None, None, None, None, None
                     ],
                     timeout: Duration::from_millis(50),
+                    prior_idle_time: None,
                 },
                 ..BehaviorConfig::default()
             }),

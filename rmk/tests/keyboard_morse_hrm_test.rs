@@ -87,6 +87,7 @@ fn create_hrm_keyboard_with_combo() -> Keyboard<'static> {
                     None,
                 ],
                 timeout: Duration::from_millis(50),
+                prior_idle_time: None,
             },
             ..BehaviorConfig::default()
         },

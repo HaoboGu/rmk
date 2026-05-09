@@ -150,6 +150,13 @@ fn expand_combos(
                 None => quote! {},
             };
 
+            let prior_idle_time = match &combos.prior_idle_time_ms {
+                Some(millis) => {
+                    quote! { prior_idle_time: ::core::option::Option::Some(::embassy_time::Duration::from_millis(#millis)), }
+                }
+                None => quote! {},
+            };
+
             quote! {
                 ::rmk::config::CombosConfig {
                     combos: {
@@ -163,6 +170,7 @@ fn expand_combos(
                         })
                     },
                     #timeout
+                    #prior_idle_time
                     ..Default::default()
                 }
             }
