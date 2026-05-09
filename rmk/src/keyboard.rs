@@ -2223,7 +2223,7 @@ mod test {
             let mut keyboard = create_test_keyboard();
 
             // Activate layer 1
-            keyboard.process_action_layer_switch(1, KeyboardEvent::key(0, 0, true));
+            keyboard.process_action_layer_switch(1, KeyboardEvent::key(0, 0, true)).await;
 
             // Press Transparent key (Q on lower layer)
             keyboard.process_inner(KeyboardEvent::key(1, 1, true)).await;
