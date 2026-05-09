@@ -252,7 +252,8 @@ fn expand_main(
 
     let host_service_init = if host.vial_enabled {
         quote! {
-            let mut host_service = ::rmk::host::HostService::new(&keymap, &rmk_config);
+            let host_ctx = ::rmk::host::KeyboardContext::new(&keymap);
+            let mut host_service = ::rmk::host::HostService::new(&host_ctx, &rmk_config);
         }
     } else {
         quote! {}

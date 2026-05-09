@@ -55,6 +55,15 @@ pub(crate) static LAST_KEY_TIMESTAMP: Signal<crate::RawMutex, u32> = Signal::new
 /// LedIndicator type would be nicer, but that does not have const expr constructor
 pub(crate) static LOCK_LED_STATES: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0u8);
 
+/// Read the current host-driven lock LED state as a typed [`LedIndicator`].
+///
+/// Updated by `run_led_reader` whenever the host sends a SET_REPORT for LEDs;
+/// host services read it synchronously instead of subscribing to
+/// [`LedIndicatorEvent`](crate::event::LedIndicatorEvent).
+pub(crate) fn current_led_indicator() -> LedIndicator {
+    LedIndicator::from_bits(LOCK_LED_STATES.load(core::sync::atomic::Ordering::Relaxed))
+}
+
 /// State machine for Caps Word
 #[derive(Debug, Default)]
 enum CapsWordState {

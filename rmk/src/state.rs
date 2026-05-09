@@ -21,6 +21,10 @@ pub(crate) fn active_transport() -> Option<ConnectionType> {
     CONNECTION_STATUS.lock(|c| c.get().decide_active())
 }
 
+pub(crate) fn current_connection_status() -> ConnectionStatus {
+    CONNECTION_STATUS.lock(|c| c.get())
+}
+
 pub(crate) fn current_usb_state() -> UsbState {
     CONNECTION_STATUS.lock(|c| c.get().usb)
 }

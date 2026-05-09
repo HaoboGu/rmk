@@ -179,7 +179,8 @@ async fn main(_spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, true);
     let mut keyboard = Keyboard::new(&keymap);
-    let mut host_service = HostService::new(&keymap, &rmk_config);
+    let host_ctx = rmk::host::KeyboardContext::new(&keymap);
+    let mut host_service = HostService::new(&host_ctx, &rmk_config);
 
     // Rotary encoder: PA43 = phase A, PA41 = phase B. Detents short to GND, so pull-ups are required.
     // Resolution 4 collapses the 4 quadrature transitions per detent into a single event;

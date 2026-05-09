@@ -221,7 +221,8 @@ async fn main(spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, true);
     let mut keyboard = Keyboard::new(&keymap);
-    let mut host_service = HostService::new(&keymap, &rmk_config);
+    let host_ctx = rmk::host::KeyboardContext::new(&keymap);
+    let mut host_service = HostService::new(&host_ctx, &rmk_config);
 
     let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config);
     let mut ble_transport = BleTransport::new(&stack, rmk_config).await;

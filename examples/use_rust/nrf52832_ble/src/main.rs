@@ -159,7 +159,8 @@ async fn main(spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap);
-    let mut host_service = HostService::new(&keymap, &rmk_config);
+    let host_ctx = rmk::host::KeyboardContext::new(&keymap);
+    let mut host_service = HostService::new(&host_ctx, &rmk_config);
 
     let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
     let mut wpm_processor = WpmProcessor::new();
