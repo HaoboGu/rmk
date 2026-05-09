@@ -150,9 +150,9 @@ fn expand_combos(
                 None => quote! {},
             };
 
-            let require_prior_idle = match &combos.require_prior_idle_ms {
+            let prior_idle_time = match &combos.prior_idle_time_ms {
                 Some(millis) => {
-                    quote! { require_prior_idle_ms: ::core::option::Option::Some(::embassy_time::Duration::from_millis(#millis)), }
+                    quote! { prior_idle_time: ::core::option::Option::Some(::embassy_time::Duration::from_millis(#millis)), }
                 }
                 None => quote! {},
             };
@@ -170,7 +170,7 @@ fn expand_combos(
                         })
                     },
                     #timeout
-                    #require_prior_idle
+                    #prior_idle_time
                     ..Default::default()
                 }
             }

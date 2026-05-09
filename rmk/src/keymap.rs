@@ -504,8 +504,8 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().behavior.combo.timeout
     }
 
-    pub(crate) fn combo_require_prior_idle(&self) -> Option<Duration> {
-        self.inner.borrow().behavior.combo.require_prior_idle_ms
+    pub(crate) fn combo_prior_idle_time(&self) -> Option<Duration> {
+        self.inner.borrow().behavior.combo.prior_idle_time
     }
 
     pub(crate) fn one_shot_timeout(&self) -> Duration {

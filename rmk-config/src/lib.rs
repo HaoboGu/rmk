@@ -629,7 +629,7 @@ pub struct OneShotModifiersConfig {
 pub(crate) struct CombosConfig {
     pub combos: Vec<ComboConfig>,
     pub timeout: Option<DurationMillis>,
-    pub require_prior_idle_ms: Option<u64>,
+    pub prior_idle_time: Option<DurationMillis>,
 }
 
 /// Configurations for combo

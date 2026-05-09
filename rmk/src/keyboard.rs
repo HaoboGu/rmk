@@ -1032,7 +1032,7 @@ impl<'a> Keyboard<'a> {
         let skip_combo = event.pressed
             && self
                 .keymap
-                .combo_require_prior_idle()
+                .combo_prior_idle_time()
                 .is_some_and(|idle_time| self.last_press_time.elapsed() < idle_time);
 
         let max_size_of_updated_combo = if skip_combo {

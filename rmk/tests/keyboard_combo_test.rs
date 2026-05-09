@@ -75,7 +75,7 @@ pub fn get_combos_config() -> CombosConfig {
             None,
         ],
         timeout: Duration::from_millis(100),
-        require_prior_idle_ms: None,
+        prior_idle_time: None,
     }
 }
 
@@ -323,7 +323,7 @@ fn test_taphold_with_combo() {
                         ))), None, None, None, None, None, None, None
                     ],
                     timeout: Duration::from_millis(50),
-                    require_prior_idle_ms: None,
+                    prior_idle_time: None,
                 },
                 ..Default::default()
             };
@@ -366,7 +366,7 @@ fn test_re_press_combo_key_while_triggered_does_not_leak_to_hid() {
             None,
         ],
         timeout: Duration::from_millis(40),
-        require_prior_idle_ms: None,
+        prior_idle_time: None,
     };
     key_sequence_test! {
         keyboard: create_test_keyboard_with_config(BehaviorConfig {
@@ -423,7 +423,7 @@ fn test_overlapping_triggered_combos_release_all_outputs() {
             None,
         ],
         timeout: Duration::from_millis(40),
-        require_prior_idle_ms: None,
+        prior_idle_time: None,
     };
     key_sequence_test! {
         keyboard: create_test_keyboard_with_config(BehaviorConfig {

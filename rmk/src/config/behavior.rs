@@ -86,7 +86,7 @@ pub struct CombosConfig {
     pub timeout: Duration,
     /// Cooldown after any key press before a combo can start recording.
     /// `None` = no idle check (backward compatible). Equivalent to ZMK `require-prior-idle-ms`.
-    pub require_prior_idle_ms: Option<Duration>,
+    pub prior_idle_time: Option<Duration>,
 }
 
 impl Default for CombosConfig {
@@ -94,7 +94,7 @@ impl Default for CombosConfig {
         Self {
             timeout: Duration::from_millis(50),
             combos: core::array::from_fn(|_| None),
-            require_prior_idle_ms: None,
+            prior_idle_time: None,
         }
     }
 }

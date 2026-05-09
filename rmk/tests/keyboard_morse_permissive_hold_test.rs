@@ -72,7 +72,7 @@ fn create_permissive_hold_keyboard_with_combo() -> Keyboard<'static> {
                 None,
             ],
             timeout: Duration::from_millis(50),
-            require_prior_idle_ms: None,
+            prior_idle_time: None,
         },
         ..BehaviorConfig::default()
     })
