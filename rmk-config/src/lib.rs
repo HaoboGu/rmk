@@ -627,6 +627,7 @@ pub struct OneShotModifiersConfig {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct CombosConfig {
+    #[serde(default)]
     pub combos: Vec<ComboConfig>,
     pub timeout: Option<DurationMillis>,
     pub prior_idle_time: Option<DurationMillis>,
