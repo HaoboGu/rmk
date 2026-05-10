@@ -176,7 +176,7 @@ where
                         // Connected when it sees GattConnectionEvent::Encrypted.
                         #[cfg(feature = "storage")]
                         let active_bond_info = profile_manager.active_bond_info();
-                        select(
+                        if let Either::Second(_) = select(
                             run_ble_keyboard(
                                 server,
                                 &conn,
@@ -186,23 +186,17 @@ where
                             ),
                             profile_manager.update_profile(),
                         )
-                        .await;
-
-                        // The inner select may return because of a profile switch (link still
-                        // up at the controller) or a peer-side disconnect (link already torn
-                        // down). Just dropping `conn` doesn't wait for the controller to
-                        // release the slot.
-                        // Drive an explicit disconnect (no-op when the controller is already done)
-                        // and wait for the disconnection event before falling back to
-                        // advertise.
-                        if conn.raw().is_connected() {
-                            conn.raw().disconnect();
-                            let _ = with_timeout(Duration::from_millis(500), async {
-                                while conn.raw().is_connected() {
-                                    let _ = conn.next().await;
+                        .await
+                        {
+                            // When the profile changes, manually disconnect from the current host
+                            if conn.raw().is_connected() {
+                                conn.raw().disconnect();
+                                loop {
+                                    if let GattConnectionEvent::Disconnected { .. } = conn.next().await {
+                                        break;
+                                    }
                                 }
-                            })
-                            .await;
+                            }
                         }
                     }
                     Either::First(Err(BleHostError::BleHost(Error::Timeout))) => {
