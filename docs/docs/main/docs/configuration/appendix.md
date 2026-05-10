@@ -192,6 +192,7 @@ MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_
 # Combo configuration
 [behavior.combo]
 timeout = "150ms"
+prior_idle_time = "130ms"  # optional, prevents accidental triggers during fast typing
 combos = [
   # Press J and K keys simultaneously to output Escape key
   { actions = ["J", "K"], output = "Escape" }
