@@ -11,11 +11,6 @@ use rmk_types::morse::MorseProfile;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{Key, MapConfig, MapStorage, PostcardValue, SerializationError};
-#[cfg(feature = "_ble")]
-use {
-    crate::ble::{ble_server::CCCD_TABLE_SIZE, profile::ProfileInfo},
-    trouble_host::prelude::CccdTable,
-};
 #[cfg(feature = "host")]
 use {
     crate::{MACRO_SPACE_SIZE, keyboard::combo::ComboConfig},
@@ -24,6 +19,8 @@ use {
     rmk_types::morse::Morse,
 };
 
+#[cfg(feature = "_ble")]
+use crate::ble::profile::ProfileInfo;
 use crate::channel::FLASH_CHANNEL;
 use crate::config::StorageConfig;
 #[cfg(all(feature = "_ble", feature = "split"))]
@@ -772,9 +769,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 }
                 #[cfg(feature = "_ble")]
                 FlashOperationMessage::ClearSlot(slot_num) => {
-                    use bt_hci::param::BdAddr;
-                    use trouble_host::prelude::{CCCD, SecurityLevel};
-                    use trouble_host::{BondInformation, Identity, LongTermKey};
+                    use trouble_host::prelude::SecurityLevel;
+                    use trouble_host::{Address, BondInformation, Identity, LongTermKey};
 
                     info!("Clearing bond info slot_num: {}", slot_num);
                     // Remove item in `sequential-storage` is quite expensive, so just override the item with `removed = true`
@@ -783,14 +779,14 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         slot_num,
                         info: BondInformation::new(
                             Identity {
-                                bd_addr: BdAddr::new([0; 6]),
+                                addr: Address::default(),
                                 irk: None,
                             },
                             LongTermKey::from_le_bytes([0; 16]),
                             SecurityLevel::NoEncryption,
                             false,
                         ),
-                        cccd_table: CccdTable::new([(0u16, CCCD::default()); CCCD_TABLE_SIZE]),
+                        cccd_table: heapless::Vec::new(),
                     };
                     self.store_data(StorageKey::bond_info(slot_num), &StorageData::BondInfo(empty))
                         .await

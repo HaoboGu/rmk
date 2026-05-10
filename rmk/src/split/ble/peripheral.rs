@@ -125,15 +125,14 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitWriter for BleSplitPeripheralDrive
 /// * `id` - The id of the peripheral
 /// * `central_addr` - The address of the central
 /// * `stack` - The stack to use
-pub async fn initialize_nrf_ble_split_peripheral_and_run<'stack, C: Controller + ControllerCmdAsync<LeSetPhy>>(
+pub async fn initialize_nrf_ble_split_peripheral_and_run<'b, 's: 'b, C: Controller + ControllerCmdAsync<LeSetPhy>>(
     id: usize,
-    stack: &'stack Stack<'stack, C, DefaultPacketPool>,
+    stack: &'b Stack<'s, C, DefaultPacketPool>,
 ) {
     publish_event(CentralConnectedEvent { connected: false });
 
-    let Host {
-        mut peripheral, runner, ..
-    } = stack.build();
+    let mut peripheral = stack.peripheral();
+    let runner = stack.runner();
 
     // First, read central address from storage
     let mut central_addr = crate::storage::read_peer_address(0)
@@ -151,7 +150,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'stack, C: Controller +
                     info!("Connected to the central");
                     publish_event(CentralConnectedEvent { connected: true });
                     let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
-                    let new_addr = conn.raw().peer_address().into_inner();
+                    let new_addr = conn.raw().peer_address().addr.into_inner();
                     if central_addr != Some(new_addr) {
                         info!("Saving central address to storage");
                         if crate::storage::write_peer_address(PeerAddress {

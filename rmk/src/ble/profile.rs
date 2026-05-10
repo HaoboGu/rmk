@@ -15,7 +15,7 @@ use crate::channel::BLE_PROFILE_CHANNEL;
 use crate::state::{current_profile, set_ble_profile};
 
 pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal::new();
-pub(crate) static UPDATED_CCCD_TABLE: Signal<crate::RawMutex, CccdTable<CCCD_TABLE_SIZE>> = Signal::new();
+pub(crate) static UPDATED_CCCD_TABLE: Signal<crate::RawMutex, heapless::Vec<u8, CCCD_TABLE_SIZE>> = Signal::new();
 
 /// BLE profile info
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -23,88 +23,10 @@ pub(crate) static UPDATED_CCCD_TABLE: Signal<crate::RawMutex, CccdTable<CCCD_TAB
 pub struct ProfileInfo {
     pub(crate) slot_num: u8,
     pub(crate) removed: bool,
-    #[serde(with = "bond_info_serde")]
     pub(crate) info: BondInformation,
-    #[serde(with = "cccd_table_serde")]
-    pub(crate) cccd_table: CccdTable<CCCD_TABLE_SIZE>,
-}
-
-// Custom serde module for BondInformation
-pub(crate) mod bond_info_serde {
-    use serde::{Deserializer, Serialize, Serializer};
-
-    use super::*;
-
-    pub fn serialize<S>(info: &BondInformation, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let tuple = (
-            info.ltk.to_le_bytes(),
-            info.identity.bd_addr.into_inner(),
-            info.identity.irk.map(|k| k.to_le_bytes()),
-            match info.security_level {
-                SecurityLevel::NoEncryption => 0u8,
-                SecurityLevel::Encrypted => 1u8,
-                SecurityLevel::EncryptedAuthenticated => 2u8,
-            },
-            info.is_bonded,
-        );
-        tuple.serialize(serializer)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<BondInformation, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let (ltk, bd_addr, irk, security_level, is_bonded): ([u8; 16], [u8; 6], Option<[u8; 16]>, u8, bool) =
-            serde::Deserialize::deserialize(deserializer)?;
-
-        Ok(BondInformation::new(
-            Identity {
-                bd_addr: BdAddr::new(bd_addr),
-                irk: irk.map(IdentityResolvingKey::from_le_bytes),
-            },
-            LongTermKey::from_le_bytes(ltk),
-            match security_level {
-                0 => SecurityLevel::NoEncryption,
-                1 => SecurityLevel::Encrypted,
-                _ => SecurityLevel::EncryptedAuthenticated,
-            },
-            is_bonded,
-        ))
-    }
-}
-
-// Custom serde module for CccdTable
-pub(crate) mod cccd_table_serde {
-    use serde::{Deserializer, Serialize, Serializer};
-
-    use super::*;
-
-    pub fn serialize<S>(table: &CccdTable<CCCD_TABLE_SIZE>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut entries = [(0u16, 0u16); CCCD_TABLE_SIZE];
-
-        for (i, entry) in table.inner().iter().enumerate() {
-            entries[i] = (entry.0, entry.1.raw());
-        }
-        entries.serialize(serializer)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<CccdTable<CCCD_TABLE_SIZE>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let entries: [(u16, u16); CCCD_TABLE_SIZE] = serde::Deserialize::deserialize(deserializer)?;
-        let mut cccd_values = [(0u16, CCCD::default()); CCCD_TABLE_SIZE];
-        for i in 0..CCCD_TABLE_SIZE {
-            cccd_values[i] = (entries[i].0, entries[i].1.into());
-        }
-        Ok(CccdTable::new(cccd_values))
-    }
+    /// Raw bytes of the trouble-host `ClientAttTable` for this peer.
+    /// Reconstructed via `ClientAttTableView::try_from_raw` when applied to the stack.
+    pub(crate) cccd_table: heapless::Vec<u8, CCCD_TABLE_SIZE>,
 }
 
 /// Returns the maximum number of bytes required to encode T.
@@ -136,14 +58,14 @@ impl Default for ProfileInfo {
             removed: false,
             info: BondInformation::new(
                 Identity {
-                    bd_addr: BdAddr::default(),
+                    addr: Address::default(),
                     irk: None,
                 },
                 LongTermKey(0),
                 SecurityLevel::NoEncryption,
                 false,
             ),
-            cccd_table: CccdTable::<CCCD_TABLE_SIZE>::default(),
+            cccd_table: heapless::Vec::new(),
         }
     }
 }
@@ -164,17 +86,25 @@ pub(crate) enum BleProfileAction {
 /// 3. Updating the bonding information of the active profile to the BLE stack
 /// 4. Handling profile switch, clear, and save operations
 #[cfg(feature = "_ble")]
-pub(crate) struct ProfileManager<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> {
+pub(crate) struct ProfileManager<'b, 's, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>
+where
+    's: 'b,
+{
     /// List of bonded devices
     bonded_devices: heapless::Vec<ProfileInfo, NUM_BLE_PROFILE>,
-    /// BLE stack
-    stack: &'a Stack<'a, C, P>,
+    /// BLE stack. Two lifetimes (`'b` for the borrow, `'s` for the stack itself)
+    /// avoid tying `Stack`'s drop-checked `'s` to the borrow scope; tying them
+    /// together trips dropck once `Stack` has a `Drop` impl.
+    stack: &'b Stack<'s, C, P>,
 }
 
 #[cfg(feature = "_ble")]
-impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileManager<'a, C, P> {
+impl<'b, 's, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileManager<'b, 's, C, P>
+where
+    's: 'b,
+{
     /// Create a new profile manager
-    pub(crate) fn new(stack: &'a Stack<'a, C, P>) -> Self {
+    pub(crate) fn new(stack: &'b Stack<'s, C, P>) -> Self {
         Self {
             bonded_devices: heapless::Vec::new(),
             stack,
@@ -219,9 +149,11 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
 
     /// Update bonding information in the stack according to the current active profile
     pub(crate) fn update_stack_bonds(&self) {
-        let current_bond_info = self.stack.get_bond_information();
-        for bond in current_bond_info {
-            if let Err(e) = self.stack.remove_bond_information(bond.identity) {
+        let identities: heapless::Vec<Identity, NUM_BLE_PROFILE> = self
+            .stack
+            .with_bond_information(|bonds| bonds.iter().map(|b| b.identity).collect());
+        for identity in identities {
+            if let Err(e) = self.stack.remove_bond_information(identity) {
                 debug!("Remove bond info error: {:?}", e);
             }
         }
@@ -265,7 +197,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
     }
 
     /// Update CCCD table in the stack
-    pub(crate) async fn update_profile_cccd_table(&mut self, table: CccdTable<CCCD_TABLE_SIZE>) {
+    pub(crate) async fn update_profile_cccd_table(&mut self, table: heapless::Vec<u8, CCCD_TABLE_SIZE>) {
         // Get current active profile
         let active_profile = current_profile();
 
@@ -275,7 +207,7 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
             .iter()
             .position(|info| info.slot_num == active_profile)
         {
-            if self.bonded_devices[index].cccd_table.inner() == table.inner() {
+            if self.bonded_devices[index].cccd_table == table {
                 debug!("Skip updating same CCCD table");
                 return;
             }

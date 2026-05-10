@@ -7,8 +7,9 @@ use super::device_info::DeviceConfigurationService;
 use crate::hid::ViaReport;
 use crate::hid::{CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report};
 
-// Used for saving the CCCD table
-pub(crate) const CCCD_TABLE_SIZE: usize = _CCCD_TABLE_SIZE;
+// Used for saving the client attribute (CCCD) table. Tracks the trouble-host
+// per-connection client-specific attribute buffer size.
+pub(crate) const CCCD_TABLE_SIZE: usize = trouble_host::config::CLIENT_ATT_TABLE_SIZE;
 
 // `gatt_server` compiles every member regardless of the surrounding `cfg` —
 // gating an individual field with `#[cfg(feature = "host")]` doesn't work. So

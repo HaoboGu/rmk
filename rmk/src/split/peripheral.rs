@@ -32,18 +32,19 @@ use crate::split::serial::SerialSplitDriver;
 /// * `stack` - (optional) The TrouBLE stack
 /// * `serial` - (optional) serial port used to send peripheral split message. This argument is enabled only for serial split now
 /// * `storage` - (optional) The storage to save the central address
-// `'a` is only referenced from the `_ble` cfg-gated parameters; clippy can't
-// see that when `_ble` is off, so silence the unused-lifetime warning.
 #[allow(clippy::extra_unused_lifetimes)]
 pub async fn run_rmk_split_peripheral<
-    'a,
+    'b,
+    's,
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy>,
     #[cfg(not(feature = "_ble"))] S: Write + Read,
 >(
     #[cfg(feature = "_ble")] id: usize,
-    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C, DefaultPacketPool>,
+    #[cfg(feature = "_ble")] stack: &'b Stack<'s, C, DefaultPacketPool>,
     #[cfg(not(feature = "_ble"))] serial: S,
-) {
+) where
+    's: 'b,
+{
     #[cfg(not(feature = "_ble"))]
     {
         let mut peripheral = SplitPeripheral::new(SerialSplitDriver::new(serial));

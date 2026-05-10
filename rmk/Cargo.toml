@@ -58,11 +58,12 @@ display-interface-i2c = { version = "0.5", optional = true }
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { git = "https://github.com/haobogu/trouble", rev = "e96bdadda8806b1f6257978549746a516f73cf3d", features = [
+trouble-host = { git = "https://github.com/haobogu/trouble", rev = "fdfa1d7001418ca913ea97f7af11aae7bc779098", features = [
     "gatt",
     "scan",
     "derive",
     "security",
+    "serde",
 ], optional = true }
 rand_core = { version = "0.6", optional = true }
 bt-hci = { version = "0.8", optional = true }

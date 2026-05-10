@@ -59,32 +59,40 @@ pub async fn build_ble_stack<
     controller: C,
     host_address: [u8; 6],
     random_generator: &mut RNG,
-    resources: &'a mut HostResources<P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX>,
+    resources: &'a mut HostResources<C, P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX>,
 ) -> Stack<'a, C, P> {
     // Initialize trouble host stack
     trouble_host::new(controller, resources)
         .set_random_address(Address::random(host_address))
         .set_random_generator_seed(random_generator)
+        .build()
 }
 
 /// BLE transport runnable. Owns the trouble-host server and profile manager;
 /// `run` joins the background `ble_task` runner with the advertise→connect→serve
 /// loop and runs forever.
-pub struct BleTransport<'a, C>
+//
+// Two lifetimes: `'b` is the borrow of the stack value, `'s` is the trouble-host
+// `Stack`'s own resource lifetime. They are separated because `Stack<'s, _, _>`
+// is invariant in `'s` and now has a `Drop` impl; tying them together (a single
+// `'a`) forces the outer borrow to extend past `Stack`'s drop and trips dropck.
+pub struct BleTransport<'b, 's, C>
 where
+    's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
-    stack: &'a Stack<'a, C, DefaultPacketPool>,
+    stack: &'b Stack<'s, C, DefaultPacketPool>,
     server: Server<'static>,
-    profile_manager: ProfileManager<'a, C, DefaultPacketPool>,
+    profile_manager: ProfileManager<'b, 's, C, DefaultPacketPool>,
     product_name: &'static str,
 }
 
-impl<'a, C> BleTransport<'a, C>
+impl<'b, 's, C> BleTransport<'b, 's, C>
 where
+    's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
-    pub async fn new(stack: &'a Stack<'a, C, DefaultPacketPool>, rmk_config: RmkConfig<'static>) -> Self {
+    pub async fn new(stack: &'b Stack<'s, C, DefaultPacketPool>, rmk_config: RmkConfig<'static>) -> Self {
         #[cfg(feature = "_nrf_ble")]
         let serial_number = crate::ble::nrf::get_serial_number();
         #[cfg(not(feature = "_nrf_ble"))]
@@ -132,8 +140,9 @@ where
     }
 }
 
-impl<'a, C> Runnable for BleTransport<'a, C>
+impl<'b, 's, C> Runnable for BleTransport<'b, 's, C>
 where
+    's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
     async fn run(&mut self) -> ! {
@@ -146,10 +155,9 @@ where
         self.profile_manager.update_stack_bonds();
 
         // Copy the &Stack reference so it doesn't tie a borrow to &mut self.
-        let stack: &'a Stack<'a, C, DefaultPacketPool> = self.stack;
-        let Host {
-            mut peripheral, runner, ..
-        } = stack.build();
+        let stack: &'b Stack<'s, C, DefaultPacketPool> = self.stack;
+        let mut peripheral = stack.peripheral();
+        let runner = stack.runner();
 
         let server = &self.server;
         let profile_manager = &mut self.profile_manager;
@@ -164,7 +172,8 @@ where
                 .await
                 {
                     Either::First(Ok(conn)) => {
-                        set_ble_state(BleState::Connected);
+                        // Do NOT emit BleState::Connected here. gatt_events_task emits
+                        // Connected when it sees GattConnectionEvent::Encrypted.
                         #[cfg(feature = "storage")]
                         let active_bond_info = profile_manager.active_bond_info();
                         select(
@@ -178,6 +187,23 @@ where
                             profile_manager.update_profile(),
                         )
                         .await;
+
+                        // The inner select may return because of a profile switch (link still
+                        // up at the controller) or a peer-side disconnect (link already torn
+                        // down). Just dropping `conn` doesn't wait for the controller to
+                        // release the slot.
+                        // Drive an explicit disconnect (no-op when the controller is already done)
+                        // and wait for the disconnection event before falling back to
+                        // advertise.
+                        if conn.raw().is_connected() {
+                            conn.raw().disconnect();
+                            let _ = with_timeout(Duration::from_millis(500), async {
+                                while conn.raw().is_connected() {
+                                    let _ = conn.next().await;
+                                }
+                            })
+                            .await;
+                        }
                     }
                     Either::First(Err(BleHostError::BleHost(Error::Timeout))) => {
                         warn!("Advertising timeout, sleep and wait for any key");
@@ -203,7 +229,13 @@ where
                     Either::Second(()) => {}
                 };
 
-                set_ble_state(BleState::Inactive);
+                // Skip the Inactive transition if we never moved off Advertising
+                // (e.g. an old host briefly connected, never reached the Encrypted
+                // event, then dropped). Otherwise the LED would flicker
+                // Advertising -> Inactive -> Advertising on every failed retry.
+                if crate::state::current_ble_status().state != BleState::Advertising {
+                    set_ble_state(BleState::Inactive);
+                }
             }
         };
 
@@ -282,11 +314,15 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 info!("[gatt] pairing complete: {:?}", security_level);
                 let profile = crate::state::current_profile();
                 if let Some(bond_info) = bond {
+                    let cccd_table = server
+                        .get_client_att_table(conn.raw())
+                        .and_then(|t| heapless::Vec::from_slice(t.raw()).ok())
+                        .unwrap_or_default();
                     let profile_info = ProfileInfo {
                         slot_num: profile,
                         info: bond_info,
                         removed: false,
-                        cccd_table: server.get_cccd_table(conn.raw()).unwrap(),
+                        cccd_table,
                     };
                     UPDATED_PROFILE.signal(profile_info);
                 }
@@ -295,6 +331,10 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 #[cfg(feature = "passkey_entry")]
                 passkey_state.clear();
                 error!("[gatt] pairing error: {:?}", err);
+            }
+            GattConnectionEvent::Encrypted { security_level } => {
+                info!("[gatt] encrypted: {:?}", security_level);
+                set_ble_state(BleState::Connected);
             }
             GattConnectionEvent::Gatt { event: gatt_event } => {
                 let mut cccd_updated = false;
@@ -403,8 +443,10 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                     #[cfg(feature = "split")]
                     CENTRAL_SLEEP.signal(false);
 
-                    if let Some(table) = server.get_cccd_table(conn.raw()) {
-                        UPDATED_CCCD_TABLE.signal(table);
+                    if let Some(table) = server.get_client_att_table(conn.raw())
+                        && let Ok(bytes) = heapless::Vec::from_slice(table.raw())
+                    {
+                        UPDATED_CCCD_TABLE.signal(bytes);
                     }
                 }
             }
@@ -485,6 +527,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 warn!("[gatt] PassKeyInput event, should not happen")
             }
             GattConnectionEvent::BondLost => warn!("[gatt] BondLost"),
+            GattConnectionEvent::OobRequest => warn!("[gatt] OobRequest"),
         }
     }
     info!("[gatt] task finished");
@@ -625,7 +668,10 @@ async fn run_ble_keyboard<
         && bond_info.info.identity.match_identity(&conn.raw().peer_identity())
     {
         info!("Loading CCCD table: {:?}", bond_info.cccd_table);
-        server.set_cccd_table(conn.raw(), bond_info.cccd_table);
+        match ClientAttTableView::try_from_raw(&bond_info.cccd_table) {
+            Ok(view) => server.set_client_att_table(conn.raw(), &view),
+            Err(e) => warn!("Invalid stored CCCD table: {:?}", e),
+        }
     }
 
     // Use 2M Phy
