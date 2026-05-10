@@ -17,7 +17,6 @@ use rmk_types::mouse_button::MouseButtons;
 use usbd_hid::descriptor::{MediaKeyboardReport, SystemControlReport};
 
 use crate::channel::send_hid_report;
-use crate::config::Hand;
 use crate::core_traits::Runnable;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::ClearPeerEvent;
@@ -725,7 +724,28 @@ impl<'a> Keyboard<'a> {
                                 let _ = decisions.push((held_key.event.pos, HeldKeyDecision::HoldOnOtherKeyPress));
                                 decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
                             }
-                            _ => {}
+                            MorseMode::Normal => {
+                                // Normal mode: resolve a same-hand HRM as tap on press when
+                                // unilateral_tap is enabled, so the roll fires in the correct
+                                // order (HRM tap first, then the new key).
+                                let unilateral_tap = Self::is_unilateral_tap_enabled(self.keymap, &held_key.action);
+                                if unilateral_tap
+                                    && matches!(held_key.state, KeyState::Pressed(_))
+                                    && let KeyboardEventPos::Key(pos1) = held_key.event.pos
+                                    && let KeyboardEventPos::Key(pos2) = event.pos
+                                {
+                                    let hand1 = self.keymap.hand_at(pos1.row as usize, pos1.col as usize);
+                                    let hand2 = self.keymap.hand_at(pos2.row as usize, pos2.col as usize);
+                                    if hand1.is_same_side(hand2) {
+                                        debug!(
+                                            "Unilateral tap on press (Normal mode): resolving HRM as tap for correct roll order"
+                                        );
+                                        let _ = decisions.push((held_key.event.pos, HeldKeyDecision::UnilateralTap));
+                                        decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
+                                        continue;
+                                    }
+                                }
+                            }
                         }
                     } else {
                         let unilateral_tap = Self::is_unilateral_tap_enabled(self.keymap, &held_key.action);
@@ -742,8 +762,7 @@ impl<'a> Keyboard<'a> {
                             let hand1 = self.keymap.hand_at(pos1.row as usize, pos1.col as usize);
                             let hand2 = self.keymap.hand_at(pos2.row as usize, pos2.col as usize);
 
-                            if hand1 == hand2 && hand1 != Hand::Unknown && hand2 != Hand::Bilateral {
-                                //if same hand
+                            if hand1.is_same_side(hand2) {
                                 debug!("Unilateral tap triggered, resolve morse key as tapping");
                                 let _ = decisions.push((held_key.event.pos, HeldKeyDecision::UnilateralTap));
                                 continue;
