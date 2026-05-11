@@ -119,11 +119,12 @@ vial = ["host"]
 ## Enable vial lock feature
 vial_lock = ["vial", "host_security"]
 
-## Enable physical key unlock and matrix state tracking (shared between vial_lock and rynk)
+## Enable physical key unlock and matrix state tracking (used by vial_lock; rynk
+## re-pulls it in v2 when the host lock gate lands)
 host_security = []
 
-## Enable RMK native (Rynk) protocol support (mutually exclusive with vial)
-rynk = ["host", "host_security", "rmk-types/rynk"]
+## Enable Rynk protocol support (new RMK-native protocol, mutually exclusive with vial)
+rynk = ["host", "rmk-types/rynk"]
 
 ## Enable bulk transfer endpoints for the Rynk protocol on MCUs with sufficient RAM
 bulk_transfer = ["rynk", "rmk-types/bulk"]
