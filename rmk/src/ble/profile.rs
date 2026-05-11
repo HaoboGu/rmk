@@ -92,9 +92,7 @@ where
 {
     /// List of bonded devices
     bonded_devices: heapless::Vec<ProfileInfo, NUM_BLE_PROFILE>,
-    /// BLE stack. Two lifetimes (`'b` for the borrow, `'s` for the stack itself)
-    /// avoid tying `Stack`'s drop-checked `'s` to the borrow scope; tying them
-    /// together trips dropck once `Stack` has a `Drop` impl.
+    /// BLE stack
     stack: &'b Stack<'s, C, P>,
 }
 

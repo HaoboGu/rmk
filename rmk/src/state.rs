@@ -283,6 +283,7 @@ mod tests {
     #[test]
     fn usb_preference_flip_releases_previous_ble_transport() {
         use crate::channel::BLE_REPORT_CHANNEL;
+        use crate::state::{BleState, set_ble_state};
 
         let _guard = state_test_lock().lock().unwrap();
         reset_state();

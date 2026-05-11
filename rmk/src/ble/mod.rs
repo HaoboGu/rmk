@@ -72,10 +72,6 @@ pub async fn build_ble_stack<
 /// `run` joins the background `ble_task` runner with the advertise→connect→serve
 /// loop and runs forever.
 //
-// Two lifetimes: `'b` is the borrow of the stack value, `'s` is the trouble-host
-// `Stack`'s own resource lifetime. They are separated because `Stack<'s, _, _>`
-// is invariant in `'s` and now has a `Drop` impl; tying them together (a single
-// `'a`) forces the outer borrow to extend past `Stack`'s drop and trips dropck.
 pub struct BleTransport<'b, 's, C>
 where
     's: 'b,
@@ -224,9 +220,6 @@ where
                 };
 
                 // Skip the Inactive transition if we never moved off Advertising
-                // (e.g. an old host briefly connected, never reached the Encrypted
-                // event, then dropped). Otherwise the LED would flicker
-                // Advertising -> Inactive -> Advertising on every failed retry.
                 if crate::state::current_ble_status().state != BleState::Advertising {
                     set_ble_state(BleState::Inactive);
                 }

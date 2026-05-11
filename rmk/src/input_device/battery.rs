@@ -171,7 +171,7 @@ impl BatteryProcessor {
                 charge_state: ChargeState::Charging,
                 ..
             } => {}
-            // Not charging: update level if changed
+            // Not charging: publish if the percentage changed.
             BatteryStatus::Available { charge_state, level } => {
                 let battery_percent = self.get_battery_percent(val);
                 if level != Some(battery_percent) {
@@ -181,7 +181,7 @@ impl BatteryProcessor {
                     });
                 }
             }
-            // First ADC reading: transition from Unavailable
+            // First ADC reading: transition from Unavailable.
             BatteryStatus::Unavailable => {
                 let battery_percent = self.get_battery_percent(val);
                 self.commit(BatteryStatus::Available {
