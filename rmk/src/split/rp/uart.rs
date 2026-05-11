@@ -425,11 +425,18 @@ impl<PIO: Instance + UartPioAccess> Handler<PIO::Interrupt> for UartInterruptHan
                 let mut writer = unsafe { PIO::uart_buffer().buf_rx.writer() };
                 let rx_buf = writer.push_slice();
                 if rx_buf.len() > 0 {
+                    // SM1 RX FIFO is joined (FifoJoin::RxOnly), so depth is 8.
                     let mut n = 0;
-                    while (pio.fstat().read().rxempty() & 1 << 1 as u8) == 0 && n < rx_buf.len() {
-                        let byte = pio.rxf(1).read();
-                        rx_buf[n] = (byte >> 24) as u8;
-                        n += 1;
+                    while n < rx_buf.len() {
+                        let avail = pio.flevel().read().rx1() as usize;
+                        if avail == 0 {
+                            break;
+                        }
+                        let take = avail.min(rx_buf.len() - n);
+                        for slot in &mut rx_buf[n..n + take] {
+                            *slot = (pio.rxf(1).read() >> 24) as u8;
+                        }
+                        n += take;
                     }
                     writer.push_done(n);
                     PIO::Interrupt::unpend();
@@ -442,23 +449,29 @@ impl<PIO: Instance + UartPioAccess> Handler<PIO::Interrupt> for UartInterruptHan
             PIO::Interrupt::unpend();
             if PIO::uart_buffer().buf_tx.is_available() {
                 // Full-Duplex Mode
-                if !PIO::uart_buffer().buf_tx.is_full() {
-                    let mut reader = unsafe { PIO::uart_buffer().buf_tx.reader() };
-                    let tx_buf = reader.pop_slice();
-                    let mut n = 0;
-                    while (pio.fstat().read().txfull() & 1 << 0 as u8) == 0 && n < tx_buf.len() {
-                        let byte = tx_buf[n];
-                        pio.txf(0).write(|f| *f = byte as u32);
-                        n += 1;
+                let mut reader = unsafe { PIO::uart_buffer().buf_tx.reader() };
+                let tx_buf = reader.pop_slice();
+                // SM0 TX FIFO is joined (FifoJoin::TxOnly), so depth is 8.
+                const TX_FIFO_DEPTH: usize = 8;
+                let mut n = 0;
+                while n < tx_buf.len() {
+                    let free = TX_FIFO_DEPTH - pio.flevel().read().tx0() as usize;
+                    if free == 0 {
+                        break;
                     }
-                    reader.pop_done(n);
+                    let push = free.min(tx_buf.len() - n);
+                    for byte in &tx_buf[n..n + push] {
+                        pio.txf(0).write(|f| *f = *byte as u32);
+                    }
+                    n += push;
                 }
+                reader.pop_done(n);
                 if PIO::uart_buffer().buf_tx.is_empty() {
-                    PIO::regs().irqs(0).inte().modify(|i| i.set_sm0_txnfull(false));
+                    pio.irqs(0).inte().modify(|i| i.set_sm0_txnfull(false));
                 }
             } else {
                 // Half-Duplex Mode
-                PIO::regs().irqs(0).inte().modify(|i| i.set_sm0_txnfull(false));
+                pio.irqs(0).inte().modify(|i| i.set_sm0_txnfull(false));
                 PIO::uart_buffer().waker_tx.wake();
             }
         }

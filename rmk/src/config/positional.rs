@@ -37,3 +37,14 @@ impl<const ROW: usize, const COL: usize> PositionalConfig<ROW, COL> {
         Self { hand }
     }
 }
+
+impl Hand {
+    /// Whether two keys sit on the same hand for unilateral-tap decisions.
+    ///
+    /// Only `Left`/`Left` and `Right`/`Right` qualify. `Unknown` keys and
+    /// `Bilateral` keys (which are deliberately exempt from same-hand rules)
+    /// always return `false`, even when paired with themselves.
+    pub fn is_same_side(self, other: Hand) -> bool {
+        matches!((self, other), (Hand::Left, Hand::Left) | (Hand::Right, Hand::Right))
+    }
+}

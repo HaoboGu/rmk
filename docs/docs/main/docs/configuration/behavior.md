@@ -71,6 +71,7 @@ In the `combo` sub-table, you can configure the keyboard's combo key functionali
 Combo configuration includes the following parameters:
 
 - `timeout`: Defines the maximum time window for pressing all combo keys. If the time exceeds this, the combo key will not be triggered. The format is a string, which can be milliseconds (e.g. "200ms") or seconds (e.g. "1s").
+- `prior_idle_time`: An optional cooldown window after any key press before a combo can start recording. This helps prevent accidental combo triggers during fast typing. The format is a string (e.g. `"130ms"`). If not set, there is no idle check (equivalent to ZMK's `require-prior-idle-ms`).
 - `combos`: An array containing all defined combos. Each combo configuration is an object containing the following attributes:
   - `actions`: An array of strings defining the keys that need to be pressed simultaneously to trigger the combo action.
   - `output`: A string defining the output action to be triggered when all keys in `actions` are pressed simultaneously.
@@ -81,6 +82,7 @@ Here is an example of combo configuration:
 ```toml
 [behavior.combo]
 timeout = "150ms"
+prior_idle_time = "130ms"  # optional, prevents accidental triggers during fast typing
 combos = [
   # Press J and K keys simultaneously to output Escape key
   { actions = ["J", "K"], output = "Escape" },
