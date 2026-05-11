@@ -1,6 +1,13 @@
 /// Test cases for home row mod(HRM)
 ///
 /// For HRM, `enable_flow_tap` and `unilateral_tap` is enabled, `prior-idle-time` will be considered.
+///
+/// Keyboard layout (1 row, 5 cols, 2 layers):
+///   Col:  0     1                    2                  3           4
+///   L0: [A,  mt!(B, LShift),  mt!(C, LGui),  lt!(1, D),  mt!(E, LAlt)]
+///   L1: [Kp1,     Kp2,            Kp3,           Kp4,        Kp5]
+///
+/// Hand config: [Left, Left, Right, Right, Right]
 pub mod common;
 
 use embassy_time::Duration;
@@ -24,12 +31,7 @@ fn create_hrm_keyboard() -> Keyboard<'static> {
             morse: MorsesConfig {
                 enable_flow_tap: true,
                 prior_idle_time: Duration::from_millis(120),
-                default_profile: MorseProfile::new(
-                    Some(true),
-                    Some(MorseMode::PermissiveHold),
-                    Some(250u16),
-                    Some(250u16),
-                ),
+                default_profile: MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(250), Some(250)),
                 ..Default::default()
             },
             ..Default::default()
@@ -63,12 +65,7 @@ fn create_hrm_keyboard_with_combo() -> Keyboard<'static> {
             morse: MorsesConfig {
                 enable_flow_tap: true,
                 prior_idle_time: Duration::from_millis(120),
-                default_profile: MorseProfile::new(
-                    Some(true),
-                    Some(MorseMode::PermissiveHold),
-                    Some(250u16),
-                    Some(250u16),
-                ),
+                default_profile: MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(250), Some(250)),
                 ..Default::default()
             },
             combo: CombosConfig {
@@ -1755,6 +1752,49 @@ fn test_release_morse_keeps_pressed_layer_transparent_action_after_layer_off_hol
         expected_reports: [
             [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap A down
             [0, [0, 0, 0, 0, 0, 0]],            // Tap A up
+        ]
+    };
+}
+
+fn create_normal_unilateral_keyboard() -> Keyboard<'static> {
+    let hand = [[Hand::Left, Hand::Left, Hand::Right, Hand::Right, Hand::Right]];
+    create_morse_keyboard(
+        BehaviorConfig {
+            morse: MorsesConfig {
+                enable_flow_tap: false,
+                default_profile: MorseProfile::new(
+                    Some(true),              // unilateral_tap enabled
+                    Some(MorseMode::Normal), // Normal (timeout-only) hold
+                    Some(250),
+                    Some(250),
+                ),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        hand,
+    )
+}
+
+/// Same-hand roll in Normal mode: mt!(B, LShift) (col 1, Left) then A (col 0, Left).
+/// The HRM tap must fire BEFORE the plain key so the roll comes out in the pressed order.
+/// Previously, Normal mode + unilateral_tap only resolved on key-release, causing the
+/// plain key to fire first (wrong order).
+#[test]
+fn test_normal_mode_same_hand_roll_order() {
+    key_sequence_test! {
+        keyboard: create_normal_unilateral_keyboard(),
+        sequence: [
+            [0, 1, true,  10],  // Press mt!(B, LShift) — HRM, Left hand
+            [0, 0, true,  10],  // Press A — plain key, Left hand (same-hand roll)
+            [0, 0, false, 10],  // Release A
+            [0, 1, false, 10],  // Release mt!(B, LShift)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],              // B fires first (unilateral tap on press)
+            [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]],   // A fires after
+            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],               // A released
+            [0, [0, 0, 0, 0, 0, 0]],                          // B released
         ]
     };
 }
