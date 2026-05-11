@@ -82,7 +82,6 @@ pub enum Cmd {
 
     // ── Connection (0x07xx) ──
     GetConnectionType = 0x0701,
-    SetConnectionType = 0x0702,
     #[cfg(feature = "_ble")]
     GetBleStatus = 0x0703,
     #[cfg(feature = "_ble")]
