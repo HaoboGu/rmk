@@ -1,0 +1,22 @@
+[package]
+name = "rynk-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rynk-host = { path = "../rynk-host" }
+rmk-types.workspace = true
+postcard.workspace = true
+serde.workspace = true
+tokio.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+futures.workspace = true
+
+[[bin]]
+name = "rynk"
+path = "src/main.rs"
