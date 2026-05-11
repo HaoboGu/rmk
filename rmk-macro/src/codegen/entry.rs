@@ -14,6 +14,7 @@ pub(crate) fn expand_rmk_entry(
     devices: Vec<TokenStream2>,
     processors: Vec<TokenStream2>,
     registered_processors: Vec<TokenStream2>,
+    watchdog_task: Option<TokenStream2>,
 ) -> TokenStream2 {
     // If there is a function with `#[Overwritten(entry)]`, override the entry
     if let Some((_, items)) = &item_mod.content {
@@ -34,9 +35,17 @@ pub(crate) fn expand_rmk_entry(
                 devices,
                 processors,
                 registered_processors,
+                watchdog_task,
             ))
     } else {
-        rmk_entry_select(hardware, host, devices, processors, registered_processors)
+        rmk_entry_select(
+            hardware,
+            host,
+            devices,
+            processors,
+            registered_processors,
+            watchdog_task,
+        )
     }
 }
 
@@ -53,6 +62,7 @@ pub(crate) fn rmk_entry_select(
     devices: Vec<TokenStream2>,
     processors: Vec<TokenStream2>,
     registered_processors: Vec<TokenStream2>,
+    watchdog_task: Option<TokenStream2>,
 ) -> TokenStream2 {
     let devices_task = {
         let mut devs = devices.clone();
@@ -96,6 +106,9 @@ pub(crate) fn rmk_entry_select(
                 tasks.push(t);
             }
             tasks.extend(transport_tasks);
+            if let Some(t) = &watchdog_task {
+                tasks.push(t.clone());
+            }
             if split_config.connection == "ble" {
                 if !processors.is_empty() {
                     tasks.push(processors_task);
@@ -170,6 +183,7 @@ pub(crate) fn rmk_entry_select(
             devices_task,
             processors_task,
             registered_processors,
+            watchdog_task,
         ),
     };
 
@@ -186,6 +200,7 @@ pub(crate) fn rmk_entry_unibody(
     devices_task: TokenStream2,
     processors_task: TokenStream2,
     registered_processors: Vec<TokenStream2>,
+    watchdog_task: Option<TokenStream2>,
 ) -> TokenStream2 {
     let keyboard_task = quote! {
         keyboard.run()
@@ -200,6 +215,9 @@ pub(crate) fn rmk_entry_unibody(
     }
     tasks.extend(registered_processors);
     tasks.extend(transport_tasks);
+    if let Some(t) = watchdog_task {
+        tasks.push(t);
+    }
     let joined = join_all_tasks(tasks);
     quote! {
         #transport_prelude

@@ -29,6 +29,7 @@ use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::matrix::Matrix;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
+use rmk::watchdog::Nrf52Watchdog;
 use rmk::{HostResources, run_all};
 use static_cell::StaticCell;
 
@@ -167,9 +168,11 @@ async fn main(spawner: Spawner) {
     );
     let mut battery_processor = BatteryProcessor::new(2000, 2806);
 
+    let mut watchdog_runner = Nrf52Watchdog::default_runner(p.WDT);
+
     // Start
     join3(
-        run_all!(matrix, encoder, adc_device, storage),
+        run_all!(matrix, encoder, adc_device, storage, watchdog_runner),
         run_all!(battery_processor),
         run_rmk_split_peripheral(0, &stack),
     )

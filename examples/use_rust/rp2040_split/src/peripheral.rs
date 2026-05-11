@@ -19,6 +19,7 @@ use rmk::matrix::Matrix;
 use rmk::run_all;
 use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
 use rmk::split::peripheral::run_rmk_split_peripheral;
+use rmk::watchdog::Rp2040Watchdog;
 use static_cell::StaticCell;
 
 bind_interrupts!(struct Irqs {
@@ -45,6 +46,12 @@ async fn main(_spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, 2, 2, true>::new(row_pins, col_pins, debouncer);
 
+    let mut watchdog_runner = Rp2040Watchdog::default_runner(embassy_rp::watchdog::Watchdog::new(p.WATCHDOG));
+
     // Start
-    join(run_all!(matrix), run_rmk_split_peripheral(uart_instance)).await;
+    join(
+        run_all!(matrix, watchdog_runner),
+        run_rmk_split_peripheral(uart_instance),
+    )
+    .await;
 }

@@ -41,6 +41,7 @@ use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::split::ble::central::scan_peripherals;
 use rmk::split::central::run_peripheral_manager;
 use rmk::usb::UsbTransport;
+use rmk::watchdog::Nrf52Watchdog;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -263,6 +264,8 @@ async fn main(spawner: Spawner) {
     let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
     let mut wpm_processor = WpmProcessor::new();
 
+    let mut watchdog_runner = Nrf52Watchdog::default_runner(p.WDT);
+
     // Start
     join(
         run_all!(
@@ -277,7 +280,8 @@ async fn main(spawner: Spawner) {
             keyboard,
             host_service,
             capslock_led,
-            peripheral_battery_monitor
+            peripheral_battery_monitor,
+            watchdog_runner
         ),
         join(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),

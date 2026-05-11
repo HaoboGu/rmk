@@ -116,10 +116,14 @@ jobs:
       - name: Build
         working-directory: ${{ matrix.dir }}
         run: |
+          # Deny warnings so a stray lint (e.g. an unused import) fails CI here
+          # instead of slipping through. For bloat examples an undenied warning
+          # gets replayed onto stdout by `cargo size` and corrupts the size parser.
+          export RUSTFLAGS="-D warnings"
           # For bloat examples, remap source paths so the absolute workspace
           # prefix doesn't affect binary size (panic messages embed file!() paths).
           if [[ "${{ matrix.bloat }}" == "true" ]]; then
-            export RUSTFLAGS="--remap-path-prefix=$GITHUB_WORKSPACE=/rmk-build"
+            export RUSTFLAGS="$RUSTFLAGS --remap-path-prefix=$GITHUB_WORKSPACE=/rmk-build"
           fi
           cargo build --release
 
@@ -160,7 +164,10 @@ jobs:
           # virtual prefix.  Without this, absolute paths embedded by panic
           # messages (file!() macro) differ in length between $GITHUB_WORKSPACE
           # and the temp worktree, producing false size diffs in .rodata/.text.
-          head_remap="--remap-path-prefix=$GITHUB_WORKSPACE=/rmk-build"
+          # HEAD also keeps `-D warnings` so RUSTFLAGS matches the Build step
+          # above and cargo reuses the binary; BASE uses the default lint level
+          # so a pre-existing warning on main doesn't fail this PR.
+          head_remap="-D warnings --remap-path-prefix=$GITHUB_WORKSPACE=/rmk-build"
           base_remap="--remap-path-prefix=$worktree=/rmk-build"
 
           base_dir="$worktree/${{ matrix.dir }}"

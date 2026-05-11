@@ -106,7 +106,10 @@ features = ["split", "vial", "async_matrix", "_ble"]
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["defmt", "storage", "vial", "vial_lock"]
+default = ["defmt", "storage", "vial", "vial_lock", "watchdog"]
+
+## Enable hardware watchdog support
+watchdog = ["rmk-macro/watchdog"]
 
 ## Enable host configurator support
 host = ["dep:byteorder"]

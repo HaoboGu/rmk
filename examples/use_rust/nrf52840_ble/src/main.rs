@@ -37,6 +37,7 @@ use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::usb::UsbTransport;
+use rmk::watchdog::Nrf52Watchdog;
 use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -218,6 +219,8 @@ async fn main(spawner: Spawner) {
     let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
     let mut wpm_processor = WpmProcessor::new();
 
+    let mut watchdog_runner = Nrf52Watchdog::default_runner(p.WDT);
+
     run_all!(
         matrix,
         encoder,
@@ -228,7 +231,8 @@ async fn main(spawner: Spawner) {
         wpm_processor,
         batt_proc,
         keyboard,
-        host_service
+        host_service,
+        watchdog_runner
     )
     .await;
 }

@@ -27,6 +27,7 @@ use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::matrix::Matrix;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
+use rmk::watchdog::Nrf52Watchdog;
 use rmk::{HostResources, run_all};
 use static_cell::StaticCell;
 
@@ -155,6 +156,12 @@ async fn main(spawner: Spawner) {
     let pin_b = Input::new(p.P1_04, embassy_nrf::gpio::Pull::None);
     let mut encoder = RotaryEncoder::with_resolution(pin_a, pin_b, 4, true, 1);
 
+    let mut watchdog_runner = Nrf52Watchdog::default_runner(p.WDT);
+
     // Start
-    join(run_all!(matrix, encoder, storage), run_rmk_split_peripheral(1, &stack)).await;
+    join(
+        run_all!(matrix, encoder, storage, watchdog_runner),
+        run_rmk_split_peripheral(1, &stack),
+    )
+    .await;
 }

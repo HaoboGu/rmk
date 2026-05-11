@@ -13,5 +13,6 @@ pub(crate) mod orchestrator;
 pub(crate) mod override_helper;
 pub(crate) mod registered_processor;
 pub(crate) mod split;
+pub(crate) mod watchdog;
 
 pub(crate) use orchestrator::parse_keyboard_mod;

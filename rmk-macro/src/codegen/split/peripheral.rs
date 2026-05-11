@@ -26,6 +26,7 @@ use crate::codegen::matrix::{
 };
 use crate::codegen::orchestrator::get_debouncer_type;
 use crate::codegen::registered_processor::expand_registered_processor_init;
+use crate::codegen::watchdog::expand_watchdog_init;
 
 /// Parse split peripheral mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_split_peripheral_mod(
@@ -377,8 +378,9 @@ fn expand_split_peripheral(
         quote! {}
     };
 
-    // Import Runnable trait so processor.run() calls compile
-    let processor_import = if !registered_processors.is_empty() {
+    let (watchdog_init, watchdog_task) = expand_watchdog_init(hardware);
+
+    let runnable_import = if !registered_processors.is_empty() || watchdog_task.is_some() {
         quote! { use ::rmk::core_traits::Runnable; }
     } else {
         quote! {}
@@ -392,11 +394,12 @@ fn expand_split_peripheral(
         devices,
         processors,
         registered_processors,
+        watchdog_task,
     );
 
     quote! {
         #imports
-        #processor_import
+        #runnable_import
         #chip_init
         #registered_processor_initializers
         #matrix_config
@@ -404,10 +407,12 @@ fn expand_split_peripheral(
         #output_config
         #device_initialization
         #display_init
+        #watchdog_init
         #run_rmk_peripheral
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn expand_split_peripheral_entry(
     id: usize,
     chip: &ChipModel,
@@ -416,6 +421,7 @@ fn expand_split_peripheral_entry(
     devices: Vec<TokenStream2>,
     processors: Vec<TokenStream2>,
     registered_processors: Vec<TokenStream2>,
+    watchdog_task: Option<TokenStream2>,
 ) -> TokenStream2 {
     // Add matrix to devices, and run all devices
     let mut devs = devices.clone();
@@ -454,6 +460,9 @@ fn expand_split_peripheral_entry(
         }
         tasks.push(peripheral_run);
         tasks.extend(registered_processors);
+        if let Some(t) = &watchdog_task {
+            tasks.push(t.clone());
+        }
         let run_rmk_peripheral = join_all_tasks(tasks);
         quote! {
             #run_rmk_peripheral
@@ -484,6 +493,9 @@ fn expand_split_peripheral_entry(
         };
         let mut tasks = vec![device_task, peripheral_run];
         tasks.extend(registered_processors);
+        if let Some(t) = &watchdog_task {
+            tasks.push(t.clone());
+        }
         let run_rmk_peripheral = join_all_tasks(tasks);
         quote! {
             #serial_init
