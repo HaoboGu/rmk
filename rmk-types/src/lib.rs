@@ -23,7 +23,7 @@
 //!
 //! ### Protocol
 //! - [`protocol::vial`] — Vial/Via protocol types
-//! - [`protocol::rmk`] — RMK native protocol ICD (feature-gated: `rmk_protocol`)
+//! - [`protocol::rynk`] — RMK native protocol ICD (feature-gated: `rynk`)
 //!
 //! ### Build-time
 //! - [`constants`] — Generated from `keyboard.toml` by `build.rs`

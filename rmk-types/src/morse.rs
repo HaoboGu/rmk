@@ -7,10 +7,6 @@
 
 use heapless::LinearMap;
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::Schema;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::schema::{DataModelType, NamedType, NamedValue};
 use serde::{Deserialize, Serialize};
 
 use crate::action::Action;
@@ -23,7 +19,6 @@ use crate::constants::MORSE_SIZE;
 /// Mode for morse key behavior
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[repr(u8)]
 pub enum MorseMode {
     /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
@@ -52,7 +47,6 @@ pub enum MorseMode {
 /// - `hold_timeout` (bits 13-0): hold timeout in ms (0 = None, max 16383)
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub struct MorseProfile(u32);
 
 impl MorseProfile {
@@ -190,7 +184,6 @@ impl From<MorseProfile> for u32 {
 /// MorsePattern is a sequence of maximum 15 taps or holds that can be encoded into an u16:
 /// 0x1 when empty, then 0 for tap or 1 for hold shifted from the right
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MorsePattern(u16);
 
@@ -312,36 +305,9 @@ impl PartialEq for Morse {
 
 impl Eq for Morse {}
 
-/// Manual Schema impl because Morse uses custom serde for LinearMap.
-/// The wire format is: (MorseProfile, Vec<(u16, Action)>).
-///
-/// **Important:** This must stay in sync with the custom serde impl in
-/// `morse_actions_serde`. If the wire format changes, update this Schema
-/// accordingly. The `morse_schema_matches_wire_format` test validates
-/// this invariant.
-#[cfg(feature = "rmk_protocol")]
-impl Schema for Morse {
-    const SCHEMA: &'static NamedType = &NamedType {
-        name: "Morse",
-        ty: &DataModelType::Struct(&[
-            &NamedValue {
-                name: "profile",
-                ty: <MorseProfile as Schema>::SCHEMA,
-            },
-            &NamedValue {
-                name: "actions",
-                ty: &NamedType {
-                    name: "MorseActions",
-                    ty: &DataModelType::Seq(&NamedType {
-                        name: "MorseActionEntry",
-                        ty: &DataModelType::Tuple(&[<u16 as Schema>::SCHEMA, <Action as Schema>::SCHEMA]),
-                    }),
-                },
-            },
-        ]),
-    };
-}
-
+/// Wire format note: `Morse` uses a custom serde impl for the `LinearMap`
+/// of actions. The on-wire shape is `(MorseProfile, Vec<(u16, Action)>)`.
+/// The `morse_wire_format` test below pins this contract.
 impl Morse {
     pub fn new_from_vial(
         tap: Action,
@@ -645,15 +611,14 @@ mod tests {
         assert_eq!(profile.gap_timeout_ms(), None);
     }
 
-    /// Validates that the manual Schema impl matches the actual serde wire format.
+    /// Pins the on-wire shape of `Morse`:
+    ///   `(MorseProfile, Vec<(u16, Action)>)`
     ///
-    /// The Schema claims Morse serializes as:
-    ///   struct { profile: MorseProfile, actions: Vec<(u16, Action)> }
-    ///
-    /// We verify this by checking that a Morse value can be reconstructed by
-    /// manually deserializing its two fields in order using the same bytes.
+    /// `Morse` uses a custom serde impl for the `LinearMap` of actions; this
+    /// test verifies a Morse value can be reconstructed by manually
+    /// deserializing those two fields from the same byte stream.
     #[test]
-    fn morse_schema_matches_wire_format() {
+    fn morse_wire_format() {
         use postcard::to_slice;
 
         // Build a Morse with known data

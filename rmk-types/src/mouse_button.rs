@@ -6,11 +6,6 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::{
-    Schema,
-    schema::{DataModelType, NamedType},
-};
 use serde::{Deserialize, Serialize};
 
 /// Mouse buttons
@@ -98,12 +93,4 @@ impl MouseButtons {
             .with_button7(button7)
             .with_button8(button8)
     }
-}
-
-#[cfg(feature = "rmk_protocol")]
-impl Schema for MouseButtons {
-    const SCHEMA: &'static NamedType = &NamedType {
-        name: "MouseButtons",
-        ty: &DataModelType::U8,
-    };
 }
