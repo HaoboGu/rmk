@@ -26,7 +26,7 @@ pub(crate) mod storage;
 ///
 /// These define the maximum values any firmware may use for protocol
 /// Vec capacities (`COMBO_SIZE`, `MORSE_SIZE`, etc.). The host tool compiles
-/// against these as upper bounds. Any firmware with `rmk_protocol` enabled
+/// against these as upper bounds. Any firmware with `rynk` enabled
 /// must satisfy `value <= ceiling` at compile time.
 ///
 /// Constant names mirror the generated constants with a `MAX_` prefix:
@@ -249,6 +249,11 @@ pub(crate) struct RmkConstantsConfig {
     /// Smaller values reduce firmware RAM usage but require more round-trips.
     #[serde_inline_default(64)]
     pub protocol_macro_chunk_size: usize,
+    /// Optional override for the Rynk RX/TX buffer size (bytes). When `None`,
+    /// the build emits `RYNK_BUFFER_SIZE = RYNK_MIN_BUFFER_SIZE`. The const
+    /// assertion in `rmk/src/host/rynk` rejects user values below the floor.
+    #[serde(default)]
+    pub rynk_buffer_size: Option<usize>,
 }
 
 fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
@@ -316,6 +321,7 @@ impl Default for RmkConstantsConfig {
             split_central_sleep_timeout_seconds: 0,
             protocol_max_bulk_size: 8,
             protocol_macro_chunk_size: 64,
+            rynk_buffer_size: None,
         }
     }
 }

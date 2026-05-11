@@ -18,8 +18,8 @@
 #![cfg_attr(not(test), no_std)]
 
 // Mutual exclusivity guard
-#[cfg(all(feature = "rmk_protocol", feature = "vial"))]
-compile_error!("features `rmk_protocol` and `vial` are mutually exclusive");
+#[cfg(all(feature = "rynk", feature = "vial"))]
+compile_error!("features `rynk` and `vial` are mutually exclusive");
 
 // Re-export self as ::rmk for macro-generated code to work both inside and outside the crate
 extern crate self as rmk;

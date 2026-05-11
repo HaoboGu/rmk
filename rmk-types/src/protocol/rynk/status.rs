@@ -1,7 +1,6 @@
 //! Status endpoint types.
 
 use postcard::experimental::max_size::MaxSize;
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 /// Maximum bitmap size: supports up to 256 keys (e.g., 16 rows x 16 cols).
@@ -12,7 +11,7 @@ pub const MATRIX_BITMAP_SIZE: usize = 32;
 /// Current matrix key-press state as a bitmap.
 /// Bit ordering: row-major, bit 0 = col 0, bit 1 = col 1, etc.
 /// Total meaningful bytes = num_rows * ceil(num_cols / 8).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MatrixState {
     pub pressed_bitmap: heapless::Vec<u8, MATRIX_BITMAP_SIZE>,
@@ -24,7 +23,7 @@ impl MaxSize for MatrixState {
 
 /// Status of a single split peripheral.
 #[cfg(all(feature = "_ble", feature = "split"))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PeripheralStatus {
     pub connected: bool,
@@ -36,7 +35,7 @@ mod tests {
     use heapless::Vec;
 
     use super::*;
-    use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+    use crate::protocol::rynk::test_utils::{assert_max_size_bound, round_trip};
 
     #[test]
     fn round_trip_matrix_state() {
