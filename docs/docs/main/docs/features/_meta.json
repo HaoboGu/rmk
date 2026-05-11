@@ -6,6 +6,7 @@
   "low_power",
   "split_keyboard",
   "vial_support",
+  "rynk",
   "usb_logging",
   "storage",
   "use_rust_api",
