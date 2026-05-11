@@ -140,11 +140,9 @@ mod tests {
 
     use embassy_futures::select::{Either, select};
     use embassy_time::{Duration, Timer};
-    use rmk_types::ble::BleState;
 
     use super::{
-        CONNECTION_STATUS, ConnectionStatus, ConnectionType, UsbState, set_ble_state, set_preferred_connection,
-        set_usb_state,
+        CONNECTION_STATUS, ConnectionStatus, ConnectionType, UsbState, set_preferred_connection, set_usb_state,
     };
     use crate::event::{ConnectionChangeEvent, EventSubscriber, SubscribableEvent};
     use crate::hid::{KeyboardReport, Report};
@@ -285,6 +283,7 @@ mod tests {
     #[test]
     fn usb_preference_flip_releases_previous_ble_transport() {
         use crate::channel::BLE_REPORT_CHANNEL;
+        use crate::state::{BleState, set_ble_state};
 
         let _guard = state_test_lock().lock().unwrap();
         reset_state();

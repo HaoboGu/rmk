@@ -52,13 +52,14 @@ struct BleSplitCentralServer {
 }
 
 pub async fn scan_peripherals<
-    'a,
+    'b,
+    's: 'b,
     C: Controller
         + ControllerCmdSync<LeSetScanParams>
         + ControllerCmdAsync<LeSetPhy>
         + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 >(
-    stack: &'a Stack<'a, C, DefaultPacketPool>,
+    stack: &'b Stack<'s, C, DefaultPacketPool>,
     addrs: &RefCell<VecView<Option<[u8; 6]>>>,
 ) {
     loop {
@@ -69,7 +70,7 @@ pub async fn scan_peripherals<
         if need_scan {
             let scanning_fut = async {
                 loop {
-                    let Host { central, .. } = stack.build();
+                    let central = stack.central();
                     wait_for_stack_started().await;
                     let mut scanner = Scanner::new(central);
                     let scan_config = ScanConfig {
@@ -159,7 +160,8 @@ impl EventHandler for ScanHandler {
 }
 
 pub(crate) async fn run_ble_peripheral_manager<
-    'a,
+    'b,
+    's: 'b,
     C: Controller
         + ControllerCmdSync<LeSetScanParams>
         + ControllerCmdAsync<LeSetPhy>
@@ -171,7 +173,7 @@ pub(crate) async fn run_ble_peripheral_manager<
 >(
     peri_id: usize,
     addrs: &RefCell<VecView<Option<[u8; 6]>>>,
-    stack: &'a Stack<'a, C, DefaultPacketPool>,
+    stack: &'b Stack<'s, C, DefaultPacketPool>,
 ) {
     trace!("SPLIT_MESSAGE_MAX_SIZE: {}", SPLIT_MESSAGE_MAX_SIZE);
 
@@ -189,11 +191,11 @@ pub(crate) async fn run_ble_peripheral_manager<
         };
         info!("Peripheral peer address: {:?}", address);
 
-        let Host { mut central, .. } = stack.build();
+        let mut central = stack.central();
         let config = ConnectConfig {
             connect_params: defaul_central_conn_param(),
             scan_config: ScanConfig {
-                filter_accept_list: &[(address.kind, &address.addr)],
+                filter_accept_list: &[address],
                 ..Default::default()
             },
         };
@@ -265,7 +267,8 @@ fn defaul_central_conn_param() -> RequestedConnParams {
 }
 
 async fn run_central_manager_task<
-    'a,
+    'b,
+    's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     P: PacketPool,
     const ROW: usize,
@@ -274,8 +277,8 @@ async fn run_central_manager_task<
     const COL_OFFSET: usize,
 >(
     id: usize,
-    stack: &'a Stack<'a, C, P>,
-    conn: &Connection<'a, P>,
+    stack: &'b Stack<'s, C, P>,
+    conn: &Connection<'b, P>,
 ) -> Result<(), BleHostError<C::Error>> {
     let client = GattClient::<C, P, 10>::new(stack, conn).await?;
 
@@ -459,12 +462,13 @@ pub(crate) async fn wait_for_stack_started() {
 /// Sleep manager task for connection between split central and peripheral
 /// Handles sleep timeout and connection parameter adjustments using event-driven approach
 async fn sleep_manager_task<
-    'a,
+    'b,
+    's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     P: PacketPool,
 >(
-    stack: &'a Stack<'a, C, P>,
-    conn: &Connection<'a, P>,
+    stack: &'b Stack<'s, C, P>,
+    conn: &Connection<'b, P>,
 ) -> Result<(), BleHostError<C::Error>> {
     // Skip sleep management if timeout is 0 (disabled)
     if SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS == 0 {

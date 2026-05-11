@@ -32,7 +32,7 @@ sifli-radio = { git = "https://github.com/OpenSiFli/sifli-rs", rev = "8b9da60c61
     "defmt",
 ] }
 
-trouble-host = { git = "https://github.com/haobogu/trouble", rev = "e96bdadda8806b1f6257978549746a516f73cf3d", features = [
+trouble-host = { git = "https://github.com/haobogu/trouble", rev = "48e409858586546272a405525b134f8c9ab29320", features = [
     "defmt",
     "peripheral",
     "gatt",
