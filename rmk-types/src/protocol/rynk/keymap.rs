@@ -1,13 +1,12 @@
 //! Keymap endpoint types.
 
 use postcard::experimental::max_size::MaxSize;
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::action::KeyAction;
 
 /// Identifies a specific key position in the keymap.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 pub struct KeyPosition {
     pub layer: u8,
     pub row: u8,
@@ -15,7 +14,7 @@ pub struct KeyPosition {
 }
 
 /// Request payload for `SetKeyAction` endpoint.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 pub struct SetKeyRequest {
     pub position: KeyPosition,
     pub action: KeyAction,
@@ -28,7 +27,6 @@ pub struct SetKeyRequest {
 mod bulk {
     use heapless::Vec;
     use postcard::experimental::max_size::MaxSize;
-    use postcard_schema::Schema;
     use serde::{Deserialize, Serialize};
 
     use crate::action::KeyAction;
@@ -39,7 +37,7 @@ mod bulk {
     /// Keys are linearized in row-major order starting from `(start_row, start_col)`.
     /// `count` is the number of keys to read; iteration wraps to subsequent
     /// rows when the end of a row is reached.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
     pub struct GetKeymapBulkRequest {
         pub layer: u8,
         pub start_row: u8,
@@ -48,7 +46,7 @@ mod bulk {
     }
 
     /// Bulk response for getting multiple key actions at once.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     pub struct GetKeymapBulkResponse {
         pub actions: Vec<KeyAction, BULK_SIZE>,
     }
@@ -62,7 +60,7 @@ mod bulk {
     /// Keys are linearized in row-major order starting from `(start_row, start_col)`.
     /// Iteration wraps to subsequent rows when the end of a row is reached.
     /// The number of keys to write is derived from `actions.len()`.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     pub struct SetKeymapBulkRequest {
         pub layer: u8,
         pub start_row: u8,
@@ -82,7 +80,7 @@ pub use bulk::*;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::rmk::test_utils::round_trip;
+    use crate::protocol::rynk::test_utils::round_trip;
 
     #[test]
     fn round_trip_key_position() {
@@ -115,7 +113,7 @@ mod tests {
         use crate::keycode::{HidKeyCode, KeyCode};
         use crate::modifier::ModifierCombination;
         use crate::morse::MorseProfile;
-        use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+        use crate::protocol::rynk::test_utils::{assert_max_size_bound, round_trip};
 
         /// Largest-encoded `KeyAction` variant: `TapHold` wraps two multi-field
         /// `Action`s and a `MorseProfile(u32)`, many times the size of

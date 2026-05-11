@@ -1,4 +1,4 @@
-//! Shared façade for host-facing services (Vial today, rmk_protocol next).
+//! Shared façade for host-facing services (Vial today, Rynk next).
 //!
 //! Bundles every keymap mutation with its flash persistence so callers don't
 //! repeat `keymap.X(); FLASH_CHANNEL.send(FlashOperationMessage::Y).await`
@@ -26,7 +26,7 @@ use crate::keymap::KeyMap;
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 
-/// Façade shared between Vial and rmk_protocol host services.
+/// Façade shared between Vial and Rynk host services.
 ///
 /// `keymap` is intentionally `pub`: callers like `VialLock` that only need a
 /// raw `&KeyMap` keep their existing parameter and read it through

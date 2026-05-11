@@ -4,14 +4,13 @@
 
 use heapless::Vec;
 use postcard::experimental::max_size::MaxSize;
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 /// Maximum number of key positions in an unlock challenge.
 pub const UNLOCK_KEYS_SIZE: usize = 2;
 
 /// Protocol version advertised during the connection handshake.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 pub struct ProtocolVersion {
     pub major: u8,
     pub minor: u8,
@@ -26,7 +25,7 @@ impl ProtocolVersion {
 ///
 /// The host reads this once after connecting to learn the firmware's layout,
 /// feature set, and protocol limits.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 pub struct DeviceCapabilities {
     // -- Layout --
     pub num_layers: u8,
@@ -61,7 +60,7 @@ pub struct DeviceCapabilities {
 }
 
 /// Current lock/unlock state of the device.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 pub struct LockStatus {
     pub locked: bool,
     pub awaiting_keys: bool,
@@ -69,7 +68,7 @@ pub struct LockStatus {
 }
 
 /// Challenge returned by the Unlock endpoint containing physical key positions to press.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UnlockChallenge {
     pub key_positions: Vec<(u8, u8), UNLOCK_KEYS_SIZE>,
 }
@@ -79,7 +78,7 @@ impl MaxSize for UnlockChallenge {
 }
 
 /// Storage reset mode for the `StorageReset` endpoint.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[non_exhaustive]
 pub enum StorageResetMode {
     /// Reset all stored data.
@@ -89,7 +88,7 @@ pub enum StorageResetMode {
 }
 
 /// Protocol-facing behavior configuration (global timing settings).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 pub struct BehaviorConfig {
     pub combo_timeout_ms: u16,
     pub oneshot_timeout_ms: u16,
@@ -100,7 +99,7 @@ pub struct BehaviorConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+    use crate::protocol::rynk::test_utils::{assert_max_size_bound, round_trip};
 
     #[test]
     fn round_trip_protocol_version() {

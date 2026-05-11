@@ -2,8 +2,6 @@
 
 use heapless::Vec;
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::action::KeyAction;
@@ -19,7 +17,6 @@ use crate::constants::COMBO_SIZE;
 /// Note: `COMBO_SIZE` is a **wire-format** capacity — on firmware it equals
 /// `COMBO_MAX_LENGTH` (from `keyboard.toml`), on host it's a fixed upper bound.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Combo {
     pub actions: Vec<KeyAction, COMBO_SIZE>,

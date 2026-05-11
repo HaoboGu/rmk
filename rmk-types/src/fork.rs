@@ -3,8 +3,6 @@
 use core::ops::{BitAnd, BitOr, Not};
 
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::action::KeyAction;
@@ -16,7 +14,6 @@ use crate::mouse_button::MouseButtons;
 ///
 /// A zero (default) value means "match nothing" — no modifiers, LEDs, or mouse buttons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct StateBits {
     /// Active modifier combination to match.
@@ -75,7 +72,6 @@ impl StateBits {
 /// When the trigger key is pressed, the fork checks current state against `match_any`
 /// and `match_none` to decide between `positive_output` and `negative_output`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Fork {
     /// The key action that activates this fork. Should not be `KeyAction::Transparent`.

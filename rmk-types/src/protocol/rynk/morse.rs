@@ -1,13 +1,12 @@
 //! Morse endpoint types.
 
 use postcard::experimental::max_size::MaxSize;
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::morse::Morse;
 
 /// Request payload for `SetMorse`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 pub struct SetMorseRequest {
     pub index: u8,
     pub config: Morse,
@@ -20,21 +19,20 @@ pub struct SetMorseRequest {
 mod bulk {
     use heapless::Vec;
     use postcard::experimental::max_size::MaxSize;
-    use postcard_schema::Schema;
     use serde::{Deserialize, Serialize};
 
     use crate::constants::BULK_SIZE;
     use crate::morse::Morse;
 
     /// Request payload for `GetMorseBulk`.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
     pub struct GetMorseBulkRequest {
         pub start_index: u8,
         pub count: u8,
     }
 
     /// Bulk request payload for setting multiple morse configs at once.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     pub struct SetMorseBulkRequest {
         pub start_index: u8,
         pub configs: Vec<Morse, BULK_SIZE>,
@@ -45,7 +43,7 @@ mod bulk {
     }
 
     /// Bulk response for getting multiple morse configs at once.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     pub struct GetMorseBulkResponse {
         pub configs: Vec<Morse, BULK_SIZE>,
     }
@@ -66,7 +64,7 @@ mod tests {
     use crate::keycode::{HidKeyCode, KeyCode};
     use crate::modifier::ModifierCombination;
     use crate::morse::{MorsePattern, MorseProfile};
-    use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+    use crate::protocol::rynk::test_utils::{assert_max_size_bound, round_trip};
 
     /// Build a `Morse` whose `actions` `LinearMap` is filled to `MORSE_SIZE`
     /// distinct entries, each using a multi-field `Action` variant so both the
@@ -128,7 +126,7 @@ mod tests {
         use super::full_morse;
         use crate::constants::BULK_SIZE;
         use crate::morse::Morse;
-        use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+        use crate::protocol::rynk::test_utils::{assert_max_size_bound, round_trip};
 
         #[test]
         fn round_trip_set_morse_bulk_request_max_capacity() {
