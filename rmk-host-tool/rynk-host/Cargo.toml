@@ -1,0 +1,25 @@
+[package]
+name = "rynk-host"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rmk-types.workspace = true
+postcard.workspace = true
+serde.workspace = true
+heapless.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+futures.workspace = true
+nusb.workspace = true
+btleplug.workspace = true
+uuid.workspace = true
+
+[features]
+default = ["usb", "ble"]
+usb = []
+ble = []
