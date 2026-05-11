@@ -176,6 +176,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             #[cfg(feature = "_ble")]
             SplitMessage::BatteryStatus(state) => {
                 use crate::event::PeripheralBatteryEvent;
+                crate::split::peripheral_state::record_battery(self.id, state.0);
                 publish_event(PeripheralBatteryEvent { id: self.id, state })
             }
             _ => warn!("{:?} should not come from peripheral", split_message),
