@@ -1,7 +1,6 @@
 //! The abstracted driver layer of the split keyboard.
 //!
-use embassy_futures::select::{Either3, select3};
-use embassy_time::{Instant, Timer};
+use embassy_futures::select::{Either, select};
 use futures::FutureExt;
 
 use super::SplitMessage;
@@ -71,27 +70,19 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
     /// Run the manager.
     ///
     /// The manager receives from the peripheral and publishes input events.
-    /// It also syncs the central's host-connection state (`active_transport().is_some()`)
-    /// to the peripheral periodically as informational signal — peripheral-side
-    /// consumers (e.g. status display) read it from `CENTRAL_HOST_CONNECTED`.
+    /// It also syncs the central's `ConnectionStatus` to the peripheral on every
+    /// change as an informational signal
     pub(crate) async fn run(mut self) {
         use crate::event::EventSubscriber;
 
-        if self
-            .send(&SplitMessage::ConnectionState(
-                crate::state::active_transport().is_some(),
-            ))
-            .await
-            .is_err()
-        {
-            return;
-        }
-        let mut last_sync_time = Instant::now();
-
         let mut indicator_sub = crate::event::LedIndicatorEvent::subscriber();
         let mut layer_sub = crate::event::LayerChangeEvent::subscriber();
+        // Subscribe before the initial send so any change racing past the
+        // snapshot is still delivered to us.
+        let mut connection_sub = crate::event::ConnectionStatusChangeEvent::subscriber();
         #[cfg(feature = "_ble")]
         let mut clear_peer_sub = crate::event::ClearPeerEvent::subscriber();
+
         #[cfg(feature = "display")]
         let mut wpm_sub = crate::event::WpmUpdateEvent::subscriber();
         #[cfg(feature = "display")]
@@ -99,15 +90,25 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
         #[cfg(feature = "display")]
         let mut sleep_sub = crate::event::SleepStateEvent::subscriber();
 
-        loop {
-            let elapsed = last_sync_time.elapsed().as_millis();
-            let wait_time = if elapsed >= 3000 { 1 } else { 3000 - elapsed };
+        // Send the current state once on startup so the peripheral matches us
+        // even when no transition has happened since the central booted.
+        if self
+            .send(&SplitMessage::ConnectionStatus(
+                crate::state::current_connection_status(),
+            ))
+            .await
+            .is_err()
+        {
+            return;
+        }
 
+        loop {
             // Use select_biased_with_feature to handle feature-gated subscriber arms
             let next_event_to_peri = async {
                 crate::select_biased_with_feature! {
                     e = indicator_sub.next_event().fuse() => SplitMessage::KeyboardIndicator(e.0.into_bits()),
                     e = layer_sub.next_event().fuse() => SplitMessage::Layer(e.0),
+                    e = connection_sub.next_event().fuse() => SplitMessage::ConnectionStatus(e.0),
                     with_feature("_ble"): _ = clear_peer_sub.next_event().fuse() => {
                         #[cfg(feature = "storage")]
                         {
@@ -128,14 +129,8 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 }
             };
 
-            match select3(
-                self.transceiver.read(),
-                next_event_to_peri,
-                Timer::after_millis(wait_time),
-            )
-            .await
-            {
-                Either3::First(read_result) => match read_result {
+            match select(self.transceiver.read(), next_event_to_peri).await {
+                Either::First(read_result) => match read_result {
                     Ok(split_message) => {
                         self.process_peripheral_message(split_message).await;
                     }
@@ -143,18 +138,10 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                         error!("Peripheral message read error: {:?}", e);
                     }
                 },
-                Either3::Second(message_to_peri) => {
-                    if self.send(&message_to_peri).await.is_err() {
+                Either::Second(msg) => {
+                    if self.send(&msg).await.is_err() {
                         return;
                     }
-                }
-                Either3::Third(_) => {
-                    let conn_state = crate::state::active_transport().is_some();
-                    trace!("Syncing connection state to peripheral: {}", conn_state);
-                    if self.send(&SplitMessage::ConnectionState(conn_state)).await.is_err() {
-                        return;
-                    }
-                    last_sync_time = Instant::now();
                 }
             }
         }

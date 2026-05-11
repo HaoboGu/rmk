@@ -28,5 +28,5 @@ subs = 5
 [event.sleep_state]
 subs = 5
 
-[event.ble_status_change]
+[event.connection_status_change]
 subs = 5

@@ -190,8 +190,9 @@ mod tests {
     /// must deliver both without issuing a second underlying read.
     #[test]
     fn two_bundled_messages_do_not_trigger_extra_read() {
+        let status = rmk_types::connection::ConnectionStatus::new();
         let mut bundled = encode(&SplitMessage::LedState(true));
-        bundled.extend_from_slice(&encode(&SplitMessage::ConnectionState(false)));
+        bundled.extend_from_slice(&encode(&SplitMessage::ConnectionState(status)));
 
         let fake = FakeSerial::new([bundled]);
         let mut drv = SerialSplitDriver::new(fake);
@@ -200,7 +201,10 @@ mod tests {
         assert!(matches!(m1, SplitMessage::LedState(true)));
 
         let m2 = block_on(drv.read()).expect("second read should not touch serial");
-        assert!(matches!(m2, SplitMessage::ConnectionState(false)));
+        match m2 {
+            SplitMessage::ConnectionState(s) => assert_eq!(s, status),
+            other => panic!("expected ConnectionState, got {:?}", other),
+        }
 
         assert_eq!(drv.serial.read_calls, 1);
     }
@@ -211,8 +215,9 @@ mod tests {
     /// prefix plus the next chunk.
     #[test]
     fn trailing_partial_message_is_carried_over() {
+        let status = rmk_types::connection::ConnectionStatus::new();
         let full1 = encode(&SplitMessage::LedState(true));
-        let full2 = encode(&SplitMessage::ConnectionState(true));
+        let full2 = encode(&SplitMessage::ConnectionState(status));
         let (prefix, suffix) = full2.split_at(full2.len() / 2);
 
         let mut first_chunk = full1;
@@ -225,7 +230,10 @@ mod tests {
         assert!(matches!(m1, SplitMessage::LedState(true)));
 
         let m2 = block_on(drv.read()).expect("second read should succeed");
-        assert!(matches!(m2, SplitMessage::ConnectionState(true)));
+        match m2 {
+            SplitMessage::ConnectionState(s) => assert_eq!(s, status),
+            other => panic!("expected ConnectionState, got {:?}", other),
+        }
 
         assert_eq!(drv.serial.read_calls, 2);
     }

@@ -20,9 +20,9 @@ use crate::event::{
 };
 #[cfg(feature = "display")]
 use crate::event::{ModifierEvent, SleepStateEvent, WpmUpdateEvent};
-use crate::split::CENTRAL_HOST_CONNECTED;
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
+use crate::state::update_status;
 
 /// Run the split peripheral service.
 ///
@@ -98,9 +98,9 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                 Either::First(m) => match m {
                     // Process split messages from the central
                     Ok(split_message) => match split_message {
-                        SplitMessage::ConnectionState(state) => {
-                            trace!("Received central host-connection state: {}", state);
-                            CENTRAL_HOST_CONNECTED.store(state, core::sync::atomic::Ordering::Release);
+                        SplitMessage::ConnectionStatus(status) => {
+                            trace!("Received central connection status: {:?}", status);
+                            update_status(|c| *c = status);
                         }
                         #[cfg(all(feature = "_ble", feature = "storage"))]
                         SplitMessage::ClearPeer => {

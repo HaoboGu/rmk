@@ -50,8 +50,20 @@ impl<P: PacketPool> Runnable for BleBatteryServer<'_, '_, '_, P> {
         // Wait 2 seconds, ensure that gatt server has been started
         Timer::after_secs(2).await;
 
-        // First report after connected
+        // First report after connected.
+        //
+        // Prefer the cached status from the processor — that way a host that
+        // connects after the level has already stabilized (battery clamped at
+        // 100%, no recent key activity, etc.) doesn't have to wait for a state
+        // change to learn the level. If the cache is empty, fall through to
+        // waiting on the event stream.
         let first_report = async {
+            if let BatteryStatus::Available { level: Some(level), .. } =
+                crate::input_device::battery::current_battery_status()
+                && self.battery_level.notify(self.conn, &level).await.is_ok()
+            {
+                return;
+            }
             loop {
                 if let BatteryStatus::Available { level: Some(level), .. } = self.sub.next_message_pure().await.0 {
                     if let Err(e) = self.battery_level.notify(self.conn, &level).await {

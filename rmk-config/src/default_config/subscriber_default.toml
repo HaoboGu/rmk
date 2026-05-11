@@ -24,6 +24,13 @@ events = [
 ]
 
 [[subscriber]]
+features = ["display", "_ble"]
+events = [
+    # display/mod.rs: DisplayProcessor subscribes when _ble is enabled
+    { name = "connection_status_change" },
+]
+
+[[subscriber]]
 features = ["display", "split"]
 events = [
     # split/driver.rs: each PeripheralManager subscribes when display is enabled
@@ -56,6 +63,9 @@ events = [
     { name = "led_indicator" },
     # split/driver.rs: LayerChangeEvent::subscriber()
     { name = "layer_change" },
+    # split/driver.rs: ConnectionStatusChangeEvent::subscriber()
+    # Covers up to 2 peripherals; for 3+ peripherals override subs in keyboard.toml
+    { name = "connection_status_change", count = 2 },
 ]
 
 # --- Split + BLE-gated internal subscribers ---
