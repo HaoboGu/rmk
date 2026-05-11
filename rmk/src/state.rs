@@ -7,9 +7,7 @@ use rmk_types::ble::BleStatus;
 use rmk_types::connection::{ConnectionStatus, ConnectionType, UsbState};
 
 use crate::RawMutex;
-#[cfg(feature = "_ble")]
-use crate::event::BleStatusChangeEvent;
-use crate::event::{ConnectionChangeEvent, publish_event};
+use crate::event::{ConnectionStatusChangeEvent, publish_event};
 
 /// Single source of truth for transport state and routing. All writes go
 /// through the mutator helpers below so the active-output cascade runs and
@@ -35,7 +33,7 @@ pub(crate) fn current_ble_status() -> BleStatus {
 }
 
 /// Read-modify-write the connection status atomically.
-fn update_status(f: impl FnOnce(&mut ConnectionStatus)) {
+pub(crate) fn update_status(f: impl FnOnce(&mut ConnectionStatus)) {
     let Some((prev, new)) = CONNECTION_STATUS.lock(|c| {
         let prev = c.get();
         let mut new = prev;
@@ -61,13 +59,7 @@ fn update_status(f: impl FnOnce(&mut ConnectionStatus)) {
         crate::channel::clear_and_release_report_channel(prev_active);
     }
 
-    #[cfg(feature = "_ble")]
-    if prev.ble != new.ble {
-        publish_event(BleStatusChangeEvent(new.ble));
-    }
-    if prev.preferred != new.preferred {
-        publish_event(ConnectionChangeEvent::new(new.preferred));
-    }
+    publish_event(ConnectionStatusChangeEvent(new));
 }
 
 pub fn set_usb_state(s: UsbState) {
@@ -144,7 +136,7 @@ mod tests {
     use super::{
         CONNECTION_STATUS, ConnectionStatus, ConnectionType, UsbState, set_preferred_connection, set_usb_state,
     };
-    use crate::event::{ConnectionChangeEvent, EventSubscriber, SubscribableEvent};
+    use crate::event::{ConnectionStatusChangeEvent, EventSubscriber, SubscribableEvent};
     use crate::hid::{KeyboardReport, Report};
     use crate::test_support::test_block_on as block_on;
 
@@ -183,29 +175,43 @@ mod tests {
     }
 
     #[test]
-    fn preferred_transport_change_publishes_connection_event() {
+    fn preferred_transport_change_publishes_status_event() {
         let _guard = state_test_lock().lock().unwrap();
         reset_state();
         set_usb_state(UsbState::Configured);
-        let mut sub = ConnectionChangeEvent::subscriber();
+        let mut sub = ConnectionStatusChangeEvent::subscriber();
 
         set_preferred_connection(ConnectionType::Ble);
 
         let event = block_on(sub.next_event());
-        assert_eq!(event.0, ConnectionType::Ble);
+        assert_eq!(event.0.preferred, ConnectionType::Ble);
     }
 
     #[test]
-    fn active_transport_flip_does_not_publish_connection_event() {
+    fn usb_state_change_publishes_status_event() {
         let _guard = state_test_lock().lock().unwrap();
         reset_state();
-        let mut sub = ConnectionChangeEvent::subscriber();
+        let mut sub = ConnectionStatusChangeEvent::subscriber();
 
+        set_usb_state(UsbState::Configured);
+
+        let event = block_on(sub.next_event());
+        assert_eq!(event.0.usb, UsbState::Configured);
+    }
+
+    #[test]
+    fn unchanged_status_does_not_publish_event() {
+        let _guard = state_test_lock().lock().unwrap();
+        reset_state();
+        set_usb_state(UsbState::Configured);
+        let mut sub = ConnectionStatusChangeEvent::subscriber();
+
+        // Re-setting the same value should not publish.
         set_usb_state(UsbState::Configured);
 
         match block_on(select(Timer::after(Duration::from_millis(1)), sub.next_event())) {
             Either::First(_) => {}
-            Either::Second(event) => panic!("unexpected connection change event: {:?}", event),
+            Either::Second(event) => panic!("unexpected status change event: {:?}", event),
         }
     }
 

@@ -1,15 +1,9 @@
 # Event channel default configurations
 # Users can override any of these in their keyboard.toml under [event.xxx]
 
-# BLE events
-[event.ble_status_change]
-channel_size = 2
-pubs = 2
-subs = 1
-
 # Connection events
-[event.connection_change]
-channel_size = 1
+[event.connection_status_change]
+channel_size = 2
 pubs = 2
 subs = 1
 

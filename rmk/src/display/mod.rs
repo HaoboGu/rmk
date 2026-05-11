@@ -75,7 +75,7 @@ pub use ssd1306;
 
 use crate::core_traits::Runnable;
 #[cfg(feature = "_ble")]
-use crate::event::BleStatusChangeEvent;
+use crate::event::ConnectionStatusChangeEvent;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::PeripheralBatteryEvent;
 use crate::event::{
@@ -224,7 +224,7 @@ pub trait DisplayRenderer<C: PixelColor> {
 /// - `D` — display driver, must implement [`DisplayDriver`].
 /// - `R` — the renderer, defaults to [`LogoRenderer`].
 #[processor(subscribe = [KeyboardEvent, LayerChangeEvent, WpmUpdateEvent, LedIndicatorEvent, ModifierEvent, BatteryStatusEvent, SleepStateEvent])]
-#[cfg_attr(feature = "_ble", processor(subscribe = [BleStatusChangeEvent]))]
+#[cfg_attr(feature = "_ble", processor(subscribe = [ConnectionStatusChangeEvent]))]
 #[cfg_attr(feature = "split", processor(subscribe = [PeripheralConnectedEvent, CentralConnectedEvent]))]
 #[cfg_attr(all(feature = "split", feature = "_ble"), processor(subscribe = [PeripheralBatteryEvent]))]
 #[::rmk::macros::runnable_generated]
@@ -381,8 +381,8 @@ where
     }
 
     #[cfg(feature = "_ble")]
-    async fn on_ble_status_change_event(&mut self, event: BleStatusChangeEvent) {
-        self.ctx.ble_status = event.0;
+    async fn on_connection_status_change_event(&mut self, event: ConnectionStatusChangeEvent) {
+        self.ctx.ble_status = event.0.ble;
         self.render().await;
     }
 

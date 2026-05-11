@@ -63,8 +63,7 @@ peripheral_battery.subs = 4
 | `charging_state` | `ChargingStateEvent` | channel_size=2 |
 | `battery_status` | `BatteryStatusEvent` | subs=4 |
 | **Connection Events** | | |
-| `connection_change` | `ConnectionChangeEvent` | |
-| `ble_status_change` | `BleStatusChangeEvent` | pubs=2 |
+| `connection_status_change` | `ConnectionStatusChangeEvent` | channel_size=2, pubs=2 |
 | **Split Events** | | |
 | `peripheral_connected` | `PeripheralConnectedEvent` | |
 | `central_connected` | `CentralConnectedEvent` | |

@@ -43,8 +43,7 @@ RMK provides built-in event types organized by category:
 - `BatteryStatusEvent` - Battery status changed (includes level and charging status)
 
 **Connection Events** (`rmk::event::connection`):
-- `ConnectionChangeEvent` - Connection type changed (USB/BLE)
-- `BleStatusChangeEvent` - BLE status changed: profile, state (Advertising/Connected/Inactive)
+- `ConnectionStatusChangeEvent` - Full `ConnectionStatus` snapshot (USB lifecycle, BLE profile/state, preferred transport); fires on every transition
 
 **Split Keyboard Events** (`rmk::event::split`, when split is enabled):
 - `PeripheralConnectedEvent` - Peripheral connection state changed
