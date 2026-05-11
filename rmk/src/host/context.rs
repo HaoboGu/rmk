@@ -16,7 +16,8 @@ use rmk_types::action::{EncoderAction, KeyAction};
 #[cfg(feature = "_ble")]
 use rmk_types::battery::BatteryStatus;
 use rmk_types::combo::Combo as ComboConfig;
-use rmk_types::connection::ConnectionStatus;
+use rmk_types::connection::{ConnectionStatus, ConnectionType};
+use rmk_types::fork::Fork;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::morse::{Morse, MorseProfile};
 
@@ -320,6 +321,42 @@ impl<'a> KeyboardContext<'a> {
 
     pub fn default_layer(&self) -> u8 {
         self.keymap.get_default_layer()
+    }
+
+    pub async fn set_default_layer(&self, layer: u8) {
+        self.keymap.set_default_layer(layer);
+        #[cfg(feature = "storage")]
+        FLASH_CHANNEL.send(FlashOperationMessage::DefaultLayer(layer)).await;
+    }
+
+    // ── Connection ───────────────────────────────────────────────────────
+
+    /// Tiebreaker connection currently chosen as preferred — independent
+    /// of which transport is actively routable.
+    pub fn preferred_connection(&self) -> ConnectionType {
+        crate::state::current_connection_status().preferred
+    }
+
+    // ── Forks ────────────────────────────────────────────────────────────
+
+    pub fn get_fork(&self, idx: u8) -> Option<Fork> {
+        self.keymap.with_forks(|forks| forks.get(idx as usize).copied())
+    }
+
+    pub async fn set_fork(&self, idx: u8, fork: Fork) {
+        let valid = self.keymap.with_forks_mut(|forks| {
+            if let Some(slot) = forks.get_mut(idx as usize) {
+                *slot = fork;
+                true
+            } else {
+                false
+            }
+        });
+        if !valid {
+            return;
+        }
+        #[cfg(feature = "storage")]
+        FLASH_CHANNEL.send(FlashOperationMessage::Fork { idx, fork }).await;
     }
 
     // ── Matrix state (host_security) ─────────────────────────────────────
