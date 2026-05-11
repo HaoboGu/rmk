@@ -48,8 +48,8 @@ pub struct BuildConstants {
     pub split_central_sleep_timeout_seconds: u32,
     pub protocol_max_bulk_size: usize,
     pub protocol_macro_chunk_size: usize,
-    /// Optional override for the Rynk RX/TX buffer size (bytes). `None`
-    /// instructs `rmk-types/build.rs` to fall back to `RYNK_MIN_BUFFER_SIZE`.
+    /// Optional user-configured Rynk RX/TX buffer size. `None` means
+    /// "use `RYNK_MIN_BUFFER_SIZE` at firmware build time."
     pub rynk_buffer_size: Option<usize>,
     pub events: Vec<EventChannel>,
     pub passkey: Option<Passkey>,

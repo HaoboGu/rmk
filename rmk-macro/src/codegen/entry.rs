@@ -93,7 +93,13 @@ pub(crate) fn rmk_entry_select(
     };
     let board = &hardware.board;
     let communication = &hardware.communication;
-    let (transport_prelude, transport_tasks) = transport_setup(communication);
+    let (transport_prelude, mut transport_tasks) = transport_setup(communication, host);
+
+    // Rynk transports are owned by the transport prelude (see
+    // `transport_setup`). Their `run` futures live alongside the existing
+    // `usb_transport.run()` / `ble_transport.run()` calls in
+    // `transport_tasks`, so no extra collection is needed here.
+    let _ = &mut transport_tasks;
 
     let entry = match board {
         BoardConfig::Split(split_config) => {
@@ -229,40 +235,93 @@ pub(crate) fn rmk_entry_unibody(
 /// active communication config. The prelude must be emitted before the join so
 /// that `transport.run()` can borrow each transport for the lifetime of the
 /// program.
-fn transport_setup(communication: &CommunicationConfig) -> (TokenStream2, Vec<TokenStream2>) {
+///
+/// When `host.rynk_enabled`, a Rynk USB transport is built on the same
+/// `embassy_usb::Builder` as the keyboard's HID interfaces and joined as
+/// an additional future. A Rynk BLE transport is built off the GATT
+/// server inside the BLE per-connection runner; the keyboard's
+/// `BleTransport::run` future handles that hookup, so nothing extra needs
+/// to be added here for BLE.
+fn transport_setup(
+    communication: &CommunicationConfig,
+    host: &Host,
+) -> (TokenStream2, Vec<TokenStream2>) {
     let wpm_prelude = quote! {
         let mut wpm_processor = ::rmk::processor::builtin::wpm::WpmProcessor::new();
     };
     let wpm_task = quote! { wpm_processor.run() };
+
+    // When Rynk is on, `UsbTransport::new_with` is used to attach the
+    // vendor-class bulk interface to the same USB builder. The returned
+    // tuple gives back the rynk transport so its `run` future can join
+    // `run_all!`.
+    let (usb_init, rynk_usb_task): (TokenStream2, Option<TokenStream2>) = if host.rynk_enabled {
+        let init = quote! {
+            let (mut usb_transport, mut rynk_usb) = ::rmk::usb::UsbTransport::new_with(
+                driver,
+                rmk_config.device_config,
+                |builder| {
+                    ::rmk::host::RynkUsbTransport::build(builder, ::rmk::host::RYNK_USB_MAX_PACKET_SIZE)
+                },
+            );
+        };
+        (init, Some(quote! { rynk_usb.run(&rynk_service) }))
+    } else {
+        (
+            quote! {
+                let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config);
+            },
+            None,
+        )
+    };
+
+    // BLE rynk hookup is conditional on `host.rynk_enabled`, not the
+    // Cargo feature — the `RynkService` binding only exists when the
+    // macro emitted the host_service_init Rynk branch.
+    let ble_rynk_attach: TokenStream2 = if host.rynk_enabled {
+        quote! { let mut ble_transport = ble_transport.with_rynk_service(&rynk_service); }
+    } else {
+        quote! {}
+    };
+
     match communication {
         CommunicationConfig::Usb(_) => {
             let prelude = quote! {
                 #wpm_prelude
-                let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config);
+                #usb_init
             };
-            (prelude, vec![quote! { usb_transport.run() }, wpm_task])
+            let mut tasks = vec![quote! { usb_transport.run() }, wpm_task];
+            if let Some(t) = rynk_usb_task {
+                tasks.push(t);
+            }
+            (prelude, tasks)
         }
         CommunicationConfig::Ble(_) => {
             let prelude = quote! {
                 #wpm_prelude
+                #[allow(unused_mut)]
                 let mut ble_transport = ::rmk::ble::BleTransport::new(&stack, rmk_config).await;
+                #ble_rynk_attach
             };
             (prelude, vec![quote! { ble_transport.run() }, wpm_task])
         }
         CommunicationConfig::Both(_, _) => {
             let prelude = quote! {
                 #wpm_prelude
-                let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config);
+                #usb_init
+                #[allow(unused_mut)]
                 let mut ble_transport = ::rmk::ble::BleTransport::new(&stack, rmk_config).await;
+                #ble_rynk_attach
             };
-            (
-                prelude,
-                vec![
-                    quote! { usb_transport.run() },
-                    quote! { ble_transport.run() },
-                    wpm_task,
-                ],
-            )
+            let mut tasks = vec![
+                quote! { usb_transport.run() },
+                quote! { ble_transport.run() },
+                wpm_task,
+            ];
+            if let Some(t) = rynk_usb_task {
+                tasks.push(t);
+            }
+            (prelude, tasks)
         }
         CommunicationConfig::None => panic!("USB and BLE are both disabled"),
     }

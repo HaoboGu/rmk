@@ -50,6 +50,8 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
         is_feature_enabled(&rmk_features, "storage"),
         host.vial_enabled,
         is_feature_enabled(&rmk_features, "vial"),
+        host.rynk_enabled,
+        is_feature_enabled(&rmk_features, "rynk"),
     )
     .unwrap_or_else(|err| panic!("{err}"));
 
@@ -79,6 +81,8 @@ fn validate_feature_config_parity(
     storage_enabled_in_features: bool,
     vial_enabled_in_config: bool,
     vial_enabled_in_features: bool,
+    rynk_enabled_in_config: bool,
+    rynk_enabled_in_features: bool,
 ) -> Result<(), &'static str> {
     if storage_enabled_in_config != storage_enabled_in_features {
         if storage_enabled_in_config {
@@ -99,6 +103,23 @@ fn validate_feature_config_parity(
         }
         return Err(
             "`host.vial_enabled = false` in keyboard.toml requires disabling the \"vial\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need).",
+        );
+    }
+
+    if rynk_enabled_in_config != rynk_enabled_in_features {
+        if rynk_enabled_in_config {
+            return Err(
+                "If the \"rynk\" Cargo feature is disabled, `host.rynk_enabled` must be set to false in keyboard.toml.",
+            );
+        }
+        return Err(
+            "`host.rynk_enabled = false` in keyboard.toml requires disabling the \"rynk\" Cargo feature for rmk in Cargo.toml.",
+        );
+    }
+
+    if vial_enabled_in_config && rynk_enabled_in_config {
+        return Err(
+            "`host.vial_enabled` and `host.rynk_enabled` are mutually exclusive — enable only one in keyboard.toml.",
         );
     }
 
@@ -166,14 +187,20 @@ mod tests {
 
     #[test]
     fn accepts_matching_storage_and_vial_feature_states() {
-        assert!(validate_feature_config_parity(true, true, true, true).is_ok());
-        assert!(validate_feature_config_parity(false, false, false, false).is_ok());
-        assert!(validate_feature_config_parity(true, true, false, false).is_ok());
+        assert!(validate_feature_config_parity(true, true, true, true, false, false).is_ok());
+        assert!(validate_feature_config_parity(false, false, false, false, false, false).is_ok());
+        assert!(validate_feature_config_parity(true, true, false, false, false, false).is_ok());
+    }
+
+    #[test]
+    fn accepts_rynk_enabled_state() {
+        assert!(validate_feature_config_parity(true, true, false, false, true, true).is_ok());
     }
 
     #[test]
     fn rejects_storage_enabled_in_config_without_feature() {
-        let err = validate_feature_config_parity(true, false, false, false).unwrap_err();
+        let err =
+            validate_feature_config_parity(true, false, false, false, false, false).unwrap_err();
         assert_eq!(
             err,
             "If the \"storage\" Cargo feature is disabled, `storage.enabled` must be set to false in keyboard.toml."
@@ -182,7 +209,8 @@ mod tests {
 
     #[test]
     fn rejects_storage_feature_without_config() {
-        let err = validate_feature_config_parity(false, true, false, false).unwrap_err();
+        let err =
+            validate_feature_config_parity(false, true, false, false, false, false).unwrap_err();
         assert_eq!(
             err,
             "`storage.enabled = false` in keyboard.toml requires disabling the \"storage\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need)."
@@ -191,7 +219,8 @@ mod tests {
 
     #[test]
     fn rejects_vial_enabled_in_config_without_feature() {
-        let err = validate_feature_config_parity(false, false, true, false).unwrap_err();
+        let err =
+            validate_feature_config_parity(false, false, true, false, false, false).unwrap_err();
         assert_eq!(
             err,
             "If the \"vial\" Cargo feature is disabled, `host.vial_enabled` must be set to false in keyboard.toml."
@@ -200,10 +229,40 @@ mod tests {
 
     #[test]
     fn rejects_vial_feature_without_config() {
-        let err = validate_feature_config_parity(false, false, false, true).unwrap_err();
+        let err =
+            validate_feature_config_parity(false, false, false, true, false, false).unwrap_err();
         assert_eq!(
             err,
             "`host.vial_enabled = false` in keyboard.toml requires disabling the \"vial\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need)."
+        );
+    }
+
+    #[test]
+    fn rejects_rynk_enabled_in_config_without_feature() {
+        let err =
+            validate_feature_config_parity(false, false, false, false, true, false).unwrap_err();
+        assert_eq!(
+            err,
+            "If the \"rynk\" Cargo feature is disabled, `host.rynk_enabled` must be set to false in keyboard.toml."
+        );
+    }
+
+    #[test]
+    fn rejects_rynk_feature_without_config() {
+        let err =
+            validate_feature_config_parity(false, false, false, false, false, true).unwrap_err();
+        assert_eq!(
+            err,
+            "`host.rynk_enabled = false` in keyboard.toml requires disabling the \"rynk\" Cargo feature for rmk in Cargo.toml."
+        );
+    }
+
+    #[test]
+    fn rejects_vial_and_rynk_both_enabled() {
+        let err = validate_feature_config_parity(false, false, true, true, true, true).unwrap_err();
+        assert_eq!(
+            err,
+            "`host.vial_enabled` and `host.rynk_enabled` are mutually exclusive — enable only one in keyboard.toml."
         );
     }
 }
@@ -255,6 +314,14 @@ fn expand_main(
         quote! {
             let host_ctx = ::rmk::host::KeyboardContext::new(&keymap);
             let mut host_service = ::rmk::host::HostService::new(&host_ctx, &rmk_config);
+        }
+    } else if host.rynk_enabled {
+        // Rynk reuses the same `KeyboardContext` Vial does but funnels every
+        // wire request through `RynkService`. The per-transport adapters
+        // are constructed inside `transport_setup` so they can hook the
+        // shared `embassy_usb::Builder` / GATT server at the right point.
+        quote! {
+            let rynk_service = ::rmk::host::RynkService::new(&keymap);
         }
     } else {
         quote! {}

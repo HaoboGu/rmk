@@ -249,9 +249,10 @@ pub(crate) struct RmkConstantsConfig {
     /// Smaller values reduce firmware RAM usage but require more round-trips.
     #[serde_inline_default(64)]
     pub protocol_macro_chunk_size: usize,
-    /// Optional override for the Rynk RX/TX buffer size (bytes). When `None`,
-    /// the build emits `RYNK_BUFFER_SIZE = RYNK_MIN_BUFFER_SIZE`. The const
-    /// assertion in `rmk/src/host/rynk` rejects user values below the floor.
+    /// Buffer size (bytes) for Rynk RX/TX frames per active transport.
+    /// `None` falls back to `RYNK_MIN_BUFFER_SIZE` at build time so every
+    /// possible wire frame fits exactly. Underprovisioning fails the build
+    /// via the const assert in `rmk/src/host/rynk/mod.rs`.
     #[serde(default)]
     pub rynk_buffer_size: Option<usize>,
 }
@@ -840,6 +841,10 @@ pub(crate) struct HostConfig {
     /// Whether Vial is enabled
     #[serde_inline_default(true)]
     pub vial_enabled: bool,
+    /// Whether Rynk (RMK-native protocol) is enabled. Mutually exclusive
+    /// with `vial_enabled`.
+    #[serde_inline_default(false)]
+    pub rynk_enabled: bool,
     /// Unlock keys for Vial (optional)
     pub unlock_keys: Option<Vec<[u8; 2]>>,
 }
@@ -848,6 +853,7 @@ impl Default for HostConfig {
     fn default() -> Self {
         Self {
             vial_enabled: true,
+            rynk_enabled: false,
             unlock_keys: None,
         }
     }
