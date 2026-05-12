@@ -650,3 +650,43 @@ fn test_flow_tap_after_early_fire_does_not_jam() {
         ]
     };
 }
+
+/// Regression test: a tap resolved by flow-tap (e.g. right after a burst of typing) must
+/// still allow a hold-after-tap continuation, so press-and-hold after that tap repeats the
+/// tap action instead of resolving as a fresh hold.
+///
+/// Before the fix, flow-tap fired the tap and removed the key from the held buffer on
+/// release, leaving no trace. A subsequent press-and-hold was therefore a brand-new press
+/// and resolved to the hold action (RShift here) instead of hold-after-tap (Backspace). The
+/// early-fire path did not have this problem because it leaves an EarlyFired breadcrumb; the
+/// fix makes flow-tapped taps leave the same breadcrumb when a hold-after-tap action exists.
+#[test]
+fn test_flow_tapped_tap_then_hold_after_tap() {
+    key_sequence_test! {
+        keyboard: create_flow_tap_early_fire_keyboard(),
+        sequence: [
+            // Type A, then tap td!(0) within prior_idle_time so the tap is resolved by flow-tap.
+            [0, 1, true, 200],
+            [0, 1, false, 30],
+            [0, 0, true, 50],
+            [0, 0, false, 30],
+            // Re-press td!(0) within the gap timeout and hold past the hold timeout.
+            // With the fix this continues into hold-after-tap (Backspace held); before it
+            // resolved as a fresh hold (RShift).
+            [0, 0, true, 150],
+            [0, 0, false, 400],
+        ],
+        expected_reports: [
+            // Type A.
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            // Flow-tapped tap: Backspace press (held) then release on key-up.
+            [0, [kc_to_u8!(Backspace), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            // Re-press held: hold-after-tap fires Backspace (held), released on key-up.
+            // RShift would mean the continuation breadcrumb was lost.
+            [0, [kc_to_u8!(Backspace), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]]
+        ]
+    };
+}
