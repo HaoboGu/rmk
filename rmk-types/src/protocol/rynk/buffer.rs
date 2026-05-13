@@ -12,17 +12,14 @@
 //!
 //! ## Response wrapping
 //!
-//! Every response payload is `RynkResponse<T> = Result<T, RynkError>`, so
-//! the response sizing folds over `Result<T, RynkError>::POSTCARD_MAX_SIZE`
-//! rather than `T::POSTCARD_MAX_SIZE` directly. Postcard's enum tag is 1
-//! byte, so each response is at most `1 + T::POSTCARD_MAX_SIZE` bytes.
+//! Every response payload is `Result<T, RynkError>`, so the response sizing
+//! folds over `Result<T, RynkError>::POSTCARD_MAX_SIZE` rather than
+//! `T::POSTCARD_MAX_SIZE` directly. Postcard's enum tag is 1 byte, so
+//! each response is at most `1 + T::POSTCARD_MAX_SIZE` bytes.
 
 use postcard::experimental::max_size::MaxSize;
 
 use super::*;
-
-/// Size in bytes of the fixed Rynk header (CMD u16 + SEQ u8 + LEN u16).
-pub const RYNK_HEADER_SIZE: usize = super::header::HEADER_SIZE;
 
 /// `const fn` max used to fold over all wire types at compile time.
 const fn max_const(a: usize, b: usize) -> usize {
@@ -31,37 +28,37 @@ const fn max_const(a: usize, b: usize) -> usize {
 
 /// Maximum postcard-encoded payload size across every Rynk wire type.
 ///
-/// Folds over all responses (wrapped in `RynkResponse<T>`) and all
+/// Folds over all responses (wrapped in `Result<T, RynkError>`) and all
 /// requests where the request can be larger than any response (e.g.
 /// bulk-set requests).
 pub const RYNK_MAX_PAYLOAD: usize = {
     let mut m = 0usize;
 
-    // ── responses (all wrapped in RynkResponse<T>) ──
-    m = max_const(m, <RynkResponse<ProtocolVersion> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <RynkResponse<DeviceCapabilities> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <RynkResponse<LockStatus> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <RynkResponse<UnlockChallenge> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <RynkResponse<BehaviorConfig> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <RynkResponse<crate::action::KeyAction> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <RynkResponse<crate::action::EncoderAction> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <RynkResponse<crate::combo::Combo> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <RynkResponse<crate::morse::Morse> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <RynkResponse<crate::fork::Fork> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <RynkResponse<crate::connection::ConnectionType> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <RynkResponse<MacroData> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <RynkResponse<MatrixState> as MaxSize>::POSTCARD_MAX_SIZE);
-    // `RynkResult` (i.e. `RynkResponse<()>`) is the canonical Set* reply.
-    m = max_const(m, <RynkResult as MaxSize>::POSTCARD_MAX_SIZE);
+    // ── responses (all wrapped in Result<T, RynkError>) ──
+    m = max_const(m, <Result<ProtocolVersion, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    m = max_const(m, <Result<DeviceCapabilities, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    m = max_const(m, <Result<LockStatus, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    m = max_const(m, <Result<UnlockChallenge, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    m = max_const(m, <Result<BehaviorConfig, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    m = max_const(m, <Result<crate::action::KeyAction, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    m = max_const(m, <Result<crate::action::EncoderAction, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    m = max_const(m, <Result<crate::combo::Combo, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    m = max_const(m, <Result<crate::morse::Morse, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    m = max_const(m, <Result<crate::fork::Fork, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    m = max_const(m, <Result<crate::connection::ConnectionType, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    m = max_const(m, <Result<MacroData, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    m = max_const(m, <Result<MatrixState, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    // Canonical Set* reply.
+    m = max_const(m, <Result<(), RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
 
     #[cfg(feature = "_ble")]
     {
-        m = max_const(m, <RynkResponse<crate::battery::BatteryStatus> as MaxSize>::POSTCARD_MAX_SIZE);
-        m = max_const(m, <RynkResponse<crate::ble::BleStatus> as MaxSize>::POSTCARD_MAX_SIZE);
+        m = max_const(m, <Result<crate::battery::BatteryStatus, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+        m = max_const(m, <Result<crate::ble::BleStatus, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
     }
     #[cfg(all(feature = "_ble", feature = "split"))]
     {
-        m = max_const(m, <RynkResponse<PeripheralStatus> as MaxSize>::POSTCARD_MAX_SIZE);
+        m = max_const(m, <Result<PeripheralStatus, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
     }
 
     // ── requests that can be larger than any response ──
@@ -76,12 +73,12 @@ pub const RYNK_MAX_PAYLOAD: usize = {
     #[cfg(feature = "bulk")]
     {
         m = max_const(m, <GetKeymapBulkRequest as MaxSize>::POSTCARD_MAX_SIZE);
-        m = max_const(m, <RynkResponse<GetKeymapBulkResponse> as MaxSize>::POSTCARD_MAX_SIZE);
+        m = max_const(m, <Result<GetKeymapBulkResponse, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
         m = max_const(m, <SetKeymapBulkRequest as MaxSize>::POSTCARD_MAX_SIZE);
         m = max_const(m, <SetComboBulkRequest as MaxSize>::POSTCARD_MAX_SIZE);
-        m = max_const(m, <RynkResponse<GetComboBulkResponse> as MaxSize>::POSTCARD_MAX_SIZE);
+        m = max_const(m, <Result<GetComboBulkResponse, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
         m = max_const(m, <SetMorseBulkRequest as MaxSize>::POSTCARD_MAX_SIZE);
-        m = max_const(m, <RynkResponse<GetMorseBulkResponse> as MaxSize>::POSTCARD_MAX_SIZE);
+        m = max_const(m, <Result<GetMorseBulkResponse, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
     }
 
     m
@@ -106,7 +103,7 @@ mod tests {
         // `DeviceCapabilities` is one of the largest single-message responses
         // when bulk is disabled; the min buffer must hold its wrapped form
         // plus header.
-        let wrapped = <RynkResponse<DeviceCapabilities> as MaxSize>::POSTCARD_MAX_SIZE;
+        let wrapped = <Result<DeviceCapabilities, RynkError> as MaxSize>::POSTCARD_MAX_SIZE;
         assert!(RYNK_MAX_PAYLOAD >= wrapped);
         assert!(RYNK_MIN_BUFFER_SIZE >= wrapped + RYNK_HEADER_SIZE);
     }
@@ -116,7 +113,7 @@ mod tests {
         // Postcard's Result tag is 1 byte. The wrapped size of any
         // non-trivial T must equal `1 + T::POSTCARD_MAX_SIZE`.
         let bare = <DeviceCapabilities as MaxSize>::POSTCARD_MAX_SIZE;
-        let wrapped = <RynkResponse<DeviceCapabilities> as MaxSize>::POSTCARD_MAX_SIZE;
+        let wrapped = <Result<DeviceCapabilities, RynkError> as MaxSize>::POSTCARD_MAX_SIZE;
         assert_eq!(wrapped, bare + 1);
     }
 }
