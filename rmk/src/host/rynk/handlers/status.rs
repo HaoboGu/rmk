@@ -34,13 +34,16 @@ impl<'a> RynkService<'a> {
     }
 
     /// `Cmd::GetPeripheralStatus` — payload is a peripheral slot id. The
-    /// snapshot is mirrored from `PeripheralConnectedEvent` /
-    /// `PeripheralBatteryEvent` publishes (see
-    /// [`crate::split::peripheral_state`]).
+    /// snapshot lives in [`KeyboardContext`](crate::host::context::KeyboardContext)
+    /// and is fed by `TopicSubscribers` from `PeripheralConnectedEvent` /
+    /// `PeripheralBatteryEvent` publishes.
     #[cfg(all(feature = "_ble", feature = "split"))]
     pub(crate) async fn handle_get_peripheral_status(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
         let (id, _) = postcard::take_from_bytes::<u8>(payload).map_err(|_| RynkError::InvalidRequest)?;
-        let status = crate::split::peripheral_state::peripheral_status(id as usize).ok_or(RynkError::InvalidRequest)?;
+        let status = self
+            .ctx
+            .peripheral_status(id as usize)
+            .ok_or(RynkError::InvalidRequest)?;
         Self::write_response(&status, payload)
     }
 

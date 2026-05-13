@@ -15,7 +15,7 @@ rmk-macro = { version = "=0.7.1", path = "../rmk-macro" }
 rmk-types = { version = "=0.2.2", path = "../rmk-types" }
 embedded-hal = { version = "1.0.0" }
 embedded-hal-async = { version = "1.0.0" }
-embedded-io-async = { version = "0.7", optional = true }
+embedded-io-async = { version = "0.7" }
 embedded-storage = { version = "0.3", optional = true }
 embedded-storage-async = { version = "0.4", optional = true }
 
@@ -199,7 +199,6 @@ async_matrix = []
 
 ## Enable split keyboard support.
 split = [
-    "dep:embedded-io-async",
     "trouble-host?/gatt-client-notification-queue-size-4",
     "rmk-types/split",
 ]

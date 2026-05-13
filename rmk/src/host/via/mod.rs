@@ -1,14 +1,14 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::Instant;
+use embedded_io_async::{Read, Write};
 use rmk_types::protocol::vial::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
 use vial::process_vial;
 
-use crate::channel::{HOST_REQUEST_CHANNEL, try_send_host_reply};
 use crate::config::{RmkConfig, VialConfig};
-use crate::core_traits::Runnable;
 use crate::hid::ViaReport;
 use crate::host::context::KeyboardContext;
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
+use crate::keymap::KeyMap;
 use crate::{MACRO_SPACE_SIZE, boot};
 
 pub(crate) mod keycode_convert;
@@ -17,23 +17,23 @@ mod vial;
 mod vial_lock;
 
 pub struct VialService<'a> {
-    ctx: &'a KeyboardContext<'a>,
+    ctx: KeyboardContext<'a>,
     vial_config: VialConfig<'static>,
     #[cfg(feature = "vial_lock")]
     locker: vial_lock::VialLock<'a>,
 }
 
 impl<'a> VialService<'a> {
-    pub fn new(ctx: &'a KeyboardContext<'a>, config: &RmkConfig<'static>) -> Self {
+    pub fn new(keymap: &'a KeyMap<'a>, config: &RmkConfig<'static>) -> Self {
         Self {
-            ctx,
+            ctx: KeyboardContext::new(keymap),
             vial_config: config.vial_config,
             #[cfg(feature = "vial_lock")]
-            locker: vial_lock::VialLock::new(config.vial_config.unlock_keys, ctx.keymap),
+            locker: vial_lock::VialLock::new(config.vial_config.unlock_keys, keymap),
         }
     }
 
-    async fn process_via_packet(&mut self, report: &mut ViaReport) {
+    async fn process_via_packet(&self, report: &mut ViaReport) {
         let command_id = report.output_data[0];
 
         // Caller pre-fills `input_data` from `output_data`, so individual arms
@@ -215,8 +215,8 @@ impl<'a> VialService<'a> {
                     report,
                     &self.vial_config,
                     #[cfg(feature = "vial_lock")]
-                    &mut self.locker,
-                    self.ctx,
+                    &self.locker,
+                    &self.ctx,
                 )
                 .await
             }
@@ -228,16 +228,24 @@ impl<'a> VialService<'a> {
     }
 }
 
-impl Runnable for VialService<'_> {
-    async fn run(&mut self) -> ! {
+impl VialService<'_> {
+    /// Drive one Vial session against `rx`/`tx` (32-byte request → 32-byte
+    /// response, processed in place). Returns on any read/write error;
+    /// transport-specific reconnect lives in the caller.
+    pub async fn run_session<R: Read, T: Write>(&self, rx: &mut R, tx: &mut T) {
+        let mut buf = [0u8; 32];
         loop {
-            let (transport, output_data) = HOST_REQUEST_CHANNEL.receive().await;
+            if rx.read_exact(&mut buf).await.is_err() {
+                return;
+            }
             let mut report = ViaReport {
-                input_data: output_data,
-                output_data,
+                input_data: buf,
+                output_data: buf,
             };
             self.process_via_packet(&mut report).await;
-            try_send_host_reply(transport, report.input_data);
+            if tx.write_all(&report.input_data).await.is_err() {
+                return;
+            }
         }
     }
 }

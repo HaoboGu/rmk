@@ -101,21 +101,13 @@ async fn main(_s: Spawner) {
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     // let mut matrix = rmk::matrix::TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap); // Initialize the light controller
-    let host_ctx = rmk::host::KeyboardContext::new(&keymap);
-    let mut host_service = HostService::new(&host_ctx, &rmk_config);
+    let host_service = HostService::new(&keymap, &rmk_config);
 
-    let mut usb_transport = UsbTransport::new(usb_driver, rmk_config.device_config);
-    let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
+    let mut usb_transport = UsbTransport::new(usb_driver, rmk_config.device_config).with_host_service(&host_service);
+    let mut ble_transport = BleTransport::new(&stack, rmk_config)
+        .await
+        .with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();
 
-    run_all!(
-        matrix,
-        storage,
-        usb_transport,
-        ble_transport,
-        wpm_processor,
-        keyboard,
-        host_service
-    )
-    .await;
+    run_all!(matrix, storage, usb_transport, ble_transport, wpm_processor, keyboard).await;
 }

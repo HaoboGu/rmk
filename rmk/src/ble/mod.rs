@@ -37,6 +37,8 @@ pub(crate) mod led;
 pub(crate) mod nrf;
 pub mod passkey;
 pub(crate) mod profile;
+#[cfg(feature = "rynk")]
+pub(crate) mod rynk;
 
 /// Global state of sleep management
 /// - `true`: Indicates central is sleeping
@@ -71,8 +73,7 @@ pub async fn build_ble_stack<
 /// BLE transport runnable. Owns the trouble-host server and profile manager;
 /// `run` joins the background `ble_task` runner with the advertise→connect→serve
 /// loop and runs forever.
-//
-pub struct BleTransport<'b, 's, C>
+pub struct BleTransport<'a, 'b, 's, C>
 where
     's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
@@ -81,15 +82,14 @@ where
     server: Server<'static>,
     profile_manager: ProfileManager<'b, 's, C, DefaultPacketPool>,
     product_name: &'static str,
-    /// Optional Rynk dispatch core. When set, [`run_ble_keyboard`] joins a
-    /// [`RynkBleTransport`](crate::host::RynkBleTransport) future per
-    /// connection so wire requests from the host land in the same
-    /// `RynkService` USB uses.
-    #[cfg(feature = "rynk")]
-    rynk_service: Option<&'a crate::host::rynk::RynkService<'a>>,
+    #[cfg(feature = "host")]
+    host_service: Option<&'a crate::host::HostService<'a>>,
+    // Keeps `'a` in the type's parameter list across all feature configurations.
+    #[cfg(not(feature = "host"))]
+    _phantom: core::marker::PhantomData<&'a ()>,
 }
 
-impl<'b, 's, C> BleTransport<'b, 's, C>
+impl<'a, 'b, 's, C> BleTransport<'a, 'b, 's, C>
 where
     's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
@@ -138,21 +138,26 @@ where
             server,
             profile_manager,
             product_name: rmk_config.device_config.product_name,
-            #[cfg(feature = "rynk")]
-            rynk_service: None,
+            #[cfg(feature = "host")]
+            host_service: None,
+            #[cfg(not(feature = "host"))]
+            _phantom: core::marker::PhantomData,
         }
     }
 
-    /// Attach a [`RynkService`](crate::host::rynk::RynkService) so the per-connection
-    /// runner joins a Rynk dispatch future alongside the keyboard/HID/host tasks.
-    #[cfg(feature = "rynk")]
-    pub fn with_rynk_service(mut self, service: &'a crate::host::rynk::RynkService<'a>) -> Self {
-        self.rynk_service = Some(service);
+    /// Attach the host-protocol service (Vial or Rynk, picked at compile
+    /// time by feature). See
+    /// [`UsbTransport::with_host_service`](crate::usb::UsbTransport::with_host_service)
+    /// for the full contract and the rationale for the
+    /// builder-instead-of-Runnable design.
+    #[cfg(feature = "host")]
+    pub fn with_host_service(mut self, service: &'a crate::host::HostService<'a>) -> Self {
+        self.host_service = Some(service);
         self
     }
 }
 
-impl<'b, 's, C> Runnable for BleTransport<'b, 's, C>
+impl<'a, 'b, 's, C> Runnable for BleTransport<'a, 'b, 's, C>
 where
     's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
@@ -195,8 +200,8 @@ where
                                 stack,
                                 #[cfg(feature = "storage")]
                                 active_bond_info,
-                                #[cfg(feature = "rynk")]
-                                self.rynk_service,
+                                #[cfg(feature = "host")]
+                                self.host_service,
                             ),
                             profile_manager.update_profile(),
                         )
@@ -284,15 +289,14 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let output_keyboard = server.hid_service.output_keyboard;
     let hid_control_point = server.hid_service.hid_control_point;
     let input_keyboard = server.hid_service.input_keyboard;
+    #[cfg(feature = "vial")]
+    let (output_host, input_host) = (server.vial_service.output_data, server.vial_service.input_data);
     #[cfg(feature = "host")]
-    let (output_host, input_host, host_control_point) = (
-        server.host_service.output_data,
-        server.host_service.input_data,
-        server.host_service.hid_control_point,
-    );
-    // `Characteristic<heapless::Vec<u8, N>>` is `Clone` but not `Copy` because
-    // `Vec` itself isn't Copy — only the handles are needed for comparisons
-    // here, so clone instead of move.
+    let host_control_point = server.vial_service.hid_control_point;
+    // `Characteristic<heapless::Vec<u8, N>>` derives `Copy` with an implicit
+    // `T: Copy` bound that `heapless::Vec` doesn't satisfy, so clone the
+    // handle wrapper. The wrapper is two `u16`s plus an `Option<u16>`; the
+    // clone is essentially a memcpy.
     #[cfg(feature = "rynk")]
     let (rynk_output, rynk_input) = (
         server.rynk_service.output_data.clone(),
@@ -408,19 +412,19 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 }
                             }
                         } else {
-                            #[cfg(any(feature = "host", feature = "rynk"))]
-                            let mut handled = false;
-                            #[cfg(not(any(feature = "host", feature = "rynk")))]
-                            let handled = false;
                             #[cfg(feature = "host")]
+                            let mut handled = false;
+                            #[cfg(not(feature = "host"))]
+                            let handled = false;
+                            #[cfg(feature = "vial")]
                             if event.handle() == output_host.handle {
-                                debug!("Got host packet: {:?}", event.data());
+                                debug!("Got Vial packet: {:?}", event.data());
                                 if event.data().len() == 32 {
                                     let mut data = [0u8; 32];
                                     data.copy_from_slice(event.data());
-                                    crate::channel::enqueue_host_request(ConnectionType::Ble, data).await;
+                                    crate::channel::VIAL_BLE_RX_CHANNEL.send(data).await;
                                 } else {
-                                    warn!("Wrong host packet data: {:?}", event.data());
+                                    warn!("Wrong Vial packet data: {:?}", event.data());
                                 }
                                 handled = true;
                             } else if event.handle() == input_host.cccd_handle.expect("No CCCD for input host") {
@@ -432,7 +436,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 let data = event.data();
                                 debug!("Got Rynk packet ({} bytes)", data.len());
                                 match heapless::Vec::from_slice(data) {
-                                    Ok(chunk) => crate::channel::RYNK_RX_CHANNEL.send(chunk).await,
+                                    Ok(chunk) => crate::channel::RYNK_BLE_RX_CHANNEL.send(chunk).await,
                                     Err(_) => {
                                         warn!("Rynk write of {} bytes exceeds chunk capacity, dropping", data.len())
                                     }
@@ -442,7 +446,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 && event.handle() == rynk_input.cccd_handle.expect("No CCCD for Rynk input")
                             {
                                 cccd_updated = true;
-                                crate::channel::BLE_RYNK_READY.signal(());
                                 handled = true;
                             }
                             if !handled {
@@ -693,7 +696,7 @@ async fn run_ble_keyboard<
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     stack: &Stack<'_, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] active_bond_info: Option<crate::ble::profile::ProfileInfo>,
-    #[cfg(feature = "rynk")] rynk_service: Option<&'r crate::host::rynk::RynkService<'r>>,
+    #[cfg(feature = "host")] host_service: Option<&'r crate::host::HostService<'r>>,
 ) {
     let mut ble_hid_server = BleHidServer::new(server, conn);
     let mut ble_led_reader = BleLedReader {};
@@ -739,27 +742,20 @@ async fn run_ble_keyboard<
     let led_task = run_led_reader(&mut ble_led_reader, ConnectionType::Ble);
 
     #[cfg(feature = "host")]
-    let host_task = crate::host::ble::run_ble_host(server.host_service.input_data, conn);
-    #[cfg(not(feature = "host"))]
-    let host_task = core::future::pending::<()>();
-
-    // The Rynk per-connection runner mirrors the Vial `host_task`: it
-    // owns the input/output BLE characteristics for the duration of the
-    // connection. When `rynk_service` is `None` (Rynk feature off or no
-    // service attached), poll a pending future so the join is a no-op.
-    #[cfg(feature = "rynk")]
-    let rynk_task = async {
-        if let Some(service) = rynk_service {
-            let rynk_ble = crate::host::rynk::RynkBleTransport::new(server);
-            rynk_ble.run(conn, service).await;
+    let host_task = async {
+        if let Some(service) = host_service {
+            #[cfg(feature = "rynk")]
+            crate::ble::rynk::run_rynk_ble(server, conn, service).await;
+            #[cfg(feature = "vial")]
+            crate::host::ble::run_vial_ble(server, conn, service).await;
         } else {
             core::future::pending::<()>().await;
         }
     };
-    #[cfg(not(feature = "rynk"))]
-    let rynk_task = core::future::pending::<()>();
+    #[cfg(not(feature = "host"))]
+    let host_task = core::future::pending::<()>();
 
-    let inner = embassy_futures::join::join4(writer_task, led_task, host_task, rynk_task);
+    let inner = embassy_futures::join::join3(writer_task, led_task, host_task);
     select(communication_task, inner).await;
 }
 
