@@ -23,10 +23,11 @@ adapter, or anyone debugging the wire with `xxd`/Wireshark.
 | **LEN** | 2 (LE) | Payload byte count. Bounded by `RYNK_MIN_BUFFER_SIZE - 5`; firmware rejects frames with `LEN > RYNK_BUFFER_SIZE - 5`. |
 | **payload** | LEN | `postcard`-encoded `Request` or `Response`. May be empty. |
 
-Header members map 1:1 to `rmk_types::protocol::rynk::Header { cmd, seq,
-len }`. Encoding/decoding lives in
-[`rmk-types/src/protocol/rynk/header.rs`](../rmk-types/src/protocol/rynk/header.rs)
-and is shared between firmware and `rynk-host`.
+Header fields are accessed in place via the `FrameOps` trait
+(`frame.cmd()`, `frame.seq()`, `frame.payload_len()`, plus the matching
+setters). Frame layout and trait live in
+[`rmk-types/src/protocol/rynk/frame.rs`](../rmk-types/src/protocol/rynk/frame.rs)
+and are shared between firmware and `rynk-host`.
 
 ## Cmd table
 
