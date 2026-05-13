@@ -6,7 +6,7 @@
 //! focus on their I/O loops.
 
 use rmk_types::protocol::rynk::Cmd;
-use rmk_types::protocol::rynk::header::HEADER_SIZE;
+use rmk_types::protocol::rynk::RYNK_HEADER_SIZE;
 use serde::Serialize;
 
 use crate::transport::TransportError;
@@ -22,9 +22,9 @@ pub fn encode_frame<T: Serialize>(cmd: Cmd, seq: u8, value: &T) -> Result<Vec<u8
     // Worst-case host payload size — see `MAX_FRAME_SIZE` above. Allocate
     // up-front so postcard's slice serializer doesn't have to grow.
     let mut buf = vec![0u8; MAX_FRAME_SIZE];
-    let payload = postcard::to_slice(value, &mut buf[HEADER_SIZE..]).map_err(TransportError::Serialize)?;
+    let payload = postcard::to_slice(value, &mut buf[RYNK_HEADER_SIZE..]).map_err(TransportError::Serialize)?;
     let len = payload.len();
-    let total = HEADER_SIZE + len;
+    let total = RYNK_HEADER_SIZE + len;
 
     let cmd_raw = cmd as u16;
     buf[0] = cmd_raw as u8;
@@ -41,10 +41,10 @@ pub fn encode_frame<T: Serialize>(cmd: Cmd, seq: u8, value: &T) -> Result<Vec<u8
 /// `(cmd_raw, seq, payload_len)`. Caller verifies `bytes.len() >= 5 +
 /// payload_len`.
 pub fn parse_header(bytes: &[u8]) -> Result<(u16, u8, usize), TransportError> {
-    if bytes.len() < HEADER_SIZE {
+    if bytes.len() < RYNK_HEADER_SIZE {
         return Err(TransportError::FrameTooLong {
             len: bytes.len(),
-            max: HEADER_SIZE,
+            max: RYNK_HEADER_SIZE,
         });
     }
     let cmd = u16::from_le_bytes([bytes[0], bytes[1]]);
@@ -60,7 +60,7 @@ mod tests {
     #[test]
     fn encode_unit_payload_emits_header_only() {
         let bytes = encode_frame(Cmd::GetVersion, 0x42, &()).unwrap();
-        assert_eq!(bytes.len(), HEADER_SIZE);
+        assert_eq!(bytes.len(), RYNK_HEADER_SIZE);
         // CMD 0x0001 little-endian.
         assert_eq!(bytes[0], 0x01);
         assert_eq!(bytes[1], 0x00);
@@ -93,6 +93,6 @@ mod tests {
         let (cmd, seq, len) = parse_header(&bytes).unwrap();
         assert_eq!(cmd, Cmd::GetKeyAction as u16);
         assert_eq!(seq, 0x10);
-        assert_eq!(len, bytes.len() - HEADER_SIZE);
+        assert_eq!(len, bytes.len() - RYNK_HEADER_SIZE);
     }
 }
