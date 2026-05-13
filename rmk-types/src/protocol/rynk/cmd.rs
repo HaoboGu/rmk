@@ -23,10 +23,10 @@
 
 use strum::FromRepr;
 
-/// Command tag carried in the [`Header`](super::Header) CMD field.
+/// Command tag carried in the header CMD field.
 ///
-/// The wire encoding is a plain `u16 LE` written by `Header::encode_into` —
-/// Cmd is never postcard-encoded, so no `Serialize`/`Deserialize`/`MaxSize`
+/// The wire encoding is a plain `u16 LE` written by [`FrameOps::set_cmd`](super::FrameOps::set_cmd) —
+/// `Cmd` is never postcard-encoded, so no `Serialize`/`Deserialize`/`MaxSize`
 /// derives are needed here.
 #[repr(u16)]
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, FromRepr)]
