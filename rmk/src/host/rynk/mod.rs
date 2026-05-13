@@ -13,8 +13,11 @@
 
 pub(crate) mod codec;
 mod handlers;
+mod snapshot;
 mod topics;
 pub mod transport;
+
+pub use snapshot::run_topic_snapshot;
 
 use rmk_types::protocol::rynk::header::HEADER_SIZE;
 use rmk_types::protocol::rynk::{Cmd, Header, RYNK_MIN_BUFFER_SIZE};
@@ -193,6 +196,9 @@ impl<'a> RynkService<'a> {
             Cmd::GetBatteryStatus => self.handle_get_battery_status(req, out).await,
             #[cfg(all(feature = "_ble", feature = "split"))]
             Cmd::GetPeripheralStatus => self.handle_get_peripheral_status(req, out).await,
+            Cmd::GetWpm => self.handle_get_wpm(req, out).await,
+            Cmd::GetSleepState => self.handle_get_sleep_state(req, out).await,
+            Cmd::GetLedIndicator => self.handle_get_led_indicator(req, out).await,
 
             // Topics never reach here (checked above) but the compiler can't
             // prove that — exhaustively match them with an unreachable arm.
