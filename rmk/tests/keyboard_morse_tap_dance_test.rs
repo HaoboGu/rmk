@@ -1,6 +1,7 @@
 /// Test cases for tap-dance like morses
 pub mod common;
 
+use embassy_time::Duration;
 use heapless::Vec;
 use rmk::config::{BehaviorConfig, MorsesConfig, PositionalConfig};
 use rmk::keyboard::Keyboard;
@@ -570,6 +571,80 @@ fn test_early_fire_then_fire_on_second_tap_with_no_double_tap_config() {
             [0, [0, 0, 0, 0, 0, 0]],
             [0, [kc_to_u8!(E), 0, 0, 0, 0, 0]],
             [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+/// Regression test: rapid repeat tapping a FlowTap+EarlyFire key must not jam the key.
+///
+/// When flow_tap is enabled and a key has early-fire behaviour (tap == hold_after_tap,
+/// no double_tap), the first quick tap fires the action immediately and leaves the key
+/// in `EarlyFired` state in the held buffer. A second tap that arrives within
+/// `prior_idle_time` triggers `FlowTap`, which sends the key-press report and pushes a
+/// new `ProcessedButReleaseNotReportedYet` entry; without the fix it would push on
+/// top of the stale `EarlyFired` entry. On release `find_pos_mut` would then find the
+/// `EarlyFired` entry first and skip the release report, leaving the key held down (jam).
+///
+/// The fix drops any existing held entry at this position before pushing in the
+/// `FlowTap` handler, so the buffer keeps its one-entry-per-position invariant and
+/// the release is always reported.
+fn create_flow_tap_early_fire_keyboard() -> Keyboard<'static> {
+    // td!(0): tap=Backspace, hold=RShift, hold_after_tap=Backspace (no double_tap).
+    // tap == hold_after_tap with no double_tap makes can_fire_early() return true for TAP.
+    let keymap = [[[td!(0), k!(A)]], [[k!(Kp1), k!(Kp2)]]];
+
+    let behavior_config = BehaviorConfig {
+        morse: MorsesConfig {
+            enable_flow_tap: true,
+            prior_idle_time: Duration::from_millis(120),
+            default_profile: MorseProfile::new(Some(false), Some(MorseMode::HoldOnOtherPress), Some(250), Some(250)),
+            morses: Vec::from_slice(&[Morse::new_from_vial(
+                Action::Key(KeyCode::Hid(HidKeyCode::Backspace)),
+                Action::Modifier(ModifierCombination::RSHIFT),
+                Action::Key(KeyCode::Hid(HidKeyCode::Backspace)),
+                Action::No,
+                MorseProfile::const_default(),
+            )])
+            .unwrap(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
+    let per_key_config: &'static PositionalConfig<1, 2> = Box::leak(Box::new(PositionalConfig::default()));
+    Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
+}
+
+#[test]
+fn test_flow_tap_after_early_fire_does_not_jam() {
+    key_sequence_test! {
+        keyboard: create_flow_tap_early_fire_keyboard(),
+        sequence: [
+            // First tap arrives after >prior_idle_time of idle, so it takes the normal morse
+            // path: a quick release early-fires Backspace and leaves an EarlyFired entry behind.
+            [0, 0, true, 150],
+            [0, 0, false, 30],
+            // Second tap lands within prior_idle_time of the early-fired Backspace press, so it
+            // takes the FlowTap path. FlowTap must replace the stale EarlyFired entry, not stack
+            // a new one on top of it, or the release report below is dropped and Backspace jams.
+            [0, 0, true, 50],
+            [0, 0, false, 30],
+            // Press an unrelated key well after the morse gap timeout to confirm nothing is stuck.
+            [0, 1, true, 300],
+            [0, 1, false, 10],
+        ],
+        expected_reports: [
+            // First tap: early-fired Backspace press, then release 10ms later (process_key_action_tap).
+            [0, [kc_to_u8!(Backspace), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            // Second tap via FlowTap: Backspace press, then release on key-up.
+            // The release report was missing before the fix (Backspace stayed held -> jam).
+            [0, [kc_to_u8!(Backspace), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            // Unrelated key A, cleanly pressed and released.
             [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
             [0, [0, 0, 0, 0, 0, 0]],
         ]

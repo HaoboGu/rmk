@@ -440,7 +440,11 @@ impl<'a> Keyboard<'a> {
             KeyBehaviorDecision::FlowTap => {
                 let action = Self::action_from_pattern(self.keymap, key_action, TAP); //tap action
                 self.process_key_action_normal(action, event).await;
-                // Push back after triggered press
+                // Drop any existing held entry at this position (e.g. an EarlyFired entry left by
+                // a previous quick tap) before inserting the new one. The held buffer assumes one
+                // entry per position; without this the release handler would find the stale entry
+                // first via find_pos_mut, skip the release report, and leave the key stuck down.
+                self.held_buffer.remove_if(|k| k.event.pos == event.pos);
                 let now = Instant::now();
                 let time_out = now + Self::morse_timeout(self.keymap, key_action, true);
                 self.held_buffer.push(HeldKey::new(
