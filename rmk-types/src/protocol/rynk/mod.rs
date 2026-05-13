@@ -33,7 +33,7 @@
 //! ## Module layout
 //!
 //! - [`cmd`] — `Cmd` enum (request, response, topic tags)
-//! - [`header`] — `Header` struct + encode/decode (shared with `rynk-host`)
+//! - [`frame`] — `Frame` + `FrameOps` (in-place wire-header accessors)
 //! - [`buffer`] — `RYNK_MIN_BUFFER_SIZE` const computed from `MaxSize` of
 //!   every wire type
 //! - [`system`] — handshake (`ProtocolVersion`, `DeviceCapabilities`,
@@ -65,7 +65,7 @@
 
 pub mod buffer;
 pub mod cmd;
-pub mod header;
+pub mod frame;
 
 mod combo;
 mod encoder;
@@ -86,7 +86,7 @@ pub use self::cmd::Cmd;
 pub use self::combo::*;
 pub use self::encoder::*;
 pub use self::fork::*;
-pub use self::header::{DecodeError as HeaderDecodeError, Header, RYNK_HEADER_SIZE};
+pub use self::frame::{Frame, FrameOps, RYNK_HEADER_SIZE};
 pub use self::keymap::*;
 pub use self::macro_data::*;
 pub use self::morse::*;
