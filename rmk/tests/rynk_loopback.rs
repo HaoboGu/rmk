@@ -14,6 +14,7 @@ use rmk::host::RynkService;
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk_types::protocol::rynk::header::HEADER_SIZE;
+use rmk_types::led_indicator::LedIndicator;
 use rmk_types::protocol::rynk::{
     BehaviorConfig as WireBehaviorConfig, Cmd, DeviceCapabilities, Header, KeyPosition, ProtocolVersion,
     SetKeyRequest,
@@ -202,4 +203,44 @@ fn dispatch_get_current_layer_returns_active() {
     let (_, payload) = parse_frame(&out[..n]);
     let layer: u8 = postcard::from_bytes(payload).expect("decode layer");
     assert_eq!(layer, 0);
+}
+
+// The snapshot atomics start at default (0 / false / empty LedIndicator)
+// and `run_topic_snapshot` is never spawned in these tests, so the values
+// stay at default. The tests pin both wire shape and default payload.
+
+#[test]
+fn dispatch_get_wpm_returns_snapshot() {
+    let service = RynkService::new(tiny_keymap());
+    let req = build_frame(Cmd::GetWpm, 0x09, &());
+    let mut out = vec![0u8; rmk::host::RYNK_BUFFER_SIZE];
+    let n = test_block_on(service.dispatch(&req, &mut out));
+    let (hdr, payload) = parse_frame(&out[..n]);
+    assert_eq!(hdr.cmd, Cmd::GetWpm);
+    let wpm: u16 = postcard::from_bytes(payload).expect("decode wpm");
+    assert_eq!(wpm, 0);
+}
+
+#[test]
+fn dispatch_get_sleep_state_returns_snapshot() {
+    let service = RynkService::new(tiny_keymap());
+    let req = build_frame(Cmd::GetSleepState, 0x0A, &());
+    let mut out = vec![0u8; rmk::host::RYNK_BUFFER_SIZE];
+    let n = test_block_on(service.dispatch(&req, &mut out));
+    let (hdr, payload) = parse_frame(&out[..n]);
+    assert_eq!(hdr.cmd, Cmd::GetSleepState);
+    let sleeping: bool = postcard::from_bytes(payload).expect("decode sleep");
+    assert!(!sleeping);
+}
+
+#[test]
+fn dispatch_get_led_indicator_returns_snapshot() {
+    let service = RynkService::new(tiny_keymap());
+    let req = build_frame(Cmd::GetLedIndicator, 0x0B, &());
+    let mut out = vec![0u8; rmk::host::RYNK_BUFFER_SIZE];
+    let n = test_block_on(service.dispatch(&req, &mut out));
+    let (hdr, payload) = parse_frame(&out[..n]);
+    assert_eq!(hdr.cmd, Cmd::GetLedIndicator);
+    let led: LedIndicator = postcard::from_bytes(payload).expect("decode led");
+    assert_eq!(led, LedIndicator::from_bits(0));
 }
