@@ -450,7 +450,7 @@ impl<'a> Keyboard<'a> {
                 self.held_buffer.push(HeldKey::new(
                     event,
                     *key_action,
-                    KeyState::ProcessedButReleaseNotReportedYet(action),
+                    KeyState::FlowTapped(action),
                     now,
                     time_out,
                 ));

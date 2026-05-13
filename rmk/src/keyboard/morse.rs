@@ -192,6 +192,26 @@ impl<'a> Keyboard<'a> {
                         debug!("[morse] Releasing morse key: {:?}", event);
                         self.process_key_action_normal(action, event).await;
                     }
+                    KeyState::FlowTapped(action) => {
+                        // Flow-tap fired the tap action and is holding it down; release it now.
+                        debug!("[morse] Releasing flow-tapped morse key: {:?}", event);
+                        self.process_key_action_normal(action, event).await;
+                        // If the key has a hold-after-tap action, keep it in the buffer as if it
+                        // had been early-fired so a re-press within the gap timeout continues into
+                        // hold-after-tap (the tap-then-hold repeat). Without this a flow-tapped
+                        // tap leaves no trace and the next press-and-hold resolves as a fresh hold.
+                        if Self::action_from_pattern(self.keymap, key_action, TAP.followed_by_hold()) != Action::No {
+                            let now = Instant::now();
+                            let timeout = Self::morse_timeout(self.keymap, key_action, false);
+                            if let Some(k) = self.held_buffer.find_pos_mut(event.pos) {
+                                k.state = KeyState::EarlyFired(TAP);
+                                k.press_time = now;
+                                k.timeout_time = now + timeout;
+                            }
+                        } else {
+                            let _ = self.held_buffer.remove(event.pos);
+                        }
+                    }
                     _ => {}
                 };
             }

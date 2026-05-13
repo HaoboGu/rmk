@@ -110,6 +110,11 @@ pub enum KeyState {
     /// remains in the buffer to allow hold_after_tap continuation.
     EarlyFired(MorsePattern),
 
+    /// After flow-tap resolved the key as a tap: the tap action's press HID report
+    /// is sent and held while the key is physically held. On release the action is
+    /// released and the key is kept as `EarlyFired` so hold_after_tap can continue.
+    FlowTapped(Action),
+
     /// The corresponding action is already executed (so the Pressed HID report is sent),
     /// but the release HID report is not sent yet (will be sent only when the corresponding
     /// key is really released).
