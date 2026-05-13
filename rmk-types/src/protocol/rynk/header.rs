@@ -12,7 +12,7 @@
 use super::cmd::Cmd;
 
 /// Size in bytes of the fixed Rynk header.
-pub const HEADER_SIZE: usize = 5;
+pub const RYNK_HEADER_SIZE: usize = 5;
 
 /// Parsed Rynk header.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,7 +25,7 @@ pub struct Header {
 /// Reasons a header (or following payload) could not be parsed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecodeError {
-    /// Buffer is shorter than the 5-byte header or shorter than `HEADER_SIZE + len`.
+    /// Buffer is shorter than the 5-byte header or shorter than `RYNK_HEADER_SIZE + len`.
     Short,
     /// CMD discriminant doesn't correspond to any compiled-in variant
     /// (host built against a newer ICD, or wire corruption).
@@ -34,9 +34,9 @@ pub enum DecodeError {
 
 impl Header {
     /// Encode `self` into the first 5 bytes of `out`. The caller is
-    /// responsible for ensuring `out.len() >= HEADER_SIZE`.
+    /// responsible for ensuring `out.len() >= RYNK_HEADER_SIZE`.
     pub fn encode_into(&self, out: &mut [u8]) {
-        debug_assert!(out.len() >= HEADER_SIZE);
+        debug_assert!(out.len() >= RYNK_HEADER_SIZE);
         let cmd = self.cmd as u16;
         out[0..2].copy_from_slice(&cmd.to_le_bytes());
         out[2] = self.seq;
@@ -47,17 +47,17 @@ impl Header {
     /// a slice referencing the payload bytes (length = `header.len`).
     ///
     /// Returns `Err(DecodeError::Short)` if `buf` doesn't contain the
-    /// full `HEADER_SIZE + len` bytes — caller should accumulate more
+    /// full `RYNK_HEADER_SIZE + len` bytes — caller should accumulate more
     /// bytes and retry.
     pub fn decode(buf: &[u8]) -> Result<(Self, &[u8]), DecodeError> {
-        if buf.len() < HEADER_SIZE {
+        if buf.len() < RYNK_HEADER_SIZE {
             return Err(DecodeError::Short);
         }
         let cmd_raw = u16::from_le_bytes([buf[0], buf[1]]);
         let cmd = Cmd::from_repr(cmd_raw).ok_or(DecodeError::UnknownCmd(cmd_raw))?;
         let seq = buf[2];
         let len = u16::from_le_bytes([buf[3], buf[4]]) as usize;
-        if buf.len() < HEADER_SIZE + len {
+        if buf.len() < RYNK_HEADER_SIZE + len {
             return Err(DecodeError::Short);
         }
         Ok((
@@ -66,7 +66,7 @@ impl Header {
                 seq,
                 len: len as u16,
             },
-            &buf[HEADER_SIZE..HEADER_SIZE + len],
+            &buf[RYNK_HEADER_SIZE..RYNK_HEADER_SIZE + len],
         ))
     }
 }
@@ -82,9 +82,9 @@ mod tests {
             seq: 0x42,
             len: 7,
         };
-        let mut buf = [0u8; HEADER_SIZE + 7];
+        let mut buf = [0u8; RYNK_HEADER_SIZE + 7];
         h.encode_into(&mut buf);
-        buf[HEADER_SIZE..].copy_from_slice(&[1, 2, 3, 4, 5, 6, 7]);
+        buf[RYNK_HEADER_SIZE..].copy_from_slice(&[1, 2, 3, 4, 5, 6, 7]);
         let (parsed, payload) = Header::decode(&buf).unwrap();
         assert_eq!(parsed, h);
         assert_eq!(payload, &[1, 2, 3, 4, 5, 6, 7]);
@@ -97,7 +97,7 @@ mod tests {
             seq: 0xAB,
             len: 0x0304,
         };
-        let mut buf = [0u8; HEADER_SIZE];
+        let mut buf = [0u8; RYNK_HEADER_SIZE];
         h.encode_into(&mut buf);
         assert_eq!(buf, [0x02, 0x01, 0xAB, 0x04, 0x03]);
     }
@@ -110,7 +110,7 @@ mod tests {
 
     #[test]
     fn decode_short_payload_returns_short() {
-        let mut buf = [0u8; HEADER_SIZE];
+        let mut buf = [0u8; RYNK_HEADER_SIZE];
         Header {
             cmd: Cmd::GetVersion,
             seq: 0,
