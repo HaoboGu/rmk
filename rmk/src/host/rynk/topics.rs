@@ -28,7 +28,7 @@ use crate::event::{
 
 /// One yielded event from any of the topic subscribers. The transport
 /// encodes `cmd` + the borrowed payload into a frame via
-/// [`RynkService::encode_topic`](super::RynkService::encode_topic).
+/// [`RynkService::write_topic`](super::RynkService::write_topic).
 ///
 /// Holds the payload by value, not by reference — postcard's `Serialize`
 /// requires only `&T`, and these primitive types are cheap to copy.
@@ -60,21 +60,25 @@ impl TopicEvent {
         }
     }
 
-    /// Serialize the payload into `out`. Returns the number of bytes
-    /// written (`0` on encode failure — handled the same as a zero-byte
-    /// payload by callers).
-    pub(in crate::host::rynk) fn encode(&self, service: &super::RynkService<'_>, out: &mut [u8]) -> usize {
+    /// Write the topic frame (header + payload) into `frame` in place.
+    /// After this returns, the full frame occupies
+    /// `&frame[..RYNK_HEADER_SIZE + frame.payload_len()]`.
+    pub(in crate::host::rynk) fn encode(
+        &self,
+        service: &super::RynkService<'_>,
+        frame: &mut rmk_types::protocol::rynk::Frame,
+    ) {
         let cmd = self.cmd();
         match self {
-            TopicEvent::LayerChange(v) => service.encode_topic(cmd, v, out),
-            TopicEvent::WpmUpdate(v) => service.encode_topic(cmd, v, out),
-            TopicEvent::ConnectionChange(v) => service.encode_topic(cmd, v, out),
-            TopicEvent::SleepState(v) => service.encode_topic(cmd, v, out),
-            TopicEvent::LedIndicator(v) => service.encode_topic(cmd, v, out),
+            TopicEvent::LayerChange(v) => service.write_topic(cmd, v, frame),
+            TopicEvent::WpmUpdate(v) => service.write_topic(cmd, v, frame),
+            TopicEvent::ConnectionChange(v) => service.write_topic(cmd, v, frame),
+            TopicEvent::SleepState(v) => service.write_topic(cmd, v, frame),
+            TopicEvent::LedIndicator(v) => service.write_topic(cmd, v, frame),
             #[cfg(feature = "_ble")]
-            TopicEvent::BatteryStatus(v) => service.encode_topic(cmd, v, out),
+            TopicEvent::BatteryStatus(v) => service.write_topic(cmd, v, frame),
             #[cfg(feature = "_ble")]
-            TopicEvent::BleStatusChange(v) => service.encode_topic(cmd, v, out),
+            TopicEvent::BleStatusChange(v) => service.write_topic(cmd, v, frame),
         }
     }
 }
