@@ -140,11 +140,7 @@ mod tests {
     fn from_repr_known_round_trips() {
         // Sanity for a handful of variants — the derive guarantees every
         // compiled variant round-trips, so an exhaustive list is unnecessary.
-        for cmd in [
-            Cmd::GetVersion,
-            Cmd::SetKeyAction,
-            Cmd::LayerChange,
-        ] {
+        for cmd in [Cmd::GetVersion, Cmd::SetKeyAction, Cmd::LayerChange] {
             assert_eq!(Cmd::from_repr(cmd as u16), Some(cmd));
         }
     }
