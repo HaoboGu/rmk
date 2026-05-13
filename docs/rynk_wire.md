@@ -70,7 +70,8 @@ group is sequential under its hex prefix:
 - `0x05xx` — fork
 - `0x06xx` — behavior config
 - `0x07xx` — connection / BLE profile management
-- `0x08xx` — runtime status (layer, matrix, battery, peripheral)
+- `0x08xx` — runtime status (layer, matrix, battery, peripheral, plus
+  snapshot getters for wpm/sleep/led)
 
 ### Topics — `0x80xx` (server → host push)
 
@@ -85,6 +86,13 @@ group is sequential under its hex prefix:
 | `BleStatusChangeTopic` | `0x8007` | `BleStatus` | `BleStatusChangeEvent` | `_ble` |
 
 Dispatch uses `is_topic()` (`cmd as u16 & 0x8000 != 0`).
+
+Each non-persistent topic (`WpmUpdate`, `SleepState`, `LedIndicator`)
+also has a Get-equivalent in the `0x08xx` Status group
+(`GetWpm = 0x0805`, `GetSleepState = 0x0806`, `GetLedIndicator = 0x0807`).
+The firmware runs `run_topic_snapshot` next to the transports; it
+subscribes to the three events and latches each payload so the host
+can probe the latest cached value without waiting for the next push.
 
 ## Framing — how a receiver knows the message is over
 

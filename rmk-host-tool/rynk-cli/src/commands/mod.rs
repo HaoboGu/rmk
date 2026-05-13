@@ -10,5 +10,8 @@ pub mod caps;
 pub mod get_key;
 pub mod info;
 pub mod layer;
+pub mod led;
 pub mod matrix;
 pub mod reboot;
+pub mod sleep;
+pub mod wpm;

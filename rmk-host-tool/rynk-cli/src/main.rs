@@ -48,6 +48,12 @@ enum Command {
     Layer,
     /// Read the live matrix bitmap.
     Matrix,
+    /// Read the latest WPM (words-per-minute) snapshot.
+    Wpm,
+    /// Read the latest sleep flag.
+    Sleep,
+    /// Read the latest HID LED indicator bits.
+    Led,
     /// Reboot the keyboard.
     Reboot,
     /// Jump to bootloader (DFU mode).
@@ -67,6 +73,9 @@ async fn main() -> anyhow::Result<()> {
         Command::GetKey { layer, row, col } => commands::get_key::run(&mut client, layer, row, col).await,
         Command::Layer => commands::layer::run(&mut client).await,
         Command::Matrix => commands::matrix::run(&mut client).await,
+        Command::Wpm => commands::wpm::run(&mut client).await,
+        Command::Sleep => commands::sleep::run(&mut client).await,
+        Command::Led => commands::led::run(&mut client).await,
         Command::Reboot => commands::reboot::run(&mut client).await,
         Command::Bootloader => commands::bootloader::run(&mut client).await,
     }
