@@ -112,20 +112,6 @@ pub(crate) static HOST_USB_REPLY: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE>
 #[cfg(all(feature = "host", feature = "_ble"))]
 pub(crate) static HOST_BLE_REPLY: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE> = Channel::new();
 
-/// Rynk RX from the BLE GATT `output_data` writes — variable-size chunks up to
-/// MTU − 3 bytes per write. The transport reassembles whole frames using the
-/// 5-byte header's `LEN` field. A fixed `heapless::Vec` carrying the chunk
-/// keeps the channel `Sync` without needing an allocator.
-#[cfg(all(feature = "rynk", feature = "_ble"))]
-pub(crate) static RYNK_RX_CHANNEL: Channel<RawMutex, heapless::Vec<u8, crate::host::rynk::RYNK_BLE_CHUNK_SIZE>, 4> =
-    Channel::new();
-
-/// Latched when the host enables notifications on the Rynk `input_data`
-/// characteristic. The BLE transport waits on this before draining the RX
-/// channel so notifies aren't dropped against a not-yet-subscribed peer.
-#[cfg(all(feature = "rynk", feature = "_ble"))]
-pub(crate) static BLE_RYNK_READY: Signal<RawMutex, ()> = Signal::new();
-
 /// Routes a Vial reply back to the channel owned by the originating transport.
 /// Drops with a warning when the destination queue already has a pending reply
 /// (the `HostService` produced faster than the transport drained it).
