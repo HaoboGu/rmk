@@ -1,8 +1,0 @@
-# Topic Key snapshot — DO NOT edit by hand.
-# File: snapshots/topic_keys_ble.snap
-# Regenerate intentionally with:
-#   UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rmk_protocol
-# Format: <path>  KEY <8-byte hex>
-
-event/battery     KEY 95 a7 cc 79 3e 54 d6 12
-event/ble_status  KEY 9e 5c 3f dd 57 47 c1 36

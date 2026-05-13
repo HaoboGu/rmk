@@ -7,11 +7,6 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::{
-    Schema,
-    schema::{DataModelType, NamedType},
-};
 use serde::{Deserialize, Serialize};
 
 use crate::keycode::HidKeyCode;
@@ -50,14 +45,6 @@ crate::impl_debug_list!(ModifierCombination, |self| [
 ]
 .into_iter()
 .filter_map(|(state, label)| state.then_some(label)));
-
-#[cfg(feature = "rmk_protocol")]
-impl Schema for ModifierCombination {
-    const SCHEMA: &'static NamedType = &NamedType {
-        name: "ModifierCombination",
-        ty: &DataModelType::U8,
-    };
-}
 
 impl BitOr for ModifierCombination {
     type Output = Self;

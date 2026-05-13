@@ -41,7 +41,6 @@ sequential-storage = { version = "7.1.0", features = ["postcard"] }
 defmt = { version = "1.0", optional = true }
 log = { version = "0.4", optional = true }
 byteorder = { version = "1", default-features = false, optional = true }
-postcard-rpc = { version = "0.12", optional = true }
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive"] }
 
@@ -120,14 +119,14 @@ vial = ["host"]
 ## Enable vial lock feature
 vial_lock = ["vial", "host_security"]
 
-## Enable physical key unlock and matrix state tracking (shared between vial_lock and rmk_protocol)
+## Enable physical key unlock and matrix state tracking (shared between vial_lock and rynk)
 host_security = []
 
-## Enable RMK protocol support (new protocol, mutually exclusive with vial)
-rmk_protocol = ["host", "host_security", "dep:postcard-rpc", "rmk-types/rmk_protocol"]
+## Enable RMK native (Rynk) protocol support (mutually exclusive with vial)
+rynk = ["host", "host_security", "rmk-types/rynk"]
 
-## Enable bulk transfer endpoints for RMK protocol on MCUs with sufficient RAM
-bulk_transfer = ["rmk_protocol", "rmk-types/bulk"]
+## Enable bulk transfer endpoints for the Rynk protocol on MCUs with sufficient RAM
+bulk_transfer = ["rynk", "rmk-types/bulk"]
 
 ## Enable the storage. The storage is optional to save memory
 storage = [
