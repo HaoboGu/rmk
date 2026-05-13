@@ -97,6 +97,12 @@ pub enum Cmd {
     GetBatteryStatus = 0x0803,
     #[cfg(all(feature = "_ble", feature = "split"))]
     GetPeripheralStatus = 0x0804,
+    /// Latest WPM, sourced from the `WpmUpdate` topic snapshot.
+    GetWpm = 0x0805,
+    /// Latest sleep flag, sourced from the `SleepState` topic snapshot.
+    GetSleepState = 0x0806,
+    /// Latest HID LED bitmap, sourced from the `LedIndicator` topic snapshot.
+    GetLedIndicator = 0x0807,
 
     // ── Topics (0x80xx, server → host push) ──
     LayerChange = 0x8001,
