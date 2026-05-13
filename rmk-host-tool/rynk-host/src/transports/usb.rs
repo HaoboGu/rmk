@@ -19,7 +19,7 @@ use std::time::Duration;
 use nusb::transfer::{Buffer, Bulk, In, Out};
 use nusb::{Endpoint, MaybeFuture};
 use rmk_types::protocol::rynk::Cmd;
-use rmk_types::protocol::rynk::header::HEADER_SIZE;
+use rmk_types::protocol::rynk::RYNK_HEADER_SIZE;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tokio::sync::{Mutex, broadcast, oneshot};
@@ -220,12 +220,12 @@ async fn rx_worker(mut bulk_in: Endpoint<Bulk, In>, inbox: Inbox, topic_tx: broa
         bulk_in.submit(Buffer::new(1024));
 
         // Drain whatever full frames are now present. `LEN` decides.
-        while buf.len() >= HEADER_SIZE {
+        while buf.len() >= RYNK_HEADER_SIZE {
             let Ok((cmd_raw, seq, len)) = parse_header(&buf) else {
                 buf.clear();
                 break;
             };
-            let total = HEADER_SIZE + len;
+            let total = RYNK_HEADER_SIZE + len;
             if total > MAX_FRAME_SIZE {
                 buf.clear();
                 break;
@@ -233,7 +233,7 @@ async fn rx_worker(mut bulk_in: Endpoint<Bulk, In>, inbox: Inbox, topic_tx: broa
             if buf.len() < total {
                 break;
             }
-            let payload = buf[HEADER_SIZE..total].to_vec();
+            let payload = buf[RYNK_HEADER_SIZE..total].to_vec();
             buf.drain(..total);
 
             // Topic frames have the high bit set in CMD. Topics carry

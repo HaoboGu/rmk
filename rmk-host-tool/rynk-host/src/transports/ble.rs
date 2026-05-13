@@ -19,7 +19,7 @@ use btleplug::api::{Central, CharPropFlags, Manager as _, Peripheral as _, ScanF
 use btleplug::platform::{Manager, Peripheral};
 use futures::StreamExt;
 use rmk_types::protocol::rynk::Cmd;
-use rmk_types::protocol::rynk::header::HEADER_SIZE;
+use rmk_types::protocol::rynk::RYNK_HEADER_SIZE;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tokio::sync::{Mutex, broadcast, oneshot};
@@ -211,12 +211,12 @@ async fn rx_worker(
         }
         buf.extend_from_slice(&n.value);
 
-        while buf.len() >= HEADER_SIZE {
+        while buf.len() >= RYNK_HEADER_SIZE {
             let Ok((cmd_raw, seq, len)) = parse_header(&buf) else {
                 buf.clear();
                 break;
             };
-            let total = HEADER_SIZE + len;
+            let total = RYNK_HEADER_SIZE + len;
             if total > MAX_FRAME_SIZE {
                 buf.clear();
                 break;
@@ -224,7 +224,7 @@ async fn rx_worker(
             if buf.len() < total {
                 break;
             }
-            let payload = buf[HEADER_SIZE..total].to_vec();
+            let payload = buf[RYNK_HEADER_SIZE..total].to_vec();
             buf.drain(..total);
 
             let is_topic = cmd_raw & 0x8000 != 0;

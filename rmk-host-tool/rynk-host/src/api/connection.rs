@@ -10,11 +10,6 @@ pub async fn get_connection_type<T: Transport>(t: &mut T) -> Result<ConnectionTy
     t.request::<(), ConnectionType>(Cmd::GetConnectionType, &()).await
 }
 
-pub async fn set_connection_type<T: Transport>(t: &mut T, conn: ConnectionType) -> Result<RynkResult, TransportError> {
-    t.request::<ConnectionType, RynkResult>(Cmd::SetConnectionType, &conn)
-        .await
-}
-
 pub async fn get_ble_status<T: Transport>(t: &mut T) -> Result<BleStatus, TransportError> {
     t.request::<(), BleStatus>(Cmd::GetBleStatus, &()).await
 }
