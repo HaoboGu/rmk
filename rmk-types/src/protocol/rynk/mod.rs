@@ -23,10 +23,9 @@
 //!
 //! ## Response envelope
 //!
-//! Every response payload is postcard-encoded `RynkResponse<T> =
-//! Result<T, RynkError>`. `Set*` calls use `T = ()` (so the canonical
-//! `RynkResult` alias) and `Get*` calls use `T` = the requested type.
-//! This costs 1 byte on success and lets reads signal
+//! Every response payload is postcard-encoded `Result<T, RynkError>`.
+//! `Set*` calls use `T = ()` and `Get*` calls use `T` = the requested
+//! type. This costs 1 byte on success and lets reads signal
 //! `InvalidParameter` / `BadState` / `InternalError` without a per-cmd
 //! sentinel. Requests are *not* wrapped — they're the bare postcard
 //! encoding of the request struct.
@@ -82,12 +81,12 @@ use serde::{Deserialize, Serialize};
 
 // Re-export every submodule's public items into `protocol::rynk::*` for
 // convenient downstream import.
-pub use self::buffer::{RYNK_HEADER_SIZE, RYNK_MAX_PAYLOAD, RYNK_MIN_BUFFER_SIZE};
+pub use self::buffer::{RYNK_MAX_PAYLOAD, RYNK_MIN_BUFFER_SIZE};
 pub use self::cmd::Cmd;
 pub use self::combo::*;
 pub use self::encoder::*;
 pub use self::fork::*;
-pub use self::header::{DecodeError as HeaderDecodeError, Header};
+pub use self::header::{DecodeError as HeaderDecodeError, Header, RYNK_HEADER_SIZE};
 pub use self::keymap::*;
 pub use self::macro_data::*;
 pub use self::morse::*;
@@ -109,17 +108,6 @@ pub enum RynkError {
     /// An internal firmware error occurred (storage, contention, etc).
     InternalError,
 }
-
-/// Wire envelope for every response payload, including reads. `Set*` calls
-/// use `RynkResponse<()>` (one-byte Ok tag, two-byte Err); `Get*` calls use
-/// `RynkResponse<T>` for the requested type. Wrapping every response
-/// uniformly costs exactly 1 byte on success and gives reads a way to
-/// signal `InvalidParameter` / `BadState` / `InternalError` without
-/// inventing per-cmd error sentinels.
-pub type RynkResponse<T> = Result<T, RynkError>;
-
-/// Convenience alias for the common `Set*` response shape.
-pub type RynkResult = RynkResponse<()>;
 
 // ---------------------------------------------------------------------------
 // Test utilities (shared across submodule test mods)
@@ -282,8 +270,6 @@ pub(crate) mod snapshot {
 mod tests {
     extern crate alloc;
 
-    use heapless::Vec;
-
     use super::*;
     use crate::connection::ConnectionType;
 
@@ -293,8 +279,8 @@ mod tests {
         round_trip(&RynkError::InvalidParameter);
         round_trip(&RynkError::BadState);
         round_trip(&RynkError::InternalError);
-        let ok: RynkResult = Ok(());
-        let err: RynkResult = Err(RynkError::BadState);
+        let ok: Result<(), RynkError> = Ok(());
+        let err: Result<(), RynkError> = Err(RynkError::BadState);
         let _ = round_trip(&ok);
         let _ = round_trip(&err);
     }
@@ -331,10 +317,10 @@ mod tests {
             ("RynkError::InternalError", encode(&RynkError::InternalError)),
             ("RynkError::InvalidParameter", encode(&RynkError::InvalidParameter)),
             (
-                "RynkResult::Err(BadState)",
-                encode::<RynkResult>(&Err(RynkError::BadState)),
+                "Result<(),RynkError>::Err(BadState)",
+                encode::<Result<(), RynkError>>(&Err(RynkError::BadState)),
             ),
-            ("RynkResult::Ok", encode::<RynkResult>(&Ok(()))),
+            ("Result<(),RynkError>::Ok", encode::<Result<(), RynkError>>(&Ok(()))),
             ("StorageResetMode::Full", encode(&StorageResetMode::Full)),
             ("StorageResetMode::LayoutOnly", encode(&StorageResetMode::LayoutOnly)),
         ];
