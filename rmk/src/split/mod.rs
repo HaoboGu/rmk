@@ -12,9 +12,6 @@ pub mod central;
 /// Common abstraction layer of split driver
 pub(crate) mod driver;
 pub mod peripheral;
-/// Live snapshot of per-peripheral connection / battery state, mirrored from
-/// the matching events so `Cmd::GetPeripheralStatus` can do a sync read.
-pub(crate) mod peripheral_state;
 #[cfg(feature = "rp2040")]
 pub mod rp;
 #[cfg(not(feature = "_ble"))]

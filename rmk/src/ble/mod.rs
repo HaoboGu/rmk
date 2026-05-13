@@ -72,7 +72,7 @@ pub async fn build_ble_stack<
 /// `run` joins the background `ble_task` runner with the advertise→connect→serve
 /// loop and runs forever.
 //
-pub struct BleTransport<'b, 's, C>
+pub struct BleTransport<'a, 'b, 's, C>
 where
     's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
@@ -82,14 +82,17 @@ where
     profile_manager: ProfileManager<'b, 's, C, DefaultPacketPool>,
     product_name: &'static str,
     /// Optional Rynk dispatch core. When set, [`run_ble_keyboard`] joins a
-    /// [`RynkBleTransport`](crate::host::RynkBleTransport) future per
-    /// connection so wire requests from the host land in the same
-    /// `RynkService` USB uses.
+    /// `run_ble_rynk` future per connection so wire requests from the host
+    /// land in the same `RynkService` USB uses.
     #[cfg(feature = "rynk")]
     rynk_service: Option<&'a crate::host::rynk::RynkService<'a>>,
+    /// Keep `'a` reachable even when `rynk` is off, so the struct's
+    /// generic parameter list is identical across feature configurations.
+    #[cfg(not(feature = "rynk"))]
+    _phantom: core::marker::PhantomData<&'a ()>,
 }
 
-impl<'b, 's, C> BleTransport<'b, 's, C>
+impl<'a, 'b, 's, C> BleTransport<'a, 'b, 's, C>
 where
     's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
@@ -140,6 +143,8 @@ where
             product_name: rmk_config.device_config.product_name,
             #[cfg(feature = "rynk")]
             rynk_service: None,
+            #[cfg(not(feature = "rynk"))]
+            _phantom: core::marker::PhantomData,
         }
     }
 
@@ -152,7 +157,7 @@ where
     }
 }
 
-impl<'b, 's, C> Runnable for BleTransport<'b, 's, C>
+impl<'a, 'b, 's, C> Runnable for BleTransport<'a, 'b, 's, C>
 where
     's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
@@ -290,9 +295,10 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
         server.host_service.input_data,
         server.host_service.hid_control_point,
     );
-    // `Characteristic<heapless::Vec<u8, N>>` is `Clone` but not `Copy` because
-    // `Vec` itself isn't Copy — only the handles are needed for comparisons
-    // here, so clone instead of move.
+    // `Characteristic<heapless::Vec<u8, N>>` derives `Copy` with an implicit
+    // `T: Copy` bound that `heapless::Vec` doesn't satisfy, so clone the
+    // handle wrapper. The wrapper is two `u16`s plus an `Option<u16>`; the
+    // clone is essentially a memcpy.
     #[cfg(feature = "rynk")]
     let (rynk_output, rynk_input) = (
         server.rynk_service.output_data.clone(),
@@ -750,8 +756,7 @@ async fn run_ble_keyboard<
     #[cfg(feature = "rynk")]
     let rynk_task = async {
         if let Some(service) = rynk_service {
-            let rynk_ble = crate::host::rynk::RynkBleTransport::new(server);
-            rynk_ble.run(conn, service).await;
+            crate::host::rynk::run_ble_rynk(server, conn, service).await;
         } else {
             core::future::pending::<()>().await;
         }

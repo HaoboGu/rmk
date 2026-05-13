@@ -201,7 +201,6 @@ pub(crate) async fn run_ble_peripheral_manager<
         };
         wait_for_stack_started().await;
 
-        crate::split::peripheral_state::record_connected(peri_id, false);
         publish_event(PeripheralConnectedEvent {
             id: peri_id,
             connected: false,
@@ -226,7 +225,6 @@ pub(crate) async fn run_ble_peripheral_manager<
             Ok(Ok(conn)) => {
                 info!("Connected to peripheral {}", peri_id);
 
-                crate::split::peripheral_state::record_connected(peri_id, true);
                 publish_event(PeripheralConnectedEvent {
                     id: peri_id,
                     connected: true,

@@ -59,10 +59,10 @@ pub use input::{
     Axis, AxisEvent, AxisValType, KeyPos, KeyboardEvent, KeyboardEventPos, ModifierEvent, PointingEvent,
     PointingSetCpiEvent, RotaryEncoderPos,
 };
-#[cfg(feature = "split")]
-pub use split::{CentralConnectedEvent, PeripheralConnectedEvent};
 #[cfg(all(feature = "split", feature = "_ble"))]
-pub use split::{ClearPeerEvent, PeripheralBatteryEvent};
+pub use split::ClearPeerEvent;
+#[cfg(feature = "split")]
+pub use split::{CentralConnectedEvent, PeripheralBatteryEvent, PeripheralConnectedEvent};
 pub use state::{LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent};
 
 /// Trait for event publishers

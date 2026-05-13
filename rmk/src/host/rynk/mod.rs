@@ -13,17 +13,16 @@ pub mod transport;
 pub(crate) mod wire;
 
 use rmk_types::protocol::rynk::{Cmd, RYNK_MIN_BUFFER_SIZE, RynkError, RynkMessage};
-// TODO: implement and remove this comment
+#[cfg(not(feature = "_no_usb"))]
+pub use transport::RynkUsbTransport;
 // Re-exports used by macro-generated entry code (Phase 6). The `unused`
 // lint can flip on for feature combos where the macro path isn't compiled —
 // keep them at the module surface so manually-driven examples still see
-// them. `RynkBleTransport` is crate-internal; the user-facing handle is
-// `BleTransport::with_rynk_service`.
+// them. The BLE side dispatches into `transport::run_ble_rynk` from
+// `BleTransport::with_rynk_service`; no public transport handle is needed.
 #[cfg(feature = "_ble")]
 #[allow(unused_imports)]
-pub(crate) use transport::RynkBleTransport;
-#[cfg(not(feature = "_no_usb"))]
-pub use transport::RynkUsbTransport;
+pub(crate) use transport::run_ble_rynk;
 
 use super::context::KeyboardContext;
 use crate::keymap::KeyMap;
@@ -146,7 +145,7 @@ impl<'a> RynkService<'a> {
                 return Err(RynkError::InvalidRequest);
             }
             #[cfg(feature = "_ble")]
-            Cmd::BatteryStatusTopic | Cmd::BleStatusChangeTopic => return Err(RynkError::InvalidRequest),
+            Cmd::BatteryStatusTopic => return Err(RynkError::InvalidRequest),
         };
         Ok(payload_len)
     }

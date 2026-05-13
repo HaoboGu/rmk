@@ -11,11 +11,8 @@ use crate::hid::{CompositeReport, CompositeReportType, HidError, HidWriterTrait,
 // per-connection client-specific attribute buffer size.
 pub(crate) const CCCD_TABLE_SIZE: usize = trouble_host::config::CLIENT_ATT_TABLE_SIZE;
 
-/// Maximum bytes carried by a single Rynk BLE characteristic write/notify.
-/// Mirrors `crate::channel::RYNK_BLE_CHUNK_SIZE` but lives here so the
-/// `gatt_service` macro can use it in a `const` context.
 #[cfg(feature = "rynk")]
-pub(crate) const RYNK_BLE_VALUE_LEN: usize = 244;
+use crate::host::rynk::RYNK_BLE_CHUNK_SIZE;
 
 // `gatt_server` compiles every member regardless of the surrounding `cfg` —
 // gating an individual field with `#[cfg(feature = "host")]` doesn't work. So
@@ -48,17 +45,17 @@ pub(crate) struct Server {
 /// actually carries (a fixed `[u8; N]` would always send N).
 ///
 /// `gatt_events_task` forwards `output_data` writes into
-/// [`crate::channel::RYNK_RX_CHANNEL`] for `RynkBleTransport::run` to drain,
-/// and signals [`crate::channel::BLE_RYNK_READY`] once the host subscribes to
+/// [`crate::channel::RYNK_RX_CHANNEL`] for `run_ble_rynk` to drain, and signals
+/// [`crate::channel::BLE_RYNK_READY`] once the host subscribes to
 /// `input_data` notifications.
 #[cfg(feature = "rynk")]
-#[gatt_service(uuid = "F5F50001-1234-5678-9ABC-DEF012345678")]
+#[gatt_service(uuid = "10900067-537f-4f0a-9b55-929e271f61ab")]
 pub(crate) struct RynkService {
     #[descriptor(uuid = "2908", read, value = [0u8, 1u8])]
-    #[characteristic(uuid = "F5F50002-1234-5678-9ABC-DEF012345678", read, notify)]
-    pub(crate) input_data: heapless::Vec<u8, RYNK_BLE_VALUE_LEN>,
-    #[characteristic(uuid = "F5F50003-1234-5678-9ABC-DEF012345678", read, write, write_without_response)]
-    pub(crate) output_data: heapless::Vec<u8, RYNK_BLE_VALUE_LEN>,
+    #[characteristic(uuid = "80f9319b-0c74-43a5-9738-c59d6dda3db9", read, notify)]
+    pub(crate) input_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
+    #[characteristic(uuid = "19802524-6f90-4346-93c2-63dbc509ab55", read, write, write_without_response)]
+    pub(crate) output_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
 }
 
 /// GATT service exposing the Vial-over-HID protocol. The keyboard writes replies via

@@ -16,10 +16,10 @@ pub(crate) mod ble;
 #[cfg(not(feature = "_no_usb"))]
 pub mod usb;
 
-// `RynkBleTransport` stays crate-internal — its `Server` parameter is
-// `pub(crate)`-only, and `BleTransport::with_rynk_service` provides the
-// stable user-facing handle.
+// The BLE side has no public transport handle — `BleTransport::with_rynk_service`
+// is the stable entry point, and `ble::run_ble_rynk` is the per-connection
+// runner it dispatches to.
 #[cfg(feature = "_ble")]
-pub(crate) use ble::RynkBleTransport;
+pub(crate) use ble::run_ble_rynk;
 #[cfg(not(feature = "_no_usb"))]
 pub use usb::RynkUsbTransport;

@@ -5,21 +5,22 @@
 //! WinUSB automatically (so `rynk-cli` can talk to the device without a
 //! `.inf` install).
 //!
-//! Framing follows [`Header`]: read packets into a buffer until
-//! `5 + LEN` bytes are available, dispatch the frame, then keep any
-//! remainder for the next iteration. ZLP termination is added after a
-//! TX whose payload is an exact multiple of MPS so the host's URB
+//! Framing follows the Rynk wire format: read packets into a buffer until
+//! `RYNK_HEADER_SIZE + LEN` bytes are available, dispatch the frame, then
+//! keep any remainder for the next iteration. ZLP termination is added
+//! after a TX whose payload is an exact multiple of MPS so the host's URB
 //! completes promptly.
 
 use embassy_futures::select::{Either, select};
 use embassy_usb::Builder;
 use embassy_usb::driver::{Driver, Endpoint, EndpointError, EndpointIn, EndpointOut};
 use embassy_usb::msos::{self, CompatibleIdFeatureDescriptor, PropertyData, RegistryPropertyFeatureDescriptor};
-use rmk_types::protocol::rynk::header::HEADER_SIZE;
+use rmk_types::constants::RYNK_BUFFER_SIZE;
+use rmk_types::protocol::rynk::{RYNK_HEADER_SIZE, RynkMessage};
 
-use super::super::codec::WireErr;
+use super::super::RynkService;
 use super::super::topics::TopicSubscribers;
-use super::super::{RYNK_BUFFER_SIZE, RynkService};
+use super::super::wire::WireErr;
 
 /// USB Vendor class code (per USB-IF). Combined with subclass+protocol = 0,
 /// this is the magic triple Windows looks for to apply the WinUSB compat ID.
@@ -99,7 +100,7 @@ impl<'d, D: Driver<'d>> RynkUsbTransport<'d, D> {
     /// by macro-generated code. Never returns under normal operation.
     pub async fn run(&mut self, service: &RynkService<'_>) -> ! {
         let mut rx_buf = [0u8; RYNK_BUFFER_SIZE];
-        let mut tx_buf = [0u8; RYNK_BUFFER_SIZE];
+        let mut dispatch_buf = [0u8; RYNK_BUFFER_SIZE];
         let mut topics = TopicSubscribers::new();
 
         loop {
@@ -113,18 +114,33 @@ impl<'d, D: Driver<'d>> RynkUsbTransport<'d, D> {
             'session: loop {
                 match select(
                     read_frame(&mut self.bulk_out, &mut rx_buf, &mut rx_used),
-                    topics.next_event(),
+                    topics.next_event(&service.ctx),
                 )
                 .await
                 {
                     Either::First(Ok(frame_len)) => {
-                        let n = service.dispatch(&rx_buf[..frame_len], &mut tx_buf).await;
-                        if n > 0
-                            && write_frame(&mut self.bulk_in, &tx_buf[..n], self.max_packet_size)
-                                .await
-                                .is_err()
-                        {
-                            break 'session;
+                        // Copy the request into the dispatch buffer; the handler
+                        // rewrites the payload in place over the full buffer
+                        // capacity and patches LEN.
+                        dispatch_buf[..frame_len].copy_from_slice(&rx_buf[..frame_len]);
+                        // dispatch writes the response envelope (Ok or Err)
+                        // into the buffer; no further error handling needed.
+                        service.dispatch(&mut dispatch_buf).await;
+                        match dispatch_buf.payload_len() {
+                            Ok(n) => {
+                                let resp_len = RYNK_HEADER_SIZE + n as usize;
+                                if write_frame(&mut self.bulk_in, &dispatch_buf[..resp_len], self.max_packet_size)
+                                    .await
+                                    .is_err()
+                                {
+                                    break 'session;
+                                }
+                            }
+                            Err(e) => {
+                                // Unreachable in practice: dispatch_buf is sized at
+                                // RYNK_BUFFER_SIZE >= RYNK_HEADER_SIZE.
+                                warn!("Rynk dispatch_buf header read failed: {:?}", e);
+                            }
                         }
                         // Compact: keep any bytes belonging to the next frame.
                         rx_buf.copy_within(frame_len..rx_used, 0);
@@ -139,13 +155,24 @@ impl<'d, D: Driver<'d>> RynkUsbTransport<'d, D> {
                     }
                     Either::First(Err(WireErr::Io)) => break 'session,
                     Either::Second(event) => {
-                        let n = event.encode(service, &mut tx_buf);
-                        if n > 0
-                            && write_frame(&mut self.bulk_in, &tx_buf[..n], self.max_packet_size)
-                                .await
-                                .is_err()
+                        match event
+                            .encode(service, &mut dispatch_buf)
+                            .and_then(|()| dispatch_buf.payload_len())
                         {
-                            break 'session;
+                            Ok(n) => {
+                                let resp_len = RYNK_HEADER_SIZE + n as usize;
+                                if write_frame(&mut self.bulk_in, &dispatch_buf[..resp_len], self.max_packet_size)
+                                    .await
+                                    .is_err()
+                                {
+                                    break 'session;
+                                }
+                            }
+                            Err(e) => {
+                                // Unreachable in practice: dispatch_buf is sized at
+                                // RYNK_BUFFER_SIZE >= RYNK_HEADER_SIZE.
+                                warn!("Rynk topic encode failed: {:?}", e);
+                            }
                         }
                     }
                 }
@@ -161,9 +188,9 @@ async fn read_frame<E: EndpointOut>(ep: &mut E, buf: &mut [u8], used: &mut usize
         // Try parsing a frame from what's already buffered. `LEN` is
         // authoritative — the buffer naturally holds at most one frame
         // in progress plus the start of the next.
-        if *used >= HEADER_SIZE {
+        if *used >= RYNK_HEADER_SIZE {
             let len = u16::from_le_bytes([buf[3], buf[4]]) as usize;
-            let total = HEADER_SIZE + len;
+            let total = RYNK_HEADER_SIZE + len;
             if total > buf.len() {
                 return Err(WireErr::Overflow);
             }
@@ -318,7 +345,7 @@ mod tests {
 
     #[test]
     fn read_frame_rejects_oversize() {
-        let mut header = std::vec![0; HEADER_SIZE];
+        let mut header = std::vec![0; RYNK_HEADER_SIZE];
         header[3] = 0xFF;
         header[4] = 0xFF;
         let mut ep = MockOut {

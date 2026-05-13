@@ -117,7 +117,7 @@ pub(crate) static HOST_BLE_REPLY: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE>
 /// 5-byte header's `LEN` field. A fixed `heapless::Vec` carrying the chunk
 /// keeps the channel `Sync` without needing an allocator.
 #[cfg(all(feature = "rynk", feature = "_ble"))]
-pub(crate) static RYNK_RX_CHANNEL: Channel<RawMutex, heapless::Vec<u8, crate::host::rynk::RYNK_BLE_CHUNK_SIZE>, 4> =
+pub(crate) static RYNK_RX_CHANNEL: Channel<RawMutex, heapless::Vec<u8, { crate::host::rynk::RYNK_BLE_CHUNK_SIZE }>, 4> =
     Channel::new();
 
 /// Latched when the host enables notifications on the Rynk `input_data`
