@@ -192,7 +192,7 @@ mod tests {
     fn two_bundled_messages_do_not_trigger_extra_read() {
         let status = rmk_types::connection::ConnectionStatus::new();
         let mut bundled = encode(&SplitMessage::LedState(true));
-        bundled.extend_from_slice(&encode(&SplitMessage::ConnectionState(status)));
+        bundled.extend_from_slice(&encode(&SplitMessage::ConnectionStatus(status)));
 
         let fake = FakeSerial::new([bundled]);
         let mut drv = SerialSplitDriver::new(fake);
@@ -202,8 +202,8 @@ mod tests {
 
         let m2 = block_on(drv.read()).expect("second read should not touch serial");
         match m2 {
-            SplitMessage::ConnectionState(s) => assert_eq!(s, status),
-            other => panic!("expected ConnectionState, got {:?}", other),
+            SplitMessage::ConnectionStatus(s) => assert_eq!(s, status),
+            other => panic!("expected ConnectionStatus, got {:?}", other),
         }
 
         assert_eq!(drv.serial.read_calls, 1);
@@ -217,7 +217,7 @@ mod tests {
     fn trailing_partial_message_is_carried_over() {
         let status = rmk_types::connection::ConnectionStatus::new();
         let full1 = encode(&SplitMessage::LedState(true));
-        let full2 = encode(&SplitMessage::ConnectionState(status));
+        let full2 = encode(&SplitMessage::ConnectionStatus(status));
         let (prefix, suffix) = full2.split_at(full2.len() / 2);
 
         let mut first_chunk = full1;
@@ -231,8 +231,8 @@ mod tests {
 
         let m2 = block_on(drv.read()).expect("second read should succeed");
         match m2 {
-            SplitMessage::ConnectionState(s) => assert_eq!(s, status),
-            other => panic!("expected ConnectionState, got {:?}", other),
+            SplitMessage::ConnectionStatus(s) => assert_eq!(s, status),
+            other => panic!("expected ConnectionStatus, got {:?}", other),
         }
 
         assert_eq!(drv.serial.read_calls, 2);
