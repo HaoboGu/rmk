@@ -11,11 +11,8 @@ use crate::hid::{CompositeReport, CompositeReportType, HidError, HidWriterTrait,
 // per-connection client-specific attribute buffer size.
 pub(crate) const CCCD_TABLE_SIZE: usize = trouble_host::config::CLIENT_ATT_TABLE_SIZE;
 
-/// Maximum bytes carried by a single Rynk BLE characteristic write/notify.
-/// Mirrors `crate::channel::RYNK_BLE_CHUNK_SIZE` but lives here so the
-/// `gatt_service` macro can use it in a `const` context.
 #[cfg(feature = "rynk")]
-pub(crate) const RYNK_BLE_VALUE_LEN: usize = 244;
+use crate::host::rynk::RYNK_BLE_CHUNK_SIZE;
 
 // `gatt_server` compiles every member regardless of the surrounding `cfg` —
 // gating an individual field with `#[cfg(feature = "host")]` doesn't work. So
@@ -26,7 +23,7 @@ pub(crate) const RYNK_BLE_VALUE_LEN: usize = 244;
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
     pub(crate) hid_service: HidService,
-    pub(crate) host_service: VialService,
+    pub(crate) vial_service: VialService,
     pub(crate) composite_service: CompositeService,
     pub(crate) device_config_service: DeviceConfigurationService,
 }
@@ -36,7 +33,7 @@ pub(crate) struct Server {
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
     pub(crate) hid_service: HidService,
-    pub(crate) host_service: VialService,
+    pub(crate) vial_service: VialService,
     pub(crate) rynk_service: RynkService,
     pub(crate) composite_service: CompositeService,
     pub(crate) device_config_service: DeviceConfigurationService,
@@ -48,23 +45,21 @@ pub(crate) struct Server {
 /// actually carries (a fixed `[u8; N]` would always send N).
 ///
 /// `gatt_events_task` forwards `output_data` writes into
-/// [`crate::channel::RYNK_RX_CHANNEL`] for `RynkBleTransport::run` to drain,
-/// and signals [`crate::channel::BLE_RYNK_READY`] once the host subscribes to
-/// `input_data` notifications.
+/// [`crate::channel::RYNK_BLE_RX_CHANNEL`] for [`crate::ble::rynk::run_rynk_ble`] to drain.
 #[cfg(feature = "rynk")]
-#[gatt_service(uuid = "F5F50001-1234-5678-9ABC-DEF012345678")]
+#[gatt_service(uuid = "10900067-537f-4f0a-9b55-929e271f61ab")]
 pub(crate) struct RynkService {
     #[descriptor(uuid = "2908", read, value = [0u8, 1u8])]
-    #[characteristic(uuid = "F5F50002-1234-5678-9ABC-DEF012345678", read, notify)]
-    pub(crate) input_data: heapless::Vec<u8, RYNK_BLE_VALUE_LEN>,
-    #[characteristic(uuid = "F5F50003-1234-5678-9ABC-DEF012345678", read, write, write_without_response)]
-    pub(crate) output_data: heapless::Vec<u8, RYNK_BLE_VALUE_LEN>,
+    #[characteristic(uuid = "80f9319b-0c74-43a5-9738-c59d6dda3db9", read, notify)]
+    pub(crate) input_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
+    #[characteristic(uuid = "19802524-6f90-4346-93c2-63dbc509ab55", read, write, write_without_response)]
+    pub(crate) output_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
 }
 
 /// GATT service exposing the Vial-over-HID protocol. The keyboard writes replies via
 /// `input_data` notify; hosts push requests through `output_data`. `gatt_events_task`
-/// forwards `output_data` writes into `HOST_REQUEST_CHANNEL`, and `host::run_ble_host`
-/// drains `HOST_BLE_REPLY` to notify `input_data`.
+/// forwards `output_data` writes into [`crate::channel::VIAL_BLE_RX_CHANNEL`] for
+/// [`crate::host::ble::run_vial_ble`] to drain.
 #[cfg(feature = "host")]
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
 pub(crate) struct VialService {

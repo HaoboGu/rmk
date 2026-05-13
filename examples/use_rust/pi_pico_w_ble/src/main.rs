@@ -149,8 +149,7 @@ async fn main(spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
-    let host_ctx = rmk::host::KeyboardContext::new(&keymap);
-    let mut host_service = HostService::new(&host_ctx, &rmk_config);
+    let host_service = HostService::new(&keymap, &rmk_config);
 
     let ble_addr = [0x18, 0xe2, 0x21, 0x88, 0xc0, 0xc7];
 
@@ -160,8 +159,10 @@ async fn main(spawner: Spawner) {
 
     let stack = build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
 
-    let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config);
-    let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
+    let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
+    let mut ble_transport = BleTransport::new(&stack, rmk_config)
+        .await
+        .with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();
     let mut watchdog_runner = Rp2040Watchdog::default_runner(embassy_rp::watchdog::Watchdog::new(p.WATCHDOG));
 
@@ -173,7 +174,6 @@ async fn main(spawner: Spawner) {
         ble_transport,
         wpm_processor,
         keyboard,
-        host_service,
         watchdog_runner
     )
     .await;

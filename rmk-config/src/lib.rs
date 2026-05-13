@@ -841,6 +841,10 @@ pub(crate) struct HostConfig {
     /// Whether Vial is enabled
     #[serde_inline_default(true)]
     pub vial_enabled: bool,
+    /// Whether the RMK-native Rynk protocol is enabled. Mutually exclusive
+    /// with `vial_enabled` (the underlying Cargo features conflict).
+    #[serde_inline_default(false)]
+    pub rynk_enabled: bool,
     /// Unlock keys for Vial (optional)
     pub unlock_keys: Option<Vec<[u8; 2]>>,
     /// Start Vial unlocked, bypassing the unlock-key combo (default: false).
@@ -853,6 +857,7 @@ impl Default for HostConfig {
     fn default() -> Self {
         Self {
             vial_enabled: true,
+            rynk_enabled: false,
             unlock_keys: None,
             vial_insecure: false,
         }

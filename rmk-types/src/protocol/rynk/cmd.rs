@@ -111,8 +111,6 @@ pub enum Cmd {
     LedIndicator = 0x8005,
     #[cfg(feature = "_ble")]
     BatteryStatusTopic = 0x8006,
-    #[cfg(feature = "_ble")]
-    BleStatusChangeTopic = 0x8007,
 }
 
 impl Cmd {
