@@ -109,6 +109,10 @@ pub enum RynkError {
     InternalError,
 }
 
+/// Default response payload type for handlers that return a status with
+/// no value attached: `Result<(), RynkError>` postcard-encoded.
+pub type RynkResult<T = ()> = Result<T, RynkError>;
+
 // ---------------------------------------------------------------------------
 // Test utilities (shared across submodule test mods)
 // ---------------------------------------------------------------------------
