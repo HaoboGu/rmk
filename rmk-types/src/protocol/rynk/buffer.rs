@@ -40,12 +40,27 @@ pub const RYNK_MAX_PAYLOAD: usize = {
     m = max_const(m, <Result<LockStatus, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
     m = max_const(m, <Result<UnlockChallenge, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
     m = max_const(m, <Result<BehaviorConfig, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <Result<crate::action::KeyAction, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <Result<crate::action::EncoderAction, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <Result<crate::combo::Combo, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <Result<crate::morse::Morse, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    m = max_const(
+        m,
+        <Result<crate::action::KeyAction, RynkError> as MaxSize>::POSTCARD_MAX_SIZE,
+    );
+    m = max_const(
+        m,
+        <Result<crate::action::EncoderAction, RynkError> as MaxSize>::POSTCARD_MAX_SIZE,
+    );
+    m = max_const(
+        m,
+        <Result<crate::combo::Combo, RynkError> as MaxSize>::POSTCARD_MAX_SIZE,
+    );
+    m = max_const(
+        m,
+        <Result<crate::morse::Morse, RynkError> as MaxSize>::POSTCARD_MAX_SIZE,
+    );
     m = max_const(m, <Result<crate::fork::Fork, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
-    m = max_const(m, <Result<crate::connection::ConnectionType, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+    m = max_const(
+        m,
+        <Result<crate::connection::ConnectionType, RynkError> as MaxSize>::POSTCARD_MAX_SIZE,
+    );
     m = max_const(m, <Result<MacroData, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
     m = max_const(m, <Result<MatrixState, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
     // Canonical Set* reply.
@@ -53,8 +68,14 @@ pub const RYNK_MAX_PAYLOAD: usize = {
 
     #[cfg(feature = "_ble")]
     {
-        m = max_const(m, <Result<crate::battery::BatteryStatus, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
-        m = max_const(m, <Result<crate::ble::BleStatus, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+        m = max_const(
+            m,
+            <Result<crate::battery::BatteryStatus, RynkError> as MaxSize>::POSTCARD_MAX_SIZE,
+        );
+        m = max_const(
+            m,
+            <Result<crate::ble::BleStatus, RynkError> as MaxSize>::POSTCARD_MAX_SIZE,
+        );
     }
     #[cfg(all(feature = "_ble", feature = "split"))]
     {
@@ -73,12 +94,21 @@ pub const RYNK_MAX_PAYLOAD: usize = {
     #[cfg(feature = "bulk")]
     {
         m = max_const(m, <GetKeymapBulkRequest as MaxSize>::POSTCARD_MAX_SIZE);
-        m = max_const(m, <Result<GetKeymapBulkResponse, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+        m = max_const(
+            m,
+            <Result<GetKeymapBulkResponse, RynkError> as MaxSize>::POSTCARD_MAX_SIZE,
+        );
         m = max_const(m, <SetKeymapBulkRequest as MaxSize>::POSTCARD_MAX_SIZE);
         m = max_const(m, <SetComboBulkRequest as MaxSize>::POSTCARD_MAX_SIZE);
-        m = max_const(m, <Result<GetComboBulkResponse, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+        m = max_const(
+            m,
+            <Result<GetComboBulkResponse, RynkError> as MaxSize>::POSTCARD_MAX_SIZE,
+        );
         m = max_const(m, <SetMorseBulkRequest as MaxSize>::POSTCARD_MAX_SIZE);
-        m = max_const(m, <Result<GetMorseBulkResponse, RynkError> as MaxSize>::POSTCARD_MAX_SIZE);
+        m = max_const(
+            m,
+            <Result<GetMorseBulkResponse, RynkError> as MaxSize>::POSTCARD_MAX_SIZE,
+        );
     }
 
     m
