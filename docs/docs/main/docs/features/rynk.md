@@ -62,6 +62,9 @@ firmware build.
    rynk get-key 0 0 0           # read one key
    rynk layer                   # current active layer
    rynk matrix                  # live matrix bitmap
+   rynk wpm                     # latest WPM snapshot
+   rynk sleep                   # latest sleep flag
+   rynk led                     # latest HID LED indicator bits
    rynk reboot                  # reboot the firmware
    ```
 
