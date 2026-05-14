@@ -19,3 +19,9 @@ pub mod transports;
 pub use client::{Client, ConnectError};
 pub use rmk_types;
 pub use transport::{TopicFrame, Transport, TransportError};
+
+/// Convenience alias for the host-side response envelope. Every firmware
+/// response decodes to `Result<T, RynkError>` (defaulting to `()`); the
+/// host-side API functions surface this directly so callers can pattern-
+/// match on protocol errors without unwrapping a bare value.
+pub type RynkResult<T = ()> = Result<T, rmk_types::protocol::rynk::RynkError>;

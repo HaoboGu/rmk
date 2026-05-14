@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["rynk-host", "rynk-cli"]
+members = ["rynk-host"]
 
 [workspace.package]
 authors = ["Haobo Gu <haobogu@outlook.com>"]

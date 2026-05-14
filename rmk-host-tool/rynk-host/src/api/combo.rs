@@ -1,13 +1,14 @@
 //! Combo endpoints.
 
 use rmk_types::combo::Combo;
-use rmk_types::protocol::rynk::{Cmd, RynkResult, SetComboRequest};
+use rmk_types::protocol::rynk::{Cmd, SetComboRequest};
 
+use crate::RynkResult;
 use crate::transport::{Transport, TransportError};
 
 /// Read one combo entry by index.
-pub async fn get_combo<T: Transport>(t: &mut T, index: u8) -> Result<Combo, TransportError> {
-    t.request::<u8, Combo>(Cmd::GetCombo, &index).await
+pub async fn get_combo<T: Transport>(t: &mut T, index: u8) -> Result<RynkResult<Combo>, TransportError> {
+    t.request::<u8, RynkResult<Combo>>(Cmd::GetCombo, &index).await
 }
 
 /// Write one combo entry by index.
