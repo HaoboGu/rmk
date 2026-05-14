@@ -11,6 +11,8 @@
 //! (`BatteryProcessor::commit`, `state.rs::update_status`,
 //! `keyboard::run_led_reader`).
 
+use core::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+
 use embassy_time::Duration;
 use rmk_types::action::{EncoderAction, KeyAction};
 #[cfg(feature = "_ble")]
@@ -32,13 +34,24 @@ use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 /// `keymap` is intentionally `pub`: callers like `VialLock` that only need a
 /// raw `&KeyMap` keep their existing parameter and read it through
 /// `ctx.keymap` at the construction site.
+///
+/// `latest_wpm` / `latest_sleep` cache pure event-stream topics that have no
+/// producer-side store. The Rynk topic subscriber loop calls `cache_wpm` /
+/// `cache_sleep` when each event fires; `Get*` handlers read via `wpm()` /
+/// `sleep_state()`. Pre-first-event readers see `0` / `false`.
 pub struct KeyboardContext<'a> {
     pub keymap: &'a KeyMap<'a>,
+    latest_wpm: AtomicU16,
+    latest_sleep: AtomicBool,
 }
 
 impl<'a> KeyboardContext<'a> {
     pub fn new(keymap: &'a KeyMap<'a>) -> Self {
-        Self { keymap }
+        Self {
+            keymap,
+            latest_wpm: AtomicU16::new(0),
+            latest_sleep: AtomicBool::new(false),
+        }
     }
 
     // ── Keymap operations ────────────────────────────────────────────────
@@ -317,6 +330,22 @@ impl<'a> KeyboardContext<'a> {
 
     pub fn active_layer(&self) -> u8 {
         self.keymap.active_layer()
+    }
+
+    pub fn wpm(&self) -> u16 {
+        self.latest_wpm.load(Ordering::Relaxed)
+    }
+
+    pub fn sleep_state(&self) -> bool {
+        self.latest_sleep.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn cache_wpm(&self, v: u16) {
+        self.latest_wpm.store(v, Ordering::Relaxed);
+    }
+
+    pub(crate) fn cache_sleep(&self, v: bool) {
+        self.latest_sleep.store(v, Ordering::Relaxed);
     }
 
     pub fn default_layer(&self) -> u8 {

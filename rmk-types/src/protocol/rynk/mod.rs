@@ -33,7 +33,7 @@
 //! ## Module layout
 //!
 //! - [`cmd`] — `Cmd` enum (request, response, topic tags)
-//! - [`frame`] — `Frame` + `FrameOps` (in-place wire-header accessors)
+//! - [`message`] — `RynkMessage` (in-place wire-header accessors over `[u8]`)
 //! - [`buffer`] — `RYNK_MIN_BUFFER_SIZE` const computed from `MaxSize` of
 //!   every wire type
 //! - [`system`] — handshake (`ProtocolVersion`, `DeviceCapabilities`,
@@ -44,7 +44,7 @@
 //!
 //! ## Protocol handshake
 //!
-//! 1. Host connects over USB bulk or BLE GATT (length-prefixed frames).
+//! 1. Host connects over USB bulk or BLE GATT (length-prefixed messages).
 //! 2. Host sends `Cmd::GetVersion`. If `major` differs from the host's
 //!    supported major, or `minor` exceeds the host's known max, the host
 //!    aborts with an "update host" diagnostic. `GetVersion`'s shape is
@@ -65,7 +65,7 @@
 
 pub mod buffer;
 pub mod cmd;
-pub mod frame;
+pub mod message;
 
 mod combo;
 mod encoder;
@@ -86,9 +86,9 @@ pub use self::cmd::Cmd;
 pub use self::combo::*;
 pub use self::encoder::*;
 pub use self::fork::*;
-pub use self::frame::{Frame, FrameOps, RYNK_HEADER_SIZE};
 pub use self::keymap::*;
 pub use self::macro_data::*;
+pub use self::message::{RYNK_HEADER_SIZE, RynkMessage};
 pub use self::morse::*;
 pub use self::status::*;
 pub use self::system::*;
@@ -98,20 +98,31 @@ pub use self::system::*;
 // ---------------------------------------------------------------------------
 
 /// Protocol-level error returned in every response payload.
+///
+/// Variants are grouped by what the host should *do* about them, not by
+/// where in the firmware they originated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
 pub enum RynkError {
-    /// The request parameters are invalid or out of range.
-    InvalidParameter,
-    /// Operation not valid in the current device state.
-    BadState,
-    /// An internal firmware error occurred (storage, contention, etc).
-    InternalError,
+    /// The request was malformed or referred to something out of range:
+    /// bad header, undecodable payload, index OOB, empty slot, or topic
+    /// CMD sent as a request. Host should fix the request; retrying the
+    /// same bytes will fail the same way.
+    InvalidRequest,
+    /// Device is not currently in a state to satisfy the request — BLE
+    /// adapter not ready, peripheral disconnected, etc. Host may retry
+    /// once the state changes.
+    NotReady,
+    /// Persistent storage failed on a write path (flash erase/write
+    /// error). Host may retry once; repeated failures indicate flash
+    /// health issues.
+    StorageFault,
+    /// Internal firmware fault — reentrant borrow, response too large to
+    /// encode, or another "should not happen" arm. Host should surface
+    /// it for diagnostics but can't act on it.
+    Internal,
 }
-
-/// Default response payload type for handlers that return a status with
-/// no value attached: `Result<(), RynkError>` postcard-encoded.
-pub type RynkResult<T = ()> = Result<T, RynkError>;
 
 // ---------------------------------------------------------------------------
 // Test utilities (shared across submodule test mods)
@@ -280,11 +291,12 @@ mod tests {
     #[test]
     fn round_trip_rynk_error_and_result() {
         use super::test_utils::round_trip;
-        round_trip(&RynkError::InvalidParameter);
-        round_trip(&RynkError::BadState);
-        round_trip(&RynkError::InternalError);
+        round_trip(&RynkError::InvalidRequest);
+        round_trip(&RynkError::NotReady);
+        round_trip(&RynkError::StorageFault);
+        round_trip(&RynkError::Internal);
         let ok: Result<(), RynkError> = Ok(());
-        let err: Result<(), RynkError> = Err(RynkError::BadState);
+        let err: Result<(), RynkError> = Err(RynkError::StorageFault);
         let _ = round_trip(&ok);
         let _ = round_trip(&err);
     }
@@ -317,12 +329,13 @@ mod tests {
             ),
             ("MatrixState{[0x05,0x00,0x20]}", encode(&matrix)),
             ("ProtocolVersion{1,0}", encode(&ProtocolVersion { major: 1, minor: 0 }),),
-            ("RynkError::BadState", encode(&RynkError::BadState)),
-            ("RynkError::InternalError", encode(&RynkError::InternalError)),
-            ("RynkError::InvalidParameter", encode(&RynkError::InvalidParameter)),
+            ("RynkError::Internal", encode(&RynkError::Internal)),
+            ("RynkError::InvalidRequest", encode(&RynkError::InvalidRequest)),
+            ("RynkError::NotReady", encode(&RynkError::NotReady)),
+            ("RynkError::StorageFault", encode(&RynkError::StorageFault)),
             (
-                "Result<(),RynkError>::Err(BadState)",
-                encode::<Result<(), RynkError>>(&Err(RynkError::BadState)),
+                "Result<(),RynkError>::Err(StorageFault)",
+                encode::<Result<(), RynkError>>(&Err(RynkError::StorageFault)),
             ),
             ("Result<(),RynkError>::Ok", encode::<Result<(), RynkError>>(&Ok(()))),
             ("StorageResetMode::Full", encode(&StorageResetMode::Full)),

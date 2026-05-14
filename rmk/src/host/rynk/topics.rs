@@ -25,14 +25,15 @@ use crate::event::{
     ConnectionStatusChangeEvent, EventSubscriber, LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, SubscribableEvent,
     WpmUpdateEvent,
 };
+use crate::host::context::KeyboardContext;
 
 /// One yielded event from any of the topic subscribers. The transport
-/// encodes `cmd` + the borrowed payload into a frame via
+/// encodes `cmd` + the borrowed payload into a message via
 /// [`RynkService::write_topic`](super::RynkService::write_topic).
 ///
 /// Holds the payload by value, not by reference — postcard's `Serialize`
 /// requires only `&T`, and these primitive types are cheap to copy.
-pub(in crate::host::rynk) enum TopicEvent {
+pub(crate) enum TopicEvent {
     LayerChange(u8),
     WpmUpdate(u16),
     ConnectionChange(ConnectionStatus),
@@ -46,7 +47,7 @@ pub(in crate::host::rynk) enum TopicEvent {
 
 impl TopicEvent {
     /// Map the event to its wire-format `Cmd` tag.
-    pub(in crate::host::rynk) fn cmd(&self) -> Cmd {
+    pub(crate) fn cmd(&self) -> Cmd {
         match self {
             TopicEvent::LayerChange(_) => Cmd::LayerChange,
             TopicEvent::WpmUpdate(_) => Cmd::WpmUpdate,
@@ -60,25 +61,25 @@ impl TopicEvent {
         }
     }
 
-    /// Write the topic frame (header + payload) into `frame` in place.
-    /// After this returns, the full frame occupies
-    /// `&frame[..RYNK_HEADER_SIZE + frame.payload_len()]`.
-    pub(in crate::host::rynk) fn encode(
+    /// Write the topic message (header + payload) into `msg` in place.
+    /// After this returns, the full message occupies
+    /// `&msg[..RYNK_HEADER_SIZE + msg.payload_len()]`.
+    pub(crate) fn encode(
         &self,
         service: &super::RynkService<'_>,
-        frame: &mut rmk_types::protocol::rynk::Frame,
+        msg: &mut [u8],
     ) {
         let cmd = self.cmd();
         match self {
-            TopicEvent::LayerChange(v) => service.write_topic(cmd, v, frame),
-            TopicEvent::WpmUpdate(v) => service.write_topic(cmd, v, frame),
-            TopicEvent::ConnectionChange(v) => service.write_topic(cmd, v, frame),
-            TopicEvent::SleepState(v) => service.write_topic(cmd, v, frame),
-            TopicEvent::LedIndicator(v) => service.write_topic(cmd, v, frame),
+            TopicEvent::LayerChange(v) => service.write_topic(cmd, v, msg),
+            TopicEvent::WpmUpdate(v) => service.write_topic(cmd, v, msg),
+            TopicEvent::ConnectionChange(v) => service.write_topic(cmd, v, msg),
+            TopicEvent::SleepState(v) => service.write_topic(cmd, v, msg),
+            TopicEvent::LedIndicator(v) => service.write_topic(cmd, v, msg),
             #[cfg(feature = "_ble")]
-            TopicEvent::BatteryStatus(v) => service.write_topic(cmd, v, frame),
+            TopicEvent::BatteryStatus(v) => service.write_topic(cmd, v, msg),
             #[cfg(feature = "_ble")]
-            TopicEvent::BleStatusChange(v) => service.write_topic(cmd, v, frame),
+            TopicEvent::BleStatusChange(v) => service.write_topic(cmd, v, msg),
         }
     }
 }
@@ -87,7 +88,7 @@ impl TopicEvent {
 ///
 /// Construct once per transport future, then poll [`next_event`] in
 /// the transport's main `select!`.
-pub(in crate::host::rynk) struct TopicSubscribers {
+pub(crate) struct TopicSubscribers {
     layer: <LayerChangeEvent as SubscribableEvent>::Subscriber,
     wpm: <WpmUpdateEvent as SubscribableEvent>::Subscriber,
     conn: <ConnectionStatusChangeEvent as SubscribableEvent>::Subscriber,
@@ -103,7 +104,7 @@ impl TopicSubscribers {
     /// Create one subscriber per topic. Each call consumes a `subs` slot
     /// in the underlying PubSubChannel; the `subscriber_default.toml`
     /// `rynk` entries must reserve one slot per active transport.
-    pub(in crate::host::rynk) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             layer: LayerChangeEvent::subscriber(),
             wpm: WpmUpdateEvent::subscriber(),
@@ -122,12 +123,25 @@ impl TopicSubscribers {
     /// Biased select — earlier arms win when multiple subscribers are
     /// ready on the same wake. The order below favors keymap/state
     /// changes (`layer`, `wpm`, `conn`) over passive status pushes.
-    pub(in crate::host::rynk) async fn next_event(&mut self) -> TopicEvent {
+    ///
+    /// Side-effect: `WpmUpdate` and `SleepState` latch their payload into
+    /// `ctx` so the matching `GetWpm` / `GetSleepState` handlers can answer
+    /// without re-subscribing. Other topics have producer-side caches
+    /// elsewhere (LED via `current_led_indicator`, connection via `state.rs`).
+    pub(crate) async fn next_event(&mut self, ctx: &KeyboardContext<'_>) -> TopicEvent {
         crate::select_biased_with_feature! {
             e = self.layer.next_event().fuse() => TopicEvent::LayerChange((*e).into()),
-            e = self.wpm.next_event().fuse() => TopicEvent::WpmUpdate((*e).into()),
+            e = self.wpm.next_event().fuse() => {
+                let v: u16 = (*e).into();
+                ctx.cache_wpm(v);
+                TopicEvent::WpmUpdate(v)
+            },
             e = self.conn.next_event().fuse() => TopicEvent::ConnectionChange((*e).into()),
-            e = self.sleep.next_event().fuse() => TopicEvent::SleepState((*e).into()),
+            e = self.sleep.next_event().fuse() => {
+                let v: bool = (*e).into();
+                ctx.cache_sleep(v);
+                TopicEvent::SleepState(v)
+            },
             e = self.led.next_event().fuse() => TopicEvent::LedIndicator((*e).into()),
             with_feature("_ble"): e = self.battery.next_event().fuse() => TopicEvent::BatteryStatus((*e).into()),
             with_feature("_ble"): e = self.ble_status.next_event().fuse() => TopicEvent::BleStatusChange((*e).into()),

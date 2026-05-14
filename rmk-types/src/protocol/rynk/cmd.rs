@@ -25,7 +25,7 @@ use strum::FromRepr;
 
 /// Command tag carried in the header CMD field.
 ///
-/// The wire encoding is a plain `u16 LE` written by [`FrameOps::set_cmd`](super::FrameOps::set_cmd) —
+/// The wire encoding is a plain `u16 LE` written by [`RynkMessage::set_cmd`](super::RynkMessage::set_cmd) —
 /// `Cmd` is never postcard-encoded, so no `Serialize`/`Deserialize`/`MaxSize`
 /// derives are needed here.
 #[repr(u16)]
