@@ -1,14 +1,6 @@
-//! Per-transport topic publishers.
+//! Rynk topic publishers.
 //!
-//! Each `RynkUsbTransport`/`RynkBleTransport` instance owns one
-//! [`TopicSubscribers`] bundle so the same event is observed independently
-//! by every active wire — the underlying channels are PubSubChannels with
-//! `subs` counted to match.
-//!
-//! [`TopicSubscribers::next_event`] is a single-shot `select!` over every
-//! event we publish on Rynk. The transport's main `select!` arm awaits it
-//! alongside the inbound RX path, so a topic write and a reply write are
-//! always serialized on the same future — no notify interleaving.
+//! Topics are firmware -> host event publishing channels.
 
 use futures::FutureExt;
 #[cfg(feature = "_ble")]
@@ -22,17 +14,11 @@ use rmk_types::protocol::rynk::Cmd;
 #[cfg(feature = "_ble")]
 use crate::event::{BatteryStatusEvent, BleStatusChangeEvent};
 use crate::event::{
-    ConnectionStatusChangeEvent, EventSubscriber, LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, SubscribableEvent,
-    WpmUpdateEvent,
+    ConnectionStatusChangeEvent, EventSubscriber, LayerChangeEvent, LedIndicatorEvent, SleepStateEvent,
+    SubscribableEvent, WpmUpdateEvent,
 };
 use crate::host::context::KeyboardContext;
 
-/// One yielded event from any of the topic subscribers. The transport
-/// encodes `cmd` + the borrowed payload into a message via
-/// [`RynkService::write_topic`](super::RynkService::write_topic).
-///
-/// Holds the payload by value, not by reference — postcard's `Serialize`
-/// requires only `&T`, and these primitive types are cheap to copy.
 pub(crate) enum TopicEvent {
     LayerChange(u8),
     WpmUpdate(u16),
@@ -62,11 +48,6 @@ impl TopicEvent {
     }
 
     /// Write the topic message (header + payload) into `msg` in place.
-    /// After this returns, the full message occupies
-    /// `&msg[..RYNK_HEADER_SIZE + msg.payload_len()]`. Returns
-    /// `Err(InvalidRequest)` if `msg` is shorter than `RYNK_HEADER_SIZE`
-    /// — transports always pass `RYNK_BUFFER_SIZE` buffers, so this is a
-    /// firmware bug in practice.
     pub(crate) fn encode(
         &self,
         service: &super::RynkService<'_>,
@@ -87,10 +68,6 @@ impl TopicEvent {
     }
 }
 
-/// Bundle of subscribers — one per Rynk topic.
-///
-/// Construct once per transport future, then poll [`next_event`] in
-/// the transport's main `select!`.
 pub(crate) struct TopicSubscribers {
     layer: <LayerChangeEvent as SubscribableEvent>::Subscriber,
     wpm: <WpmUpdateEvent as SubscribableEvent>::Subscriber,
@@ -104,9 +81,6 @@ pub(crate) struct TopicSubscribers {
 }
 
 impl TopicSubscribers {
-    /// Create one subscriber per topic. Each call consumes a `subs` slot
-    /// in the underlying PubSubChannel; the `subscriber_default.toml`
-    /// `rynk` entries must reserve one slot per active transport.
     pub(crate) fn new() -> Self {
         Self {
             layer: LayerChangeEvent::subscriber(),
@@ -121,16 +95,8 @@ impl TopicSubscribers {
         }
     }
 
-    /// Wait for any topic to fire and return the matching [`TopicEvent`].
-    ///
-    /// Biased select — earlier arms win when multiple subscribers are
-    /// ready on the same wake. The order below favors keymap/state
-    /// changes (`layer`, `wpm`, `conn`) over passive status pushes.
-    ///
-    /// Side-effect: `WpmUpdate` and `SleepState` latch their payload into
-    /// `ctx` so the matching `GetWpm` / `GetSleepState` handlers can answer
-    /// without re-subscribing. Other topics have producer-side caches
-    /// elsewhere (LED via `current_led_indicator`, connection via `state.rs`).
+    /// Latches `WpmUpdate` / `SleepState` payloads into `ctx` so the matching
+    /// `GetWpm` / `GetSleepState` handlers can answer without re-subscribing.
     pub(crate) async fn next_event(&mut self, ctx: &KeyboardContext<'_>) -> TopicEvent {
         crate::select_biased_with_feature! {
             e = self.layer.next_event().fuse() => TopicEvent::LayerChange((*e).into()),
