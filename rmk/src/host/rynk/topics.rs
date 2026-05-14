@@ -63,12 +63,15 @@ impl TopicEvent {
 
     /// Write the topic message (header + payload) into `msg` in place.
     /// After this returns, the full message occupies
-    /// `&msg[..RYNK_HEADER_SIZE + msg.payload_len()]`.
+    /// `&msg[..RYNK_HEADER_SIZE + msg.payload_len()]`. Returns
+    /// `Err(InvalidRequest)` if `msg` is shorter than `RYNK_HEADER_SIZE`
+    /// — transports always pass `RYNK_BUFFER_SIZE` buffers, so this is a
+    /// firmware bug in practice.
     pub(crate) fn encode(
         &self,
         service: &super::RynkService<'_>,
         msg: &mut [u8],
-    ) {
+    ) -> Result<(), rmk_types::protocol::rynk::RynkError> {
         let cmd = self.cmd();
         match self {
             TopicEvent::LayerChange(v) => service.write_topic(cmd, v, msg),
