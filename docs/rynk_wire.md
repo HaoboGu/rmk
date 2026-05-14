@@ -4,11 +4,11 @@ Dev-facing specification of the binary protocol that runs over USB bulk
 and BLE GATT. Audience: anyone implementing a third-party host
 adapter, or anyone debugging the wire with `xxd`/Wireshark.
 
-## Frame layout
+## Message layout
 
 ```
 ┌───────────────────────────────────────────────┐
-│                   RYNK FRAME                  │
+│                  RYNK MESSAGE                 │
 ├──────────────┬───────────┬────────────────────┤
 │ CMD u16 LE   │ SEQ u8    │ LEN u16 LE         │  ← 5-byte header
 ├──────────────┴───────────┴────────────────────┤
@@ -23,10 +23,11 @@ adapter, or anyone debugging the wire with `xxd`/Wireshark.
 | **LEN** | 2 (LE) | Payload byte count. Bounded by `RYNK_MIN_BUFFER_SIZE - 5`; firmware rejects frames with `LEN > RYNK_BUFFER_SIZE - 5`. |
 | **payload** | LEN | `postcard`-encoded `Request` or `Response`. May be empty. |
 
-Header fields are accessed in place via the `FrameOps` trait
-(`frame.cmd()`, `frame.seq()`, `frame.payload_len()`, plus the matching
-setters). Frame layout and trait live in
-[`rmk-types/src/protocol/rynk/frame.rs`](../rmk-types/src/protocol/rynk/frame.rs)
+Header fields are accessed in place via the `RynkMessage` trait
+(`msg.cmd()`, `msg.seq()`, `msg.payload_len()`, plus the matching
+setters). The trait is implemented on `[u8]` so any byte slice or array
+holding a Rynk message gains the accessors. Layout and trait live in
+[`rmk-types/src/protocol/rynk/message.rs`](../rmk-types/src/protocol/rynk/message.rs)
 and are shared between firmware and `rynk-host`.
 
 ## Cmd table

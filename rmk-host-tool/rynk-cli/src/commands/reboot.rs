@@ -5,10 +5,11 @@ pub async fn run<T: Transport>(client: &mut Client<T>) -> anyhow::Result<()> {
     // The firmware reboots before the response can be read in some cases —
     // either an Ok or a transport disconnect is success.
     match system::reboot(client.transport()).await {
-        Ok(()) | Err(rynk_host::TransportError::Disconnected) | Err(rynk_host::TransportError::Timeout) => {
+        Ok(Ok(())) | Err(rynk_host::TransportError::Disconnected) | Err(rynk_host::TransportError::Timeout) => {
             println!("reboot requested");
             Ok(())
         }
+        Ok(Err(e)) => Err(anyhow::anyhow!("firmware rejected reboot: {e:?}")),
         Err(e) => Err(e.into()),
     }
 }
