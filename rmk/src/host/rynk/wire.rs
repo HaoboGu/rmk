@@ -1,13 +1,14 @@
-//! Transport-trait surface shared by every Rynk handler.
+//! Wire-level transport trait surface used by every Rynk transport.
 //!
-//! `Header` itself (the wire-format struct + encode/decode) lives in
-//! `rmk_types::protocol::rynk::header` so the host crate and the firmware
-//! use the same implementation.
+//! The message layout itself (header accessors, payload sub-slice) lives
+//! in [`rmk_types::protocol::rynk::RynkMessage`]; this module only
+//! defines how a transport pushes assembled bytes onto / pulls them off
+//! the wire.
 
 /// Errors a transport can surface to the dispatch loop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WireErr {
-    /// Frame longer than the configured buffer.
+    /// Message longer than the configured buffer.
     Overflow,
     /// Peer closed the connection (USB unconfigured / BLE disconnected).
     ConnectionClosed,
@@ -15,7 +16,7 @@ pub enum WireErr {
     Io,
 }
 
-/// Transport TX half — writes one fully assembled frame to the wire.
+/// Transport TX half — writes one fully assembled message to the wire.
 ///
 /// The transport is responsible for any wire-level framing the medium
 /// requires (USB short-packet / ZLP convention, BLE MTU chunking). The
@@ -23,14 +24,14 @@ pub enum WireErr {
 /// buffer and expects the call to return only after the bytes have
 /// been accepted.
 pub trait WireTx {
-    async fn send(&mut self, frame: &[u8]) -> Result<(), WireErr>;
+    async fn send(&mut self, msg: &[u8]) -> Result<(), WireErr>;
 }
 
-/// Transport RX half — yields one complete frame at a time.
+/// Transport RX half — yields one complete message at a time.
 ///
 /// Implementations accumulate bytes from the medium until they have
 /// `5 + LEN` bytes (header + payload), then return a slice of `buf`
-/// covering those bytes. Bytes belonging to the next frame stay
+/// covering those bytes. Bytes belonging to the next message stay
 /// buffered inside the transport for the next call.
 pub trait WireRx {
     async fn recv<'b>(&mut self, buf: &'b mut [u8]) -> Result<&'b [u8], WireErr>;
