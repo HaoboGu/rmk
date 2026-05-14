@@ -16,11 +16,7 @@ use super::cmd::Cmd;
 /// Size in bytes of the fixed Rynk header.
 pub const RYNK_HEADER_SIZE: usize = 5;
 
-/// Header-field accessors over an in-place buffer.
-///
-/// Every method validates that the underlying buffer is at least
-/// `RYNK_HEADER_SIZE` bytes long and returns `Err(InvalidRequest)`
-/// otherwise — there's no separate "must verify length first" step.
+/// Message operations for Rynk
 pub trait RynkMessage {
     fn cmd(&self) -> Result<Cmd, RynkError>;
     fn seq(&self) -> Result<u8, RynkError>;
