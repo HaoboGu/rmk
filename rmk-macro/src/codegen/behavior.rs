@@ -133,16 +133,6 @@ fn expand_combos(
     let default = quote! { ::core::default::Default::default() };
     match combos {
         Some(combos) => {
-            let combos_def = combos.combos.iter().map(|combo| {
-                let actions = combo.actions.iter().map(|a| parse_key(a.to_owned(), profiles));
-                let output = parse_key(combo.output.to_owned(), profiles);
-                let layer = match combo.layer {
-                    Some(layer) => quote! { ::core::option::Option::Some(#layer) },
-                    None => quote! { ::core::option::Option::None },
-                };
-                quote! { ::rmk::keyboard::combo::Combo::new(::rmk::keyboard::combo::ComboConfig::new([#(#actions),*], #output, #layer)) }
-            });
-
             let timeout = match &combos.timeout_ms {
                 Some(millis) => {
                     quote! { timeout: ::embassy_time::Duration::from_millis(#millis), }
@@ -157,8 +147,24 @@ fn expand_combos(
                 None => quote! {},
             };
 
-            quote! {
-                ::rmk::config::CombosConfig {
+            // When no combos are defined the `let v = [#(#combos_def),*]` expression
+            // collapses to `let v = []`, which Rust can't type-infer. Emit an
+            // all-`None` array directly in that case.
+            let combos_field = if combos.combos.is_empty() {
+                quote! {
+                    combos: core::array::from_fn(|_| ::core::option::Option::None),
+                }
+            } else {
+                let combos_def = combos.combos.iter().map(|combo| {
+                    let actions = combo.actions.iter().map(|a| parse_key(a.to_owned(), profiles));
+                    let output = parse_key(combo.output.to_owned(), profiles);
+                    let layer = match combo.layer {
+                        Some(layer) => quote! { ::core::option::Option::Some(#layer) },
+                        None => quote! { ::core::option::Option::None },
+                    };
+                    quote! { ::rmk::keyboard::combo::Combo::new(::rmk::keyboard::combo::ComboConfig::new([#(#actions),*], #output, #layer)) }
+                });
+                quote! {
                     combos: {
                         let v = [#(#combos_def),*];
                         core::array::from_fn(|i| {
@@ -169,6 +175,12 @@ fn expand_combos(
                             }
                         })
                     },
+                }
+            };
+
+            quote! {
+                ::rmk::config::CombosConfig {
+                    #combos_field
                     #timeout
                     #prior_idle_time
                     ..Default::default()
@@ -185,6 +197,10 @@ fn expand_macros(macros: &Option<Macros>) -> proc_macro2::TokenStream {
     match macros {
         Some(macros) => {
             let macros_def = macros.macros.iter().map(|m| {
+                if m.operations.is_empty() {
+                    // `[].into_iter().flatten().collect()` cannot infer the element type.
+                    return quote! { ::rmk::heapless::Vec::new() };
+                }
                 let operations = m.operations.iter().map(|op| match op {
                     MacroOperation::Tap { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
