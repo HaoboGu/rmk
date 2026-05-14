@@ -1,0 +1,21 @@
+# Wire-format value snapshot — DO NOT edit by hand.
+# File: snapshots/wire_values.snap
+# Each entry is the postcard byte encoding of a fixed value. A diff here means
+# the wire format changed (either intentionally or by accident). If intentional,
+# bump ProtocolVersion::CURRENT and regenerate:
+#   UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rynk wire_values
+# Format: <label>  <hex bytes>
+
+ConnectionType::Ble                      01
+ConnectionType::Usb                      00
+KeyPosition{layer:0,row:5,col:13}        00 05 0d
+MatrixState{[0x05,0x00,0x20]}            03 05 00 20
+ProtocolVersion{1,0}                     01 00
+Result<(),RynkError>::Err(StorageFault)  01 02
+Result<(),RynkError>::Ok                 00
+RynkError::Internal                      03
+RynkError::InvalidRequest                00
+RynkError::NotReady                      01
+RynkError::StorageFault                  02
+StorageResetMode::Full                   00
+StorageResetMode::LayoutOnly             01
