@@ -1,14 +1,20 @@
 //! Macro endpoints.
 
-use rmk_types::protocol::rynk::{Cmd, GetMacroRequest, MacroData, RynkResult, SetMacroRequest};
+use rmk_types::protocol::rynk::{Cmd, GetMacroRequest, MacroData, SetMacroRequest};
 
+use crate::RynkResult;
 use crate::transport::{Transport, TransportError};
 
 /// Read a chunk of one macro starting at `offset`. A response shorter
 /// than `MACRO_DATA_SIZE` signals the end of the macro.
-pub async fn get_macro<T: Transport>(t: &mut T, index: u8, offset: u16) -> Result<MacroData, TransportError> {
+pub async fn get_macro<T: Transport>(
+    t: &mut T,
+    index: u8,
+    offset: u16,
+) -> Result<RynkResult<MacroData>, TransportError> {
     let req = GetMacroRequest { index, offset };
-    t.request::<GetMacroRequest, MacroData>(Cmd::GetMacro, &req).await
+    t.request::<GetMacroRequest, RynkResult<MacroData>>(Cmd::GetMacro, &req)
+        .await
 }
 
 /// Write a chunk of one macro starting at `offset`. A final chunk shorter

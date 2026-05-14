@@ -1,13 +1,14 @@
 //! Fork endpoints.
 
 use rmk_types::fork::Fork;
-use rmk_types::protocol::rynk::{Cmd, RynkResult, SetForkRequest};
+use rmk_types::protocol::rynk::{Cmd, SetForkRequest};
 
 use crate::transport::{Transport, TransportError};
+use crate::RynkResult;
 
 /// Read one fork entry by index.
-pub async fn get_fork<T: Transport>(t: &mut T, index: u8) -> Result<Fork, TransportError> {
-    t.request::<u8, Fork>(Cmd::GetFork, &index).await
+pub async fn get_fork<T: Transport>(t: &mut T, index: u8) -> Result<RynkResult<Fork>, TransportError> {
+    t.request::<u8, RynkResult<Fork>>(Cmd::GetFork, &index).await
 }
 
 /// Write one fork entry by index.

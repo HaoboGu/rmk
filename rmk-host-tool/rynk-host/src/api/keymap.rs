@@ -1,14 +1,21 @@
 //! Keymap endpoints — keys, default layer, encoders.
 
 use rmk_types::action::{EncoderAction, KeyAction};
-use rmk_types::protocol::rynk::{Cmd, GetEncoderRequest, KeyPosition, RynkResult, SetEncoderRequest, SetKeyRequest};
+use rmk_types::protocol::rynk::{Cmd, GetEncoderRequest, KeyPosition, SetEncoderRequest, SetKeyRequest};
 
+use crate::RynkResult;
 use crate::transport::{Transport, TransportError};
 
 /// Read one key's action.
-pub async fn get_key<T: Transport>(t: &mut T, layer: u8, row: u8, col: u8) -> Result<KeyAction, TransportError> {
+pub async fn get_key<T: Transport>(
+    t: &mut T,
+    layer: u8,
+    row: u8,
+    col: u8,
+) -> Result<RynkResult<KeyAction>, TransportError> {
     let pos = KeyPosition { layer, row, col };
-    t.request::<KeyPosition, KeyAction>(Cmd::GetKeyAction, &pos).await
+    t.request::<KeyPosition, RynkResult<KeyAction>>(Cmd::GetKeyAction, &pos)
+        .await
 }
 
 /// Write one key's action and persist it to flash. Returns the device's
@@ -28,8 +35,8 @@ pub async fn set_key<T: Transport>(
 }
 
 /// Read the currently selected default layer index.
-pub async fn get_default_layer<T: Transport>(t: &mut T) -> Result<u8, TransportError> {
-    t.request::<(), u8>(Cmd::GetDefaultLayer, &()).await
+pub async fn get_default_layer<T: Transport>(t: &mut T) -> Result<RynkResult<u8>, TransportError> {
+    t.request::<(), RynkResult<u8>>(Cmd::GetDefaultLayer, &()).await
 }
 
 /// Set the default layer.
@@ -38,9 +45,13 @@ pub async fn set_default_layer<T: Transport>(t: &mut T, layer: u8) -> Result<Ryn
 }
 
 /// Read both rotation actions for one encoder on one layer.
-pub async fn get_encoder<T: Transport>(t: &mut T, encoder_id: u8, layer: u8) -> Result<EncoderAction, TransportError> {
+pub async fn get_encoder<T: Transport>(
+    t: &mut T,
+    encoder_id: u8,
+    layer: u8,
+) -> Result<RynkResult<EncoderAction>, TransportError> {
     let req = GetEncoderRequest { encoder_id, layer };
-    t.request::<GetEncoderRequest, EncoderAction>(Cmd::GetEncoderAction, &req)
+    t.request::<GetEncoderRequest, RynkResult<EncoderAction>>(Cmd::GetEncoderAction, &req)
         .await
 }
 

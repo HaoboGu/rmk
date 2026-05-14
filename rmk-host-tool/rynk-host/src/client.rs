@@ -1,7 +1,7 @@
 //! Higher-level [`Client`] facade — wraps a [`Transport`] with the handshake
 //! and aggregate operations.
 
-use rmk_types::protocol::rynk::{DeviceCapabilities, ProtocolVersion};
+use rmk_types::protocol::rynk::{DeviceCapabilities, ProtocolVersion, RynkError};
 use thiserror::Error;
 
 use crate::api;
@@ -23,6 +23,8 @@ pub const CLIENT_MAX_MINOR_VERSION: u8 = 0;
 pub enum ConnectError {
     #[error("transport error: {0}")]
     Transport(#[from] TransportError),
+    #[error("firmware rejected handshake request: {0:?}")]
+    FirmwareError(RynkError),
     #[error(
         "protocol version mismatch — firmware reports v{firmware_major}.{firmware_minor}, host supports up to v{host_major}.{host_max_minor}. \
          Regenerate `rynk-host` from a matching `rmk-types` checkout."
@@ -52,10 +54,14 @@ impl<T: Transport> Client<T> {
     /// `rmk-types`, so `ProtocolVersion::major`/`minor` is the only
     /// runtime gate.
     pub async fn connect(mut transport: T) -> Result<Self, ConnectError> {
-        let version = api::system::get_version(&mut transport).await?;
+        let version = api::system::get_version(&mut transport)
+            .await?
+            .map_err(ConnectError::FirmwareError)?;
         Self::check_version(version)?;
 
-        let caps = api::system::get_capabilities(&mut transport).await?;
+        let caps = api::system::get_capabilities(&mut transport)
+            .await?
+            .map_err(ConnectError::FirmwareError)?;
 
         Ok(Self {
             transport,
