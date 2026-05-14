@@ -23,10 +23,10 @@
 
 use strum::FromRepr;
 
-/// Command tag carried in the [`Header`](super::Header) CMD field.
+/// Command tag carried in the header CMD field.
 ///
-/// The wire encoding is a plain `u16 LE` written by `Header::encode_into` —
-/// Cmd is never postcard-encoded, so no `Serialize`/`Deserialize`/`MaxSize`
+/// The wire encoding is a plain `u16 LE` written by [`RynkMessage::set_cmd`](super::RynkMessage::set_cmd) —
+/// `Cmd` is never postcard-encoded, so no `Serialize`/`Deserialize`/`MaxSize`
 /// derives are needed here.
 #[repr(u16)]
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, FromRepr)]
@@ -82,7 +82,6 @@ pub enum Cmd {
 
     // ── Connection (0x07xx) ──
     GetConnectionType = 0x0701,
-    SetConnectionType = 0x0702,
     #[cfg(feature = "_ble")]
     GetBleStatus = 0x0703,
     #[cfg(feature = "_ble")]
@@ -97,6 +96,12 @@ pub enum Cmd {
     GetBatteryStatus = 0x0803,
     #[cfg(all(feature = "_ble", feature = "split"))]
     GetPeripheralStatus = 0x0804,
+    /// Latest WPM, sourced from the `WpmUpdate` topic snapshot.
+    GetWpm = 0x0805,
+    /// Latest sleep flag, sourced from the `SleepState` topic snapshot.
+    GetSleepState = 0x0806,
+    /// Latest HID LED bitmap, sourced from the `LedIndicator` topic snapshot.
+    GetLedIndicator = 0x0807,
 
     // ── Topics (0x80xx, server → host push) ──
     LayerChange = 0x8001,

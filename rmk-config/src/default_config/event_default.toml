@@ -27,17 +27,17 @@ subs = 1
 [event.wpm_update]
 channel_size = 1
 pubs = 1
-subs = 1
+subs = 2
 
 [event.led_indicator]
 channel_size = 2
 pubs = 2
-subs = 3
+subs = 4
 
 [event.sleep_state]
 channel_size = 1
 pubs = 1
-subs = 1
+subs = 2
 
 # Power events
 [event.battery_status]

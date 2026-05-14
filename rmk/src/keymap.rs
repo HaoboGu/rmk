@@ -591,6 +591,11 @@ impl<'a> KeyMap<'a> {
         f(&inner.behavior.fork.forks)
     }
 
+    pub(crate) fn with_forks_mut<R>(&self, f: impl FnOnce(&mut [Fork]) -> R) -> R {
+        let mut inner = self.inner.borrow_mut();
+        f(&mut inner.behavior.fork.forks)
+    }
+
     pub(crate) fn with_combos<R>(&self, f: impl FnOnce(&[Option<Combo>]) -> R) -> R {
         let inner = self.inner.borrow();
         f(&inner.behavior.combo.combos)

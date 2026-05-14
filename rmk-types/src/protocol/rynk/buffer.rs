@@ -114,7 +114,7 @@ pub const RYNK_MAX_PAYLOAD: usize = {
     m
 };
 
-/// Minimum buffer size required to hold any single Rynk frame
+/// Minimum buffer size required to hold any single Rynk message
 /// (header + max-payload). User-configured `RYNK_BUFFER_SIZE` must
 /// not be smaller than this.
 pub const RYNK_MIN_BUFFER_SIZE: usize = RYNK_HEADER_SIZE + RYNK_MAX_PAYLOAD;

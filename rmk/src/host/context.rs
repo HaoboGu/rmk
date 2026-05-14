@@ -1,22 +1,14 @@
-//! Shared façade for host-facing services (Vial today, Rynk next).
-//!
-//! Bundles every keymap mutation with its flash persistence so callers don't
-//! repeat `keymap.X(); FLASH_CHANNEL.send(FlashOperationMessage::Y).await`
-//! by hand, and exposes synchronous reads of live keyboard state (LED,
-//! battery, connection, active layer) that are otherwise scattered across
-//! module-private statics.
-//!
-//! The context does not subscribe to events — the underlying statics it
-//! reads from are kept in sync by the relevant event handlers
-//! (`BatteryProcessor::commit`, `state.rs::update_status`,
-//! `keyboard::run_led_reader`).
+//! Shared context for host-facing services (Vial today, Rynk next).
+
+use core::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 
 use embassy_time::Duration;
 use rmk_types::action::{EncoderAction, KeyAction};
 #[cfg(feature = "_ble")]
 use rmk_types::battery::BatteryStatus;
 use rmk_types::combo::Combo as ComboConfig;
-use rmk_types::connection::ConnectionStatus;
+use rmk_types::connection::{ConnectionStatus, ConnectionType};
+use rmk_types::fork::Fork;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::morse::{Morse, MorseProfile};
 
@@ -26,18 +18,20 @@ use crate::keymap::KeyMap;
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 
-/// Façade shared between Vial and Rynk host services.
-///
-/// `keymap` is intentionally `pub`: callers like `VialLock` that only need a
-/// raw `&KeyMap` keep their existing parameter and read it through
-/// `ctx.keymap` at the construction site.
+/// Context shared between Vial and Rynk host services.
 pub struct KeyboardContext<'a> {
     pub keymap: &'a KeyMap<'a>,
+    latest_wpm: AtomicU16,
+    latest_sleep: AtomicBool,
 }
 
 impl<'a> KeyboardContext<'a> {
     pub fn new(keymap: &'a KeyMap<'a>) -> Self {
-        Self { keymap }
+        Self {
+            keymap,
+            latest_wpm: AtomicU16::new(0),
+            latest_sleep: AtomicBool::new(false),
+        }
     }
 
     // ── Keymap operations ────────────────────────────────────────────────
@@ -81,7 +75,11 @@ impl<'a> KeyboardContext<'a> {
         self.keymap.set_action_by_flat_index(index, action);
         #[cfg(feature = "storage")]
         {
-            let (row, col, layer) = position_from_flat_index(index, rows, cols);
+            let layer_size = rows * cols;
+            let layer = index / layer_size;
+            let layer_offset = index % layer_size;
+            let row = layer_offset / cols;
+            let col = layer_offset % cols;
             if FLASH_CHANNEL
                 .try_send(FlashOperationMessage::KeymapKey {
                     layer: layer as u8,
@@ -191,7 +189,7 @@ impl<'a> KeyboardContext<'a> {
         let _ = config;
     }
 
-    // ── Morses (Vial: tap-dance) ─────────────────────────────────────────
+    // ── Morses ─────────────────────────────────────────
 
     pub fn get_morse(&self, idx: u8) -> Option<Morse> {
         self.keymap.get_morse(idx as usize)
@@ -318,8 +316,60 @@ impl<'a> KeyboardContext<'a> {
         self.keymap.active_layer()
     }
 
+    pub fn wpm(&self) -> u16 {
+        self.latest_wpm.load(Ordering::Relaxed)
+    }
+
+    pub fn sleep_state(&self) -> bool {
+        self.latest_sleep.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn cache_wpm(&self, v: u16) {
+        self.latest_wpm.store(v, Ordering::Relaxed);
+    }
+
+    pub(crate) fn cache_sleep(&self, v: bool) {
+        self.latest_sleep.store(v, Ordering::Relaxed);
+    }
+
     pub fn default_layer(&self) -> u8 {
         self.keymap.get_default_layer()
+    }
+
+    pub async fn set_default_layer(&self, layer: u8) {
+        self.keymap.set_default_layer(layer);
+        #[cfg(feature = "storage")]
+        FLASH_CHANNEL.send(FlashOperationMessage::DefaultLayer(layer)).await;
+    }
+
+    // ── Connection ───────────────────────────────────────────────────────
+
+    /// Tiebreaker connection currently chosen as preferred — independent
+    /// of which transport is actively routable.
+    pub fn preferred_connection(&self) -> ConnectionType {
+        crate::state::current_connection_status().preferred
+    }
+
+    // ── Forks ────────────────────────────────────────────────────────────
+
+    pub fn get_fork(&self, idx: u8) -> Option<Fork> {
+        self.keymap.with_forks(|forks| forks.get(idx as usize).copied())
+    }
+
+    pub async fn set_fork(&self, idx: u8, fork: Fork) {
+        let valid = self.keymap.with_forks_mut(|forks| {
+            if let Some(slot) = forks.get_mut(idx as usize) {
+                *slot = fork;
+                true
+            } else {
+                false
+            }
+        });
+        if !valid {
+            return;
+        }
+        #[cfg(feature = "storage")]
+        FLASH_CHANNEL.send(FlashOperationMessage::Fork { idx, fork }).await;
     }
 
     // ── Matrix state (host_security) ─────────────────────────────────────
@@ -328,15 +378,4 @@ impl<'a> KeyboardContext<'a> {
     pub fn read_matrix_state(&self, target: &mut [u8]) {
         self.keymap.read_matrix_state(target);
     }
-}
-
-/// Map a flat keymap index back to `(row, col, layer)`.
-///
-/// Layout: `index = layer * (rows * cols) + row * cols + col`.
-fn position_from_flat_index(index: usize, rows: usize, cols: usize) -> (usize, usize, usize) {
-    let layer = index / (cols * rows);
-    let layer_offset = index % (cols * rows);
-    let row = layer_offset / cols;
-    let col = layer_offset % cols;
-    (row, col, layer)
 }
