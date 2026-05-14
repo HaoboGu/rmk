@@ -93,71 +93,71 @@ impl<'a> RynkService<'a> {
 
         let handler_result: Result<usize, RynkError> = match cmd {
             // ── System ──
-            Cmd::GetVersion => self.handle_get_version(msg.payload_mut()).await,
-            Cmd::GetCapabilities => self.handle_get_capabilities(msg.payload_mut()).await,
-            Cmd::Reboot => self.handle_reboot(msg.payload_mut()).await,
-            Cmd::BootloaderJump => self.handle_bootloader_jump(msg.payload_mut()).await,
-            Cmd::StorageReset => self.handle_storage_reset(msg.payload_mut()).await,
+            Cmd::GetVersion => self.handle_get_version(msg.payload_mut()?).await,
+            Cmd::GetCapabilities => self.handle_get_capabilities(msg.payload_mut()?).await,
+            Cmd::Reboot => self.handle_reboot(msg.payload_mut()?).await,
+            Cmd::BootloaderJump => self.handle_bootloader_jump(msg.payload_mut()?).await,
+            Cmd::StorageReset => self.handle_storage_reset(msg.payload_mut()?).await,
 
             // ── Keymap (incl. encoder) ──
-            Cmd::GetKeyAction => self.handle_get_key_action(msg.payload_mut()).await,
-            Cmd::SetKeyAction => self.handle_set_key_action(msg.payload_mut()).await,
-            Cmd::GetDefaultLayer => self.handle_get_default_layer(msg.payload_mut()).await,
-            Cmd::SetDefaultLayer => self.handle_set_default_layer(msg.payload_mut()).await,
-            Cmd::GetEncoderAction => self.handle_get_encoder_action(msg.payload_mut()).await,
-            Cmd::SetEncoderAction => self.handle_set_encoder_action(msg.payload_mut()).await,
+            Cmd::GetKeyAction => self.handle_get_key_action(msg.payload_mut()?).await,
+            Cmd::SetKeyAction => self.handle_set_key_action(msg.payload_mut()?).await,
+            Cmd::GetDefaultLayer => self.handle_get_default_layer(msg.payload_mut()?).await,
+            Cmd::SetDefaultLayer => self.handle_set_default_layer(msg.payload_mut()?).await,
+            Cmd::GetEncoderAction => self.handle_get_encoder_action(msg.payload_mut()?).await,
+            Cmd::SetEncoderAction => self.handle_set_encoder_action(msg.payload_mut()?).await,
             #[cfg(feature = "bulk_transfer")]
-            Cmd::GetKeymapBulk => self.handle_get_keymap_bulk(msg.payload_mut()).await,
+            Cmd::GetKeymapBulk => self.handle_get_keymap_bulk(msg.payload_mut()?).await,
             #[cfg(feature = "bulk_transfer")]
-            Cmd::SetKeymapBulk => self.handle_set_keymap_bulk(msg.payload_mut()).await,
+            Cmd::SetKeymapBulk => self.handle_set_keymap_bulk(msg.payload_mut()?).await,
 
             // ── Macro ──
-            Cmd::GetMacro => self.handle_get_macro(msg.payload_mut()).await,
-            Cmd::SetMacro => self.handle_set_macro(msg.payload_mut()).await,
+            Cmd::GetMacro => self.handle_get_macro(msg.payload_mut()?).await,
+            Cmd::SetMacro => self.handle_set_macro(msg.payload_mut()?).await,
 
             // ── Combo ──
-            Cmd::GetCombo => self.handle_get_combo(msg.payload_mut()).await,
-            Cmd::SetCombo => self.handle_set_combo(msg.payload_mut()).await,
+            Cmd::GetCombo => self.handle_get_combo(msg.payload_mut()?).await,
+            Cmd::SetCombo => self.handle_set_combo(msg.payload_mut()?).await,
             #[cfg(feature = "bulk_transfer")]
-            Cmd::GetComboBulk => self.handle_get_combo_bulk(msg.payload_mut()).await,
+            Cmd::GetComboBulk => self.handle_get_combo_bulk(msg.payload_mut()?).await,
             #[cfg(feature = "bulk_transfer")]
-            Cmd::SetComboBulk => self.handle_set_combo_bulk(msg.payload_mut()).await,
+            Cmd::SetComboBulk => self.handle_set_combo_bulk(msg.payload_mut()?).await,
 
             // ── Morse ──
-            Cmd::GetMorse => self.handle_get_morse(msg.payload_mut()).await,
-            Cmd::SetMorse => self.handle_set_morse(msg.payload_mut()).await,
+            Cmd::GetMorse => self.handle_get_morse(msg.payload_mut()?).await,
+            Cmd::SetMorse => self.handle_set_morse(msg.payload_mut()?).await,
             #[cfg(feature = "bulk_transfer")]
-            Cmd::GetMorseBulk => self.handle_get_morse_bulk(msg.payload_mut()).await,
+            Cmd::GetMorseBulk => self.handle_get_morse_bulk(msg.payload_mut()?).await,
             #[cfg(feature = "bulk_transfer")]
-            Cmd::SetMorseBulk => self.handle_set_morse_bulk(msg.payload_mut()).await,
+            Cmd::SetMorseBulk => self.handle_set_morse_bulk(msg.payload_mut()?).await,
 
             // ── Fork ──
-            Cmd::GetFork => self.handle_get_fork(msg.payload_mut()).await,
-            Cmd::SetFork => self.handle_set_fork(msg.payload_mut()).await,
+            Cmd::GetFork => self.handle_get_fork(msg.payload_mut()?).await,
+            Cmd::SetFork => self.handle_set_fork(msg.payload_mut()?).await,
 
             // ── Behavior ──
-            Cmd::GetBehaviorConfig => self.handle_get_behavior_config(msg.payload_mut()).await,
-            Cmd::SetBehaviorConfig => self.handle_set_behavior_config(msg.payload_mut()).await,
+            Cmd::GetBehaviorConfig => self.handle_get_behavior_config(msg.payload_mut()?).await,
+            Cmd::SetBehaviorConfig => self.handle_set_behavior_config(msg.payload_mut()?).await,
 
             // ── Connection ──
-            Cmd::GetConnectionType => self.handle_get_connection_type(msg.payload_mut()).await,
+            Cmd::GetConnectionType => self.handle_get_connection_type(msg.payload_mut()?).await,
             #[cfg(feature = "_ble")]
-            Cmd::GetBleStatus => self.handle_get_ble_status(msg.payload_mut()).await,
+            Cmd::GetBleStatus => self.handle_get_ble_status(msg.payload_mut()?).await,
             #[cfg(feature = "_ble")]
-            Cmd::SwitchBleProfile => self.handle_switch_ble_profile(msg.payload_mut()).await,
+            Cmd::SwitchBleProfile => self.handle_switch_ble_profile(msg.payload_mut()?).await,
             #[cfg(feature = "_ble")]
-            Cmd::ClearBleProfile => self.handle_clear_ble_profile(msg.payload_mut()).await,
+            Cmd::ClearBleProfile => self.handle_clear_ble_profile(msg.payload_mut()?).await,
 
             // ── Status ──
-            Cmd::GetCurrentLayer => self.handle_get_current_layer(msg.payload_mut()).await,
-            Cmd::GetMatrixState => self.handle_get_matrix_state(msg.payload_mut()).await,
+            Cmd::GetCurrentLayer => self.handle_get_current_layer(msg.payload_mut()?).await,
+            Cmd::GetMatrixState => self.handle_get_matrix_state(msg.payload_mut()?).await,
             #[cfg(feature = "_ble")]
-            Cmd::GetBatteryStatus => self.handle_get_battery_status(msg.payload_mut()).await,
+            Cmd::GetBatteryStatus => self.handle_get_battery_status(msg.payload_mut()?).await,
             #[cfg(all(feature = "_ble", feature = "split"))]
-            Cmd::GetPeripheralStatus => self.handle_get_peripheral_status(msg.payload_mut()).await,
-            Cmd::GetWpm => self.handle_get_wpm(msg.payload_mut()).await,
-            Cmd::GetSleepState => self.handle_get_sleep_state(msg.payload_mut()).await,
-            Cmd::GetLedIndicator => self.handle_get_led_indicator(msg.payload_mut()).await,
+            Cmd::GetPeripheralStatus => self.handle_get_peripheral_status(msg.payload_mut()?).await,
+            Cmd::GetWpm => self.handle_get_wpm(msg.payload_mut()?).await,
+            Cmd::GetSleepState => self.handle_get_sleep_state(msg.payload_mut()?).await,
+            Cmd::GetLedIndicator => self.handle_get_led_indicator(msg.payload_mut()?).await,
 
             // Topic CMDs — host shouldn't be sending these.
             Cmd::LayerChange | Cmd::WpmUpdate | Cmd::ConnectionChange | Cmd::SleepState | Cmd::LedIndicator => {
@@ -173,27 +173,29 @@ impl<'a> RynkService<'a> {
             Ok(n) => n,
             Err(e) => {
                 let envelope: Result<(), RynkError> = Err(e);
-                postcard::to_slice(&envelope, msg.payload_mut())
+                postcard::to_slice(&envelope, msg.payload_mut()?)
                     .map(|s| s.len())
                     .unwrap_or(0)
             }
         };
-        msg.set_payload_len(payload_len as u16);
+        msg.set_payload_len(payload_len as u16)?;
         Ok(())
     }
 
     /// Build a topic message in `msg`: writes the header (cmd, seq=0,
     /// payload_len) and the postcard-encoded payload. The full message
     /// occupies `&msg[..RYNK_HEADER_SIZE + msg.payload_len()]`
-    /// after this returns. No-op silent on `cmd` being a non-topic — the
-    /// debug assertion catches the bug in dev builds.
-    pub fn write_topic<T: serde::Serialize>(&self, cmd: Cmd, value: &T, msg: &mut [u8]) {
+    /// after this returns. Returns `Err(InvalidRequest)` if `msg` is
+    /// shorter than `RYNK_HEADER_SIZE`; the debug assertion catches a
+    /// non-topic `cmd` in dev builds.
+    pub fn write_topic<T: serde::Serialize>(&self, cmd: Cmd, value: &T, msg: &mut [u8]) -> Result<(), RynkError> {
         debug_assert!(cmd.is_topic(), "write_topic called with non-topic cmd");
-        msg.set_cmd(cmd);
-        msg.set_seq(0);
-        let n = postcard::to_slice(value, msg.payload_mut())
+        msg.set_cmd(cmd)?;
+        msg.set_seq(0)?;
+        let n = postcard::to_slice(value, msg.payload_mut()?)
             .map(|s| s.len())
             .unwrap_or(0);
-        msg.set_payload_len(n as u16);
+        msg.set_payload_len(n as u16)?;
+        Ok(())
     }
 }
