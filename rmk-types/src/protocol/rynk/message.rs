@@ -3,17 +3,12 @@
 //! Fixed 5-byte header followed by a postcard-encoded payload:
 //!
 //! ```text
-//! ┌──────────────┬───────────┬────────────────────┐
-//! │ CMD u16 LE   │ SEQ u8    │ LEN u16 LE         │  ← 5-byte header
-//! └──────────────┴───────────┴────────────────────┘
-//! │                       payload bytes                       │
+//! ┌──────────────┬───────┬──────────────┐
+//! │  CMD u16 LE  │SEQ u8 │  LEN u16 LE  │  ← 5-byte header
+//! ├──────────────┴───────┴──────────────┤
+//! │          payload bytes ...          │
+//! └─────────────────────────────────────┘
 //! ```
-//!
-//! [`RynkMessage`] is implemented on `[u8]`, so any byte slice (or
-//! `[u8; N]` via auto-deref) holding a Rynk message gains typed accessors
-//! for the header fields and the payload sub-slice. Firmware and host
-//! both operate on the bytes in place rather than through a parsed
-//! `struct`.
 
 use super::RynkError;
 use super::cmd::Cmd;
@@ -23,20 +18,19 @@ pub const RYNK_HEADER_SIZE: usize = 5;
 
 /// Header-field accessors over an in-place buffer.
 ///
-/// `cmd()` validates the CMD discriminant against the compiled-in [`Cmd`]
-/// enum and checks the buffer length, so it's the safe first call on a
-/// fresh buffer. The other accessors assume `msg.len() >= RYNK_HEADER_SIZE`
-/// — verify that yourself (e.g. via `cmd()`) before calling them.
+/// Every method validates that the underlying buffer is at least
+/// `RYNK_HEADER_SIZE` bytes long and returns `Err(InvalidRequest)`
+/// otherwise — there's no separate "must verify length first" step.
 pub trait RynkMessage {
     fn cmd(&self) -> Result<Cmd, RynkError>;
-    fn seq(&self) -> u8;
-    fn payload_len(&self) -> u16;
-    fn payload(&self) -> &[u8];
-    fn payload_mut(&mut self) -> &mut [u8];
+    fn seq(&self) -> Result<u8, RynkError>;
+    fn payload_len(&self) -> Result<u16, RynkError>;
+    fn payload(&self) -> Result<&[u8], RynkError>;
+    fn payload_mut(&mut self) -> Result<&mut [u8], RynkError>;
 
-    fn set_cmd(&mut self, cmd: Cmd);
-    fn set_seq(&mut self, seq: u8);
-    fn set_payload_len(&mut self, len: u16);
+    fn set_cmd(&mut self, cmd: Cmd) -> Result<(), RynkError>;
+    fn set_seq(&mut self, seq: u8) -> Result<(), RynkError>;
+    fn set_payload_len(&mut self, len: u16) -> Result<(), RynkError>;
 }
 
 impl RynkMessage for [u8] {
@@ -47,32 +41,56 @@ impl RynkMessage for [u8] {
         Cmd::from_repr(u16::from_le_bytes([self[0], self[1]])).ok_or(RynkError::InvalidRequest)
     }
 
-    fn seq(&self) -> u8 {
-        self[2]
+    fn seq(&self) -> Result<u8, RynkError> {
+        if self.len() < RYNK_HEADER_SIZE {
+            return Err(RynkError::InvalidRequest);
+        }
+        Ok(self[2])
     }
 
-    fn payload_len(&self) -> u16 {
-        u16::from_le_bytes([self[3], self[4]])
+    fn payload_len(&self) -> Result<u16, RynkError> {
+        if self.len() < RYNK_HEADER_SIZE {
+            return Err(RynkError::InvalidRequest);
+        }
+        Ok(u16::from_le_bytes([self[3], self[4]]))
     }
 
-    fn payload(&self) -> &[u8] {
-        &self[RYNK_HEADER_SIZE..]
+    fn payload(&self) -> Result<&[u8], RynkError> {
+        if self.len() < RYNK_HEADER_SIZE {
+            return Err(RynkError::InvalidRequest);
+        }
+        Ok(&self[RYNK_HEADER_SIZE..])
     }
 
-    fn payload_mut(&mut self) -> &mut [u8] {
-        &mut self[RYNK_HEADER_SIZE..]
+    fn payload_mut(&mut self) -> Result<&mut [u8], RynkError> {
+        if self.len() < RYNK_HEADER_SIZE {
+            return Err(RynkError::InvalidRequest);
+        }
+        Ok(&mut self[RYNK_HEADER_SIZE..])
     }
 
-    fn set_cmd(&mut self, cmd: Cmd) {
+    fn set_cmd(&mut self, cmd: Cmd) -> Result<(), RynkError> {
+        if self.len() < RYNK_HEADER_SIZE {
+            return Err(RynkError::InvalidRequest);
+        }
         self[0..2].copy_from_slice(&(cmd as u16).to_le_bytes());
+        Ok(())
     }
 
-    fn set_seq(&mut self, seq: u8) {
+    fn set_seq(&mut self, seq: u8) -> Result<(), RynkError> {
+        if self.len() < RYNK_HEADER_SIZE {
+            return Err(RynkError::InvalidRequest);
+        }
         self[2] = seq;
+        Ok(())
     }
 
-    fn set_payload_len(&mut self, len: u16) {
+    fn set_payload_len(&mut self, len: u16) -> Result<(), RynkError> {
+        if self.len() < RYNK_HEADER_SIZE {
+            return Err(RynkError::InvalidRequest);
+        }
         self[3..5].copy_from_slice(&len.to_le_bytes());
+        Ok(())
     }
 }
 
@@ -83,15 +101,15 @@ mod tests {
     #[test]
     fn round_trip_header_fields() {
         let mut buf = [0u8; RYNK_HEADER_SIZE + 7];
-        buf.set_cmd(Cmd::GetVersion);
-        buf.set_seq(0x42);
-        buf.set_payload_len(7);
-        buf.payload_mut()[..7].copy_from_slice(&[1, 2, 3, 4, 5, 6, 7]);
+        buf.set_cmd(Cmd::GetVersion).unwrap();
+        buf.set_seq(0x42).unwrap();
+        buf.set_payload_len(7).unwrap();
+        buf.payload_mut().unwrap()[..7].copy_from_slice(&[1, 2, 3, 4, 5, 6, 7]);
 
         assert_eq!(buf.cmd().unwrap(), Cmd::GetVersion);
-        assert_eq!(buf.seq(), 0x42);
-        assert_eq!(buf.payload_len(), 7);
-        assert_eq!(buf.payload(), &[1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(buf.seq().unwrap(), 0x42);
+        assert_eq!(buf.payload_len().unwrap(), 7);
+        assert_eq!(buf.payload().unwrap(), &[1, 2, 3, 4, 5, 6, 7]);
     }
 
     #[test]
@@ -105,5 +123,17 @@ mod tests {
         let mut buf = [0u8; RYNK_HEADER_SIZE];
         buf[0..2].copy_from_slice(&0xFFFFu16.to_le_bytes());
         assert_eq!(buf.cmd(), Err(RynkError::InvalidRequest));
+    }
+
+    #[test]
+    fn every_accessor_rejects_short_buffer() {
+        let mut buf = [0u8; RYNK_HEADER_SIZE - 1];
+        assert_eq!(buf.seq(), Err(RynkError::InvalidRequest));
+        assert_eq!(buf.payload_len(), Err(RynkError::InvalidRequest));
+        assert!(buf.payload().is_err());
+        assert!(buf.payload_mut().is_err());
+        assert_eq!(buf.set_cmd(Cmd::GetVersion), Err(RynkError::InvalidRequest));
+        assert_eq!(buf.set_seq(0), Err(RynkError::InvalidRequest));
+        assert_eq!(buf.set_payload_len(0), Err(RynkError::InvalidRequest));
     }
 }
