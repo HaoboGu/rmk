@@ -16,6 +16,6 @@ pub use rynk::RYNK_BLE_CHUNK_SIZE;
 #[cfg(all(feature = "rynk", not(feature = "_no_usb")))]
 pub use rynk::{RYNK_USB_MAX_PACKET_SIZE, RynkUsbTransport};
 #[cfg(feature = "rynk")]
-pub use rynk::RynkService;
+pub use rynk::{RynkService, write_error_response};
 #[cfg(feature = "vial")]
 pub use via::VialService as HostService;
