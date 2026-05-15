@@ -5,18 +5,18 @@
 use futures::FutureExt;
 #[cfg(feature = "_ble")]
 use rmk_types::battery::BatteryStatus;
-#[cfg(feature = "_ble")]
-use rmk_types::ble::BleStatus;
 use rmk_types::connection::ConnectionStatus;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::protocol::rynk::Cmd;
 
 #[cfg(feature = "_ble")]
-use crate::event::{BatteryStatusEvent, BleStatusChangeEvent};
+use crate::event::BatteryStatusEvent;
 use crate::event::{
     ConnectionStatusChangeEvent, EventSubscriber, LayerChangeEvent, LedIndicatorEvent, SleepStateEvent,
     SubscribableEvent, WpmUpdateEvent,
 };
+#[cfg(feature = "split")]
+use crate::event::{PeripheralBatteryEvent, PeripheralConnectedEvent};
 use crate::host::context::KeyboardContext;
 
 pub(crate) enum TopicEvent {
@@ -27,8 +27,6 @@ pub(crate) enum TopicEvent {
     LedIndicator(LedIndicator),
     #[cfg(feature = "_ble")]
     BatteryStatus(BatteryStatus),
-    #[cfg(feature = "_ble")]
-    BleStatusChange(BleStatus),
 }
 
 impl TopicEvent {
@@ -42,8 +40,6 @@ impl TopicEvent {
             TopicEvent::LedIndicator(_) => Cmd::LedIndicator,
             #[cfg(feature = "_ble")]
             TopicEvent::BatteryStatus(_) => Cmd::BatteryStatusTopic,
-            #[cfg(feature = "_ble")]
-            TopicEvent::BleStatusChange(_) => Cmd::BleStatusChangeTopic,
         }
     }
 
@@ -62,8 +58,6 @@ impl TopicEvent {
             TopicEvent::LedIndicator(v) => service.write_topic(cmd, v, msg),
             #[cfg(feature = "_ble")]
             TopicEvent::BatteryStatus(v) => service.write_topic(cmd, v, msg),
-            #[cfg(feature = "_ble")]
-            TopicEvent::BleStatusChange(v) => service.write_topic(cmd, v, msg),
         }
     }
 }
@@ -76,8 +70,13 @@ pub(crate) struct TopicSubscribers {
     led: <LedIndicatorEvent as SubscribableEvent>::Subscriber,
     #[cfg(feature = "_ble")]
     battery: <BatteryStatusEvent as SubscribableEvent>::Subscriber,
-    #[cfg(feature = "_ble")]
-    ble_status: <BleStatusChangeEvent as SubscribableEvent>::Subscriber,
+    /// Cache-only: feeds `KeyboardContext::peripheral_status` snapshots so
+    /// `Cmd::GetPeripheralStatus` can answer synchronously. Not surfaced as
+    /// a Rynk topic on the wire.
+    #[cfg(feature = "split")]
+    peri_connected: <PeripheralConnectedEvent as SubscribableEvent>::Subscriber,
+    #[cfg(feature = "split")]
+    peri_battery: <PeripheralBatteryEvent as SubscribableEvent>::Subscriber,
 }
 
 impl TopicSubscribers {
@@ -90,30 +89,46 @@ impl TopicSubscribers {
             led: LedIndicatorEvent::subscriber(),
             #[cfg(feature = "_ble")]
             battery: BatteryStatusEvent::subscriber(),
-            #[cfg(feature = "_ble")]
-            ble_status: BleStatusChangeEvent::subscriber(),
+            #[cfg(feature = "split")]
+            peri_connected: PeripheralConnectedEvent::subscriber(),
+            #[cfg(feature = "split")]
+            peri_battery: PeripheralBatteryEvent::subscriber(),
         }
     }
 
-    /// Latches `WpmUpdate` / `SleepState` payloads into `ctx` so the matching
-    /// `GetWpm` / `GetSleepState` handlers can answer without re-subscribing.
+    /// Latches `WpmUpdate` / `SleepState` / `PeripheralConnected` /
+    /// `PeripheralBattery` payloads into `ctx` so the matching `Get*` handlers
+    /// can answer without re-subscribing. Loops internally on cache-only
+    /// arms so it only returns when a real wire-visible topic fires.
     pub(crate) async fn next_event(&mut self, ctx: &KeyboardContext<'_>) -> TopicEvent {
-        crate::select_biased_with_feature! {
-            e = self.layer.next_event().fuse() => TopicEvent::LayerChange((*e).into()),
-            e = self.wpm.next_event().fuse() => {
-                let v: u16 = (*e).into();
-                ctx.cache_wpm(v);
-                TopicEvent::WpmUpdate(v)
-            },
-            e = self.conn.next_event().fuse() => TopicEvent::ConnectionChange((*e).into()),
-            e = self.sleep.next_event().fuse() => {
-                let v: bool = (*e).into();
-                ctx.cache_sleep(v);
-                TopicEvent::SleepState(v)
-            },
-            e = self.led.next_event().fuse() => TopicEvent::LedIndicator((*e).into()),
-            with_feature("_ble"): e = self.battery.next_event().fuse() => TopicEvent::BatteryStatus((*e).into()),
-            with_feature("_ble"): e = self.ble_status.next_event().fuse() => TopicEvent::BleStatusChange((*e).into()),
+        loop {
+            let next: Option<TopicEvent> = crate::select_biased_with_feature! {
+                e = self.layer.next_event().fuse() => Some(TopicEvent::LayerChange((*e).into())),
+                e = self.wpm.next_event().fuse() => {
+                    let v: u16 = (*e).into();
+                    ctx.set_wpm(v);
+                    Some(TopicEvent::WpmUpdate(v))
+                },
+                e = self.conn.next_event().fuse() => Some(TopicEvent::ConnectionChange((*e).into())),
+                e = self.sleep.next_event().fuse() => {
+                    let v: bool = (*e).into();
+                    ctx.set_sleep(v);
+                    Some(TopicEvent::SleepState(v))
+                },
+                e = self.led.next_event().fuse() => Some(TopicEvent::LedIndicator((*e).into())),
+                with_feature("_ble"): e = self.battery.next_event().fuse() => Some(TopicEvent::BatteryStatus((*e).into())),
+                with_feature("split"): e = self.peri_connected.next_event().fuse() => {
+                    ctx.set_peripheral_connected(e.id, e.connected);
+                    None
+                },
+                with_feature("split"): e = self.peri_battery.next_event().fuse() => {
+                    ctx.set_peripheral_battery(e.id, e.state.0);
+                    None
+                },
+            };
+            if let Some(t) = next {
+                return t;
+            }
         }
     }
 }

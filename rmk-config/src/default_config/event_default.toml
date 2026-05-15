@@ -65,7 +65,7 @@ subs = 2
 [event.peripheral_connected]
 channel_size = 1
 pubs = 1
-subs = 1
+subs = 2
 
 [event.central_connected]
 channel_size = 1
@@ -75,7 +75,7 @@ subs = 1
 [event.peripheral_battery]
 channel_size = 2
 pubs = 1
-subs = 2
+subs = 3
 
 [event.clear_peer]
 channel_size = 1

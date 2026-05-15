@@ -11,10 +11,14 @@ use crate::hid::{CompositeReport, CompositeReportType, HidError, HidWriterTrait,
 // per-connection client-specific attribute buffer size.
 pub(crate) const CCCD_TABLE_SIZE: usize = trouble_host::config::CLIENT_ATT_TABLE_SIZE;
 
+#[cfg(feature = "rynk")]
+use crate::host::rynk::RYNK_BLE_CHUNK_SIZE;
+
 // `gatt_server` compiles every member regardless of the surrounding `cfg` —
 // gating an individual field with `#[cfg(feature = "host")]` doesn't work. So
-// the whole struct is duplicated, with and without `host_service`.
-#[cfg(feature = "host")]
+// the whole struct is duplicated, with and without `host_service`. Likewise
+// the Rynk service forces a third variant.
+#[cfg(all(feature = "host", not(feature = "rynk")))]
 #[gatt_server]
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
@@ -22,6 +26,36 @@ pub(crate) struct Server {
     pub(crate) host_service: VialService,
     pub(crate) composite_service: CompositeService,
     pub(crate) device_config_service: DeviceConfigurationService,
+}
+
+#[cfg(all(feature = "host", feature = "rynk"))]
+#[gatt_server]
+pub(crate) struct Server {
+    pub(crate) battery_service: BatteryService,
+    pub(crate) hid_service: HidService,
+    pub(crate) host_service: VialService,
+    pub(crate) rynk_service: RynkService,
+    pub(crate) composite_service: CompositeService,
+    pub(crate) device_config_service: DeviceConfigurationService,
+}
+
+/// Rynk-over-GATT transport. The host writes request chunks to `output_data`;
+/// the firmware replies via `input_data` notify. Variable-length values use
+/// `heapless::Vec` so each notify only spends MTU − 3 bytes for the bytes it
+/// actually carries (a fixed `[u8; N]` would always send N).
+///
+/// `gatt_events_task` forwards `output_data` writes into
+/// [`crate::channel::RYNK_RX_CHANNEL`] for `run_ble_rynk` to drain, and signals
+/// [`crate::channel::BLE_RYNK_READY`] once the host subscribes to
+/// `input_data` notifications.
+#[cfg(feature = "rynk")]
+#[gatt_service(uuid = "10900067-537f-4f0a-9b55-929e271f61ab")]
+pub(crate) struct RynkService {
+    #[descriptor(uuid = "2908", read, value = [0u8, 1u8])]
+    #[characteristic(uuid = "80f9319b-0c74-43a5-9738-c59d6dda3db9", read, notify)]
+    pub(crate) input_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
+    #[characteristic(uuid = "19802524-6f90-4346-93c2-63dbc509ab55", read, write, write_without_response)]
+    pub(crate) output_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
 }
 
 /// GATT service exposing the Vial-over-HID protocol. The keyboard writes replies via
