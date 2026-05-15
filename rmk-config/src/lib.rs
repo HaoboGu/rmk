@@ -803,7 +803,7 @@ pub struct SerialConfig {
 
 /// Duration in milliseconds
 #[derive(Clone, Debug, Deserialize)]
-pub(crate) struct DurationMillis(#[serde(deserialize_with = "parse_duration_millis")] pub u64);
+pub struct DurationMillis(#[serde(deserialize_with = "parse_duration_millis")] pub u64);
 
 const fn default_true() -> bool {
     true

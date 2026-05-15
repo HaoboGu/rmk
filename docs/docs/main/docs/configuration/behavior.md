@@ -76,6 +76,7 @@ Quick-release example:
 quick_release = true
 ```
 
+
 ## Combo
 
 In the `combo` sub-table, you can configure the keyboard's combo key functionality. Combo allows you to define a group of keys that, when pressed simultaneously, will trigger a specific output action.

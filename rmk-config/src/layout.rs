@@ -736,4 +736,48 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_sm_action_parsing() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+
+        let keymap = "SM(Tab, LAlt) SM(Tab, LCtrl) SM(Tab, LCtrl | LShift)";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            vec!["SM(Tab, LAlt)", "SM(Tab, LCtrl)", "SM(Tab, LCtrl | LShift)"]
+        );
+    }
+
+    #[test]
+    fn test_sm_action_grammar() {
+        let test_cases = vec![
+            "SM(Tab, LAlt)",
+            "SM(Tab, LCtrl)",
+            "SM(Tab, LCtrl | LShift)",
+            "SM(A, LGui)",
+            "sm(Tab, LAlt)", // case insensitive
+        ];
+
+        for input in test_cases {
+            let result = ConfigParser::parse(Rule::key_map, input);
+            assert!(result.is_ok(), "Failed to parse: {}", input);
+
+            let mut found_sm = false;
+            for pair in result.unwrap() {
+                if pair.as_rule() == Rule::key_map {
+                    for inner_pair in pair.into_inner() {
+                        if inner_pair.as_rule() == Rule::sm_action {
+                            found_sm = true;
+                        }
+                    }
+                }
+            }
+
+            assert!(found_sm, "Input should be parsed as sm_action: {}", input);
+        }
+    }
 }
