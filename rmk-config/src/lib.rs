@@ -619,6 +619,7 @@ pub(crate) struct OneShotConfig {
 #[serde(deny_unknown_fields)]
 pub struct OneShotModifiersConfig {
     pub activate_on_keypress: Option<bool>,
+    pub quick_release: Option<bool>,
 }
 
 /// Configurations for combos
