@@ -47,15 +47,9 @@ impl<'a> Keyboard<'a> {
             _ => unreachable!(),
         };
 
-        // If there's still morse key in the held buffer, don't fire normal keys
-        // FIXME? is |Holding needed here?
-        if self
-            .held_buffer
-            .keys
-            .iter()
-            .any(|k| k.action.is_morse() && matches!(k.state, KeyState::Pressed(_)))
-        {
-            return; //?
+        // If there's still an unresolved morse key in the held buffer, don't fire normal keys.
+        if self.has_unresolved_morse_key() {
+            return;
         }
 
         self.fire_held_non_morse_keys().await;
@@ -172,6 +166,10 @@ impl<'a> Keyboard<'a> {
                                 if let Some(k) = self.held_buffer.find_pos_mut(event.pos) {
                                     k.state = KeyState::EarlyFired(pattern);
                                 }
+
+                                if !self.has_unresolved_morse_key() {
+                                    self.fire_held_non_morse_keys().await;
+                                }
                             }
                         }
                     }
@@ -233,6 +231,16 @@ impl<'a> Keyboard<'a> {
         }
 
         self.held_buffer.keys.sort_unstable_by_key(|k| k.timeout_time);
+    }
+
+    fn has_unresolved_morse_key(&self) -> bool {
+        self.held_buffer.keys.iter().any(|k| {
+            k.action.is_morse()
+                && matches!(
+                    k.state,
+                    KeyState::Pressed(_) | KeyState::Holding(_) | KeyState::Released(_)
+                )
+        })
     }
 
     pub fn action_from_pattern(keymap: &KeyMap, keyAction: &KeyAction, pattern: MorsePattern) -> Action {
