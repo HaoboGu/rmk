@@ -237,7 +237,7 @@ mod one_shot_test {
         };
     }
 
-    /// OSM Test 6
+    /// OSM Test Case 6
     ///
     /// Config:
     /// - timeout: 1000ms

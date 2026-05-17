@@ -1541,7 +1541,12 @@ impl<'a> Keyboard<'a> {
                 && hid.process_as_system_control().is_none()
                 && !hid.is_mouse_key()
         );
-        if quick_release && is_basic_keyboard_key && osm_active_before && self.osm_state.value().is_none() && event.pressed {
+        if quick_release
+            && is_basic_keyboard_key
+            && osm_active_before
+            && self.osm_state.value().is_none()
+            && event.pressed
+        {
             self.send_keyboard_report_with_resolved_modifiers(true).await;
         }
         self.update_osl(event);
