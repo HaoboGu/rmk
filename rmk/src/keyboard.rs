@@ -1536,7 +1536,12 @@ impl<'a> Keyboard<'a> {
         let quick_release = self.keymap.one_shot_modifiers_config().quick_release;
         let osm_active_before = self.osm_state.value().is_some();
         self.update_osm(event);
-        if quick_release && osm_active_before && self.osm_state.value().is_none() && event.pressed {
+        let is_basic_keyboard_key = matches!(key,
+            KeyCode::Hid(hid) if hid.process_as_consumer().is_none()
+                && hid.process_as_system_control().is_none()
+                && !hid.is_mouse_key()
+        );
+        if quick_release && is_basic_keyboard_key && osm_active_before && self.osm_state.value().is_none() && event.pressed {
             self.send_keyboard_report_with_resolved_modifiers(true).await;
         }
         self.update_osl(event);
