@@ -1004,21 +1004,21 @@ impl<'a> Keyboard<'a> {
             self.process_key_action(&action, new_event, true, Instant::now()).await;
             debug!("[Combo] {:?} triggered", action);
             embassy_time::Timer::after_millis(20).await;
-            // Reset other combos' state
-            self.reset_combo(key_action);
+            // Reset non-triggered sub-combos of the combo that just won.
+            self.reset_sub_combos(&combo_actions);
         }
     }
 
-    // Reset combos that contain a key_action but not triggered yet
-    fn reset_combo(&mut self, key_action: &KeyAction) {
-        // Reset other sub-combo states
+    /// Reset all non-triggered combos whose keys are a subset of the triggered combo's keys.
+    /// Prevents sub-combos (e.g. E+T when E+R+T triggered) from firing spuriously,
+    /// while preserving state bits for overlapping combos that share some but not all keys.
+    fn reset_sub_combos(&mut self, triggered_actions: &[KeyAction]) {
         self.keymap.with_combos_mut(|combos| {
-            combos.iter_mut().filter_map(|c| c.as_mut()).for_each(|c| {
-                if c.is_all_pressed() && !c.is_triggered() && c.config.contains(key_action) {
-                    info!("Resetting combo: {:?}", c,);
-                    c.reset();
+            for combo in combos.iter_mut().filter_map(|c| c.as_mut()) {
+                if !combo.is_triggered() && combo.config.actions.iter().all(|a| triggered_actions.contains(a)) {
+                    combo.reset();
                 }
-            });
+            }
         });
     }
 
@@ -1100,22 +1100,22 @@ impl<'a> Keyboard<'a> {
             ));
 
             // Only one combo is updated, and triggered
-            let next_action = self.keymap.with_combos_mut(|combos| {
+            let triggered_combo = self.keymap.with_combos_mut(|combos| {
                 combos.iter_mut().filter_map(|c| c.as_mut()).find_map(|c| {
                     if c.is_all_pressed() && !c.is_triggered() && c.size() == max_size {
-                        Some(c.trigger())
+                        Some((c.trigger(), c.config.actions.clone()))
                     } else {
                         None
                     }
                 })
             });
 
-            if let Some(next_action) = next_action {
+            if let Some((next_action, combo_actions)) = triggered_combo {
                 debug!("[Combo] {:?} triggered", next_action);
                 self.held_buffer
                     .keys
                     .retain(|item| item.state != KeyState::WaitingCombo);
-                self.reset_combo(key_action);
+                self.reset_sub_combos(&combo_actions);
                 return (Some(next_action), true);
             }
             (None, false)
@@ -1533,7 +1533,22 @@ impl<'a> Keyboard<'a> {
             _ => warn!("KeyCode variant not supported: {:?}", key),
         }
 
+        let quick_release = self.keymap.one_shot_modifiers_config().quick_release;
+        let osm_active_before = self.osm_state.value().is_some();
         self.update_osm(event);
+        let is_basic_keyboard_key = matches!(key,
+            KeyCode::Hid(hid) if hid.process_as_consumer().is_none()
+                && hid.process_as_system_control().is_none()
+                && !hid.is_mouse_key()
+        );
+        if quick_release
+            && is_basic_keyboard_key
+            && osm_active_before
+            && self.osm_state.value().is_none()
+            && event.pressed
+        {
+            self.send_keyboard_report_with_resolved_modifiers(true).await;
+        }
         self.update_osl(event);
     }
 

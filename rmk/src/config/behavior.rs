@@ -77,6 +77,8 @@ impl Default for OneShotConfig {
 pub struct OneShotModifiersConfig {
     /// Should modifiers be active from keypress (sticky modifiers)
     pub activate_on_keypress: bool,
+    /// If true, OSM releases on next key press (ZMK skq); if false, on next key release (ZMK skn)
+    pub quick_release: bool,
 }
 
 /// Config for combo behavior

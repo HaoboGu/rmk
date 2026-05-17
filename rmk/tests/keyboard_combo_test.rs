@@ -1,7 +1,7 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, OneShotConfig};
+use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, OneShotConfig, OneShotModifiersConfig};
 use rmk::keyboard::combo::{Combo, ComboConfig};
 use rmk::types::keycode::HidKeyCode;
 use rmk::types::modifier::ModifierCombination;
@@ -154,6 +154,10 @@ fn test_combo_with_one_shot_modifier() {
                 timeout: Duration::from_millis(300),
                 ..Default::default()
             },
+            one_shot_modifiers: OneShotModifiersConfig {
+                quick_release: true,
+                ..Default::default()
+            },
             ..Default::default()
         }),
         sequence: [
@@ -166,6 +170,7 @@ fn test_combo_with_one_shot_modifier() {
         ],
         expected_reports: [
             [KC_LSHIFT, [HidKeyCode::E as u8, 0, 0, 0, 0, 0]],
+            [0, [HidKeyCode::E as u8, 0, 0, 0, 0, 0]], // Quick-release: modifier removed
             [0, [0; 6]],
         ]
     }
@@ -240,6 +245,10 @@ fn test_fully_overlapped_combo() {
     key_sequence_test! {
         keyboard: create_test_keyboard_with_config(BehaviorConfig {
             combo: get_combos_config(),
+            one_shot_modifiers: OneShotModifiersConfig {
+                quick_release: true,
+                ..Default::default()
+            },
             ..Default::default()
         }),
         sequence: [
@@ -269,6 +278,7 @@ fn test_fully_overlapped_combo() {
             [0, [HidKeyCode::Space as u8, 0, 0, 0, 0, 0]],
             [0, [0; 6]],
             [KC_LSHIFT, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]],
+            [0, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]], // Quick-release: modifier removed
             [0, [0; 6]],
             [0, [HidKeyCode::Space as u8, 0, 0, 0, 0, 0]],
             [0, [0; 6]],
@@ -281,6 +291,10 @@ fn test_overlapped_combo() {
     key_sequence_test! {
         keyboard: create_test_keyboard_with_config(BehaviorConfig {
             combo: get_combos_config(),
+            one_shot_modifiers: OneShotModifiersConfig {
+                quick_release: true,
+                ..Default::default()
+            },
             ..Default::default()
         }),
         sequence: [
@@ -295,6 +309,7 @@ fn test_overlapped_combo() {
         ],
         expected_reports: [
             [KC_LSHIFT, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]],
+            [0, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]], // Quick-release: modifier removed
             [0, [0; 6]],
         ]
     }

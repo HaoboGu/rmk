@@ -540,4 +540,237 @@ mod one_shot_test {
             ]
         };
     }
+
+    /// Chain mode (quick_release = false): modifier released on key RELEASE
+    #[test]
+    fn test_osm_chain_mode_basic() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+                quick_release: false,
+                ..OneShotModifiersConfig::default()
+            }),
+            sequence: [
+                [0, 0, true, 10],   // Press OSM LShift
+                [0, 0, false, 10],  // Release OSM LShift
+                [0, 2, true, 10],   // Press A
+                [0, 2, false, 10],  // Release A
+            ],
+            expected_reports: [
+                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift
+                [0, [0, 0, 0, 0, 0, 0]], // Release A clears modifier
+            ]
+        };
+    }
+
+    /// Chain mode: tap A then tap B — only A gets modifier
+    #[test]
+    fn test_osm_chain_mode_multiple_keys() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+                quick_release: false,
+                ..OneShotModifiersConfig::default()
+            }),
+            sequence: [
+                [0, 0, true, 10],   // Press OSM LShift
+                [0, 0, false, 10],  // Release LShift
+                [0, 2, true, 10],   // Press A
+                [0, 2, false, 10],  // Release A
+                [0, 3, true, 10],   // Press B
+                [0, 3, false, 10],  // Release B
+            ],
+            expected_reports: [
+                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift
+                [0, [0, 0, 0, 0, 0, 0]], // Release A clears modifier
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // B without modifier
+                [0, [0, 0, 0, 0, 0, 0]], // All released
+            ]
+        };
+    }
+
+    /// Chain mode with activate_on_keypress
+    #[test]
+    fn test_osm_chain_mode_activate_on_keypress() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+                activate_on_keypress: true,
+                quick_release: false,
+                ..OneShotModifiersConfig::default()
+            }),
+            sequence: [
+                [0, 0, true, 10],   // Press OSM LShift
+                [0, 0, false, 10],  // Release OSM LShift
+                [0, 2, true, 10],   // Press A
+                [0, 2, false, 10],  // Release A
+            ],
+            expected_reports: [
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // LShift sent immediately
+                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift
+                [0, [0, 0, 0, 0, 0, 0]], // Release A clears modifier
+            ]
+        };
+    }
+
+    // Quick-release mode tests (quick_release = true)
+
+    #[test]
+    fn test_osm_quick_release_basic() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+                quick_release: true,
+                ..OneShotModifiersConfig::default()
+            }),
+            sequence: [
+                [0, 0, true, 10],   // Press OSM LShift
+                [0, 0, false, 10],  // Release OSM LShift
+                [0, 2, true, 10],   // Press A
+                [0, 2, false, 10],  // Release A
+            ],
+            expected_reports: [
+                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Quick-release: modifier removed, key still held
+                [0, [0, 0, 0, 0, 0, 0]], // All released
+            ]
+        };
+    }
+
+    #[test]
+    fn test_osm_quick_release_multiple_keys() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+                quick_release: true,
+                ..OneShotModifiersConfig::default()
+            }),
+            sequence: [
+                [0, 0, true, 10],   // Press OSM LShift
+                [0, 0, false, 10],  // Release OSM LShift
+                [0, 2, true, 10],   // Press A
+                [0, 2, false, 10],  // Release A
+                [0, 3, true, 10],   // Press B
+                [0, 3, false, 10],  // Release B
+            ],
+            expected_reports: [
+                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Quick-release: modifier removed
+                [0, [0, 0, 0, 0, 0, 0]], // All released
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // B without LShift
+                [0, [0, 0, 0, 0, 0, 0]], // All released
+            ]
+        };
+    }
+
+    #[test]
+    fn test_osm_quick_release_rolling() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+                quick_release: true,
+                ..OneShotModifiersConfig::default()
+            }),
+            sequence: [
+                [0, 0, true, 10],   // Press OSM LShift
+                [0, 3, true, 10],   // Press B while OSM held
+                [0, 0, false, 10],  // Release OSM LShift
+                [0, 3, false, 10],  // Release B
+            ],
+            expected_reports: [
+                [KC_LSHIFT, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // B with LShift
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Quick-release: modifier removed
+                [0, [0, 0, 0, 0, 0, 0]], // All released
+            ]
+        };
+    }
+
+    #[test]
+    fn test_osm_quick_release_combined_modifiers() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+                quick_release: true,
+                ..OneShotModifiersConfig::default()
+            }),
+            sequence: [
+                [0, 0, true, 10],   // Press OSM LShift
+                [0, 0, false, 10],  // Release OSM LShift
+                [0, 4, true, 10],   // Press OSM LCtrl
+                [0, 4, false, 10],  // Release OSM LCtrl
+                [0, 2, true, 10],   // Press A
+                [0, 2, false, 10],  // Release A
+            ],
+            expected_reports: [
+                [KC_LSHIFT | KC_LCTRL, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift+LCtrl
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Quick-release: modifiers removed
+                [0, [0, 0, 0, 0, 0, 0]], // All released
+            ]
+        };
+    }
+
+    #[test]
+    fn test_osm_quick_release_with_wm() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+                quick_release: true,
+                ..OneShotModifiersConfig::default()
+            }),
+            sequence: [
+                [0, 0, true, 10],   // Press OSM LShift
+                [0, 0, false, 10],  // Release OSM LShift
+                [0, 4, true, 10],   // Press OSM LCtrl
+                [0, 4, false, 10],  // Release OSM LCtrl
+                [0, 5, true, 10],   // Press WM(B, LGui)
+                [0, 5, false, 10],  // Release WM(B, LGui)
+            ],
+            expected_reports: [
+                [KC_LSHIFT | KC_LCTRL | KC_LGUI, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // B with LShift + LCtrl + LGui
+                [KC_LGUI, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Quick-release: OSM modifiers removed, WM stays
+                [0, [0, 0, 0, 0, 0, 0]], // All released
+            ]
+        };
+    }
+
+    #[test]
+    fn test_osm_quick_release_activate_on_keypress() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+                activate_on_keypress: true,
+                quick_release: true,
+                ..OneShotModifiersConfig::default()
+            }),
+            sequence: [
+                [0, 0, true, 10],   // Press OSM LShift
+                [0, 0, false, 10],  // Release OSM LShift
+                [0, 2, true, 10],   // Press A
+                [0, 2, false, 10],  // Release A
+            ],
+            expected_reports: [
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // LShift sent immediately
+                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Quick-release: modifier removed
+                [0, [0, 0, 0, 0, 0, 0]], // All released
+            ]
+        };
+    }
+
+    #[test]
+    fn test_osm_quick_release_combined_activate_on_keypress() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+                activate_on_keypress: true,
+                quick_release: true,
+                ..OneShotModifiersConfig::default()
+            }),
+            sequence: [
+                [0, 0, true, 10],   // Press OSM LShift
+                [0, 0, false, 10],  // Release OSM LShift
+                [0, 4, true, 10],   // Press OSM LCtrl
+                [0, 4, false, 10],  // Release OSM LCtrl
+                [0, 2, true, 10],   // Press A
+                [0, 2, false, 10],  // Release A
+            ],
+            expected_reports: [
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // LShift sent first
+                [KC_LSHIFT | KC_LCTRL, [0, 0, 0, 0, 0, 0]], // LCtrl added
+                [KC_LSHIFT | KC_LCTRL, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift+LCtrl
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Quick-release: modifiers removed
+                [0, [0, 0, 0, 0, 0, 0]], // All released
+            ]
+        };
+    }
 }

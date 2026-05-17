@@ -123,6 +123,7 @@ one_shot = {
 # One Shot Modifiers configuration
 one_shot_modifiers = {
   activate_on_keypress = false,
+  quick_release = false,
 }
 
 [behavior.morse]
