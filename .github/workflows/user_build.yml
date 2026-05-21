@@ -124,8 +124,8 @@ jobs:
         run: |
           [ ! -f $LIBSSL ] && wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/$LIBSSL
           sudo dpkg -i $LIBSSL
-      - name: Install rmkit, espflash and espup
-        run: cargo binstall rmkit espflash espup -y
+      - name: Install rmkit, cargo-espflash, cargo-make and espup
+        run: cargo binstall rmkit cargo-espflash cargo-make espup -y
       - name: Cache ESP Rust toolchain
         id: esp-toolchain-cache
         uses: actions/cache@v5
@@ -147,35 +147,7 @@ jobs:
           key: ${{ needs.get_chip_name.outputs.chip_name }}
       - name: Build firmware for esp32
         working-directory: ./rmk
-        run: . /home/runner/export-esp.sh && cargo +esp build --release
-      - name: Get target arch
-        id: arch
-        run: |
-          if [ "${{ needs.get_chip_name.outputs.chip_name }}" == "esp32c3" ]; then
-            ARCH="riscv32imc-unknown-none-elf"
-          elif [ "${{ needs.get_chip_name.outputs.chip_name }}" == "esp32s3" ]; then
-            ARCH="xtensa-esp32s3-none-elf"
-          elif [ "${{ needs.get_chip_name.outputs.chip_name }}" == "esp32c6" ]; then
-            ARCH="riscv32imac-unknown-none-elf"
-          else
-            ARCH=""
-          fi
-          # Save the arch as a GitHub Actions output variable
-          echo "arch=$ARCH" >> $GITHUB_OUTPUT
-      - name: Get project name
-        id: project_name
-        run: |
-          # Run rmkit command to get the chip name
-          OUTPUT=$(rmkit get-project-name --keyboard-toml-path ${{ inputs.keyboard_toml_path }})
-
-          # Print the output to confirm
-          echo "Command output: $OUTPUT"
-
-          # Save the output as a GitHub Actions output variable
-          echo "project_name=$OUTPUT" >> $GITHUB_OUTPUT
-      - name: convert firmware to bin
-        working-directory: ./rmk
-        run: espflash save-image --chip ${{ needs.get_chip_name.outputs.chip_name }} target/${{ steps.arch.outputs.arch }}/release/${{ steps.project_name.outputs.project_name }} --merge ./rmk.bin
+        run: . /home/runner/export-esp.sh && cargo make uf2 --release
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
