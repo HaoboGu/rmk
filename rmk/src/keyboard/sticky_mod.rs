@@ -72,7 +72,10 @@ impl Keyboard<'_> {
 
             match &mut self.sticky_mod_state {
                 StickyModState::None => {
-                    self.sticky_mod_state = StickyModState::Active { mods: modifiers, deadline };
+                    self.sticky_mod_state = StickyModState::Active {
+                        mods: modifiers,
+                        deadline,
+                    };
                 }
                 StickyModState::Active { deadline: d, .. } => {
                     // Reset deadline on each SM press (timeout counts from last press)

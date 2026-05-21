@@ -250,9 +250,7 @@ pub(crate) fn parse_key(
                     ::rmk::sm!(#ident, #modifiers)
                 }
             } else {
-                panic!(
-                    "\n\u{274c} keyboard.toml: SM(key, modifier) invalid. Usage: SM(Tab, LAlt)"
-                );
+                panic!("\n\u{274c} keyboard.toml: SM(key, modifier) invalid. Usage: SM(Tab, LAlt)");
             }
         }
         s if s.to_lowercase().starts_with("lm(") => {

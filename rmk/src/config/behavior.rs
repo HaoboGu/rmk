@@ -93,9 +93,7 @@ pub struct StickyModConfig {
 
 impl Default for StickyModConfig {
     fn default() -> Self {
-        Self {
-            timeout: Duration::MAX,
-        }
+        Self { timeout: Duration::MAX }
     }
 }
 

@@ -17,21 +17,24 @@ use crate::common::{KC_LALT, KC_LCTRL, KC_LSHIFT, wrap_keymap};
 const KEYMAP: [[[KeyAction; 6]; 1]; 2] = [
     [[
         // Layer 0
-        k!(A),    // col 0: A
-        k!(B),    // col 1: B
-        k!(C),    // col 2: C
-        mo!(1),   // col 3: MO(1) — momentary layer
+        k!(A),      // col 0: A
+        k!(B),      // col 1: B
+        k!(C),      // col 2: C
+        mo!(1),     // col 3: MO(1) — momentary layer
         k!(LShift), // col 4: LShift
-        a!(No),   // col 5: No
+        a!(No),     // col 5: No
     ]],
     [[
         // Layer 1
-        sm!(Tab, ModifierCombination::LALT),                              // col 0: SM(Tab, LAlt)
-        sm!(Tab, ModifierCombination::LCTRL),                             // col 1: SM(Tab, LCtrl)
-        sm!(Tab, ModifierCombination::new_from_vals(true, true, false, false, false, false, false, false)), // col 2: SM(Tab, LCtrl|LShift)
-        a!(Transparent),                                                    // col 3: Transparent
-        a!(Transparent),                                                    // col 4: Transparent → LShift
-        a!(No),                                                             // col 5: No
+        sm!(Tab, ModifierCombination::LALT),  // col 0: SM(Tab, LAlt)
+        sm!(Tab, ModifierCombination::LCTRL), // col 1: SM(Tab, LCtrl)
+        sm!(
+            Tab,
+            ModifierCombination::new_from_vals(true, true, false, false, false, false, false, false)
+        ), // col 2: SM(Tab, LCtrl|LShift)
+        a!(Transparent),                      // col 3: Transparent
+        a!(Transparent),                      // col 4: Transparent → LShift
+        a!(No),                               // col 5: No
     ]],
 ];
 
