@@ -25,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       chip_name: ${{ steps.capture.outputs.chip_name }}
+      artifact_prefix: ${{ steps.prefix.outputs.prefix }}
     steps:
       - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v6
@@ -50,6 +51,21 @@ jobs:
 
           # Save the output as a GitHub Actions output variable
           echo "chip_name=$OUTPUT" >> $GITHUB_OUTPUT
+      - name: Compute artifact path prefix from keyboard.toml directory
+        id: prefix
+        env:
+          KEYBOARD_TOML_PATH: ${{ inputs.keyboard_toml_path }}
+        run: |
+          # Final artifact name is <PATH>-<CHIP>-firmware_<FORMAT>. This step
+          # derives "<PATH>-" (or empty when keyboard.toml is at the project
+          # root). Within PATH, '/' and characters outside [A-Za-z0-9._]
+          # collapse to '_' so the path↔chip boundary stays unambiguous.
+          DIR=$(dirname -- "$KEYBOARD_TOML_PATH")
+          PREFIX=""
+          if [ "$DIR" != "." ]; then
+            PREFIX="$(printf '%s' "$DIR" | tr -c 'A-Za-z0-9._' '_')-"
+          fi
+          echo "prefix=$PREFIX" >> "$GITHUB_OUTPUT"
   build:
     runs-on: ubuntu-latest
     needs: get_chip_name
@@ -85,12 +101,12 @@ jobs:
       - name: Upload uf2 artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: firmware_uf2
+          name: ${{ needs.get_chip_name.outputs.artifact_prefix }}${{ needs.get_chip_name.outputs.chip_name }}-firmware_uf2
           path: rmk/*.uf2
       - name: Upload hex artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: firmware_hex
+          name: ${{ needs.get_chip_name.outputs.artifact_prefix }}${{ needs.get_chip_name.outputs.chip_name }}-firmware_hex
           path: rmk/*.hex
   build_esp:
     runs-on: ubuntu-latest
@@ -163,5 +179,5 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: firmware_bin
+          name: ${{ needs.get_chip_name.outputs.artifact_prefix }}${{ needs.get_chip_name.outputs.chip_name }}-firmware_bin
           path: rmk/*.bin
