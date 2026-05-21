@@ -166,10 +166,10 @@ impl Runnable for Keyboard<'_> {
                         Ok(event) => event,
                         Err(_) => {
                             let now = Instant::now();
-                            if sm_deadline.map_or(false, |d| now >= d) {
+                            if sm_deadline.is_some_and(|d| now >= d) {
                                 self.release_sticky_mod_if_active().await;
                             }
-                            if mouse_deadline.map_or(false, |d| now >= d) {
+                            if mouse_deadline.is_some_and(|d| now >= d) {
                                 self.fire_mouse_repeat().await;
                             }
                             continue;
