@@ -154,18 +154,29 @@ impl Runnable for Keyboard<'_> {
                 // Process buffered held key
                 self.process_buffered_key(key).await
             } else {
-                // If mouse repeat is pending, race subscriber against deadline
-                let event = if let Some(deadline) = self.mouse.next_deadline() {
+                // Race subscriber against any pending deadlines (mouse repeat, SM timeout)
+                let sm_deadline = self.sticky_mod_state.deadline();
+                let mouse_deadline = self.mouse.next_deadline();
+                let combined_deadline = match (sm_deadline, mouse_deadline) {
+                    (Some(a), Some(b)) => Some(a.min(b)),
+                    (a, b) => a.or(b),
+                };
+                let event = if let Some(deadline) = combined_deadline {
                     match with_deadline(deadline, self.keyboard_event_subscriber.next_message_pure()).await {
                         Ok(event) => event,
                         Err(_) => {
-                            // Repeat deadline expired, fire repeat
-                            self.fire_mouse_repeat().await;
+                            let now = Instant::now();
+                            if sm_deadline.map_or(false, |d| now >= d) {
+                                self.release_sticky_mod_if_active().await;
+                            }
+                            if mouse_deadline.map_or(false, |d| now >= d) {
+                                self.fire_mouse_repeat().await;
+                            }
                             continue;
                         }
                     }
                 } else {
-                    // No repeat pending, wait indefinitely
+                    // No deadlines pending, wait indefinitely
                     self.keyboard_event_subscriber.next_message_pure().await
                 };
                 self.process_inner(event).await

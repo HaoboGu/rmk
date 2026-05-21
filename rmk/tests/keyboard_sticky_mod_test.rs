@@ -1,6 +1,7 @@
 pub mod common;
 
-use rmk::config::{BehaviorConfig, PositionalConfig};
+use embassy_time::Duration;
+use rmk::config::{BehaviorConfig, PositionalConfig, StickyModConfig};
 use rmk::keyboard::Keyboard;
 use rmk::types::action::KeyAction;
 use rmk::types::modifier::ModifierCombination;
@@ -39,6 +40,12 @@ fn create_test_keyboard() -> Keyboard<'static> {
     let behavior_config = BEHAVIOR_CONFIG.init(BehaviorConfig::default());
     static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 6>> = static_cell::StaticCell::new();
     let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
+    Keyboard::new(wrap_keymap(KEYMAP, per_key_config, behavior_config))
+}
+
+fn create_test_keyboard_with_behavior_config(config: BehaviorConfig) -> Keyboard<'static> {
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(config));
+    let per_key_config: &'static PositionalConfig<1, 6> = Box::leak(Box::new(PositionalConfig::default()));
     Keyboard::new(wrap_keymap(KEYMAP, per_key_config, behavior_config))
 }
 
@@ -198,6 +205,89 @@ rusty_fork_test! {
                 [KC_LCTRL | KC_LSHIFT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // SM press: Ctrl+Shift+Tab
                 [KC_LCTRL | KC_LSHIFT, [0, 0, 0, 0, 0, 0]],                 // SM release: Ctrl+Shift held
                 [0, [0, 0, 0, 0, 0, 0]],                                      // MO release: SM cleaned up
+            ]
+        };
+    }
+
+    /// StickyMod Test 6: Timeout — modifier auto-releases after inactivity
+    ///
+    /// Config: timeout = 100ms
+    ///
+    /// Sequence:
+    /// - Press MO(1), press SM(Tab,LAlt), release SM → timer starts (100ms)
+    /// - Wait 150ms → timer fires, Alt auto-released
+    /// - Release MO(1) (SM already inactive — no cleanup report)
+    /// - Press C on layer 0 (no modifier), release C
+    ///
+    /// Note: MO(1) must be released before pressing the verification key so that
+    /// col 2 resolves to k!(C) on layer 0 rather than SM(Tab,LCtrl|LShift) on layer 1.
+    #[test]
+    fn test_sm_timeout() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
+                sticky_mod: StickyModConfig {
+                    timeout: Duration::from_millis(100),
+                },
+                ..BehaviorConfig::default()
+            }),
+            sequence: [
+                [0, 3, true,  10],   // Press MO(1)
+                [0, 0, true,  10],   // Press SM(Tab, LAlt)
+                [0, 0, false, 10],   // Release SM → timer starts (100ms)
+                [0, 3, false, 150],  // Wait 150ms (timer fires!), then release MO(1)
+                [0, 2, true,  10],   // Press C on layer 0 (no modifier)
+                [0, 2, false, 10],   // Release C
+            ],
+            expected_reports: [
+                [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // SM press: Alt+Tab
+                [KC_LALT, [0, 0, 0, 0, 0, 0]],                 // SM release: Alt held, timer starts
+                [0, [0, 0, 0, 0, 0, 0]],                        // Timeout: Alt auto-released
+                // MO(1) release: SM already inactive, no report
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],           // C press: no modifier
+                [0, [0, 0, 0, 0, 0, 0]],                        // C release
+            ]
+        };
+    }
+
+    /// StickyMod Test 7: Timeout resets on each SM press
+    ///
+    /// Config: timeout = 100ms
+    ///
+    /// Sequence:
+    /// - Press MO(1), press SM #1, release SM #1 → T1 starts (100ms)
+    /// - At 50ms: press SM #2 → T1 cancelled, SM #2 processed from unprocessed queue
+    /// - Release SM #2 → T2 starts (100ms reset)
+    /// - Wait 150ms → T2 fires, Alt auto-released
+    /// - Release MO(1) (SM already inactive — no cleanup report)
+    /// - Press C on layer 0 (no modifier), release C
+    #[test]
+    fn test_sm_timeout_resets_on_press() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
+                sticky_mod: StickyModConfig {
+                    timeout: Duration::from_millis(100),
+                },
+                ..BehaviorConfig::default()
+            }),
+            sequence: [
+                [0, 3, true,  10],   // Press MO(1)
+                [0, 0, true,  10],   // Press SM #1
+                [0, 0, false, 10],   // Release SM #1 → T1 starts (100ms)
+                [0, 0, true,  50],   // At 50ms: press SM #2 → T1 cancelled
+                [0, 0, false, 10],   // Release SM #2 → T2 starts (100ms reset)
+                [0, 3, false, 150],  // Wait 150ms (T2 fires!), then release MO(1)
+                [0, 2, true,  10],   // Press C on layer 0 (no modifier)
+                [0, 2, false, 10],   // Release C
+            ],
+            expected_reports: [
+                [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // SM #1 press: Alt+Tab
+                [KC_LALT, [0, 0, 0, 0, 0, 0]],                 // SM #1 release: Alt held (T1 starts)
+                [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // SM #2 press: Alt+Tab (T1 cancelled)
+                [KC_LALT, [0, 0, 0, 0, 0, 0]],                 // SM #2 release: Alt held (T2 starts)
+                [0, [0, 0, 0, 0, 0, 0]],                        // T2 fires: Alt auto-released
+                // MO(1) release: SM already inactive, no report
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],           // C press: no modifier
+                [0, [0, 0, 0, 0, 0, 0]],                        // C release
             ]
         };
     }
