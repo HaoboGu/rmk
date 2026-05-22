@@ -52,16 +52,28 @@ This behavior is also known as One-Shot Sticky Modifiers (OSSM).
 
 If you press One-Shot Modifier again, it will be sent as a normal modifier key press and, therefore, released.
 
+The `quick_release` option controls when the one-shot modifier is released:
+
+- `false` (default): the modifier is released when the next key is **released** (chain mode, equivalent to ZMK `&skn`). The modifier stays active for the entire duration of the next keypress, including key repeat.
+- `true`: the modifier is released when the next key is **pressed** (equivalent to ZMK `&skq`). Only the initial press of the next key is modified; key repeat will not include the modifier.
+
 Default values:
 ```toml
 [behavior.one_shot_modifiers]
 activate_on_keypress = false
+quick_release = false
 ```
 
 OSSM example:
 ```toml
 [behavior.one_shot_modifiers]
 activate_on_keypress = true
+```
+
+Quick-release example:
+```toml
+[behavior.one_shot_modifiers]
+quick_release = true
 ```
 
 ## Combo

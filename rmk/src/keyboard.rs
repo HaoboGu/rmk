@@ -1533,7 +1533,11 @@ impl<'a> Keyboard<'a> {
             _ => warn!("KeyCode variant not supported: {:?}", key),
         }
 
-        self.update_osm(event);
+        let quick_release = self.keymap.one_shot_modifiers_config().quick_release;
+        let osm_consumed = self.update_osm(event);
+        if quick_release && osm_consumed && key.is_basic_keyboard_key() && event.pressed {
+            self.send_keyboard_report_with_resolved_modifiers(true).await;
+        }
         self.update_osl(event);
     }
 
