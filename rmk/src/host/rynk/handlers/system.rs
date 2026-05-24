@@ -47,18 +47,19 @@ impl<'a> RynkService<'a> {
         Self::write_response(&caps, payload)
     }
 
-    pub(crate) async fn handle_reboot(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        // Synchronous reset — function never returns on real hardware. The
-        // wire response is moot; the host treats post-Reboot disconnect as
-        // success. On std/test targets the call falls through and we send
-        // an Ok envelope so loopback tests complete.
+    pub(crate) async fn handle_reboot(&self, _payload: &mut [u8]) -> Result<usize, RynkError> {
+        // Fire-and-forget: synchronous reset never returns on real hardware,
+        // and there's no way to guarantee a response makes it onto the wire
+        // before the reset takes effect.
         crate::boot::reboot_keyboard();
-        Self::write_response(&(), payload)
+        Ok(0)
     }
 
-    pub(crate) async fn handle_bootloader_jump(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
+    pub(crate) async fn handle_bootloader_jump(&self, _payload: &mut [u8]) -> Result<usize, RynkError> {
+        // Fire-and-forget, same reasoning as `handle_reboot`: the bootloader
+        // jump is synchronous on real hardware, so we don't attempt to ack.
         crate::boot::jump_to_bootloader();
-        Self::write_response(&(), payload)
+        Ok(0)
     }
 
     pub(crate) async fn handle_storage_reset(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
