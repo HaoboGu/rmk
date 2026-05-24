@@ -9,7 +9,7 @@ use rmk_types::battery::BatteryStatus;
 use rmk_types::ble::BleStatus;
 use rmk_types::connection::ConnectionStatus;
 use rmk_types::led_indicator::LedIndicator;
-use rmk_types::protocol::rynk::Cmd;
+use rmk_types::protocol::rynk::{Cmd, RynkMessage};
 
 #[cfg(feature = "_ble")]
 use crate::event::{BatteryStatusEvent, BleStatusChangeEvent};
@@ -47,23 +47,25 @@ impl TopicEvent {
         }
     }
 
-    /// Write the topic message (header + payload) into `msg` in place.
-    pub(crate) fn encode(
+    /// Build a topic message into `buf`: header (cmd, seq=0, payload_len)
+    /// plus the postcard-encoded value. Returns the fully-formed message;
+    /// the caller sends `&buf[..msg.frame_len()]`.
+    pub(crate) fn encode<'a>(
         &self,
-        service: &super::RynkService<'_>,
-        msg: &mut [u8],
-    ) -> Result<(), rmk_types::protocol::rynk::RynkError> {
+        buf: &'a mut [u8],
+    ) -> Result<RynkMessage<'a>, rmk_types::protocol::rynk::RynkError> {
         let cmd = self.cmd();
+        debug_assert!(cmd.is_topic(), "TopicEvent produced non-topic cmd");
         match self {
-            TopicEvent::LayerChange(v) => service.write_topic(cmd, v, msg),
-            TopicEvent::WpmUpdate(v) => service.write_topic(cmd, v, msg),
-            TopicEvent::ConnectionChange(v) => service.write_topic(cmd, v, msg),
-            TopicEvent::SleepState(v) => service.write_topic(cmd, v, msg),
-            TopicEvent::LedIndicator(v) => service.write_topic(cmd, v, msg),
+            TopicEvent::LayerChange(v) => RynkMessage::build(buf, cmd, 0, v),
+            TopicEvent::WpmUpdate(v) => RynkMessage::build(buf, cmd, 0, v),
+            TopicEvent::ConnectionChange(v) => RynkMessage::build(buf, cmd, 0, v),
+            TopicEvent::SleepState(v) => RynkMessage::build(buf, cmd, 0, v),
+            TopicEvent::LedIndicator(v) => RynkMessage::build(buf, cmd, 0, v),
             #[cfg(feature = "_ble")]
-            TopicEvent::BatteryStatus(v) => service.write_topic(cmd, v, msg),
+            TopicEvent::BatteryStatus(v) => RynkMessage::build(buf, cmd, 0, v),
             #[cfg(feature = "_ble")]
-            TopicEvent::BleStatusChange(v) => service.write_topic(cmd, v, msg),
+            TopicEvent::BleStatusChange(v) => RynkMessage::build(buf, cmd, 0, v),
         }
     }
 }

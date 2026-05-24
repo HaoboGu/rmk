@@ -17,5 +17,6 @@ RynkError::Internal                      03
 RynkError::InvalidRequest                00
 RynkError::NotReady                      01
 RynkError::StorageFault                  02
+RynkError::Unimplemented                 04
 StorageResetMode::Full                   00
 StorageResetMode::LayoutOnly             01
