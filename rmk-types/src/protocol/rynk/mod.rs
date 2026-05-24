@@ -33,7 +33,8 @@
 //! ## Module layout
 //!
 //! - [`cmd`] — `Cmd` enum (request, response, topic tags)
-//! - [`message`] — `RynkMessage` (in-place wire-header accessors over `[u8]`)
+//! - [`message`] — `RynkMessage` (mutable view over wire bytes; header
+//!   parsed once at construction, accessors are infallible)
 //! - [`buffer`] — `RYNK_MIN_BUFFER_SIZE` const computed from `MaxSize` of
 //!   every wire type
 //! - [`system`] — handshake (`ProtocolVersion`, `DeviceCapabilities`,
@@ -122,6 +123,9 @@ pub enum RynkError {
     /// encode, or another "should not happen" arm. Host should surface
     /// it for diagnostics but can't act on it.
     Internal,
+    /// Command is recognized but the handler is not implemented in this
+    /// firmware build.
+    Unimplemented,
 }
 
 // ---------------------------------------------------------------------------
@@ -295,6 +299,7 @@ mod tests {
         round_trip(&RynkError::NotReady);
         round_trip(&RynkError::StorageFault);
         round_trip(&RynkError::Internal);
+        round_trip(&RynkError::Unimplemented);
         let ok: Result<(), RynkError> = Ok(());
         let err: Result<(), RynkError> = Err(RynkError::StorageFault);
         let _ = round_trip(&ok);
@@ -333,6 +338,7 @@ mod tests {
             ("RynkError::InvalidRequest", encode(&RynkError::InvalidRequest)),
             ("RynkError::NotReady", encode(&RynkError::NotReady)),
             ("RynkError::StorageFault", encode(&RynkError::StorageFault)),
+            ("RynkError::Unimplemented", encode(&RynkError::Unimplemented)),
             (
                 "Result<(),RynkError>::Err(StorageFault)",
                 encode::<Result<(), RynkError>>(&Err(RynkError::StorageFault)),

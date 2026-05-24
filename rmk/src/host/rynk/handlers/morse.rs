@@ -29,11 +29,11 @@ impl<'a> RynkService<'a> {
 
     #[cfg(feature = "bulk_transfer")]
     pub(crate) async fn handle_get_morse_bulk(&self, _payload: &mut [u8]) -> Result<usize, RynkError> {
-        Err(RynkError::Internal)
+        Err(RynkError::Unimplemented)
     }
 
     #[cfg(feature = "bulk_transfer")]
     pub(crate) async fn handle_set_morse_bulk(&self, _payload: &mut [u8]) -> Result<usize, RynkError> {
-        Err(RynkError::Internal)
+        Err(RynkError::Unimplemented)
     }
 }
