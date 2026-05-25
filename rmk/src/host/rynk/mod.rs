@@ -3,9 +3,11 @@
 //! `RynkService` is the transport-agnostic core. It holds a
 //! [`KeyboardContext`](super::context::KeyboardContext) and exposes:
 //!
-//! - [`dispatch`](RynkService::dispatch) — process inbound message in-place
-//! - [`write_topic`](RynkService::write_topic) — fill a buffer with one
-//!   topic message for the per-transport publisher task.
+//! - [`dispatch`](RynkService::dispatch) — process inbound message in-place.
+//!
+//! Topic frames are built independently via [`TopicEvent::encode`](topics::TopicEvent::encode);
+//! the per-transport publisher task drains the topic subscribers and emits
+//! frames directly without going through `RynkService`.
 
 mod handlers;
 mod topics;
@@ -57,22 +59,22 @@ impl<'a> RynkService<'a> {
 
     /// Process one inbound message in place. Always writes a response
     /// envelope (Ok or Err) into `msg`; `cmd` and `seq` are echoed verbatim.
-    pub async fn dispatch(&self, msg: &mut [u8]) {
+    pub async fn dispatch(&self, msg: &mut RynkMessage<'_>) {
         let payload_len: usize = match self.handle(msg).await {
             Ok(n) => n,
-            Err(e) => msg
-                .payload_mut()
-                .and_then(|p| Self::write_error_response(p, e))
+            // Postcard's `Err` encoding doesn't reference `T`, so
+            // `Err::<(), RynkError>(e)` is byte-identical on the wire to
+            // any `Result<T, RynkError>::Err(e)` the host expects.
+            Err(e) => postcard::to_slice(&Err::<(), RynkError>(e), msg.payload_mut())
+                .map(|s| s.len())
                 .unwrap_or(0),
         };
-        if let Err(e) = msg.set_payload_len(payload_len as u16) {
-            error!("Rynk dispatch failed to write payload_len: {:?}", e);
-        }
+        msg.set_payload_len(payload_len as u16);
     }
 
-    async fn handle(&self, msg: &mut [u8]) -> Result<usize, RynkError> {
-        let cmd = msg.cmd()?;
-        let payload = msg.payload_mut()?;
+    async fn handle(&self, msg: &mut RynkMessage<'_>) -> Result<usize, RynkError> {
+        let cmd = msg.cmd();
+        let payload = msg.payload_mut();
         let payload_len = match cmd {
             // ── System ──
             Cmd::GetVersion => self.handle_get_version(payload).await?,
@@ -156,30 +158,5 @@ impl<'a> RynkService<'a> {
         postcard::to_slice(&Ok::<&T, RynkError>(value), payload)
             .map(|s| s.len())
             .map_err(|_| RynkError::Internal)
-    }
-
-    /// Encode `err` as the `Err` arm of a `Result<T, RynkError>` envelope.
-    ///
-    /// Postcard's `Err` encoding doesn't reference `T`, so
-    /// `Err::<(), RynkError>(err)` is byte-identical on the wire to any
-    /// `Result<T, RynkError>::Err(err)` the host expects.
-    pub(crate) fn write_error_response(payload: &mut [u8], err: RynkError) -> Result<usize, RynkError> {
-        postcard::to_slice(&Err::<(), RynkError>(err), payload)
-            .map(|s| s.len())
-            .map_err(|_| RynkError::Internal)
-    }
-
-    /// Build a topic message in `msg`: header (cmd, seq=0, payload_len) and
-    /// postcard-encoded payload. The full message occupies
-    /// `&msg[..RYNK_HEADER_SIZE + msg.payload_len()]` after this returns.
-    pub fn write_topic<T: serde::Serialize>(&self, cmd: Cmd, value: &T, msg: &mut [u8]) -> Result<(), RynkError> {
-        debug_assert!(cmd.is_topic(), "write_topic called with non-topic cmd");
-        msg.set_cmd(cmd)?;
-        msg.set_seq(0)?;
-        let n = postcard::to_slice(value, msg.payload_mut()?)
-            .map(|s| s.len())
-            .map_err(|_| RynkError::Internal)?;
-        msg.set_payload_len(n as u16)?;
-        Ok(())
     }
 }
