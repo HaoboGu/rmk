@@ -13,11 +13,8 @@ use trouble_host::prelude::*;
 
 use crate::ble::ble_server::Server;
 use crate::channel::RYNK_BLE_RX_CHANNEL;
+use crate::host::rynk::transport::RynkTransportError;
 use crate::host::rynk::{RYNK_BLE_CHUNK_SIZE, RynkService};
-
-/// Variable-length value type of the Rynk `input_data` / `output_data`
-/// characteristics.
-type RynkChunk = Vec<u8, RYNK_BLE_CHUNK_SIZE>;
 
 /// Run one rynk session over `conn`. Clears any leftover RX chunks from a
 /// prior connection, constructs Rx/Tx adapters in-place, and returns when
@@ -28,7 +25,7 @@ pub async fn run_rynk_ble<'stack, 'server, P: PacketPool>(
     service: &RynkService<'_>,
 ) {
     RYNK_BLE_RX_CHANNEL.clear();
-    let mut residual = RynkChunk::new();
+    let mut residual = Vec::new();
     let mut head = 0usize;
     let mut rx = RynkBleRx {
         residual: &mut residual,
@@ -41,42 +38,16 @@ pub async fn run_rynk_ble<'stack, 'server, P: PacketPool>(
     service.run_session(&mut rx, &mut tx).await;
 }
 
-/// Error type for the BLE rynk transport. Always reports
-/// `ConnectionReset` — the framing layer only cares about live vs. gone.
-#[derive(Debug)]
-struct RynkBleError;
-
-impl core::fmt::Display for RynkBleError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("BLE rynk transport closed")
-    }
-}
-
-impl core::error::Error for RynkBleError {}
-
-impl embedded_io_async::Error for RynkBleError {
-    fn kind(&self) -> embedded_io_async::ErrorKind {
-        embedded_io_async::ErrorKind::ConnectionReset
-    }
-}
-
-#[cfg(feature = "defmt")]
-impl defmt::Format for RynkBleError {
-    fn format(&self, f: defmt::Formatter) {
-        defmt::write!(f, "RynkBleError")
-    }
-}
-
 /// Read half. Drains [`RYNK_BLE_RX_CHANNEL`] one chunk at a time, copying
 /// as much as fits into the caller's buffer and stashing any leftover in
 /// the supplied residual slot for the next `read` call.
 struct RynkBleRx<'a> {
-    residual: &'a mut RynkChunk,
+    residual: &'a mut Vec<u8, RYNK_BLE_CHUNK_SIZE>,
     head: &'a mut usize,
 }
 
 impl ErrorType for RynkBleRx<'_> {
-    type Error = RynkBleError;
+    type Error = RynkTransportError;
 }
 
 impl Read for RynkBleRx<'_> {
@@ -101,12 +72,12 @@ impl Read for RynkBleRx<'_> {
 /// Write half. Notifies the `input_data` characteristic in
 /// `RYNK_BLE_CHUNK_SIZE`-byte slices.
 struct RynkBleTx<'a, 'b, 'c, P: PacketPool> {
-    input_data: Characteristic<RynkChunk>,
+    input_data: Characteristic<Vec<u8, RYNK_BLE_CHUNK_SIZE>>,
     conn: &'a GattConnection<'b, 'c, P>,
 }
 
 impl<P: PacketPool> ErrorType for RynkBleTx<'_, '_, '_, P> {
-    type Error = RynkBleError;
+    type Error = RynkTransportError;
 }
 
 impl<P: PacketPool> Write for RynkBleTx<'_, '_, '_, P> {
@@ -116,11 +87,11 @@ impl<P: PacketPool> Write for RynkBleTx<'_, '_, '_, P> {
         }
         for chunk in buf.chunks(RYNK_BLE_CHUNK_SIZE) {
             // `chunks(RYNK_BLE_CHUNK_SIZE)` yields slices bounded by the
-            // RynkChunk capacity, so from_slice cannot fail.
-            let payload = RynkChunk::from_slice(chunk).expect("chunk size <= RYNK_BLE_CHUNK_SIZE");
+            // Vec capacity, so from_slice cannot fail.
+            let payload = Vec::<u8, RYNK_BLE_CHUNK_SIZE>::from_slice(chunk).expect("chunk size <= RYNK_BLE_CHUNK_SIZE");
             if let Err(e) = self.input_data.notify(self.conn, &payload).await {
                 error!("Failed to notify Rynk reply: {:?}", e);
-                return Err(RynkBleError);
+                return Err(RynkTransportError);
             }
         }
         Ok(buf.len())

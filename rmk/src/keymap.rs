@@ -650,6 +650,10 @@ impl<'a> KeyMap<'a> {
 
     // ── Encoder access (for Vial GetEncoder/SetEncoder) ──
 
+    pub(crate) fn num_encoders(&self) -> usize {
+        self.inner.borrow().num_encoder
+    }
+
     pub(crate) fn get_encoder_action(&self, layer: usize, id: usize) -> Option<EncoderAction> {
         let inner = self.inner.borrow();
         inner.encoders.as_ref().and_then(|encoders| {

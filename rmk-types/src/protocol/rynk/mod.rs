@@ -106,11 +106,12 @@ pub use self::system::*;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
 pub enum RynkError {
-    /// The request was malformed or referred to something out of range:
-    /// bad header, undecodable payload, index OOB, empty slot, or topic
-    /// CMD sent as a request. Host should fix the request; retrying the
-    /// same bytes will fail the same way.
-    InvalidRequest,
+    /// The request could not be decoded: header shorter than
+    /// `RYNK_HEADER_SIZE`, unknown `Cmd` discriminant, declared
+    /// `payload_len` longer than the buffer, or the payload failed to
+    /// deserialize. Host should fix the bytes; retrying the same request
+    /// will fail the same way.
+    Malformed,
     /// Device is not currently in a state to satisfy the request — BLE
     /// adapter not ready, peripheral disconnected, etc. Host may retry
     /// once the state changes.
@@ -126,6 +127,11 @@ pub enum RynkError {
     /// Command is recognized but the handler is not implemented in this
     /// firmware build.
     Unimplemented,
+    /// The request decoded cleanly but is semantically invalid: an
+    /// out-of-range index, a value out of range, an empty slot, or a
+    /// topic CMD sent as a request. Host should fix the request; retrying
+    /// the same request will fail the same way.
+    Invalid,
 }
 
 // ---------------------------------------------------------------------------
@@ -295,11 +301,12 @@ mod tests {
     #[test]
     fn round_trip_rynk_error_and_result() {
         use super::test_utils::round_trip;
-        round_trip(&RynkError::InvalidRequest);
+        round_trip(&RynkError::Malformed);
         round_trip(&RynkError::NotReady);
         round_trip(&RynkError::StorageFault);
         round_trip(&RynkError::Internal);
         round_trip(&RynkError::Unimplemented);
+        round_trip(&RynkError::Invalid);
         let ok: Result<(), RynkError> = Ok(());
         let err: Result<(), RynkError> = Err(RynkError::StorageFault);
         let _ = round_trip(&ok);
@@ -335,7 +342,8 @@ mod tests {
             ("MatrixState{[0x05,0x00,0x20]}", encode(&matrix)),
             ("ProtocolVersion{1,0}", encode(&ProtocolVersion { major: 1, minor: 0 }),),
             ("RynkError::Internal", encode(&RynkError::Internal)),
-            ("RynkError::InvalidRequest", encode(&RynkError::InvalidRequest)),
+            ("RynkError::Invalid", encode(&RynkError::Invalid)),
+            ("RynkError::Malformed", encode(&RynkError::Malformed)),
             ("RynkError::NotReady", encode(&RynkError::NotReady)),
             ("RynkError::StorageFault", encode(&RynkError::StorageFault)),
             ("RynkError::Unimplemented", encode(&RynkError::Unimplemented)),

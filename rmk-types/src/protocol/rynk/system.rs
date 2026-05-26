@@ -18,7 +18,7 @@ pub struct ProtocolVersion {
 
 impl ProtocolVersion {
     /// Current protocol version for this firmware release.
-    pub const CURRENT: Self = Self { major: 1, minor: 0 };
+    pub const CURRENT: Self = Self { major: 1, minor: 1 };
 }
 
 /// Device capabilities discovered during the connection handshake.

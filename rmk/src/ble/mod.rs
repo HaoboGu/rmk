@@ -291,7 +291,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let input_keyboard = server.hid_service.input_keyboard;
     #[cfg(feature = "vial")]
     let (output_host, input_host) = (server.vial_service.output_data, server.vial_service.input_data);
-    #[cfg(feature = "host")]
+    #[cfg(feature = "vial")]
     let host_control_point = server.vial_service.hid_control_point;
     // `Characteristic<heapless::Vec<u8, N>>` derives `Copy` with an implicit
     // `T: Copy` bound that `heapless::Vec` doesn't satisfy, so clone the
@@ -371,9 +371,9 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         }
                     }
                     GattEvent::Write(event) => {
-                        #[cfg(feature = "host")]
+                        #[cfg(feature = "vial")]
                         let host_control_point_match = event.handle() == host_control_point.handle;
-                        #[cfg(not(feature = "host"))]
+                        #[cfg(not(feature = "vial"))]
                         let host_control_point_match = false;
 
                         if event.handle() == output_keyboard.handle {
@@ -435,10 +435,15 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             if !handled && event.handle() == rynk_output.handle {
                                 let data = event.data();
                                 debug!("Got Rynk packet ({} bytes)", data.len());
-                                match heapless::Vec::from_slice(data) {
-                                    Ok(chunk) => crate::channel::RYNK_BLE_RX_CHANNEL.send(chunk).await,
-                                    Err(_) => {
-                                        warn!("Rynk write of {} bytes exceeds chunk capacity, dropping", data.len())
+                                // Skip empty writes: an empty chunk would surface as
+                                // `Ok(0)` = EOF in `rynk::RynkBleRx::read` and tear down
+                                // the session.
+                                if !data.is_empty() {
+                                    match heapless::Vec::from_slice(data) {
+                                        Ok(chunk) => crate::channel::RYNK_BLE_RX_CHANNEL.send(chunk).await,
+                                        Err(_) => {
+                                            warn!("Rynk write of {} bytes exceeds chunk capacity, dropping", data.len())
+                                        }
                                     }
                                 }
                                 handled = true;

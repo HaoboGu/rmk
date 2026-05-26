@@ -14,6 +14,9 @@
 
 mod handlers;
 pub(crate) mod topics;
+// Shared error for RMK-authored adapters; only BLE hand-writes one today.
+#[cfg(feature = "_ble")]
+pub mod transport;
 pub mod uart;
 
 use embassy_futures::select::{Either, select};
@@ -138,10 +141,10 @@ impl<'a> RynkService<'a> {
 
             // Topic CMDs — host shouldn't be sending these as requests.
             Cmd::LayerChange | Cmd::WpmUpdate | Cmd::ConnectionChange | Cmd::SleepState | Cmd::LedIndicator => {
-                return Err(RynkError::InvalidRequest);
+                return Err(RynkError::Invalid);
             }
             #[cfg(feature = "_ble")]
-            Cmd::BatteryStatusTopic => return Err(RynkError::InvalidRequest),
+            Cmd::BatteryStatusTopic => return Err(RynkError::Invalid),
         };
         Ok(payload_len)
     }
