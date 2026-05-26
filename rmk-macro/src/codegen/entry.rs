@@ -227,22 +227,17 @@ fn transport_setup(
 
     let host_active = host.vial_enabled || host.rynk_enabled;
 
-    let usb_prelude = if host_active {
-        quote! {
-            let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config)
-                .with_host_service(&host_service);
-        }
+    let with_host = if host_active {
+        quote! { .with_host_service(&host_service) }
     } else {
-        quote! { let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config); }
+        quote! {}
     };
-    let ble_prelude = if host_active {
-        quote! {
-            let mut ble_transport = ::rmk::ble::BleTransport::new(&stack, rmk_config)
-                .await
-                .with_host_service(&host_service);
-        }
-    } else {
-        quote! { let mut ble_transport = ::rmk::ble::BleTransport::new(&stack, rmk_config).await; }
+
+    let usb_prelude = quote! {
+        let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config)#with_host;
+    };
+    let ble_prelude = quote! {
+        let mut ble_transport = ::rmk::ble::BleTransport::new(&stack, rmk_config).await #with_host;
     };
 
     match communication {

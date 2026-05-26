@@ -3,7 +3,7 @@ use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor};
 
 use super::battery_service::BatteryService;
 use super::device_info::DeviceConfigurationService;
-#[cfg(feature = "host")]
+#[cfg(feature = "vial")]
 use crate::hid::ViaReport;
 use crate::hid::{CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report};
 
@@ -15,10 +15,10 @@ pub(crate) const CCCD_TABLE_SIZE: usize = trouble_host::config::CLIENT_ATT_TABLE
 use crate::host::rynk::RYNK_BLE_CHUNK_SIZE;
 
 // `gatt_server` compiles every member regardless of the surrounding `cfg` —
-// gating an individual field with `#[cfg(feature = "host")]` doesn't work. So
-// the whole struct is duplicated, with and without `host_service`. Likewise
-// the Rynk service forces a third variant.
-#[cfg(all(feature = "host", not(feature = "rynk")))]
+// gating an individual field with `#[cfg]` doesn't work. So the whole struct is
+// duplicated once per host protocol: `vial` exposes `vial_service`, `rynk`
+// exposes `rynk_service`, and the no-host variant has neither.
+#[cfg(feature = "vial")]
 #[gatt_server]
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
@@ -28,12 +28,11 @@ pub(crate) struct Server {
     pub(crate) device_config_service: DeviceConfigurationService,
 }
 
-#[cfg(all(feature = "host", feature = "rynk"))]
+#[cfg(feature = "rynk")]
 #[gatt_server]
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
     pub(crate) hid_service: HidService,
-    pub(crate) vial_service: VialService,
     pub(crate) rynk_service: RynkService,
     pub(crate) composite_service: CompositeService,
     pub(crate) device_config_service: DeviceConfigurationService,
@@ -60,7 +59,7 @@ pub(crate) struct RynkService {
 /// `input_data` notify; hosts push requests through `output_data`. `gatt_events_task`
 /// forwards `output_data` writes into [`crate::channel::VIAL_BLE_RX_CHANNEL`] for
 /// [`crate::host::ble::run_vial_ble`] to drain.
-#[cfg(feature = "host")]
+#[cfg(feature = "vial")]
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
 pub(crate) struct VialService {
     #[characteristic(uuid = "2a4a", read, value = [0x01, 0x01, 0x00, 0x03])]

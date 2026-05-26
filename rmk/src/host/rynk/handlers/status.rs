@@ -39,11 +39,8 @@ impl<'a> RynkService<'a> {
     /// `PeripheralBatteryEvent` publishes.
     #[cfg(all(feature = "_ble", feature = "split"))]
     pub(crate) async fn handle_get_peripheral_status(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (id, _) = postcard::take_from_bytes::<u8>(payload).map_err(|_| RynkError::InvalidRequest)?;
-        let status = self
-            .ctx
-            .peripheral_status(id as usize)
-            .ok_or(RynkError::InvalidRequest)?;
+        let (id, _) = postcard::take_from_bytes::<u8>(payload).map_err(|_| RynkError::Malformed)?;
+        let status = self.ctx.peripheral_status(id as usize).ok_or(RynkError::Invalid)?;
         Self::write_response(&status, payload)
     }
 

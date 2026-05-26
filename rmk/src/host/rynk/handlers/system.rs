@@ -63,8 +63,7 @@ impl<'a> RynkService<'a> {
     }
 
     pub(crate) async fn handle_storage_reset(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (_mode, _) =
-            postcard::take_from_bytes::<StorageResetMode>(payload).map_err(|_| RynkError::InvalidRequest)?;
+        let (_mode, _) = postcard::take_from_bytes::<StorageResetMode>(payload).map_err(|_| RynkError::Malformed)?;
         // KeyboardContext::reset_storage() does not currently honor the
         // `LayoutOnly` mode (always Full). Phase 6 wires mode-aware reset.
         self.ctx.reset_storage().await;
