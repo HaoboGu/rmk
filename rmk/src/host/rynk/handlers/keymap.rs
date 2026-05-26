@@ -1,32 +1,30 @@
 //! Keymap and encoder handlers (encoder is part of keymap's `0x01xx` Cmd group).
 
-use rmk_types::action::EncoderAction;
 use rmk_types::protocol::rynk::{GetEncoderRequest, KeyPosition, RynkError, SetEncoderRequest, SetKeyRequest};
 
 use super::super::RynkService;
 
 impl<'a> RynkService<'a> {
     pub(crate) async fn handle_get_key_action(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (pos, _) = postcard::take_from_bytes::<KeyPosition>(payload).map_err(|_| RynkError::InvalidRequest)?;
+        let (pos, _) = postcard::take_from_bytes::<KeyPosition>(payload).map_err(|_| RynkError::Malformed)?;
         let (rows, cols, num_layers) = self.ctx.keymap_dimensions();
-        // Out-of-range reads return KeyAction::No so callers don't need a
-        // separate sentinel — keeps the wire envelope shape uniform with hits.
-        let action = if (pos.layer as usize) >= num_layers || (pos.row as usize) >= rows || (pos.col as usize) >= cols {
-            rmk_types::action::KeyAction::No
-        } else {
-            self.ctx.get_action(pos.layer, pos.row, pos.col)
-        };
+        // An out-of-range position is a semantic error — reads and writes use
+        // the same bounds (see `handle_set_key_action`).
+        if (pos.layer as usize) >= num_layers || (pos.row as usize) >= rows || (pos.col as usize) >= cols {
+            return Err(RynkError::Invalid);
+        }
+        let action = self.ctx.get_action(pos.layer, pos.row, pos.col);
         Self::write_response(&action, payload)
     }
 
     pub(crate) async fn handle_set_key_action(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (set, _) = postcard::take_from_bytes::<SetKeyRequest>(payload).map_err(|_| RynkError::InvalidRequest)?;
+        let (set, _) = postcard::take_from_bytes::<SetKeyRequest>(payload).map_err(|_| RynkError::Malformed)?;
         let (rows, cols, num_layers) = self.ctx.keymap_dimensions();
         if (set.position.layer as usize) >= num_layers
             || (set.position.row as usize) >= rows
             || (set.position.col as usize) >= cols
         {
-            return Err(RynkError::InvalidRequest);
+            return Err(RynkError::Invalid);
         }
         self.ctx
             .set_action(set.position.layer, set.position.row, set.position.col, set.action)
@@ -40,26 +38,25 @@ impl<'a> RynkService<'a> {
     }
 
     pub(crate) async fn handle_set_default_layer(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (layer, _) = postcard::take_from_bytes::<u8>(payload).map_err(|_| RynkError::InvalidRequest)?;
+        let (layer, _) = postcard::take_from_bytes::<u8>(payload).map_err(|_| RynkError::Malformed)?;
         let (_, _, num_layers) = self.ctx.keymap_dimensions();
         if (layer as usize) >= num_layers {
-            return Err(RynkError::InvalidRequest);
+            return Err(RynkError::Invalid);
         }
         self.ctx.set_default_layer(layer).await;
         Self::write_response(&(), payload)
     }
 
     pub(crate) async fn handle_get_encoder_action(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (r, _) = postcard::take_from_bytes::<GetEncoderRequest>(payload).map_err(|_| RynkError::InvalidRequest)?;
-        let action = self
-            .ctx
-            .get_encoder(r.layer, r.encoder_id)
-            .unwrap_or_else(EncoderAction::default);
+        let (r, _) = postcard::take_from_bytes::<GetEncoderRequest>(payload).map_err(|_| RynkError::Malformed)?;
+        self.check_encoder_bounds(r.layer, r.encoder_id)?;
+        let action = self.ctx.get_encoder(r.layer, r.encoder_id).ok_or(RynkError::Invalid)?;
         Self::write_response(&action, payload)
     }
 
     pub(crate) async fn handle_set_encoder_action(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (r, _) = postcard::take_from_bytes::<SetEncoderRequest>(payload).map_err(|_| RynkError::InvalidRequest)?;
+        let (r, _) = postcard::take_from_bytes::<SetEncoderRequest>(payload).map_err(|_| RynkError::Malformed)?;
+        self.check_encoder_bounds(r.layer, r.encoder_id)?;
         // No clean "set whole encoder" accessor exists yet — split into two writes.
         self.ctx
             .set_encoder_clockwise(r.layer, r.encoder_id, r.action.clockwise)
@@ -68,6 +65,18 @@ impl<'a> RynkService<'a> {
             .set_encoder_counter_clockwise(r.layer, r.encoder_id, r.action.counter_clockwise)
             .await;
         Self::write_response(&(), payload)
+    }
+
+    /// `Invalid` for an out-of-range encoder. Checks `layer` and `encoder_id`
+    /// explicitly rather than relying on `get_encoder` returning `None`: the
+    /// keymap flat-indexes encoders (`layer * num_encoder + id`), so an
+    /// over-range `id` would otherwise alias into another layer's slot.
+    fn check_encoder_bounds(&self, layer: u8, encoder_id: u8) -> Result<(), RynkError> {
+        let (_, _, num_layers) = self.ctx.keymap_dimensions();
+        if (layer as usize) >= num_layers || (encoder_id as usize) >= self.ctx.num_encoders() {
+            return Err(RynkError::Invalid);
+        }
+        Ok(())
     }
 
     #[cfg(feature = "bulk_transfer")]

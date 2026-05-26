@@ -142,6 +142,11 @@ impl<'a> KeyboardContext<'a> {
         self.keymap.get_encoder_action(layer as usize, idx as usize)
     }
 
+    /// Number of encoders per layer.
+    pub fn num_encoders(&self) -> usize {
+        self.keymap.num_encoders()
+    }
+
     pub async fn set_encoder_clockwise(&self, layer: u8, idx: u8, action: KeyAction) {
         let updated = self.keymap.set_encoder_clockwise(layer as usize, idx as usize, action);
         #[cfg(feature = "storage")]
