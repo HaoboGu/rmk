@@ -13,6 +13,25 @@ pub struct DeviceConfig<'a> {
     pub serial_number: &'a str,
 }
 
+/// RMK version string embedded in the USB serial number: `rmk:<version>-<git-hash>`.
+///
+/// When the `vial` feature is enabled the string also includes `;vial:f64c2b3c` so that
+/// vial-gui can discover the device without requiring a hardcoded serial number override.
+///
+/// Downstream firmware can extend this with their own build info using
+/// `const_format::concatcp!(rmk::RMK_BUILD_INFO, ";my-firmware:", env!("CARGO_PKG_VERSION"), "-", env!("MY_GIT_HASH"))`.
+#[cfg(feature = "vial")]
+pub const RMK_BUILD_INFO: &str = concat!(
+    "rmk:",
+    env!("CARGO_PKG_VERSION"),
+    "-",
+    env!("RMK_GIT_HASH"),
+    ";vial:f64c2b3c"
+);
+
+#[cfg(not(feature = "vial"))]
+pub const RMK_BUILD_INFO: &str = concat!("rmk:", env!("CARGO_PKG_VERSION"), "-", env!("RMK_GIT_HASH"));
+
 impl Default for DeviceConfig<'_> {
     fn default() -> Self {
         Self {
@@ -20,7 +39,7 @@ impl Default for DeviceConfig<'_> {
             pid: 0x4643,
             manufacturer: "RMK",
             product_name: "RMK Keyboard",
-            serial_number: "vial:f64c2b3c:000001",
+            serial_number: RMK_BUILD_INFO,
         }
     }
 }

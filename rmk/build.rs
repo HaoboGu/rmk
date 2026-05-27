@@ -11,6 +11,11 @@ fn main() {
     common::set_target_cfgs(&mut cfgs);
 
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=.git/HEAD");
+
+    // Emit the short git hash so device.rs can stamp it into the USB serial number.
+    let git_hash = get_git_hash();
+    println!("cargo:rustc-env=RMK_GIT_HASH={git_hash}");
 
     // Compute build hash and write to constants.rs
     let build_hash = compute_build_hash();
@@ -22,9 +27,8 @@ fn main() {
     let dest_path = Path::new(&out_dir).join("constants.rs");
     fs::write(&dest_path, constants).expect("Failed to write constants.rs file");
 }
-fn compute_build_hash() -> u32 {
-    // Get the short hash of the latest Git commit. Use "unknown" if it fails
-    let commit_id = Command::new("git")
+fn get_git_hash() -> String {
+    Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
         .output()
         .ok()
@@ -35,7 +39,11 @@ fn compute_build_hash() -> u32 {
                 None
             }
         })
-        .unwrap_or_else(|| "unknown".to_string());
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn compute_build_hash() -> u32 {
+    let commit_id = get_git_hash();
 
     // Get and format current local time
     let now = std::time::SystemTime::now()
