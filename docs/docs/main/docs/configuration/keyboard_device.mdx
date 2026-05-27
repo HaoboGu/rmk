@@ -18,7 +18,7 @@ vendor_id = 0x4c4b                # USB vendor ID (16-bit hex)
 product_id = 0x4643               # USB product ID (16-bit hex)
 manufacturer = "YourName"         # (Optional) Manufacturer string
 product_name = "KeyboardName"     # (Optional) Keyboard name, if not set, it will be same as `name` field
-serial_number = "vial:f64c2b3c"   # (Optional) Serial number of the keyboard
+serial_number = "my-firmware-v1"  # (Optional) Serial number; defaults to rmk:<version>-<git-hash>
 chip = "nrf52840"                 # Target microcontroller
 usb_enable = true                 # (Optional) Enable USB functionality. If omitted, RMK uses the board/chip default.
 ```
@@ -27,20 +27,23 @@ usb_enable = true                 # (Optional) Enable USB functionality. If omit
 <Tab label={<Rust />}>
 
 ```rust title="main.rs"
+use const_format::concatcp;
+use rmk::config::{DeviceConfig, RmkConfig, RMK_BUILD_INFO};
 
 let keyboard_device_config = DeviceConfig {
     vid: 0x4c4b,
     pid: 0x4643,
     manufacturer: "Haobo",
     product_name: "RMK Keyboard",
-    serial_number: "vial:f64c2b3c:000001",
+    // Omit serial_number to use RMK's default (includes ;vial:f64c2b3c for Vial builds).
+    // To append downstream firmware info, use concatcp! from the `const_format` crate:
+    serial_number: concatcp!(RMK_BUILD_INFO, ";my-firmware:", env!("CARGO_PKG_VERSION")),
 };
 
 let rmk_config = RmkConfig {
     device_config: keyboard_device_config,
     // .. Other configurations
 };
-
 ```
 
 </Tab>
@@ -48,7 +51,9 @@ let rmk_config = RmkConfig {
 
 ::: info
 
-To make your keyboard to be recognized by Vial, the `serial_number` shall start with `vial:f64c2b3c:`
+If `serial_number` is omitted, RMK embeds a version stamp automatically. For Vial builds (the
+default), this is `rmk:<version>-<git-hash>;vial:f64c2b3c`, which lets Vial discover the
+keyboard without a hardcoded serial override. Non-Vial builds omit the Vial suffix.
 
 :::
 
@@ -102,4 +107,45 @@ For microcontrollers that lack full USB device functionality (such as the nRF528
 [keyboard]
 chip = "nrf52832"
 usb_enable = false  # Required for chips without USB
+```
+
+## Custom serial number stamps
+
+Downstream firmware projects can extend the RMK serial stamp with their own version and Git hash.
+RMK exposes `rmk::config::RMK_BUILD_INFO` as a compile-time `&str` constant
+(`"rmk:<version>-<git-hash>"`). For simple cases, use
+[`const_format`](https://docs.rs/const_format)'s `concatcp!` macro as shown in the Rust tab
+above, producing a serial like `rmk:0.8.2-a1b2c3d4;my-firmware:1.0.0`.
+
+For richer stamps (e.g. including a Git hash of the downstream repo itself), emit a custom
+environment variable from your `build.rs` and reference it with `env!`:
+
+```rust title="build.rs"
+use std::process::Command;
+
+fn main() {
+    println!("cargo:rerun-if-changed=Cargo.lock");
+    println!("cargo:rerun-if-changed=.git/HEAD");
+
+    let hash = Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let version = std::env::var("CARGO_PKG_VERSION").unwrap();
+    println!("cargo:rustc-env=MY_FIRMWARE_STAMP=my-firmware:{version}-{hash}");
+}
+```
+
+```rust title="main.rs"
+use const_format::concatcp;
+use rmk::config::{DeviceConfig, RMK_BUILD_INFO};
+
+let keyboard_device_config = DeviceConfig {
+    serial_number: concatcp!(RMK_BUILD_INFO, ";", env!("MY_FIRMWARE_STAMP")),
+    ..DeviceConfig::default()
+};
 ```
