@@ -20,7 +20,7 @@ vendor_id = 0x4c4b                # USB vendor ID (16-bit hex)
 product_id = 0x4643               # USB product ID (16-bit hex)
 manufacturer = "YourName"         # (Optional) Manufacturer string
 product_name = "KeyboardName"     # (Optional) Keyboard name, if not set, it will be same as `name` field
-serial_number = "vial:f64c2b3c"   # (Optional) Serial number of the keyboard
+serial_number = "my-firmware-v1"  # (Optional) Serial number; defaults to rmk:<version> (with a vial: prefix for Vial builds)
 chip = "nrf52840"                 # Target microcontroller
 usb_enable = true                 # (Optional) Enable USB functionality. If omitted, RMK uses the board/chip default.
 ```
@@ -29,20 +29,22 @@ usb_enable = true                 # (Optional) Enable USB functionality. If omit
 <Tab label={<Rust />}>
 
 ```rust title="main.rs"
+use rmk::config::{DeviceConfig, RmkConfig};
 
 let keyboard_device_config = DeviceConfig {
     vid: 0x4c4b,
     pid: 0x4643,
     manufacturer: "Haobo",
     product_name: "RMK Keyboard",
-    serial_number: "vial:f64c2b3c:000001",
+    // Omit serial_number to use RMK's default version stamp (Vial builds get the
+    // vial: marker automatically).
+    ..Default::default()
 };
 
 let rmk_config = RmkConfig {
     device_config: keyboard_device_config,
     // .. Other configurations
 };
-
 ```
 
 </Tab>
@@ -50,8 +52,27 @@ let rmk_config = RmkConfig {
 
 ::: info
 
-To make your keyboard to be recognized by Vial, the `serial_number` shall start with
-`vial:f64c2b3c:`
+If `serial_number` is omitted, RMK embeds a version stamp automatically. For Vial builds (the
+default), this is `vial:f64c2b3c;rmk:<version>`, which lets Vial discover the keyboard without a
+hardcoded serial override. Non-Vial builds use `rmk:<version>` without the Vial marker. The Vial
+marker comes first because BLE's serial number characteristic is length limited, so a trailing
+marker can be truncated away.
+
+:::
+
+::: tip Overriding the serial number
+
+Set `serial_number` explicitly in `DeviceConfig` to use your own value instead of the RMK default.
+For Vial to discover the keyboard, the value must start with `vial:f64c2b3c`:
+
+```rust title="main.rs"
+use rmk::config::DeviceConfig;
+
+let keyboard_device_config = DeviceConfig {
+    serial_number: "vial:f64c2b3c;my-firmware:1.0.0",
+    ..DeviceConfig::default()
+};
+```
 
 :::
 
@@ -106,3 +127,4 @@ support must be explicitly disabled:
 chip = "nrf52832"
 usb_enable = false  # Required for chips without USB
 ```
+
