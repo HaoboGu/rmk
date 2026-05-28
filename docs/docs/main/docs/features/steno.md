@@ -69,3 +69,4 @@ let keymap = [
   service has no stenography characteristic.
 - No dictionary on the keyboard. RMK sends raw steno chords to the host;
   translation to text happens in Plover.
+- No serial emulation: TX Bolt and GeminiPR are not supported.
