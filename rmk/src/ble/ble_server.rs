@@ -14,10 +14,6 @@ pub(crate) const CCCD_TABLE_SIZE: usize = trouble_host::config::CLIENT_ATT_TABLE
 #[cfg(feature = "rynk")]
 use crate::host::rynk::RYNK_BLE_CHUNK_SIZE;
 
-// `gatt_server` compiles every member regardless of the surrounding `cfg` —
-// gating an individual field with `#[cfg]` doesn't work. So the whole struct is
-// duplicated once per host protocol: `vial` exposes `vial_service`, `rynk`
-// exposes `rynk_service`, and the no-host variant has neither.
 #[cfg(feature = "vial")]
 #[gatt_server]
 pub(crate) struct Server {
@@ -38,13 +34,22 @@ pub(crate) struct Server {
     pub(crate) device_config_service: DeviceConfigurationService,
 }
 
+#[cfg(not(feature = "host"))]
+#[gatt_server]
+pub(crate) struct Server {
+    pub(crate) battery_service: BatteryService,
+    pub(crate) hid_service: HidService,
+    pub(crate) composite_service: CompositeService,
+    pub(crate) device_config_service: DeviceConfigurationService,
+}
+
 /// Rynk-over-GATT transport. The host writes request chunks to `output_data`;
 /// the firmware replies via `input_data` notify. Variable-length values use
 /// `heapless::Vec` so each notify only spends MTU − 3 bytes for the bytes it
 /// actually carries (a fixed `[u8; N]` would always send N).
 ///
 /// `gatt_events_task` forwards `output_data` writes into
-/// [`crate::channel::RYNK_BLE_RX_CHANNEL`] for [`crate::ble::rynk::run_rynk_ble`] to drain.
+/// [`crate::channel::RYNK_BLE_RX_PIPE`] for [`crate::ble::rynk::run_rynk_ble`] to drain.
 #[cfg(feature = "rynk")]
 #[gatt_service(uuid = "10900067-537f-4f0a-9b55-929e271f61ab")]
 pub(crate) struct RynkService {
@@ -76,15 +81,6 @@ pub(crate) struct VialService {
     #[descriptor(uuid = "2908", read, value = [0u8, 2u8])]
     #[characteristic(uuid = "2a4d", read, write, write_without_response)]
     pub(crate) output_data: [u8; 32],
-}
-
-#[cfg(not(feature = "host"))]
-#[gatt_server]
-pub(crate) struct Server {
-    pub(crate) battery_service: BatteryService,
-    pub(crate) hid_service: HidService,
-    pub(crate) composite_service: CompositeService,
-    pub(crate) device_config_service: DeviceConfigurationService,
 }
 
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]

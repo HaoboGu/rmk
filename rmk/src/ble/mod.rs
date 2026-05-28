@@ -435,16 +435,10 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             if !handled && event.handle() == rynk_output.handle {
                                 let data = event.data();
                                 debug!("Got Rynk packet ({} bytes)", data.len());
-                                // Skip empty writes: an empty chunk would surface as
-                                // `Ok(0)` = EOF in `rynk::RynkBleRx::read` and tear down
-                                // the session.
                                 if !data.is_empty() {
-                                    match heapless::Vec::from_slice(data) {
-                                        Ok(chunk) => crate::channel::RYNK_BLE_RX_CHANNEL.send(chunk).await,
-                                        Err(_) => {
-                                            warn!("Rynk write of {} bytes exceeds chunk capacity, dropping", data.len())
-                                        }
-                                    }
+                                    // Awaits the pipe's backpressure when the rynk
+                                    // consumer falls behind.
+                                    crate::channel::RYNK_BLE_RX_PIPE.write_all(data).await;
                                 }
                                 handled = true;
                             } else if !handled
