@@ -19,6 +19,7 @@ pub struct BehaviorConfig {
     pub keyboard_macros: KeyboardMacrosConfig,
     pub mouse_key: MouseKeyConfig,
     pub sticky_mod: StickyModConfig,
+    pub sticky_key: StickyKeyConfig,
 }
 
 /// Configurations for tap behavior
@@ -92,6 +93,20 @@ pub struct StickyModConfig {
 }
 
 impl Default for StickyModConfig {
+    fn default() -> Self {
+        Self { timeout: Duration::MAX }
+    }
+}
+
+/// Configuration for StickyKey behavior
+#[derive(Clone, Copy, Debug)]
+pub struct StickyKeyConfig {
+    /// Global timeout before auto-releasing held modifiers.
+    /// Duration::MAX = no timeout — modifier held until key press or layer change.
+    pub timeout: Duration,
+}
+
+impl Default for StickyKeyConfig {
     fn default() -> Self {
         Self { timeout: Duration::MAX }
     }
