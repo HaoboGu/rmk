@@ -8,8 +8,8 @@
 //!   session, repeat.
 
 use embassy_usb::Builder;
-use embassy_usb::class::hid::{HidReader, HidWriter, ReadError};
-use embassy_usb::driver::{Driver, EndpointError};
+use embassy_usb::class::hid::{HidReader, HidWriter};
+use embassy_usb::driver::Driver;
 use embedded_io_async::{ErrorType, Read, Write};
 
 use crate::hid::ViaReport;
@@ -83,9 +83,11 @@ impl<D: Driver<'static>> Read for VialUsbRx<'_, D> {
             return Err(VialUsbError);
         }
         match self.reader.read(&mut buf[..32]).await {
-            Ok(_) => Ok(32),
-            Err(ReadError::Disabled) => Err(VialUsbError),
-            Err(ReadError::Sync(_) | ReadError::BufferOverflow) => Err(VialUsbError),
+            Ok(n) => Ok(n),
+            Err(e) => {
+                error!("USB host read error: {:?}", e);
+                Err(VialUsbError)
+            }
         }
     }
 }
@@ -104,7 +106,10 @@ impl<D: Driver<'static>> Write for VialUsbTx<'_, D> {
         let n = buf.len().min(32);
         match self.writer.write(&buf[..n]).await {
             Ok(()) => Ok(n),
-            Err(EndpointError::Disabled) | Err(EndpointError::BufferOverflow) => Err(VialUsbError),
+            Err(e) => {
+                error!("USB host write error: {:?}", e);
+                Err(VialUsbError)
+            }
         }
     }
 

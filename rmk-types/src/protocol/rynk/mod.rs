@@ -94,49 +94,24 @@ pub use self::morse::*;
 pub use self::status::*;
 pub use self::system::*;
 
-// ---------------------------------------------------------------------------
-// Protocol-wide error primitives
-// ---------------------------------------------------------------------------
-
 /// Protocol-level error returned in every response payload.
-///
-/// Variants are grouped by what the host should *do* about them, not by
-/// where in the firmware they originated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
 pub enum RynkError {
-    /// The request could not be decoded: header shorter than
-    /// `RYNK_HEADER_SIZE`, unknown `Cmd` discriminant, declared
-    /// `payload_len` longer than the buffer, or the payload failed to
-    /// deserialize. Host should fix the bytes; retrying the same request
-    /// will fail the same way.
+    /// The request could not be decoded
     Malformed,
-    /// Device is not currently in a state to satisfy the request — BLE
-    /// adapter not ready, peripheral disconnected, etc. Host may retry
-    /// once the state changes.
+    /// Device is not currently in a state to satisfy the request
     NotReady,
-    /// Persistent storage failed on a write path (flash erase/write
-    /// error). Host may retry once; repeated failures indicate flash
-    /// health issues.
+    /// Persistent storage failed on a write path (flash erase/write error)
     StorageFault,
-    /// Internal firmware fault — reentrant borrow, response too large to
-    /// encode, or another "should not happen" arm. Host should surface
-    /// it for diagnostics but can't act on it.
+    /// Internal firmware fault.
     Internal,
-    /// Command is recognized but the handler is not implemented in this
-    /// firmware build.
+    /// Command is recognized but the handler is not implemented yet.
     Unimplemented,
-    /// The request decoded cleanly but is semantically invalid: an
-    /// out-of-range index, a value out of range, an empty slot, or a
-    /// topic CMD sent as a request. Host should fix the request; retrying
-    /// the same request will fail the same way.
+    /// The request decoded cleanly but is semantically invalid.
     Invalid,
 }
-
-// ---------------------------------------------------------------------------
-// Test utilities (shared across submodule test mods)
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 pub(crate) mod test_utils {

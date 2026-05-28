@@ -56,16 +56,10 @@ impl<'a> RynkService<'a> {
     /// Process one inbound message in place. Always writes a response
     /// envelope (Ok or Err) into `msg`; `cmd` and `seq` are echoed verbatim.
     pub async fn dispatch(&self, msg: &mut RynkMessage<'_>) {
-        let payload_len: usize = match self.handle(msg).await {
-            Ok(n) => n,
-            // Postcard's `Err` encoding doesn't reference `T`, so
-            // `Err::<(), RynkError>(e)` is byte-identical on the wire to
-            // any `Result<T, RynkError>::Err(e)` the host expects.
-            Err(e) => postcard::to_slice(&Err::<(), RynkError>(e), msg.payload_mut())
-                .map(|s| s.len())
-                .unwrap_or(0),
-        };
-        msg.set_payload_len(payload_len as u16);
+        match self.handle(msg).await {
+            Ok(n) => msg.set_payload_len(n as u16),
+            Err(e) => msg.write_error(e),
+        }
     }
 
     async fn handle(&self, msg: &mut RynkMessage<'_>) -> Result<usize, RynkError> {
@@ -209,20 +203,25 @@ impl RynkService<'_> {
                 Err(_) => return,
             }
 
-            if rx_used >= RYNK_HEADER_SIZE {
+            // Drain every complete frame already buffered before reading
+            // again. Without this, a host that pipelines two frames in one
+            // syscall and then disconnects would lose the second frame —
+            // the next read would return EOF before it could be processed.
+            while rx_used >= RYNK_HEADER_SIZE {
                 let payload_n = u16::from_le_bytes([buf[3], buf[4]]) as usize;
                 let frame_len = RYNK_HEADER_SIZE + payload_n;
-                if rx_used < frame_len {
-                    continue;
+                if frame_len > buf.len() {
+                    // Declared frame_len won't fit in the buffer.
+                    warn!("Rynk: frame_len {} exceeds buffer {}", frame_len, buf.len());
+                    let resp_len = RynkMessage::encode_error_reply(&mut buf, RynkError::Malformed);
+                    if tx.write_all(&buf[..resp_len]).await.is_err() {
+                        return;
+                    }
+                    rx_used = 0;
+                    break;
                 }
-                if rx_used > frame_len {
-                    // Trailing bytes get clobbered by the in-place response
-                    // below — rynk callers don't pipeline, but warn so a
-                    // misbehaving host is visible.
-                    warn!(
-                        "Rynk: discarding {} trailing byte(s) past frame end",
-                        rx_used - frame_len
-                    );
+                if rx_used < frame_len {
+                    break; // need more bytes
                 }
                 let resp_len = match RynkMessage::try_from(&mut buf[..frame_len]) {
                     Ok(mut msg) => {
@@ -231,15 +230,196 @@ impl RynkService<'_> {
                     }
                     Err(e) => {
                         warn!("Rynk: invalid frame: {:?}", e);
-                        rx_used = 0;
-                        continue;
+                        RynkMessage::encode_error_reply(&mut buf, RynkError::Malformed)
                     }
                 };
                 if tx.write_all(&buf[..resp_len]).await.is_err() {
                     return;
                 }
-                rx_used = 0;
+                // Preserve any pipelined trailing bytes for the next iteration.
+                buf.copy_within(frame_len..rx_used, 0);
+                rx_used -= frame_len;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate alloc;
+
+    use alloc::collections::VecDeque;
+    use alloc::vec;
+    use alloc::vec::Vec;
+
+    use embedded_io_async::{ErrorKind, ErrorType, Read, Write};
+    use rmk_types::action::KeyAction;
+    use rmk_types::protocol::rynk::ProtocolVersion;
+
+    use super::*;
+    use crate::config::{BehaviorConfig, PositionalConfig, RmkConfig};
+    use crate::keymap::{KeyMap, KeymapData};
+    use crate::test_support::test_block_on as block_on;
+
+    /// Returns each item in `chunks` as a separate `read` call, with partial
+    /// buffers handled by draining bytes from the head of the front chunk.
+    /// Yields `Ok(0)` (EOF) once all chunks are drained.
+    struct ChunkRead {
+        chunks: VecDeque<Vec<u8>>,
+    }
+
+    impl ErrorType for ChunkRead {
+        type Error = ErrorKind;
+    }
+
+    impl Read for ChunkRead {
+        async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+            let Some(chunk) = self.chunks.front_mut() else {
+                return Ok(0);
+            };
+            let n = chunk.len().min(buf.len());
+            buf[..n].copy_from_slice(&chunk[..n]);
+            chunk.drain(..n);
+            if chunk.is_empty() {
+                self.chunks.pop_front();
+            }
+            Ok(n)
+        }
+    }
+
+    /// Captures every byte handed to `write` into a `Vec` for later assertion.
+    struct VecWrite {
+        captured: Vec<u8>,
+    }
+
+    impl ErrorType for VecWrite {
+        type Error = ErrorKind;
+    }
+
+    impl Write for VecWrite {
+        async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+            self.captured.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        async fn flush(&mut self) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+
+    /// Build a `GetVersion` request frame with `seq`. The payload slot is sized
+    /// to hold the in-place response (`Ok(ProtocolVersion)` = 3 bytes).
+    fn get_version_frame(seq: u8) -> Vec<u8> {
+        let cmd = Cmd::GetVersion as u16;
+        let payload_len: u16 = 4;
+        let total = RYNK_HEADER_SIZE + payload_len as usize;
+        let mut v = vec![0u8; total];
+        v[0..2].copy_from_slice(&cmd.to_le_bytes());
+        v[2] = seq;
+        v[3..5].copy_from_slice(&payload_len.to_le_bytes());
+        v
+    }
+
+    /// Two pipelined `GetVersion` frames arriving across a split read — chunk 1
+    /// carries all of frame 1 plus the first 3 bytes of frame 2 (header only),
+    /// chunk 2 carries the rest of frame 2. The post-dispatch `copy_within`
+    /// must preserve the in-flight prefix of frame 2; without it, `rx_used = 0`
+    /// would discard those bytes and frame 2's response would never be emitted.
+    #[test]
+    fn run_session_preserves_pipelined_trailing_bytes() {
+        let mut behavior = BehaviorConfig::default();
+        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
+        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+        let config = RmkConfig::default();
+        let service = RynkService::new(&keymap, &config);
+
+        let frame_one = get_version_frame(0);
+        let frame_two = get_version_frame(1);
+
+        let mut chunk_a = frame_one.clone();
+        chunk_a.extend_from_slice(&frame_two[..3]);
+        let chunk_b = frame_two[3..].to_vec();
+
+        let mut chunks = VecDeque::new();
+        chunks.push_back(chunk_a);
+        chunks.push_back(chunk_b);
+
+        let mut rx = ChunkRead { chunks };
+        let mut tx = VecWrite { captured: Vec::new() };
+
+        block_on(service.run_session(&mut rx, &mut tx));
+
+        // Response: 5-byte header + 3-byte `Ok(ProtocolVersion)` payload.
+        const RESP_PAYLOAD_LEN: usize = 3;
+        const RESP_FRAME_LEN: usize = RYNK_HEADER_SIZE + RESP_PAYLOAD_LEN;
+
+        assert_eq!(
+            tx.captured.len(),
+            RESP_FRAME_LEN * 2,
+            "expected two complete response frames; got {} bytes (would be {} without the pipelining fix)",
+            tx.captured.len(),
+            RESP_FRAME_LEN,
+        );
+
+        let mut expected_payload = [0u8; RESP_PAYLOAD_LEN];
+        let n = postcard::to_slice(
+            &Ok::<&ProtocolVersion, RynkError>(&ProtocolVersion::CURRENT),
+            &mut expected_payload[..],
+        )
+        .unwrap()
+        .len();
+        assert_eq!(n, RESP_PAYLOAD_LEN);
+
+        for (i, expected_seq) in [0u8, 1u8].iter().enumerate() {
+            let off = i * RESP_FRAME_LEN;
+            let resp = &tx.captured[off..off + RESP_FRAME_LEN];
+            assert_eq!(
+                &resp[0..2],
+                &(Cmd::GetVersion as u16).to_le_bytes(),
+                "response {i} cmd echo",
+            );
+            assert_eq!(resp[2], *expected_seq, "response {i} seq echo");
+            assert_eq!(
+                &resp[3..5],
+                &(RESP_PAYLOAD_LEN as u16).to_le_bytes(),
+                "response {i} payload_len",
+            );
+            assert_eq!(&resp[RYNK_HEADER_SIZE..], &expected_payload[..], "response {i} payload",);
+        }
+    }
+
+    /// Two `GetVersion` frames delivered together in one `read` call, then EOF.
+    /// Exercises the `while` drain after a successful read — without it, the
+    /// post-frame-1 read would surface `Ok(0)` and return before frame 2 was
+    /// dispatched.
+    #[test]
+    fn run_session_drains_pipelined_frames_before_eof() {
+        let mut behavior = BehaviorConfig::default();
+        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
+        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+        let config = RmkConfig::default();
+        let service = RynkService::new(&keymap, &config);
+
+        let mut combined = get_version_frame(0);
+        combined.extend_from_slice(&get_version_frame(1));
+
+        let mut chunks = VecDeque::new();
+        chunks.push_back(combined);
+
+        let mut rx = ChunkRead { chunks };
+        let mut tx = VecWrite { captured: Vec::new() };
+
+        block_on(service.run_session(&mut rx, &mut tx));
+
+        const RESP_FRAME_LEN: usize = RYNK_HEADER_SIZE + 3;
+        assert_eq!(
+            tx.captured.len(),
+            RESP_FRAME_LEN * 2,
+            "expected both pipelined frames to be dispatched before EOF",
+        );
+        assert_eq!(tx.captured[2], 0, "first response seq");
+        assert_eq!(tx.captured[RESP_FRAME_LEN + 2], 1, "second response seq");
     }
 }

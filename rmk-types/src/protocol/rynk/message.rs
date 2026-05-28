@@ -73,6 +73,26 @@ impl<'a> RynkMessage<'a> {
     pub fn set_payload_len(&mut self, len: u16) {
         self.buf[3..5].copy_from_slice(&len.to_le_bytes());
     }
+
+    /// Encode `Err(err)` into the payload and update `LEN`. Header `cmd`
+    /// and `seq` bytes are left untouched so the host can correlate the
+    /// error reply with the outgoing request.
+    pub fn write_error(&mut self, err: RynkError) {
+        let n = postcard::to_slice(&Err::<(), RynkError>(err), self.payload_mut())
+            .map(|s| s.len())
+            .unwrap_or(0);
+        self.set_payload_len(n as u16);
+    }
+
+    /// Encode an `Err(err)` reply over a raw `buf`.
+    /// Preserves `cmd` and `seq` from the existing header bytes.
+    /// Returns the total frame length.
+    pub fn encode_error_reply(buf: &mut [u8], err: RynkError) -> usize {
+        debug_assert!(buf.len() >= RYNK_HEADER_SIZE);
+        let mut msg = RynkMessage { buf };
+        msg.write_error(err);
+        msg.frame_len()
+    }
 }
 
 impl<'a> TryFrom<&'a mut [u8]> for RynkMessage<'a> {
