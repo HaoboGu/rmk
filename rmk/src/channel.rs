@@ -98,13 +98,10 @@ pub(crate) static BLE_PROFILE_CHANNEL: Channel<RawMutex, BleProfileAction, 1> = 
 #[cfg(all(feature = "vial", feature = "_ble"))]
 pub(crate) static VIAL_BLE_RX_CHANNEL: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE> = Channel::new();
 
-/// Rynk RX from the BLE GATT `output_data` writes — variable-size chunks up to
-/// MTU − 3 bytes per write. The transport reassembles whole frames using the
-/// 5-byte header's `LEN` field. A fixed `heapless::Vec` carrying the chunk
-/// keeps the channel `Sync` without needing an allocator.
+/// Rynk RX from the BLE GATT `output_data` writes. Chunk boundaries don't
+/// matter because the transport reframes against the 5-byte header's `LEN`
+/// field, so bytes stream through as `embedded_io_async`. The 512 B ring is
+/// ~2× one MTU's worth of payload — enough that the GATT task can deliver a
+/// fresh chunk while the rynk session is still draining the prior one.
 #[cfg(all(feature = "rynk", feature = "_ble"))]
-pub(crate) static RYNK_BLE_RX_CHANNEL: Channel<
-    RawMutex,
-    heapless::Vec<u8, { crate::host::rynk::RYNK_BLE_CHUNK_SIZE }>,
-    4,
-> = Channel::new();
+pub(crate) static RYNK_BLE_RX_PIPE: embassy_sync::pipe::Pipe<RawMutex, 512> = embassy_sync::pipe::Pipe::new();
