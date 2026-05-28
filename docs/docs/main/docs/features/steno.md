@@ -1,4 +1,4 @@
-# Stenography (Plover HID)
+# Stenography
 
 RMK supports [Plover](https://opensteno.org/plover/) stenography over
 USB HID. When the `steno` feature is enabled, the keyboard registers as a
