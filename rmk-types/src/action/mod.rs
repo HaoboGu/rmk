@@ -31,6 +31,24 @@ use crate::modifier::ModifierCombination;
 #[cfg(feature = "steno")]
 use crate::steno::StenoKey;
 
+/// Parameters for the StickyKey action.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
+pub struct StickyKeyAction {
+    /// Key sent on each SK press.
+    pub key: KeyCode,
+    /// Modifiers held between presses (0 = none).
+    pub keep: ModifierCombination,
+    /// Maximum presses before auto-release; 0 = infinite.
+    /// Fires key on presses 1..=max_repeat, deactivates silently on press max_repeat+1.
+    pub max_repeat: u16,
+    /// Per-key timeout in ms; 0 = use global BehaviorConfig default.
+    pub timeout_ms: u16,
+    /// Release SK when any layer activates or deactivates.
+    pub exit_on_layer_change: bool,
+}
+
 /// A single basic action that a keyboard can execute.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -75,6 +93,9 @@ pub enum Action {
     Special(SpecialKey),
     /// User Keys
     User(u8),
+    /// Sticky key: sends modifier + key on each press, holds modifiers between presses.
+    /// Supports max_repeat, per-key timeout, and conditional exit on layer change.
+    StickyKey(StickyKeyAction),
     /// Sticky modifier: sends key + modifier on press, holds modifier until
     /// another key is pressed or layer changes. Used for Alt+Tab-like switching.
     StickyMod(KeyCode, ModifierCombination),
