@@ -223,34 +223,58 @@ pub(crate) fn parse_key(
                 );
             }
         }
-        s if s.to_lowercase().starts_with("sm(") => {
+        s if s.to_lowercase().starts_with("sk(") => {
             let prefix = s.get(0..3).unwrap();
             if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
-                let keys: Vec<&str> = internal
-                    .split_terminator(",")
-                    .map(|w| w.trim())
-                    .filter(|w| !w.is_empty())
-                    .collect();
-                if keys.len() != 2 {
+                // Parse: "Tab, [LAlt]" or "Tab, [LAlt], 5, 3000, true"
+                let bracket_start = internal.find('[').unwrap_or_else(|| {
                     panic!(
-                        "\n\u{274c} keyboard.toml: SM(key, modifier) requires exactly 2 arguments, got {}. Usage: SM(Tab, LAlt)",
-                        keys.len()
-                    );
-                }
-
-                let ident = get_key_with_alias(keys[0].to_string());
-                let modifiers = parse_modifiers(keys[1]);
-
-                if modifiers.is_empty() {
+                        "\n\u{274c} keyboard.toml: SK requires a bracketed keep-mod list. \
+                         Usage: SK(Tab, [LAlt]) or SK(Tab, [LCtrl|LShift], 3, 2000, true)"
+                    )
+                });
+                let bracket_end = internal.find(']').unwrap_or_else(|| {
                     panic!(
-                        "\n\u{274c} keyboard.toml: modifier in SM(key, modifier) is not valid! Usage: SM(Tab, LAlt)"
-                    );
-                }
+                        "\n\u{274c} keyboard.toml: SK has unclosed '['. \
+                         Usage: SK(Tab, [LAlt])"
+                    )
+                });
+
+                let key_str = internal[..bracket_start].trim().trim_end_matches(',').trim();
+                let ident = get_key_with_alias(key_str.to_string());
+
+                let keep_mods_str = &internal[bracket_start + 1..bracket_end];
+                let keep_modifiers = if keep_mods_str.trim().is_empty() {
+                    ModifierCombinationMacro::new()
+                } else {
+                    parse_modifiers(keep_mods_str)
+                };
+
+                let after_bracket = internal[bracket_end + 1..].trim_start_matches(',').trim();
+                let optional_args: Vec<&str> = if after_bracket.is_empty() {
+                    vec![]
+                } else {
+                    after_bracket.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect()
+                };
+
+                let max_repeat: u16 = optional_args.first()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0u16);
+                let timeout_ms: u16 = optional_args.get(1)
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0u16);
+                let exit_on_layer_change: bool = optional_args.get(2)
+                    .map(|s| s.trim() == "true")
+                    .unwrap_or(false);
+
                 quote! {
-                    ::rmk::sm!(#ident, #modifiers)
+                    ::rmk::sk!(#ident, #keep_modifiers, #max_repeat, #timeout_ms, #exit_on_layer_change)
                 }
             } else {
-                panic!("\n\u{274c} keyboard.toml: SM(key, modifier) invalid. Usage: SM(Tab, LAlt)");
+                panic!(
+                    "\n\u{274c} keyboard.toml: SK(...) invalid. \
+                     Usage: SK(Tab, [LAlt]) or SK(Tab, [LCtrl|LShift], 3, 2000, true)"
+                );
             }
         }
         s if s.to_lowercase().starts_with("lm(") => {

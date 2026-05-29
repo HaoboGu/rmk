@@ -64,17 +64,17 @@ fn expand_one_shot_modifiers(one_shot_modifiers: &Option<OneShot>) -> proc_macro
     }
 }
 
-fn expand_sticky_mod(sticky_mod_timeout_ms: &Option<u64>) -> proc_macro2::TokenStream {
-    match sticky_mod_timeout_ms {
+fn expand_sticky_key(sticky_key_timeout_ms: &Option<u64>) -> proc_macro2::TokenStream {
+    match sticky_key_timeout_ms {
         Some(millis) => {
             let timeout = quote! { ::embassy_time::Duration::from_millis(#millis) };
             quote! {
-                ::rmk::config::StickyModConfig {
+                ::rmk::config::StickyKeyConfig {
                     timeout: #timeout,
                 }
             }
         }
-        None => quote! { ::rmk::config::StickyModConfig::default() },
+        None => quote! { ::rmk::config::StickyKeyConfig::default() },
     }
 }
 
@@ -510,7 +510,7 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
     let macros = expand_macros(&behavior.macros);
     let forks = expand_forks(&behavior.forks, &profiles);
     let morse = expand_morse(&behavior.morse);
-    let sticky_mod = expand_sticky_mod(&behavior.sticky_key_timeout_ms);
+    let sticky_key = expand_sticky_key(&behavior.sticky_key_timeout_ms);
 
     quote! {
         #[allow(clippy::needless_update)]
@@ -524,7 +524,8 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
             keyboard_macros: #macros,
             mouse_key: ::rmk::config::MouseKeyConfig::default(),
             tap: ::rmk::config::TapConfig::default(),
-            sticky_mod: #sticky_mod,
+            sticky_mod: ::rmk::config::StickyModConfig::default(),
+            sticky_key: #sticky_key,
         };
     }
 }
