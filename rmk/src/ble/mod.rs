@@ -39,6 +39,8 @@ pub mod passkey;
 pub(crate) mod profile;
 #[cfg(feature = "rynk")]
 pub(crate) mod rynk;
+#[cfg(all(feature = "vial", feature = "_ble"))]
+pub(crate) mod vial;
 
 /// Global state of sleep management
 /// - `true`: Indicates central is sleeping
@@ -147,9 +149,7 @@ where
 
     /// Attach the host-protocol service (Vial or Rynk, picked at compile
     /// time by feature). See
-    /// [`UsbTransport::with_host_service`](crate::usb::UsbTransport::with_host_service)
-    /// for the full contract and the rationale for the
-    /// builder-instead-of-Runnable design.
+    /// [`UsbTransport::with_host_service`](crate::usb::UsbTransport::with_host_service).
     #[cfg(feature = "host")]
     pub fn with_host_service(mut self, service: &'a crate::host::HostService<'a>) -> Self {
         self.host_service = Some(service);
@@ -290,15 +290,13 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let hid_control_point = server.hid_service.hid_control_point;
     let input_keyboard = server.hid_service.input_keyboard;
     #[cfg(feature = "vial")]
-    let (output_host, input_host) = (server.vial_service.output_data, server.vial_service.input_data);
-    #[cfg(feature = "vial")]
-    let host_control_point = server.vial_service.hid_control_point;
-    // `Characteristic<heapless::Vec<u8, N>>` derives `Copy` with an implicit
-    // `T: Copy` bound that `heapless::Vec` doesn't satisfy, so clone the
-    // handle wrapper. The wrapper is two `u16`s plus an `Option<u16>`; the
-    // clone is essentially a memcpy.
+    let (output_host, input_host, host_control_point) = (
+        server.vial_service.output_data,
+        server.vial_service.input_data,
+        server.vial_service.hid_control_point,
+    );
     #[cfg(feature = "rynk")]
-    let (rynk_output, rynk_input) = (
+    let (output_host, input_host) = (
         server.rynk_service.output_data.clone(),
         server.rynk_service.input_data.clone(),
     );
@@ -416,34 +414,29 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             let mut handled = false;
                             #[cfg(not(feature = "host"))]
                             let handled = false;
-                            #[cfg(feature = "vial")]
+                            #[cfg(feature = "host")]
                             if event.handle() == output_host.handle {
-                                debug!("Got Vial packet: {:?}", event.data());
-                                if event.data().len() == 32 {
-                                    let mut data = [0u8; 32];
-                                    data.copy_from_slice(event.data());
-                                    crate::channel::VIAL_BLE_RX_CHANNEL.send(data).await;
-                                } else {
-                                    warn!("Wrong Vial packet data: {:?}", event.data());
-                                }
-                                handled = true;
-                            } else if event.handle() == input_host.cccd_handle.expect("No CCCD for input host") {
-                                cccd_updated = true;
-                                handled = true;
-                            }
-                            #[cfg(feature = "rynk")]
-                            if !handled && event.handle() == rynk_output.handle {
                                 let data = event.data();
-                                debug!("Got Rynk packet ({} bytes)", data.len());
+                                #[cfg(feature = "vial")]
+                                if data.len() == 32 {
+                                    debug!("Got Vial packet: {:?}", data);
+                                    let mut message = [0u8; 32];
+                                    message.copy_from_slice(data);
+                                    crate::channel::VIAL_BLE_RX_CHANNEL.send(message).await;
+                                } else {
+                                    warn!("Wrong Vial packet data: {:?}", data);
+                                }
+
+                                #[cfg(feature = "rynk")]
                                 if !data.is_empty() {
+                                    debug!("Got Rynk packet ({} bytes)", data.len());
                                     // Awaits the pipe's backpressure when the rynk
                                     // consumer falls behind.
                                     crate::channel::RYNK_BLE_RX_PIPE.write_all(data).await;
                                 }
+
                                 handled = true;
-                            } else if !handled
-                                && event.handle() == rynk_input.cccd_handle.expect("No CCCD for Rynk input")
-                            {
+                            } else if event.handle() == input_host.cccd_handle.expect("No CCCD for host input") {
                                 cccd_updated = true;
                                 handled = true;
                             }
@@ -743,10 +736,7 @@ async fn run_ble_keyboard<
     #[cfg(feature = "host")]
     let host_task = async {
         if let Some(service) = host_service {
-            #[cfg(feature = "rynk")]
-            crate::ble::rynk::run_rynk_ble(server, conn, service).await;
-            #[cfg(feature = "vial")]
-            crate::host::ble::run_vial_ble(server, conn, service).await;
+            crate::host::run_host_ble(server, conn, service).await;
         } else {
             core::future::pending::<()>().await;
         }

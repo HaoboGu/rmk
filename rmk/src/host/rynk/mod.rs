@@ -14,9 +14,6 @@
 
 mod handlers;
 pub(crate) mod topics;
-// Shared error for RMK-authored adapters; only BLE hand-writes one today.
-#[cfg(feature = "_ble")]
-pub mod transport;
 pub mod uart;
 
 use embassy_futures::select::{Either, select};
@@ -66,14 +63,14 @@ impl<'a> RynkService<'a> {
         let cmd = msg.cmd();
         let payload = msg.payload_mut();
         let payload_len = match cmd {
-            // ── System ──
+            // System
             Cmd::GetVersion => self.handle_get_version(payload).await?,
             Cmd::GetCapabilities => self.handle_get_capabilities(payload).await?,
             Cmd::Reboot => self.handle_reboot(payload).await?,
             Cmd::BootloaderJump => self.handle_bootloader_jump(payload).await?,
             Cmd::StorageReset => self.handle_storage_reset(payload).await?,
 
-            // ── Keymap (incl. encoder) ──
+            // Keymap (incl. encoder)
             Cmd::GetKeyAction => self.handle_get_key_action(payload).await?,
             Cmd::SetKeyAction => self.handle_set_key_action(payload).await?,
             Cmd::GetDefaultLayer => self.handle_get_default_layer(payload).await?,
@@ -85,11 +82,11 @@ impl<'a> RynkService<'a> {
             #[cfg(feature = "bulk_transfer")]
             Cmd::SetKeymapBulk => self.handle_set_keymap_bulk(payload).await?,
 
-            // ── Macro ──
+            // Macro
             Cmd::GetMacro => self.handle_get_macro(payload).await?,
             Cmd::SetMacro => self.handle_set_macro(payload).await?,
 
-            // ── Combo ──
+            // Combo
             Cmd::GetCombo => self.handle_get_combo(payload).await?,
             Cmd::SetCombo => self.handle_set_combo(payload).await?,
             #[cfg(feature = "bulk_transfer")]
@@ -97,7 +94,7 @@ impl<'a> RynkService<'a> {
             #[cfg(feature = "bulk_transfer")]
             Cmd::SetComboBulk => self.handle_set_combo_bulk(payload).await?,
 
-            // ── Morse ──
+            // Morse
             Cmd::GetMorse => self.handle_get_morse(payload).await?,
             Cmd::SetMorse => self.handle_set_morse(payload).await?,
             #[cfg(feature = "bulk_transfer")]
@@ -105,15 +102,15 @@ impl<'a> RynkService<'a> {
             #[cfg(feature = "bulk_transfer")]
             Cmd::SetMorseBulk => self.handle_set_morse_bulk(payload).await?,
 
-            // ── Fork ──
+            // Fork
             Cmd::GetFork => self.handle_get_fork(payload).await?,
             Cmd::SetFork => self.handle_set_fork(payload).await?,
 
-            // ── Behavior ──
+            // Behavior
             Cmd::GetBehaviorConfig => self.handle_get_behavior_config(payload).await?,
             Cmd::SetBehaviorConfig => self.handle_set_behavior_config(payload).await?,
 
-            // ── Connection ──
+            // Connection
             Cmd::GetConnectionType => self.handle_get_connection_type(payload).await?,
             #[cfg(feature = "_ble")]
             Cmd::GetBleStatus => self.handle_get_ble_status(payload).await?,
@@ -122,7 +119,7 @@ impl<'a> RynkService<'a> {
             #[cfg(feature = "_ble")]
             Cmd::ClearBleProfile => self.handle_clear_ble_profile(payload).await?,
 
-            // ── Status ──
+            // Status
             Cmd::GetCurrentLayer => self.handle_get_current_layer(payload).await?,
             Cmd::GetMatrixState => self.handle_get_matrix_state(payload).await?,
             #[cfg(feature = "_ble")]
@@ -152,93 +149,87 @@ impl<'a> RynkService<'a> {
 }
 
 impl RynkService<'_> {
-    /// Drive one rynk session against `rx`/`tx`. Returns when either half
-    /// reports an error or EOF (USB endpoint disabled, BLE disconnect,
-    /// UART read failure).
+    /// Drive one rynk session based on embedded-io `rx`/`tx`.
     ///
     /// Owns the reassembly/dispatch buffer, parses frames as `5 + LEN`
     /// headers, dispatches each frame in place via
     /// [`dispatch`](RynkService::dispatch), and emits topic frames between
-    /// request/response turns. Transport-specific setup (USB
-    /// `wait_connection`, BLE per-connection channel reset) and reconnect
-    /// both stay in the caller — this returns on close rather than looping.
+    /// request/response turns.
+    ///
+    /// Transport-specific setup and reconnect both stay in the caller.
     pub async fn run_session<R: Read, T: Write>(&self, rx: &mut R, tx: &mut T) {
         let mut buf = [0u8; RYNK_BUFFER_SIZE];
         let mut topics = topics::TopicSubscribers::new();
-        let mut rx_used = 0usize;
 
         loop {
-            let recv_result = if rx_used == 0 {
-                // Idle: race the wire against topic events. Topic emission
-                // is only safe before frame accumulation starts — once
-                // `rx_used > 0` the buffer is committed to that frame.
-                match select(rx.read(&mut buf), topics.next_event(&self.ctx)).await {
-                    Either::First(r) => r,
-                    Either::Second(event) => {
-                        match event.encode(&mut buf) {
-                            Ok(msg) => {
-                                let total = msg.frame_len();
-                                if tx.write_all(&buf[..total]).await.is_err() {
-                                    return;
-                                }
-                            }
-                            Err(e) => warn!("Rynk topic encode failed: {:?}", e),
+            // 1. Read the fixed header or a topic
+            match select(rx.read(&mut buf[..RYNK_HEADER_SIZE]), topics.next_event()).await {
+                Either::First(r) => match r {
+                    Ok(0) => return, // EOF
+                    Ok(n) => {
+                        if n < RYNK_HEADER_SIZE && rx.read_exact(&mut buf[n..RYNK_HEADER_SIZE]).await.is_err() {
+                            // Error when reading header
+                            return;
                         }
-                        continue;
                     }
-                }
-            } else {
-                let tail = &mut buf[rx_used..];
-                if tail.is_empty() {
-                    warn!("Rynk RX overflow; resyncing");
-                    rx_used = 0;
+                    Err(_) => return,
+                },
+                Either::Second(event) => {
+                    match event.encode(&mut buf) {
+                        Ok(msg) => {
+                            let total = msg.frame_len();
+                            if tx.write_all(&buf[..total]).await.is_err() {
+                                return;
+                            }
+                        }
+                        Err(e) => warn!("Rynk topic encode failed: {:?}", e),
+                    }
                     continue;
                 }
-                rx.read(tail).await
             };
 
-            match recv_result {
-                Ok(0) => return, // EOF
-                Ok(n) => rx_used += n,
-                Err(_) => return,
-            }
-
-            // Drain every complete frame already buffered before reading
-            // again. Without this, a host that pipelines two frames in one
-            // syscall and then disconnects would lose the second frame —
-            // the next read would return EOF before it could be processed.
-            while rx_used >= RYNK_HEADER_SIZE {
-                let payload_n = u16::from_le_bytes([buf[3], buf[4]]) as usize;
-                let frame_len = RYNK_HEADER_SIZE + payload_n;
-                if frame_len > buf.len() {
-                    // Declared frame_len won't fit in the buffer.
-                    warn!("Rynk: frame_len {} exceeds buffer {}", frame_len, buf.len());
-                    let resp_len = RynkMessage::encode_error_reply(&mut buf, RynkError::Malformed);
-                    if tx.write_all(&buf[..resp_len]).await.is_err() {
-                        return;
-                    }
-                    rx_used = 0;
-                    break;
-                }
-                if rx_used < frame_len {
-                    break; // need more bytes
-                }
-                let resp_len = match RynkMessage::try_from(&mut buf[..frame_len]) {
-                    Ok(mut msg) => {
-                        self.dispatch(&mut msg).await;
-                        msg.frame_len()
-                    }
-                    Err(e) => {
-                        warn!("Rynk: invalid frame: {:?}", e);
-                        RynkMessage::encode_error_reply(&mut buf, RynkError::Malformed)
-                    }
-                };
+            // 2. Parse the header.
+            let payload_n = u16::from_le_bytes([buf[3], buf[4]]) as usize;
+            let frame_len = RYNK_HEADER_SIZE + payload_n;
+            if frame_len > buf.len() {
+                // The payload declared won't fit into buf.
+                // Reply with an error then drain the declared payload off
+                // the wire to resync the stream before the next frame.
+                warn!("Rynk: frame_len {} exceeds buffer {}", frame_len, buf.len());
+                let resp_len = RynkMessage::encode_error_reply(&mut buf, RynkError::Malformed);
                 if tx.write_all(&buf[..resp_len]).await.is_err() {
                     return;
                 }
-                // Preserve any pipelined trailing bytes for the next iteration.
-                buf.copy_within(frame_len..rx_used, 0);
-                rx_used -= frame_len;
+                let mut remaining = payload_n;
+                while remaining > 0 {
+                    let take = remaining.min(buf.len());
+                    match rx.read(&mut buf[..take]).await {
+                        Ok(0) => return,
+                        Ok(n) => remaining -= n,
+                        Err(_) => return,
+                    }
+                }
+                continue;
+            }
+
+            // 3. Read exactly the payload.
+            if rx.read_exact(&mut buf[RYNK_HEADER_SIZE..frame_len]).await.is_err() {
+                return;
+            }
+
+            // 4. Dispatch in place over the full buffer.
+            let resp_len = match RynkMessage::try_from(&mut buf[..]) {
+                Ok(mut msg) => {
+                    self.dispatch(&mut msg).await;
+                    msg.frame_len()
+                }
+                Err(e) => {
+                    warn!("Rynk: invalid frame: {:?}", e);
+                    RynkMessage::encode_error_reply(&mut buf, RynkError::Malformed)
+                }
+            };
+            if tx.write_all(&buf[..resp_len]).await.is_err() {
+                return;
             }
         }
     }
@@ -307,11 +298,12 @@ mod tests {
         }
     }
 
-    /// Build a `GetVersion` request frame with `seq`. The payload slot is sized
-    /// to hold the in-place response (`Ok(ProtocolVersion)` = 3 bytes).
+    /// Build a `GetVersion` request frame with `seq`. The request carries an
+    /// empty payload — the response is written into the full session buffer,
+    /// not this slot, so no padding is needed.
     fn get_version_frame(seq: u8) -> Vec<u8> {
         let cmd = Cmd::GetVersion as u16;
-        let payload_len: u16 = 4;
+        let payload_len: u16 = 0;
         let total = RYNK_HEADER_SIZE + payload_len as usize;
         let mut v = vec![0u8; total];
         v[0..2].copy_from_slice(&cmd.to_le_bytes());
@@ -322,9 +314,9 @@ mod tests {
 
     /// Two pipelined `GetVersion` frames arriving across a split read — chunk 1
     /// carries all of frame 1 plus the first 3 bytes of frame 2 (header only),
-    /// chunk 2 carries the rest of frame 2. The post-dispatch `copy_within`
-    /// must preserve the in-flight prefix of frame 2; without it, `rx_used = 0`
-    /// would discard those bytes and frame 2's response would never be emitted.
+    /// chunk 2 carries the rest of frame 2. Framed reads size each `read` to the
+    /// current frame, so frame 2's in-flight bytes stay in the transport between
+    /// iterations and both responses are emitted.
     #[test]
     fn run_session_preserves_pipelined_trailing_bytes() {
         let mut behavior = BehaviorConfig::default();
@@ -390,9 +382,8 @@ mod tests {
     }
 
     /// Two `GetVersion` frames delivered together in one `read` call, then EOF.
-    /// Exercises the `while` drain after a successful read — without it, the
-    /// post-frame-1 read would surface `Ok(0)` and return before frame 2 was
-    /// dispatched.
+    /// Framed reads consume frame 1 first, leaving frame 2's bytes in the
+    /// transport for the next iteration, so both are dispatched before EOF.
     #[test]
     fn run_session_drains_pipelined_frames_before_eof() {
         let mut behavior = BehaviorConfig::default();
@@ -421,5 +412,49 @@ mod tests {
         );
         assert_eq!(tx.captured[2], 0, "first response seq");
         assert_eq!(tx.captured[RESP_FRAME_LEN + 2], 1, "second response seq");
+    }
+
+    /// Regression: a `GetVersion` request with `payload_len = 0` (the natural
+    /// host request — `GetVersion` has no arguments) must produce a fully
+    /// decodable `Ok(ProtocolVersion)` reply. Previously the response was
+    /// squeezed into the 0-byte request slot, failed to encode, and was
+    /// silently swallowed into a header-only `[01 00 00 00 00]` frame the host
+    /// would misread as an empty success.
+    #[test]
+    fn run_session_empty_request_gets_full_response() {
+        let mut behavior = BehaviorConfig::default();
+        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
+        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+        let config = RmkConfig::default();
+        let service = RynkService::new(&keymap, &config);
+
+        let mut chunks = VecDeque::new();
+        chunks.push_back(get_version_frame(0x42));
+
+        let mut rx = ChunkRead { chunks };
+        let mut tx = VecWrite { captured: Vec::new() };
+
+        block_on(service.run_session(&mut rx, &mut tx));
+
+        let resp = &tx.captured;
+        assert!(
+            resp.len() > RYNK_HEADER_SIZE,
+            "response must carry a payload, not just a header"
+        );
+        assert_eq!(&resp[0..2], &(Cmd::GetVersion as u16).to_le_bytes(), "cmd echo");
+        assert_eq!(resp[2], 0x42, "seq echo");
+
+        let payload_len = u16::from_le_bytes([resp[3], resp[4]]) as usize;
+        assert!(payload_len > 0, "payload_len must be non-zero (not a swallowed fault)");
+        assert_eq!(
+            resp.len(),
+            RYNK_HEADER_SIZE + payload_len,
+            "frame length matches header"
+        );
+
+        let decoded: Result<ProtocolVersion, RynkError> =
+            postcard::from_bytes(&resp[RYNK_HEADER_SIZE..]).expect("response payload must decode");
+        assert_eq!(decoded, Ok(ProtocolVersion::CURRENT));
     }
 }

@@ -105,7 +105,7 @@ features = ["split", "vial", "async_matrix", "_ble"]
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["defmt", "storage", "vial", "vial_lock", "watchdog"]
+default = ["defmt", "storage", "vial", "watchdog"]
 
 ## Enable hardware watchdog support
 watchdog = ["rmk-macro/watchdog"]
@@ -116,11 +116,10 @@ host = ["dep:byteorder"]
 ## Enable vial support
 vial = ["host"]
 
-## Enable vial lock feature
+## Enable vial lock feature. TODO: remove it, use `host_security`
 vial_lock = ["vial", "host_security"]
 
-## Enable physical key unlock and matrix state tracking (used by vial_lock; rynk
-## re-pulls it in v2 when the host lock gate lands)
+## Enable physical key unlock and matrix state tracking
 host_security = []
 
 ## Enable Rynk protocol support (new RMK-native protocol, mutually exclusive with vial)
