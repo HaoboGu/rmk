@@ -102,15 +102,29 @@ morse_action = { (^"TD" | ^"MORSE") ~ "(" ~ number ~ ")" }
 // Rule 9: Macro(n) - Trigger Macro
 trigger_macro_action = { ^"MACRO" ~ "(" ~ number ~ ")" }
 
-// Rule 10: SM(key, modifier) - Sticky Modifier Action (holds modifier, taps key)
-sm_action = { ^"SM" ~ "(" ~ keycode_name ~ "," ~ modifier_combination ~ ")" }
+// boolean literal for SK optional args
+boolean = @{ ^"true" | ^"false" }
+
+// bracketed modifier list for SK keep parameter: [LAlt] or [LAlt|LShift] or []
+modifier_keep_list = { "[" ~ modifier_combination ~ "]" | "[" ~ "]" }
+
+// SK(key, [keep], max_repeat?, timeout_ms?, exit_on_layer_change?) — StickyKey
+sk_action = {
+    ^"SK" ~ "(" ~
+    keycode_name ~ "," ~
+    modifier_keep_list ~
+    ("," ~ number)?  ~
+    ("," ~ number)?  ~
+    ("," ~ boolean)? ~
+    ")"
+}
 
 // --- Top Level Rules ---
 
 // A single key action entry in the map
 // Order is important: more specific function-like rules first, then aliases/specials, then simple keycodes.
 key_action = _{ // Consume surrounding whitespace/comments implicitly
-    wm_action | osm_action | layer_action | mt_action | th_action | shifted_action | morse_action | trigger_macro_action | sm_action | no_action | transparent_action | simple_keycode
+    wm_action | osm_action | layer_action | mt_action | th_action | shifted_action | morse_action | trigger_macro_action | sk_action | no_action | transparent_action | simple_keycode
 }
 
 // The entire key map string: Start, zero or more key actions, End.

@@ -396,7 +396,7 @@ impl KeyboardTomlConfig {
                                     key_action_sequence.push(action);
                                 }
 
-                                Rule::sm_action => {
+                                Rule::sk_action => {
                                     let action = inner_pair.as_str().to_string();
                                     key_action_sequence.push(action);
                                 }
@@ -738,46 +738,52 @@ mod tests {
     }
 
     #[test]
-    fn test_sm_action_parsing() {
+    fn test_sk_action_parsing() {
         let aliases = HashMap::new();
         let layer_names = HashMap::new();
 
-        let keymap = "SM(Tab, LAlt) SM(Tab, LCtrl) SM(Tab, LCtrl | LShift)";
+        let keymap = "SK(Tab, [LAlt]) SK(Tab, [LCtrl]) SK(Tab, [LCtrl | LShift], 3, 2000, true)";
         let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
 
         assert!(result.is_ok());
         assert_eq!(
             result.unwrap(),
-            vec!["SM(Tab, LAlt)", "SM(Tab, LCtrl)", "SM(Tab, LCtrl | LShift)"]
+            vec![
+                "SK(Tab, [LAlt])",
+                "SK(Tab, [LCtrl])",
+                "SK(Tab, [LCtrl | LShift], 3, 2000, true)"
+            ]
         );
     }
 
     #[test]
-    fn test_sm_action_grammar() {
+    fn test_sk_action_grammar() {
         let test_cases = vec![
-            "SM(Tab, LAlt)",
-            "SM(Tab, LCtrl)",
-            "SM(Tab, LCtrl | LShift)",
-            "SM(A, LGui)",
-            "sm(Tab, LAlt)", // case insensitive
+            "SK(Tab, [LAlt])",
+            "SK(Tab, [LCtrl])",
+            "SK(Tab, [LCtrl | LShift])",
+            "SK(Tab, [LAlt], 5)",
+            "SK(Tab, [LAlt], 5, 3000)",
+            "SK(Tab, [LAlt], 5, 3000, true)",
+            "SK(Tab, [])",
+            "sk(Tab, [LAlt])",
         ];
 
         for input in test_cases {
             let result = ConfigParser::parse(Rule::key_map, input);
             assert!(result.is_ok(), "Failed to parse: {}", input);
 
-            let mut found_sm = false;
+            let mut found_sk = false;
             for pair in result.unwrap() {
                 if pair.as_rule() == Rule::key_map {
                     for inner_pair in pair.into_inner() {
-                        if inner_pair.as_rule() == Rule::sm_action {
-                            found_sm = true;
+                        if inner_pair.as_rule() == Rule::sk_action {
+                            found_sk = true;
                         }
                     }
                 }
             }
-
-            assert!(found_sm, "Input should be parsed as sm_action: {}", input);
+            assert!(found_sk, "Input should be parsed as sk_action: {}", input);
         }
     }
 }

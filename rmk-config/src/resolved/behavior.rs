@@ -9,7 +9,7 @@ pub struct Behavior {
     pub macros: Option<Macros>,
     pub forks: Option<Forks>,
     pub morse: Option<Morse>,
-    pub sticky_mod_timeout_ms: Option<u64>,
+    pub sticky_key_timeout_ms: Option<u64>,
 }
 
 pub struct OneShot {
@@ -202,7 +202,7 @@ impl crate::KeyboardTomlConfig {
             }
         });
 
-        let sticky_mod_timeout_ms = toml_behavior.sticky_mod.and_then(|s| s.timeout.map(|t| t.0));
+        let sticky_key_timeout_ms = toml_behavior.sticky_key.and_then(|s| s.timeout.map(|t| t.0));
 
         Ok(Behavior {
             tri_layer,
@@ -212,7 +212,7 @@ impl crate::KeyboardTomlConfig {
             macros,
             forks,
             morse,
-            sticky_mod_timeout_ms,
+            sticky_key_timeout_ms,
         })
     }
 }

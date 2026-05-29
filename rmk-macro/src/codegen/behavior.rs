@@ -510,7 +510,7 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
     let macros = expand_macros(&behavior.macros);
     let forks = expand_forks(&behavior.forks, &profiles);
     let morse = expand_morse(&behavior.morse);
-    let sticky_mod = expand_sticky_mod(&behavior.sticky_mod_timeout_ms);
+    let sticky_mod = expand_sticky_mod(&behavior.sticky_key_timeout_ms);
 
     quote! {
         #[allow(clippy::needless_update)]

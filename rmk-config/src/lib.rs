@@ -576,7 +576,7 @@ pub(crate) struct BehaviorConfig {
     pub macros: Option<MacrosConfig>,
     pub fork: Option<ForksConfig>,
     pub morse: Option<MorsesConfig>,
-    pub sticky_mod: Option<StickyModConfig>,
+    pub sticky_key: Option<StickyKeyConfig>,
 }
 
 /// Per Key configurations profiles for morse, tap-hold, etc.
@@ -623,11 +623,11 @@ pub struct OneShotModifiersConfig {
     pub quick_release: Option<bool>,
 }
 
-/// Configurations for sticky modifier
+/// Configurations for sticky key
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct StickyModConfig {
-    /// Timeout for sticky modifier auto-release (e.g., "5000ms", "5s")
+pub struct StickyKeyConfig {
+    /// Timeout for sticky key auto-release (e.g., "5000ms", "5s")
     pub timeout: Option<DurationMillis>,
 }
 
