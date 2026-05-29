@@ -47,10 +47,15 @@ fn expand_one_shot_modifiers(one_shot_modifiers: &Option<OneShot>) -> proc_macro
                 Some(value) => quote! { activate_on_keypress: #value, },
                 None => quote! {},
             };
+            let quick_release = match one_shot_modifier.quick_release {
+                Some(value) => quote! { quick_release: #value, },
+                None => quote! {},
+            };
 
             quote! {
                 ::rmk::config::OneShotModifiersConfig {
                     #activate_on_keypress
+                    #quick_release
                     ..Default::default()
                 }
             }
