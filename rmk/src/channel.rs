@@ -92,16 +92,11 @@ pub(crate) static FLASH_CHANNEL: Channel<RawMutex, FlashOperationMessage, FLASH_
 #[cfg(feature = "_ble")]
 pub(crate) static BLE_PROFILE_CHANNEL: Channel<RawMutex, BleProfileAction, 1> = Channel::new();
 
-/// Vial RX from BLE GATT `output_data` writes — one 32-byte chunk per
-/// write. Pushed by `gatt_events_task`, drained by
-/// [`crate::host::ble::run_vial_ble`].
+/// Vial RX from BLE GATT `output_data` writes — one 32-byte chunk per write.
+/// Pushed by `gatt_events_task`, drained by [`crate::ble::vial::run_host_ble`].
 #[cfg(all(feature = "vial", feature = "_ble"))]
 pub(crate) static VIAL_BLE_RX_CHANNEL: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE> = Channel::new();
 
-/// Rynk RX from the BLE GATT `output_data` writes. Chunk boundaries don't
-/// matter because the transport reframes against the 5-byte header's `LEN`
-/// field, so bytes stream through as `embedded_io_async`. The 512 B ring is
-/// ~2× one MTU's worth of payload — enough that the GATT task can deliver a
-/// fresh chunk while the rynk session is still draining the prior one.
+/// Rynk RX from the BLE GATT `output_data` writes. The 512 B ring is ~2× one MTU's worth of payload.
 #[cfg(all(feature = "rynk", feature = "_ble"))]
 pub(crate) static RYNK_BLE_RX_PIPE: embassy_sync::pipe::Pipe<RawMutex, 512> = embassy_sync::pipe::Pipe::new();

@@ -1,5 +1,6 @@
 //! Status handlers — current layer, matrix bitmap, battery, peripheral status,
-//! plus the topic-snapshot getters for WPM / sleep / LED.
+//! plus the live getters for WPM / sleep / LED. Each value is read from its
+//! producer-owned current-value accessor, not a host-side cache.
 
 use rmk_types::protocol::rynk::{MATRIX_BITMAP_SIZE, MatrixState, RynkError};
 
@@ -34,23 +35,23 @@ impl<'a> RynkService<'a> {
     }
 
     /// `Cmd::GetPeripheralStatus` — payload is a peripheral slot id. The
-    /// snapshot lives in [`KeyboardContext`](crate::host::context::KeyboardContext)
-    /// and is fed by `TopicSubscribers` from `PeripheralConnectedEvent` /
-    /// `PeripheralBatteryEvent` publishes.
+    /// snapshot is owned by the split central
+    /// ([`current_peripheral_status`](crate::split::ble::central::current_peripheral_status)),
+    /// fed at the `PeripheralConnectedEvent` / `PeripheralBatteryEvent` publish sites.
     #[cfg(all(feature = "_ble", feature = "split"))]
     pub(crate) async fn handle_get_peripheral_status(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
         let (id, _) = postcard::take_from_bytes::<u8>(payload).map_err(|_| RynkError::Malformed)?;
-        let status = self.ctx.peripheral_status(id as usize).ok_or(RynkError::Invalid)?;
+        let status = crate::split::ble::central::current_peripheral_status(id as usize).ok_or(RynkError::Invalid)?;
         Self::write_response(&status, payload)
     }
 
     pub(crate) async fn handle_get_wpm(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let wpm = self.ctx.wpm();
+        let wpm = crate::processor::builtin::wpm::current_wpm();
         Self::write_response(&wpm, payload)
     }
 
     pub(crate) async fn handle_get_sleep_state(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let sleep = self.ctx.sleep_state();
+        let sleep = crate::state::current_sleep_state();
         Self::write_response(&sleep, payload)
     }
 
