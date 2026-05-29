@@ -489,7 +489,7 @@ rusty_fork_test! {
     /// - SK press: Alt+Tab
     /// - SK release: Alt held
     /// - (MO release: no report — SK still active)
-    /// - A press: SK releases (Alt released), then A sent → [0, [A, ...]]
+    /// - A press: SK released first → [0, [0, ...]], then A registered → [0, [A, ...]]
     /// - A release: [0, [0, ...]]
     #[test]
     fn test_sk_survives_layer_change() {
@@ -506,7 +506,8 @@ rusty_fork_test! {
             expected_reports: [
                 [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // SK press: Alt+Tab
                 [KC_LALT, [0, 0, 0, 0, 0, 0]],                 // SK release: Alt held (SK still active after MO release)
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],           // A press: SK releases, A sent (no Alt)
+                [0, [0, 0, 0, 0, 0, 0]],                        // A press: SK release report (Alt released)
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],           // A press: A registered
                 [0, [0, 0, 0, 0, 0, 0]],                        // A release
             ]
         };
