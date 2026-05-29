@@ -1,6 +1,6 @@
 //! Rynk over BLE GATT.
 //!
-//! One public free function — [`run_rynk_ble`] — that owns the whole
+//! One public free function — [`run_host_ble`] — that owns the whole
 //! per-connection lifecycle: clear the inbound byte pipe, construct the Tx
 //! adapter around the GATT plumbing, and call [`RynkService::run_session`]
 //! once with the pipe as the Rx half. Returns when the underlying
@@ -13,13 +13,13 @@ use trouble_host::prelude::*;
 
 use crate::ble::ble_server::Server;
 use crate::channel::RYNK_BLE_RX_PIPE;
-use crate::host::rynk::transport::RynkTransportError;
 use crate::host::rynk::{RYNK_BLE_CHUNK_SIZE, RynkService};
+use crate::host::transport::HostTransportError;
 
 /// Run one rynk session over `conn`. Clears any leftover RX bytes from a
 /// prior connection, constructs the Tx adapter in place, and returns when
 /// the session ends.
-pub async fn run_rynk_ble<'stack, 'server, P: PacketPool>(
+pub async fn run_host_ble<'stack, 'server, P: PacketPool>(
     server: &'server Server<'_>,
     conn: &GattConnection<'stack, 'server, P>,
     service: &RynkService<'_>,
@@ -41,7 +41,7 @@ struct RynkBleTx<'a, 'b, 'c, P: PacketPool> {
 }
 
 impl<P: PacketPool> ErrorType for RynkBleTx<'_, '_, '_, P> {
-    type Error = RynkTransportError;
+    type Error = HostTransportError;
 }
 
 impl<P: PacketPool> Write for RynkBleTx<'_, '_, '_, P> {
@@ -55,7 +55,7 @@ impl<P: PacketPool> Write for RynkBleTx<'_, '_, '_, P> {
             let payload = Vec::<u8, RYNK_BLE_CHUNK_SIZE>::from_slice(chunk).expect("chunk size <= RYNK_BLE_CHUNK_SIZE");
             if let Err(e) = self.input_data.notify(self.conn, &payload).await {
                 error!("Failed to notify Rynk reply: {:?}", e);
-                return Err(RynkTransportError);
+                return Err(HostTransportError);
             }
         }
         Ok(buf.len())

@@ -50,6 +50,38 @@ events = [
     { name = "battery_status", count = 2 },
 ]
 
+# --- Rynk host-service subscribers ---
+#
+# host/rynk/topics.rs: each `run_session` builds a `TopicSubscribers` that
+# subscribes to all of these. There is one session per transport that has a
+# host service attached, so a board exposing both USB and BLE runs two
+# sessions concurrently. Reserve one slot here for the always-present session;
+# the `rynk` + `_ble` entry below adds the second (USB + BLE) slot.
+
+[[subscriber]]
+features = ["rynk"]
+events = [
+    { name = "layer_change" },
+    { name = "wpm_update" },
+    { name = "connection_status_change" },
+    { name = "sleep_state" },
+    { name = "led_indicator" },
+]
+
+[[subscriber]]
+features = ["rynk", "_ble"]
+events = [
+    # battery_status is only subscribed under `_ble`; needs one slot per
+    # concurrent session (USB + BLE = 2).
+    { name = "battery_status", count = 2 },
+    # Second session slot for the always-on topics on dual-transport boards.
+    { name = "layer_change" },
+    { name = "wpm_update" },
+    { name = "connection_status_change" },
+    { name = "sleep_state" },
+    { name = "led_indicator" },
+]
+
 # --- Split-gated internal subscribers ---
 
 [[subscriber]]

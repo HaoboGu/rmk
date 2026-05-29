@@ -1,74 +1,29 @@
 //! Shared context for host-facing services (Vial today, Rynk next).
 
-#[cfg(feature = "split")]
-use core::cell::Cell;
-use core::sync::atomic::{AtomicBool, AtomicU16, Ordering};
-
-#[cfg(feature = "split")]
-use embassy_sync::blocking_mutex::Mutex as BlockingMutex;
 use embassy_time::Duration;
 use rmk_types::action::{EncoderAction, KeyAction};
-#[cfg(any(feature = "_ble", feature = "split"))]
+#[cfg(feature = "_ble")]
 use rmk_types::battery::BatteryStatus;
 use rmk_types::combo::Combo as ComboConfig;
 use rmk_types::connection::{ConnectionStatus, ConnectionType};
 use rmk_types::fork::Fork;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::morse::{Morse, MorseProfile};
-#[cfg(all(feature = "split", feature = "_ble", feature = "rynk"))]
-use rmk_types::protocol::rynk::PeripheralStatus;
 
-#[cfg(feature = "split")]
-use crate::RawMutex;
 use crate::event::KeyboardEventPos;
 use crate::keyboard::combo::Combo;
 use crate::keymap::KeyMap;
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 
-/// Per-split-peripheral live status snapshot. Kept as a private
-/// interior-mutable cell so the snapshot can be updated from the
-/// `TopicSubscribers` loop without an `&mut KeyboardContext`.
-#[cfg(feature = "split")]
-#[derive(Copy, Clone)]
-struct PeripheralSlot {
-    connected: bool,
-    battery: BatteryStatus,
-}
-
-#[cfg(feature = "split")]
-impl PeripheralSlot {
-    const fn new() -> Self {
-        Self {
-            connected: false,
-            battery: BatteryStatus::Unavailable,
-        }
-    }
-}
-
 /// Context shared between Vial and Rynk host services.
 pub(crate) struct KeyboardContext<'a> {
     pub keymap: &'a KeyMap<'a>,
-    latest_wpm: AtomicU16,
-    latest_sleep: AtomicBool,
-    /// Per-peripheral snapshot fed by `TopicSubscribers` from
-    /// `PeripheralConnectedEvent` / `PeripheralBatteryEvent`. Sized at compile
-    /// time from the split layout in `keyboard.toml`.
-    #[cfg(feature = "split")]
-    peripheral_slots: BlockingMutex<RawMutex, [Cell<PeripheralSlot>; crate::SPLIT_PERIPHERALS_NUM]>,
 }
 
 impl<'a> KeyboardContext<'a> {
     pub fn new(keymap: &'a KeyMap<'a>) -> Self {
-        Self {
-            keymap,
-            latest_wpm: AtomicU16::new(0),
-            latest_sleep: AtomicBool::new(false),
-            #[cfg(feature = "split")]
-            peripheral_slots: BlockingMutex::new(
-                [const { Cell::new(PeripheralSlot::new()) }; crate::SPLIT_PERIPHERALS_NUM],
-            ),
-        }
+        Self { keymap }
     }
 
     // ── Keymap operations ────────────────────────────────────────────────
@@ -356,60 +311,6 @@ impl<'a> KeyboardContext<'a> {
 
     pub fn active_layer(&self) -> u8 {
         self.keymap.active_layer()
-    }
-
-    pub fn wpm(&self) -> u16 {
-        self.latest_wpm.load(Ordering::Relaxed)
-    }
-
-    pub fn sleep_state(&self) -> bool {
-        self.latest_sleep.load(Ordering::Relaxed)
-    }
-
-    pub(crate) fn set_wpm(&self, v: u16) {
-        self.latest_wpm.store(v, Ordering::Relaxed);
-    }
-
-    pub(crate) fn set_sleep(&self, v: bool) {
-        self.latest_sleep.store(v, Ordering::Relaxed);
-    }
-
-    /// Latest snapshot for split peripheral `id`, or `None` when `id` is out
-    /// of range. Fed by the `TopicSubscribers` loop, so this is push-warmed
-    /// rather than poll-current.
-    #[cfg(all(feature = "split", feature = "_ble", feature = "rynk"))]
-    pub fn peripheral_status(&self, id: usize) -> Option<PeripheralStatus> {
-        self.peripheral_slots.lock(|slots| {
-            slots.get(id).map(|cell| {
-                let s = cell.get();
-                PeripheralStatus {
-                    connected: s.connected,
-                    battery: s.battery,
-                }
-            })
-        })
-    }
-
-    #[cfg(feature = "split")]
-    pub(crate) fn set_peripheral_connected(&self, id: usize, connected: bool) {
-        self.peripheral_slots.lock(|slots| {
-            if let Some(cell) = slots.get(id) {
-                let mut s = cell.get();
-                s.connected = connected;
-                cell.set(s);
-            }
-        });
-    }
-
-    #[cfg(feature = "split")]
-    pub(crate) fn set_peripheral_battery(&self, id: usize, battery: BatteryStatus) {
-        self.peripheral_slots.lock(|slots| {
-            if let Some(cell) = slots.get(id) {
-                let mut s = cell.get();
-                s.battery = battery;
-                cell.set(s);
-            }
-        });
     }
 
     pub fn default_layer(&self) -> u8 {

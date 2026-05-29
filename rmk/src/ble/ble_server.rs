@@ -49,7 +49,7 @@ pub(crate) struct Server {
 /// actually carries (a fixed `[u8; N]` would always send N).
 ///
 /// `gatt_events_task` forwards `output_data` writes into
-/// [`crate::channel::RYNK_BLE_RX_PIPE`] for [`crate::ble::rynk::run_rynk_ble`] to drain.
+/// [`crate::channel::RYNK_BLE_RX_PIPE`] for [`crate::ble::rynk::run_host_ble`] to drain.
 #[cfg(feature = "rynk")]
 #[gatt_service(uuid = "10900067-537f-4f0a-9b55-929e271f61ab")]
 pub(crate) struct RynkService {
@@ -63,7 +63,7 @@ pub(crate) struct RynkService {
 /// GATT service exposing the Vial-over-HID protocol. The keyboard writes replies via
 /// `input_data` notify; hosts push requests through `output_data`. `gatt_events_task`
 /// forwards `output_data` writes into [`crate::channel::VIAL_BLE_RX_CHANNEL`] for
-/// [`crate::host::ble::run_vial_ble`] to drain.
+/// [`crate::ble::vial::run_host_ble`] to drain.
 #[cfg(feature = "vial")]
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
 pub(crate) struct VialService {
