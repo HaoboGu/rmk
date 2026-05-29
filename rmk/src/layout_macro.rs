@@ -381,6 +381,33 @@ macro_rules! sm {
     };
 }
 
+/// Create a StickyKey action.
+///
+/// # Parameters
+/// - `$key`: HID keycode identifier (e.g., `Tab`, `A`)
+/// - `$keep`: `ModifierCombination` held between presses
+/// - `$max_repeat`: `u16` — max fires before auto-release; 0 = infinite
+/// - `$timeout_ms`: `u16` — per-key timeout in ms; 0 = use global config
+/// - `$exit_on_layer_change`: `bool` — release SK when any layer changes
+#[macro_export]
+macro_rules! sk {
+    ($key:ident, $keep:expr, $max_repeat:expr, $timeout_ms:expr, $exit_on_layer_change:expr) => {
+        $crate::types::action::KeyAction::Single(
+            $crate::types::action::Action::StickyKey(
+                $crate::types::action::StickyKeyAction {
+                    key: $crate::types::keycode::KeyCode::Hid(
+                        $crate::types::keycode::HidKeyCode::$key,
+                    ),
+                    keep: $keep,
+                    max_repeat: $max_repeat,
+                    timeout_ms: $timeout_ms,
+                    exit_on_layer_change: $exit_on_layer_change,
+                }
+            )
+        )
+    };
+}
+
 /// Create a layer toggle action.
 ///
 /// This macro creates a key that toggles a layer on/off with each press.
