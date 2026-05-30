@@ -355,32 +355,6 @@ macro_rules! osm {
     };
 }
 
-/// Create a StickyMod action for Alt+Tab-like switching.
-///
-/// Sends modifier + key on first press, holds modifier across subsequent presses.
-/// Modifier releases when any other key is pressed or layer changes.
-///
-/// # Parameters
-/// - `$x`: HID keycode identifier (e.g., `Tab`, `A`)
-/// - `$m`: `ModifierCombination` to hold
-///
-/// # Example
-/// ```ignore
-/// // Alt+Tab window switcher
-/// sm!(Tab, ModifierCombination::LALT)
-/// // Ctrl+Tab browser tab switcher
-/// sm!(Tab, ModifierCombination::LCTRL)
-/// ```
-#[macro_export]
-macro_rules! sm {
-    ($x: ident, $m: expr) => {
-        $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyMod(
-            $crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::$x),
-            $m,
-        ))
-    };
-}
-
 /// Create a StickyKey action.
 ///
 /// # Parameters

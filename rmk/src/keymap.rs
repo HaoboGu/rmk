@@ -512,10 +512,6 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().behavior.one_shot.timeout
     }
 
-    pub(crate) fn sticky_mod_timeout(&self) -> Duration {
-        self.inner.borrow().behavior.sticky_mod.timeout
-    }
-
     pub(crate) fn sticky_key_timeout(&self) -> Duration {
         self.inner.borrow().behavior.sticky_key.timeout
     }

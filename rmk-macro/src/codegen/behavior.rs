@@ -524,7 +524,6 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
             keyboard_macros: #macros,
             mouse_key: ::rmk::config::MouseKeyConfig::default(),
             tap: ::rmk::config::TapConfig::default(),
-            sticky_mod: ::rmk::config::StickyModConfig::default(),
             sticky_key: #sticky_key,
         };
     }

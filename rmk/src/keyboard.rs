@@ -29,7 +29,6 @@ use crate::keyboard::fork::ActiveFork;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard::mouse::{MouseAction, MouseState};
 use crate::keyboard::oneshot::OneShotState;
-use crate::keyboard::sticky_mod::StickyModState;
 use crate::keyboard::sticky_key::StickyKeyState;
 use crate::keyboard_macros::MacroOperation;
 use crate::keymap::KeyMap;
@@ -45,7 +44,6 @@ pub(crate) mod mouse;
 pub(crate) mod oneshot;
 #[cfg(feature = "steno")]
 pub(crate) mod steno;
-pub(crate) mod sticky_mod;
 pub(crate) mod sticky_key;
 
 use crate::keymap::HOLD_BUFFER_SIZE;
@@ -156,11 +154,10 @@ impl Runnable for Keyboard<'_> {
                 // Process buffered held key
                 self.process_buffered_key(key).await
             } else {
-                // Race subscriber against any pending deadlines (mouse repeat, SM timeout)
-                let sm_deadline = self.sticky_mod_state.deadline();
+                // Race subscriber against any pending deadlines (mouse repeat, SK timeout)
                 let sk_deadline = self.sticky_key_state.deadline();
                 let mouse_deadline = self.mouse.next_deadline();
-                let combined_deadline = [sm_deadline, sk_deadline, mouse_deadline]
+                let combined_deadline = [sk_deadline, mouse_deadline]
                     .into_iter()
                     .flatten()
                     .reduce(|a, b| a.min(b));
@@ -169,9 +166,6 @@ impl Runnable for Keyboard<'_> {
                         Ok(event) => event,
                         Err(_) => {
                             let now = Instant::now();
-                            if sm_deadline.is_some_and(|d| now >= d) {
-                                self.release_sticky_mod_if_active().await;
-                            }
                             if sk_deadline.is_some_and(|d| now >= d) {
                                 self.release_sticky_key_if_active().await;
                             }
@@ -224,9 +218,6 @@ pub struct Keyboard<'a> {
 
     /// Oneshot Modifier state
     osm_state: OneShotState<ModifierCombination>,
-
-    /// StickyMod state — holds modifier across key presses for Alt+Tab-like behavior
-    sticky_mod_state: StickyModState,
 
     /// StickyKey state — holds a modifier+key combination across key presses
     sticky_key_state: StickyKeyState,
@@ -284,7 +275,6 @@ impl<'a> Keyboard<'a> {
             last_press_time: Instant::now(),
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
-            sticky_mod_state: StickyModState::default(),
             sticky_key_state: StickyKeyState::default(),
             caps_word: CapsWordState::default(),
             with_modifiers: ModifierCombination::default(),
@@ -1227,19 +1217,6 @@ impl<'a> Keyboard<'a> {
         })
         .await;
 
-        // Release StickyMod when any non-SM, non-modifier key is pressed.
-        // Modifier keys (Shift, Ctrl, etc.) are excluded so Shift+Tab reverse cycling works.
-        if event.pressed && self.sticky_mod_state.is_active() {
-            let is_sm_or_modifier = match action {
-                Action::StickyMod(_, _) | Action::Modifier(_) => true,
-                Action::Key(KeyCode::Hid(hid_key)) if hid_key.is_modifier() => true,
-                _ => false,
-            };
-            if !is_sm_or_modifier {
-                self.release_sticky_mod_if_active().await;
-            }
-        }
-
         // Release StickyKey when any non-SK, non-modifier key is pressed.
         if event.pressed && self.sticky_key_state.is_active() {
             let is_sk_or_modifier = match action {
@@ -1261,7 +1238,6 @@ impl<'a> Keyboard<'a> {
                 // Reactivate the layer after the key is released
                 if event.pressed {
                     self.keymap.deactivate_layer(layer_num);
-                    self.release_sticky_mod_if_active().await;
                     if self.sticky_key_state.exit_on_layer_change() {
                         self.release_sticky_key_if_active().await;
                     }
@@ -1271,7 +1247,6 @@ impl<'a> Keyboard<'a> {
                 // Toggle a layer when the key is released
                 if !event.pressed {
                     self.keymap.toggle_layer(layer_num);
-                    self.release_sticky_mod_if_active().await;
                     if self.sticky_key_state.exit_on_layer_change() {
                         self.release_sticky_key_if_active().await;
                     }
@@ -1290,7 +1265,6 @@ impl<'a> Keyboard<'a> {
                     }
                     // Activate the target layer
                     self.keymap.activate_layer(layer_num);
-                    self.release_sticky_mod_if_active().await;
                     if self.sticky_key_state.exit_on_layer_change() {
                         self.release_sticky_key_if_active().await;
                     }
@@ -1299,7 +1273,6 @@ impl<'a> Keyboard<'a> {
             Action::DefaultLayer(layer_num) => {
                 // Set the default layer
                 self.keymap.set_default_layer(layer_num);
-                self.release_sticky_mod_if_active().await;
                 if self.sticky_key_state.exit_on_layer_change() {
                     self.release_sticky_key_if_active().await;
                 }
@@ -1349,9 +1322,6 @@ impl<'a> Keyboard<'a> {
                 self.process_action_osm(m, event).await;
                 // Process OSL to avoid the OSM state stuck when an OSM is followed by an OSL
                 self.update_osl(event);
-            }
-            Action::StickyMod(key, modifiers) => {
-                self.process_action_sticky_mod(key, modifiers, event).await;
             }
             Action::StickyKey(params) => {
                 self.process_action_sticky_key(params, event).await;
@@ -1423,11 +1393,6 @@ impl<'a> Keyboard<'a> {
             // the "modifier released" change in a separate hid report
             result |= osm;
         };
-
-        // Add StickyMod modifiers if active
-        if let Some(sm_mods) = self.sticky_mod_state.value() {
-            result |= *sm_mods;
-        }
 
         // Add StickyKey modifiers if active
         if let Some(sk_mods) = self.sticky_key_state.value() {
@@ -1632,8 +1597,6 @@ impl<'a> Keyboard<'a> {
             self.keymap.activate_layer(layer_num);
         } else {
             self.keymap.deactivate_layer(layer_num);
-            // Clean up StickyMod when layer deactivates
-            self.release_sticky_mod_if_active().await;
             if self.sticky_key_state.exit_on_layer_change() {
                 self.release_sticky_key_if_active().await;
             }

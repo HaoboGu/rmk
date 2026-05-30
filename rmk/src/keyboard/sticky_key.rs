@@ -1,7 +1,7 @@
 //! StickyKey action implementation.
 //!
 //! StickyKey holds a modifier combination across key presses for Alt+Tab-like cycling.
-//! Compared to StickyMod, it adds:
+//! Features:
 //! - `max_repeat`: limit fires before auto-release (0 = infinite)
 //! - `timeout_ms`: per-key timeout override (0 = use global config)
 //! - `exit_on_layer_change`: whether layer changes release the SK

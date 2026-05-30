@@ -96,9 +96,6 @@ pub enum Action {
     /// Sticky key: sends modifier + key on each press, holds modifiers between presses.
     /// Supports max_repeat, per-key timeout, and conditional exit on layer change.
     StickyKey(StickyKeyAction),
-    /// Sticky modifier: sends key + modifier on press, holds modifier until
-    /// another key is pressed or layer changes. Used for Alt+Tab-like switching.
-    StickyMod(KeyCode, ModifierCombination),
     /// A Plover HID stenography key. Press/release of this key updates the
     /// in-progress steno chord; on first release the accumulated chord is
     /// sent to the host as a vendor HID report.
