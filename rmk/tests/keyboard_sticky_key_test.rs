@@ -3,7 +3,7 @@ pub mod common;
 use embassy_time::Duration;
 use rmk::config::{BehaviorConfig, PositionalConfig, StickyKeyConfig};
 use rmk::keyboard::Keyboard;
-use rmk::types::action::{KeyAction, StickyKeyAction};
+use rmk::types::action::KeyAction;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{a, k, mo, sk};
 use rusty_fork::rusty_fork_test;
