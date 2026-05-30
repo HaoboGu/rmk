@@ -405,6 +405,8 @@ rusty_fork_test! {
                 [0, 0, true,  10],  // Press SK #3 → max_repeat reached, deactivate
                 [0, 0, false, 10],  // Release SK #3
                 [0, 3, false, 10],  // Release MO(1)
+                [0, 0, true,  10],  // Press A on layer 0 — SK deactivated, no modifier
+                [0, 0, false, 10],  // Release A
             ],
             expected_reports: [
                 [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // SK #1 press: Alt+Tab
@@ -412,6 +414,8 @@ rusty_fork_test! {
                 [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // SK #2 press: Alt+Tab
                 [KC_LALT, [0, 0, 0, 0, 0, 0]],                 // SK #2 release: Alt held
                 [0, [0, 0, 0, 0, 0, 0]],                        // SK #3: max_repeat reached, SK deactivated
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],           // A press: no modifier (SK deactivated cleanly)
+                [0, [0, 0, 0, 0, 0, 0]],                        // A release
             ]
         };
     }

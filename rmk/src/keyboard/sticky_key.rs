@@ -92,9 +92,7 @@ impl Keyboard<'_> {
                     ..
                 } => {
                     *repeat_count += 1;
-                    let count = *repeat_count;
-                    let mr_val = *mr;
-                    if mr_val > 0 && count > mr_val {
+                    if *mr > 0 && *repeat_count > *mr {
                         should_deactivate = true;
                     } else {
                         *d = deadline;
@@ -112,10 +110,15 @@ impl Keyboard<'_> {
                 self.send_keyboard_report_with_resolved_modifiers(true).await;
             }
         } else {
-            if let KeyCode::Hid(hid_key) = params.key {
-                self.unregister_key(hid_key, event);
+            // Only unregister and report if SK was active (key was registered on press).
+            // If max_repeat deactivated SK silently on the press event, the key was never
+            // registered, so the release is a no-op.
+            if self.sticky_key_state.is_active() {
+                if let KeyCode::Hid(hid_key) = params.key {
+                    self.unregister_key(hid_key, event);
+                }
+                self.send_keyboard_report_with_resolved_modifiers(false).await;
             }
-            self.send_keyboard_report_with_resolved_modifiers(false).await;
         }
     }
 
