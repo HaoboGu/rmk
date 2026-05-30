@@ -76,6 +76,23 @@ Quick-release example:
 quick_release = true
 ```
 
+## Sticky Key
+
+The `sticky_key` sub-table configures the StickyKey (`SK`) feature.
+
+`SK(key, [modifier])` holds a modifier across repeated presses of the same key. This is useful for Alt+Tab-style window/tab cycling: the first press sends `modifier + key` (e.g. Alt+Tab), then on each subsequent press the modifier stays held so only `key` is sent again. The modifier releases automatically when any non-SK, non-modifier key is pressed.
+
+This differs from `OSM` (one-shot modifier), which sends the modifier only once and always releases after the next keypress.
+
+Default behavior: no timeout, infinite repeats, modifier survives layer changes.
+
+Optional global timeout example:
+```toml
+[behavior.sticky_key]
+timeout = "5s"  # auto-release the modifier after 5 seconds of inactivity
+```
+
+To use StickyKey in your keymap, see `SK(key, [modifier])` in the [keymap configuration](./layout#keymap-config).
 
 ## Combo
 

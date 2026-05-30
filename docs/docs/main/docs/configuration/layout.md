@@ -124,7 +124,7 @@ The `layer.keys` string should follow several rules:
    4. Use `LT(n, key, <profile_name>)` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html), The `profile_name` is optional, which defines the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning)
    5. Use `OSL(n)` to create a one-shot layer action, `n` is the layer number
    6. Use `OSM(modifier)` to create a one-shot modifier action. The modifier can be chained in the same way as `WM`
-   7. Use `SM(key, modifier)` to create a sticky modifier action. The modifier stays held across repeated presses of `key` until any non-SM key is pressed or the layer changes — useful for Alt+Tab-style cycling. The modifier can be chained in the same way as `WM`. See [Sticky Modifiers](./behavior#sticky-modifiers) for optional timeout configuration.
+   7. Use `SK(key, [modifier])` to create a sticky key action. The modifier stays held across repeated presses of `key` until any non-SK key is pressed — useful for Alt+Tab-style cycling. The modifier can be chained in the same way as `WM` (e.g. `SK(Tab, [LCtrl|LShift])`). Optional positional args: `SK(key, [mod], max_repeat, timeout_ms, exit_on_layer_change)`. See [Sticky Key](./behavior#sticky-key) for global timeout configuration.
    8. Use `TT(n)` to create a layer activate or tap toggle action, `n` is the layer number
    9. Use `TG(n)` to create a layer toggle action, `n` is the layer number
    10. Use `TO(n)` to create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
