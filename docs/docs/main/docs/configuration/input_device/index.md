@@ -6,6 +6,7 @@ All input devices are defined in the `[input_device]` table. Currently supported
 - [Joystick (joystick)](./joystick.md)
 - [PMW3610 Optical Mouse Sensor (pmw3610)](./pmw3610.md)
 - [Azoteq IQS5xx Trackpad (iqs5xx)](./iqs5xx.md)
+- [Azoteq IQS9151 Trackpad (iqs9151)](./iqs9151.md)
 
 Please refer to the corresponding documentation for detailed configuration settings.
 
