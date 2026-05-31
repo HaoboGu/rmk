@@ -282,7 +282,7 @@ jobs:
             examples/use_rust/esp32s3_ble -> ../../../target-esp
       - name: Install espup and esp toolchain
         run: |
-          cargo binstall espup -y
+          cargo binstall --force espup -y
           espup install
       - name: Build ESP examples
         run: |
