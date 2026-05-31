@@ -262,6 +262,7 @@ where
                             },
                         ]);
                     }
+                    Timer::after_millis(1).await;
                 }
                 Err(e) => {
                     error!("iqs9151 {} failure: {:?}", self.pointing_device_id, e);
