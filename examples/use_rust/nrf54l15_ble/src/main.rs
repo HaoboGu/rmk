@@ -171,7 +171,7 @@ async fn main(spawner: Spawner) {
         pid: 0x4643,
         manufacturer: "Haobo",
         product_name: "RMK nRF54L15",
-        serial_number: "vial:f64c2b3c:000055",
+        ..DeviceConfig::default()
     };
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, UNLOCK_KEYS);
     let storage_config = StorageConfig {

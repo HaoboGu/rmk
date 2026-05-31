@@ -5,7 +5,9 @@ pub struct Identity {
     pub product_id: u16,
     pub manufacturer: String,
     pub product_name: String,
-    pub serial_number: String,
+    /// `None` when `serial_number` is absent from `keyboard.toml`; the codegen will
+    /// substitute `::rmk::config::RMK_BUILD_INFO` so the default is version-stamped.
+    pub serial_number: Option<String>,
 }
 
 impl crate::KeyboardTomlConfig {
@@ -24,10 +26,7 @@ impl crate::KeyboardTomlConfig {
                 .product_name
                 .clone()
                 .unwrap_or_else(|| "RMK Keyboard".to_string()),
-            serial_number: keyboard
-                .serial_number
-                .clone()
-                .unwrap_or_else(|| "vial:f64c2b3c:000001".to_string()),
+            serial_number: keyboard.serial_number.clone(),
         })
     }
 }
