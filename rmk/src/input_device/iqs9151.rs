@@ -7,7 +7,7 @@
 //! Gestures, virtual keys, scrolling, dynamic scaling, split custom transports,
 //! and device-specific configuration images are deliberately out of scope.
 
-use embassy_time::{Duration, Instant, Timer};
+use embassy_time::{Duration, Instant, Timer, with_timeout};
 use embedded_hal_async::digital::Wait;
 use embedded_hal_async::i2c::I2c;
 use rmk_macro::input_device;
@@ -37,6 +37,7 @@ const SYS_CTRL_ACK_RESET: u16 = 1 << 7;
 const CFG_TP_TOUCH_EVENT_EN: u16 = 1 << 13;
 const CFG_TP_EVENT_EN: u16 = 1 << 10;
 const CFG_EVENT_MODE: u16 = 1 << 8;
+const RDY_TIMEOUT_MS: u64 = 20;
 
 #[input_device(publish = PointingEvent)]
 pub struct Iqs9151<I, RDY>
@@ -134,7 +135,12 @@ where
 
     async fn wait_ready(&mut self) -> Result<(), Error<I::Error>> {
         match self.window_detection {
-            WindowDetection::Rdy(ref mut rdy) => rdy.wait_for_low().await.map_err(|_| Error::Pin),
+            WindowDetection::Rdy(ref mut rdy) => {
+                match with_timeout(Duration::from_millis(RDY_TIMEOUT_MS), rdy.wait_for_low()).await {
+                    Ok(Ok(())) | Err(_) => Ok(()),
+                    Ok(Err(_)) => Err(Error::Pin),
+                }
+            }
             WindowDetection::Poll {
                 ref mut last_poll,
                 interval_ms,
