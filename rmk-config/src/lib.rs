@@ -513,6 +513,9 @@ pub struct ChipConfig {
     /// DCDC regulator 0 voltage (for nrf52840)
     /// Values: "3V3" or "1V8"
     pub dcdc_reg0_voltage: Option<String>,
+    /// Frequency of the CPU. Currently supported only on
+    /// ESP32 and supports only 160 and 80(which are in MHz)
+    pub frequency: Option<String>
 }
 
 /// Config for lights
