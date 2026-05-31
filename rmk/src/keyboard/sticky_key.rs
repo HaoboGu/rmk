@@ -55,7 +55,13 @@ impl StickyKeyState {
     }
 
     pub fn exit_on_layer_change(&self) -> bool {
-        matches!(self, StickyKeyState::Active { exit_on_layer_change: true, .. })
+        matches!(
+            self,
+            StickyKeyState::Active {
+                exit_on_layer_change: true,
+                ..
+            }
+        )
     }
 }
 
