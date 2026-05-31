@@ -5,6 +5,7 @@ pub(crate) mod context;
 pub(crate) mod storage;
 #[cfg(not(feature = "_no_usb"))]
 pub(crate) mod usb;
+#[cfg(feature = "vial")]
 pub(crate) mod via;
 
 pub use context::KeyboardContext;
