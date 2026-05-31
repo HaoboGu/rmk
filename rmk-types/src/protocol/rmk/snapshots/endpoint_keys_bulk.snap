@@ -6,9 +6,9 @@
 #   UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rmk_protocol
 # Format: <path>  REQ <8-byte hex>  RESP <8-byte hex>
 
-combo/bulk_get   REQ 52 b1 93 5f 86 d5 96 53  RESP 15 1a 33 42 ab 3e e9 d7
-combo/bulk_set   REQ 63 1a 39 ca 37 c0 75 6f  RESP 83 3b 2e b1 a0 96 2f 3d
-keymap/bulk_get  REQ 11 21 e6 78 15 e5 8a ca  RESP 47 7b f1 bd ad cd b6 e7
-keymap/bulk_set  REQ 01 63 3c a6 88 c3 fa b9  RESP 42 98 cc 60 91 e5 c5 f3
-morse/bulk_get   REQ 46 e8 ff eb aa ed 5f db  RESP 6a 78 3f f6 e4 0b eb 9d
-morse/bulk_set   REQ cc ea c6 89 58 61 8b 16  RESP f7 57 bd 43 2b 0b ec b8
+combo/bulk_get   REQ 52 b1 93 5f 86 d5 96 53  RESP 99 8a 7a 05 7b 22 4b f8
+combo/bulk_set   REQ 7f 1a c0 79 72 e4 d5 c1  RESP 83 3b 2e b1 a0 96 2f 3d
+keymap/bulk_get  REQ 11 21 e6 78 15 e5 8a ca  RESP 6f 52 99 0c e4 fe 9b 08
+keymap/bulk_set  REQ c1 7c e9 3d 96 a2 0c 69  RESP 42 98 cc 60 91 e5 c5 f3
+morse/bulk_get   REQ 46 e8 ff eb aa ed 5f db  RESP 8e 17 e3 36 0b 09 8d a5
+morse/bulk_set   REQ 98 1c 43 26 ee 0a de 23  RESP f7 57 bd 43 2b 0b ec b8

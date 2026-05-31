@@ -366,19 +366,15 @@ macro_rules! osm {
 #[macro_export]
 macro_rules! sk {
     ($key:ident, $keep:expr, $max_repeat:expr, $timeout_ms:expr, $exit_on_layer_change:expr) => {
-        $crate::types::action::KeyAction::Single(
-            $crate::types::action::Action::StickyKey(
-                $crate::types::action::StickyKeyAction {
-                    key: $crate::types::keycode::KeyCode::Hid(
-                        $crate::types::keycode::HidKeyCode::$key,
-                    ),
-                    keep: $keep,
-                    max_repeat: $max_repeat,
-                    timeout_ms: $timeout_ms,
-                    exit_on_layer_change: $exit_on_layer_change,
-                }
-            )
-        )
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
+            $crate::types::action::StickyKeyAction {
+                key: $crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::$key),
+                keep: $keep,
+                max_repeat: $max_repeat,
+                timeout_ms: $timeout_ms,
+                exit_on_layer_change: $exit_on_layer_change,
+            },
+        ))
     };
 }
 

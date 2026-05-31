@@ -66,11 +66,7 @@ impl StickyKeyState {
 }
 
 impl Keyboard<'_> {
-    pub(crate) async fn process_action_sticky_key(
-        &mut self,
-        params: StickyKeyAction,
-        event: KeyboardEvent,
-    ) {
+    pub(crate) async fn process_action_sticky_key(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
         if event.pressed {
             let timeout = if params.timeout_ms > 0 {
                 Duration::from_millis(params.timeout_ms as u64)

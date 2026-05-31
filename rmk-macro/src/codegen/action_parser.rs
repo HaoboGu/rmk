@@ -240,7 +240,10 @@ pub(crate) fn parse_key(
                     )
                 });
 
-                let key_str = internal[..bracket_start].trim().trim_end_matches(',').trim();
+                let key_str = internal[..bracket_start]
+                    .trim()
+                    .trim_end_matches(',')
+                    .trim();
                 let ident = get_key_with_alias(key_str.to_string());
 
                 let keep_mods_str = &internal[bracket_start + 1..bracket_end];
@@ -254,16 +257,23 @@ pub(crate) fn parse_key(
                 let optional_args: Vec<&str> = if after_bracket.is_empty() {
                     vec![]
                 } else {
-                    after_bracket.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect()
+                    after_bracket
+                        .split(',')
+                        .map(|s| s.trim())
+                        .filter(|s| !s.is_empty())
+                        .collect()
                 };
 
-                let max_repeat: u16 = optional_args.first()
+                let max_repeat: u16 = optional_args
+                    .first()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0u16);
-                let timeout_ms: u16 = optional_args.get(1)
+                let timeout_ms: u16 = optional_args
+                    .get(1)
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0u16);
-                let exit_on_layer_change: bool = optional_args.get(2)
+                let exit_on_layer_change: bool = optional_args
+                    .get(2)
                     .map(|s| s.trim() == "true")
                     .unwrap_or(false);
 

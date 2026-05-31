@@ -26,7 +26,7 @@ const KEYMAP: [[[KeyAction; 6]; 1]; 2] = [
     ]],
     [[
         // Layer 1
-        sk!(Tab, ModifierCombination::LALT, 0, 0, true),  // col 0: SK(Tab, LAlt, exit=true)
+        sk!(Tab, ModifierCombination::LALT, 0, 0, true), // col 0: SK(Tab, LAlt, exit=true)
         sk!(Tab, ModifierCombination::LCTRL, 0, 0, true), // col 1: SK(Tab, LCtrl, exit=true)
         sk!(
             Tab,
@@ -35,22 +35,15 @@ const KEYMAP: [[[KeyAction; 6]; 1]; 2] = [
             0,
             true
         ), // col 2: SK(Tab, LCtrl|LShift, exit=true)
-        a!(Transparent), // col 3: Transparent
-        a!(Transparent), // col 4: Transparent → LShift
-        a!(No),          // col 5: No
+        a!(Transparent),                                 // col 3: Transparent
+        a!(Transparent),                                 // col 4: Transparent → LShift
+        a!(No),                                          // col 5: No
     ]],
 ];
 
 // KEYMAP_MAX_REPEAT: SK at col 0 has max_repeat=2
 const KEYMAP_MAX_REPEAT: [[[KeyAction; 6]; 1]; 2] = [
-    [[
-        k!(A),
-        k!(B),
-        k!(C),
-        mo!(1),
-        k!(LShift),
-        a!(No),
-    ]],
+    [[k!(A), k!(B), k!(C), mo!(1), k!(LShift), a!(No)]],
     [[
         sk!(Tab, ModifierCombination::LALT, 2, 0, false),  // col 0: max_repeat=2
         sk!(Tab, ModifierCombination::LCTRL, 0, 0, false), // col 1
@@ -63,18 +56,11 @@ const KEYMAP_MAX_REPEAT: [[[KeyAction; 6]; 1]; 2] = [
 
 // KEYMAP_PER_KEY_TIMEOUT: SK at col 0 has 50ms per-key timeout
 const KEYMAP_PER_KEY_TIMEOUT: [[[KeyAction; 6]; 1]; 2] = [
+    [[k!(A), k!(B), k!(C), mo!(1), k!(LShift), a!(No)]],
     [[
-        k!(A),
-        k!(B),
-        k!(C),
-        mo!(1),
-        k!(LShift),
-        a!(No),
-    ]],
-    [[
-        sk!(Tab, ModifierCombination::LALT, 0, 50, false),  // col 0: 50ms per-key timeout
-        sk!(Tab, ModifierCombination::LCTRL, 0, 0, false),  // col 1
-        sk!(Tab, ModifierCombination::LCTRL, 0, 0, false),  // col 2
+        sk!(Tab, ModifierCombination::LALT, 0, 50, false), // col 0: 50ms per-key timeout
+        sk!(Tab, ModifierCombination::LCTRL, 0, 0, false), // col 1
+        sk!(Tab, ModifierCombination::LCTRL, 0, 0, false), // col 2
         a!(Transparent),
         a!(Transparent),
         a!(No),
@@ -83,18 +69,11 @@ const KEYMAP_PER_KEY_TIMEOUT: [[[KeyAction; 6]; 1]; 2] = [
 
 // KEYMAP_NO_EXIT: SK with exit_on_layer_change=false — SK survives MO release
 const KEYMAP_NO_EXIT: [[[KeyAction; 6]; 1]; 2] = [
+    [[k!(A), k!(B), k!(C), mo!(1), k!(LShift), a!(No)]],
     [[
-        k!(A),
-        k!(B),
-        k!(C),
-        mo!(1),
-        k!(LShift),
-        a!(No),
-    ]],
-    [[
-        sk!(Tab, ModifierCombination::LALT, 0, 0, false),   // col 0: exit=false
-        sk!(Tab, ModifierCombination::LCTRL, 0, 0, false),  // col 1
-        sk!(Tab, ModifierCombination::LCTRL, 0, 0, false),  // col 2
+        sk!(Tab, ModifierCombination::LALT, 0, 0, false),  // col 0: exit=false
+        sk!(Tab, ModifierCombination::LCTRL, 0, 0, false), // col 1
+        sk!(Tab, ModifierCombination::LCTRL, 0, 0, false), // col 2
         a!(Transparent),
         a!(Transparent),
         a!(No),
