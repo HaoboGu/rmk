@@ -515,7 +515,7 @@ pub struct ChipConfig {
     pub dcdc_reg0_voltage: Option<String>,
     /// Frequency of the CPU. Currently supported only on
     /// ESP32 and supports only 160 and 80(which are in MHz)
-    pub frequency: Option<String>
+    pub frequency: Option<String>,
 }
 
 /// Config for lights

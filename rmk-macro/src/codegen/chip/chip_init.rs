@@ -230,7 +230,9 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                 match &hardware.chip_config.frequency.as_deref() {
                     Some("160") | None => quote! { ::esp_hal::clock::CpuClock::_160MHz },
                     Some("80") => quote! { ::esp_hal::clock::CpuClock::_80MHz },
-                    _ => panic!("Currently only CPU clocks of 160MHz and 80Mhz are supported for ESP32")
+                    _ => panic!(
+                        "Currently only CPU clocks of 160MHz and 80Mhz are supported for ESP32"
+                    ),
                 }
             } else {
                 quote! { ::esp_hal::clock::CpuClock::_160MHz }
