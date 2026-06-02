@@ -37,9 +37,6 @@ pub(crate) fn expand_iqs9151_device(
         let i2c_buf_ident = format_ident!("{}_i2c_buf", sensor_name);
         let i2c_buf_ref_ident = format_ident!("{}_i2c_buf_ref", sensor_name);
         let rdy_ident = format_ident!("{}_rdy", sensor_name);
-        let processor_ident = format_ident!("{}_processor", sensor_name);
-        let processor_ident_config = format_ident!("{}_config", processor_ident);
-
         let instance_ident = format_ident!("{}", sensor.i2c.instance.to_uppercase());
         let sda_ident = format_ident!("{}", sensor.i2c.sda);
         let scl_ident = format_ident!("{}", sensor.i2c.scl);
@@ -54,7 +51,7 @@ pub(crate) fn expand_iqs9151_device(
                 quote! {
                     let #rdy_ident = Some(::embassy_nrf::gpio::Input::new(
                         p.#rdy_pin_ident,
-                        ::embassy_nrf::gpio::Pull::Up,
+                        ::embassy_nrf::gpio::Pull::None,
                     ));
                 }
             }
@@ -81,16 +78,12 @@ pub(crate) fn expand_iqs9151_device(
                 #rdy_init
                 static #i2c_buf_ident: ::static_cell::StaticCell<[u8; 16]> = ::static_cell::StaticCell::new();
                 let #i2c_buf_ref_ident = #i2c_buf_ident.init([0u8; 16]);
-                let mut #i2c_ident = ::embassy_nrf::twim::Config::default();
-                #i2c_ident.frequency = ::embassy_nrf::twim::Frequency::K400;
-                #i2c_ident.sda_pullup = true;
-                #i2c_ident.scl_pullup = true;
                 let #i2c_ident = ::embassy_nrf::twim::Twim::new(
                     p.#instance_ident,
                     Irqs,
                     p.#sda_ident,
                     p.#scl_ident,
-                    #i2c_ident,
+                    ::embassy_nrf::twim::Config::default(),
                     #i2c_buf_ref_ident,
                 );
                 let mut #device_ident = ::rmk::input_device::iqs9151::Iqs9151::new(
@@ -122,22 +115,26 @@ pub(crate) fn expand_iqs9151_device(
             var_name: device_ident,
         });
 
-        let processor_init = quote! {
-            let #processor_ident_config = ::rmk::input_device::pointing::PointingProcessorConfig {
-                invert_x: #proc_invert_x,
-                invert_y: #proc_invert_y,
-                swap_xy: #proc_swap_xy,
+        if processor_initializers.is_empty() {
+            let processor_ident = format_ident!("{}_processor", sensor_name);
+            let processor_ident_config = format_ident!("{}_config", processor_ident);
+            let processor_init = quote! {
+                let #processor_ident_config = ::rmk::input_device::pointing::PointingProcessorConfig {
+                    invert_x: #proc_invert_x,
+                    invert_y: #proc_invert_y,
+                    swap_xy: #proc_swap_xy,
+                };
+                let mut #processor_ident = ::rmk::input_device::pointing::PointingProcessor::new(
+                    &keymap,
+                    #processor_ident_config,
+                );
             };
-            let mut #processor_ident = ::rmk::input_device::pointing::PointingProcessor::new(
-                &keymap,
-                #processor_ident_config,
-            );
-        };
 
-        processor_initializers.push(Initializer {
-            initializer: processor_init,
-            var_name: processor_ident,
-        });
+            processor_initializers.push(Initializer {
+                initializer: processor_init,
+                var_name: processor_ident,
+            });
+        }
     }
 
     (device_initializers, processor_initializers)

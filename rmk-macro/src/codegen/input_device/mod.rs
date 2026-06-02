@@ -320,6 +320,7 @@ pub(crate) fn expand_input_device_config(
         devices.push(quote! { #device_name });
     }
 
+    let mut has_iqs9151_processor = !iqs9151_processor_initializers.is_empty();
     for initializer in iqs9151_processor_initializers {
         initialization.extend(initializer.initializer);
         let processor_name = initializer.var_name;
@@ -330,6 +331,9 @@ pub(crate) fn expand_input_device_config(
     // The devices run on peripherals, but processors need to run on central to handle the events
     if let BoardConfig::Split(split_config) = board {
         for peripheral in &split_config.peripheral {
+            if has_iqs9151_processor {
+                break;
+            }
             let peripheral_iqs9151_config = peripheral
                 .input_device
                 .clone()
@@ -345,6 +349,7 @@ pub(crate) fn expand_input_device_config(
                 initialization.extend(initializer.initializer);
                 let processor_name = initializer.var_name;
                 processors.push(quote! { #processor_name });
+                has_iqs9151_processor = true;
             }
         }
     }

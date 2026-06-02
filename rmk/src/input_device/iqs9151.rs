@@ -70,6 +70,7 @@ pub enum WindowDetection<RDY> {
 enum Error<I2cError> {
     I2c { tag: &'static str, inner: I2cError },
     InvalidProductNumber(u16),
+    NotReady,
     Pin,
 }
 
@@ -137,7 +138,8 @@ where
         match self.window_detection {
             WindowDetection::Rdy(ref mut rdy) => {
                 match with_timeout(Duration::from_millis(RDY_TIMEOUT_MS), rdy.wait_for_low()).await {
-                    Ok(Ok(())) | Err(_) => Ok(()),
+                    Ok(Ok(())) => Ok(()),
+                    Err(_) => Err(Error::NotReady),
                     Ok(Err(_)) => Err(Error::Pin),
                 }
             }
@@ -146,9 +148,14 @@ where
                 interval_ms,
             } => {
                 Timer::at(last_poll.saturating_add(Duration::from_millis(u64::from(interval_ms)))).await;
-                *last_poll = Instant::now();
                 Ok(())
             }
+        }
+    }
+
+    fn note_communication_attempt(&mut self) {
+        if let WindowDetection::Poll { ref mut last_poll, .. } = self.window_detection {
+            *last_poll = Instant::now();
         }
     }
 
@@ -161,10 +168,13 @@ where
     async fn write_u16(&mut self, tag: &'static str, register: u16, value: u16) -> Result<(), Error<I::Error>> {
         let register = register.to_le_bytes();
         let value = value.to_le_bytes();
-        self.i2c
+        let result = self
+            .i2c
             .write(I2C_ADDR, &[register[0], register[1], value[0], value[1]])
             .await
-            .map_err(|inner| Error::I2c { tag, inner })
+            .map_err(|inner| Error::I2c { tag, inner });
+        self.note_communication_attempt();
+        result
     }
 
     async fn update_bits_u16(
@@ -175,14 +185,18 @@ where
         value: u16,
     ) -> Result<(), Error<I::Error>> {
         let current = self.read_u16(tag, register).await?;
+        self.wait_ready().await?;
         self.write_u16(tag, register, (current & !mask) | (value & mask)).await
     }
 
     async fn read_block(&mut self, tag: &'static str, register: u16, bytes: &mut [u8]) -> Result<(), Error<I::Error>> {
-        self.i2c
+        let result = self
+            .i2c
             .write_read(I2C_ADDR, &register.to_le_bytes(), bytes)
             .await
-            .map_err(|inner| Error::I2c { tag, inner })
+            .map_err(|inner| Error::I2c { tag, inner });
+        self.note_communication_attempt();
+        result
     }
 
     async fn init(&mut self) -> Result<(), Error<I::Error>> {
