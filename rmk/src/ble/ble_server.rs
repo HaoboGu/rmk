@@ -121,7 +121,7 @@ impl<'stack, 'server, 'conn, P: PacketPool> BleHidServer<'stack, 'server, 'conn,
     ) -> Result<usize, HidError> {
         let mut buf = [0u8; N];
         let n = report.serialize(&mut buf).map_err(|_| HidError::ReportSerializeError)?;
-        characteristic.notify(self.conn, &buf).await.map_err(|e| {
+        characteristic.notify(self.conn, &buf, true).await.map_err(|e| {
             error!("Failed to notify HID report: {:?}", e);
             HidError::BleError
         })?;

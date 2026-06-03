@@ -1,6 +1,9 @@
 use core::sync::atomic::AtomicBool;
 
-use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
+use bt_hci::cmd::le::{
+    LeClearAdvSets, LeReadLocalSupportedFeatures, LeReadNumberOfSupportedAdvSets, LeSetAdvSetRandomAddr,
+    LeSetExtAdvData, LeSetExtAdvEnable, LeSetExtAdvParams, LeSetExtScanResponseData, LeSetPhy,
+};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join;
 use embassy_futures::select::{Either, Either3, select, select3};
@@ -48,6 +51,31 @@ pub(crate) const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + 1;
 
 /// Max number of L2CAP channels
 pub(crate) const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
+
+/// Derive the BLE identity (local) address for a profile slot ("option B").
+///
+/// Each profile advertises and pairs under its own static-random address, so a bonded
+/// host only ever sees — and only ever reconnects to — the address of the slot it was
+/// paired on. Switching to another (or empty) slot simply advertises a different address:
+/// the previous host never sees its address, so it neither reconnects nor needs rejecting,
+/// and its bond is preserved for an instant reconnect when that slot becomes active again.
+///
+/// Slot 0 keeps the base address (so existing single-host bonds survive the upgrade).
+/// Other slots perturb a middle octet — never the most-significant octet that carries the
+/// static-random type bits — so the result is still a valid static-random address regardless
+/// of `BdAddr` byte order, and the slots never collide for the small `NUM_BLE_PROFILE`.
+///
+/// Note: slot addresses are derived deterministically, so a cleared-then-repaired slot reuses
+/// its address; a stale host still bonded to it may briefly attempt (and fail) to reconnect.
+/// Per-slot stored addresses regenerated on clear-bond would remove that, at the cost of flash plumbing.
+fn slot_identity(base: Address, slot: u8) -> Address {
+    if slot == 0 {
+        return base;
+    }
+    let mut bytes = base.addr.into_inner();
+    bytes[2] = bytes[2].wrapping_add(slot);
+    Address::random(bytes)
+}
 
 /// Build the BLE stack.
 pub async fn build_ble_stack<
@@ -139,7 +167,16 @@ where
 impl<'b, 's, C> Runnable for BleTransport<'b, 's, C>
 where
     's: 'b,
-    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    C: Controller
+        + ControllerCmdAsync<LeSetPhy>
+        + ControllerCmdSync<LeReadLocalSupportedFeatures>
+        + for<'t> ControllerCmdSync<LeSetExtAdvData<'t>>
+        + ControllerCmdSync<LeClearAdvSets>
+        + ControllerCmdSync<LeSetExtAdvParams>
+        + ControllerCmdSync<LeSetAdvSetRandomAddr>
+        + ControllerCmdSync<LeReadNumberOfSupportedAdvSets>
+        + for<'t> ControllerCmdSync<LeSetExtAdvEnable<'t>>
+        + for<'t> ControllerCmdSync<LeSetExtScanResponseData<'t>>,
 {
     async fn run(&mut self) -> ! {
         // Load the preferred connection from storage
@@ -155,14 +192,24 @@ where
         let mut peripheral = stack.peripheral();
         let runner = stack.runner();
 
+        // Capture the base identity address before applying any per-profile identity, so slot
+        // addresses are always derived from the original device address rather than a slot one.
+        let identity_base = stack.get_local_address();
+
         let server = &self.server;
         let profile_manager = &mut self.profile_manager;
         let product_name = self.product_name;
 
         let connection_loop = async {
             loop {
+                // The active profile's per-slot identity address. Applied as the advertising set's
+                // address (extended advertising) and as the accepted connection's SMP identity —
+                // never the controller-global address, so the split-central link is undisturbed.
+                let active_profile = crate::state::current_profile();
+                let identity = identity_base.map(|base| slot_identity(base, active_profile));
+                let active = profile_manager.active_bond_info(); // ProfileInfo of active slot
                 match select(
-                    advertise(product_name, &mut peripheral, server),
+                    advertise(product_name, &mut peripheral, server, active.map(|p| p.info), identity),
                     profile_manager.update_profile(),
                 )
                 .await
@@ -250,7 +297,7 @@ pub(crate) async fn ble_task<C: Controller + ControllerCmdAsync<LeSetPhy>, P: Pa
                 .run_with_handler(&crate::split::ble::central::ScanHandler {})
                 .await
             {
-                error!("[ble_task] runner.run_with_handler error");
+                error!("[ble_task] runner.run_with_handler error {:?}", _e);
                 embassy_time::Timer::after_millis(100).await;
             }
         }
@@ -347,13 +394,15 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         let host_control_point_match = false;
 
                         if event.handle() == output_keyboard.handle {
-                            if event.data().len() == 1 {
-                                let led_indicator = LedIndicator::from_bits(event.data()[0]);
-                                debug!("Got keyboard state: {:?}", led_indicator);
-                                LED_SIGNAL.signal(led_indicator);
-                            } else {
-                                warn!("Wrong keyboard state data: {:?}", event.data());
-                            }
+                            event.with_data(|_, data| {
+                                if data.len() == 1 {
+                                    let led_indicator = LedIndicator::from_bits(data[0]);
+                                    debug!("Got keyboard state: {:?}", led_indicator);
+                                    LED_SIGNAL.signal(led_indicator);
+                                } else {
+                                    warn!("Wrong keyboard state data: {:?}", data);
+                                }
+                            });
                         } else if event.handle() == input_keyboard.cccd_handle.expect("No CCCD for input keyboard")
                             || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
                             || event.handle() == media.cccd_handle.expect("No CCCD for media report")
@@ -372,25 +421,32 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 // HID Class spec opcodes for the HID Control Point characteristic:
                                 //   - 0: HID_CTRL_SUSPEND
                                 //   - 1: HID_CTRL_EXIT_SUSPEND
-                                let data = event.data();
-                                if data.len() == 1 {
-                                    match data[0] {
-                                        0 => CENTRAL_SLEEP.signal(true),
-                                        1 => CENTRAL_SLEEP.signal(false),
-                                        _ => {}
+                                event.with_data(|_, data| {
+                                    if data.len() == 1 {
+                                        match data[0] {
+                                            0 => CENTRAL_SLEEP.signal(true),
+                                            1 => CENTRAL_SLEEP.signal(false),
+                                            _ => {}
+                                        }
                                     }
-                                }
+                                });
                             }
                         } else {
                             #[cfg(feature = "host")]
                             if event.handle() == output_host.handle {
-                                debug!("Got host packet: {:?}", event.data());
-                                if event.data().len() == 32 {
-                                    let mut data = [0u8; 32];
-                                    data.copy_from_slice(event.data());
+                                let mut data = [0u8; 32];
+                                let valid = event.with_data(|_, packet| {
+                                    debug!("Got host packet: {:?}", packet);
+                                    if packet.len() == 32 {
+                                        data.copy_from_slice(packet);
+                                        true
+                                    } else {
+                                        warn!("Wrong host packet data: {:?}", packet);
+                                        false
+                                    }
+                                });
+                                if valid {
                                     crate::channel::enqueue_host_request(ConnectionType::Ble, data).await;
-                                } else {
-                                    warn!("Wrong host packet data: {:?}", event.data());
                                 }
                             } else if event.handle() == input_host.cccd_handle.expect("No CCCD for input host") {
                                 cccd_updated = true;
@@ -522,11 +578,28 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
 }
 
 /// Create an advertiser to use to connect to a BLE Central, and wait for it to connect.
-async fn advertise<'a, 'b, C: Controller>(
+///
+/// Uses extended advertising with a per-advertising-set random address (`identity`) so each
+/// profile advertises under its own address without touching the controller-global address that
+/// the split-central role depends on. The accepted connection is pinned to the same address for
+/// SMP, so pairing and the distributed identity match what the host saw.
+async fn advertise<'a, 'b, C>(
     name: &'a str,
     peripheral: &mut Peripheral<'a, C, DefaultPacketPool>,
     server: &'b Server<'_>,
-) -> Result<GattConnection<'a, 'b, DefaultPacketPool>, BleHostError<C::Error>> {
+    active: Option<BondInformation>,
+    identity: Option<Address>,
+) -> Result<GattConnection<'a, 'b, DefaultPacketPool>, BleHostError<C::Error>>
+where
+    C: Controller
+        + for<'t> ControllerCmdSync<LeSetExtAdvData<'t>>
+        + ControllerCmdSync<LeClearAdvSets>
+        + ControllerCmdSync<LeSetExtAdvParams>
+        + ControllerCmdSync<LeSetAdvSetRandomAddr>
+        + ControllerCmdSync<LeReadNumberOfSupportedAdvSets>
+        + for<'t> ControllerCmdSync<LeSetExtAdvEnable<'t>>
+        + for<'t> ControllerCmdSync<LeSetExtScanResponseData<'t>>,
+{
     // Wait for 10ms to ensure the USB is checked
     embassy_time::Timer::after_millis(10).await;
     let mut advertiser_data = [0; 31];
@@ -544,7 +617,8 @@ async fn advertise<'a, 'b, C: Controller>(
     )?;
 
     let advertise_config = AdvertisementParameters {
-        primary_phy: PhyKind::Le2M,
+        // Extended advertising: primary channel must be 1M/Coded; 2M is allowed on secondary only.
+        primary_phy: PhyKind::Le1M,
         secondary_phy: PhyKind::Le2M,
         tx_power: TxPower::Plus8dBm,
         interval_min: Duration::from_millis(200),
@@ -552,23 +626,43 @@ async fn advertise<'a, 'b, C: Controller>(
         ..Default::default()
     };
 
+    // Per-profile identity: advertise this set under `identity` (falls back to the host-global
+    // address when none). Connectable, non-scannable, undirected — the extended-advertising analog
+    // of the previous connectable-undirected advertisement.
+    let sets = [AdvertisementSet {
+        params: advertise_config,
+        data: Advertisement::ExtConnectableNonscannableUndirected {
+            adv_data: &advertiser_data[..],
+        },
+        address: identity.map(|a| a.addr),
+    }];
+    let mut handles = AdvertisementSet::handles(&sets);
+
     info!("[adv] advertising");
     set_ble_state(BleState::Advertising);
-    let advertiser = peripheral
-        .advertise(
-            &advertise_config,
-            Advertisement::ConnectableScannableUndirected {
-                adv_data: &advertiser_data[..],
-                scan_data: &[],
-            },
-        )
-        .await?;
+    let advertiser = peripheral.advertise_ext(&sets, &mut handles).await?;
 
     // Timeout for advertising is 300s
     match with_timeout(Duration::from_secs(300), advertiser.accept()).await {
         Ok(conn_res) => {
             let conn = conn_res?.with_attribute_server(server)?;
             info!("[adv] connection established");
+            // The connection's SMP local address is pinned to this profile's identity automatically
+            // by `advertise_ext`/`accept` (from the advertising set's address), so pairing key
+            // derivation and the distributed identity use the address the host actually saw.
+            // Safety net on top of per-profile identities: each slot advertises its own address,
+            // so normally only the active host can reach us. This still catches the recycled-slot
+            // edge case (slot cleared then re-paired) where a stale host bonded to the reused
+            // address connects — reject it gracefully (0x13) without touching its bond.
+            match active {
+                Some(b) if !b.identity.match_identity(&conn.raw().peer_identity()) => {
+                    // A *different* bonded host reached this slot's address → reject
+                    conn.raw().disconnect();
+                }
+                None => { /* empty slot: its address is unbonded, so only a genuinely new device gets here → allow pairing */
+                }
+                _ => { /* the active profile's own host → serve normally */ }
+            }
             if let Err(e) = conn.raw().set_bondable(true) {
                 error!("Set bondable error: {:?}", e);
             };

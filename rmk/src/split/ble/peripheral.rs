@@ -63,8 +63,11 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitReader for BleSplitPeripheralDrive
                         GattEvent::Write(event) => {
                             // Write to peripheral
                             if event.handle() == self.message_to_peripheral.handle {
-                                trace!("Got message from central: {:?}", event.data());
-                                match postcard::from_bytes::<SplitMessage>(event.data()) {
+                                let parsed = event.with_data(|_, data| {
+                                    trace!("Got message from central: {:?}", data);
+                                    postcard::from_bytes::<SplitMessage>(data)
+                                });
+                                match parsed {
                                     Ok(message) => {
                                         trace!("Message from central: {:?}", message);
                                         break message;
@@ -112,7 +115,7 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitWriter for BleSplitPeripheralDrive
             SplitDriverError::SerializeError
         })?;
         info!("Writing split message to central: {:?}", message);
-        self.message_to_central.notify(self.conn, &buf).await.map_err(|e| {
+        self.message_to_central.notify(self.conn, &buf, true).await.map_err(|e| {
             error!("BLE notify error: {:?}", e);
             SplitDriverError::BleError(1)
         })?;

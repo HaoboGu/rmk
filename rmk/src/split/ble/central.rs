@@ -1,7 +1,10 @@
 use core::cell::RefCell;
 use core::sync::atomic::Ordering;
 
-use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy, LeSetScanParams};
+use bt_hci::cmd::le::{
+    LeAddDeviceToFilterAcceptList, LeClearFilterAcceptList, LeExtCreateConn, LeReadLocalSupportedFeatures, LeSetExtScanEnable,
+    LeSetExtScanParams, LeSetPhy,
+};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::select::{Either, Either3, select, select3};
 use embassy_sync::mutex::Mutex;
@@ -55,7 +58,8 @@ pub async fn scan_peripherals<
     'b,
     's: 'b,
     C: Controller
-        + ControllerCmdSync<LeSetScanParams>
+        + ControllerCmdSync<LeSetExtScanParams>
+        + ControllerCmdSync<LeSetExtScanEnable>
         + ControllerCmdAsync<LeSetPhy>
         + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 >(
@@ -78,7 +82,9 @@ pub async fn scan_peripherals<
                         ..Default::default()
                     };
                     let _guard = SCANNING_MUTEX.lock().await;
-                    if let Ok(_session) = scanner.scan(&scan_config).await {
+                    // Extended scanning: the host role uses extended advertising, and a controller
+                    // cannot mix legacy and extended advertising/scanning/initiating commands.
+                    if let Ok(_session) = scanner.scan_ext(&scan_config).await {
                         info!("Start scanning peripherals");
                         STOP_SCANNING.wait().await;
                         info!("Stop scanning");
@@ -137,25 +143,43 @@ pub(crate) struct ScanHandler {}
 impl EventHandler for ScanHandler {
     fn on_adv_reports(&self, mut it: LeAdvReportsIter<'_>) {
         while let Some(Ok(report)) = it.next() {
-            // Check advertisement data
-            if report.data.len() < 25 {
-                continue;
-            }
-            if report.data[4] == 0x07
-                && report.data[5..].starts_with(&[
-                    // uuid: 4dd5fbaa-18e5-4b07-bf0a-353698659946
-                    70u8, 153u8, 101u8, 152u8, 54u8, 53u8, 10u8, 191u8, 7u8, 75u8, 229u8, 24u8, 170u8, 251u8, 213u8,
-                    77u8,
-                ])
-                && report.data[21..25] == [0x04, 0xff, 0x18, 0xe1]
-            {
-                // Uuid and manufacturer specific data check passed
-                let peripheral_id = report.data[25];
-                info!("Found split peripheral: id={:?}, addr={:?}", peripheral_id, report.addr);
-                PERIPHERAL_FOUND.signal((peripheral_id, report.addr));
+            if Self::match_peripheral(report.data, report.addr) {
                 break;
             }
         }
+    }
+
+    // Extended scanning (forced by the host's extended advertising) delivers reports here, even
+    // for the peripheral's legacy directed advertising. Same matching logic as the legacy path.
+    fn on_ext_adv_reports(&self, mut it: LeExtAdvReportsIter<'_>) {
+        while let Some(Ok(report)) = it.next() {
+            if Self::match_peripheral(report.data, report.addr) {
+                break;
+            }
+        }
+    }
+}
+
+impl ScanHandler {
+    /// Returns true when `data` identifies a split peripheral; signals `PERIPHERAL_FOUND` if so.
+    fn match_peripheral(data: &[u8], addr: BdAddr) -> bool {
+        if data.len() < 25 {
+            return false;
+        }
+        if data[4] == 0x07
+            && data[5..].starts_with(&[
+                // uuid: 4dd5fbaa-18e5-4b07-bf0a-353698659946
+                70u8, 153u8, 101u8, 152u8, 54u8, 53u8, 10u8, 191u8, 7u8, 75u8, 229u8, 24u8, 170u8, 251u8, 213u8, 77u8,
+            ])
+            && data[21..25] == [0x04, 0xff, 0x18, 0xe1]
+        {
+            // Uuid and manufacturer specific data check passed
+            let peripheral_id = data[25];
+            info!("Found split peripheral: id={:?}, addr={:?}", peripheral_id, addr);
+            PERIPHERAL_FOUND.signal((peripheral_id, addr));
+            return true;
+        }
+        false
     }
 }
 
@@ -163,7 +187,9 @@ pub(crate) async fn run_ble_peripheral_manager<
     'b,
     's: 'b,
     C: Controller
-        + ControllerCmdSync<LeSetScanParams>
+        + ControllerCmdSync<LeClearFilterAcceptList>
+        + ControllerCmdSync<LeAddDeviceToFilterAcceptList>
+        + ControllerCmdAsync<LeExtCreateConn>
         + ControllerCmdAsync<LeSetPhy>
         + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     const ROW: usize,
@@ -210,14 +236,14 @@ pub(crate) async fn run_ble_peripheral_manager<
         match with_timeout(Duration::from_secs(5), async {
             if let Ok(_guard) = SCANNING_MUTEX.try_lock() {
                 info!("Start connecting to peripheral {}", peri_id);
-                central.connect(&config).await
+                central.connect_ext(&config).await
             } else {
                 STOP_SCANNING.signal(());
                 let _guard = SCANNING_MUTEX.lock().await;
                 // Wait a little bit to ensure that the scanning has been fully stopped
                 embassy_time::Timer::after_millis(100).await;
                 info!("Start connecting to peripheral {}", peri_id);
-                central.connect(&config).await
+                central.connect_ext(&config).await
             }
         })
         .await

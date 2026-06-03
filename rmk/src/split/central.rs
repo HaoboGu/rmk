@@ -5,7 +5,9 @@ use core::cell::RefCell;
 use embedded_io_async::{Read, Write};
 #[cfg(feature = "_ble")]
 use {
-    bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy, LeSetScanParams},
+    bt_hci::cmd::le::{
+        LeAddDeviceToFilterAcceptList, LeClearFilterAcceptList, LeExtCreateConn, LeReadLocalSupportedFeatures, LeSetPhy,
+    },
     bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync},
     heapless::VecView,
     trouble_host::prelude::*,
@@ -26,7 +28,9 @@ pub async fn run_peripheral_manager<
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
     #[cfg(feature = "_ble")] C: Controller
-        + ControllerCmdSync<LeSetScanParams>
+        + ControllerCmdSync<LeClearFilterAcceptList>
+        + ControllerCmdSync<LeAddDeviceToFilterAcceptList>
+        + ControllerCmdAsync<LeExtCreateConn>
         + ControllerCmdAsync<LeSetPhy>
         + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(not(feature = "_ble"))] S: Read + Write,
