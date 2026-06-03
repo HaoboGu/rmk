@@ -269,6 +269,20 @@ OSM/OSL are frozen (Section 1) and keep their global-only config. It is an
 the runtime engine, so it can land before or after the Section 4 merge stages,
 each step staying test-green.
 
+### Requirement: profile-first configuration
+
+The TOML profile (`[behavior.sticky_key]` plus its named `profiles`) is the
+**preferred and primary** way to specify SK settings. Per-key overrides in the
+`SK(...)` action string are a **secondary convenience, retained for now but
+explicitly optional** — they may be removed in a later pass to simplify the code.
+
+Consequence for the design: nothing may architecturally depend on key-level
+overrides existing. Because every setting is resolved to a concrete value at
+codegen (profile/global folded in), the runtime engine reads only fully-resolved
+values and is blind to *where* a value came from. Dropping the per-key override
+syntax later must therefore be a clean deletion of parser/codegen arms — no
+runtime change, no engine coupling.
+
 ### Motivation
 
 SK's current keymap form `SK(key, [mods], max_repeat, timeout_ms,
