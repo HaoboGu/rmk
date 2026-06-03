@@ -34,6 +34,17 @@ cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features
 # the _ble combo verifies the BLE silent-drop arm compiles.
 cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "vial,storage,steno"
 cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "split,vial,storage,async_matrix,_ble,steno"
+# Rynk: runs the `rynk_loopback` end-to-end tests, which drive the real
+# `run_session` over an in-memory embedded-io duplex (request/response Cmds,
+# topic-emit, and oversized-frame resync). The feature flags also add *compile*
+# coverage for the gated handler arms: `bulk_transfer` pulls in every bulk Cmd
+# handler, `_ble` the BLE-only handlers, and `_ble` + `split` the peripheral-status
+# handler — those arms are compiled here, not all exercised at runtime.
+cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "rynk,bulk_transfer,_ble,split,storage,async_matrix"
+# Rynk again with the BLE/split/bulk handlers OFF: exercises the gated arms' absence
+# and the `GetCapabilities` feature flags in their false state (so the cfg!()-based
+# assertions aren't tautological), plus the no-`_ble`/no-`split` topic set.
+cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "rynk,storage"
 cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features
 
 # Doctests: nextest doesn't run them. rmk/ has `doctest = false` so only
