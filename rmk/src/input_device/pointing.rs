@@ -8,7 +8,7 @@ use rmk_macro::{input_device, processor};
 use usbd_hid::descriptor::MouseReport;
 
 use crate::channel::send_hid_report;
-use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent, PointingSetCpiEvent};
+use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent, PointingSetCpiEvent, PointingDeviceEvent};
 use crate::hid::Report;
 use crate::keymap::KeyMap;
 
@@ -154,23 +154,26 @@ impl<S: PointingDriver> PointingDevice<S> {
         self.accumulated_x = 0;
         self.accumulated_y = 0;
 
-        Some(PointingEvent([
-            AxisEvent {
-                typ: AxisValType::Rel,
-                axis: Axis::X,
-                value: dx,
-            },
-            AxisEvent {
-                typ: AxisValType::Rel,
-                axis: Axis::Y,
-                value: dy,
-            },
-            AxisEvent {
-                typ: AxisValType::Rel,
-                axis: Axis::Z,
-                value: 0,
-            },
-        ]))
+        Some(PointingEvent {
+            device_id: self.id,
+            axes: [
+                AxisEvent {
+                    typ: AxisValType::Rel,
+                    axis: Axis::X,
+                    value: dx,
+                },
+                AxisEvent {
+                    typ: AxisValType::Rel,
+                    axis: Axis::Y,
+                    value: dy,
+                },
+                AxisEvent {
+                    typ: AxisValType::Rel,
+                    axis: Axis::Z,
+                    value: 0,
+                },
+            ],
+        })
     }
 }
 
@@ -249,35 +252,176 @@ impl<S: PointingDriver> PointingDevice<S> {
     }
 }
 
-#[derive(Clone, Default)]
-pub struct PointingProcessorConfig {
-    /// Invert X axis
+/// Pointing mode determines how raw XY motion is interpreted
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum PointingMode {
+    /// Default cursor mode - XY maps to mouse XY movement
+    #[default]
+    Cursor,
+    /// Scroll mode - XY maps to wheel (vertical) and pan (horizontal)
+    Scroll(ScrollConfig),
+    /// Sniper mode - XY maps to cursor but at reduced sensitivity
+    Sniper(SniperConfig),
+}
+
+/// Configuration for scroll mode
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct ScrollConfig {
+    /// Divisor for X axis (→ pan). Higher = slower. 0 disables horizontal pan.
+    pub divisor_x: u8,
+    /// Divisor for Y axis (→ wheel). Higher = slower. 0 disables vertical scroll.
+    pub divisor_y: u8,
+    /// Invert X axis. In scroll mode X maps to pan, so this reverses pan direction.
     pub invert_x: bool,
-    /// Invert Y axis
+    /// Invert Y axis. In scroll mode Y maps to wheel, so this reverses scroll direction.
     pub invert_y: bool,
-    /// Swap X and Y axes
+}
+    
+impl Default for ScrollConfig {
+    fn default() -> Self {
+        Self {
+            divisor_x: 8,
+            divisor_y: 8,
+            invert_x: false,
+            invert_y: false,
+        }
+    }
+}
+/// Configuration for sniper (precision) mode
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct SniperConfig {
+    /// Divisor for both axes. Higher = slower, more precise movement.
+    pub divisor: u8,
+    /// Invert X axis movement.
+    pub invert_x: bool,
+    /// Invert Y axis movement.
+    pub invert_y: bool,
+}
+
+impl Default for SniperConfig {
+    fn default() -> Self {
+        Self {
+            divisor: 4,
+            invert_x: false,
+            invert_y: false,
+        }
+    }
+}
+
+/// Accumulator for sub-unit motion deltas (used in Scroll and Sniper modes)
+///
+/// When dividing motion by a divisor, small movements would be lost.
+/// The accumulator keeps track of the remainder so sub-unit deltas
+/// accumulate until they produce a non-zero output.
+#[derive(Clone, Debug, Default)]
+pub struct MotionAccumulator {
+    remainder_x: i16,
+    remainder_y: i16,
+}
+
+impl MotionAccumulator {
+    /// Reset accumulator (call when mode changes)
+    pub fn reset(&mut self) {
+        self.remainder_x = 0;
+        self.remainder_y = 0;
+    }
+
+    /// Accumulate motion and return the divided output, keeping remainder.
+    /// A divisor of 0 disables that axis (always outputs 0).
+    pub fn accumulate(&mut self, dx: i16, dy: i16, divisor_x: u8, divisor_y: u8) -> (i16, i16) {
+        let out_x = if divisor_x == 0 {
+            self.remainder_x = 0;
+            0
+        } else {
+            let div_x = divisor_x as i16;
+            let total_x = self.remainder_x.saturating_add(dx);
+            let out = total_x / div_x;
+            self.remainder_x = total_x - out * div_x;
+            out
+        };
+
+        let out_y = if divisor_y == 0 {
+            self.remainder_y = 0;
+            0
+        } else {
+            let div_y = divisor_y as i16;
+            let total_y = self.remainder_y.saturating_add(dy);
+            let out = total_y / div_y;
+            self.remainder_y = total_y - out * div_y;
+            out
+        };
+
+        (out_x, out_y)
+    }
+}
+
+#[derive(Clone)]
+pub struct PointingProcessorConfig {
+    /// The id of the PointingDevice this processor handles.
+    /// Use ALL_POINTING_DEVICES (255) to process events from all devices.
+    pub device_id: u8,
+    /// Invert X axis (applied to all modes before mode-specific processing)
+    pub invert_x: bool,
+    /// Invert Y axis (applied to all modes before mode-specific processing)
+    pub invert_y: bool,
+    /// Swap X and Y axes (applied to all modes before mode-specific processing)
     pub swap_xy: bool,
 }
 
+impl Default for PointingProcessorConfig {
+    fn default() -> Self {
+        Self {
+            device_id: ALL_POINTING_DEVICES,
+            invert_x: false,
+            invert_y: false,
+            swap_xy: false,
+        }
+    }
+}
+
 /// PointingProcessor that converts motion events to mouse reports
-#[processor(subscribe = [PointingEvent])]
+#[processor(subscribe = [PointingEvent, PointingDeviceEvent])]
 pub struct PointingProcessor<'a> {
-    /// Reference to the keymap
+    /// Reference to the keymap (used for mouse_buttons)
     keymap: &'a KeyMap<'a>,
     config: PointingProcessorConfig,
+    /// Motion accumulator for scroll/sniper modes
+    accumulator: MotionAccumulator,
+    /// current active mode
+    current_mode: PointingMode,
 }
 
 impl<'a> PointingProcessor<'a> {
     /// Create a new pointing processor with default settings
     pub fn new(keymap: &'a KeyMap<'a>, config: PointingProcessorConfig) -> Self {
-        Self { keymap, config }
+        Self {
+            keymap,
+            config,
+            accumulator: MotionAccumulator::default(),
+            current_mode: PointingMode::default(),
+        }
     }
 
+    /// Set the pointing mode for a specific layer
+    pub fn set_pointing_mode(&mut self, mode: PointingMode) -> &mut Self {
+        self.current_mode = mode;
+        self
+    }
+
+    // pointing events are generated by the PointingDevice after accumulating motion and applying the poll/report intervals.
     async fn on_pointing_event(&mut self, event: PointingEvent) {
+        // Filter: only process events from the configured device
+        if self.config.device_id != ALL_POINTING_DEVICES && event.device_id != self.config.device_id {
+            return;
+        }
+
         let mut x = 0i16;
         let mut y = 0i16;
 
-        for axis_event in event.0.iter() {
+        for axis_event in event.axes.iter() {
             match axis_event.axis {
                 Axis::X => x = axis_event.value,
                 Axis::Y => y = axis_event.value,
@@ -285,6 +429,10 @@ impl<'a> PointingProcessor<'a> {
             }
         }
 
+        // Apply global config transforms (before mode-specific processing).
+        // Order: invert → swap → mode invert.
+        // Mode-specific invert_x/y operate on the post-swap logical axes,
+        // so if swap_xy is enabled, ScrollConfig::invert_y affects the physical X axis.
         if self.config.invert_x {
             x = -x;
         }
@@ -296,14 +444,63 @@ impl<'a> PointingProcessor<'a> {
         }
 
         let buttons = self.keymap.mouse_buttons();
-        let mouse_report = MouseReport {
-            buttons,
-            x: x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
-            y: y.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
-            wheel: 0,
-            pan: 0,
+
+        let mouse_report = match self.current_mode {
+            PointingMode::Cursor => MouseReport {
+                buttons,
+                x: x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                y: y.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                wheel: 0,
+                pan: 0,
+            },
+            PointingMode::Scroll(scroll_config) => {
+                let (sx, sy) = self
+                    .accumulator
+                    .accumulate(x, y, scroll_config.divisor_x, scroll_config.divisor_y);
+                if sx == 0 && sy == 0 {
+                    return;
+                }
+                // Sensor X → pan, sensor Y → wheel.
+                // Default: sensor +Y produces negative wheel (scroll up in HID convention).
+                // invert_y reverses wheel direction; invert_x reverses pan direction.
+                let wheel = if scroll_config.invert_y { sy } else { -sy };
+                let pan = if scroll_config.invert_x { -sx } else { sx };
+                MouseReport {
+                    buttons,
+                    x: 0,
+                    y: 0,
+                    wheel: wheel.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                    pan: pan.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                }
+            }
+            PointingMode::Sniper(sniper_config) => {
+                let (sx, sy) = self
+                    .accumulator
+                    .accumulate(x, y, sniper_config.divisor, sniper_config.divisor);
+                if sx == 0 && sy == 0 {
+                    return;
+                }
+                let out_x = if sniper_config.invert_x { -sx } else { sx };
+                let out_y = if sniper_config.invert_y { -sy } else { sy };
+                MouseReport {
+                    buttons,
+                    x: out_x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                    y: out_y.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                    wheel: 0,
+                    pan: 0,
+                }
+            }
         };
+
         send_hid_report(Report::MouseReport(mouse_report)).await;
+    }
+
+    // pointing device events are used to change the mode (cursor/scroll/sniper) of the processor based on the device id. This allows users to trigger different modes if desired.
+    pub async fn on_pointing_device_event(&mut self, event: PointingDeviceEvent) {
+        if self.config.device_id == ALL_POINTING_DEVICES || self.config.device_id == event.device_id {
+            debug!("PointingProcessor {}: setting mode to {:?}", event.device_id, event.mode);
+            self.set_pointing_mode(event.mode);
+        }
     }
 }
 

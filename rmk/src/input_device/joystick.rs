@@ -4,10 +4,13 @@ use usbd_hid::descriptor::MouseReport;
 use crate::channel::send_hid_report;
 use crate::event::PointingEvent;
 use crate::hid::Report;
+use crate::input_device::pointing::ALL_POINTING_DEVICES;
 use crate::keymap::KeyMap;
 
 #[processor(subscribe = [PointingEvent])]
 pub struct JoystickProcessor<'a, const N: usize> {
+    /// Only process events from this device id. Use ALL_POINTING_DEVICES (255) to accept all.
+    device_id: u8,
     transform: [[i16; N]; N],
     bias: [i16; N],
     keymap: &'a KeyMap<'a>,
@@ -16,8 +19,9 @@ pub struct JoystickProcessor<'a, const N: usize> {
 }
 
 impl<'a, const N: usize> JoystickProcessor<'a, N> {
-    pub fn new(transform: [[i16; N]; N], bias: [i16; N], resolution: u16, keymap: &'a KeyMap<'a>) -> Self {
+    pub fn new(device_id: u8, transform: [[i16; N]; N], bias: [i16; N], resolution: u16, keymap: &'a KeyMap<'a>) -> Self {
         Self {
+            device_id,
             transform,
             bias,
             resolution,
@@ -27,7 +31,10 @@ impl<'a, const N: usize> JoystickProcessor<'a, N> {
     }
 
     async fn on_pointing_event(&mut self, event: PointingEvent) {
-        for (rec, e) in self.record.iter_mut().zip(event.0.iter()) {
+        if self.device_id != ALL_POINTING_DEVICES && event.device_id != self.device_id {
+            return;
+        }
+        for (rec, e) in self.record.iter_mut().zip(event.axes.iter()) {
             *rec = e.value;
         }
         debug!("Joystick info: {:#?}", self.record);
