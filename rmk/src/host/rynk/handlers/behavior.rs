@@ -16,7 +16,7 @@ impl<'a> RynkService<'a> {
     }
 
     pub(crate) async fn handle_set_behavior_config(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (cfg, _) = postcard::take_from_bytes::<BehaviorConfig>(payload).map_err(|_| RynkError::InvalidRequest)?;
+        let (cfg, _) = postcard::take_from_bytes::<BehaviorConfig>(payload).map_err(|_| RynkError::Malformed)?;
         self.ctx.set_combo_timeout(cfg.combo_timeout_ms).await;
         self.ctx.set_one_shot_timeout(cfg.oneshot_timeout_ms).await;
         self.ctx.set_tap_interval(cfg.tap_interval_ms).await;

@@ -13,12 +13,12 @@ impl<'a> RynkService<'a> {
     pub(crate) async fn handle_get_capabilities(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
         let (rows, cols, num_layers) = self.ctx.keymap_dimensions();
         let caps = DeviceCapabilities {
-            // -- Layout (live, from the configured keymap) --
+            // Layout (live, from the configured keymap)
             num_layers: num_layers as u8,
             num_rows: rows as u8,
             num_cols: cols as u8,
 
-            // -- Input device limits (compile-time from keyboard.toml) --
+            // Input device limits (compile-time from keyboard.toml)
             num_encoders: 0, // TODO Phase 6: surface encoder count
             max_combos: constants::COMBO_MAX_NUM as u8,
             max_combo_keys: constants::COMBO_MAX_LENGTH as u8,
@@ -28,17 +28,17 @@ impl<'a> RynkService<'a> {
             max_patterns_per_key: constants::MAX_PATTERNS_PER_KEY as u8,
             max_forks: constants::FORK_MAX_NUM as u8,
 
-            // -- Feature flags --
+            // Feature flags
             storage_enabled: cfg!(feature = "storage"),
             lighting_enabled: false, // TODO Phase 6: surface light_service
 
-            // -- Connectivity --
+            // Connectivity
             is_split: cfg!(feature = "split"),
             num_split_peripherals: constants::SPLIT_PERIPHERALS_NUM as u8,
             ble_enabled: cfg!(feature = "_ble"),
             num_ble_profiles: constants::NUM_BLE_PROFILE as u8,
 
-            // -- Protocol limits --
+            // Protocol limits
             max_payload_size: rmk_types::protocol::rynk::RYNK_MAX_PAYLOAD as u16,
             max_bulk_keys: bulk_size() as u8,
             macro_chunk_size: constants::MACRO_DATA_SIZE as u16,
@@ -63,8 +63,7 @@ impl<'a> RynkService<'a> {
     }
 
     pub(crate) async fn handle_storage_reset(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (_mode, _) =
-            postcard::take_from_bytes::<StorageResetMode>(payload).map_err(|_| RynkError::InvalidRequest)?;
+        let (_mode, _) = postcard::take_from_bytes::<StorageResetMode>(payload).map_err(|_| RynkError::Malformed)?;
         // KeyboardContext::reset_storage() does not currently honor the
         // `LayoutOnly` mode (always Full). Phase 6 wires mode-aware reset.
         self.ctx.reset_storage().await;

@@ -29,7 +29,9 @@ impl<'a> RynkMessage<'a> {
     /// then write `cmd`, `seq`, and `payload_len` into the header.
     pub fn build<T: Serialize>(buf: &'a mut [u8], cmd: Cmd, seq: u8, value: &T) -> Result<Self, RynkError> {
         if buf.len() < RYNK_HEADER_SIZE {
-            return Err(RynkError::InvalidRequest);
+            // Outbound encode: a buffer too small for the header is a
+            // firmware-side fault, not a malformed host request.
+            return Err(RynkError::Internal);
         }
         buf[0..2].copy_from_slice(&(cmd as u16).to_le_bytes());
         buf[2] = seq;
@@ -71,6 +73,26 @@ impl<'a> RynkMessage<'a> {
     pub fn set_payload_len(&mut self, len: u16) {
         self.buf[3..5].copy_from_slice(&len.to_le_bytes());
     }
+
+    /// Encode `Err(err)` into the payload and update `LEN`. Header `cmd`
+    /// and `seq` bytes are left untouched so the host can correlate the
+    /// error reply with the outgoing request.
+    pub fn write_error(&mut self, err: RynkError) {
+        let n = postcard::to_slice(&Err::<(), RynkError>(err), self.payload_mut())
+            .map(|s| s.len())
+            .unwrap_or(0);
+        self.set_payload_len(n as u16);
+    }
+
+    /// Encode an `Err(err)` reply over a raw `buf`.
+    /// Preserves `cmd` and `seq` from the existing header bytes.
+    /// Returns the total frame length.
+    pub fn encode_error_reply(buf: &mut [u8], err: RynkError) -> usize {
+        debug_assert!(buf.len() >= RYNK_HEADER_SIZE);
+        let mut msg = RynkMessage { buf };
+        msg.write_error(err);
+        msg.frame_len()
+    }
 }
 
 impl<'a> TryFrom<&'a mut [u8]> for RynkMessage<'a> {
@@ -81,12 +103,12 @@ impl<'a> TryFrom<&'a mut [u8]> for RynkMessage<'a> {
     /// declared payload (`buf.len() >= RYNK_HEADER_SIZE + payload_len`).
     fn try_from(buf: &'a mut [u8]) -> Result<Self, RynkError> {
         if buf.len() < RYNK_HEADER_SIZE {
-            return Err(RynkError::InvalidRequest);
+            return Err(RynkError::Malformed);
         }
-        Cmd::from_repr(u16::from_le_bytes([buf[0], buf[1]])).ok_or(RynkError::InvalidRequest)?;
+        Cmd::from_repr(u16::from_le_bytes([buf[0], buf[1]])).ok_or(RynkError::Malformed)?;
         let payload_len = u16::from_le_bytes([buf[3], buf[4]]) as usize;
         if buf.len() < RYNK_HEADER_SIZE + payload_len {
-            return Err(RynkError::InvalidRequest);
+            return Err(RynkError::Malformed);
         }
         Ok(Self { buf })
     }
@@ -113,27 +135,21 @@ mod tests {
         let mut buf = [0u8; RYNK_HEADER_SIZE - 1];
         assert_eq!(
             RynkMessage::build(&mut buf, Cmd::GetVersion, 0, &()).err(),
-            Some(RynkError::InvalidRequest),
+            Some(RynkError::Internal),
         );
     }
 
     #[test]
     fn try_from_rejects_short_buffer() {
         let mut buf = [0u8; RYNK_HEADER_SIZE - 1];
-        assert_eq!(
-            RynkMessage::try_from(&mut buf[..]).err(),
-            Some(RynkError::InvalidRequest),
-        );
+        assert_eq!(RynkMessage::try_from(&mut buf[..]).err(), Some(RynkError::Malformed),);
     }
 
     #[test]
     fn try_from_rejects_unknown_discriminant() {
         let mut buf = [0u8; RYNK_HEADER_SIZE];
         buf[0..2].copy_from_slice(&0xFFFFu16.to_le_bytes());
-        assert_eq!(
-            RynkMessage::try_from(&mut buf[..]).err(),
-            Some(RynkError::InvalidRequest),
-        );
+        assert_eq!(RynkMessage::try_from(&mut buf[..]).err(), Some(RynkError::Malformed),);
     }
 
     #[test]
@@ -150,10 +166,7 @@ mod tests {
         let mut buf = [0u8; RYNK_HEADER_SIZE + 4];
         buf[0..2].copy_from_slice(&(Cmd::GetVersion as u16).to_le_bytes());
         buf[3..5].copy_from_slice(&10u16.to_le_bytes());
-        assert_eq!(
-            RynkMessage::try_from(&mut buf[..]).err(),
-            Some(RynkError::InvalidRequest),
-        );
+        assert_eq!(RynkMessage::try_from(&mut buf[..]).err(), Some(RynkError::Malformed),);
     }
 
     #[test]

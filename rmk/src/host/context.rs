@@ -1,7 +1,5 @@
 //! Shared context for host-facing services (Vial today, Rynk next).
 
-use core::sync::atomic::{AtomicBool, AtomicU16, Ordering};
-
 use embassy_time::Duration;
 use rmk_types::action::{EncoderAction, KeyAction};
 #[cfg(feature = "_ble")]
@@ -19,19 +17,13 @@ use crate::keymap::KeyMap;
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 
 /// Context shared between Vial and Rynk host services.
-pub struct KeyboardContext<'a> {
+pub(crate) struct KeyboardContext<'a> {
     pub keymap: &'a KeyMap<'a>,
-    latest_wpm: AtomicU16,
-    latest_sleep: AtomicBool,
 }
 
 impl<'a> KeyboardContext<'a> {
     pub fn new(keymap: &'a KeyMap<'a>) -> Self {
-        Self {
-            keymap,
-            latest_wpm: AtomicU16::new(0),
-            latest_sleep: AtomicBool::new(false),
-        }
+        Self { keymap }
     }
 
     // ── Keymap operations ────────────────────────────────────────────────
@@ -103,6 +95,11 @@ impl<'a> KeyboardContext<'a> {
 
     pub fn get_encoder(&self, layer: u8, idx: u8) -> Option<EncoderAction> {
         self.keymap.get_encoder_action(layer as usize, idx as usize)
+    }
+
+    /// Number of encoders per layer.
+    pub fn num_encoders(&self) -> usize {
+        self.keymap.num_encoders()
     }
 
     pub async fn set_encoder_clockwise(&self, layer: u8, idx: u8, action: KeyAction) {
@@ -314,22 +311,6 @@ impl<'a> KeyboardContext<'a> {
 
     pub fn active_layer(&self) -> u8 {
         self.keymap.active_layer()
-    }
-
-    pub fn wpm(&self) -> u16 {
-        self.latest_wpm.load(Ordering::Relaxed)
-    }
-
-    pub fn sleep_state(&self) -> bool {
-        self.latest_sleep.load(Ordering::Relaxed)
-    }
-
-    pub(crate) fn cache_wpm(&self, v: u16) {
-        self.latest_wpm.store(v, Ordering::Relaxed);
-    }
-
-    pub(crate) fn cache_sleep(&self, v: bool) {
-        self.latest_sleep.store(v, Ordering::Relaxed);
     }
 
     pub fn default_layer(&self) -> u8 {

@@ -22,9 +22,9 @@ impl<'a> RynkService<'a> {
     /// dispatch loop.
     #[cfg(feature = "_ble")]
     pub(crate) async fn handle_switch_ble_profile(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (slot, _) = postcard::take_from_bytes::<u8>(payload).map_err(|_| RynkError::InvalidRequest)?;
+        let (slot, _) = postcard::take_from_bytes::<u8>(payload).map_err(|_| RynkError::Malformed)?;
         if (slot as usize) >= crate::NUM_BLE_PROFILE {
-            return Err(RynkError::InvalidRequest);
+            return Err(RynkError::Invalid);
         }
         crate::channel::BLE_PROFILE_CHANNEL
             .try_send(crate::ble::profile::BleProfileAction::Switch(slot))
@@ -36,9 +36,9 @@ impl<'a> RynkService<'a> {
     /// requiring a prior switch (uses [`BleProfileAction::ClearSlot`]).
     #[cfg(feature = "_ble")]
     pub(crate) async fn handle_clear_ble_profile(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (slot, _) = postcard::take_from_bytes::<u8>(payload).map_err(|_| RynkError::InvalidRequest)?;
+        let (slot, _) = postcard::take_from_bytes::<u8>(payload).map_err(|_| RynkError::Malformed)?;
         if (slot as usize) >= crate::NUM_BLE_PROFILE {
-            return Err(RynkError::InvalidRequest);
+            return Err(RynkError::Invalid);
         }
         crate::channel::BLE_PROFILE_CHANNEL
             .try_send(crate::ble::profile::BleProfileAction::ClearSlot(slot))

@@ -8,7 +8,7 @@ use super::super::RynkService;
 
 impl<'a> RynkService<'a> {
     pub(crate) async fn handle_get_macro(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (r, _) = postcard::take_from_bytes::<GetMacroRequest>(payload).map_err(|_| RynkError::InvalidRequest)?;
+        let (r, _) = postcard::take_from_bytes::<GetMacroRequest>(payload).map_err(|_| RynkError::Malformed)?;
         // Read up to MACRO_DATA_SIZE bytes starting at `offset`. The keymap
         // accessor zero-fills any read that runs past the end of the macro
         // space, so the host detects "macro complete" by a chunk shorter
@@ -25,7 +25,7 @@ impl<'a> RynkService<'a> {
     }
 
     pub(crate) async fn handle_set_macro(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (r, _) = postcard::take_from_bytes::<SetMacroRequest>(payload).map_err(|_| RynkError::InvalidRequest)?;
+        let (r, _) = postcard::take_from_bytes::<SetMacroRequest>(payload).map_err(|_| RynkError::Malformed)?;
         let _ = r.index;
         self.ctx.write_macro_buffer(r.offset as usize, &r.data.data).await;
         Self::write_response(&(), payload)

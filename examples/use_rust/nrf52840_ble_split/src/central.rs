@@ -211,8 +211,7 @@ async fn main(spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer);
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap);
-    let host_ctx = rmk::host::KeyboardContext::new(&keymap);
-    let mut host_service = HostService::new(&host_ctx, &rmk_config);
+    let host_service = HostService::new(&keymap, &rmk_config);
 
     // Read peripheral address from storage
     let peripheral_addrs = storage.read_peripheral_addresses::<1>().await;
@@ -260,8 +259,10 @@ async fn main(spawner: Spawner) {
 
     let mut peripheral_battery_monitor = PeripheralBatteryMonitor {};
 
-    let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config);
-    let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
+    let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
+    let mut ble_transport = BleTransport::new(&stack, rmk_config)
+        .await
+        .with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();
 
     let mut watchdog_runner = Nrf52Watchdog::default_runner(p.WDT);
@@ -278,7 +279,6 @@ async fn main(spawner: Spawner) {
             wpm_processor,
             batt_proc,
             keyboard,
-            host_service,
             capslock_led,
             peripheral_battery_monitor,
             watchdog_runner

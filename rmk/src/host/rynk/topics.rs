@@ -5,19 +5,16 @@
 use futures::FutureExt;
 #[cfg(feature = "_ble")]
 use rmk_types::battery::BatteryStatus;
-#[cfg(feature = "_ble")]
-use rmk_types::ble::BleStatus;
 use rmk_types::connection::ConnectionStatus;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::protocol::rynk::{Cmd, RynkMessage};
 
 #[cfg(feature = "_ble")]
-use crate::event::{BatteryStatusEvent, BleStatusChangeEvent};
+use crate::event::BatteryStatusEvent;
 use crate::event::{
     ConnectionStatusChangeEvent, EventSubscriber, LayerChangeEvent, LedIndicatorEvent, SleepStateEvent,
     SubscribableEvent, WpmUpdateEvent,
 };
-use crate::host::context::KeyboardContext;
 
 pub(crate) enum TopicEvent {
     LayerChange(u8),
@@ -27,8 +24,6 @@ pub(crate) enum TopicEvent {
     LedIndicator(LedIndicator),
     #[cfg(feature = "_ble")]
     BatteryStatus(BatteryStatus),
-    #[cfg(feature = "_ble")]
-    BleStatusChange(BleStatus),
 }
 
 impl TopicEvent {
@@ -42,8 +37,6 @@ impl TopicEvent {
             TopicEvent::LedIndicator(_) => Cmd::LedIndicator,
             #[cfg(feature = "_ble")]
             TopicEvent::BatteryStatus(_) => Cmd::BatteryStatusTopic,
-            #[cfg(feature = "_ble")]
-            TopicEvent::BleStatusChange(_) => Cmd::BleStatusChangeTopic,
         }
     }
 
@@ -64,8 +57,6 @@ impl TopicEvent {
             TopicEvent::LedIndicator(v) => RynkMessage::build(buf, cmd, 0, v),
             #[cfg(feature = "_ble")]
             TopicEvent::BatteryStatus(v) => RynkMessage::build(buf, cmd, 0, v),
-            #[cfg(feature = "_ble")]
-            TopicEvent::BleStatusChange(v) => RynkMessage::build(buf, cmd, 0, v),
         }
     }
 }
@@ -78,8 +69,6 @@ pub(crate) struct TopicSubscribers {
     led: <LedIndicatorEvent as SubscribableEvent>::Subscriber,
     #[cfg(feature = "_ble")]
     battery: <BatteryStatusEvent as SubscribableEvent>::Subscriber,
-    #[cfg(feature = "_ble")]
-    ble_status: <BleStatusChangeEvent as SubscribableEvent>::Subscriber,
 }
 
 impl TopicSubscribers {
@@ -92,30 +81,20 @@ impl TopicSubscribers {
             led: LedIndicatorEvent::subscriber(),
             #[cfg(feature = "_ble")]
             battery: BatteryStatusEvent::subscriber(),
-            #[cfg(feature = "_ble")]
-            ble_status: BleStatusChangeEvent::subscriber(),
         }
     }
 
-    /// Latches `WpmUpdate` / `SleepState` payloads into `ctx` so the matching
-    /// `GetWpm` / `GetSleepState` handlers can answer without re-subscribing.
-    pub(crate) async fn next_event(&mut self, ctx: &KeyboardContext<'_>) -> TopicEvent {
+    /// Await the next topic event to forward to the host.
+    /// Each value's current snapshot is owned by its producer,
+    /// this only forwards change notifications onto the wire.
+    pub(crate) async fn next_event(&mut self) -> TopicEvent {
         crate::select_biased_with_feature! {
             e = self.layer.next_event().fuse() => TopicEvent::LayerChange((*e).into()),
-            e = self.wpm.next_event().fuse() => {
-                let v: u16 = (*e).into();
-                ctx.cache_wpm(v);
-                TopicEvent::WpmUpdate(v)
-            },
+            e = self.wpm.next_event().fuse() => TopicEvent::WpmUpdate((*e).into()),
             e = self.conn.next_event().fuse() => TopicEvent::ConnectionChange((*e).into()),
-            e = self.sleep.next_event().fuse() => {
-                let v: bool = (*e).into();
-                ctx.cache_sleep(v);
-                TopicEvent::SleepState(v)
-            },
+            e = self.sleep.next_event().fuse() => TopicEvent::SleepState((*e).into()),
             e = self.led.next_event().fuse() => TopicEvent::LedIndicator((*e).into()),
             with_feature("_ble"): e = self.battery.next_event().fuse() => TopicEvent::BatteryStatus((*e).into()),
-            with_feature("_ble"): e = self.ble_status.next_event().fuse() => TopicEvent::BleStatusChange((*e).into()),
         }
     }
 }

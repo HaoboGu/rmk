@@ -179,8 +179,7 @@ async fn main(_spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, true);
     let mut keyboard = Keyboard::new(&keymap);
-    let host_ctx = rmk::host::KeyboardContext::new(&keymap);
-    let mut host_service = HostService::new(&host_ctx, &rmk_config);
+    let host_service = HostService::new(&keymap, &rmk_config);
 
     // Rotary encoder: PA43 = phase A, PA41 = phase B. Detents short to GND, so pull-ups are required.
     // Resolution 4 collapses the 4 quadrature transitions per detent into a single event;
@@ -254,8 +253,10 @@ async fn main(_spawner: Spawner) {
 
     info!("Starting RMK dual-mode (USB + BLE) runner...");
 
-    let mut usb_transport = UsbTransport::new(usb_driver, rmk_config.device_config);
-    let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
+    let mut usb_transport = UsbTransport::new(usb_driver, rmk_config.device_config).with_host_service(&host_service);
+    let mut ble_transport = BleTransport::new(&stack, rmk_config)
+        .await
+        .with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();
 
     run_all!(
@@ -268,8 +269,7 @@ async fn main(_spawner: Spawner) {
         usb_transport,
         ble_transport,
         wpm_processor,
-        keyboard,
-        host_service
+        keyboard
     )
     .await;
 }

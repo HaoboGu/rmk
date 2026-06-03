@@ -94,43 +94,24 @@ pub use self::morse::*;
 pub use self::status::*;
 pub use self::system::*;
 
-// ---------------------------------------------------------------------------
-// Protocol-wide error primitives
-// ---------------------------------------------------------------------------
-
 /// Protocol-level error returned in every response payload.
-///
-/// Variants are grouped by what the host should *do* about them, not by
-/// where in the firmware they originated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
 pub enum RynkError {
-    /// The request was malformed or referred to something out of range:
-    /// bad header, undecodable payload, index OOB, empty slot, or topic
-    /// CMD sent as a request. Host should fix the request; retrying the
-    /// same bytes will fail the same way.
-    InvalidRequest,
-    /// Device is not currently in a state to satisfy the request — BLE
-    /// adapter not ready, peripheral disconnected, etc. Host may retry
-    /// once the state changes.
+    /// The request could not be decoded
+    Malformed,
+    /// Device is not currently in a state to satisfy the request
     NotReady,
-    /// Persistent storage failed on a write path (flash erase/write
-    /// error). Host may retry once; repeated failures indicate flash
-    /// health issues.
+    /// Persistent storage failed on a write path (flash erase/write error)
     StorageFault,
-    /// Internal firmware fault — reentrant borrow, response too large to
-    /// encode, or another "should not happen" arm. Host should surface
-    /// it for diagnostics but can't act on it.
+    /// Internal firmware fault.
     Internal,
-    /// Command is recognized but the handler is not implemented in this
-    /// firmware build.
+    /// Command is recognized but the handler is not implemented yet.
     Unimplemented,
+    /// The request decoded cleanly but is semantically invalid.
+    Invalid,
 }
-
-// ---------------------------------------------------------------------------
-// Test utilities (shared across submodule test mods)
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 pub(crate) mod test_utils {
@@ -295,11 +276,12 @@ mod tests {
     #[test]
     fn round_trip_rynk_error_and_result() {
         use super::test_utils::round_trip;
-        round_trip(&RynkError::InvalidRequest);
+        round_trip(&RynkError::Malformed);
         round_trip(&RynkError::NotReady);
         round_trip(&RynkError::StorageFault);
         round_trip(&RynkError::Internal);
         round_trip(&RynkError::Unimplemented);
+        round_trip(&RynkError::Invalid);
         let ok: Result<(), RynkError> = Ok(());
         let err: Result<(), RynkError> = Err(RynkError::StorageFault);
         let _ = round_trip(&ok);
@@ -335,7 +317,8 @@ mod tests {
             ("MatrixState{[0x05,0x00,0x20]}", encode(&matrix)),
             ("ProtocolVersion{1,0}", encode(&ProtocolVersion { major: 1, minor: 0 }),),
             ("RynkError::Internal", encode(&RynkError::Internal)),
-            ("RynkError::InvalidRequest", encode(&RynkError::InvalidRequest)),
+            ("RynkError::Invalid", encode(&RynkError::Invalid)),
+            ("RynkError::Malformed", encode(&RynkError::Malformed)),
             ("RynkError::NotReady", encode(&RynkError::NotReady)),
             ("RynkError::StorageFault", encode(&RynkError::StorageFault)),
             ("RynkError::Unimplemented", encode(&RynkError::Unimplemented)),

@@ -1,19 +1,25 @@
-use core::cell::RefCell;
+use core::cell::{Cell, RefCell};
 use core::sync::atomic::Ordering;
 
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy, LeSetScanParams};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::select::{Either, Either3, select, select3};
+use embassy_sync::blocking_mutex::Mutex as BlockingMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer, with_timeout};
 use heapless::VecView;
+use rmk_types::battery::BatteryStatus;
+#[cfg(feature = "rynk")]
+use rmk_types::protocol::rynk::PeripheralStatus;
 use trouble_host::prelude::*;
 
 use crate::SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS;
 use crate::ble::{SLEEPING_STATE, update_ble_phy, update_conn_params};
 use crate::channel::FLASH_CHANNEL;
-use crate::event::{PeripheralConnectedEvent, SleepStateEvent, publish_event};
+use crate::event::{
+    BatteryStatusEvent, PeripheralBatteryEvent, PeripheralConnectedEvent, SleepStateEvent, publish_event,
+};
 #[cfg(feature = "storage")]
 use crate::split::ble::PeerAddress;
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
@@ -34,6 +40,74 @@ static SCANNING_MUTEX: Mutex<crate::RawMutex, ()> = Mutex::new(());
 /// - `signal(true)`: Indicates central has entered sleep mode
 /// - `signal(false)`: Indicates activity detected, wake up or reset sleep timer
 pub(crate) static CENTRAL_SLEEP: Signal<crate::RawMutex, bool> = Signal::new();
+
+/// Update `SLEEPING_STATE` and broadcast the change. The central owns the
+/// sleep value; host services read it via `crate::state::current_sleep_state`.
+pub(crate) fn set_sleeping(sleeping: bool) {
+    SLEEPING_STATE.store(sleeping, Ordering::Release);
+    publish_event(SleepStateEvent::new(sleeping));
+}
+
+/// Live per-peripheral status, owned by the central so it is correct
+/// regardless of whether a host service session is active.
+#[derive(Copy, Clone)]
+struct PeripheralSlot {
+    connected: bool,
+    battery: BatteryStatus,
+}
+
+impl PeripheralSlot {
+    const fn new() -> Self {
+        Self {
+            connected: false,
+            battery: BatteryStatus::Unavailable,
+        }
+    }
+}
+
+static PERIPHERAL_SLOTS: BlockingMutex<crate::RawMutex, [Cell<PeripheralSlot>; crate::SPLIT_PERIPHERALS_NUM]> =
+    BlockingMutex::new([const { Cell::new(PeripheralSlot::new()) }; crate::SPLIT_PERIPHERALS_NUM]);
+
+/// Latch peripheral `id`'s connected state and broadcast the change.
+pub(crate) fn set_peripheral_connected(id: usize, connected: bool) {
+    PERIPHERAL_SLOTS.lock(|slots| {
+        if let Some(cell) = slots.get(id) {
+            let mut s = cell.get();
+            s.connected = connected;
+            cell.set(s);
+        }
+    });
+    publish_event(PeripheralConnectedEvent { id, connected });
+}
+
+/// Latch peripheral `id`'s battery status and broadcast the change.
+pub(crate) fn set_peripheral_battery(id: usize, battery: BatteryStatus) {
+    PERIPHERAL_SLOTS.lock(|slots| {
+        if let Some(cell) = slots.get(id) {
+            let mut s = cell.get();
+            s.battery = battery;
+            cell.set(s);
+        }
+    });
+    publish_event(PeripheralBatteryEvent {
+        id,
+        state: BatteryStatusEvent(battery),
+    });
+}
+
+/// Latest snapshot for peripheral `id`, or `None` when `id` is out of range.
+#[cfg(feature = "rynk")]
+pub(crate) fn current_peripheral_status(id: usize) -> Option<PeripheralStatus> {
+    PERIPHERAL_SLOTS.lock(|slots| {
+        slots.get(id).map(|cell| {
+            let s = cell.get();
+            PeripheralStatus {
+                connected: s.connected,
+                battery: s.battery,
+            }
+        })
+    })
+}
 
 /// Gatt service used in split central to send split message to peripheral
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -201,10 +275,7 @@ pub(crate) async fn run_ble_peripheral_manager<
         };
         wait_for_stack_started().await;
 
-        publish_event(PeripheralConnectedEvent {
-            id: peri_id,
-            connected: false,
-        });
+        set_peripheral_connected(peri_id, false);
 
         // Connect to peripheral
         match with_timeout(Duration::from_secs(5), async {
@@ -225,10 +296,7 @@ pub(crate) async fn run_ble_peripheral_manager<
             Ok(Ok(conn)) => {
                 info!("Connected to peripheral {}", peri_id);
 
-                publish_event(PeripheralConnectedEvent {
-                    id: peri_id,
-                    connected: true,
-                });
+                set_peripheral_connected(peri_id, true);
 
                 if let Err(e) =
                     run_central_manager_task::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(peri_id, stack, &conn).await
@@ -520,17 +588,13 @@ async fn sleep_manager_task<
 
             // Update connection parameters
             update_conn_params(stack, conn, &conn_params).await;
-            SLEEPING_STATE.store(true, Ordering::Release);
-
-            publish_event(SleepStateEvent::new(true));
+            set_sleeping(true);
         } else {
             // Wait for activity to wake up (false signal means activity/wakeup)
             let signal_value = CENTRAL_SLEEP.wait().await;
             if !signal_value {
                 info!("Waking up from sleep mode due to activity");
-                SLEEPING_STATE.store(false, Ordering::Release);
-
-                publish_event(SleepStateEvent::new(false));
+                set_sleeping(false);
 
                 // Restore normal connection parameters
                 update_conn_params(stack, conn, &defaul_central_conn_param()).await;
