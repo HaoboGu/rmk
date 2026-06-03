@@ -227,9 +227,9 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
         ChipSeries::Esp32 => {
             let ble_addr = get_ble_addr(hardware, peripheral_id);
             let cpu_clock = if hardware.chip.series == ChipSeries::Esp32 {
-                match &hardware.chip_config.frequency.as_deref() {
-                    Some("160") | None => quote! { ::esp_hal::clock::CpuClock::_160MHz },
-                    Some("80") => quote! { ::esp_hal::clock::CpuClock::_80MHz },
+                match hardware.chip_config.frequency.as_ref() {
+                    Some(&160.0) | None => quote! { ::esp_hal::clock::CpuClock::_160MHz },
+                    Some(&80.0) => quote! { ::esp_hal::clock::CpuClock::_80MHz },
                     _ => panic!(
                         "Currently only CPU clocks of 160MHz and 80Mhz are supported for ESP32"
                     ),
