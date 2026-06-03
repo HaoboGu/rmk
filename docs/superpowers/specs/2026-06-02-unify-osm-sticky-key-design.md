@@ -33,9 +33,13 @@ left with a documented seam to fold in later.
 4. **Fix the OSM "select race"** as a natural consequence of moving OSM onto
    SK's non-blocking deadline mechanism.
 
-**Non-goal:** any new user-facing feature. This is internal consolidation plus
-the race fix; observable behavior is identical except that the OSM timeout race
-goes away.
+**Mostly internal.** The unification itself adds no user-facing feature —
+OSM/OSL observable behavior is identical except that the OSM timeout race goes
+away. The one intentional new capability is **SK-only**: a global
+`[behavior.sticky_key]` default plus an optional per-key **profile** that can
+override any SK setting field-by-field (Section 5). It is purely additive —
+existing SK configs, the SK keymap syntax, the `StickyKeyAction` wire struct,
+and the 11 SK tests are all untouched.
 
 ---
 
@@ -104,7 +108,9 @@ one into the other.
 - **Two separate config blocks stay:** `[behavior.one_shot]` +
   `one_shot_modifiers` (`activate_on_keypress`, `quick_release`) and
   `[behavior.sticky_key]` (`timeout`). Independent timeouts are a feature, and
-  keeping both is also what compat requires.
+  keeping both is also what compat requires. (`[behavior.sticky_key]` *grows*
+  additively — optional default fields plus a `profiles` subtable, per
+  Section 5; a config that sets only `timeout` is unaffected.)
 - TOML keymap syntax `OSM(...)` / `OSL(...)` / `SK(...)` unchanged.
 - **Parity oracle:** all existing OSM/OSL tests
   (`rmk/tests/keyboard_one_shot_test.rs`, 25 tests) and SK tests
@@ -240,15 +246,124 @@ regression is bisectable to one stage. Tests run via `cargo nextest`.
   commented seam (a `// OSL fold point:` marker + short note) describing what a
   future "fold OSL fully in" change would collapse. **Gate: all 36 tests green +
   `cargo clippy` clean.**
+- **Stage S — SK profile override (independent; Section 5).** Config-resolve +
+  codegen only; orthogonal to the runtime-merge Stages 1–3, so it can land before
+  or after them. Adds the new profile resolution tests (below) and keeps the 36
+  existing tests green. **Gate: 36 existing tests green + new resolution tests
+  green.**
 
-**New tests:** none for unchanged behavior — the existing suite already defines
-parity. Add a test only if the Stage 1 race fix creates a newly-correct behavior
-the old suite did not pin (e.g. a key event arriving in the exact timeout window).
-If found, that is one targeted regression test, not a suite.
+**New tests:** for the *merge* (Stages 1–3), none for unchanged behavior — the
+existing suite already defines parity; add one targeted regression test only if
+the Stage 1 race fix creates a newly-correct behavior the old suite did not pin
+(e.g. a key event arriving in the exact timeout window). For the *SK profile
+override* (Stage S), add the small resolution-tier test set described in
+Section 5.
 
 ---
 
-## Section 5 — Risks & non-goals
+## Section 5 — SK config: global default + per-key profile override (new SK capability)
+
+This is the one intentional new feature in this work. It applies to **SK only** —
+OSM/OSL are frozen (Section 1) and keep their global-only config. It is an
+**independent workstream**: it touches the config-resolve + codegen layers, not
+the runtime engine, so it can land before or after the Section 4 merge stages,
+each step staying test-green.
+
+### Motivation
+
+SK's current keymap form `SK(key, [mods], max_repeat, timeout_ms,
+exit_on_layer_change)` is the only 5-positional-argument action in RMK; the
+trailing `0, 0, true` is unreadable and the `0` sentinels are easy to mis-order.
+We want a global default that every SK key inherits, with any individual key able
+to override any field — **without** inventing inline named-parameter syntax (no
+RMK action uses `key=value` inside the action string; named params live only in
+`[behavior.*]` TOML tables).
+
+### The three RMK override patterns (and which we pick)
+
+RMK already solves "global default, override per key" two ways, and uses a third
+(global-only) for OSM:
+
+1. **Global-only** (OSM): one `[behavior.one_shot]` block, no per-key override.
+   *Rejected* — too rigid for the stated need.
+2. **Sentinel fallback** (SK `timeout_ms = 0` today → inherit global). Works for a
+   numeric field with a spare sentinel, but can't express "inherit" for a `bool`,
+   and `max_repeat = 0` already means "infinite" so `0` is taken there.
+3. **Option-field merge** (morse / tap-hold profiles): a per-key named profile
+   whose `Option<T>` fields override the global default *field by field*; unset
+   fields inherit. Most general, reads naturally in TOML, and is a pattern RMK
+   users and maintainers already recognize.
+
+**Chosen: pattern 3 — Option-field merge, mirroring morse profiles.**
+
+### TOML surface (additive)
+
+`[behavior.sticky_key]` gains the full set of SK defaults; a new
+`[behavior.sticky_key.profiles.<name>]` subtable defines named overrides:
+
+```toml
+[behavior.sticky_key]                    # global default for every SK key
+timeout = "5s"
+max_repeat = 0                           # 0 = infinite
+exit_on_layer_change = false
+
+[behavior.sticky_key.profiles.tabber]    # overrides only what it names
+max_repeat = 3
+exit_on_layer_change = true              # timeout inherited from the global default
+```
+
+Purely additive: an existing config that sets only `timeout` keeps working; the
+new default fields and the `profiles` table are optional.
+
+### Keymap DSL (reuses MT/LT/TH's optional profile slot)
+
+The bare form is unchanged; an optional trailing **profile name** stands in for
+the positional numeric tail:
+
+```toml
+SK(Tab, [LAlt])            # every setting from the global default
+SK(Tab, [LAlt], tabber)    # override per profile "tabber", inherit the rest
+```
+
+This reuses the same optional 3rd positional slot that `MT` / `LT` / `TH` already
+use for their morse profile, so it introduces no new DSL shape. The parser
+distinguishes the slot by token kind: a **numeric** token keeps the legacy
+positional `SK(key,[mods],max_repeat,timeout_ms,exit)` parse (so the 11 existing
+SK tests stay green, unmodified); an **identifier** token is resolved as a
+profile name.
+
+### Resolution — codegen-time merge, no wire change
+
+Because both the global defaults and the named profiles are compile-time TOML,
+the merge happens entirely at **codegen** — exactly as morse's `expand_profile`
+bakes resolved values. For each field the resolution order is:
+
+> explicit per-key value (positional arg, if present) →
+> named-profile field (if `Some`) →
+> `[behavior.sticky_key]` global default (if set) →
+> built-in default (`timeout` sentinel `0`, `max_repeat` `0`, `exit` `false`).
+
+The codegen folds this down to concrete values and emits the existing
+`sk!(key, mods, max_repeat, timeout_ms, exit)` macro. Therefore:
+
+- **`StickyKeyAction` is unchanged** — still all-concrete `{ key, keep,
+  max_repeat, timeout_ms, exit_on_layer_change }`. No `Option` fields reach the
+  wire; `MaxSize` and the postcard encoding are untouched.
+- **The SK runtime engine is unchanged** by this feature — it still receives one
+  fully-resolved action. The profile indirection is a zero-runtime-cost
+  compile-time convenience.
+
+### Tests
+
+The legacy positional form keeps its 11 tests unmodified (parity oracle). Add a
+small set of **new** codegen/resolution tests for the profile form: bare key
+inherits all global defaults; a profile overrides only its named fields and
+inherits the rest; a missing global default falls to the built-in default;
+numeric-vs-identifier slot disambiguation.
+
+---
+
+## Section 6 — Risks & non-goals
 
 **Risks (ranked):**
 
@@ -263,14 +378,24 @@ If found, that is one targeted regression test, not a suite.
    toggle, `activate_on_keypress`, held-promotion, accumulation, `quick_release`)
    is dropped when re-expressed as a preset. Mitigated by the frozen test suite —
    each axis has a named test.
+4. **SK profile-merge resolution (Section 5).** Risk that the codegen merge
+   resolves a field from the wrong tier (per-key vs. profile vs. global vs.
+   built-in), or that numeric-vs-identifier slot disambiguation misreads a token.
+   Mitigated by: the merge is pure compile-time logic with no runtime state, the
+   legacy positional path is left intact (existing tests pin it), and the new
+   resolution tests cover each tier and the slot-kind split. Low blast radius — a
+   bad resolve produces a wrong baked constant caught at build/test time, not a
+   runtime hazard.
 
 **Non-goals (explicitly out of scope this round):**
 
 - Folding OSL fully into the latch (keeps its own layer calls — documented seam
   only). This is the eventual "everything folds into sticky-key" direction
   HaoboGu wants, deferred to a follow-up.
-- Touching the wire format, Via/Vial keycodes, or the two config blocks (frozen
-  per Section 1).
+- Touching the wire format, Via/Vial keycodes, or the OSM/OSL config blocks
+  (frozen per Section 1). The SK config block grows additively only (Section 5).
+- Extending the per-key profile override to OSM/OSL. OSM stays global-only; the
+  new profile mechanism is SK-only this round.
 - `OneShotKey` (OSK) — still unsupported, stays a warning (`keyboard.rs:1329`).
 - Any new user-facing feature.
 
@@ -292,14 +417,26 @@ If found, that is one targeted regression test, not a suite.
 - Likely a new shared module (e.g. `rmk/src/keyboard/sticky_latch.rs`) housing
   `StickyLatch` + `Preset`, depending on how Stage 2 shakes out.
 
+**Modify (Section 5 — SK profile override, independent of the merge stages):**
+
+- `rmk-config/src/resolved/behavior.rs` — extend the `[behavior.sticky_key]`
+  resolve to read the new default fields (`max_repeat`, `exit_on_layer_change`)
+  and a `profiles` map; plus the corresponding raw-TOML config structs.
+- `rmk-macro/src/codegen/action_parser.rs` — SK parse path: numeric-vs-identifier
+  slot disambiguation, profile lookup, and the codegen-time tier merge that bakes
+  concrete values into the existing `sk!(...)` emission.
+- New resolution tests for the profile form (alongside the existing SK tests).
+
 **Frozen (do not touch):**
 
-- `rmk-types/src/action/mod.rs` — `Action` variants + wire order.
+- `rmk-types/src/action/mod.rs` — `Action` variants + wire order, **and the
+  `StickyKeyAction` struct** (Section 5 bakes resolved values into the existing
+  fields at codegen, so the wire struct stays all-concrete and unchanged).
 - `rmk/src/host/via/keycode_convert.rs` — OSM/OSL keycodes.
 - `rmk/src/config/behavior.rs` — `OneShotModifiersConfig` + `StickyKeyConfig`
   (both blocks stay).
 - `rmk/tests/keyboard_one_shot_test.rs`, `rmk/tests/keyboard_sticky_key_test.rs`
-  — the parity oracle.
+  — the parity oracle (the legacy positional SK form keeps these green unmodified).
 
 ---
 
