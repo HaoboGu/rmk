@@ -81,13 +81,12 @@ layer); `SK(Tab, [LAlt])` = sticky-mod (alt-tab).
 `[behavior.sticky_key]` table (Section 4). The bare forms above are the entire
 surface.
 
-**`OSM(...)` / `OSL(...)` keymap forms — lowered to `SK(...)` at codegen, then
-removed.** To ease migration of existing keymaps, the parser may retain `OSM(m)`
-and `OSL(n)` as **deprecated aliases** that lower to `SK(m)` and `SK(MO(n))`
-respectively at codegen (zero runtime cost — they produce the identical
-`Action::StickyKey`). This is a confirm-or-drop decision (see Open Questions); the
-default position is to lower-and-deprecate now, delete later, matching the
-"keep for now, simplify once consolidation is proven" approach used for the config.
+**`OSM(...)` / `OSL(...)` keymap forms are dropped entirely.** No deprecated
+aliases, no lowering shim. The parser removes the `OSM` and `OSL` action keywords;
+existing keymaps using them must be rewritten to the `SK(...)` forms above. (This
+is a fork whose keymaps we control and rewrite as part of the migration, so a
+compatibility shim buys nothing.) Encountering `OSM(...)`/`OSL(...)` after this
+change is a build error, not a silent fallback.
 
 **OSL payload requires the SK action to carry a layer.** `SK(MO(n))` cannot be
 expressed by today's `StickyKeyAction { key, keep, max_repeat, timeout_ms,
@@ -263,15 +262,17 @@ Two candidate encodings (decide during implementation):
   marks the layer shape (`key`/`keep` unused), `None` is the mod/tap-key shape
   with `key == No` distinguishing the two.
 
-Either way this is a **postcard wire-order / struct change** that invalidates
-stored keymaps in flash and Vial state. Accepted because (a) full replacement is
-the goal, and (b) the firmware is reflashed on every change. Migration note for
-users: reflash both halves and re-sync Vial after upgrading.
+Either way this is a **postcard wire-order / struct change.** Whether it
+invalidates stored keymaps in flash and Vial state — and if so, what migration
+handling (if any) is needed — is **to be determined after the engine is
+implemented and working**; the impact may only become clear during hardware
+testing. Do not assume it is harmless. Flag it explicitly for evaluation in the
+test phase, and capture whatever is found (reflash needed? Vial re-sync? storage
+schema bump?) before this work moves toward PR #859.
 
 The `OneShotModifier` / `OneShotLayer` `Action` variants are **removed** from the
-wire once `OSM(...)`/`OSL(...)` are lowered to `SK(...)` at codegen — there is no
-remaining producer. (If the deprecated aliases are kept per Section 1, they still
-lower to `Action::StickyKey`; the old variants do not survive.)
+wire — with `OSM(...)`/`OSL(...)` dropped from the parser (Section 1), there is no
+remaining producer, and every SK form lowers to `Action::StickyKey`.
 
 ---
 
@@ -301,7 +302,7 @@ Tests run via `cargo nextest`.
   per OSM/OSL/SK axis). This list is the parity contract for the new surface.
 - **Stage 1 — Config + parser.** Collapse the three tables into
   `[behavior.sticky_key]` (with the rename); add the `SK(LGui)` / `SK(MO(n))`
-  parse paths; lower `OSM`/`OSL` (and remove the legacy 5-positional SK tail).
+  parse paths; remove the `OSM`/`OSL` keywords and the legacy 5-positional SK tail.
   Update keymaps/tests to the new syntax. **Gate: rewritten config/parse tests
   green.**
 - **Stage 2 — Engine: shape dispatch + absorb OSM.** Single latch; pure-mod path
@@ -332,8 +333,10 @@ gets wrong), and one for cross-tap accumulation on the pure-mod shape.
 2. **OSM timeout-semantics shift.** Moving OSM off the blocking inline `select`
    onto the run-loop deadline changes *when* expiry is observed relative to an
    incoming event (carried over from the 06-02 risk list). Watch on real hardware.
-3. **Wire/struct break (Section 5).** Invalidates stored keymaps + Vial. Accepted,
-   but must be called out in release notes with the reflash/re-sync migration step.
+3. **Wire/struct break (Section 5).** A postcard wire-order / struct change is
+   unavoidable (the layer payload requires it). Its blast radius on stored keymaps
+   and Vial state is **undetermined** — evaluate during hardware testing and record
+   the finding (and any migration step) before moving toward PR #859.
 4. **`unprocessed_events` removal.** Only safe if OSM/OSL were its sole producers;
    grep/audit before deleting.
 5. **Behavior loss during re-expression.** Any OSM/OSL axis (double-press un-latch,
@@ -347,9 +350,12 @@ gets wrong), and one for cross-tap accumulation on the pure-mod shape.
   deferred, pending RAM/flash measurement).
 - Separate timeouts for OSM vs. alt-tab keys (the deferred override is the planned
   mechanism; this round uses one shared `timeout`).
-- `OneShotKey` (OSK) — still unsupported, stays a warning.
-- Preserving the old `OSM`/`OSL`/legacy-positional-`SK` surfaces beyond the
-  optional deprecated lowering aliases (Section 1).
+- `OneShotKey` (OSK) — still unsupported, stays a no-op warning this round. Its
+  role and whether it folds into SK is **deferred and revisited after the OSM+OSL
+  migration is confirmed working** (it is not yet understood well enough to design
+  for here).
+- Preserving the old `OSM`/`OSL`/legacy-positional-`SK` surfaces — all dropped
+  (Section 1); no compatibility shim.
 
 ---
 
@@ -369,8 +375,8 @@ gets wrong), and one for cross-tap accumulation on the pure-mod shape.
 **Modify — parser/codegen:**
 
 - `rmk-macro/src/codegen/action_parser.rs` — `SK(LGui)` (pure-mod), `SK(MO(n))`
-  (layer), `SK(key,[mods])` parse; remove the 5-positional tail; lower
-  `OSM`/`OSL` to `SK` (or drop them per Open Questions).
+  (layer), `SK(key,[mods])` parse; remove the 5-positional tail; remove the
+  `OSM` / `OSL` action keywords entirely (build error if used).
 - `rmk/src/layout_macro.rs` — update/remove the `SK(...)` macro arms for the new
   shapes; layer-carrying payload.
 
@@ -406,13 +412,14 @@ gets wrong), and one for cross-tap accumulation on the pure-mod shape.
 
 ## Open questions for the implementation plan
 
-1. **Keep `OSM(...)`/`OSL(...)` as deprecated lowering aliases, or drop the syntax
-   outright?** Default: keep-and-lower now, delete later (low cost, eases keymap
-   migration). Confirm before Stage 1.
-2. **Action payload encoding (Section 5):** tagged variant vs. added
+1. **Action payload encoding (Section 5):** tagged variant vs. added
    `layer: Option<u8>` — decide by which keeps the engine dispatch cleanest once
    the latch is merged.
-3. **Home of the unified latch** — fold `oneshot.rs` into `sticky_key.rs`, or a
+2. **Home of the unified latch** — fold `oneshot.rs` into `sticky_key.rs`, or a
    new shared module — decide during Stage 2.
-4. **Vial one-shot-timeout control** — does the unified `timeout` keep a Vial
+3. **Vial one-shot-timeout control** — does the unified `timeout` keep a Vial
    runtime-set path, or is that dropped with the OSM keycodes? Decide in Stage 1.
+4. **Wire/Vial/storage migration impact (Section 5)** — determine after the engine
+   works (likely during hardware testing) whether the struct change invalidates
+   stored keymaps / Vial state, and what migration is needed, before moving toward
+   PR #859.
