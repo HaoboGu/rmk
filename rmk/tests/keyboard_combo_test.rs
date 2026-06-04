@@ -1,7 +1,7 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, OneShotConfig};
+use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, OneShotConfig, OneShotModifiersConfig};
 use rmk::keyboard::combo::{Combo, ComboConfig};
 use rmk::types::keycode::HidKeyCode;
 use rmk::types::modifier::ModifierCombination;
@@ -445,6 +445,66 @@ fn test_overlapping_triggered_combos_release_all_outputs() {
             // Order of the two release reports depends on combo iteration order;
             // `M+,` is index 0 so its output (RightBracket) releases first.
             [0, [kc_to_u8!(Equal), 0, 0, 0, 0, 0]],
+            [0, [0; 6]],
+        ]
+    }
+}
+
+#[test]
+fn test_combo_with_one_shot_modifier_quick_release() {
+    key_sequence_test! {
+        keyboard: create_test_keyboard_with_config(BehaviorConfig {
+            combo: get_combos_config(),
+            one_shot: OneShotConfig {
+                timeout: Duration::from_millis(300),
+                ..Default::default()
+            },
+            one_shot_modifiers: OneShotModifiersConfig {
+                quick_release: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        }),
+        sequence: [
+            [1, 3, true, 10],
+            [1, 5, true, 10],
+            [1, 3, false, 50],
+            [1, 5, false, 70],
+            [1, 3, true, 50],
+            [1, 3, false, 110],
+        ],
+        expected_reports: [
+            [KC_LSHIFT, [HidKeyCode::E as u8, 0, 0, 0, 0, 0]],
+            [0, [HidKeyCode::E as u8, 0, 0, 0, 0, 0]],
+            [0, [0; 6]],
+        ]
+    }
+}
+
+#[test]
+fn test_overlapped_combo_quick_release() {
+    key_sequence_test! {
+        keyboard: create_test_keyboard_with_config(BehaviorConfig {
+            combo: get_combos_config(),
+            one_shot_modifiers: OneShotModifiersConfig {
+                quick_release: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        }),
+        sequence: [
+            [1, 3, true, 10],
+            [1, 5, true, 10],
+            [1, 3, false, 50],
+            [1, 5, false, 10],
+            [1, 4, true, 100],
+            [1, 3, true, 10],
+            [1, 4, false, 50],
+            [1, 3, false, 10],
+        ],
+        expected_reports: [
+            [KC_LSHIFT, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]],
+            [0, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]],
             [0, [0; 6]],
         ]
     }

@@ -32,3 +32,13 @@ pub enum KeyCode {
     Consumer(ConsumerKey),
     SystemControl(SystemControlKey),
 }
+
+impl KeyCode {
+    pub fn is_basic_keyboard_key(&self) -> bool {
+        matches!(self,
+            KeyCode::Hid(hid) if hid.process_as_consumer().is_none()
+                && hid.process_as_system_control().is_none()
+                && !hid.is_mouse_key()
+        )
+    }
+}

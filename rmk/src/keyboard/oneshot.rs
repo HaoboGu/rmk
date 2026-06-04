@@ -160,13 +160,24 @@ impl<'a> Keyboard<'a> {
         }
     }
 
-    pub(crate) fn update_osm(&mut self, event: KeyboardEvent) {
+    /// Update OSM state based on the keyboard event.
+    /// Returns `true` if the OSM was consumed (transitioned from Single to None).
+    pub(crate) fn update_osm(&mut self, event: KeyboardEvent) -> bool {
+        let quick_release = self.keymap.one_shot_modifiers_config().quick_release;
         match self.osm_state {
-            OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
-            OneShotState::Single(_) if !event.pressed => {
-                self.osm_state = OneShotState::None;
+            OneShotState::Initial(m) => {
+                self.osm_state = OneShotState::Held(m);
+                false
             }
-            _ => (),
+            OneShotState::Single(_) if quick_release && event.pressed => {
+                self.osm_state = OneShotState::None;
+                true
+            }
+            OneShotState::Single(_) if !quick_release && !event.pressed => {
+                self.osm_state = OneShotState::None;
+                true
+            }
+            _ => false,
         }
     }
 

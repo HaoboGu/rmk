@@ -23,20 +23,20 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
 - [ ] NKRO
 - [x] 🔵 Input device
   - [x] 🟢 Encoder
-  - [ ] 🔴 Mouse
-  - [ ] 🔴 Trackball
+  - [x] 🔴 Mouse
+  - [x] 🔴 Trackball
   - [ ] 🔴 Trackpad
 - [x] 🔴 Basic Macro support
   - [x] 🔴 Macro definition via Rust
   - [x] 🔴 Unicode and umlaute support
-- [ ] Macro support enhancement
-  - [ ] 🟢 Macro definition via toml
+- [x] Macro support enhancement
+  - [x] 🟢 Macro definition via toml
   - [x] 🟢 Make macro storage space configurable
 - [ ] 🔴 Tap dance
-- [ ] 🔵 Controller device
-  - [ ] External power control(GPIO)
+- [x] 🔵 Controller device
+  - [x] External power control(GPIO)
   - [ ] 🔴 RGB
-  - [ ] 🔴 Display support
+  - [x] 🔴 Display support
 
 #### Wireless
 
@@ -49,7 +49,7 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
 - [x] Stabilizing BLE feature gate/API
 - [x] Support more MCUs, such as cyw(used in rp2040w/rp2350w)
 - [ ] Deep-sleep mode
-- [ ] Better support for dongle
+- [x] Better support for dongle
 - [ ] Nordic Uart HCI support
 - [ ] Send report via Uart/Usart
 - [ ] Switch between dongle mode and BLE mode

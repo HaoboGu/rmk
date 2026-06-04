@@ -90,5 +90,11 @@ fn expand_encoder_layer(
         quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)) },
     );
 
-    quote! { [#(#encoders), *] }
+    if encoders.is_empty() {
+        // An empty `[]` literal has no element type for Rust to infer when
+        // `num_encoder == 0`. Emit the typed `[expr; N]` form instead.
+        quote! { [::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)); NUM_ENCODER] }
+    } else {
+        quote! { [#(#encoders), *] }
+    }
 }
