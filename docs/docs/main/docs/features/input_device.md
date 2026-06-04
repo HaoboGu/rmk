@@ -126,7 +126,7 @@ use rmk::run_all;
 // Create your devices and processors
 let mut matrix = Matrix::new(row_pins, col_pins, debouncer);
 let mut encoder = RotaryEncoder::new(pin_a, pin_b, 0);
-let mut adc_device = NrfAdc::new(saadc, event_types, interval, None);
+let mut adc_device = NrfAdc::new(saadc, [AnalogEventType::Battery], [0], interval, None);
 let mut batt_proc = BatteryProcessor::new(2000, 2806);
 
 // Run them concurrently using join and run_all!
