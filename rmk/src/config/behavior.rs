@@ -11,8 +11,6 @@ use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MOUSE_
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap: TapConfig,
-    pub one_shot: OneShotConfig,
-    pub one_shot_modifiers: OneShotModifiersConfig,
     pub combo: CombosConfig,
     pub fork: ForksConfig,
     pub morse: MorsesConfig,
@@ -59,40 +57,32 @@ impl Default for MorsesConfig {
     }
 }
 
-/// Config for one shot behavior
-#[derive(Clone, Copy, Debug)]
-pub struct OneShotConfig {
-    /// Timeout after which modifiers/layers are canceled/released
-    pub timeout: Duration,
-}
-
-impl Default for OneShotConfig {
-    fn default() -> Self {
-        Self {
-            timeout: Duration::from_secs(1),
-        }
-    }
-}
-/// Config for one-shot behavior
-#[derive(Clone, Copy, Debug, Default)]
-pub struct OneShotModifiersConfig {
-    /// Should modifiers be active from keypress (sticky modifiers)
-    pub activate_on_keypress: bool,
-    /// If true, OSM releases on next key press (ZMK skq); if false, on next key release (ZMK skn)
-    pub quick_release: bool,
-}
-
-/// Configuration for StickyKey behavior
+/// Unified sticky-key configuration. Absorbs the former one_shot, one_shot_modifiers,
+/// and sticky_key tables. `activate_on_keypress`/`quick_release` are honored only for
+/// the pure-modifier SK shape (key == No); see docs.
 #[derive(Clone, Copy, Debug)]
 pub struct StickyKeyConfig {
-    /// Global timeout before auto-releasing held modifiers.
-    /// Duration::MAX = no timeout — modifier held until key press or layer change.
+    /// Applies to every SK shape. Default 1s.
     pub timeout: Duration,
+    /// Honored only by pure-mod SK. Default false.
+    pub activate_on_keypress: bool,
+    /// Honored only by pure-mod SK. Default false.
+    pub quick_release: bool,
+    /// 0 = infinite; governs tap-key cycling. Default 0.
+    pub max_repeat: u16,
+    /// true = a layer change releases the SK. Default false (survives).
+    pub release_on_layer_change: bool,
 }
 
 impl Default for StickyKeyConfig {
     fn default() -> Self {
-        Self { timeout: Duration::MAX }
+        Self {
+            timeout: Duration::from_secs(1),
+            activate_on_keypress: false,
+            quick_release: false,
+            max_repeat: 0,
+            release_on_layer_change: false,
+        }
     }
 }
 
