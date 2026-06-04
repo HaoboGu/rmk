@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use quote::quote;
 use rmk_config::resolved::Behavior;
 use rmk_config::resolved::behavior::{
-    Combos, Forks, MacroOperation, Macros, Morse, MorseActionPair, MorseKey, MorseProfile, OneShot,
+    Combos, Forks, MacroOperation, Macros, Morse, MorseActionPair, MorseKey, MorseProfile,
 };
 
 use super::action_parser::{expand_profile, expand_profile_name, get_key_with_alias, parse_key};
@@ -22,59 +22,24 @@ fn expand_tri_layer(tri_layer: &Option<[u8; 3]>) -> proc_macro2::TokenStream {
     }
 }
 
-fn expand_one_shot(one_shot_timeout_ms: &Option<u64>) -> proc_macro2::TokenStream {
-    let default = quote! {::rmk::config::OneShotConfig::default()};
-    match one_shot_timeout_ms {
-        Some(millis) => {
-            let timeout = quote! {::embassy_time::Duration::from_millis(#millis)};
+fn expand_sticky_key(behavior: &Behavior) -> proc_macro2::TokenStream {
+    let timeout = match behavior.sticky_key_timeout_ms {
+        Some(millis) => quote! { ::embassy_time::Duration::from_millis(#millis) },
+        None => quote! { ::embassy_time::Duration::from_secs(1) },
+    };
+    let activate_on_keypress = behavior.sticky_key_activate_on_keypress.unwrap_or(false);
+    let quick_release = behavior.sticky_key_quick_release.unwrap_or(false);
+    let max_repeat = behavior.sticky_key_max_repeat.unwrap_or(0);
+    let release_on_layer_change = behavior.sticky_key_release_on_layer_change.unwrap_or(false);
 
-            quote! {
-                ::rmk::config::OneShotConfig {
-                    timeout: #timeout,
-                }
-            }
+    quote! {
+        ::rmk::config::StickyKeyConfig {
+            timeout: #timeout,
+            activate_on_keypress: #activate_on_keypress,
+            quick_release: #quick_release,
+            max_repeat: #max_repeat,
+            release_on_layer_change: #release_on_layer_change,
         }
-        None => default,
-    }
-}
-
-fn expand_one_shot_modifiers(one_shot_modifiers: &Option<OneShot>) -> proc_macro2::TokenStream {
-    let default = quote! { ::core::default::Default::default() };
-
-    match one_shot_modifiers {
-        Some(one_shot_modifier) => {
-            let activate_on_keypress = match one_shot_modifier.activate_on_keypress {
-                Some(value) => quote! { activate_on_keypress: #value, },
-                None => quote! {},
-            };
-            let quick_release = match one_shot_modifier.quick_release {
-                Some(value) => quote! { quick_release: #value, },
-                None => quote! {},
-            };
-
-            quote! {
-                ::rmk::config::OneShotModifiersConfig {
-                    #activate_on_keypress
-                    #quick_release
-                    ..Default::default()
-                }
-            }
-        }
-        None => default,
-    }
-}
-
-fn expand_sticky_key(sticky_key_timeout_ms: &Option<u64>) -> proc_macro2::TokenStream {
-    match sticky_key_timeout_ms {
-        Some(millis) => {
-            let timeout = quote! { ::embassy_time::Duration::from_millis(#millis) };
-            quote! {
-                ::rmk::config::StickyKeyConfig {
-                    timeout: #timeout,
-                }
-            }
-        }
-        None => quote! { ::rmk::config::StickyKeyConfig::default() },
     }
 }
 
@@ -504,20 +469,16 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
         .filter(|p| !p.is_empty());
 
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
-    let one_shot = expand_one_shot(&behavior.one_shot_timeout_ms);
-    let one_shot_modifiers = expand_one_shot_modifiers(&behavior.one_shot_modifiers);
     let combos = expand_combos(&behavior.combos, &profiles);
     let macros = expand_macros(&behavior.macros);
     let forks = expand_forks(&behavior.forks, &profiles);
     let morse = expand_morse(&behavior.morse);
-    let sticky_key = expand_sticky_key(&behavior.sticky_key_timeout_ms);
+    let sticky_key = expand_sticky_key(behavior);
 
     quote! {
         #[allow(clippy::needless_update)]
         let mut behavior_config = ::rmk::config::BehaviorConfig {
             tri_layer: #tri_layer,
-            one_shot: #one_shot,
-            one_shot_modifiers: #one_shot_modifiers,
             combo: #combos,
             fork: #forks,
             morse: #morse,
