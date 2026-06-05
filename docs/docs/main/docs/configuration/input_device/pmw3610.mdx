@@ -177,6 +177,7 @@ The `PointingProcessor` supports configuring different pointing behavior modes. 
 - **Cursor mode** (default): Normal mouse movement
 - **Scroll mode**: Movement becomes scroll wheel/pan
 - **Sniper mode**: Precision mode with reduced sensitivity
+- **Caret mode**: Emit user defined key codes when moving. (By default arrow keys to move the caret, but could also be hjkl for vim people)
 
 ### Example Configuration
 Different modes are activated by sending a `PointingProcessorEvent` to the pointing processor.
@@ -184,30 +185,18 @@ To control different processors independently, the event contains the device id 
 
 An example configuration with different layers switching on different modes could look like this:
 
-import { Tab, Tabs, Rust, Toml } from '@theme'
-
-<Tabs>
-<Tab label={<Toml />}>
-
-```toml title="keyboard.toml"
-// TODO
-```
-
-</Tab>
-<Tab label={<Rust />}>
-
-```rust
+```rust title="src/pointingproccontroller.rs"
 use rmk::{
-    event::{publish_event, LayerChangeEvent, PointingProcessorEvent},
-    input_device::pointing::PointingMode,
+    event::{LayerChangeEvent, PointingProcessorEvent, publish_event},
+    input_device::pointing::PointingMode, types::keycode::HidKeyCode,
 };
 use rmk_macro::processor;
 
 #[processor(subscribe = [LayerChangeEvent])]
 #[derive(Default)]
-pub struct PointingDeviceController;
+pub struct PointingProcessorController;
 
-impl PointingDeviceController {
+impl PointingProcessorController {
     pub fn new() -> Self {
         Self
     }
@@ -234,22 +223,73 @@ impl PointingDeviceController {
                 publish_event(PointingProcessorEvent {
                     device_id: 255,
                     mode: PointingMode::Scroll(rmk::input_device::pointing::ScrollConfig {
-                        divisor_x: 8,
-                        divisor_y: 8,
+                        divisor_x: 16,
+                        divisor_y: 16,
                         invert_x: false,
                         invert_y: false,
                     }),
                 });
             }
+            3 => {
+                publish_event(PointingProcessorEvent {
+                    device_id: 255,
+                    mode: PointingMode::Caret(rmk::input_device::pointing::CaretConfig {
+                        disable_x: false,
+                        disable_y: false,
+                        invert_x: false,
+                        invert_y: false,
+                        threshold: 100,
+                        keycode_up: HidKeyCode::Up,
+                        keycode_down: HidKeyCode::Down,
+                        keycode_left: HidKeyCode::Left,
+                        keycode_right: HidKeyCode::Right,
+                    }),
+                });
+            }
+
             _ => {}
         }
     }
 }
 ```
 
-Then, create the controller and run it in the run_all! macro.
-```rust
-    let mut pointing_controller = PointingController::default();
+Create the controller and run it in the run_all! macro (rust configuration) or register it (toml configuration).
+
+import { Tab, Tabs, Rust, Toml } from '@theme'
+
+<Tabs>
+<Tab label={<Toml />}>
+
+```toml title="src/central.rs"
+// always into central.rs/ main.rs, regardless of where the sensor is connected.
+#![no_main]
+#![no_std]
+
+mod pointingproccontroller;
+
+use rmk::macros::rmk_central;
+use crate::pointingproccontroller::PointingProcessorController;
+
+#[rmk_central]
+mod keyboard_central {
+    use super::*;
+
+    #[register_processor(event)] 
+    fn pointing_processor_controller() -> PointingProcessorController {
+        PointingProcessorController::new()
+    }
+}
+```
+
+</Tab>
+<Tab label={<Rust />}>
+
+```rust title="src/central.rs"
+// always into central.rs/ main.rs, regardless of where the sensor is connected.
+	mod pointingproccontroller;
+	use crate::pointingproccontroller::PointingProcessorController;
+// ...
+    let mut pointing_controller = PointingProcessorController::default();
     run_all!(
 		/* other processors go here */
         pointing_controller,
