@@ -19,7 +19,13 @@ pub struct JoystickProcessor<'a, const N: usize> {
 }
 
 impl<'a, const N: usize> JoystickProcessor<'a, N> {
-    pub fn new(device_id: u8, transform: [[i16; N]; N], bias: [i16; N], resolution: u16, keymap: &'a KeyMap<'a>) -> Self {
+    pub fn new(
+        device_id: u8,
+        transform: [[i16; N]; N],
+        bias: [i16; N],
+        resolution: u16,
+        keymap: &'a KeyMap<'a>,
+    ) -> Self {
         Self {
             device_id,
             transform,

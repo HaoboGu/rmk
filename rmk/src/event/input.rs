@@ -10,8 +10,8 @@ use rmk_macro::event;
 use rmk_types::modifier::ModifierCombination;
 use serde::{Deserialize, Serialize};
 
-use crate::input_device::{pointing::PointingMode, rotary_encoder::Direction};
-
+use crate::input_device::pointing::PointingMode;
+use crate::input_device::rotary_encoder::Direction;
 // ============================================================================
 // Keyboard Events
 // ============================================================================

@@ -820,31 +820,30 @@ mod tests {
                 let mut pointing_wake = PointingEvent::subscriber();
                 let _ = select(key_wake.next_message_pure(), pointing_wake.next_message_pure()).await;
             };
-            join(wake,
-                async {
-                    Timer::after_millis(1).await;
-                    publish_event(PointingEvent {
-                        device_id: 0,
-                        axes: [
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::X,
-                                value: 1,
-                            },
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::Y,
-                                value: 0,
-                            },
-                            AxisEvent {
-                                typ: AxisValType::Rel,
-                                axis: Axis::Z,
-                                value: 0,
-                            },
-                        ],
-                    })
-                }
-            ).await;
-        }); 
-    }    
+            join(wake, async {
+                Timer::after_millis(1).await;
+                publish_event(PointingEvent {
+                    device_id: 0,
+                    axes: [
+                        AxisEvent {
+                            typ: AxisValType::Rel,
+                            axis: Axis::X,
+                            value: 1,
+                        },
+                        AxisEvent {
+                            typ: AxisValType::Rel,
+                            axis: Axis::Y,
+                            value: 0,
+                        },
+                        AxisEvent {
+                            typ: AxisValType::Rel,
+                            axis: Axis::Z,
+                            value: 0,
+                        },
+                    ],
+                })
+            })
+            .await;
+        });
+    }
 }

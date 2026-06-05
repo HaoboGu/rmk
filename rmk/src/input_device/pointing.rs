@@ -9,7 +9,7 @@ use rmk_types::keycode::HidKeyCode;
 use usbd_hid::descriptor::MouseReport;
 
 use crate::channel::send_hid_report;
-use crate::event::{Axis, AxisEvent, AxisValType, PointingProcessorEvent, PointingEvent, PointingSetCpiEvent};
+use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent, PointingProcessorEvent, PointingSetCpiEvent};
 use crate::hid::{KeyboardReport, Report};
 use crate::keymap::KeyMap;
 
@@ -276,13 +276,13 @@ pub struct CaretConfig {
     pub divisor_x: u8,
     /// Divisor for Y axis. Higher = slower. 0 disables vertical caret movement.
     pub divisor_y: u8,
-    /// Invert X axis. 
+    /// Invert X axis.
     pub invert_x: bool,
     /// Invert Y axis.
     pub invert_y: bool,
     /// Threshold for accumulated motion. Read this as sensitivity in caret mode.
     /// Higher values mean less sensitivity.
-    pub threshold: i16,   
+    pub threshold: i16,
     /// Keycode to emit for up rotation. Default: Up arrow
     pub keycode_up: HidKeyCode,
     /// Keycode to emit for down rotation. Default: Down arrow
@@ -292,7 +292,7 @@ pub struct CaretConfig {
     /// Keycode to emit for right rotation. Default: Right arrow
     pub keycode_right: HidKeyCode,
 }
-    
+
 impl Default for CaretConfig {
     fn default() -> Self {
         Self {
@@ -300,7 +300,7 @@ impl Default for CaretConfig {
             divisor_y: 1,
             invert_x: false,
             invert_y: false,
-            threshold: 100, 
+            threshold: 100,
             keycode_up: HidKeyCode::Up,
             keycode_down: HidKeyCode::Down,
             keycode_left: HidKeyCode::Left,
@@ -321,7 +321,7 @@ pub struct ScrollConfig {
     /// Invert Y axis. In scroll mode Y maps to wheel, so this reverses scroll direction.
     pub invert_y: bool,
 }
-    
+
 impl Default for ScrollConfig {
     fn default() -> Self {
         Self {
@@ -373,10 +373,14 @@ impl MotionAccumulator {
     }
 
     /// Reset x axis remainder of accumulator
-    pub fn reset_x(&mut self) { self.remainder_x = 0; }
+    pub fn reset_x(&mut self) {
+        self.remainder_x = 0;
+    }
 
     /// Reset y axis remainder of accumulator
-    pub fn reset_y(&mut self) { self.remainder_y = 0; }
+    pub fn reset_y(&mut self) {
+        self.remainder_y = 0;
+    }
 
     /// Accumulate motion and return the divided output, keeping remainder.
     /// A divisor of 0 disables that axis (always outputs 0).
@@ -416,7 +420,7 @@ impl MotionAccumulator {
             let div_x = divisor_x as i16;
             let total_x = self.remainder_x.saturating_add(dx);
             let out = total_x / div_x;
-            self.remainder_x = total_x; 
+            self.remainder_x = total_x;
             out
         };
 
@@ -433,7 +437,6 @@ impl MotionAccumulator {
 
         (out_x, out_y)
     }
-
 }
 
 #[derive(Clone)]
@@ -534,9 +537,9 @@ impl<'a> PointingProcessor<'a> {
                         pan: 0,
                     },
                     PointingMode::Scroll(scroll_config) => {
-                        let (sx, sy) = self
-                            .accumulator
-                            .accumulate(x, y, scroll_config.divisor_x, scroll_config.divisor_y);
+                        let (sx, sy) =
+                            self.accumulator
+                                .accumulate(x, y, scroll_config.divisor_x, scroll_config.divisor_y);
                         if sx == 0 && sy == 0 {
                             return;
                         }
@@ -576,11 +579,9 @@ impl<'a> PointingProcessor<'a> {
                 send_hid_report(Report::MouseReport(mouse_report)).await;
             }
             PointingMode::Caret(caret_config) => {
-                let (mut dx, mut dy) = self.accumulator.accumulate_persistent(
-                    x, y,
-                    caret_config.divisor_x,
-                    caret_config.divisor_y,
-                );
+                let (mut dx, mut dy) =
+                    self.accumulator
+                        .accumulate_persistent(x, y, caret_config.divisor_x, caret_config.divisor_y);
                 if dx == 0 && dy == 0 {
                     return;
                 }
@@ -588,68 +589,71 @@ impl<'a> PointingProcessor<'a> {
                 let mut count = 0;
                 let mut direction = caret_config.keycode_up; // dummy initialization
                 while (dx.abs() + dy.abs()) > caret_config.threshold {
-                    direction =
-                        if dx.abs() >= dy.abs() { // x movement
-                            // reset the other axis
-                            self.accumulator.reset_y();
-                            // reduce accumulator x by the threshold value
-                            let reduce = if dx > 0 {
-                                -(caret_config.threshold)
-                            } else {
-                                caret_config.threshold
-                            };
-                            (dx, dy) = self.accumulator.accumulate_persistent(
-                                reduce,
-                                0,
-                                caret_config.divisor_x,
-                                caret_config.divisor_y);
-                            count += 1;
-                            if dx > 0 {
-                                if caret_config.invert_x {
-                                    caret_config.keycode_right
-                                } else {
-                                    caret_config.keycode_left
-                                }
-                            } else { 
-                                if caret_config.invert_x {
-                                    caret_config.keycode_left
-                                } else {
-                                    caret_config.keycode_right
-                                }
-                            }
-                        } else { // y movement
-                            // reset the other axis
-                            self.accumulator.reset_x();
-                            // reduce accumulator y by the threshold value
-                            let reduce = if dy > 0 {
-                                -(caret_config.threshold)
-                            } else {
-                                caret_config.threshold
-                            };
-                            (dx, dy) = self.accumulator.accumulate_persistent(
-                                0,
-                                reduce,
-                                caret_config.divisor_x,
-                                caret_config.divisor_y);
-                            count += 1;
-                            if dy > 0 {
-                                if caret_config.invert_y {
-                                    caret_config.keycode_down
-                                } else {
-                                    caret_config.keycode_up
-                                }
-                            } else { 
-                                if caret_config.invert_y {
-                                    caret_config.keycode_up
-                                } else {
-                                    caret_config.keycode_down
-                                }
-                            }
+                    direction = if dx.abs() >= dy.abs() {
+                        // x movement
+                        // reset the other axis
+                        self.accumulator.reset_y();
+                        // reduce accumulator x by the threshold value
+                        let reduce = if dx > 0 {
+                            -(caret_config.threshold)
+                        } else {
+                            caret_config.threshold
                         };
+                        (dx, dy) = self.accumulator.accumulate_persistent(
+                            reduce,
+                            0,
+                            caret_config.divisor_x,
+                            caret_config.divisor_y,
+                        );
+                        count += 1;
+                        if dx > 0 {
+                            if caret_config.invert_x {
+                                caret_config.keycode_right
+                            } else {
+                                caret_config.keycode_left
+                            }
+                        } else {
+                            if caret_config.invert_x {
+                                caret_config.keycode_left
+                            } else {
+                                caret_config.keycode_right
+                            }
+                        }
+                    } else {
+                        // y movement
+                        // reset the other axis
+                        self.accumulator.reset_x();
+                        // reduce accumulator y by the threshold value
+                        let reduce = if dy > 0 {
+                            -(caret_config.threshold)
+                        } else {
+                            caret_config.threshold
+                        };
+                        (dx, dy) = self.accumulator.accumulate_persistent(
+                            0,
+                            reduce,
+                            caret_config.divisor_x,
+                            caret_config.divisor_y,
+                        );
+                        count += 1;
+                        if dy > 0 {
+                            if caret_config.invert_y {
+                                caret_config.keycode_down
+                            } else {
+                                caret_config.keycode_up
+                            }
+                        } else {
+                            if caret_config.invert_y {
+                                caret_config.keycode_up
+                            } else {
+                                caret_config.keycode_down
+                            }
+                        }
+                    };
                 }
                 if count > 0 {
                     self.process_caret_event(direction, count).await;
-                    debug!("Caret movemenet dir {:?}, count {}",direction,count);
+                    debug!("Caret movemenet dir {:?}, count {}", direction, count);
                 }
             }
         };
@@ -663,7 +667,8 @@ impl<'a> PointingProcessor<'a> {
                 reserved: 0,
                 leds: 0,
                 keycodes: [keycode as u8, 0, 0, 0, 0, 0],
-            })).await;
+            }))
+            .await;
             Timer::after_millis(5).await;
             // Release
             send_hid_report(Report::KeyboardReport(KeyboardReport {
@@ -671,14 +676,18 @@ impl<'a> PointingProcessor<'a> {
                 reserved: 0,
                 leds: 0,
                 keycodes: [0, 0, 0, 0, 0, 0],
-            })).await;
+            }))
+            .await;
             Timer::after_millis(5).await;
         }
     }
     // pointing device events are used to change the mode (cursor/scroll/sniper) of the processor based on the device id. This allows users to trigger different modes if desired.
     pub async fn on_pointing_processor_event(&mut self, event: PointingProcessorEvent) {
         if self.config.device_id == ALL_POINTING_DEVICES || self.config.device_id == event.device_id {
-            debug!("PointingProcessor {}: setting mode to {:?}", self.config.device_id, event.mode);
+            debug!(
+                "PointingProcessor {}: setting mode to {:?}",
+                self.config.device_id, event.mode
+            );
             self.set_pointing_mode(event.mode);
         }
     }
