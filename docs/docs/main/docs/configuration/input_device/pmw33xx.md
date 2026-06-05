@@ -203,7 +203,7 @@ The `PointingProcessor` supports configuring different pointing behavior modes. 
 - **Sniper mode**: Precision mode with reduced sensitivity
 
 ### Example Configuration
-Different modes are activated by sending a `PointingDeviceEvent` to the pointing processor.
+Different modes are activated by sending a `PointingProcessorEvent` to the pointing processor.
 To control different processors independently, the event contains the device id to address the specific processor (255 to address all processors), the mode and its configuration.
 
 An example configuration with different layers switching on different modes could look like this:
@@ -222,7 +222,7 @@ import { Tab, Tabs, Rust, Toml } from '@theme'
 
 ```rust
 use rmk::{
-    event::{publish_event, LayerChangeEvent, PointingDeviceEvent},
+    event::{publish_event, LayerChangeEvent, PointingProcessorEvent},
     input_device::pointing::PointingMode,
 };
 use rmk_macro::processor;
@@ -239,13 +239,13 @@ impl PointingDeviceController {
     async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
         match event.0 {
             0 => {
-                publish_event(PointingDeviceEvent {
+                publish_event(PointingProcessorEvent {
                     device_id: 255,
                     mode: PointingMode::Cursor,
                 });
             }
             1 => {
-                publish_event(PointingDeviceEvent {
+                publish_event(PointingProcessorEvent {
                     device_id: 255,
                     mode: PointingMode::Sniper(rmk::input_device::pointing::SniperConfig {
                         divisor: 8,
@@ -255,7 +255,7 @@ impl PointingDeviceController {
                 });
             }
             2 => {
-                publish_event(PointingDeviceEvent {
+                publish_event(PointingProcessorEvent {
                     device_id: 255,
                     mode: PointingMode::Scroll(rmk::input_device::pointing::ScrollConfig {
                         divisor_x: 8,

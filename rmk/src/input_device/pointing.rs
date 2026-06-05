@@ -9,7 +9,7 @@ use rmk_types::keycode::HidKeyCode;
 use usbd_hid::descriptor::MouseReport;
 
 use crate::channel::send_hid_report;
-use crate::event::{Axis, AxisEvent, AxisValType, PointingDeviceEvent, PointingEvent, PointingSetCpiEvent};
+use crate::event::{Axis, AxisEvent, AxisValType, PointingProcessorEvent, PointingEvent, PointingSetCpiEvent};
 use crate::hid::{KeyboardReport, Report};
 use crate::keymap::KeyMap;
 
@@ -461,7 +461,7 @@ impl Default for PointingProcessorConfig {
 }
 
 /// PointingProcessor that converts motion events to mouse reports
-#[processor(subscribe = [PointingEvent, PointingDeviceEvent])]
+#[processor(subscribe = [PointingEvent, PointingProcessorEvent])]
 pub struct PointingProcessor<'a> {
     /// Reference to the keymap (used for mouse_buttons)
     keymap: &'a KeyMap<'a>,
@@ -676,7 +676,7 @@ impl<'a> PointingProcessor<'a> {
         }
     }
     // pointing device events are used to change the mode (cursor/scroll/sniper) of the processor based on the device id. This allows users to trigger different modes if desired.
-    pub async fn on_pointing_device_event(&mut self, event: PointingDeviceEvent) {
+    pub async fn on_pointing_processor_event(&mut self, event: PointingProcessorEvent) {
         if self.config.device_id == ALL_POINTING_DEVICES || self.config.device_id == event.device_id {
             debug!("PointingProcessor {}: setting mode to {:?}", self.config.device_id, event.mode);
             self.set_pointing_mode(event.mode);
