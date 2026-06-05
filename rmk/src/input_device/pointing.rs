@@ -5,11 +5,12 @@ use embedded_hal::digital::InputPin;
 use embedded_hal_async::digital::Wait;
 use futures::future::pending;
 use rmk_macro::{input_device, processor};
+use rmk_types::keycode::HidKeyCode;
 use usbd_hid::descriptor::MouseReport;
 
 use crate::channel::send_hid_report;
-use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent, PointingSetCpiEvent, PointingDeviceEvent};
-use crate::hid::Report;
+use crate::event::{Axis, AxisEvent, AxisValType, PointingDeviceEvent, PointingEvent, PointingSetCpiEvent};
+use crate::hid::{KeyboardReport, Report};
 use crate::keymap::KeyMap;
 
 pub const ALL_POINTING_DEVICES: u8 = 255;
@@ -263,8 +264,50 @@ pub enum PointingMode {
     Scroll(ScrollConfig),
     /// Sniper mode - XY maps to cursor but at reduced sensitivity
     Sniper(SniperConfig),
+    /// Caret mode, XY maps to vertical and horizontal caret movement
+    Caret(CaretConfig),
 }
 
+/// Configuration for caret mode
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct CaretConfig {
+    /// Divisor for X axis. Higher = slower. 0 disables horizontal caret movement.
+    pub divisor_x: u8,
+    /// Divisor for Y axis. Higher = slower. 0 disables vertical caret movement.
+    pub divisor_y: u8,
+    /// Invert X axis. 
+    pub invert_x: bool,
+    /// Invert Y axis.
+    pub invert_y: bool,
+    /// Threshold for accumulated motion. Read this as sensitivity in caret mode.
+    /// Higher values mean less sensitivity.
+    pub threshold: i16,   
+    /// Keycode to emit for up rotation. Default: Up arrow
+    pub keycode_up: HidKeyCode,
+    /// Keycode to emit for down rotation. Default: Down arrow
+    pub keycode_down: HidKeyCode,
+    /// Keycode to emit for left rotation. Default: Left arrow
+    pub keycode_left: HidKeyCode,
+    /// Keycode to emit for right rotation. Default: Right arrow
+    pub keycode_right: HidKeyCode,
+}
+    
+impl Default for CaretConfig {
+    fn default() -> Self {
+        Self {
+            divisor_x: 1,
+            divisor_y: 1,
+            invert_x: false,
+            invert_y: false,
+            threshold: 100, 
+            keycode_up: HidKeyCode::Up,
+            keycode_down: HidKeyCode::Down,
+            keycode_left: HidKeyCode::Left,
+            keycode_right: HidKeyCode::Right,
+        }
+    }
+}
 /// Configuration for scroll mode
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -325,9 +368,15 @@ pub struct MotionAccumulator {
 impl MotionAccumulator {
     /// Reset accumulator (call when mode changes)
     pub fn reset(&mut self) {
-        self.remainder_x = 0;
-        self.remainder_y = 0;
+        self.reset_x();
+        self.reset_y();
     }
+
+    /// Reset x axis remainder of accumulator
+    pub fn reset_x(&mut self) { self.remainder_x = 0; }
+
+    /// Reset y axis remainder of accumulator
+    pub fn reset_y(&mut self) { self.remainder_y = 0; }
 
     /// Accumulate motion and return the divided output, keeping remainder.
     /// A divisor of 0 disables that axis (always outputs 0).
@@ -356,6 +405,35 @@ impl MotionAccumulator {
 
         (out_x, out_y)
     }
+
+    /// Accumulate motion and return the divided output, keeping remainder.
+    /// Do not subtract output from remainder.
+    pub fn accumulate_persistent(&mut self, dx: i16, dy: i16, divisor_x: u8, divisor_y: u8) -> (i16, i16) {
+        let out_x = if divisor_x == 0 {
+            self.remainder_x = 0;
+            0
+        } else {
+            let div_x = divisor_x as i16;
+            let total_x = self.remainder_x.saturating_add(dx);
+            let out = total_x / div_x;
+            self.remainder_x = total_x; 
+            out
+        };
+
+        let out_y = if divisor_y == 0 {
+            self.remainder_y = 0;
+            0
+        } else {
+            let div_y = divisor_y as i16;
+            let total_y = self.remainder_y.saturating_add(dy);
+            let out = total_y / div_y;
+            self.remainder_y = total_y;
+            out
+        };
+
+        (out_x, out_y)
+    }
+
 }
 
 #[derive(Clone)]
@@ -444,61 +522,163 @@ impl<'a> PointingProcessor<'a> {
         }
 
         let buttons = self.keymap.mouse_buttons();
+        match self.current_mode {
+            PointingMode::Cursor | PointingMode::Scroll(_) | PointingMode::Sniper(_) => {
+                // modes that generate mouse reports
+                let mouse_report = match self.current_mode {
+                    PointingMode::Cursor => MouseReport {
+                        buttons,
+                        x: x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                        y: y.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                        wheel: 0,
+                        pan: 0,
+                    },
+                    PointingMode::Scroll(scroll_config) => {
+                        let (sx, sy) = self
+                            .accumulator
+                            .accumulate(x, y, scroll_config.divisor_x, scroll_config.divisor_y);
+                        if sx == 0 && sy == 0 {
+                            return;
+                        }
+                        // Sensor X → pan, sensor Y → wheel.
+                        // Default: sensor +Y produces negative wheel (scroll up in HID convention).
+                        // invert_y reverses wheel direction; invert_x reverses pan direction.
+                        let wheel = if scroll_config.invert_y { sy } else { -sy };
+                        let pan = if scroll_config.invert_x { -sx } else { sx };
+                        MouseReport {
+                            buttons,
+                            x: 0,
+                            y: 0,
+                            wheel: wheel.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                            pan: pan.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                        }
+                    }
+                    PointingMode::Sniper(sniper_config) => {
+                        let (sx, sy) = self
+                            .accumulator
+                            .accumulate(x, y, sniper_config.divisor, sniper_config.divisor);
+                        if sx == 0 && sy == 0 {
+                            return;
+                        }
+                        let out_x = if sniper_config.invert_x { -sx } else { sx };
+                        let out_y = if sniper_config.invert_y { -sy } else { sy };
+                        MouseReport {
+                            buttons,
+                            x: out_x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                            y: out_y.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                            wheel: 0,
+                            pan: 0,
+                        }
+                    }
+                    _ => unreachable!(),
+                };
 
-        let mouse_report = match self.current_mode {
-            PointingMode::Cursor => MouseReport {
-                buttons,
-                x: x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
-                y: y.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
-                wheel: 0,
-                pan: 0,
-            },
-            PointingMode::Scroll(scroll_config) => {
-                let (sx, sy) = self
-                    .accumulator
-                    .accumulate(x, y, scroll_config.divisor_x, scroll_config.divisor_y);
-                if sx == 0 && sy == 0 {
-                    return;
-                }
-                // Sensor X → pan, sensor Y → wheel.
-                // Default: sensor +Y produces negative wheel (scroll up in HID convention).
-                // invert_y reverses wheel direction; invert_x reverses pan direction.
-                let wheel = if scroll_config.invert_y { sy } else { -sy };
-                let pan = if scroll_config.invert_x { -sx } else { sx };
-                MouseReport {
-                    buttons,
-                    x: 0,
-                    y: 0,
-                    wheel: wheel.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
-                    pan: pan.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
-                }
+                send_hid_report(Report::MouseReport(mouse_report)).await;
             }
-            PointingMode::Sniper(sniper_config) => {
-                let (sx, sy) = self
-                    .accumulator
-                    .accumulate(x, y, sniper_config.divisor, sniper_config.divisor);
-                if sx == 0 && sy == 0 {
+            PointingMode::Caret(caret_config) => {
+                let (mut dx, mut dy) = self.accumulator.accumulate_persistent(
+                    x, y,
+                    caret_config.divisor_x,
+                    caret_config.divisor_y,
+                );
+                if dx == 0 && dy == 0 {
                     return;
                 }
-                let out_x = if sniper_config.invert_x { -sx } else { sx };
-                let out_y = if sniper_config.invert_y { -sy } else { sy };
-                MouseReport {
-                    buttons,
-                    x: out_x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
-                    y: out_y.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
-                    wheel: 0,
-                    pan: 0,
+
+                let mut count = 0;
+                let mut direction = caret_config.keycode_up; // dummy initialization
+                while (dx.abs() + dy.abs()) > caret_config.threshold {
+                    direction =
+                        if dx.abs() >= dy.abs() { // x movement
+                            // reset the other axis
+                            self.accumulator.reset_y();
+                            // reduce accumulator x by the threshold value
+                            let reduce = if dx > 0 {
+                                -(caret_config.threshold)
+                            } else {
+                                caret_config.threshold
+                            };
+                            (dx, dy) = self.accumulator.accumulate_persistent(
+                                reduce,
+                                0,
+                                caret_config.divisor_x,
+                                caret_config.divisor_y);
+                            count += 1;
+                            if dx > 0 {
+                                if caret_config.invert_x {
+                                    caret_config.keycode_right
+                                } else {
+                                    caret_config.keycode_left
+                                }
+                            } else { 
+                                if caret_config.invert_x {
+                                    caret_config.keycode_left
+                                } else {
+                                    caret_config.keycode_right
+                                }
+                            }
+                        } else { // y movement
+                            // reset the other axis
+                            self.accumulator.reset_x();
+                            // reduce accumulator y by the threshold value
+                            let reduce = if dy > 0 {
+                                -(caret_config.threshold)
+                            } else {
+                                caret_config.threshold
+                            };
+                            (dx, dy) = self.accumulator.accumulate_persistent(
+                                0,
+                                reduce,
+                                caret_config.divisor_x,
+                                caret_config.divisor_y);
+                            count += 1;
+                            if dy > 0 {
+                                if caret_config.invert_y {
+                                    caret_config.keycode_down
+                                } else {
+                                    caret_config.keycode_up
+                                }
+                            } else { 
+                                if caret_config.invert_y {
+                                    caret_config.keycode_up
+                                } else {
+                                    caret_config.keycode_down
+                                }
+                            }
+                        };
+                }
+                if count > 0 {
+                    self.process_caret_event(direction, count).await;
+                    debug!("Caret movemenet dir {:?}, count {}",direction,count);
                 }
             }
         };
-
-        send_hid_report(Report::MouseReport(mouse_report)).await;
     }
 
+    async fn process_caret_event(&mut self, keycode: HidKeyCode, count: u8) {
+        for _ in 0..count {
+            // Press
+            send_hid_report(Report::KeyboardReport(KeyboardReport {
+                modifier: 0,
+                reserved: 0,
+                leds: 0,
+                keycodes: [keycode as u8, 0, 0, 0, 0, 0],
+            })).await;
+            Timer::after_millis(5).await;
+            // Release
+            send_hid_report(Report::KeyboardReport(KeyboardReport {
+                modifier: 0,
+                reserved: 0,
+                leds: 0,
+                keycodes: [0, 0, 0, 0, 0, 0],
+            })).await;
+            Timer::after_millis(5).await;
+        }
+    }
     // pointing device events are used to change the mode (cursor/scroll/sniper) of the processor based on the device id. This allows users to trigger different modes if desired.
     pub async fn on_pointing_device_event(&mut self, event: PointingDeviceEvent) {
         if self.config.device_id == ALL_POINTING_DEVICES || self.config.device_id == event.device_id {
-            debug!("PointingProcessor {}: setting mode to {:?}", event.device_id, event.mode);
+            debug!("PointingProcessor {}: setting mode to {:?}", self.config.device_id, event.mode);
             self.set_pointing_mode(event.mode);
         }
     }
