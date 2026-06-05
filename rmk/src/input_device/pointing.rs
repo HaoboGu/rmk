@@ -1047,6 +1047,168 @@ mod tests {
         assert_eq!(oy, 2); // 10/5
     }
 
+    #[test]
+    fn test_motion_accumulator_persistent_keeps_total_in_remainder() {
+        // accumulate_persistent does NOT subtract the output from the
+        // remainder. The remainder is the full signed running total; the
+        // output is just total / divisor. This is what caret mode needs:
+        // the caller decides when to "spend" the remainder (via reset_x/y).
+        let mut acc = MotionAccumulator::default();
+        let (ox, oy) = acc.accumulate_persistent(150, 0, 100, 100);
+        assert_eq!(ox, 1); // 150 / 100
+        assert_eq!(oy, 0);
+        assert_eq!(acc.remainder_x, 150); // total, NOT 50
+        assert_eq!(acc.remainder_y, 0);
+
+        // Second call: total_x = 150 + 50 = 200, out=2, remainder=200
+        let (ox, oy) = acc.accumulate_persistent(50, 0, 100, 100);
+        assert_eq!(ox, 2); // 200 / 100
+        assert_eq!(oy, 0);
+        assert_eq!(acc.remainder_x, 200);
+        assert_eq!(acc.remainder_y, 0);
+    }
+
+    #[test]
+    fn test_motion_accumulator_persistent_independent_axes() {
+        // X and Y remainders are independent in accumulate_persistent:
+        // movement on one axis never touches the other's running total.
+        let mut acc = MotionAccumulator::default();
+        let (ox, oy) = acc.accumulate_persistent(150, 0, 100, 100);
+        assert_eq!(ox, 1);
+        assert_eq!(oy, 0);
+        assert_eq!(acc.remainder_x, 150);
+        assert_eq!(acc.remainder_y, 0);
+
+        // Now move purely on Y. X total is preserved (still 150), Y starts fresh.
+        let (ox, oy) = acc.accumulate_persistent(0, 150, 100, 100);
+        assert_eq!(ox, 1); // X total 150 / 100
+        assert_eq!(oy, 1); // Y total 150 / 100
+        assert_eq!(acc.remainder_x, 150);
+        assert_eq!(acc.remainder_y, 150);
+    }
+
+    #[test]
+    fn test_motion_accumulator_persistent_sub_threshold_accumulates() {
+        // Several sub-threshold samples must build up the running total
+        // in the remainder. The output (total / divisor) stays 0 until the
+        // total crosses the threshold; then output jumps and remainder
+        // continues to grow. Caret mode relies on the running total so
+        // that slow deltas are not lost.
+        let mut acc = MotionAccumulator::default();
+
+        let (ox, oy) = acc.accumulate_persistent(30, 30, 100, 100);
+        assert_eq!(ox, 0);
+        assert_eq!(oy, 0);
+        assert_eq!(acc.remainder_x, 30);
+        assert_eq!(acc.remainder_y, 30);
+
+        let (ox, oy) = acc.accumulate_persistent(30, 30, 100, 100);
+        assert_eq!(ox, 0);
+        assert_eq!(oy, 0);
+        assert_eq!(acc.remainder_x, 60);
+        assert_eq!(acc.remainder_y, 60);
+
+        let (ox, oy) = acc.accumulate_persistent(30, 30, 100, 100);
+        assert_eq!(ox, 0);
+        assert_eq!(oy, 0);
+        assert_eq!(acc.remainder_x, 90);
+        assert_eq!(acc.remainder_y, 90);
+
+        // Crosses threshold: total 90 + 20 = 110, out=1, remainder=110
+        let (ox, oy) = acc.accumulate_persistent(20, 20, 100, 100);
+        assert_eq!(ox, 1);
+        assert_eq!(oy, 1);
+        assert_eq!(acc.remainder_x, 110);
+        assert_eq!(acc.remainder_y, 110);
+    }
+
+    #[test]
+    fn test_motion_accumulator_persistent_sign_change_in_total() {
+        // accumulate_persistent uses a signed running total. A counter-
+        // direction sample just subtracts from the total. The caret
+        // handler has to detect the sign change and reset that axis
+        // (reset_x / reset_y) to avoid direction bias: otherwise
+        // small counter-direction samples silently "use up" the running
+        // total and block taps in the new direction.
+        let mut acc = MotionAccumulator::default();
+        acc.accumulate_persistent(80, 0, 100, 100);
+        assert_eq!(acc.remainder_x, 80);
+
+        // Counter-direction sample of 30: total = 80 - 30 = 50, no tap.
+        let (ox, oy) = acc.accumulate_persistent(-30, 0, 100, 100);
+        assert_eq!(ox, 0);
+        assert_eq!(oy, 0);
+        assert_eq!(acc.remainder_x, 50);
+
+        // Cross zero: total = 50 - 80 = -30, remainder becomes negative.
+        // No tap fires (still sub-threshold), but the total is now signed.
+        let (ox, oy) = acc.accumulate_persistent(-80, 0, 100, 100);
+        assert_eq!(ox, 0);
+        assert_eq!(oy, 0);
+        assert_eq!(acc.remainder_x, -30);
+    }
+
+    #[test]
+    fn test_motion_accumulator_persistent_reset_x_and_y() {
+        // reset_x() and reset_y() clear the running total of one axis only,
+        // leaving the other axis intact. The caret handler uses these on
+        // sign change so a stale total in the previous direction cannot
+        // bleed into the next sample.
+        let mut acc = MotionAccumulator::default();
+        acc.accumulate_persistent(80, 80, 100, 100);
+        assert_eq!(acc.remainder_x, 80);
+        assert_eq!(acc.remainder_y, 80);
+
+        acc.reset_x();
+        assert_eq!(acc.remainder_x, 0);
+        assert_eq!(acc.remainder_y, 80);
+
+        // Y continues to build; X is fresh
+        let (ox, oy) = acc.accumulate_persistent(30, 30, 100, 100);
+        assert_eq!(ox, 0); // 30 / 100
+        assert_eq!(oy, 1); // (80 + 30) / 100
+        assert_eq!(acc.remainder_x, 30);
+        assert_eq!(acc.remainder_y, 110);
+
+        acc.reset_y();
+        assert_eq!(acc.remainder_x, 30);
+        assert_eq!(acc.remainder_y, 0);
+    }
+
+    #[test]
+    fn test_motion_accumulator_persistent_asymmetric_divisors() {
+        // Different divisors on X and Y are handled independently. Even
+        // though the current CaretConfig uses the same divisor on both
+        // axes, the accumulator must work when they differ.
+        let mut acc = MotionAccumulator::default();
+        let (ox, oy) = acc.accumulate_persistent(10, 10, 2, 5);
+        assert_eq!(ox, 5); // 10 / 2
+        assert_eq!(oy, 2); // 10 / 5
+        assert_eq!(acc.remainder_x, 10);
+        assert_eq!(acc.remainder_y, 10);
+    }
+
+    #[test]
+    fn test_motion_accumulator_persistent_divisor_edge_cases() {
+        // divisor=1: every unit becomes output; remainder still tracks
+        // the full signed total so successive calls keep growing it.
+        let mut acc = MotionAccumulator::default();
+        let (ox, oy) = acc.accumulate_persistent(7, -3, 1, 1);
+        assert_eq!(ox, 7);
+        assert_eq!(oy, -3);
+        assert_eq!(acc.remainder_x, 7);
+        assert_eq!(acc.remainder_y, -3);
+
+        // divisor=0 on X: axis is disabled (output 0, remainder_x = 0).
+        // divisor=255 on Y: maximal u8 divisor; 50/255 = 0, remainder_y = 50.
+        let mut acc = MotionAccumulator::default();
+        let (ox, oy) = acc.accumulate_persistent(50, 50, 0, 255);
+        assert_eq!(ox, 0);
+        assert_eq!(oy, 0);
+        assert_eq!(acc.remainder_x, 0);
+        assert_eq!(acc.remainder_y, 50);
+    }
+
     // === PointingMode tests ===
 
     #[test]
@@ -1088,6 +1250,7 @@ mod tests {
                 invert_x: false,
                 invert_y: false,
             }),
+            PointingMode::Caret(CaretConfig::default()),
             PointingMode::Cursor,
         ];
 
