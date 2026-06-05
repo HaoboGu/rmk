@@ -29,12 +29,14 @@ These are the spec's four open questions (Section 5 / "Open questions for the im
   - *(a) Tagged enum:* `StickyKeyAction` becomes `enum { Mods { keep, key, max_repeat }, Layer { layer } }`.
   - *(b) Added optional field:* keep the struct, add `layer: Option<u8>`; `Some` = layer shape, `None` = mod/tap-key shape with `key == No` distinguishing pure-mod from tap-key.
   - **Recommendation:** (b) added `layer: Option<u8>` — smaller diff to the existing struct, derives (`MaxSize`/`Serialize`/`Deserialize`/`Schema`) carry over unchanged, and the engine already needs the `key == No` branch for the terminating-key rule, so the three-way match is `(layer, key)` → cheap. Revisit if the engine dispatch reads cleaner as an enum once the latch is merged.
+  - **DECISION (2026-06-04, confirmed by user):** **(b) — add `layer: Option<u8>`.** Grounding: every action-parameter type in rmk-types is a plain struct (`Combo`, `Morse`, `Fork`, `EncoderAction`, `StickyKeyAction`); none is a tagged enum — only the top-level `Action` is. Keeping `StickyKeyAction` a struct matches that convention and `MorseProfile`'s `Option<...>` sub-setting pattern. The engine currently reads `params.{key,keep,...}` as plain field accesses; adding one optional field keeps those and adds a single `(layer, key)` dispatch, whereas an enum would force every access site to a `match` (larger, riskier diff). Both encodings break the postcard wire identically (DP-4), so the struct option is strictly the lower-churn / lower-bug-risk path. Field set: `{ key: KeyCode, keep: ModifierCombination, layer: Option<u8> }` — `Some(n)` = layer shape; `None` + `key == No` = pure-mod; `None` + `key != No` = tap-key.
 
 - **DP-2 — Home of the unified latch (resolve in Stage 2, Task 2.1).** Fold `oneshot.rs` into `sticky_key.rs`, or create a new shared module (e.g. `keyboard/latch.rs`).
   - **Recommendation:** fold into `sticky_key.rs` and delete `oneshot.rs`. The spec's file map predicts `oneshot.rs` "likely shrinks to nothing or merges into `sticky_key.rs`." A new module name would orphan the established `sticky_key` mod path used across `keyboard.rs`.
 
 - **DP-3 — Vial one-shot-timeout runtime path (resolve in Stage 1, Task 1.4).** The unified `timeout` either keeps a Vial runtime-set path (`SettingKey::OneShotTimeout = 0x06`, handlers at `rmk/src/host/via/vial.rs:127-130` and `184-186`, storage `FlashOperationMessage::OneShotTimeout` at `rmk/src/storage/mod.rs:145`) or drops it with the OSM keycodes.
   - **Recommendation:** **keep** the Vial setting wire-compatible but re-point it at the unified `sticky_key` timeout (rename the internal `one_shot_timeout` storage field / accessor to `sticky_key_timeout`, leave `SettingKey` numeric value `0x06` and the protocol bytes unchanged). Dropping a Vial `SettingKey` is itself a Vial-protocol break; this round we are already breaking the keymap wire (DP-4) and should not stack a second protocol break unless the user wants it. Confirm with user.
+  - **DECISION (2026-06-04, confirmed by user):** **KEEP, re-pointed.** Leave `SettingKey::OneShotTimeout = 0x06` and its protocol bytes unchanged; rename the internal storage field/accessor from `one_shot_timeout` → `sticky_key_timeout` so Vial still live-sets the unified timeout. Zero Vial-protocol break (the keymap-wire break in DP-4 stays the only one this round). Chosen explicitly for minimum breakage.
 
 - **DP-4 — Wire/Vial/storage migration impact (resolve in Stage 5, post-engine).** The `StickyKeyAction` struct/postcard change plus removal of `Action::OneShotModifier`/`OneShotLayer` variants is a wire-order break. Whether it invalidates keymaps stored in flash and Vial state — and what migration is needed (reflash? Vial re-sync? storage schema bump?) — is **TBD after the engine works**, likely only visible during hardware testing. **Do not assume harmless.** Stage 5 has an explicit evaluation task; the finding must be recorded before any move toward PR #859.
 
@@ -161,9 +163,9 @@ git commit -m "docs: characterize OSM/OSL/SK behavior parity catalogue (Stage 0)
 **Files:**
 - Modify: `rmk/src/config/behavior.rs:85-97` (and `BehaviorConfig` 11-22)
 
-- [ ] **Step 1: Re-read the file** to confirm current line numbers for `OneShotConfig`, `OneShotModifiersConfig`, `StickyKeyConfig`, and `BehaviorConfig`.
+- [x] **Step 1: Re-read the file** to confirm current line numbers for `OneShotConfig`, `OneShotModifiersConfig`, `StickyKeyConfig`, and `BehaviorConfig`.
 
-- [ ] **Step 2: Replace the three config structs with one.** New `StickyKeyConfig`:
+- [x] **Step 2: Replace the three config structs with one.** New `StickyKeyConfig`:
 ```rust
 /// Unified sticky-key configuration. Absorbs the former one_shot, one_shot_modifiers,
 /// and sticky_key tables. `activate_on_keypress`/`quick_release` are honored only for
@@ -195,11 +197,11 @@ impl Default for StickyKeyConfig {
 }
 ```
 
-- [ ] **Step 3: Update `BehaviorConfig`.** Remove the `one_shot: OneShotConfig` and `one_shot_modifiers: OneShotModifiersConfig` fields; keep only `sticky_key: StickyKeyConfig`. Delete `OneShotConfig` and `OneShotModifiersConfig` struct defs. Fix the `Default` impl of `BehaviorConfig` accordingly.
+- [x] **Step 3: Update `BehaviorConfig`.** Remove the `one_shot: OneShotConfig` and `one_shot_modifiers: OneShotModifiersConfig` fields; keep only `sticky_key: StickyKeyConfig`. Delete `OneShotConfig` and `OneShotModifiersConfig` struct defs. Fix the `Default` impl of `BehaviorConfig` accordingly.
 
-- [ ] **Step 4: Build the config crate.** Run: `cargo build -p rmk --no-default-features --features=split,vial,storage,async_matrix,_ble` and fix any references that read `behavior.one_shot*` (you'll find them in `keymap.rs`, `storage/mod.rs`, the engine — expect failures; resolve only the config-crate-local ones now, defer engine ones to Stage 2 by leaving TODO and a temporary shim if needed). Expected: incremental compile errors that map the blast radius.
+- [x] **Step 4: Build the config crate.** Run: `cargo build -p rmk --no-default-features --features=split,vial,storage,async_matrix,_ble` and fix any references that read `behavior.one_shot*` (you'll find them in `keymap.rs`, `storage/mod.rs`, the engine — expect failures; resolve only the config-crate-local ones now, defer engine ones to Stage 2 by leaving TODO and a temporary shim if needed). Expected: incremental compile errors that map the blast radius.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 ```bash
 git add rmk/src/config/behavior.rs
 git commit -m "feat(config): collapse one_shot/one_shot_modifiers/sticky_key into unified StickyKeyConfig"
