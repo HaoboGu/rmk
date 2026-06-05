@@ -391,11 +391,6 @@ impl KeyboardTomlConfig {
                                     key_action_sequence.push(action);
                                 }
 
-                                Rule::osm_action => {
-                                    let action = inner_pair.as_str().to_string();
-                                    key_action_sequence.push(action);
-                                }
-
                                 Rule::sk_action => {
                                     let action = inner_pair.as_str().to_string();
                                     key_action_sequence.push(action);
@@ -419,13 +414,6 @@ impl KeyboardTomlConfig {
                                 Rule::lt_action => {
                                     key_action_sequence.push(Self::layer_name_resolver("LT", inner_pair, layer_names)?);
                                     //"LT(".to_owned() + &Self::layer_name_resolver(inner_pair, layer_names)? + ")");
-                                }
-                                Rule::osl_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver(
-                                        "OSL",
-                                        inner_pair,
-                                        layer_names,
-                                    )?);
                                 }
                                 Rule::tt_action => {
                                     key_action_sequence.push(Self::layer_name_resolver("TT", inner_pair, layer_names)?);

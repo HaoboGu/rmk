@@ -198,92 +198,67 @@ pub(crate) fn parse_key(
                 ::rmk::mo!(#layer)
             }
         }
-        s if s.to_lowercase().starts_with("osl(") => {
-            let layer = get_number(s.clone(), s.get(0..4).unwrap(), ")");
-            quote! {
-                ::rmk::osl!(#layer)
-            }
-        }
-        s if s.to_lowercase().starts_with("osm(") => {
-            let prefix = s.get(0..4).unwrap();
-            if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
-                let modifiers = parse_modifiers(internal);
-
-                if modifiers.is_empty() {
-                    panic!(
-                        "\n\u{274c} keyboard.toml: modifier in OSM(modifier) is not valid! Please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
-                    );
-                }
-                quote! {
-                    ::rmk::osm!(#modifiers)
-                }
-            } else {
-                panic!(
-                    "\n\u{274c} keyboard.toml: OSM(modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
-                );
-            }
-        }
         s if s.to_lowercase().starts_with("sk(") => {
             let prefix = s.get(0..3).unwrap();
             if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
-                // Parse: "Tab, [LAlt]" or "Tab, [LAlt], 5, 3000, true"
-                let bracket_start = internal.find('[').unwrap_or_else(|| {
-                    panic!(
-                        "\n\u{274c} keyboard.toml: SK requires a bracketed keep-mod list. \
-                         Usage: SK(Tab, [LAlt]) or SK(Tab, [LCtrl|LShift], 3, 2000, true)"
-                    )
-                });
-                let bracket_end = internal.find(']').unwrap_or_else(|| {
-                    panic!(
-                        "\n\u{274c} keyboard.toml: SK has unclosed '['. \
-                         Usage: SK(Tab, [LAlt])"
-                    )
-                });
+                let inner = internal.trim();
+                let inner_lower = inner.to_lowercase();
 
-                let key_str = internal[..bracket_start]
-                    .trim()
-                    .trim_end_matches(',')
-                    .trim();
-                let ident = get_key_with_alias(key_str.to_string());
+                if inner_lower.starts_with("mo(") {
+                    // Layer shape: SK(MO(n)) — OSL replacement
+                    let layer = get_number(inner.to_string(), inner.get(0..3).unwrap(), ")");
+                    quote! {
+                        ::rmk::sk_layer!(#layer)
+                    }
+                } else if inner.contains('[') {
+                    // Tap-key shape: SK(key, [mods])
+                    let bracket_start = inner.find('[').unwrap();
+                    let bracket_end = inner.find(']').unwrap_or_else(|| {
+                        panic!(
+                            "\n\u{274c} keyboard.toml: SK has unclosed '['. \
+                             Usage: SK(LGui) | SK(Tab, [LAlt]) | SK(MO(n))"
+                        )
+                    });
 
-                let keep_mods_str = &internal[bracket_start + 1..bracket_end];
-                let keep_modifiers = if keep_mods_str.trim().is_empty() {
-                    ModifierCombinationMacro::new()
+                    let key_str = inner[..bracket_start].trim().trim_end_matches(',').trim();
+                    let ident = get_key_with_alias(key_str.to_string());
+
+                    let keep_mods_str = &inner[bracket_start + 1..bracket_end];
+                    let keep_modifiers = if keep_mods_str.trim().is_empty() {
+                        ModifierCombinationMacro::new()
+                    } else {
+                        parse_modifiers(keep_mods_str)
+                    };
+
+                    // Legacy-tail guard: reject the old 5-positional form.
+                    let after_bracket = inner[bracket_end + 1..].trim_start_matches(',').trim();
+                    if !after_bracket.is_empty() {
+                        panic!(
+                            "\n\u{274c} keyboard.toml: the 5-positional SK(...) form is removed; use SK(key, [mods]). max_repeat/timeout/release_on_layer_change now live in [behavior.sticky_key]."
+                        );
+                    }
+
+                    quote! {
+                        ::rmk::sk!(#ident, #keep_modifiers)
+                    }
                 } else {
-                    parse_modifiers(keep_mods_str)
-                };
+                    // Pure-mod shape: SK(LGui) — OSM replacement
+                    let modifiers = parse_modifiers(inner);
 
-                let after_bracket = internal[bracket_end + 1..].trim_start_matches(',').trim();
-                let optional_args: Vec<&str> = if after_bracket.is_empty() {
-                    vec![]
-                } else {
-                    after_bracket
-                        .split(',')
-                        .map(|s| s.trim())
-                        .filter(|s| !s.is_empty())
-                        .collect()
-                };
-
-                let max_repeat: u16 = optional_args
-                    .first()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(0u16);
-                let timeout_ms: u16 = optional_args
-                    .get(1)
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(0u16);
-                let exit_on_layer_change: bool = optional_args
-                    .get(2)
-                    .map(|s| s.trim() == "true")
-                    .unwrap_or(false);
-
-                quote! {
-                    ::rmk::sk!(#ident, #keep_modifiers, #max_repeat, #timeout_ms, #exit_on_layer_change)
+                    if modifiers.is_empty() {
+                        panic!(
+                            "\n\u{274c} keyboard.toml: SK(modifier) is not valid! \
+                             Usage: SK(LGui) | SK(Tab, [LAlt]) | SK(MO(n))"
+                        );
+                    }
+                    quote! {
+                        ::rmk::sk_mod!(#modifiers)
+                    }
                 }
             } else {
                 panic!(
                     "\n\u{274c} keyboard.toml: SK(...) invalid. \
-                     Usage: SK(Tab, [LAlt]) or SK(Tab, [LCtrl|LShift], 3, 2000, true)"
+                     Usage: SK(LGui) | SK(Tab, [LAlt]) | SK(MO(n))"
                 );
             }
         }
@@ -550,7 +525,7 @@ pub(crate) fn parse_key(
     }
 }
 
-/// Parse the string literal like `MO(1)`, `OSL(1)`, `TD(0)`, etc, get the number in it.
+/// Parse the string literal like `MO(1)`, `TD(0)`, etc, get the number in it.
 /// The caller should pass the trimmed prefix and suffix
 fn get_number(key: String, prefix: &str, suffix: &str) -> u8 {
     let layer_str = key.trim_start_matches(prefix).trim_end_matches(suffix);

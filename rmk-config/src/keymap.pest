@@ -54,9 +54,6 @@ transparent_action = @{ ("_")+ | (^"Trns" ~ !ASCII_ALPHANUMERIC) } // One or mor
 // Rule 1: WM(key, modifier) - Key with Modifier
 wm_action = { ^"WM" ~ "(" ~ keycode_name ~ "," ~ modifier_combination ~ ")" }
 
-// Rule 4.6: OSM(modifier) - One-Shot Modifier (requires quotes)
-osm_action = { ^"OSM" ~ "(" ~ modifier_combination ~ ")" }
-
 // Rule 4.1: DF(n) - Switch Default Layer
 df_action = { ^"DF" ~ "(" ~ layer_reference ~ ")" }
 
@@ -68,9 +65,6 @@ lm_action = { ^"LM" ~ "(" ~ layer_reference ~ "," ~ modifier_combination ~ ")" }
 
 // Rule 4.4: LT(n, key) - Layer Activate or Tap Key (Tap/Hold)
 lt_action = { ^"LT" ~ "(" ~ layer_reference ~ "," ~ keycode_name ~ ("," ~ profile_name)? ~ ")" }
-
-// Rule 4.5: OSL(n) - One-Shot Layer
-osl_action = { ^"OSL" ~ "(" ~ layer_reference ~ ")" }
 
 // Rule 4.7: TT(n) - Layer Activate or Tap Toggle
 tt_action = { ^"TT" ~ "(" ~ layer_reference ~ ")" }
@@ -84,7 +78,7 @@ to_action = { ^"TO" ~ "(" ~ layer_reference ~ ")" }
 // Grouping for Layer Actions
 layer_action = _{
     df_action | mo_action | lm_action | lt_action |
-    osl_action | tt_action | tg_action | to_action
+    tt_action | tg_action | to_action
 }
 
 // Rule 5: MT(key, modifier) - Modifier Tap-Hold
@@ -102,21 +96,16 @@ morse_action = { (^"TD" | ^"MORSE") ~ "(" ~ number ~ ")" }
 // Rule 9: Macro(n) - Trigger Macro
 trigger_macro_action = { ^"MACRO" ~ "(" ~ number ~ ")" }
 
-// boolean literal for SK optional args
-boolean = @{ ^"true" | ^"false" }
-
 // bracketed modifier list for SK keep parameter: [LAlt] or [LAlt|LShift] or []
 modifier_keep_list = { "[" ~ modifier_combination ~ "]" | "[" ~ "]" }
 
-// SK(key, [keep], max_repeat?, timeout_ms?, exit_on_layer_change?) — StickyKey
+// SK(key, [mods])  | SK(modifier)  | SK(MO(n))
 sk_action = {
-    ^"SK" ~ "(" ~
-    keycode_name ~ "," ~
-    modifier_keep_list ~
-    ("," ~ number)?  ~
-    ("," ~ number)?  ~
-    ("," ~ boolean)? ~
-    ")"
+    ^"SK" ~ "(" ~ (
+        layer_action                              // SK(MO(n)) — layer shape
+      | (keycode_name ~ "," ~ modifier_keep_list) // SK(key, [mods]) — tap-key shape
+      | modifier_combination                      // SK(LGui) — pure-mod shape
+    ) ~ ")"
 }
 
 // --- Top Level Rules ---
@@ -124,7 +113,7 @@ sk_action = {
 // A single key action entry in the map
 // Order is important: more specific function-like rules first, then aliases/specials, then simple keycodes.
 key_action = _{ // Consume surrounding whitespace/comments implicitly
-    wm_action | osm_action | layer_action | mt_action | th_action | shifted_action | morse_action | trigger_macro_action | sk_action | no_action | transparent_action | simple_keycode
+    wm_action | layer_action | mt_action | th_action | shifted_action | morse_action | trigger_macro_action | sk_action | no_action | transparent_action | simple_keycode
 }
 
 // The entire key map string: Start, zero or more key actions, End.

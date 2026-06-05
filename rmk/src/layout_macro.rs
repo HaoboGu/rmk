@@ -311,68 +311,70 @@ macro_rules! thp {
     };
 }
 
-/// Create a one-shot layer action.
-///
-/// This macro creates a key that activates a layer for the next keypress only.
-/// After the next key is pressed, the layer automatically deactivates.
+/// Create a StickyKey tap-key action (alt-tab shape).
 ///
 /// # Parameters
-/// - `$x`: Layer number (0-255)
+/// - `$key`: HID keycode identifier (e.g., `Tab`, `A`)
+/// - `$keep`: `ModifierCombination` held between presses
 ///
 /// # Example
 /// ```ignore
-/// osl!(1)  // Next key will be from layer 1, then return to current layer
-/// osl!(2)  // Next key will be from layer 2, then return to current layer
+/// sk!(Tab, ModifierCombination::LALT)  // SK(Tab, [LAlt])
 /// ```
 #[macro_export]
-macro_rules! osl {
-    ($x: literal) => {
-        $crate::types::action::KeyAction::Single($crate::types::action::Action::OneShotLayer($x))
+macro_rules! sk {
+    ($key:ident, $keep:expr) => {
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
+            $crate::types::action::StickyKeyAction {
+                key: $crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::$key),
+                keep: $keep,
+                layer: None,
+            },
+        ))
     };
 }
 
-/// Create a one-shot modifier action.
+/// Create a StickyKey pure-modifier action (one-shot modifier shape).
 ///
-/// This macro creates a key that applies modifiers for the next keypress only.
-/// They automatically deactivate if:
-/// - other key that sends keyboard report is pressed,
-/// - timeout has passed before next key is triggered.
+/// `key` is `No` to signal the pure-mod shape.
 ///
 /// # Parameters
 /// - `$m`: `ModifierCombination` to apply for the next keypress
 ///
 /// # Example
 /// ```ignore
-/// // Next key will be shifted
-/// osm!(ModifierCombination::LSHIFT)
-/// // Next key will have both Shift and Ctrl applied
-/// osm!(ModifierCombination::LSHIFT | ModifierCombination::LCTRL)
+/// sk_mod!(ModifierCombination::LSHIFT)  // SK(LShift)
 /// ```
 #[macro_export]
-macro_rules! osm {
-    ($m: expr) => {
-        $crate::types::action::KeyAction::Single($crate::types::action::Action::OneShotModifier($m))
+macro_rules! sk_mod {
+    ($m:expr) => {
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
+            $crate::types::action::StickyKeyAction {
+                key: $crate::types::keycode::KeyCode::No,
+                keep: $m,
+                layer: None,
+            },
+        ))
     };
 }
 
-/// Create a StickyKey action.
+/// Create a StickyKey layer action (one-shot layer shape).
 ///
 /// # Parameters
-/// - `$key`: HID keycode identifier (e.g., `Tab`, `A`)
-/// - `$keep`: `ModifierCombination` held between presses
-/// - `$max_repeat`: `u16` — max fires before auto-release; 0 = infinite
-/// - `$timeout_ms`: `u16` — per-key timeout in ms; 0 = use global config
-/// - `$exit_on_layer_change`: `bool` — release SK when any layer changes
+/// - `$n`: Layer number (0-255)
+///
+/// # Example
+/// ```ignore
+/// sk_layer!(1)  // SK(MO(1))
+/// ```
 #[macro_export]
-macro_rules! sk {
-    ($key:ident, $keep:expr, $max_repeat:expr, $timeout_ms:expr, $exit_on_layer_change:expr) => {
+macro_rules! sk_layer {
+    ($n:literal) => {
         $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
             $crate::types::action::StickyKeyAction {
-                key: $crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::$key),
-                keep: $keep,
-                max_repeat: $max_repeat,
-                timeout_ms: $timeout_ms,
-                exit_on_layer_change: $exit_on_layer_change,
+                key: $crate::types::keycode::KeyCode::No,
+                keep: $crate::types::modifier::ModifierCombination::new(),
+                layer: Some($n),
             },
         ))
     };
