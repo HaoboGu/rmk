@@ -272,10 +272,10 @@ pub enum PointingMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CaretConfig {
-    /// Divisor for X axis. Higher = slower. 0 disables horizontal caret movement.
-    pub divisor_x: u8,
-    /// Divisor for Y axis. Higher = slower. 0 disables vertical caret movement.
-    pub divisor_y: u8,
+    /// Disable X axis in caret mode.
+    pub disable_x: bool,
+    /// Disable y axis in caret mode.
+    pub disable_y: bool,
     /// Invert X axis.
     pub invert_x: bool,
     /// Invert Y axis.
@@ -296,8 +296,8 @@ pub struct CaretConfig {
 impl Default for CaretConfig {
     fn default() -> Self {
         Self {
-            divisor_x: 1,
-            divisor_y: 1,
+            disable_x: false,
+            disable_y: false,
             invert_x: false,
             invert_y: false,
             threshold: 100,
@@ -579,88 +579,15 @@ impl<'a> PointingProcessor<'a> {
                 send_hid_report(Report::MouseReport(mouse_report)).await;
             }
             PointingMode::Caret(caret_config) => {
-                let (mut dx, mut dy) = self.accumulator.accumulate_persistent(
-                    x, y, caret_config.divisor_x, caret_config.divisor_y
-                );
-
-                if dx == 0 && dy == 0 {
-                    return;
-                }
-
-                if (dx.abs() + dy.abs()) <= caret_config.threshold {
-                    return;
-                }
-
-                enum Axis { X, Y }
-
-                let axis = if dx.abs() >= dy.abs() { Axis::X } else { Axis::Y };
-
-                let direction = match axis {
-                    Axis::X => {
-                        match (dx > 0, caret_config.invert_x) {
-                            (true,  false) | (false, true)  => caret_config.keycode_right,
-                            (true,  true)  | (false, false) => caret_config.keycode_left,
-                        }
+                if let Some((keycode, count)) = compute_caret_taps(x, y, &mut self.accumulator, &caret_config) {
+                    for _ in 0..count {
+                        tap_key(keycode).await;
                     }
-                    Axis::Y => {
-                        match (dy > 0, caret_config.invert_y) {
-                            // default: +Y => down
-                            (true,  false) | (false, true)  => caret_config.keycode_down,
-                            (true,  true)  | (false, false) => caret_config.keycode_up,
-                        }
-                    }
-                };
-
-                while (dx.abs() + dy.abs()) > caret_config.threshold {
-                    match axis {
-                        Axis::X => {
-                            let reduce = if dx > 0 { -caret_config.threshold } else { caret_config.threshold };
-                            (dx, dy) = self.accumulator.accumulate_persistent(
-                                reduce, 0, caret_config.divisor_x, caret_config.divisor_y
-                            );
-
-                            self.tap_key(direction).await;
-                        }
-                        Axis::Y => {
-                            let reduce = if dy > 0 { -caret_config.threshold } else { caret_config.threshold };
-                            (dx, dy) = self.accumulator.accumulate_persistent(
-                                0, reduce, caret_config.divisor_x, caret_config.divisor_y
-                            );
-
-                            self.tap_key(direction).await;
-                        }
-                    }
-                }
-
-                // reset the other axis, otherwise the cursor is all over the place
-                match axis {
-                    Axis::X => self.accumulator.reset_y(),
-                    Axis::Y => self.accumulator.reset_x(),
                 }
             }
         };
     }
 
-    async fn tap_key(&mut self, keycode: HidKeyCode) {
-            // Press
-            send_hid_report(Report::KeyboardReport(KeyboardReport {
-                modifier: 0,
-                reserved: 0,
-                leds: 0,
-                keycodes: [keycode as u8, 0, 0, 0, 0, 0],
-            }))
-            .await;
-            Timer::after_millis(5).await;
-            // Release
-            send_hid_report(Report::KeyboardReport(KeyboardReport {
-                modifier: 0,
-                reserved: 0,
-                leds: 0,
-                keycodes: [0, 0, 0, 0, 0, 0],
-            }))
-            .await;
-            Timer::after_millis(5).await;
-    }
     // pointing device events are used to change the mode (cursor/scroll/sniper) of the processor based on the device id. This allows users to trigger different modes if desired.
     pub async fn on_pointing_processor_event(&mut self, event: PointingProcessorEvent) {
         if self.config.device_id == ALL_POINTING_DEVICES || self.config.device_id == event.device_id {
@@ -671,6 +598,93 @@ impl<'a> PointingProcessor<'a> {
             self.set_pointing_mode(event.mode);
         }
     }
+}
+
+/// Tap a key (press and release with a short delay) - used for caret mode
+async fn tap_key(keycode: HidKeyCode) {
+    // Press
+    send_hid_report(Report::KeyboardReport(KeyboardReport {
+        modifier: 0,
+        reserved: 0,
+        leds: 0,
+        keycodes: [keycode as u8, 0, 0, 0, 0, 0],
+    }))
+    .await;
+    Timer::after_millis(5).await;
+    // Release
+    send_hid_report(Report::KeyboardReport(KeyboardReport {
+        modifier: 0,
+        reserved: 0,
+        leds: 0,
+        keycodes: [0, 0, 0, 0, 0, 0],
+    }))
+    .await;
+    Timer::after_millis(5).await;
+}
+
+/// Pure function: given a (x, y) motion delta, decide whether caret mode
+/// should fire key taps. Updates the accumulator in place (sign-change
+/// aware via divisor logic, threshold-aligned, non-dominant reset).
+/// Returns `(keycode, count)` if a tap should fire, `None` otherwise.
+///
+/// Caller is responsible for actually firing the taps (async).
+fn compute_caret_taps(
+    x: i16,
+    y: i16,
+    accumulator: &mut MotionAccumulator,
+    cfg: &CaretConfig,
+) -> Option<(HidKeyCode, u8)> {
+    let divisor_x = if cfg.disable_x { 0 } else { 1 };
+    let divisor_y = if cfg.disable_y { 0 } else { 1 };
+    let (mut dx, mut dy) = accumulator.accumulate_persistent(x, y, divisor_x, divisor_y);
+
+    if (dx.abs() + dy.abs()) <= cfg.threshold {
+        return None;
+    }
+
+    enum Axis {
+        X,
+        Y,
+    }
+    let axis = if dx.abs() >= dy.abs() { Axis::X } else { Axis::Y };
+
+    let keycode = match axis {
+        Axis::X => match (dx > 0, cfg.invert_x) {
+            (true, false) | (false, true) => cfg.keycode_right,
+            (true, true) | (false, false) => cfg.keycode_left,
+        },
+        Axis::Y => match (dy > 0, cfg.invert_y) {
+            // default: +Y => down
+            (true, false) | (false, true) => cfg.keycode_down,
+            (true, true) | (false, false) => cfg.keycode_up,
+        },
+    };
+
+    // Each tap reduces the running total on the dominant axis by `threshold`.
+    // The number of iterations is the tap count.
+    let mut count: u8 = 0;
+    while (dx.abs() + dy.abs()) > cfg.threshold {
+        let (reduce_x, reduce_y) = match axis {
+            Axis::X => {
+                let r = if dx > 0 { -cfg.threshold } else { cfg.threshold };
+                (r, 0)
+            }
+            Axis::Y => {
+                let r = if dy > 0 { -cfg.threshold } else { cfg.threshold };
+                (0, r)
+            }
+        };
+        (dx, dy) = accumulator.accumulate_persistent(reduce_x, reduce_y, divisor_x, divisor_y);
+        count = count.saturating_add(1);
+    }
+
+    // Drop the non-dominant axis so stale samples cannot bleed in.
+    match axis {
+        Axis::X => accumulator.reset_y(),
+        Axis::Y => accumulator.reset_x(),
+    }
+
+    if count == 0 { None } else { Some((keycode, count)) }
 }
 
 #[cfg(test)]
@@ -1207,6 +1221,137 @@ mod tests {
         assert_eq!(oy, 0);
         assert_eq!(acc.remainder_x, 0);
         assert_eq!(acc.remainder_y, 50);
+    }
+
+    // === compute_caret_taps tests ===
+
+    fn cfg() -> CaretConfig {
+        CaretConfig::default()
+    }
+
+    fn acc() -> MotionAccumulator {
+        MotionAccumulator::default()
+    }
+
+    #[test]
+    fn test_compute_caret_taps_zero_motion_returns_none() {
+        let mut a = acc();
+        assert!(compute_caret_taps(0, 0, &mut a, &cfg()).is_none());
+    }
+
+    #[test]
+    fn test_compute_caret_taps_sub_threshold_returns_none() {
+        let mut a = acc();
+        // |50|+|50| = 100, exactly at threshold → no tap
+        assert!(compute_caret_taps(50, 50, &mut a, &cfg()).is_none());
+        // Accumulator still tracks the running total even when sub-threshold
+        assert_eq!(a.remainder_x, 50);
+        assert_eq!(a.remainder_y, 50);
+    }
+
+    #[test]
+    fn test_compute_caret_taps_x_dominant_default_right() {
+        let mut a = acc();
+        let result = compute_caret_taps(150, 30, &mut a, &cfg());
+        // |150|+|30| = 180 > 100. X dominant (150 >= 30). dx>0 + !invert → Right.
+        // Loop: reduce_x=-100 → total=(50, 30), |50|+|30|=80<=100 → stop.
+        assert_eq!(result, Some((HidKeyCode::Right, 1)));
+        assert_eq!(a.remainder_x, 50);
+        assert_eq!(a.remainder_y, 0); // non-dominant reset
+    }
+
+    #[test]
+    fn test_compute_caret_taps_x_dominant_negative_is_left() {
+        let mut a = acc();
+        let result = compute_caret_taps(-150, 30, &mut a, &cfg());
+        assert_eq!(result, Some((HidKeyCode::Left, 1)));
+    }
+
+    #[test]
+    fn test_compute_caret_taps_y_dominant_default_is_down() {
+        let mut a = acc();
+        let result = compute_caret_taps(30, 150, &mut a, &cfg());
+        // Y dominant, dy>0, !invert → Down (default +Y = down per HID)
+        assert_eq!(result, Some((HidKeyCode::Down, 1)));
+        assert_eq!(a.remainder_x, 0); // non-dominant reset
+        assert_eq!(a.remainder_y, 50);
+    }
+
+    #[test]
+    fn test_compute_caret_taps_invert_y_flips_to_up() {
+        let mut a = acc();
+        let mut c = cfg();
+        c.invert_y = true;
+        let result = compute_caret_taps(30, 150, &mut a, &c);
+        // dy>0 + invert_y → Up
+        assert_eq!(result, Some((HidKeyCode::Up, 1)));
+    }
+
+    #[test]
+    fn test_compute_caret_taps_invert_x_flips_to_left() {
+        let mut a = acc();
+        let mut c = cfg();
+        c.invert_x = true;
+        let result = compute_caret_taps(150, 30, &mut a, &c);
+        // dx>0 + invert_x → Left
+        assert_eq!(result, Some((HidKeyCode::Left, 1)));
+    }
+
+    #[test]
+    fn test_compute_caret_taps_multiple_taps_in_one_event() {
+        let mut a = acc();
+        let result = compute_caret_taps(250, 0, &mut a, &cfg());
+        // X dominant, |250|=250, threshold=100 → 2 taps
+        // Iter 1: reduce_x=-100 → total=(150, 0), |150|>100 → tap
+        // Iter 2: reduce_x=-100 → total=(50, 0), |50|<=100 → stop
+        assert_eq!(result, Some((HidKeyCode::Right, 2)));
+        assert_eq!(a.remainder_x, 50);
+        assert_eq!(a.remainder_y, 0);
+    }
+
+    #[test]
+    fn test_compute_caret_taps_sub_threshold_accumulates_across_calls() {
+        let mut a = acc();
+        // 3 calls of (20, 20): total grows (20,20)→(40,40)→(60,60)
+        assert!(compute_caret_taps(20, 20, &mut a, &cfg()).is_none()); // 40
+        assert!(compute_caret_taps(20, 20, &mut a, &cfg()).is_none()); // 80
+        // 3rd call: |60|+|60|=120 > 100 → tap
+        assert_eq!(compute_caret_taps(20, 20, &mut a, &cfg()), Some((HidKeyCode::Right, 1)));
+    }
+
+    #[test]
+    fn test_compute_caret_taps_zero_divisor_disables_axis() {
+        let mut a = acc();
+        let mut c = cfg();
+        c.disable_x = true;
+        // dx=0, dy=120. |0|+|120|=120 > 100 → tap. Y dominant. dy>0 + !invert → Down.
+        assert_eq!(compute_caret_taps(0, 120, &mut a, &c), Some((HidKeyCode::Down, 1)));
+    }
+
+    #[test]
+    fn test_compute_caret_taps_direction_change_works() {
+        let mut a = acc();
+        // First a Right tap
+        assert_eq!(
+            compute_caret_taps(150, 30, &mut a, &cfg()),
+            Some((HidKeyCode::Right, 1))
+        );
+        // After: remainder_x = 50, remainder_y = 0 (reset)
+        assert_eq!(a.remainder_x, 50);
+        assert_eq!(a.remainder_y, 0);
+
+        // Now move left. -200 + 50 (carry-over) = -150 → |-150|=150>100 → tap
+        assert_eq!(compute_caret_taps(-200, 0, &mut a, &cfg()), Some((HidKeyCode::Left, 1)));
+    }
+
+    #[test]
+    fn test_compute_caret_taps_threshold_at_exactly_boundary() {
+        let mut a = acc();
+        // |100|+|0| = 100, exactly threshold → no tap
+        assert!(compute_caret_taps(100, 0, &mut a, &cfg()).is_none());
+        assert_eq!(a.remainder_x, 100);
+        // One more unit pushes over
+        assert_eq!(compute_caret_taps(1, 0, &mut a, &cfg()), Some((HidKeyCode::Right, 1)));
     }
 
     // === PointingMode tests ===
