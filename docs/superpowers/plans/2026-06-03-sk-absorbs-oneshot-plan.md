@@ -376,6 +376,12 @@ git commit -m "test: migrate one-shot/sticky tests to SK(...) syntax and unified
 
 **Stage 1 Gate:** Config/parse/macro/wire crates build; test crate compiles; `OSM(...)`/`OSL(...)`/5-positional-`SK(...)` now produce build errors. Behavior tests not yet green (engine pending). Run `cargo build` across the workspace to confirm only the engine `keyboard.rs`/`oneshot.rs`/`sticky_key.rs` arms remain to migrate.
 
+**STAGE 1 COMPLETE (2026-06-05).** Commits: cbb75169 (1.1) · 9ae4008c (1.2) · a24b198a (1.3) · 28416fa5 (1.4) · cefc6e1b (1.5) · f19c4734 (plan DPs). Both per-task reviews (spec + code-quality) passed for every task. Gate status:
+- ✅ rmk-config, rmk-macro, rmk-types build clean (rmk-types under `--features host`; snapshots regenerated for the wire-format change — base+bulk Action-carrying endpoints only).
+- ✅ Exactly 10 remaining `rmk` lib errors, ALL in engine files (`keymap.rs` ×2, `keyboard/oneshot.rs` ×2, `keyboard/sticky_key.rs` ×4, `keyboard.rs` ×2) under the CI feature set `--no-default-features --features=split,vial,storage,async_matrix,_ble`. These are the Stage 2 migration targets.
+- ⚠️ **CARRY-FORWARD D2 — "test crate compiles" deferred to the Stage 2 gate.** The plan assumed the engine still compiled through Stage 1, but Tasks 1.1–1.4 removed the symbols the old engine depends on, so the `rmk` lib (and therefore the test targets) cannot compile until Stage 2. The Task 1.5 test migration was verified at the symbol level only (grep-clean of `osm!`/`osl!`/`OneShotConfig`/`OneShotModifiersConfig`/`one_shot_modifiers`/>2-arg `sk!`; API-surface review; semantic per-key→global remap audited). **Stage 2 gate must compile + run both migrated test files** (`keyboard_one_shot_test.rs`, `keyboard_sticky_key_test.rs`) — that is where the migration is actually validated.
+- DP-3 applied (Vial `SettingKey::OneShotTimeout = 0x06` kept byte-identical; internal `one_shot_timeout`→`sticky_key_timeout` rename across keymap/context/vial/storage).
+
 ---
 
 ## Stage 2 — Engine: shape dispatch + absorb OSM
