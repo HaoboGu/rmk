@@ -129,7 +129,10 @@ impl Keyboard<'_> {
                 StickyKeyState::Active {
                     mods, deadline: d, ..
                 } => {
-                    // Accumulate (3c) and refresh the timeout deadline.
+                    // Accumulate (3c) and refresh the timeout deadline. The unified latch holds
+                    // at most one SK at a time; pressing a different-shaped SK while one is active
+                    // accumulates onto the existing latch rather than replacing it (no test or
+                    // spec covers concurrent mixed shapes — single-latch assumption).
                     *mods |= params.keep;
                     *d = deadline;
                 }
@@ -234,10 +237,15 @@ impl Keyboard<'_> {
         match &mut self.sticky_key_state {
             StickyKeyState::Active {
                 phase: phase @ SkPhase::Pressed,
+                deadline,
                 ..
             } => {
                 // A key was pressed while the SK is still physically held → promote to Held.
+                // OSM `Held` has no timeout: the modifier stays live until the SK is physically
+                // released (held-alt-tab use case). Clear the run-loop deadline so it does not
+                // spuriously time-out while held.
                 *phase = SkPhase::Held;
+                *deadline = None;
                 false
             }
             StickyKeyState::Active {
