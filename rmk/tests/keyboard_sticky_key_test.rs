@@ -10,9 +10,9 @@ use rusty_fork::rusty_fork_test;
 
 use crate::common::{KC_LALT, KC_LCTRL, KC_LSHIFT, wrap_keymap};
 
-// KEYMAP
+// KEYMAP (release_on_layer_change=true is set in the helper config, not per-key)
 // Layer 0: A             B             C             MO(1)         LShift        No
-// Layer 1: SK(Tab,LAlt,exit=true)  SK(Tab,LCtrl,exit=true)  SK(Tab,LCtrl|LShift,exit=true)  Transparent   Transparent   No
+// Layer 1: SK(Tab,LAlt)  SK(Tab,LCtrl)  SK(Tab,LCtrl|LShift)  Transparent   Transparent   No
 
 const KEYMAP: [[[KeyAction; 6]; 1]; 2] = [
     [[
@@ -26,54 +26,38 @@ const KEYMAP: [[[KeyAction; 6]; 1]; 2] = [
     ]],
     [[
         // Layer 1
-        sk!(Tab, ModifierCombination::LALT, 0, 0, true), // col 0: SK(Tab, LAlt, exit=true)
-        sk!(Tab, ModifierCombination::LCTRL, 0, 0, true), // col 1: SK(Tab, LCtrl, exit=true)
+        sk!(Tab, ModifierCombination::LALT), // col 0: SK(Tab, LAlt)
+        sk!(Tab, ModifierCombination::LCTRL), // col 1: SK(Tab, LCtrl)
         sk!(
             Tab,
-            ModifierCombination::new_from_vals(true, true, false, false, false, false, false, false),
-            0,
-            0,
-            true
-        ), // col 2: SK(Tab, LCtrl|LShift, exit=true)
+            ModifierCombination::new_from_vals(true, true, false, false, false, false, false, false)
+        ), // col 2: SK(Tab, LCtrl|LShift)
         a!(Transparent),                                 // col 3: Transparent
         a!(Transparent),                                 // col 4: Transparent → LShift
         a!(No),                                          // col 5: No
     ]],
 ];
 
-// KEYMAP_MAX_REPEAT: SK at col 0 has max_repeat=2
+// KEYMAP_MAX_REPEAT: used with the max_repeat=2 helper config (max_repeat is global, not per-key)
 const KEYMAP_MAX_REPEAT: [[[KeyAction; 6]; 1]; 2] = [
     [[k!(A), k!(B), k!(C), mo!(1), k!(LShift), a!(No)]],
     [[
-        sk!(Tab, ModifierCombination::LALT, 2, 0, false),  // col 0: max_repeat=2
-        sk!(Tab, ModifierCombination::LCTRL, 0, 0, false), // col 1
-        sk!(Tab, ModifierCombination::LCTRL, 0, 0, false), // col 2
+        sk!(Tab, ModifierCombination::LALT),  // col 0
+        sk!(Tab, ModifierCombination::LCTRL), // col 1
+        sk!(Tab, ModifierCombination::LCTRL), // col 2
         a!(Transparent),
         a!(Transparent),
         a!(No),
     ]],
 ];
 
-// KEYMAP_PER_KEY_TIMEOUT: SK at col 0 has 50ms per-key timeout
-const KEYMAP_PER_KEY_TIMEOUT: [[[KeyAction; 6]; 1]; 2] = [
-    [[k!(A), k!(B), k!(C), mo!(1), k!(LShift), a!(No)]],
-    [[
-        sk!(Tab, ModifierCombination::LALT, 0, 50, false), // col 0: 50ms per-key timeout
-        sk!(Tab, ModifierCombination::LCTRL, 0, 0, false), // col 1
-        sk!(Tab, ModifierCombination::LCTRL, 0, 0, false), // col 2
-        a!(Transparent),
-        a!(Transparent),
-        a!(No),
-    ]],
-];
-
-// KEYMAP_NO_EXIT: SK with exit_on_layer_change=false — SK survives MO release
+// KEYMAP_NO_EXIT: used with the default helper config (release_on_layer_change=false → SK survives MO release)
 const KEYMAP_NO_EXIT: [[[KeyAction; 6]; 1]; 2] = [
     [[k!(A), k!(B), k!(C), mo!(1), k!(LShift), a!(No)]],
     [[
-        sk!(Tab, ModifierCombination::LALT, 0, 0, false),  // col 0: exit=false
-        sk!(Tab, ModifierCombination::LCTRL, 0, 0, false), // col 1
-        sk!(Tab, ModifierCombination::LCTRL, 0, 0, false), // col 2
+        sk!(Tab, ModifierCombination::LALT),  // col 0
+        sk!(Tab, ModifierCombination::LCTRL), // col 1
+        sk!(Tab, ModifierCombination::LCTRL), // col 2
         a!(Transparent),
         a!(Transparent),
         a!(No),
@@ -82,27 +66,28 @@ const KEYMAP_NO_EXIT: [[[KeyAction; 6]; 1]; 2] = [
 
 fn create_test_keyboard() -> Keyboard<'static> {
     static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
-    let behavior_config = BEHAVIOR_CONFIG.init(BehaviorConfig::default());
+    let behavior_config = BEHAVIOR_CONFIG.init(BehaviorConfig {
+        sticky_key: StickyKeyConfig {
+            release_on_layer_change: true,
+            ..StickyKeyConfig::default()
+        },
+        ..BehaviorConfig::default()
+    });
     static KEY_CONFIG: static_cell::StaticCell<PositionalConfig<1, 6>> = static_cell::StaticCell::new();
     let per_key_config = KEY_CONFIG.init(PositionalConfig::default());
     Keyboard::new(wrap_keymap(KEYMAP, per_key_config, behavior_config))
 }
 
 fn create_test_keyboard_max_repeat() -> Keyboard<'static> {
-    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
-    let per_key_config: &'static PositionalConfig<1, 6> = Box::leak(Box::new(PositionalConfig::default()));
-    Keyboard::new(wrap_keymap(KEYMAP_MAX_REPEAT, per_key_config, behavior_config))
-}
-
-fn create_test_keyboard_per_key_timeout() -> Keyboard<'static> {
     let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
         sticky_key: StickyKeyConfig {
-            timeout: Duration::from_millis(100),
+            max_repeat: 2,
+            ..StickyKeyConfig::default()
         },
         ..BehaviorConfig::default()
     }));
     let per_key_config: &'static PositionalConfig<1, 6> = Box::leak(Box::new(PositionalConfig::default()));
-    Keyboard::new(wrap_keymap(KEYMAP_PER_KEY_TIMEOUT, per_key_config, behavior_config))
+    Keyboard::new(wrap_keymap(KEYMAP_MAX_REPEAT, per_key_config, behavior_config))
 }
 
 fn create_test_keyboard_no_exit() -> Keyboard<'static> {
@@ -295,6 +280,8 @@ rusty_fork_test! {
             keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
                 sticky_key: StickyKeyConfig {
                     timeout: Duration::from_millis(100),
+                    release_on_layer_change: true,
+                    ..StickyKeyConfig::default()
                 },
                 ..BehaviorConfig::default()
             }),
@@ -334,6 +321,8 @@ rusty_fork_test! {
             keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
                 sticky_key: StickyKeyConfig {
                     timeout: Duration::from_millis(100),
+                    release_on_layer_change: true,
+                    ..StickyKeyConfig::default()
                 },
                 ..BehaviorConfig::default()
             }),
@@ -399,39 +388,7 @@ rusty_fork_test! {
         };
     }
 
-    /// StickyKey Test 9: Per-key timeout overrides global timeout
-    ///
-    /// Config: KEYMAP_PER_KEY_TIMEOUT (SK at col 0 has 50ms per-key timeout), global=100ms
-    ///
-    /// Sequence:
-    /// - Press MO(1), press SK(50ms), release SK → per-key 50ms timer starts
-    /// - Wait 80ms (per-key 50ms fires, global 100ms has NOT fired)
-    /// - Release MO(1) (SK already released by per-key timeout)
-    /// - Press C on layer 0 (no modifier), release C
-    ///
-    /// Expected: SK releases at 50ms (per-key), not 100ms (global)
-    #[test]
-    fn test_sk_per_key_timeout_overrides_global() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard_per_key_timeout(),
-            sequence: [
-                [0, 3, true,  10],  // Press MO(1)
-                [0, 0, true,  10],  // Press SK(Tab, LAlt, 50ms timeout)
-                [0, 0, false, 10],  // Release SK → per-key 50ms timer starts
-                [0, 3, false, 80],  // Wait 80ms (50ms per-key fires!), then release MO(1)
-                [0, 2, true,  10],  // Press C on layer 0 (no modifier)
-                [0, 2, false, 10],  // Release C
-            ],
-            expected_reports: [
-                [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // SK press: Alt+Tab
-                [KC_LALT, [0, 0, 0, 0, 0, 0]],                 // SK release: Alt held, per-key timer starts (50ms)
-                [0, [0, 0, 0, 0, 0, 0]],                        // Per-key timeout fires at 50ms: Alt released
-                // MO(1) release: SK already inactive, no report
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],           // C press: no modifier
-                [0, [0, 0, 0, 0, 0, 0]],                        // C release
-            ]
-        };
-    }
+    // per-key timeout removed this round (deferred, spec Section 4); see parity catalogue
 
     /// StickyKey Test 10: exit_on_layer_change=true — SK exits on MO release
     ///
