@@ -508,10 +508,6 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().behavior.combo.prior_idle_time
     }
 
-    pub(crate) fn one_shot_timeout(&self) -> Duration {
-        self.inner.borrow().behavior.one_shot.timeout
-    }
-
     pub(crate) fn sticky_key_timeout(&self) -> Duration {
         self.inner.borrow().behavior.sticky_key.timeout
     }
@@ -558,8 +554,8 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow_mut().behavior.combo.timeout = timeout;
     }
 
-    pub(crate) fn set_one_shot_timeout(&self, timeout: Duration) {
-        self.inner.borrow_mut().behavior.one_shot.timeout = timeout;
+    pub(crate) fn set_sticky_key_timeout(&self, timeout: Duration) {
+        self.inner.borrow_mut().behavior.sticky_key.timeout = timeout;
     }
 
     pub(crate) fn set_tap_interval(&self, interval: u16) {

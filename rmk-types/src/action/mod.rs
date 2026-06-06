@@ -36,17 +36,15 @@ use crate::steno::StenoKey;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub struct StickyKeyAction {
-    /// Key sent on each SK press.
+    /// Key sent on each SK press. `KeyCode::No` selects the pure-mod (OSM) shape
+    /// when `layer` is `None`; otherwise it's the tap-key (alt-tab) shape.
     pub key: KeyCode,
-    /// Modifiers held between presses (0 = none).
+    /// Modifiers held between presses (0 = none). Unused for the layer (OSL) shape.
     pub keep: ModifierCombination,
-    /// Maximum presses before auto-release; 0 = infinite.
-    /// Fires key on presses 1..=max_repeat, deactivates silently on press max_repeat+1.
-    pub max_repeat: u16,
-    /// Per-key timeout in ms; 0 = use global BehaviorConfig default.
-    pub timeout_ms: u16,
-    /// Release SK when any layer activates or deactivates.
-    pub exit_on_layer_change: bool,
+    /// `Some(n)` = one-shot-layer (OSL) shape activating layer `n`.
+    /// `None` + `key == KeyCode::No` = pure-mod (OSM) shape.
+    /// `None` + `key != KeyCode::No` = tap-key (alt-tab) shape.
+    pub layer: Option<u8>,
 }
 
 /// A single basic action that a keyboard can execute.
@@ -79,10 +77,6 @@ pub enum Action {
     TriLayerUpper,
     /// Triggers the Macro at the 'index'.
     TriggerMacro(u8),
-    /// Oneshot layer, keep the layer active until the next key is triggered.
-    OneShotLayer(u8),
-    /// Oneshot modifier, keep the modifier active until the next key is triggered.
-    OneShotModifier(ModifierCombination),
     /// Oneshot key, keep the key active until the next key is triggered.
     OneShotKey(KeyCode),
     /// Actions for controlling lights
@@ -93,8 +87,8 @@ pub enum Action {
     Special(SpecialKey),
     /// User Keys
     User(u8),
-    /// Sticky key: sends modifier + key on each press, holds modifiers between presses.
-    /// Supports max_repeat, per-key timeout, and conditional exit on layer change.
+    /// Sticky key: a unified one-shot action whose shape (pure-mod, tap-key, or
+    /// one-shot-layer) is determined by the [`StickyKeyAction`] payload.
     StickyKey(StickyKeyAction),
     /// A Plover HID stenography key. Press/release of this key updates the
     /// in-progress steno chord; on first release the accumulated chord is

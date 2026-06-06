@@ -58,15 +58,6 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                 // 0x0
                 // }
             }
-            Action::OneShotLayer(l) => {
-                // One-shot layer
-                if l < 16 { 0x5280 | l as u16 } else { 0x0000 }
-            }
-            Action::OneShotModifier(m) => {
-                // One-shot modifier
-                let modifier_bits = m.into_packed_bits();
-                0x52A0 | modifier_bits as u16
-            }
             Action::LayerOnWithModifier(l, m) => {
                 if l < 16 {
                     0x5000 | ((l as u16) << 5) | ((m.into_packed_bits() & 0b11111) as u16)
@@ -185,16 +176,6 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             let layer = via_keycode as u8 & 0x0F;
             KeyAction::Single(Action::LayerToggle(layer))
         }
-        0x5280..=0x529F => {
-            // One-shot layer
-            let layer = via_keycode as u8 & 0xF;
-            KeyAction::Single(Action::OneShotLayer(layer))
-        }
-        0x52A0..=0x52BF => {
-            // One-shot modifier
-            let m = ModifierCombination::from_packed_bits((via_keycode & 0x1F) as u8);
-            KeyAction::Single(Action::OneShotModifier(m))
-        }
         0x52C0..=0x52DF => {
             // TODO: Layer tap toggle
             warn!("Layer tap toggle {:#X} not supported", via_keycode);
@@ -275,22 +256,6 @@ mod test {
         // Mo(3)
         let via_keycode = 0x5223;
         assert_eq!(KeyAction::Single(Action::LayerOn(3)), from_via_keycode(via_keycode));
-
-        // OSL(3)
-        let via_keycode = 0x5283;
-        assert_eq!(
-            KeyAction::Single(Action::OneShotLayer(3)),
-            from_via_keycode(via_keycode)
-        );
-
-        // OSM RCtrl
-        let via_keycode = 0x52B1;
-        assert_eq!(
-            KeyAction::Single(Action::OneShotModifier(ModifierCombination::new_from(
-                true, false, false, false, true
-            ))),
-            from_via_keycode(via_keycode)
-        );
 
         // LCtrl(A) -> WithModifier(A)
         let via_keycode = 0x104;
@@ -464,16 +429,6 @@ mod test {
         // Mo(3)
         let a = KeyAction::Single(Action::LayerOn(3));
         assert_eq!(0x5223, to_via_keycode(a));
-
-        // OSL(3)
-        let a = KeyAction::Single(Action::OneShotLayer(3));
-        assert_eq!(0x5283, to_via_keycode(a));
-
-        // OSM RCtrl
-        let a = KeyAction::Single(Action::OneShotModifier(ModifierCombination::new_from(
-            true, false, false, false, true,
-        )));
-        assert_eq!(0x52B1, to_via_keycode(a));
 
         // LCtrl(A) -> WithModifier(A)
         let a = KeyAction::Single(Action::KeyWithModifier(
