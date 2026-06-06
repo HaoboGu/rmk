@@ -1,6 +1,4 @@
 use embassy_futures::select::{Either, select};
-use embassy_time::Timer;
-use rmk_types::modifier::ModifierCombination;
 
 use crate::event::KeyboardEvent;
 use crate::keyboard::Keyboard;
@@ -30,89 +28,17 @@ impl<T> OneShotState<T> {
 }
 
 impl<'a> Keyboard<'a> {
-    pub(crate) async fn process_action_osm(&mut self, new_modifiers: ModifierCombination, event: KeyboardEvent) {
-        let activate_on_keypress = self.keymap.one_shot_modifiers_config().activate_on_keypress;
+    // OSM (one-shot modifier) is now handled by the unified StickyKey engine
+    // (see `keyboard/sticky_key.rs`, pure-mod shape). The former `process_action_osm`
+    // and `update_osm` were removed in Stage 2.
+    //
+    // OSL (one-shot layer) is still handled here until Stage 3 ports it into the SK
+    // engine's layer branch. These functions are temporarily uncalled from the OSM
+    // dispatch (which was deleted) but stay live: `update_osl` is invoked from the key
+    // and modifier paths in `keyboard.rs`.
 
-        // Update one shot state
-        if event.pressed {
-            let mut was_active = false;
-            // Add new modifier combination to existing one shot or init if none
-            self.osm_state = match self.osm_state {
-                OneShotState::None => OneShotState::Initial(new_modifiers),
-                OneShotState::Initial(cur_modifiers) => OneShotState::Initial(cur_modifiers | new_modifiers),
-                OneShotState::Single(cur_modifiers) => {
-                    was_active = cur_modifiers & new_modifiers == new_modifiers;
-
-                    if was_active {
-                        let result = cur_modifiers & !new_modifiers;
-                        // Remove the matching event from unprocessed_events queue
-                        self.unprocessed_events.retain(|e| e.pos != event.pos);
-                        // Send report for current osm_state modifiers
-                        self.send_keyboard_report_with_resolved_modifiers(true).await;
-
-                        if result.into_bits() == 0 {
-                            OneShotState::None
-                        } else {
-                            OneShotState::Single(result)
-                        }
-                    } else {
-                        OneShotState::Single(cur_modifiers | new_modifiers)
-                    }
-                }
-                OneShotState::Held(cur_modifiers) => OneShotState::Held(cur_modifiers | new_modifiers),
-            };
-
-            self.update_osl(event);
-
-            // Send report for updated osm_state modifiers
-            if was_active || activate_on_keypress {
-                self.send_keyboard_report_with_resolved_modifiers(true).await;
-            }
-        } else {
-            match self.osm_state {
-                OneShotState::Initial(cur_modifiers) | OneShotState::Single(cur_modifiers) => {
-                    self.osm_state = OneShotState::Single(cur_modifiers);
-                    let timeout = Timer::after(self.keymap.one_shot_timeout());
-                    match select(timeout, self.keyboard_event_subscriber.next_message_pure()).await {
-                        Either::First(_) => {
-                            // Timeout, release modifiers
-                            self.update_osl(event);
-                            self.osm_state = OneShotState::None;
-
-                            // Send release report because modifiers were held
-                            if activate_on_keypress {
-                                self.send_keyboard_report_with_resolved_modifiers(false).await;
-                            }
-                        }
-                        Either::Second(e) => {
-                            // New event, send it to queue
-                            if self.unprocessed_events.push(e).is_err() {
-                                warn!("Unprocessed event queue is full, dropping event");
-                            }
-                        }
-                    }
-                }
-                OneShotState::Held(cur_modifiers) => {
-                    let was_active = cur_modifiers & new_modifiers == new_modifiers;
-
-                    if !was_active {
-                        return;
-                    }
-
-                    // Release modifier
-                    self.update_osl(event);
-                    self.osm_state = OneShotState::None;
-
-                    // This sends a separate hid report with the
-                    // currently registered modifiers except the
-                    // one shot modifiers -> this way "releasing" them.
-                    self.send_keyboard_report_with_resolved_modifiers(false).await;
-                }
-                _ => (),
-            };
-        }
-    }
-
+    // TODO(Stage 3): port into process_action_sticky_key layer branch.
+    #[allow(dead_code)]
     pub(crate) async fn process_action_osl(&mut self, layer_num: u8, event: KeyboardEvent) {
         // Update one shot state
         if event.pressed {
@@ -136,7 +62,7 @@ impl<'a> Keyboard<'a> {
                 OneShotState::Initial(l) | OneShotState::Single(l) => {
                     self.osl_state = OneShotState::Single(l);
 
-                    let timeout = embassy_time::Timer::after(self.keymap.one_shot_timeout());
+                    let timeout = embassy_time::Timer::after(self.keymap.sticky_key_timeout());
                     match select(timeout, self.keyboard_event_subscriber.next_message_pure()).await {
                         Either::First(_) => {
                             // Timeout, deactivate layer
@@ -157,27 +83,6 @@ impl<'a> Keyboard<'a> {
                 }
                 _ => (),
             };
-        }
-    }
-
-    /// Update OSM state based on the keyboard event.
-    /// Returns `true` if the OSM was consumed (transitioned from Single to None).
-    pub(crate) fn update_osm(&mut self, event: KeyboardEvent) -> bool {
-        let quick_release = self.keymap.one_shot_modifiers_config().quick_release;
-        match self.osm_state {
-            OneShotState::Initial(m) => {
-                self.osm_state = OneShotState::Held(m);
-                false
-            }
-            OneShotState::Single(_) if quick_release && event.pressed => {
-                self.osm_state = OneShotState::None;
-                true
-            }
-            OneShotState::Single(_) if !quick_release && !event.pressed => {
-                self.osm_state = OneShotState::None;
-                true
-            }
-            _ => false,
         }
     }
 

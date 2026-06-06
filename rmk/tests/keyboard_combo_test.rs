@@ -1,11 +1,11 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, OneShotConfig, OneShotModifiersConfig};
+use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, StickyKeyConfig};
 use rmk::keyboard::combo::{Combo, ComboConfig};
 use rmk::types::keycode::HidKeyCode;
 use rmk::types::modifier::ModifierCombination;
-use rmk::{k, osm, th};
+use rmk::{k, sk_mod, th};
 use rmk_types::morse::{MorseMode, MorseProfile};
 
 use crate::common::{KC_LSHIFT, create_test_keyboard_with_config};
@@ -39,7 +39,7 @@ pub fn get_combos_config() -> CombosConfig {
                     k!(T), //1,5
                 ]
                 .to_vec(),
-                osm!(ModifierCombination::new_from(false, false, false, true, false)), // one-shot LShift
+                sk_mod!(ModifierCombination::new_from(false, false, false, true, false)), // one-shot LShift
                 Some(0),
             ))),
             Some(Combo::new(ComboConfig::new(
@@ -150,7 +150,7 @@ fn test_combo_with_one_shot_modifier() {
     key_sequence_test! {
         keyboard: create_test_keyboard_with_config(BehaviorConfig {
             combo: get_combos_config(),
-            one_shot: OneShotConfig {
+            sticky_key: StickyKeyConfig {
                 timeout: Duration::from_millis(300),
                 ..Default::default()
             },
@@ -455,11 +455,8 @@ fn test_combo_with_one_shot_modifier_quick_release() {
     key_sequence_test! {
         keyboard: create_test_keyboard_with_config(BehaviorConfig {
             combo: get_combos_config(),
-            one_shot: OneShotConfig {
+            sticky_key: StickyKeyConfig {
                 timeout: Duration::from_millis(300),
-                ..Default::default()
-            },
-            one_shot_modifiers: OneShotModifiersConfig {
                 quick_release: true,
                 ..Default::default()
             },
@@ -486,7 +483,7 @@ fn test_overlapped_combo_quick_release() {
     key_sequence_test! {
         keyboard: create_test_keyboard_with_config(BehaviorConfig {
             combo: get_combos_config(),
-            one_shot_modifiers: OneShotModifiersConfig {
+            sticky_key: StickyKeyConfig {
                 quick_release: true,
                 ..Default::default()
             },
