@@ -5,10 +5,10 @@ use rmk::config::{BehaviorConfig, PositionalConfig, StickyKeyConfig};
 use rmk::keyboard::Keyboard;
 use rmk::types::action::KeyAction;
 use rmk::types::modifier::ModifierCombination;
-use rmk::{a, k, mo, sk};
+use rmk::{a, k, mo, sk, sk_mod};
 use rusty_fork::rusty_fork_test;
 
-use crate::common::{KC_LALT, KC_LCTRL, KC_LSHIFT, wrap_keymap};
+use crate::common::{KC_LALT, KC_LCTRL, KC_LGUI, KC_LSHIFT, wrap_keymap};
 
 // KEYMAP (release_on_layer_change=true is set in the helper config, not per-key)
 // Layer 0: A             B             C             MO(1)         LShift        No
@@ -63,6 +63,23 @@ const KEYMAP_NO_EXIT: [[[KeyAction; 6]; 1]; 2] = [
         a!(No),
     ]],
 ];
+
+// KEYMAP_PUREMOD: pure-mod SKs (OSM shape) on the base layer for the absorbed-OSM regressions.
+// Layer 0: SK(LGui)  SK(LCtrl)  SK(LShift)  P  No  No
+const KEYMAP_PUREMOD: [[[KeyAction; 6]; 1]; 1] = [[[
+    sk_mod!(ModifierCombination::LGUI),   // col 0: pure-mod SK(LGui)
+    sk_mod!(ModifierCombination::LCTRL),  // col 1: pure-mod SK(LCtrl)
+    sk_mod!(ModifierCombination::LSHIFT), // col 2: pure-mod SK(LShift)
+    k!(P),                                // col 3: P
+    a!(No),                               // col 4
+    a!(No),                               // col 5
+]]];
+
+fn create_test_keyboard_puremod() -> Keyboard<'static> {
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
+    let per_key_config: &'static PositionalConfig<1, 6> = Box::leak(Box::new(PositionalConfig::default()));
+    Keyboard::new(wrap_keymap(KEYMAP_PUREMOD, per_key_config, behavior_config))
+}
 
 fn create_test_keyboard() -> Keyboard<'static> {
     static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
@@ -449,6 +466,53 @@ rusty_fork_test! {
                 [0, [0, 0, 0, 0, 0, 0]],                        // A press: SK release report (Alt released)
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],           // A press: A registered
                 [0, [0, 0, 0, 0, 0, 0]],                        // A release
+            ]
+        };
+    }
+
+    /// StickyKey Test 3b (regression): pure-mod SK applies its modifier THROUGH the
+    /// terminating key, then clears. Mirrors `test_osm_basic_single_behavior` via the
+    /// unified SK engine. Pins the absorbed OSM terminating-key behavior.
+    ///
+    /// Sequence: tap SK(LGui) (col 0), tap P (col 3)
+    /// Expected: P with LGui, then all released.
+    #[test]
+    fn test_sk_puremod_terminating_key() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_puremod(),
+            sequence: [
+                [0, 0, true,  10],  // Press SK(LGui)
+                [0, 0, false, 10],  // Release SK(LGui)
+                [0, 3, true,  10],  // Press P
+                [0, 3, false, 10],  // Release P
+            ],
+            expected_reports: [
+                [KC_LGUI, [kc_to_u8!(P), 0, 0, 0, 0, 0]],  // P with LGui
+                [0, [0, 0, 0, 0, 0, 0]],                     // All released
+            ]
+        };
+    }
+
+    /// StickyKey Test 3c (regression): two pure-mod SK taps accumulate onto one
+    /// terminating key. Mirrors `test_osm_combined_modifiers` via the SK engine.
+    ///
+    /// Sequence: tap SK(LCtrl) (col 1), tap SK(LShift) (col 2), tap P (col 3)
+    /// Expected: P with LCtrl|LShift, then all released.
+    #[test]
+    fn test_sk_puremod_cross_tap_accumulation() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_puremod(),
+            sequence: [
+                [0, 1, true,  10],  // Press SK(LCtrl)
+                [0, 1, false, 10],  // Release SK(LCtrl)
+                [0, 2, true,  10],  // Press SK(LShift)
+                [0, 2, false, 10],  // Release SK(LShift)
+                [0, 3, true,  10],  // Press P
+                [0, 3, false, 10],  // Release P
+            ],
+            expected_reports: [
+                [KC_LCTRL | KC_LSHIFT, [kc_to_u8!(P), 0, 0, 0, 0, 0]],  // P with LCtrl|LShift
+                [0, [0, 0, 0, 0, 0, 0]],                                  // All released
             ]
         };
     }

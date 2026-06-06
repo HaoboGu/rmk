@@ -11,7 +11,7 @@ use {
 };
 
 use crate::MACRO_SPACE_SIZE;
-use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, OneShotModifiersConfig, PositionalConfig};
+use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, PositionalConfig, StickyKeyConfig};
 use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_event};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::combo::Combo;
@@ -512,8 +512,8 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().behavior.sticky_key.timeout
     }
 
-    pub(crate) fn one_shot_modifiers_config(&self) -> OneShotModifiersConfig {
-        self.inner.borrow().behavior.one_shot_modifiers
+    pub(crate) fn sticky_key_config(&self) -> StickyKeyConfig {
+        self.inner.borrow().behavior.sticky_key
     }
 
     pub(crate) fn tap_interval(&self) -> u16 {
