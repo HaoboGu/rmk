@@ -1,36 +1,44 @@
 //! StickyKey action implementation.
 //!
-//! StickyKey holds a modifier combination across key presses for Alt+Tab-like cycling.
-//! Features:
-//! - `max_repeat`: limit fires before auto-release (0 = infinite)
-//! - `timeout_ms`: per-key timeout override (0 = use global config)
-//! - `exit_on_layer_change`: whether layer changes release the SK
-//!
-//! ## `max_repeat` semantics
-//! count starts at 1 on first press. On each subsequent press, count is incremented.
-//! Deactivation fires when count > max_repeat (strictly greater), so max_repeat=N fires
-//! the key exactly N times and deactivates silently on press N+1.
+//! A unified one-shot action engine covering pure-mod (OSM), tap-key, and layer (OSL) shapes.
+//! The shape is determined by the `StickyKeyAction` payload at compile time.
+//! Runtime state is tracked in `StickyKeyState`; the latch phase is tracked in `SkPhase`.
 
 use embassy_time::{Duration, Instant};
 use rmk_types::action::StickyKeyAction;
-use rmk_types::keycode::KeyCode;
+use rmk_types::keycode::{HidKeyCode, KeyCode};
 use rmk_types::modifier::ModifierCombination;
 
 use crate::event::KeyboardEvent;
 use crate::keyboard::Keyboard;
 
+/// Latch phase of a sticky key.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub(crate) enum SkPhase {
+    /// SK pressed, not yet consumed.
+    #[default]
+    Pressed,
+    /// Armed — waiting for the next (foreign) key.
+    Latched,
+    /// Promoted to held (key released after another key was used).
+    Held,
+}
+
 /// State for the StickyKey action.
-#[derive(Default, Debug)]
+#[derive(Clone, Copy, Default, Debug)]
 pub(crate) enum StickyKeyState {
     /// StickyKey is inactive.
     #[default]
     None,
-    /// StickyKey is active — modifiers held, optional deadline for auto-release.
+    /// StickyKey is active — carries all latch state the engine needs.
     Active {
         mods: ModifierCombination,
+        /// `KeyCode::Hid(HidKeyCode::No)` = pure-mod or layer shape; any other key = tap-key shape.
+        key: KeyCode,
+        /// `Some(n)` = OSL shape; `None` = pure-mod or tap-key shape.
+        layer: Option<u8>,
+        phase: SkPhase,
         repeat_count: u16,
-        max_repeat: u16,
-        exit_on_layer_change: bool,
         deadline: Option<Instant>,
     },
 }
@@ -54,14 +62,26 @@ impl StickyKeyState {
         }
     }
 
-    pub fn exit_on_layer_change(&self) -> bool {
+    /// True when this is a pure-mod shape: active with no tap key and no layer.
+    pub fn is_pure_mod(&self) -> bool {
         matches!(
             self,
             StickyKeyState::Active {
-                exit_on_layer_change: true,
+                key: KeyCode::Hid(HidKeyCode::No),
+                layer: None,
                 ..
             }
         )
+    }
+
+    /// True when this is a tap-key shape: active with a non-No key code.
+    pub fn is_tap_key(&self) -> bool {
+        self.is_active() && !self.is_pure_mod() && !self.is_layer()
+    }
+
+    /// True when this is a layer (OSL) shape: active with a `Some` layer.
+    pub fn is_layer(&self) -> bool {
+        matches!(self, StickyKeyState::Active { layer: Some(_), .. })
     }
 }
 
