@@ -350,7 +350,7 @@ macro_rules! sk_mod {
     ($m:expr) => {
         $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
             $crate::types::action::StickyKeyAction {
-                key: $crate::types::keycode::KeyCode::No,
+                key: $crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::No),
                 keep: $m,
                 layer: None,
             },
@@ -372,7 +372,7 @@ macro_rules! sk_layer {
     ($n:literal) => {
         $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
             $crate::types::action::StickyKeyAction {
-                key: $crate::types::keycode::KeyCode::No,
+                key: $crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::No),
                 keep: $crate::types::modifier::ModifierCombination::new(),
                 layer: Some($n),
             },

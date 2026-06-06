@@ -36,14 +36,14 @@ use crate::steno::StenoKey;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub struct StickyKeyAction {
-    /// Key sent on each SK press. `KeyCode::No` selects the pure-mod (OSM) shape
+    /// Key sent on each SK press. `KeyCode::Hid(HidKeyCode::No)` selects the pure-mod (OSM) shape
     /// when `layer` is `None`; otherwise it's the tap-key (alt-tab) shape.
     pub key: KeyCode,
     /// Modifiers held between presses (0 = none). Unused for the layer (OSL) shape.
     pub keep: ModifierCombination,
     /// `Some(n)` = one-shot-layer (OSL) shape activating layer `n`.
-    /// `None` + `key == KeyCode::No` = pure-mod (OSM) shape.
-    /// `None` + `key != KeyCode::No` = tap-key (alt-tab) shape.
+    /// `None` + `key == KeyCode::Hid(HidKeyCode::No)` = pure-mod (OSM) shape.
+    /// `None` + `key != KeyCode::Hid(HidKeyCode::No)` = tap-key (alt-tab) shape.
     pub layer: Option<u8>,
 }
 
