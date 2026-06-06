@@ -438,6 +438,8 @@ git commit -m "feat(engine): unified SK latch carrying mods/key/layer/phase/repe
 - A `phase()` accessor was **declined** as speculative (YAGNI); Task 2.2 adds accessors when it writes the engine body (same file, zero extra churn).
 - Build blast radius after 2.1: exactly the expected consumer-site errors (`process_action_sticky_key` body, `keyboard.rs` `.exit_on_layer_change()`/`Action::OneShot*` arms, `keymap.rs` `one_shot_modifiers`, `oneshot.rs` `one_shot_timeout()`) — all Task 2.2/2.4/3.1 targets. No errors in the new latch/helpers.
 
+**STAGE 2 EXECUTION DECISION (2026-06-06, confirmed by user): combine Tasks 2.2 + 2.3 + 2.4 into one engine-migration work unit.** Rationale: the `rmk` lib does not compile after Stage 1 (carry-forward D2), and the blocking errors are split across 2.2 (`process_action_sticky_key` body), 2.4 (`keyboard.rs` `Action::OneShot*` arms, `.exit_on_layer_change()` calls; `keymap.rs` `one_shot_modifiers`) and 2.4/3.1 (`oneshot.rs` `one_shot_timeout()`). The three tasks all edit the same function and the same `keyboard.rs` sites, and no test can run until all three land — so the per-task TDD gates in 2.2/2.3 are not individually satisfiable (the plan's line-160 assumption that Stage 1 kept the lib compiling failed). They are executed by one implementer to a compiling, fully test-green state (OSM behavior + non-deferred SK + new 3b/3c regressions), followed by a single two-stage review over the combined diff. OSL behavior tests remain failing until Stage 3 (expected). Task sub-sections 2.2/2.3/2.4 below retain their full specs as the combined work unit's checklist.
+
 ### Task 2.2: Pure-mod path — accumulation, activate_on_keypress, quick_release, terminating-key application
 
 **Files:**
