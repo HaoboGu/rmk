@@ -551,6 +551,8 @@ git commit -m "refactor(engine): retire OSM path + inline select; remove OSM/OSL
 
 **Gate:** all OSL-behavior tests green; full suite + `cargo clippy` clean.
 
+**STAGE 3 DESIGN DECISION (2026-06-06, confirmed by user): D1/D2 — PRESERVE existing OSM+OSL combination behavior exactly.** The OSL layer shape lives on the SAME single mutually-exclusive `sticky_key_state` latch (DP-1), not a separate field and not a combined mod+layer latch. Rule: a newly-pressed SK shape that lands on an active latch of a *different* shape REPLACES it — dropping the latched mod (→ D1: `test_osm_then_osl` emits `[0, C]`, no LShift) and/or deactivating the latched layer before applying the new shape (→ D2: `test_osl_then_osm` emits `[LShift|LCtrl, A]` because col0 resolves on the still-active layer 1 to `OSM(LShift|LCtrl)`, then that OSM replaces the OSL latch and deactivates layer 1). Same-shape mod+mod still accumulates (Stage 2 cross-tap behavior, unchanged). This is a pure behavior-preserving refactor: D1/D2 are NOT accepted behavior changes — the 5 OSL tests stay as-written and are the grading contract. Rationale: matches the parity catalogue's "the SK engine must reproduce this outcome" note (D1), keeps the one-engine/one-latch model from DP-1, and is the lowest-risk path to green. A combined-latch "fix" was rejected as scope creep with no anchoring test.
+
 ### Task 3.1: Layer shape on the unified latch
 
 **Files:**
