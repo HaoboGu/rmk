@@ -397,9 +397,9 @@ git commit -m "test: migrate one-shot/sticky tests to SK(...) syntax and unified
 - Modify: `rmk/src/keyboard/sticky_key.rs:24-66` (latch state + helpers)
 - Decision: DP-1 (payload encoding — must already be recorded from Task 1.4), DP-2 (latch home)
 
-- [ ] **Step 1: STOP — record DP-2.** Write the decision (recommended: fold `oneshot.rs` into `sticky_key.rs`, delete `oneshot.rs`) into the Decision Points section above.
+- [x] **Step 1: STOP — record DP-2.** Write the decision (recommended: fold `oneshot.rs` into `sticky_key.rs`, delete `oneshot.rs`) into the Decision Points section above.
 
-- [ ] **Step 2: Replace `StickyKeyState`** (enum `None | Active{...}` at 24-36) with the unified latch carrying everything the spec lists (Section 3e): `mods`, optional `key`, optional `layer`, `phase` (Pressed/Latched/Held), `repeat_count`, `deadline: Option<Instant>`. Suggested shape:
+- [x] **Step 2: Replace `StickyKeyState`** (enum `None | Active{...}` at 24-36) with the unified latch carrying everything the spec lists (Section 3e): `mods`, optional `key`, optional `layer`, `phase` (Pressed/Latched/Held), `repeat_count`, `deadline: Option<Instant>`. Suggested shape:
 ```rust
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub(crate) enum SkPhase {
@@ -423,13 +423,20 @@ pub(crate) enum StickyKeyState {
     },
 }
 ```
-- [ ] **Step 3: Re-implement the helper methods** (`value`/`is_active`/`deadline` at 38-66, plus new shape predicates `is_pure_mod()` = `key == No && layer.is_none()`, `is_tap_key()` = `key != No`, `is_layer()` = `layer.is_some()`). `value()` returns the held mods for `resolve_explicit_modifiers`. Replace `exit_on_layer_change()` (it was per-action; now read `release_on_layer_change` from config — the helper becomes a config read in `keyboard.rs`, see Task 2.4).
+- [x] **Step 3: Re-implement the helper methods** (`value`/`is_active`/`deadline` at 38-66, plus new shape predicates `is_pure_mod()` = `key == No && layer.is_none()`, `is_tap_key()` = `key != No`, `is_layer()` = `layer.is_some()`). `value()` returns the held mods for `resolve_explicit_modifiers`. Replace `exit_on_layer_change()` (it was per-action; now read `release_on_layer_change` from config — the helper becomes a config read in `keyboard.rs`, see Task 2.4).
 
-- [ ] **Step 4: Build.** `cargo build -p rmk ...` — expect failures only in the `process_*`/dispatch sites (next tasks). Commit the state shape alone:
+- [x] **Step 4: Build.** `cargo build -p rmk ...` — expect failures only in the `process_*`/dispatch sites (next tasks). Commit the state shape alone:
 ```bash
 git add rmk/src/keyboard/sticky_key.rs
 git commit -m "feat(engine): unified SK latch carrying mods/key/layer/phase/repeat/deadline (DP-1, DP-2)"
 ```
+
+**TASK 2.1 COMPLETE (2026-06-06).** Commits: `1056db2d` (DP-2 plan record) · `f329ca4e` (unified SK latch — sticky_key.rs only) · `d2a17499` (sentinel fix, see below). Both reviews passed (spec ✅; code-quality ✅ after fixes).
+- Latch implemented exactly as specced; `is_pure_mod` requires BOTH `key == Hid(No)` AND `layer.is_none()`. The `"No"` sentinel is `KeyCode::Hid(HidKeyCode::No)` — `KeyCode` has **no bare `No` variant**.
+- Code-quality review surfaced a **Stage-1 sentinel defect**: `sk_mod!`/`sk_layer!` in `layout_macro.rs` (and doc prose in `rmk-types/src/action/mod.rs`) emitted the non-existent `KeyCode::No`. Fixed now (commit `d2a17499`) since Task 2.1's predicates define that sentinel contract. This removes one class of the test-crate-compile errors that Task 2.2 must clear (carry-forward D2).
+- `is_tap_key` defined as `is_active() && !is_pure_mod() && !is_layer()` (sentinel-independent, per reviewer).
+- A `phase()` accessor was **declined** as speculative (YAGNI); Task 2.2 adds accessors when it writes the engine body (same file, zero extra churn).
+- Build blast radius after 2.1: exactly the expected consumer-site errors (`process_action_sticky_key` body, `keyboard.rs` `.exit_on_layer_change()`/`Action::OneShot*` arms, `keymap.rs` `one_shot_modifiers`, `oneshot.rs` `one_shot_timeout()`) — all Task 2.2/2.4/3.1 targets. No errors in the new latch/helpers.
 
 ### Task 2.2: Pure-mod path — accumulation, activate_on_keypress, quick_release, terminating-key application
 
