@@ -598,6 +598,16 @@ git commit -m "chore: clippy clean + full-suite green after OSM/OSL absorption (
 
 ---
 
+**STAGE 3 COMPLETE (2026-06-06).** Commits: `fe1e4ec6` (feat: absorb OSL — SK(MO(n)) layer shape on unified latch; delete oneshot.rs) · `9f03aac5` (docs(engine): Stage 3 review fixes). Plan-decision commit `0171d6d7` (D1/D2 design).
+
+- **Engine:** layer shape implemented on the single mutually-exclusive `sticky_key_state` latch — `process_sticky_layer` (activate/arm/deadline on press; Latched-arm or Held-deactivate on release), `update_sticky_key` extended to drive the layer shape (Pressed→Held promotion via the shared arm; Latched consumed + layer deactivated on the foreign key's RELEASE), `release_sticky_key_if_active` deactivates the active layer and suppresses the HID report for the layer shape. Latch-replacement rule per the Stage 3 design decision (pure-mod↔layer replace; layer-on-layer deactivate-old/activate-new keeping phase; pure-mod+pure-mod still accumulates). No inline select/Timer — timeout is the run-loop deadline race only.
+- **Cleanup:** `oneshot.rs` DELETED (DP-2); removed `osl_state` field+init, `OneShotState` import, `mod oneshot`, and both `update_osl` call sites from `keyboard.rs`. `grep oneshot/OneShotState/update_osl/process_action_osl/osl_state rmk/src` → no live references.
+- **Tests:** `cargo nextest ... --features=split,vial,storage,async_matrix,_ble` → **466 run, 466 passed, 0 skipped.** All 7 layer tests green (`test_osl_basic_single_behavior`, `test_osl_held_behavior`, `test_osl_multiple_keys`, `test_osl_timeout`, `test_osm_then_osl` [D1 `[0,C]`], `test_osl_then_osm` [D2 `[LShift|LCtrl,A]`], `test_osm_and_osl_timeout`). No assertions changed. Clippy clean.
+- **Reviews:** spec ✅ (independently verified, 466/466) and code-quality ✅ "Ready to merge: Yes" (only Minor items). Adjudication: fixed the stale `unprocessed_events` comment (its OSL inline-select producer was deleted this stage) + added a doc note that a bare `Action::Modifier` intentionally no longer consumes a latched OSL (untested divergence beyond accepted D1/D2; the implementer flagged it too) → commit `9f03aac5`. Left as-is (defensible/pre-existing per surgical rule): `process_sticky_layer` async-without-await (dispatch symmetry), the defensive `Latched`-source release arm (actually reachable via layer-on-layer re-press), and the pre-existing unused `StickyKeyState::value()`.
+- **Deferred to Stage 3.2 / later:** the repo-root `sh scripts/test_all.sh` full feature-matrix run and `OneShotKey` (OSK) untouched-confirmation are the remaining Stage 3.2 gate steps; can fold into Stage 5 local verification.
+
+---
+
 ## Stage 4 — Docs (Section 6 requirement)
 
 **Goal:** Document the pure-mod vs tap-key shape distinction — specifically that `activate_on_keypress` and `quick_release` are honored **only for pure-mod SKs and silently ignored for tap-key SKs** — prominently in the keymap config reference and the `[behavior.sticky_key]` section. Include the rationale (a tap-key has nothing to defer) and the three-shape table from the spec Overview.
