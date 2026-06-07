@@ -9,11 +9,8 @@ tri_layer = {
   lower = 2,
   adjust = 3,
 }
-one_shot = {
+sticky_key = {
   timeout = "1s",
-}
-one_shot_modifiers = {
-  activate_on_keypress = false,
 }
 ```
 
@@ -34,65 +31,95 @@ In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 
 
 Note that `"#layer_name"` could also be used in place of layer numbers.
 
-## One-Shot
+## Sticky Key
 
-The `one_shot` sub-table contains common one-shot configuration (for both OSM and OSL)
+The `[behavior.sticky_key]` table configures the unified **Sticky Key** (`SK`) feature. `SK` replaces the former `OSM` (one-shot modifier) and `OSL` (one-shot layer) actions, which have been removed and are now a build error.
 
-Currently, there are only `timeout` field that specifies how long the one-shot modifier/layer remains active.
-When no key is pressed within this time, the one-shot modifier/layer will be canceled.
-`timeout` value is a string suffixed with `s` or `ms` (default: `1s`).
+### SK shapes
 
-## One-Shot Modifiers
+`SK` selects its behavior based on the shape of its argument:
 
-The `one_shot_modifiers` sub-table configures one-shot modifiers (OSM).
+| Shape | Syntax | Behavior |
+|-------|--------|----------|
+| Pure-mod | `SK(LGui)` (modifiers chain like `WM`, e.g. `SK(LCtrl\|LShift)`) | One-shot modifier — the modifier is held for the next key press, then released automatically. |
+| Layer | `SK(MO(n))` | One-shot layer — layer `n` is active for the next key press, then released. |
+| Tap-key | `SK(Tab, [LAlt])` (the modifier list is in `[ ]`; modifiers chain, e.g. `SK(Tab, [LCtrl\|LShift])`) | The modifier stays held across **repeated presses of the same key** (Alt+Tab-style window/tab cycling): the first press sends `modifier + key`, each subsequent press keeps the modifier held. Releases automatically when any non-SK, non-modifier key is pressed. |
 
-By default, one-shot modifiers do not activate on keypress and will be sent only when other key is pressed.
-You can change this behavior by setting `activate_on_keypress` to `true`.
-This behavior is also known as One-Shot Sticky Modifiers (OSSM).
+### Config fields
 
-If you press One-Shot Modifier again, it will be sent as a normal modifier key press and, therefore, released.
+| Field | Default | Meaning |
+|-------|---------|---------|
+| `timeout` | `"1s"` | Auto-release an unused sticky key after this idle time. String suffixed `s` or `ms`. |
+| `activate_on_keypress` | `false` | **Pure-mod SKs only.** When `true`, send the modifier immediately as the SK key itself is pressed, instead of waiting and applying it to the next key. (Also known as One-Shot Sticky Modifiers / OSSM.) |
+| `quick_release` | `false` | **Pure-mod SKs only.** Release the modifier as soon as the next key is *pressed* (`true`) rather than when it is *released* (`false`, chain mode). |
+| `max_repeat` | `0` | Max number of keys the sticky modifier applies to; `0` = unlimited. |
+| `release_on_layer_change` | `false` | Whether a layer change releases the sticky key. `false` = it survives layer changes. |
 
-The `quick_release` option controls when the one-shot modifier is released:
+The `quick_release` option in detail:
 
 - `false` (default): the modifier is released when the next key is **released** (chain mode, equivalent to ZMK `&skn`). The modifier stays active for the entire duration of the next keypress, including key repeat.
 - `true`: the modifier is released when the next key is **pressed** (equivalent to ZMK `&skq`). Only the initial press of the next key is modified; key repeat will not include the modifier.
 
+:::warning
+
+`activate_on_keypress` and `quick_release` are honored **only for pure-mod SKs** (`SK(LGui)`). They are **silently ignored** for tap-key SKs (`SK(Tab, [LAlt])`) and layer SKs (`SK(MO(n))`). Both fields tune *when a one-shot modifier is sent and released*: a tap-key SK sends its modifier eagerly and deliberately holds it across repeats, and a layer SK sends no modifier at all — so neither has anything for these fields to tune.
+
+:::
+
 Default values:
+
 ```toml
-[behavior.one_shot_modifiers]
+[behavior.sticky_key]
+timeout = "1s"
 activate_on_keypress = false
 quick_release = false
+max_repeat = 0
+release_on_layer_change = false
 ```
 
-OSSM example:
+OSSM example (pure-mod SK activates on key press):
+
 ```toml
-[behavior.one_shot_modifiers]
+[behavior.sticky_key]
 activate_on_keypress = true
 ```
 
-Quick-release example:
+Quick-release example (modifier released when next key is pressed):
+
 ```toml
-[behavior.one_shot_modifiers]
+[behavior.sticky_key]
 quick_release = true
 ```
 
-## Sticky Key
+Longer timeout example:
 
-The `sticky_key` sub-table configures the StickyKey (`SK`) feature.
-
-`SK(key, [modifier])` holds a modifier across repeated presses of the same key. This is useful for Alt+Tab-style window/tab cycling: the first press sends `modifier + key` (e.g. Alt+Tab), then on each subsequent press the modifier stays held so only `key` is sent again. The modifier releases automatically when any non-SK, non-modifier key is pressed.
-
-This differs from `OSM` (one-shot modifier), which sends the modifier only once and always releases after the next keypress.
-
-Default behavior: no timeout, infinite repeats, modifier survives layer changes.
-
-Optional global timeout example:
 ```toml
 [behavior.sticky_key]
-timeout = "5s"  # auto-release the modifier after 5 seconds of inactivity
+timeout = "5s"
 ```
 
-To use StickyKey in your keymap, see `SK(key, [modifier])` in the [keymap configuration](./layout#keymap-config).
+For keymap usage, see `SK(...)` in the [keymap configuration](./layout#keyboard-layout-configuration).
+
+### Migration from OSM / OSL
+
+The former `OSM`, `OSL`, the 5-positional `SK` form, and the `[behavior.one_shot]` / `[behavior.one_shot_modifiers]` tables are **removed** — using them is a build error.
+
+| Old | New |
+|-----|-----|
+| `OSM(LGui)` | `SK(LGui)` |
+| `OSL(1)` | `SK(MO(1))` |
+| `SK(Tab, [LAlt], 0, 0, false)` (5-positional) | `SK(Tab, [LAlt])` + `[behavior.sticky_key]` |
+| `[behavior.one_shot]` `timeout` | `[behavior.sticky_key]` `timeout` |
+| `[behavior.one_shot_modifiers]` `activate_on_keypress` / `quick_release` | `[behavior.sticky_key]` `activate_on_keypress` / `quick_release` |
+| `exit_on_layer_change` | `release_on_layer_change` |
+
+Accepted breaking changes:
+
+- `OSM(...)` and `OSL(...)` keymap actions are **removed** → build error. Use `SK(mod)` and `SK(MO(n))`.
+- The old 5-positional `SK(key, [mod], max_repeat, timeout_ms, exit_on_layer_change)` form is **removed** → build error. The trailing knobs now live in `[behavior.sticky_key]`.
+- The `[behavior.one_shot]` and `[behavior.one_shot_modifiers]` config tables are **removed** → use `[behavior.sticky_key]`.
+- The old per-key `exit_on_layer_change` is renamed to the global `release_on_layer_change` (default `false`).
+- Tap-key (alt-tab) SKs now have a **1s default timeout** (previously they had no timeout). Set `timeout` higher or rely on the default.
 
 ## Combo
 
@@ -449,7 +476,7 @@ keymap = [
         ["A", "B", "C"],
         ["TD(0)", "TD(1)", "TD(2)"],  # Use morse dances 0, 1, and 2
         ["LCtrl", "MO(1)", "LShift"],
-        ["OSL(1)", "LT(2, Kc9, PN)", "LM(1, LShift | LGui)"]  # PN is a morse profile name here
+        ["SK(MO(1))", "LT(2, Kc9, PN)", "LM(1, LShift | LGui)"]  # PN is a morse profile name here
     [
         ["_", "TT(1)", "TG(2)"],
         ["_", "_", "_"],

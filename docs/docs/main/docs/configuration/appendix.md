@@ -115,15 +115,13 @@ tri_layer = {
   adjust = 3,
 }
 
-# OneShot configuration
-one_shot = {
-  timeout = "1s"
-}
-
-# One Shot Modifiers configuration
-one_shot_modifiers = {
+# Sticky Key configuration (replaces the former one_shot / one_shot_modifiers tables)
+sticky_key = {
+  timeout = "1s",
   activate_on_keypress = false,
   quick_release = false,
+  max_repeat = 0,
+  release_on_layer_change = false,
 }
 
 [behavior.morse]
