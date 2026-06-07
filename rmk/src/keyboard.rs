@@ -28,7 +28,6 @@ use crate::keyboard::combo::Combo;
 use crate::keyboard::fork::ActiveFork;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard::mouse::{MouseAction, MouseState};
-use crate::keyboard::oneshot::OneShotState;
 use crate::keyboard::sticky_key::{SkPhase, StickyKeyState};
 use crate::keyboard_macros::MacroOperation;
 use crate::keymap::KeyMap;
@@ -41,7 +40,6 @@ pub(crate) mod fork;
 pub(crate) mod held_buffer;
 pub(crate) mod morse;
 pub(crate) mod mouse;
-pub(crate) mod oneshot;
 #[cfg(feature = "steno")]
 pub(crate) mod steno;
 pub(crate) mod sticky_key;
@@ -215,9 +213,6 @@ pub struct Keyboard<'a> {
     /// Used in repeat-key
     last_key_code: KeyCode,
 
-    /// Oneshot Layer state
-    osl_state: OneShotState<u8>,
-
     /// StickyKey state — holds a modifier+key combination across key presses
     sticky_key_state: StickyKeyState,
 
@@ -272,7 +267,6 @@ impl<'a> Keyboard<'a> {
             keymap,
             keyboard_event_subscriber: KeyboardEvent::subscriber(),
             last_press_time: Instant::now(),
-            osl_state: OneShotState::default(),
             sticky_key_state: StickyKeyState::default(),
             caps_word: CapsWordState::default(),
             with_modifiers: ModifierCombination::default(),
@@ -1288,7 +1282,6 @@ impl<'a> Keyboard<'a> {
                 }
                 //report the modifier press/release in its own hid report
                 self.send_keyboard_report_with_resolved_modifiers(event.pressed).await;
-                self.update_osl(event);
             }
             Action::TriggerMacro(macro_idx) => self.execute_macro(macro_idx, event).await,
             Action::KeyWithModifier(key_code, modifiers) => {
@@ -1581,7 +1574,6 @@ impl<'a> Keyboard<'a> {
         if quick_release && sk_consumed && key.is_basic_keyboard_key() && event.pressed {
             self.send_keyboard_report_with_resolved_modifiers(true).await;
         }
-        self.update_osl(event);
     }
 
     /// Process layer switch action.
