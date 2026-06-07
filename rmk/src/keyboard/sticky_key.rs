@@ -296,6 +296,12 @@ impl Keyboard<'_> {
     /// consumed (so the caller can emit a quick-release report).
     ///
     /// Tap-key shape is untouched here — it is consumed elsewhere.
+    ///
+    /// Called only from `process_action_key` (basic keys), so a bare `Action::Modifier`
+    /// no longer consumes a latched OSL the way the former `update_osl` did from the
+    /// modifier path — only a non-modifier key, a layer change, or timeout consumes it.
+    /// This narrowing is intentional (a held modifier is not a "terminating key") and
+    /// matches how tap-key SKs already ignore bare modifiers.
     pub(crate) fn update_sticky_key(&mut self, event: KeyboardEvent) -> bool {
         if !self.sticky_key_state.is_pure_mod() && !self.sticky_key_state.is_layer() {
             return false;

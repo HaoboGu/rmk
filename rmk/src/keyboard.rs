@@ -142,9 +142,10 @@ impl Runnable for Keyboard<'_> {
     async fn run(&mut self) -> ! {
         loop {
             // `unprocessed_events` is still required: the Clear Peer BLE path
-            // (`#[cfg(feature = "split")]`, see below) and the OSL inline-select path push
-            // events here for re-processing. Do NOT delete the queue or this consumer.
-            // (The OSM producers were removed in Stage 2 once OSM moved to the SK engine.)
+            // (`#[cfg(feature = "split")]`, see below) pushes events here for re-processing.
+            // Do NOT delete the queue or this consumer.
+            // (The OSM/OSL producers were removed once those behaviors moved to the SK engine,
+            // whose timeout is now driven by the deadline race below rather than an inline select.)
             if !self.unprocessed_events.is_empty() {
                 // Process unprocessed events
                 let e = self.unprocessed_events.remove(0);
