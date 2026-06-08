@@ -1,0 +1,24 @@
+[package]
+name = "rmk-host-serial"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.85"
+authors.workspace = true
+description = "USB CDC-ACM serial transport for the Rynk host library"
+license.workspace = true
+repository.workspace = true
+keywords = ["keyboard", "firmware", "rmk", "protocol", "serial"]
+
+# Native USB CDC-ACM serial: async read/write + the concurrent port probe.
+[dependencies]
+rmk-host = { path = "../rmk-host" }
+rmk-types.workspace = true
+tokio-serial.workspace = true
+# `io-util` for AsyncRead/Write; `rt` for the `JoinSet` candidate probe;
+# `time` for the transport-owned handshake timeout.
+tokio = { version = "1.47", default-features = false, features = ["io-util", "rt", "time"] }
+
+[dev-dependencies]
+env_logger = "0.11"
+log.workspace = true
+tokio = { version = "1.47", features = ["macros", "rt-multi-thread", "time"] }

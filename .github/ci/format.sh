@@ -9,7 +9,7 @@ for crate in rmk rmk-config rmk-macro rmk-types; do
 done
 
 log_section "Formatting host tooling"
-cargo +nightly fmt --manifest-path rmk-host-tool/Cargo.toml --check
+cargo +nightly fmt --manifest-path rmk-host-tool/Cargo.toml --all --check
 
 log_section "Formatting examples"
 while IFS= read -r manifest; do

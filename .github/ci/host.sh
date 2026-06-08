@@ -14,8 +14,13 @@ log_section "Core check"
 cargo +stable check -p rmk-host
 cargo +stable check -p rmk-host --target wasm32-unknown-unknown
 
+log_section "Native transport checks"
+cargo +stable check -p rmk-host-serial
+cargo +stable check -p rmk-host-ble
+
 log_section "Tests"
 cargo +stable test -p rmk-host
+cargo +stable test -p rmk-host-serial
 
 log_section "Clippy"
-cargo +stable clippy -p rmk-host --all-targets -- -D warnings
+cargo +stable clippy --workspace --all-targets -- -D warnings
