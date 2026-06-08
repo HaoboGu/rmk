@@ -80,12 +80,16 @@ embassy-hal-internal = { version = "0.5.0", optional = true }
 rp-pac = { version = "7.0.0", optional = true }
 pio = { version = "0.3.0", optional = true }
 fixed = { version = "1.28.0", optional = true }
+embassy-boot-rp = { version = "0.10.0", optional = true }
 
 # ESP32 dependencies
 esp-hal = { version = "1.1", optional = true }
 
 # Document feature
 document-features = "0.2"
+
+# for DFU firmware update
+embassy-usb-dfu = { version = "0.3.0", optional = true, features = ["cortex-m", "dfu"] }
 
 [dev-dependencies]
 # A hack for enabling 'std' feature in testing, ref: https://github.com/rust-lang/cargo/issues/2911
@@ -119,6 +123,9 @@ vial = ["host"]
 
 ## Enable vial lock feature
 vial_lock = ["vial", "host_security"]
+
+## Enable DFU lock feature — physical key unlock for DFU firmware download
+dfu_lock = ["dfu_rp", "host_security"]
 
 ## Enable physical key unlock and matrix state tracking (shared between vial_lock and rmk_protocol)
 host_security = []
@@ -218,6 +225,11 @@ adafruit_bl = ["_nrf_ble"]
 
 ## Enable feature if you're using the ZSA Voyager ignition DFU bootloader
 zsa_voyager_bl = []
+
+## Enable DFU firmware update support (USB DFU interface)
+dfu = ["dep:embassy-usb-dfu", "dep:embassy-embedded-hal"]
+## Enable RP2040-specific DFU with embassy-boot-rp (implies `dfu` and `rp2040`)
+dfu_rp = ["dfu", "dep:embassy-boot-rp", "rp2040", "rmk-macro/dfu_rp"]
 
 ## Enable Plover HID stenography support: adds the steno HID descriptor,
 ## the steno USB writer endpoint, and the `Action::Steno` variant.

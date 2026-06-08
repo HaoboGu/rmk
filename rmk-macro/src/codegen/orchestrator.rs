@@ -233,6 +233,23 @@ fn expand_main(
     let (registered_processor_initializers, mut registered_processors) =
         expand_registered_processor_init(hardware, &item_mod);
 
+    // Declare dfu_lock (if enabled) so it can be pushed as a Runnable task.
+    // Check the feature at macro-expansion time so we never emit `#[cfg]`
+    // into the user's crate (avoids "unexpected cfg condition" warnings).
+    let dfu_lock_enabled = is_feature_enabled(rmk_features, "dfu_lock");
+    let dfu_lock_init = if let Some(ref dfu) = hardware.dfu {
+        if dfu_lock_enabled && !dfu.unlock_keys.is_empty() {
+            registered_processors.push(quote! { dfu_lock.run() });
+            quote! {
+                let mut dfu_lock = ::rmk::dfu::DfuLock::new(&DFU_UNLOCK_KEYS, &keymap);
+            }
+        } else {
+            quote! {}
+        }
+    } else {
+        quote! {}
+    };
+
     // Display configuration — for unibody use top-level, for split use central's config
     let display_config = match &hardware.board {
         BoardConfig::UniBody(_) => hardware.display.as_ref(),
@@ -367,6 +384,9 @@ fn expand_main(
             // Initialize watchdog
             #watchdog_init
 
+            // Initialize dfu lock
+            #dfu_lock_init
+
             // Start
             #run_rmk
         }
@@ -413,6 +433,11 @@ pub(crate) fn expand_keymap_and_storage(hardware: &Hardware, layout: &Layout) ->
     };
 
     if hardware.storage.is_some() {
+        #[cfg(feature = "dfu_rp")]
+        let mark = quote! { ::rmk::dfu::mark_booted(); };
+        #[cfg(not(feature = "dfu_rp"))]
+        let mark = quote! {};
+
         quote! {
             #initialize_positional_config
             #keymap_data_init
@@ -423,6 +448,7 @@ pub(crate) fn expand_keymap_and_storage(hardware: &Hardware, layout: &Layout) ->
                 &mut behavior_config,
                 &per_key_config,
             ).await;
+            #mark
         }
     } else {
         quote! {
