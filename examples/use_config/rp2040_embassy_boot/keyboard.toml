@@ -1,6 +1,6 @@
 [keyboard]
 name = "RMK Keyboard"
-product_name = "RMK Keyboard"
+product_name = "RMK Keyboard RP2040 embassy-boot use_config example"
 vendor_id = 0x4c4b
 product_id = 0x4643
 manufacturer = "haobo"
@@ -50,6 +50,11 @@ enabled = true
 # state_size = 0x1000
 # dfu_offset = 0x87000
 # dfu_size = 528384
+# Optional DFU activity LED (lit during firmware download)
+# led = "PIN_25"
+
+[dfu]
+led = "PIN_25"
 
 [rmk]
 morse_max_num = 8

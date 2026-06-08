@@ -238,7 +238,12 @@ impl<D: Driver<'static>> UsbTransport<D> {
             let product_name = device_config.product_name;
             #[cfg(feature = "dfu-rp")]
             if let Some(mgr) = ::rmk::dfu::get_manager() {
-                ::rmk::dfu::register_dfu_interface(&mut builder, mgr, product_name);
+                ::rmk::dfu::register_dfu_interface(
+                    &mut builder,
+                    mgr,
+                    product_name,
+                    ::rmk::dfu::take_led(),
+                );
             }
         }
         let (keyboard_reader, keyboard_writer) = keyboard_rw.split();

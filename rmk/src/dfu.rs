@@ -34,9 +34,16 @@ use embassy_embedded_hal::flash::partition::BlockingPartition;
 #[cfg(feature = "dfu-rp")]
 use embassy_rp::flash::{Blocking, Flash};
 #[cfg(feature = "dfu-rp")]
+use embassy_rp::gpio::Output;
+#[cfg(feature = "dfu-rp")]
 use embassy_rp::peripherals::FLASH;
 #[cfg(feature = "dfu-rp")]
 use embassy_rp::Peri;
+#[cfg(feature = "dfu-rp")]
+use embassy_usb::class::dfu::consts::Status;
+#[cfg(feature = "dfu-rp")]
+use embassy_usb::class::dfu::dfu_mode::{self, DfuState};
+
 
 #[cfg(feature = "dfu-rp")]
 type FlashType = Flash<'static, FLASH, Blocking, FLASH_SIZE>;
@@ -51,6 +58,8 @@ static FLASH_CELL: StaticCell<MutexType> = StaticCell::new();
 static MANAGER_CELL: StaticCell<DfuFlashManager> = StaticCell::new();
 #[cfg(feature = "dfu-rp")]
 static MANAGER_PTR: AtomicPtr<DfuFlashManager> = AtomicPtr::new(core::ptr::null_mut());
+#[cfg(feature = "dfu-rp")]
+static LED_MUTEX: AtomicPtr<Mutex<NoopRawMutex, RefCell<Option<Output<'static>>>>> = AtomicPtr::new(core::ptr::null_mut());
 
 #[cfg(feature = "dfu-rp")]
 pub struct DfuFlashManager {
@@ -96,6 +105,63 @@ impl DfuFlashManager {
     pub fn storage_partition(&self) -> PartitionType {
         BlockingPartition::new(self.flash_mutex, self.storage_offset, self.storage_size)
     }
+}
+
+/// DFU handler wrapper that toggles an optional LED on start/finish/reset.
+#[cfg(feature = "dfu-rp")]
+struct RmkDfuHandler<H> {
+    inner: H,
+    led: Option<Output<'static>>,
+}
+
+#[cfg(feature = "dfu-rp")]
+impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
+    fn start(&mut self) -> Result<(), Status> {
+        if let Some(ref mut led) = self.led {
+            led.set_high();
+        }
+        self.inner.start()
+    }
+
+    fn write(&mut self, data: &[u8]) -> Result<(), Status> {
+        self.inner.write(data)
+    }
+
+    fn finish(&mut self) -> Result<(), Status> {
+        let res = self.inner.finish();
+        if let Some(ref mut led) = self.led {
+            led.set_low();
+        }
+        res
+    }
+
+    fn system_reset(&mut self) {
+        if let Some(ref mut led) = self.led {
+            led.set_low();
+        }
+        self.inner.system_reset()
+    }
+}
+
+/// Store an optional DFU LED pin for use by the DFU USB handler.
+///
+/// Must be called before `take_led()` (i.e. before USB setup).
+#[cfg(feature = "dfu-rp")]
+pub fn set_led(led: Option<Output<'static>>) {
+    static LED_CELL: StaticCell<Mutex<NoopRawMutex, RefCell<Option<Output<'static>>>>> = StaticCell::new();
+    let m = LED_CELL.init(Mutex::new(RefCell::new(led)));
+    LED_MUTEX.store(m as *const _ as *mut _, Ordering::Release);
+}
+
+/// Take the DFU LED (consumed once during USB setup).
+#[cfg(feature = "dfu-rp")]
+pub(crate) fn take_led() -> Option<Output<'static>> {
+    let ptr = LED_MUTEX.load(Ordering::Acquire);
+    if ptr.is_null() {
+        return None;
+    }
+    let m = unsafe { &*ptr };
+    m.lock(|cell| cell.borrow_mut().take())
 }
 
 /// Initialize the blocking flash, create the DFU manager and store it globally.
@@ -151,16 +217,21 @@ pub fn get_manager() -> Option<&'static DfuFlashManager> {
 }
 
 /// Register a DFU interface on the USB builder using the given manager.
+///
+/// `led` is an optional GPIO output pin that is set high while a DFU
+/// download is in progress and low when idle / finished.
 #[cfg(feature = "dfu-rp")]
 pub fn register_dfu_interface<D: Driver<'static>>(
     builder: &mut Builder<'static, D>,
     mgr: &'static DfuFlashManager,
     product_name: &'static str,
+    led: Option<Output<'static>>,
 ) {
     use embassy_boot_rp::BlockingFirmwareUpdater;
     use embassy_boot_rp::FirmwareUpdaterConfig;
     use embassy_usb::class::dfu::consts::DfuAttributes;
-    use embassy_usb_dfu::{dfu, ResetImmediate};
+    use embassy_usb_dfu::ResetImmediate;
+    use embassy_usb_dfu::dfu::FirmwareHandler;
 
     let dfu_part = mgr.dfu_partition();
     let state_part = mgr.state_partition();
@@ -174,15 +245,19 @@ pub fn register_dfu_interface<D: Driver<'static>>(
 
     const BLOCK_SIZE: usize = 256;
     let attrs = DfuAttributes::CAN_DOWNLOAD | DfuAttributes::WILL_DETACH;
-    let state = dfu::new_state::<PartitionType, PartitionType, ResetImmediate, BLOCK_SIZE>(
-        updater,
-        attrs,
-        ResetImmediate,
-    );
 
-    static DFU_STATE: StaticCell<
-        dfu::State<'static, PartitionType, PartitionType, ResetImmediate, BLOCK_SIZE>,
-    > = StaticCell::new();
+    let inner = FirmwareHandler::new(updater, ResetImmediate);
+    let handler = RmkDfuHandler { inner, led };
+    let state = DfuState::new(handler, attrs);
+
+    type DfuStateInner = RmkDfuHandler<FirmwareHandler<
+        'static,
+        PartitionType,
+        PartitionType,
+        ResetImmediate,
+        BLOCK_SIZE,
+    >>;
+    static DFU_STATE: StaticCell<DfuState<DfuStateInner>> = StaticCell::new();
     let state_ref = DFU_STATE.init(state);
 
     let string_idx = builder.string();
