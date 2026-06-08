@@ -82,9 +82,14 @@ impl MaxSize for UnlockChallenge {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[non_exhaustive]
 pub enum StorageResetMode {
-    /// Reset all stored data.
+    /// Reset all stored data — including saved keymap edits **and BLE
+    /// bonds**.
     Full,
-    /// Reset only the layout/keymap data.
+    /// Reset only the layout/keymap data, preserving bonds.
+    ///
+    /// Not implemented yet: current firmware rejects this mode with
+    /// [`RynkError::Unimplemented`](super::RynkError::Unimplemented) rather
+    /// than silently over-wiping. Mode-aware reset lands in a later phase.
     LayoutOnly,
 }
 

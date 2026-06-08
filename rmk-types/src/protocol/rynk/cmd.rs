@@ -25,7 +25,7 @@ use strum::FromRepr;
 
 /// Command tag carried in the header CMD field.
 ///
-/// The wire encoding is a plain `u16 LE` written by [`RynkMessage::set_cmd`](super::RynkMessage::set_cmd) —
+/// The wire encoding is a plain `u16 LE` written by [`RynkMessage::build`](super::RynkMessage::build) —
 /// `Cmd` is never postcard-encoded, so no `Serialize`/`Deserialize`/`MaxSize`
 /// derives are needed here.
 #[repr(u16)]
@@ -82,6 +82,9 @@ pub enum Cmd {
 
     // ── Connection (0x07xx) ──
     GetConnectionType = 0x0701,
+    /// Full `ConnectionStatus` snapshot — same payload the `ConnectionChange`
+    /// topic pushes, so a host can recover a missed push.
+    GetConnectionStatus = 0x0702,
     #[cfg(feature = "_ble")]
     GetBleStatus = 0x0703,
     #[cfg(feature = "_ble")]
@@ -114,9 +117,9 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    /// Returns `true` for topic / unsolicited push CMDs.
+    /// Returns `true` for topic / unsolicited push CMDs (high bit set).
     pub const fn is_topic(self) -> bool {
-        (self as u16) & 0x8000 != 0
+        self as u16 & super::RYNK_TOPIC_BIT != 0
     }
 }
 

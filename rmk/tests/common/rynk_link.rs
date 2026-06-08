@@ -16,6 +16,16 @@
 //! (parse → dispatch → handler → response-encode → framing) plus the
 //! topic-emit and oversized-frame resync arms of `run_session` — so tests
 //! exercise the entire Rynk service independent of any hardware transport.
+//!
+//! This harness deliberately re-implements the host half instead of pulling in
+//! `rynk-host`'s real `Client`: as a dev-dependency it would force
+//! `rmk-types/host` (= `rynk+bulk+_ble+split`) via Cargo feature unification in
+//! *every* rmk test build, so a lean config (`--features rynk,storage`) would
+//! compile the `_ble`/`bulk` `Cmd` variants while `run_session`'s match arms
+//! stay cfg'd out — a non-exhaustive match. The host and this harness instead
+//! share one codec (`rmk-types`) and decode responses with identical strictness
+//! (`take_from_bytes` rejecting trailing bytes), which is what keeps the two
+//! ends from drifting.
 
 use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
@@ -23,7 +33,7 @@ use embassy_sync::pipe::Pipe;
 use embedded_io_async::Read;
 use rmk::host::HostService as RynkService;
 use rmk_types::constants::RYNK_BUFFER_SIZE;
-use rmk_types::protocol::rynk::{Cmd, RYNK_HEADER_SIZE, RynkError, RynkMessage};
+use rmk_types::protocol::rynk::{Cmd, RYNK_HEADER_SIZE, RYNK_TOPIC_BIT, RynkError, RynkMessage};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -36,20 +46,23 @@ pub type Link = Pipe<NoopRawMutex, RYNK_BUFFER_SIZE>;
 
 /// A frame read off the wire, decoded only as far as its header.
 ///
-/// `cmd_raw` stays a raw `u16` so error replies that echo an unknown command
-/// discriminant remain observable (the device never invents a valid `Cmd` for
-/// a frame it rejected).
+/// `cmd` is `Err(raw)` for an unknown discriminant so error replies that echo
+/// one remain observable (the device never invents a valid `Cmd` for a frame
+/// it rejected).
 pub struct Frame {
-    pub cmd_raw: u16,
+    pub cmd: Result<Cmd, u16>,
     pub seq: u8,
     pub payload: Vec<u8>,
 }
 
 impl Frame {
-    /// Topic / unsolicited-push frames carry the high bit in their `cmd`
-    /// (mirrors `Cmd::is_topic`). Works for raw discriminants too.
+    /// Topic / unsolicited-push frames carry the high bit in their `cmd` —
+    /// including unknown-but-topic-range cmds from a newer peer.
     pub fn is_topic(&self) -> bool {
-        self.cmd_raw & 0x8000 != 0
+        match self.cmd {
+            Ok(cmd) => cmd.is_topic(),
+            Err(raw) => raw & RYNK_TOPIC_BIT != 0,
+        }
     }
 
     /// Decode the payload as a `Result<T, RynkError>` response envelope.
@@ -111,13 +124,14 @@ impl<'p> RynkClient<'p> {
         let mut header = [0u8; RYNK_HEADER_SIZE];
         rx.read_exact(&mut header).await.expect("read header");
         let cmd_raw = u16::from_le_bytes([header[0], header[1]]);
+        let cmd = Cmd::from_repr(cmd_raw).ok_or(cmd_raw);
         let seq = header[2];
         let payload_len = u16::from_le_bytes([header[3], header[4]]) as usize;
         let mut payload = vec![0u8; payload_len];
         if payload_len > 0 {
             rx.read_exact(&mut payload).await.expect("read payload");
         }
-        Frame { cmd_raw, seq, payload }
+        Frame { cmd, seq, payload }
     }
 
     /// Read frames until one echoes `seq`, skipping any topic pushes that arrive
@@ -135,8 +149,8 @@ impl<'p> RynkClient<'p> {
             }
             assert_eq!(
                 frame.seq, 0,
-                "unexpected frame (cmd={:#06x}, seq={}) while awaiting response seq {}",
-                frame.cmd_raw, frame.seq, seq,
+                "unexpected frame (cmd={:?}, seq={}) while awaiting response seq {}",
+                frame.cmd, frame.seq, seq,
             );
         }
     }
@@ -151,18 +165,14 @@ impl<'p> RynkClient<'p> {
     ) -> Result<Resp, RynkError> {
         self.send(cmd, seq, req).await;
         let frame = self.recv_response(seq).await;
-        assert_eq!(frame.cmd_raw, cmd as u16, "response must echo the request cmd");
+        assert_eq!(frame.cmd, Ok(cmd), "response must echo the request cmd");
         frame.envelope()
     }
 
     /// Await the next unsolicited topic push.
     pub async fn recv_topic(&mut self) -> Frame {
         let frame = self.recv_frame().await;
-        assert!(
-            frame.is_topic(),
-            "expected a topic frame, got cmd={:#06x}",
-            frame.cmd_raw
-        );
+        assert!(frame.is_topic(), "expected a topic frame, got cmd={:?}", frame.cmd);
         assert_eq!(frame.seq, 0, "topic frames use seq 0");
         frame
     }

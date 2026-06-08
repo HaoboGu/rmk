@@ -37,11 +37,14 @@
 //!   parsed once at construction, accessors are infallible)
 //! - [`buffer`] — `RYNK_MIN_BUFFER_SIZE` const computed from `MaxSize` of
 //!   every wire type
-//! - [`system`] — handshake (`ProtocolVersion`, `DeviceCapabilities`,
+//! - `system` — handshake (`ProtocolVersion`, `DeviceCapabilities`,
 //!   `StorageResetMode`, `BehaviorConfig`)
-//! - [`keymap`], [`encoder`], [`macro_data`], [`combo`], [`morse`],
-//!   [`fork`] — per-domain request/response types
-//! - [`status`] — runtime status types (`MatrixState`, `PeripheralStatus`)
+//! - `keymap`, `encoder`, `macro_data`, `combo`, `morse`,
+//!   `fork` — per-domain request/response types
+//! - `status` — runtime status types (`MatrixState`, `PeripheralStatus`)
+//!
+//! (The per-domain modules are private; their types are re-exported at
+//! `protocol::rynk::*`.)
 //!
 //! ## Protocol handshake
 //!
@@ -94,6 +97,24 @@ pub use self::morse::*;
 pub use self::status::*;
 pub use self::system::*;
 
+/// CMD high bit marking a topic (server → host push). Requests/responses live
+/// in `0x0000..=0x7FFF`; topics in `0x8000..=0xFFFF`.
+pub const RYNK_TOPIC_BIT: u16 = 0x8000;
+
+/// Largest single GATT write/notification on the Rynk BLE characteristics.
+pub const RYNK_BLE_CHUNK_SIZE: usize = 244;
+
+/// Rynk GATT service UUID, shared by the firmware's `#[gatt_service]`
+/// (trouble's `Uuid: From<u128>` handles the little-endian wire order) and the
+/// host's GATT discovery (`uuid::Uuid::from_u128`). The service UUID is not
+/// advertised, so it can't be a scan filter — hosts discover it over GATT
+/// after attaching.
+pub const RYNK_SERVICE_UUID: u128 = 0x10900067_537f_4f0a_9b55_929e271f61ab;
+/// `input_data` characteristic (server → host, `read | notify`).
+pub const RYNK_INPUT_CHAR_UUID: u128 = 0x80f9319b_0c74_43a5_9738_c59d6dda3db9;
+/// `output_data` characteristic (host → server, `read | write | write-without-response`).
+pub const RYNK_OUTPUT_CHAR_UUID: u128 = 0x19802524_6f90_4346_93c2_63dbc509ab55;
+
 /// Protocol-level error returned in every response payload.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -111,7 +132,27 @@ pub enum RynkError {
     Unimplemented,
     /// The request decoded cleanly but is semantically invalid.
     Invalid,
+    /// The frame is well-formed but its CMD tag is not one this build knows —
+    /// a feature-gated-out command, a newer peer's command, or coincidental
+    /// garbage on a desynced stream; the receiver cannot tell which.
+    UnknownCmd,
 }
+
+impl core::fmt::Display for RynkError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::Malformed => "malformed request",
+            Self::NotReady => "device not ready",
+            Self::StorageFault => "storage write failed",
+            Self::Internal => "internal firmware error",
+            Self::Unimplemented => "command not implemented",
+            Self::Invalid => "invalid request",
+            Self::UnknownCmd => "unknown command",
+        })
+    }
+}
+
+impl core::error::Error for RynkError {}
 
 #[cfg(test)]
 pub(crate) mod test_utils {
@@ -282,6 +323,7 @@ mod tests {
         round_trip(&RynkError::Internal);
         round_trip(&RynkError::Unimplemented);
         round_trip(&RynkError::Invalid);
+        round_trip(&RynkError::UnknownCmd);
         let ok: Result<(), RynkError> = Ok(());
         let err: Result<(), RynkError> = Err(RynkError::StorageFault);
         let _ = round_trip(&ok);
@@ -303,9 +345,21 @@ mod tests {
         bitmap.extend_from_slice(&[0x05, 0x00, 0x20]).unwrap();
         let matrix = MatrixState { pressed_bitmap: bitmap };
 
+        use crate::action::{Action, KeyAction};
+        use crate::keycode::{HidKeyCode, KeyCode};
+
         let entries: alloc::vec::Vec<(&str, alloc::vec::Vec<u8>)> = alloc::vec![
+            // KeyAction/Action ride GetKeyAction/SetKeyAction; their postcard
+            // tags are positional, so pin exemplars to catch tag drift. Only
+            // feature-independent variants go here (the gated `Action::Steno`
+            // would make the snapshot differ by feature set).
             ("ConnectionType::Ble", encode(&ConnectionType::Ble)),
             ("ConnectionType::Usb", encode(&ConnectionType::Usb)),
+            ("KeyAction::Morse(3)", encode(&KeyAction::Morse(3))),
+            (
+                "KeyAction::Single(Action::Key(Hid(A)))",
+                encode(&KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A)))),
+            ),
             (
                 "KeyPosition{layer:0,row:5,col:13}",
                 encode(&KeyPosition {
@@ -322,6 +376,7 @@ mod tests {
             ("RynkError::NotReady", encode(&RynkError::NotReady)),
             ("RynkError::StorageFault", encode(&RynkError::StorageFault)),
             ("RynkError::Unimplemented", encode(&RynkError::Unimplemented)),
+            ("RynkError::UnknownCmd", encode(&RynkError::UnknownCmd)),
             (
                 "Result<(),RynkError>::Err(StorageFault)",
                 encode::<Result<(), RynkError>>(&Err(RynkError::StorageFault)),

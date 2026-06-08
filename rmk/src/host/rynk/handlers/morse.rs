@@ -1,18 +1,18 @@
 //! Morse handlers.
 
-use rmk_types::protocol::rynk::{RynkError, SetMorseRequest};
+use rmk_types::protocol::rynk::{RynkError, RynkMessage, SetMorseRequest};
 
 use super::super::RynkService;
 
 impl<'a> RynkService<'a> {
-    pub(crate) async fn handle_get_morse(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (idx, _) = postcard::take_from_bytes::<u8>(payload).map_err(|_| RynkError::Malformed)?;
+    pub(crate) async fn handle_get_morse(&self, msg: &mut RynkMessage<'_>) -> Result<usize, RynkError> {
+        let idx = msg.request::<u8>()?;
         let morse = self.ctx.get_morse(idx).ok_or(RynkError::Invalid)?;
-        Self::write_response(&morse, payload)
+        Self::write_response(&morse, msg.response_payload_mut())
     }
 
-    pub(crate) async fn handle_set_morse(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (r, _) = postcard::take_from_bytes::<SetMorseRequest>(payload).map_err(|_| RynkError::Malformed)?;
+    pub(crate) async fn handle_set_morse(&self, msg: &mut RynkMessage<'_>) -> Result<usize, RynkError> {
+        let r = msg.request::<SetMorseRequest>()?;
         if (r.index as usize) >= self.ctx.morses_len() {
             return Err(RynkError::Invalid);
         }
@@ -21,16 +21,16 @@ impl<'a> RynkService<'a> {
                 *m = r.config;
             })
             .await;
-        Self::write_response(&(), payload)
+        Self::write_response(&(), msg.response_payload_mut())
     }
 
     #[cfg(feature = "bulk_transfer")]
-    pub(crate) async fn handle_get_morse_bulk(&self, _payload: &mut [u8]) -> Result<usize, RynkError> {
+    pub(crate) async fn handle_get_morse_bulk(&self, _msg: &mut RynkMessage<'_>) -> Result<usize, RynkError> {
         Err(RynkError::Unimplemented)
     }
 
     #[cfg(feature = "bulk_transfer")]
-    pub(crate) async fn handle_set_morse_bulk(&self, _payload: &mut [u8]) -> Result<usize, RynkError> {
+    pub(crate) async fn handle_set_morse_bulk(&self, _msg: &mut RynkMessage<'_>) -> Result<usize, RynkError> {
         Err(RynkError::Unimplemented)
     }
 }

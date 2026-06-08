@@ -19,7 +19,7 @@ pub mod uart;
 use embassy_futures::select::{Either, select};
 use embedded_io_async::{Read, Write};
 use rmk_types::constants::RYNK_BUFFER_SIZE;
-use rmk_types::protocol::rynk::{Cmd, RYNK_HEADER_SIZE, RYNK_MIN_BUFFER_SIZE, RynkError, RynkMessage};
+use rmk_types::protocol::rynk::{Cmd, RYNK_HEADER_SIZE, RYNK_MIN_BUFFER_SIZE, RYNK_TOPIC_BIT, RynkError, RynkMessage};
 #[allow(unused_imports)] // re-exported at `crate::host` for downstream users
 pub use uart::run_rynk_uart;
 
@@ -27,16 +27,14 @@ use super::context::KeyboardContext;
 use crate::config::RmkConfig;
 use crate::keymap::KeyMap;
 
-const _: () = assert!(
+// Use `core::assert!` explicitly: in a `defmt` build the crate-level `assert!`
+// expands to `defmt::assert!`, whose panic path is not `const`-callable.
+const _: () = core::assert!(
     rmk_types::constants::RYNK_BUFFER_SIZE >= RYNK_MIN_BUFFER_SIZE,
     "rynk_buffer_size is smaller than RYNK_MIN_BUFFER_SIZE — set [rmk] \
      rynk_buffer_size in keyboard.toml, or disable features to shrink the \
      floor",
 );
-
-/// Maximum BLE chunk size that fits in a single GATT write
-#[cfg(feature = "_ble")]
-pub const RYNK_BLE_CHUNK_SIZE: usize = 244;
 
 /// Transport-agnostic Rynk service.
 pub struct RynkService<'a> {
@@ -60,77 +58,80 @@ impl<'a> RynkService<'a> {
     }
 
     async fn handle(&self, msg: &mut RynkMessage<'_>) -> Result<usize, RynkError> {
-        let cmd = msg.cmd();
-        let payload = msg.payload_mut();
-        let payload_len = match cmd {
+        // Each handler decodes its request via `msg.request::<T>()` (bounded by
+        // the declared LEN) and writes its response to `msg.response_payload_mut()`.
+        let payload_len = match msg.cmd() {
             // System
-            Cmd::GetVersion => self.handle_get_version(payload).await?,
-            Cmd::GetCapabilities => self.handle_get_capabilities(payload).await?,
-            Cmd::Reboot => self.handle_reboot(payload).await?,
-            Cmd::BootloaderJump => self.handle_bootloader_jump(payload).await?,
-            Cmd::StorageReset => self.handle_storage_reset(payload).await?,
+            Cmd::GetVersion => self.handle_get_version(msg).await?,
+            Cmd::GetCapabilities => self.handle_get_capabilities(msg).await?,
+            Cmd::Reboot => self.handle_reboot(msg).await?,
+            Cmd::BootloaderJump => self.handle_bootloader_jump(msg).await?,
+            Cmd::StorageReset => self.handle_storage_reset(msg).await?,
 
             // Keymap (incl. encoder)
-            Cmd::GetKeyAction => self.handle_get_key_action(payload).await?,
-            Cmd::SetKeyAction => self.handle_set_key_action(payload).await?,
-            Cmd::GetDefaultLayer => self.handle_get_default_layer(payload).await?,
-            Cmd::SetDefaultLayer => self.handle_set_default_layer(payload).await?,
-            Cmd::GetEncoderAction => self.handle_get_encoder_action(payload).await?,
-            Cmd::SetEncoderAction => self.handle_set_encoder_action(payload).await?,
+            Cmd::GetKeyAction => self.handle_get_key_action(msg).await?,
+            Cmd::SetKeyAction => self.handle_set_key_action(msg).await?,
+            Cmd::GetDefaultLayer => self.handle_get_default_layer(msg).await?,
+            Cmd::SetDefaultLayer => self.handle_set_default_layer(msg).await?,
+            Cmd::GetEncoderAction => self.handle_get_encoder_action(msg).await?,
+            Cmd::SetEncoderAction => self.handle_set_encoder_action(msg).await?,
             #[cfg(feature = "bulk_transfer")]
-            Cmd::GetKeymapBulk => self.handle_get_keymap_bulk(payload).await?,
+            Cmd::GetKeymapBulk => self.handle_get_keymap_bulk(msg).await?,
             #[cfg(feature = "bulk_transfer")]
-            Cmd::SetKeymapBulk => self.handle_set_keymap_bulk(payload).await?,
+            Cmd::SetKeymapBulk => self.handle_set_keymap_bulk(msg).await?,
 
             // Macro
-            Cmd::GetMacro => self.handle_get_macro(payload).await?,
-            Cmd::SetMacro => self.handle_set_macro(payload).await?,
+            Cmd::GetMacro => self.handle_get_macro(msg).await?,
+            Cmd::SetMacro => self.handle_set_macro(msg).await?,
 
             // Combo
-            Cmd::GetCombo => self.handle_get_combo(payload).await?,
-            Cmd::SetCombo => self.handle_set_combo(payload).await?,
+            Cmd::GetCombo => self.handle_get_combo(msg).await?,
+            Cmd::SetCombo => self.handle_set_combo(msg).await?,
             #[cfg(feature = "bulk_transfer")]
-            Cmd::GetComboBulk => self.handle_get_combo_bulk(payload).await?,
+            Cmd::GetComboBulk => self.handle_get_combo_bulk(msg).await?,
             #[cfg(feature = "bulk_transfer")]
-            Cmd::SetComboBulk => self.handle_set_combo_bulk(payload).await?,
+            Cmd::SetComboBulk => self.handle_set_combo_bulk(msg).await?,
 
             // Morse
-            Cmd::GetMorse => self.handle_get_morse(payload).await?,
-            Cmd::SetMorse => self.handle_set_morse(payload).await?,
+            Cmd::GetMorse => self.handle_get_morse(msg).await?,
+            Cmd::SetMorse => self.handle_set_morse(msg).await?,
             #[cfg(feature = "bulk_transfer")]
-            Cmd::GetMorseBulk => self.handle_get_morse_bulk(payload).await?,
+            Cmd::GetMorseBulk => self.handle_get_morse_bulk(msg).await?,
             #[cfg(feature = "bulk_transfer")]
-            Cmd::SetMorseBulk => self.handle_set_morse_bulk(payload).await?,
+            Cmd::SetMorseBulk => self.handle_set_morse_bulk(msg).await?,
 
             // Fork
-            Cmd::GetFork => self.handle_get_fork(payload).await?,
-            Cmd::SetFork => self.handle_set_fork(payload).await?,
+            Cmd::GetFork => self.handle_get_fork(msg).await?,
+            Cmd::SetFork => self.handle_set_fork(msg).await?,
 
             // Behavior
-            Cmd::GetBehaviorConfig => self.handle_get_behavior_config(payload).await?,
-            Cmd::SetBehaviorConfig => self.handle_set_behavior_config(payload).await?,
+            Cmd::GetBehaviorConfig => self.handle_get_behavior_config(msg).await?,
+            Cmd::SetBehaviorConfig => self.handle_set_behavior_config(msg).await?,
 
             // Connection
-            Cmd::GetConnectionType => self.handle_get_connection_type(payload).await?,
+            Cmd::GetConnectionType => self.handle_get_connection_type(msg).await?,
+            Cmd::GetConnectionStatus => self.handle_get_connection_status(msg).await?,
             #[cfg(feature = "_ble")]
-            Cmd::GetBleStatus => self.handle_get_ble_status(payload).await?,
+            Cmd::GetBleStatus => self.handle_get_ble_status(msg).await?,
             #[cfg(feature = "_ble")]
-            Cmd::SwitchBleProfile => self.handle_switch_ble_profile(payload).await?,
+            Cmd::SwitchBleProfile => self.handle_switch_ble_profile(msg).await?,
             #[cfg(feature = "_ble")]
-            Cmd::ClearBleProfile => self.handle_clear_ble_profile(payload).await?,
+            Cmd::ClearBleProfile => self.handle_clear_ble_profile(msg).await?,
 
             // Status
-            Cmd::GetCurrentLayer => self.handle_get_current_layer(payload).await?,
-            Cmd::GetMatrixState => self.handle_get_matrix_state(payload).await?,
+            Cmd::GetCurrentLayer => self.handle_get_current_layer(msg).await?,
+            Cmd::GetMatrixState => self.handle_get_matrix_state(msg).await?,
             #[cfg(feature = "_ble")]
-            Cmd::GetBatteryStatus => self.handle_get_battery_status(payload).await?,
+            Cmd::GetBatteryStatus => self.handle_get_battery_status(msg).await?,
             #[cfg(all(feature = "_ble", feature = "split"))]
-            Cmd::GetPeripheralStatus => self.handle_get_peripheral_status(payload).await?,
-            Cmd::GetWpm => self.handle_get_wpm(payload).await?,
-            Cmd::GetSleepState => self.handle_get_sleep_state(payload).await?,
-            Cmd::GetLedIndicator => self.handle_get_led_indicator(payload).await?,
+            Cmd::GetPeripheralStatus => self.handle_get_peripheral_status(msg).await?,
+            Cmd::GetWpm => self.handle_get_wpm(msg).await?,
+            Cmd::GetSleepState => self.handle_get_sleep_state(msg).await?,
+            Cmd::GetLedIndicator => self.handle_get_led_indicator(msg).await?,
 
-            // Topic CMDs — host shouldn't be sending these as requests.
+            // Topic CMDs — server→host push only. `run_session` drops such
+            // frames before dispatch; this arm is defense for direct
+            // `dispatch` callers.
             Cmd::LayerChange | Cmd::WpmUpdate | Cmd::ConnectionChange | Cmd::SleepState | Cmd::LedIndicator => {
                 return Err(RynkError::Invalid);
             }
@@ -188,7 +189,7 @@ impl RynkService<'_> {
                 }
             };
 
-            // 2. Parse the header.
+            // 2. Read the declared payload length (LEN u16 LE) from the header.
             let payload_n = u16::from_le_bytes([buf[3], buf[4]]) as usize;
             let frame_len = RYNK_HEADER_SIZE + payload_n;
             if frame_len > buf.len() {
@@ -217,15 +218,29 @@ impl RynkService<'_> {
                 return;
             }
 
-            // 4. Dispatch in place over the full buffer.
+            // 4. Topic-range CMDs are server→host push only — a request here
+            // is a misbehaving or desynced peer. Echoing an error would hand
+            // the peer a high-bit frame it queues as a phantom topic, so
+            // drop the frame without replying.
+            let cmd_raw = u16::from_le_bytes([buf[0], buf[1]]);
+            if cmd_raw & RYNK_TOPIC_BIT != 0 {
+                warn!("Rynk: dropping topic-range request 0x{:04x}", cmd_raw);
+                continue;
+            }
+
+            // 5. Dispatch in place over the full buffer.
             let resp_len = match RynkMessage::try_from(&mut buf[..]) {
                 Ok(mut msg) => {
                     self.dispatch(&mut msg).await;
                     msg.frame_len()
                 }
                 Err(e) => {
+                    // Steps 1–3 guarantee the buffer holds the whole frame,
+                    // so the only failure here is `UnknownCmd` — echo it
+                    // (cmd/seq preserved) so the host can tell "this build
+                    // doesn't know the command" from a malformed frame.
                     warn!("Rynk: invalid frame: {:?}", e);
-                    RynkMessage::encode_error_reply(&mut buf, RynkError::Malformed)
+                    RynkMessage::encode_error_reply(&mut buf, e)
                 }
             };
             if tx.write_all(&buf[..resp_len]).await.is_err() {

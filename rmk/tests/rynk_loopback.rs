@@ -112,35 +112,36 @@ fn get_capabilities() {
         assert_eq!(caps.storage_enabled, cfg!(feature = "storage"));
         assert_eq!(caps.ble_enabled, cfg!(feature = "_ble"));
         assert_eq!(caps.is_split, cfg!(feature = "split"));
-        assert_eq!(caps.bulk_transfer_supported, cfg!(feature = "bulk_transfer"));
+        // Bulk transfer reads as fully absent — flag AND count — until the
+        // handlers are implemented (today they all answer `Unimplemented`);
+        // both flip back to tracking the `bulk_transfer` feature together
+        // with the handlers.
+        assert!(!caps.bulk_transfer_supported);
+        assert_eq!(caps.max_bulk_keys, 0);
     });
 }
 
 #[test]
-fn reboot_is_fire_and_forget() {
-    // The host `reboot_keyboard()` is a no-op; the handler returns Ok(0), i.e.
-    // an empty-payload ack (not a `Result` envelope), echoing cmd + seq.
+fn reboot_acks_where_reset_is_a_no_op() {
+    // On real hardware `reboot_keyboard()` never returns and no reply is sent
+    // (the host's `reboot()` is send-only). On targets where the reset is a
+    // no-op — like this test host — the handler falls through to the standard
+    // `Ok(())` envelope (`request` asserts the cmd + seq echo).
     let service = service();
-    let reply = link_session(&service, async |client| {
-        client.send(Cmd::Reboot, 0x60, &()).await;
-        client.recv_response(0x60).await
+    link_session(&service, async |client| {
+        let r = client.request::<(), ()>(Cmd::Reboot, 0x60, &()).await;
+        assert_eq!(r, Ok(()));
     });
-    assert_eq!(reply.cmd_raw, Cmd::Reboot as u16);
-    assert!(reply.payload.is_empty(), "reboot is fire-and-forget: empty ack");
 }
 
 #[test]
-fn bootloader_jump_is_fire_and_forget() {
+fn bootloader_jump_acks_where_jump_is_a_no_op() {
+    // Same contract as `reboot_acks_where_reset_is_a_no_op`.
     let service = service();
-    let reply = link_session(&service, async |client| {
-        client.send(Cmd::BootloaderJump, 0x61, &()).await;
-        client.recv_response(0x61).await
+    link_session(&service, async |client| {
+        let r = client.request::<(), ()>(Cmd::BootloaderJump, 0x61, &()).await;
+        assert_eq!(r, Ok(()));
     });
-    assert_eq!(reply.cmd_raw, Cmd::BootloaderJump as u16);
-    assert!(
-        reply.payload.is_empty(),
-        "bootloader jump is fire-and-forget: empty ack"
-    );
 }
 
 #[test]
@@ -151,6 +152,20 @@ fn storage_reset_acks() {
             .request::<StorageResetMode, ()>(Cmd::StorageReset, 0x62, &StorageResetMode::Full)
             .await;
         assert_eq!(r, Ok(()));
+    });
+}
+
+#[test]
+fn storage_reset_rejects_layout_only_until_implemented() {
+    // `LayoutOnly` semantics aren't wired yet (`reset_storage` is always a
+    // Full wipe, bonds included); the handler rejects the request instead of
+    // silently over-wiping.
+    let service = service();
+    link_session(&service, async |client| {
+        let r = client
+            .request::<StorageResetMode, ()>(Cmd::StorageReset, 0x63, &StorageResetMode::LayoutOnly)
+            .await;
+        assert_eq!(r, Err(RynkError::Unimplemented));
     });
 }
 
@@ -227,6 +242,29 @@ fn get_set_default_layer() {
         // Layer 2 is out of range for a 2-layer keymap.
         let r = client.request::<u8, ()>(Cmd::SetDefaultLayer, 0x13, &2u8).await;
         assert_eq!(r, Err(RynkError::Invalid));
+    });
+}
+
+#[test]
+fn set_default_layer_rejects_truncated_payload() {
+    let service = service_2_layers();
+    link_session(&service, async |client| {
+        let mut header = [0u8; RYNK_HEADER_SIZE];
+        header[0..2].copy_from_slice(&(Cmd::SetDefaultLayer as u16).to_le_bytes());
+        header[2] = 0x16;
+        header[3..5].copy_from_slice(&0u16.to_le_bytes());
+        client.send_raw(&header).await;
+
+        let reply = client.recv_response(0x16).await;
+        assert_eq!(reply.cmd, Ok(Cmd::SetDefaultLayer));
+        assert_eq!(reply.envelope::<()>(), Err(RynkError::Malformed));
+
+        let layer = client.request::<(), u8>(Cmd::GetDefaultLayer, 0x17, &()).await;
+        assert_eq!(
+            layer,
+            Ok(0),
+            "malformed SetDefaultLayer must not set layer 0 from scratch bytes"
+        );
     });
 }
 
@@ -548,6 +586,22 @@ fn get_connection_type() {
     });
 }
 
+#[test]
+fn get_connection_status_matches_connection_type() {
+    let service = service();
+    link_session(&service, async |client| {
+        let status = client
+            .request::<(), ConnectionStatus>(Cmd::GetConnectionStatus, 0x74, &())
+            .await
+            .expect("Ok envelope decodes into ConnectionStatus");
+        // The full snapshot and the derived single-transport view agree.
+        let t = client
+            .request::<(), ConnectionType>(Cmd::GetConnectionType, 0x75, &())
+            .await;
+        assert_eq!(t, Ok(status.preferred));
+    });
+}
+
 #[cfg(feature = "_ble")]
 #[test]
 fn get_ble_status() {
@@ -681,46 +735,62 @@ fn get_led_indicator_returns_snapshot() {
 // ─────────────────────────────────────────────────────────────────────────
 
 #[test]
-fn rejects_topic_cmd_from_host() {
+fn drops_topic_cmd_from_host() {
     let service = service();
     link_session(&service, async |client| {
-        // Topic CMDs are server→host pushes; a host must never request one.
-        let r = client.request::<u8, ()>(Cmd::LayerChange, 0x13, &0u8).await;
-        assert_eq!(r, Err(RynkError::Invalid), "topic CMD from host should be rejected");
+        // Topic CMDs are server→host push only. The session drops such
+        // frames without replying — an error reply would echo a high-bit
+        // CMD that the host's reassembly queues as a phantom topic.
+        client.send(Cmd::LayerChange, 0x13, &0u8).await;
+        // The next request succeeds with no stray reply in between
+        // (`recv_response` panics on any non-topic frame with another seq).
+        let version = client.request::<(), ProtocolVersion>(Cmd::GetVersion, 0x14, &()).await;
+        assert_eq!(version, Ok(ProtocolVersion::CURRENT), "session in sync after drop");
     });
 }
 
 #[cfg(feature = "_ble")]
 #[test]
-fn rejects_battery_topic_cmd_from_host() {
-    // `BatteryStatusTopic` has its own reject arm in dispatch (separate from the
-    // combined topic arm), so cover it explicitly under `_ble`.
+fn drops_battery_topic_cmd_from_host() {
+    // `BatteryStatusTopic` is the one `_ble`-gated topic; cover it explicitly.
     let service = service();
     link_session(&service, async |client| {
-        let r = client
-            .request::<BatteryStatus, ()>(Cmd::BatteryStatusTopic, 0x19, &BatteryStatus::Unavailable)
+        client
+            .send(Cmd::BatteryStatusTopic, 0x19, &BatteryStatus::Unavailable)
             .await;
-        assert_eq!(r, Err(RynkError::Invalid));
+        let version = client.request::<(), ProtocolVersion>(Cmd::GetVersion, 0x1A, &()).await;
+        assert_eq!(version, Ok(ProtocolVersion::CURRENT), "session in sync after drop");
     });
 }
 
 #[test]
-fn unknown_cmd_over_the_wire_gets_malformed_reply() {
+fn unknown_cmd_over_the_wire_gets_unknown_cmd_reply() {
     let service = service();
-    // 0xFFFF is the reserved sentinel — not a valid Cmd discriminant. The
-    // session's `try_from` rejects it before dispatch ever runs and answers
-    // Malformed, echoing the offending cmd/seq bytes.
-    let reply = link_session(&service, async |client| {
+    // Cmd tags this build has no discriminant for, one per range. 0x0006 (a
+    // v2-reserved request slot, standing in for a feature-gated-out or newer
+    // peer's command): `try_from` rejects it before dispatch and answers
+    // UnknownCmd — not Malformed: the frame itself was sound — echoing the
+    // offending cmd/seq bytes. 0xFFFF (topic range): dropped without a reply,
+    // like every topic-range request. Neither desyncs the session.
+    link_session(&service, async |client| {
         let mut header = [0u8; RYNK_HEADER_SIZE];
-        header[0] = 0xFF;
-        header[1] = 0xFF;
+        header[0..2].copy_from_slice(&0x0006u16.to_le_bytes());
         header[2] = 0x21; // seq — echoed on the error reply
         // payload_len stays 0
         client.send_raw(&header).await;
-        client.recv_response(0x21).await
+        let reply = client.recv_response(0x21).await;
+        assert_eq!(reply.cmd, Err(0x0006), "error reply echoes the unknown cmd bytes");
+        assert_eq!(reply.envelope::<()>(), Err(RynkError::UnknownCmd));
+
+        let mut header = [0u8; RYNK_HEADER_SIZE];
+        header[0..2].copy_from_slice(&0xFFFFu16.to_le_bytes());
+        header[2] = 0x22;
+        client.send_raw(&header).await;
+
+        // The session is still in sync afterwards, with no stray reply.
+        let version = client.request::<(), ProtocolVersion>(Cmd::GetVersion, 0x23, &()).await;
+        assert_eq!(version, Ok(ProtocolVersion::CURRENT));
     });
-    assert_eq!(reply.cmd_raw, 0xFFFF, "error reply echoes the invalid cmd bytes");
-    assert_eq!(reply.envelope::<()>(), Err(RynkError::Malformed));
 }
 
 #[test]
@@ -785,7 +855,7 @@ fn topic_layer_change() {
     let v = link_session(&service, async |client| {
         publish_event(LayerChangeEvent::new(3));
         let frame = client.recv_topic().await;
-        assert_eq!(frame.cmd_raw, Cmd::LayerChange as u16);
+        assert_eq!(frame.cmd, Ok(Cmd::LayerChange));
         frame.raw::<u8>()
     });
     assert_eq!(v, 3);
@@ -797,7 +867,7 @@ fn topic_wpm_update() {
     let v = link_session(&service, async |client| {
         publish_event(WpmUpdateEvent::new(42));
         let frame = client.recv_topic().await;
-        assert_eq!(frame.cmd_raw, Cmd::WpmUpdate as u16);
+        assert_eq!(frame.cmd, Ok(Cmd::WpmUpdate));
         frame.raw::<u16>()
     });
     assert_eq!(v, 42);
@@ -809,7 +879,7 @@ fn topic_sleep_state() {
     let v = link_session(&service, async |client| {
         publish_event(SleepStateEvent::new(true));
         let frame = client.recv_topic().await;
-        assert_eq!(frame.cmd_raw, Cmd::SleepState as u16);
+        assert_eq!(frame.cmd, Ok(Cmd::SleepState));
         frame.raw::<bool>()
     });
     assert!(v);
@@ -821,7 +891,7 @@ fn topic_led_indicator() {
     let v = link_session(&service, async |client| {
         publish_event(LedIndicatorEvent::new(LedIndicator::from_bits(0b0000_0101)));
         let frame = client.recv_topic().await;
-        assert_eq!(frame.cmd_raw, Cmd::LedIndicator as u16);
+        assert_eq!(frame.cmd, Ok(Cmd::LedIndicator));
         frame.raw::<LedIndicator>()
     });
     assert_eq!(v, LedIndicator::from_bits(0b0000_0101));
@@ -839,7 +909,7 @@ fn topic_connection_change() {
         };
         publish_event(ConnectionStatusChangeEvent(status));
         let frame = client.recv_topic().await;
-        assert_eq!(frame.cmd_raw, Cmd::ConnectionChange as u16);
+        assert_eq!(frame.cmd, Ok(Cmd::ConnectionChange));
         frame.raw::<ConnectionStatus>()
     });
     assert_eq!(v.preferred, ConnectionType::Ble);
@@ -856,7 +926,7 @@ fn topic_battery_status() {
     let v = link_session(&service, async |client| {
         publish_event(BatteryStatusEvent(expected));
         let frame = client.recv_topic().await;
-        assert_eq!(frame.cmd_raw, Cmd::BatteryStatusTopic as u16);
+        assert_eq!(frame.cmd, Ok(Cmd::BatteryStatusTopic));
         frame.raw::<BatteryStatus>()
     });
     assert_eq!(v, expected);

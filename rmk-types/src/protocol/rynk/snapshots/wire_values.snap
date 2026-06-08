@@ -8,6 +8,8 @@
 
 ConnectionType::Ble                      01
 ConnectionType::Usb                      00
+KeyAction::Morse(3)                      05 03
+KeyAction::Single(Action::Key(Hid(A)))   02 01 00 04
 KeyPosition{layer:0,row:5,col:13}        00 05 0d
 MatrixState{[0x05,0x00,0x20]}            03 05 00 20
 ProtocolVersion{1,0}                     01 00
@@ -19,5 +21,6 @@ RynkError::Malformed                     00
 RynkError::NotReady                      01
 RynkError::StorageFault                  02
 RynkError::Unimplemented                 04
+RynkError::UnknownCmd                    06
 StorageResetMode::Full                   00
 StorageResetMode::LayoutOnly             01

@@ -9,15 +9,15 @@
 //! Every handler has signature
 //!
 //! ```ignore
-//! async fn handle_<name>(&self, payload: &mut [u8]) -> Result<usize, RynkError>
+//! async fn handle_<name>(&self, msg: &mut RynkMessage<'_>) -> Result<usize, RynkError>
 //! ```
 //!
+//! A handler decodes its request (if any) with `msg.request::<T>()` — bounded
+//! by the declared LEN, so a short frame is rejected rather than reading
+//! response scratch — and writes its reply into `msg.response_payload_mut()`.
 //! `Ok(n)` is the byte count of the postcard-encoded `Ok::<T, RynkError>(value)`
-//! the handler wrote into `payload`. On `Err(e)` the dispatcher overwrites
-//! the payload with the postcard encoding of `Err::<(), RynkError>(e)` and
-//! sets `payload_len = 2`. Handlers propagate `RynkError` with `?`; there are
-//! no per-call decode/encode helpers — every postcard call is inlined at its
-//! site so the error mapping stays local and visible.
+//! written there; on `Err(e)` the dispatcher overwrites it with
+//! `Err::<(), RynkError>(e)`.
 //!
 //! ## Borrow-across-await rule
 //!
