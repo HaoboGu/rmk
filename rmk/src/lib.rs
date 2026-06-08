@@ -85,7 +85,7 @@ pub mod storage;
 pub mod usb;
 #[cfg(feature = "watchdog")]
 pub mod watchdog;
-#[cfg(feature = "embassy_boot")]
+#[cfg(feature = "dfu")]
 pub mod dfu;
 
 // Test-only helper that drives `embassy-time/mock-driver` from the

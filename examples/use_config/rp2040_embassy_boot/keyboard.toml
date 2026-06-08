@@ -1,0 +1,46 @@
+[keyboard]
+name = "RMK Keyboard"
+product_name = "RMK Keyboard"
+vendor_id = 0x4c4b
+product_id = 0x4643
+manufacturer = "haobo"
+chip = "rp2040"
+
+[matrix]
+row_pins = ["PIN_6", "PIN_7", "PIN_8", "PIN_9"]
+col_pins = ["PIN_19", "PIN_20", "PIN_21"]
+
+[layout]
+rows = 4
+cols = 3
+layers = 2
+keymap = [
+    [
+        ["A", "B", "C"],
+        ["Kc1", "Kc2", "Kc3"],
+        ["LCtrl", "MO(1)", "LShift"],
+        ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"],
+    ],
+    [
+        ["_", "TT(1)", "TG(2)"],
+        ["_", "_", "_"],
+        ["_", "_", "_"],
+        ["_", "_", "_"],
+    ],
+]
+
+[storage]
+enabled = true
+
+# DFU partition layout — must match your bootloader's memory.x
+# These values are the default for rp2040 with bootymcbootface,
+# so you can omit this section unless you use a different bootloader.
+# [dfu]
+# state_offset = 0x6000
+# state_size = 0x1000
+# dfu_offset = 0x87000
+# dfu_size = 528384
+
+[rmk]
+morse_max_num = 8
+max_patterns_per_key = 8

@@ -22,7 +22,7 @@ strum = { version = "0.28", default-features = false, features = ["derive"] }
 [features]
 ## Enable hardware watchdog code generation
 watchdog = []
-embassy_boot = [] 
+dfu-rp = []
 
 [lib]
 proc-macro = true

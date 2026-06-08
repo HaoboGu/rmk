@@ -4,4 +4,10 @@ usb_enable = true
 [storage]
 enabled = true
 start_addr = 0x100000
-num_sectors = 32 
+num_sectors = 32
+
+[dfu]
+state_offset = 0x6000
+state_size = 0x1000
+dfu_offset = 0x87000
+dfu_size = 528384
