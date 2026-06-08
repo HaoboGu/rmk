@@ -413,6 +413,11 @@ pub(crate) fn expand_keymap_and_storage(hardware: &Hardware, layout: &Layout) ->
     };
 
     if hardware.storage.is_some() {
+        #[cfg(feature = "embassy_boot")]
+        let mark = quote! { ::rmk::dfu::mark_booted(); };
+        #[cfg(not(feature = "embassy_boot"))]
+        let mark = quote! {};
+
         quote! {
             #initialize_positional_config
             #keymap_data_init
@@ -423,6 +428,7 @@ pub(crate) fn expand_keymap_and_storage(hardware: &Hardware, layout: &Layout) ->
                 &mut behavior_config,
                 &per_key_config,
             ).await;
+            #mark
         }
     } else {
         quote! {

@@ -80,12 +80,16 @@ embassy-hal-internal = { version = "0.5.0", optional = true }
 rp-pac = { version = "7.0.0", optional = true }
 pio = { version = "0.3.0", optional = true }
 fixed = { version = "1.28.0", optional = true }
+embassy-boot-rp = { version = "0.10.0", optional = true }
 
 # ESP32 dependencies
 esp-hal = { version = "1.1", optional = true }
 
 # Document feature
 document-features = "0.2"
+
+# for embassy_boot firmware via dfu 
+embassy-usb-dfu = { version = "0.3.0", optional = true, features = ["cortex-m", "dfu"] }
 
 [dev-dependencies]
 # A hack for enabling 'std' feature in testing, ref: https://github.com/rust-lang/cargo/issues/2911
@@ -218,6 +222,9 @@ adafruit_bl = ["_nrf_ble"]
 
 ## Enable feature if you're using the ZSA Voyager ignition DFU bootloader
 zsa_voyager_bl = []
+
+## Enable feature to use embassy boot bootloader (currently only for RP2040)
+embassy_boot = ["rp2040", "dep:embassy-usb-dfu", "dep:embassy-boot-rp", "dep:embassy-embedded-hal", "rmk-macro/embassy_boot"]
 
 ## Enable Plover HID stenography support: adds the steno HID descriptor,
 ## the steno USB writer endpoint, and the `Action::Steno` variant.
