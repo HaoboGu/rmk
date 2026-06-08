@@ -5,6 +5,7 @@ members = [
     "rmk-host-serial",
     "rmk-host-ble",
     "rmk-host-bridge",
+    "rynk-web-demo",
 ]
 
 [workspace.package]

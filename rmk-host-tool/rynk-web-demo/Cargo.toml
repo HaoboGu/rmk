@@ -1,0 +1,24 @@
+[package]
+name = "rynk-web-demo"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Browser test harness for rmk-host's web transport (wasm32 only)"
+
+# The version-matched `rynk-core` wasm artifact. Built by `wasm-pack build
+# --target web`; never as a native library. The crate body is gated on `wasm32`
+# (see `src/lib.rs`), so the default native workspace check compiles it to an
+# empty crate rather than failing on the wasm-only deps.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# The JS-bridge core only — no native USB/BLE deps. The TS shell owns the
+# WebSerial port; this core talks through `rmk-host-bridge`.
+rmk-host = { path = "../rmk-host" }
+rmk-host-bridge = { path = "../rmk-host-bridge" }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+console_error_panic_hook = "0.1"
+console_log = "1"
+log = "0.4"

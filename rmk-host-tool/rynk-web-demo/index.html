@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Rynk web demo</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 760px; }
+      button { font-size: 1rem; padding: .5rem 1rem; border-radius: 6px;
+               border: 1px solid #4a90d9; background: #4a90d9; color: #fff; cursor: pointer; }
+      button:disabled { opacity: .5; cursor: default; }
+      #log { background: #111; color: #0f0; padding: 1rem; margin-top: 1rem;
+             white-space: pre-wrap; border-radius: 6px; min-height: 6rem;
+             font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
+  </head>
+  <body>
+    <h1>Rynk web demo</h1>
+    <p>The page (the <b>TS shell</b>) owns the serial port: it opens it, runs the
+       permanent <code>get_version</code> probe, then dynamically loads the
+       version-matched <code>rynk-core</code> wasm and lets it run the typed
+       session over a JS bridge. (BLE configuration is native-only — use the
+       rmk-host CLI.)</p>
+    <button id="serial">Connect via Serial</button>
+    <pre id="log"></pre>
+
+    <script type="module">
+      const logEl = document.getElementById("log");
+      const btn = document.getElementById("serial");
+      const log = (m) => { logEl.textContent += m + "\n"; console.log(m); };
+
+      if (!navigator.serial) {
+        log("⚠ navigator.serial undefined — use Chrome/Edge over http://localhost (not Firefox/Safari, not an IP).");
+      }
+
+      // ── permanent Rynk wire envelope (never changes across protocol versions) ──
+      const RYNK_HEADER = 5;            // cmd:u16 LE, seq:u8, len:u16 LE
+      const CMD_GET_VERSION = 0x0001;
+
+      const concat = (a, b) => { const c = new Uint8Array(a.length + b.length); c.set(a); c.set(b, a.length); return c; };
+
+      function frame(cmd, seq, body) {
+        const out = new Uint8Array(RYNK_HEADER + body.length);
+        out[0] = cmd & 0xff; out[1] = (cmd >> 8) & 0xff;
+        out[2] = seq;
+        out[3] = body.length & 0xff; out[4] = (body.length >> 8) & 0xff;
+        out.set(body, RYNK_HEADER);
+        return out;
+      }
+
+      // A buffered reader shared by the probe and the bridge, so bytes the probe
+      // over-reads aren't lost before the wasm core starts reading.
+      function link(port) {
+        const reader = port.readable.getReader();
+        const writer = port.writable.getWriter();
+        let rx = new Uint8Array(0);
+
+        async function fill(n) {
+          while (rx.length < n) {
+            const { value, done } = await reader.read();
+            if (done) throw new Error("port closed");
+            rx = concat(rx, value);
+          }
+        }
+        async function readFrame() {
+          await fill(RYNK_HEADER);
+          const len = rx[3] | (rx[4] << 8);
+          await fill(RYNK_HEADER + len);
+          const f = rx.slice(0, RYNK_HEADER + len);
+          rx = rx.slice(RYNK_HEADER + len);
+          return { cmd: f[0] | (f[1] << 8), seq: f[2], payload: f.slice(RYNK_HEADER) };
+        }
+
+        return {
+          // The permanent version probe: send GetVersion, read the reply, parse
+          // the `Result<ProtocolVersion>` body = [0x00 (Ok), major, minor].
+          async probeVersion() {
+            await writer.write(frame(CMD_GET_VERSION, 1, new Uint8Array(0)));
+            const { payload } = await readFrame();
+            if (payload.length < 3 || payload[0] !== 0x00) {
+              throw new Error(`bad version reply: [${payload}]`);
+            }
+            return { major: payload[1], minor: payload[2] };
+          },
+          // The JsLink the wasm core consumes: raw byte send/recv over the port.
+          async send(f) { await writer.write(f); },
+          async recv() {
+            if (rx.length > 0) { const c = rx; rx = new Uint8Array(0); return c; }
+            const { value, done } = await reader.read();
+            return done ? new Uint8Array(0) : value;
+          },
+        };
+      }
+
+      // Dynamic, version-matched load. One artifact today; the switch documents
+      // the per-version intent (a real deploy ships rynk_core_v1.wasm, …).
+      async function loadCore(major) {
+        switch (major) {
+          case 0: // protocol v0.x (ProtocolVersion::CURRENT = {0, 1})
+          case 1:
+            return await import("./pkg/rynk_web_demo.js");
+          default:
+            throw new Error(`no rynk-core wasm for protocol major ${major}`);
+        }
+      }
+
+      btn.addEventListener("click", async () => {
+        logEl.textContent = "";
+        btn.disabled = true;
+        try {
+          // The chooser must run inside this user gesture. (Add
+          // `{ filters: [{ usbVendorId: 0x4c4b }] }` to pre-filter to RMK's VID.)
+          const port = await navigator.serial.requestPort();
+          await port.open({ baudRate: 115200 });
+          const l = link(port);
+
+          const { major, minor } = await l.probeVersion();
+          log(`protocol v${major}.${minor} — loading rynk-core…`);
+
+          const core = await loadCore(major);
+          await core.default();            // wasm-bindgen init
+          log(await core.run(l));          // hand the link to the wasm core
+        } catch (e) {
+          log("ERROR: " + e);
+          console.error(e);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
