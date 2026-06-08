@@ -15,6 +15,10 @@ use log::{error, info, warn};
 use rmk_host::{Client, RequestError, TransportError};
 use rmk_host_serial::{SerialTransport, connect_serial};
 
+/// Per-request ceiling. A half-open link (a frame header with no payload behind
+/// it) can't stall the request — and so the whole loop — longer than this.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+
 #[tokio::main]
 async fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
@@ -31,15 +35,22 @@ async fn main() {
             // Topic pushes arrive while we await the link. Cancel-safe: when
             // the poll branch wins, this future is dropped with no ill effect.
             event = client.next_event() => match event {
-                Ok(frame) => info!("topic {:?} ({} bytes)", frame.cmd, frame.payload.len()),
+                Ok(ev) => info!("topic {ev:?}"),
                 Err(TransportError::Disconnected) => client = reconnect(client).await,
                 Err(e) => warn!("event error: {e}"),
             },
-            // Periodic request, issued only after select! returns.
-            _ = poll.tick() => match client.get_wpm().await {
-                Ok(wpm) => info!("wpm = {wpm}"),
-                Err(RequestError::Transport(TransportError::Disconnected)) => client = reconnect(client).await,
-                Err(e) => warn!("get_wpm failed: {e}"),
+            // Periodic request, issued only after select! returns. Bounded by a
+            // timeout: a half-open link would otherwise block the request — and
+            // with it the whole loop — indefinitely. On timeout, `resync` drops
+            // the stalled partial frame so the next tick starts clean.
+            _ = poll.tick() => match tokio::time::timeout(REQUEST_TIMEOUT, client.get_wpm()).await {
+                Ok(Ok(wpm)) => info!("wpm = {wpm}"),
+                Ok(Err(RequestError::Transport(TransportError::Disconnected))) => client = reconnect(client).await,
+                Ok(Err(e)) => warn!("get_wpm failed: {e}"),
+                Err(_elapsed) => {
+                    warn!("request timed out — resyncing");
+                    client.resync();
+                }
             },
         }
     }

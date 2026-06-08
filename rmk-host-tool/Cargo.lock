@@ -1342,8 +1342,12 @@ dependencies = [
 name = "rmk-host"
 version = "0.1.0"
 dependencies = [
+ "env_logger",
+ "heapless 0.9.3",
  "log",
  "postcard",
+ "rmk-host-ble",
+ "rmk-host-serial",
  "rmk-types",
  "serde",
  "thiserror",

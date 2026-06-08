@@ -50,6 +50,11 @@ pub enum RequestError {
     /// server→host push only.
     #[error("{0:?} is a topic, not a request")]
     TopicCmd(Cmd),
+    /// The cached device capabilities say this command's feature is absent, so
+    /// the client rejected it locally without touching the wire — distinct from
+    /// a firmware [`Rejected`](Self::Rejected) reply.
+    #[error("device does not support {0:?}: {1}")]
+    Unsupported(Cmd, &'static str),
 }
 
 /// `Send` on native targets, no-op on `wasm32`.

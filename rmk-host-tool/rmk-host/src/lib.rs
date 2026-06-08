@@ -21,7 +21,7 @@
 pub mod client;
 pub mod transport;
 
-pub use client::{Client, ConnectError};
+pub use client::{Client, ConnectError, Event};
 pub use rmk_types;
 pub use transport::{MaybeSend, RequestError, TopicFrame, Transport, TransportError};
 

@@ -42,7 +42,7 @@ use rmk_types::protocol::rynk::{
 };
 
 use crate::common::rynk_link::link_session;
-use crate::common::wrap_keymap;
+use crate::common::{wrap_keymap, wrap_keymap_with_encoders};
 
 /// Build a tiny 1-layer 2-row 2-col keymap so the test doesn't depend
 /// on the size of the helper module's default keyboard.
@@ -69,6 +69,18 @@ fn service_2_layers() -> RynkService<'static> {
     let per_key: &'static PositionalConfig<2, 2> = Box::leak(Box::new(PositionalConfig::default()));
     let keymap = [[[KeyAction::No; 2]; 2]; 2];
     let km = wrap_keymap(keymap, per_key, behavior);
+    let config: &'static RmkConfig<'static> = Box::leak(Box::new(RmkConfig::default()));
+    RynkService::new(km, config)
+}
+
+/// A keymap with 2 encoders, so `GetCapabilities` can report a non-zero
+/// `num_encoders` and the encoder endpoints become reachable.
+fn service_with_encoders() -> RynkService<'static> {
+    let behavior: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
+    let per_key: &'static PositionalConfig<2, 2> = Box::leak(Box::new(PositionalConfig::default()));
+    let keymap = [[[KeyAction::No; 2]; 2]; 1];
+    let encoder_map = [[EncoderAction::default(); 2]; 1];
+    let km = wrap_keymap_with_encoders(keymap, encoder_map, per_key, behavior);
     let config: &'static RmkConfig<'static> = Box::leak(Box::new(RmkConfig::default()));
     RynkService::new(km, config)
 }
@@ -289,6 +301,44 @@ fn encoder_action_out_of_range() {
             action: EncoderAction::default(),
         };
         let r = client.request::<_, ()>(Cmd::SetEncoderAction, 0x15, &set).await;
+        assert_eq!(r, Err(RynkError::Invalid));
+    });
+}
+
+#[test]
+fn capabilities_report_configured_encoder_count() {
+    // A keymap with encoders must advertise them (regression: capabilities
+    // hardcoded `num_encoders: 0`, hiding fully-wired encoder endpoints from any
+    // capability-respecting host). The endpoint is reachable once advertised.
+    let service = service_with_encoders();
+    link_session(&service, async |client| {
+        let caps = client
+            .request::<(), DeviceCapabilities>(Cmd::GetCapabilities, 0x07, &())
+            .await
+            .expect("Ok envelope");
+        assert_eq!(
+            caps.num_encoders, 2,
+            "capabilities must reflect the configured encoder count"
+        );
+
+        // In-range encoder is now reachable (would be `Invalid` if num_encoders==0).
+        let get = GetEncoderRequest {
+            encoder_id: 1,
+            layer: 0,
+        };
+        let action = client
+            .request::<_, EncoderAction>(Cmd::GetEncoderAction, 0x08, &get)
+            .await;
+        assert_eq!(action, Ok(EncoderAction::default()));
+
+        // Out-of-range encoder id (==count) is still rejected.
+        let oor = GetEncoderRequest {
+            encoder_id: 2,
+            layer: 0,
+        };
+        let r = client
+            .request::<_, EncoderAction>(Cmd::GetEncoderAction, 0x09, &oor)
+            .await;
         assert_eq!(r, Err(RynkError::Invalid));
     });
 }

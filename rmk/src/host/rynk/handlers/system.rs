@@ -21,7 +21,7 @@ impl<'a> RynkService<'a> {
             num_cols: cols as u8,
 
             // Input device limits (compile-time from keyboard.toml)
-            num_encoders: 0, // TODO Phase 6: surface encoder count
+            num_encoders: self.ctx.num_encoders() as u8,
             max_combos: constants::COMBO_MAX_NUM as u8,
             max_combo_keys: constants::COMBO_MAX_LENGTH as u8,
             max_macros: 0, // macro slots are implicit in MACRO_SPACE_SIZE
