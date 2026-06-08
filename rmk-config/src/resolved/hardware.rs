@@ -28,6 +28,7 @@ pub struct DfuConfig {
     pub state_size: u32,
     pub dfu_offset: u32,
     pub dfu_size: u32,
+    pub page_size: u32,
 }
 
 /// Complete hardware configuration for init code generation.
@@ -62,11 +63,37 @@ impl crate::KeyboardTomlConfig {
         } else {
             None
         };
-        let dfu = self.get_dfu_config().map(|d| DfuConfig {
-            state_offset: d.state_offset.unwrap_or(0x6000),
-            state_size: d.state_size.unwrap_or(0x1000),
-            dfu_offset: d.dfu_offset.unwrap_or(0x87000),
-            dfu_size: d.dfu_size.unwrap_or(516 * 1024),
+        let dfu = self.get_dfu_config().map(|d| {
+            let has_manual_overrides = self.dfu_user_set
+                && (d.state_offset.is_some()
+                    || d.state_size.is_some()
+                    || d.dfu_offset.is_some()
+                    || d.dfu_size.is_some());
+
+            if has_manual_overrides {
+                // User manually set [dfu] values → use directly
+                DfuConfig {
+                    state_offset: d.state_offset.unwrap_or(0x6000),
+                    state_size: d.state_size.unwrap_or(0x1000),
+                    dfu_offset: d.dfu_offset.unwrap_or(0x87000),
+                    dfu_size: d.dfu_size.unwrap_or(516 * 1024),
+                    page_size: d.page_size.unwrap_or(4096),
+                }
+            } else {
+                // Auto-calculate using bootymcbootface formula:
+                //   state at 0x6000 (4K), active from 0x7000 (flash/4),
+                //   dfu follows active (flash/4 + page_size)
+                let flash_size = d.flash_size.unwrap_or(2 * 1024 * 1024);
+                let half_flash = flash_size / 4;
+                let page_size = d.page_size.unwrap_or(4096);
+                DfuConfig {
+                    state_offset: 0x6000,
+                    state_size: 0x1000,
+                    dfu_offset: 0x7000 + half_flash,
+                    dfu_size: half_flash + page_size,
+                    page_size,
+                }
+            }
         });
         let light = self.get_light_config();
         let display = self.get_display_config();

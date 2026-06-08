@@ -43,14 +43,36 @@ async fn main(_spawner: Spawner) {
     let (row_pins, col_pins) =
         config_matrix_pins_rp!(peripherals: p, input: [PIN_6, PIN_7, PIN_8, PIN_9], output: [PIN_19, PIN_20, PIN_21]);
 
+    // Flash layout using the bootymcbootface formula:
+    //   state at 0x6000 (4K), active from 0x7000 (flash/4),
+    //   dfu follows active (flash/4 + page_size)
+    //
+    // All offsets (DFU_OFFSET, DFU_SIZE, STORAGE_END, etc.) are derived
+    // automatically from FLASH_SIZE below — change only that constant.
+    //
+    // ⚠  You can define your own FLASH_SIZE, but then you must build and
+    //    flash a custom bootymcbootface with a matching memory.x!
+    const FLASH_SIZE: u32 = 2 * 1024 * 1024;       // 2 MB (default)
+    // const FLASH_SIZE: u32 = 4 * 1024 * 1024;    // 4 MB
+    // const FLASH_SIZE: u32 = 8 * 1024 * 1024;    // 8 MB
+    // const FLASH_SIZE: u32 = 16 * 1024 * 1024;   // 16 MB
+    const PAGE_SIZE: u32 = 4096;
+    const HALF_FLASH: u32 = FLASH_SIZE / 4;
+    const STATE_OFFSET: u32 = 0x6000;
+    const STATE_SIZE: u32 = 0x1000;
+    const DFU_OFFSET: u32 = 0x7000 + HALF_FLASH;
+    const DFU_SIZE: u32 = HALF_FLASH + PAGE_SIZE;
+
+    const STORAGE_END: u32 = FLASH_SIZE - 32 * PAGE_SIZE;
+
     let flash = async_flash_wrapper(rmk::dfu::init_flash(
         p.FLASH,
-        0,          // storage_start (relative, dfu-rp partitions the flash)
-        0x1E0000,   // storage_end = 2MB - 32*4KB
-        0x6000,     // state_offset
-        0x1000,     // state_size
-        0x87000,    // dfu_offset
-        528384,     // dfu_size
+        0,               // storage_start (relative, dfu-rp partitions the flash)
+        STORAGE_END,
+        STATE_OFFSET,
+        STATE_SIZE,
+        DFU_OFFSET,
+        DFU_SIZE,
     ));
 
     let keyboard_device_config = DeviceConfig {
