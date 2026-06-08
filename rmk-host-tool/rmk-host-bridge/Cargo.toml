@@ -1,0 +1,23 @@
+[package]
+name = "rmk-host-bridge"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.85"
+authors.workspace = true
+description = "wasm JS-bridge transport for the Rynk host library — the byte link is owned by JS/TS"
+license.workspace = true
+repository.workspace = true
+keywords = ["keyboard", "firmware", "rmk", "protocol", "wasm"]
+
+# The crate body is gated on `wasm32` (see `src/lib.rs`), so on native targets
+# it compiles to an empty library. Only `rmk-host` is needed there; the
+# JS-bridge deps below are wasm32-only.
+[dependencies]
+rmk-host = { path = "../rmk-host" }
+
+# The TS layer owns the actual link (WebSerial, WebHID, …) and the permanent
+# version probe; this transport just forwards bytes across the JS boundary.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"

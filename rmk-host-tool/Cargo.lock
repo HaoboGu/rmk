@@ -1363,6 +1363,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmk-host-bridge"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "rmk-host",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "rmk-host-serial"
 version = "0.1.0"
 dependencies = [
@@ -1888,6 +1898,16 @@ dependencies = [
  "rustversion",
  "wasm-bindgen-macro",
  "wasm-bindgen-shared",
+]
+
+[[package]]
+name = "wasm-bindgen-futures"
+version = "0.4.72"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9473dbd2991ae90b6291c3c32c30c6187ac49aa32f9905d1cce280ec1e110b0f"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
 ]
 
 [[package]]

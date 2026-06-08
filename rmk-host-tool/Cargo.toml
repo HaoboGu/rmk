@@ -4,6 +4,7 @@ members = [
     "rmk-host",
     "rmk-host-serial",
     "rmk-host-ble",
+    "rmk-host-bridge",
 ]
 
 [workspace.package]

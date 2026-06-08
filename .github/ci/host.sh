@@ -13,6 +13,7 @@ mkdir -p "$CARGO_TARGET_DIR"
 log_section "Core check"
 cargo +stable check -p rmk-host
 cargo +stable check -p rmk-host --target wasm32-unknown-unknown
+cargo +stable check -p rmk-host-bridge --target wasm32-unknown-unknown
 
 log_section "Native transport checks"
 cargo +stable check -p rmk-host-serial
