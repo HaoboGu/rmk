@@ -1,0 +1,25 @@
+[package]
+name = "rmk-host"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.85"
+authors.workspace = true
+description = "Runtime-free host-side Rynk protocol client"
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["keyboard", "firmware", "rmk", "protocol", "vial"]
+
+# Transport-agnostic protocol client (Client / Transport trait / wire types).
+# It pulls in no transport or async-runtime dependencies; concrete transports
+# live in sibling crates and depend on this one.
+[dependencies]
+rmk-types.workspace = true
+postcard.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+log.workspace = true
+
+# Tokio is test-only. The library itself has no runtime or timer dependency.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { version = "1.47", features = ["test-util", "macros", "rt-multi-thread", "time"] }
