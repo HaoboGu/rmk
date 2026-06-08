@@ -160,10 +160,10 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     usb_config.device_protocol = 0x01;
     usb_config.composite_with_iads = true;
 
-    // Extra interfaces (usb_log, steno, embassy_boot) overflow the 128-byte config descriptor buffer.
-    #[cfg(any(feature = "usb_log", feature = "steno", feature = "embassy_boot"))]
+    // Extra interfaces (usb_log, steno, dfu) overflow the 128-byte config descriptor buffer.
+    #[cfg(any(feature = "usb_log", feature = "steno", feature = "dfu"))]
     const USB_BUF_SIZE: usize = 256;
-    #[cfg(not(any(feature = "usb_log", feature = "steno", feature = "embassy_boot")))]
+    #[cfg(not(any(feature = "usb_log", feature = "steno", feature = "dfu")))]
     const USB_BUF_SIZE: usize = 128;
 
     static CONFIG_DESC: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
@@ -204,7 +204,6 @@ pub struct UsbTransport<D: Driver<'static>> {
 
 impl<D: Driver<'static>> UsbTransport<D> {
     pub fn new(driver: D, device_config: DeviceConfig<'static>) -> Self {
-        let product_name = device_config.product_name;
         // nRF chips don't have a stable USB serial number unless one is derived
         // from the FICR. Override here so user code doesn't have to know.
         #[cfg(feature = "_nrf_ble")]
@@ -234,10 +233,14 @@ impl<D: Driver<'static>> UsbTransport<D> {
         #[cfg(feature = "usb_log")]
         let logger = Some(add_usb_logger!(&mut builder));
 
-        #[cfg(feature = "embassy_boot")]
-        if let Some(mgr) = ::rmk::dfu::get_manager() {
-            ::rmk::dfu::register_dfu_interface(&mut builder, mgr, product_name);
-}
+        #[cfg(feature = "dfu")]
+        {
+            let product_name = device_config.product_name;
+            #[cfg(feature = "dfu-rp")]
+            if let Some(mgr) = ::rmk::dfu::get_manager() {
+                ::rmk::dfu::register_dfu_interface(&mut builder, mgr, product_name);
+            }
+        }
         let (keyboard_reader, keyboard_writer) = keyboard_rw.split();
         let device = builder.build();
 

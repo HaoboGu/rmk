@@ -15,6 +15,7 @@ pub mod resolved;
 pub mod usb_interrupt_map;
 pub(crate) mod behavior;
 pub(crate) mod board;
+pub(crate) mod dfu;
 pub(crate) mod display;
 pub(crate) mod host;
 pub(crate) mod keycode_alias;
@@ -63,6 +64,8 @@ pub struct KeyboardTomlConfig {
     light: Option<LightConfig>,
     /// Storage config
     storage: Option<StorageConfig>,
+    /// DFU partition config (embassy-boot)
+    dfu: Option<DfuTomlConfig>,
     /// Ble config
     pub(crate) ble: Option<BleConfig>,
     /// Chip-specific configs (e.g., [chip.nrf52840])
@@ -479,6 +482,22 @@ pub(crate) struct StorageConfig {
     pub clear_storage: Option<bool>,
     // Clear on the layout at reboot, set this to true if you want to reset the layout
     pub clear_layout: Option<bool>,
+}
+
+/// Config for DFU partition layout (embassy-boot).
+///
+/// These values must match the bootloader's `memory.x` / linker script.
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DfuTomlConfig {
+    /// Offset of the boot state partition
+    pub state_offset: Option<u32>,
+    /// Size of the boot state partition
+    pub state_size: Option<u32>,
+    /// Offset of the DFU download partition
+    pub dfu_offset: Option<u32>,
+    /// Size of the DFU download partition
+    pub dfu_size: Option<u32>,
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]

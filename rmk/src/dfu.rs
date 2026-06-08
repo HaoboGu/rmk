@@ -1,10 +1,6 @@
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicPtr, Ordering};
 
-use embassy_embedded_hal::flash::partition::BlockingPartition;
-use embassy_rp::flash::{Blocking, Flash};
-use embassy_rp::peripherals::FLASH;
-use embassy_rp::Peri;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_usb::types::StringIndex;
@@ -33,20 +29,30 @@ impl Handler for DfuStringProvider {
 /// Total flash size for RP2040.
 pub const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
+#[cfg(feature = "dfu-rp")]
+use embassy_embedded_hal::flash::partition::BlockingPartition;
+#[cfg(feature = "dfu-rp")]
+use embassy_rp::flash::{Blocking, Flash};
+#[cfg(feature = "dfu-rp")]
+use embassy_rp::peripherals::FLASH;
+#[cfg(feature = "dfu-rp")]
+use embassy_rp::Peri;
+
+#[cfg(feature = "dfu-rp")]
 type FlashType = Flash<'static, FLASH, Blocking, FLASH_SIZE>;
+#[cfg(feature = "dfu-rp")]
 type MutexType = Mutex<NoopRawMutex, RefCell<FlashType>>;
+#[cfg(feature = "dfu-rp")]
 type PartitionType = BlockingPartition<'static, NoopRawMutex, FlashType>;
 
+#[cfg(feature = "dfu-rp")]
 static FLASH_CELL: StaticCell<MutexType> = StaticCell::new();
+#[cfg(feature = "dfu-rp")]
 static MANAGER_CELL: StaticCell<DfuFlashManager> = StaticCell::new();
+#[cfg(feature = "dfu-rp")]
 static MANAGER_PTR: AtomicPtr<DfuFlashManager> = AtomicPtr::new(core::ptr::null_mut());
 
-// Partition offsets relative to flash base (0x10000000), matching bootymcbootface/memory.x
-const STATE_OFFSET: u32 = 0x6000;
-const STATE_SIZE: u32 = 0x1000;
-const DFU_OFFSET: u32 = 0x87000;
-const DFU_SIZE: u32 = 516 * 1024;
-
+#[cfg(feature = "dfu-rp")]
 pub struct DfuFlashManager {
     flash_mutex: &'static MutexType,
     state_offset: u32,
@@ -57,14 +63,23 @@ pub struct DfuFlashManager {
     storage_size: u32,
 }
 
+#[cfg(feature = "dfu-rp")]
 impl DfuFlashManager {
-    fn new(flash_mutex: &'static MutexType, storage_start: u32, storage_end: u32) -> Self {
+    fn new(
+        flash_mutex: &'static MutexType,
+        storage_start: u32,
+        storage_end: u32,
+        state_offset: u32,
+        state_size: u32,
+        dfu_offset: u32,
+        dfu_size: u32,
+    ) -> Self {
         Self {
             flash_mutex,
-            state_offset: STATE_OFFSET,
-            state_size: STATE_SIZE,
-            dfu_offset: DFU_OFFSET,
-            dfu_size: DFU_SIZE,
+            state_offset,
+            state_size,
+            dfu_offset,
+            dfu_size,
             storage_offset: storage_start,
             storage_size: storage_end - storage_start,
         }
@@ -87,15 +102,33 @@ impl DfuFlashManager {
 ///
 /// Returns the storage partition (blocking flash) which the caller should wrap
 /// in `async_flash_wrapper` for use with `initialize_keymap_and_storage`.
-pub fn init_flash(flash_peri: Peri<'static, FLASH>, storage_start: u32, storage_end: u32) -> PartitionType {
+#[cfg(feature = "dfu-rp")]
+pub fn init_flash(
+    flash_peri: Peri<'static, FLASH>,
+    storage_start: u32,
+    storage_end: u32,
+    state_offset: u32,
+    state_size: u32,
+    dfu_offset: u32,
+    dfu_size: u32,
+) -> PartitionType {
     let raw_flash = Flash::<_, Blocking, FLASH_SIZE>::new_blocking(flash_peri);
     let flash_mutex: &'static MutexType = FLASH_CELL.init(Mutex::new(RefCell::new(raw_flash)));
-    let mgr = MANAGER_CELL.init(DfuFlashManager::new(flash_mutex, storage_start, storage_end));
+    let mgr = MANAGER_CELL.init(DfuFlashManager::new(
+        flash_mutex,
+        storage_start,
+        storage_end,
+        state_offset,
+        state_size,
+        dfu_offset,
+        dfu_size,
+    ));
     MANAGER_PTR.store(mgr as *const _ as *mut _, Ordering::Release);
     mgr.storage_partition()
 }
 
 /// Mark firmware boot as successful so the bootloader doesn't revert on next reset.
+#[cfg(feature = "dfu-rp")]
 pub fn mark_booted() {
     if let Some(mgr) = get_manager() {
         let state_part = mgr.state_partition();
@@ -107,6 +140,7 @@ pub fn mark_booted() {
 }
 
 /// Retrieve the global DFU manager (returns `None` before `init_flash` is called).
+#[cfg(feature = "dfu-rp")]
 pub fn get_manager() -> Option<&'static DfuFlashManager> {
     let ptr = MANAGER_PTR.load(Ordering::Acquire);
     if ptr.is_null() {
@@ -117,6 +151,7 @@ pub fn get_manager() -> Option<&'static DfuFlashManager> {
 }
 
 /// Register a DFU interface on the USB builder using the given manager.
+#[cfg(feature = "dfu-rp")]
 pub fn register_dfu_interface<D: Driver<'static>>(
     builder: &mut Builder<'static, D>,
     mgr: &'static DfuFlashManager,
@@ -150,11 +185,8 @@ pub fn register_dfu_interface<D: Driver<'static>>(
     > = StaticCell::new();
     let state_ref = DFU_STATE.init(state);
 
-    // Allocate a string index for the DFU interface name
     let string_idx = builder.string();
 
-    // Manually set up the DFU interface with the string index.
-    // We replicate dfu_mode::usb_dfu here to pass a non-None string.
     let mut func = builder.function(0x00, 0x00, 0x00);
     let mut iface = func.interface();
     let mut alt = iface.alt_setting(0xFE, 0x01, 0x02, Some(string_idx));
@@ -173,7 +205,6 @@ pub fn register_dfu_interface<D: Driver<'static>>(
     drop(func);
     builder.handler(state_ref);
 
-    // Register a handler to serve the interface name string
     static STRING_PROVIDER: StaticCell<DfuStringProvider> = StaticCell::new();
     let string_provider = STRING_PROVIDER.init(DfuStringProvider {
         string_idx,

@@ -20,11 +20,11 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
     let clear_storage = storage.clear_storage;
     let clear_layout = storage.clear_layout;
 
-    // With embassy_boot, the flash is already a partition that starts at the
+    // With dfu-rp, the flash is already a partition that starts at the
     // storage offset, so the relative offset must be 0.
-    #[cfg(feature = "embassy_boot")]
+    #[cfg(feature = "dfu-rp")]
     let storage_start_addr = 0usize;
-    #[cfg(not(feature = "embassy_boot"))]
+    #[cfg(not(feature = "dfu-rp"))]
     let storage_start_addr = _start_addr;
 
     let mut flash_init = quote! {
@@ -48,7 +48,7 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                 }
             }
         ChipSeries::Rp2040 => {
-            #[cfg(not(feature = "embassy_boot"))]
+            #[cfg(not(feature = "dfu-rp"))]
             {
                 quote! {
                     const FLASH_SIZE: usize = 2 * 1024 * 1024;
@@ -57,7 +57,7 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                     );
                 }
             }
-            #[cfg(feature = "embassy_boot")]
+            #[cfg(feature = "dfu-rp")]
             {
                 let storage = hardware.storage.as_ref();
                 let storage_start = storage.map(|s| s.start_addr).unwrap_or(0) as u32;
@@ -68,9 +68,24 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                 } else {
                     storage_start + storage_num_sectors * erase_size
                 };
+                let dfu = hardware.dfu.as_ref().expect(
+                    "[dfu] section is required in keyboard.toml (or chip default) when dfu-rp is enabled"
+                );
+                let state_offset = dfu.state_offset;
+                let state_size = dfu.state_size;
+                let dfu_offset = dfu.dfu_offset;
+                let dfu_size = dfu.dfu_size;
                 quote! {
                     let flash = ::rmk::storage::async_flash_wrapper(
-                        ::rmk::dfu::init_flash(p.FLASH, #storage_start, #storage_end)
+                        ::rmk::dfu::init_flash(
+                            p.FLASH,
+                            #storage_start,
+                            #storage_end,
+                            #state_offset,
+                            #state_size,
+                            #dfu_offset,
+                            #dfu_size,
+                        )
                     );
                 }
             }

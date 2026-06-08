@@ -22,6 +22,14 @@ pub struct Storage {
     pub clear_layout: bool,
 }
 
+/// Resolved DFU partition config
+pub struct DfuConfig {
+    pub state_offset: u32,
+    pub state_size: u32,
+    pub dfu_offset: u32,
+    pub dfu_size: u32,
+}
+
 /// Complete hardware configuration for init code generation.
 pub struct Hardware {
     pub chip: ChipModel,
@@ -29,6 +37,7 @@ pub struct Hardware {
     pub communication: CommunicationConfig,
     pub board: BoardConfig,
     pub storage: Option<Storage>,
+    pub dfu: Option<DfuConfig>,
     pub light: LightConfig,
     pub display: Option<DisplayConfig>,
     pub output: Vec<OutputConfig>,
@@ -53,6 +62,12 @@ impl crate::KeyboardTomlConfig {
         } else {
             None
         };
+        let dfu = self.get_dfu_config().map(|d| DfuConfig {
+            state_offset: d.state_offset.unwrap_or(0x6000),
+            state_size: d.state_size.unwrap_or(0x1000),
+            dfu_offset: d.dfu_offset.unwrap_or(0x87000),
+            dfu_size: d.dfu_size.unwrap_or(516 * 1024),
+        });
         let light = self.get_light_config();
         let display = self.get_display_config();
         let output = self.get_output_config()?;
@@ -63,6 +78,7 @@ impl crate::KeyboardTomlConfig {
             communication,
             board,
             storage,
+            dfu,
             light,
             display,
             output,
