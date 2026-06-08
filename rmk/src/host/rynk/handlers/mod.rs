@@ -13,21 +13,10 @@
 //! ```
 //!
 //! A handler decodes its request (if any) with `msg.request::<T>()` — bounded
-//! by the declared LEN, so a short frame is rejected rather than reading
+//! by the declared LEN, so a short frame is rejected rather than read from
 //! response scratch — and writes its reply into `msg.response_payload_mut()`.
-//! `Ok(n)` is the byte count of the postcard-encoded `Ok::<T, RynkError>(value)`
-//! written there; on `Err(e)` the dispatcher overwrites it with
-//! `Err::<(), RynkError>(e)`.
-//!
-//! ## Borrow-across-await rule
-//!
-//! `KeyMap` is a `RefCell<KeyMapInner>`. Its public API is sync-only —
-//! every method borrows, mutates, and drops within a single call. **Do
-//! not** introduce code that holds a `RefCell` borrow across an
-//! `.await`; under embassy's cooperative scheduler that lets a second
-//! handler observe a still-borrowed cell and panic. Stick to
-//! [`KeyboardContext`](crate::host::context::KeyboardContext)
-//! accessors, which all uphold this rule by construction.
+//! `Ok(n)` is the encoded byte count written there; on `Err(e)` the dispatcher
+//! overwrites it with the error.
 
 pub(crate) mod behavior;
 pub(crate) mod combo;

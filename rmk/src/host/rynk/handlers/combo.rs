@@ -32,12 +32,12 @@ impl<'a> RynkService<'a> {
         Self::write_response(&(), msg.response_payload_mut())
     }
 
-    #[cfg(feature = "bulk_transfer")]
+    #[cfg(feature = "bulk")]
     pub(crate) async fn handle_get_combo_bulk(&self, _msg: &mut RynkMessage<'_>) -> Result<usize, RynkError> {
         Err(RynkError::Unimplemented)
     }
 
-    #[cfg(feature = "bulk_transfer")]
+    #[cfg(feature = "bulk")]
     pub(crate) async fn handle_set_combo_bulk(&self, _msg: &mut RynkMessage<'_>) -> Result<usize, RynkError> {
         Err(RynkError::Unimplemented)
     }

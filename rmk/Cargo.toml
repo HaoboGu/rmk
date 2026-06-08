@@ -126,7 +126,7 @@ host_security = []
 rynk = ["host", "rmk-types/rynk"]
 
 ## Enable bulk transfer endpoints for the Rynk protocol on MCUs with sufficient RAM
-bulk_transfer = ["rynk", "rmk-types/bulk"]
+bulk = ["rynk", "rmk-types/bulk"]
 
 ## Enable the storage. The storage is optional to save memory
 storage = [

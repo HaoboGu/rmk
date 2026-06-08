@@ -1,11 +1,7 @@
 //! Rynk over BLE GATT.
 //!
-//! One public free function — [`run_host_ble`] — that owns the whole
-//! per-connection lifecycle: clear the inbound byte pipe, construct the Tx
-//! adapter around the GATT plumbing, and call [`RynkService::run_session`]
-//! once with the pipe as the Rx half. Returns when the underlying
-//! `embedded_io_async` halves error out (typically a disconnect); the
-//! parent BLE task is the outer reconnect loop.
+//! [`run_host_ble`] runs one per-connection session: the inbound pipe as Rx,
+//! a notify-based Tx adapter as the write half. Returns on disconnect.
 
 use embedded_io_async::{ErrorType, Write};
 use heapless::Vec;
@@ -17,9 +13,8 @@ use crate::channel::RYNK_BLE_RX_PIPE;
 use crate::host::rynk::RynkService;
 use crate::host::transport::HostTransportError;
 
-/// Run one rynk session over `conn`. Clears any leftover RX bytes from a
-/// prior connection, constructs the Tx adapter in place, and returns when
-/// the session ends.
+/// Run one rynk session over `conn`, clearing stale RX bytes from a prior
+/// connection first. Returns when the session ends.
 pub async fn run_host_ble<'stack, 'server, P: PacketPool>(
     server: &'server Server<'_>,
     conn: &GattConnection<'stack, 'server, P>,
@@ -34,8 +29,7 @@ pub async fn run_host_ble<'stack, 'server, P: PacketPool>(
     service.run_session(&mut rx, &mut tx).await;
 }
 
-/// Write half. Notifies the `input_data` characteristic in slices bounded by
-/// the live ATT MTU (and the `RYNK_BLE_CHUNK_SIZE` characteristic capacity).
+/// Write half: notifies `input_data` in MTU-bounded chunks.
 struct RynkBleTx<'a, 'b, 'c, P: PacketPool> {
     input_data: Characteristic<Vec<u8, RYNK_BLE_CHUNK_SIZE>>,
     conn: &'a GattConnection<'b, 'c, P>,
@@ -50,17 +44,12 @@ impl<P: PacketPool> Write for RynkBleTx<'_, '_, '_, P> {
         if buf.is_empty() {
             return Ok(0);
         }
-        // A notification larger than ATT_MTU − 3 is silently truncated by the
-        // stack (trouble's `assemble` caps the PDU at the negotiated MTU) —
-        // the lost bytes would desync the host's stream reassembler for the
-        // rest of the session. Chunk by the live MTU, capped at the
-        // characteristic capacity. (`max(1)` only guards `chunks(0)`; the
-        // ATT-minimum MTU of 23 keeps real links well above it.)
+        // A notification past ATT_MTU − 3 is silently truncated, not split, so
+        // chunk to fit — a dropped tail would desync the host's stream.
         let max_notify = (self.conn.raw().att_mtu() as usize).saturating_sub(3);
         let chunk_size = RYNK_BLE_CHUNK_SIZE.min(max_notify).max(1);
         for chunk in buf.chunks(chunk_size) {
-            // `chunk_size <= RYNK_BLE_CHUNK_SIZE` (the Vec capacity), so
-            // from_slice cannot fail.
+            // chunk_size <= RYNK_BLE_CHUNK_SIZE, so from_slice can't fail.
             let payload = Vec::<u8, RYNK_BLE_CHUNK_SIZE>::from_slice(chunk).expect("chunk size <= RYNK_BLE_CHUNK_SIZE");
             if let Err(e) = self.input_data.notify(self.conn, &payload).await {
                 error!("Failed to notify Rynk reply: {:?}", e);

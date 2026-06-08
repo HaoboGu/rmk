@@ -21,9 +21,9 @@
 pub mod client;
 pub mod transport;
 
-pub use client::{Client, ConnectError};
+pub use client::{Client, ConnectError, Event, RequestError, TopicFrame};
 pub use rmk_types;
-pub use transport::{MaybeSend, RequestError, TopicFrame, Transport, TransportError};
+pub use transport::{MaybeSend, Transport, TransportError};
 
 /// The wire types that appear in [`Client`] method signatures, re-exported for
 /// downstream import. The full protocol crate is [`rmk_types`].

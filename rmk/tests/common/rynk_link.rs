@@ -33,7 +33,7 @@ use embassy_sync::pipe::Pipe;
 use embedded_io_async::Read;
 use rmk::host::HostService as RynkService;
 use rmk_types::constants::RYNK_BUFFER_SIZE;
-use rmk_types::protocol::rynk::{Cmd, RYNK_HEADER_SIZE, RYNK_TOPIC_BIT, RynkError, RynkMessage};
+use rmk_types::protocol::rynk::{Cmd, RYNK_HEADER_SIZE, RynkError, RynkMessage};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -46,11 +46,8 @@ pub type Link = Pipe<NoopRawMutex, RYNK_BUFFER_SIZE>;
 
 /// A frame read off the wire, decoded only as far as its header.
 ///
-/// `cmd` is `Err(raw)` for an unknown discriminant so error replies that echo
-/// one remain observable (the device never invents a valid `Cmd` for a frame
-/// it rejected).
 pub struct Frame {
-    pub cmd: Result<Cmd, u16>,
+    pub cmd: Cmd,
     pub seq: u8,
     pub payload: Vec<u8>,
 }
@@ -59,10 +56,7 @@ impl Frame {
     /// Topic / unsolicited-push frames carry the high bit in their `cmd` —
     /// including unknown-but-topic-range cmds from a newer peer.
     pub fn is_topic(&self) -> bool {
-        match self.cmd {
-            Ok(cmd) => cmd.is_topic(),
-            Err(raw) => raw & RYNK_TOPIC_BIT != 0,
-        }
+        self.cmd.is_topic()
     }
 
     /// Decode the payload as a `Result<T, RynkError>` response envelope.
@@ -123,8 +117,7 @@ impl<'p> RynkClient<'p> {
         let mut rx = self.rx;
         let mut header = [0u8; RYNK_HEADER_SIZE];
         rx.read_exact(&mut header).await.expect("read header");
-        let cmd_raw = u16::from_le_bytes([header[0], header[1]]);
-        let cmd = Cmd::from_repr(cmd_raw).ok_or(cmd_raw);
+        let cmd = Cmd::from_le_bytes([header[0], header[1]]);
         let seq = header[2];
         let payload_len = u16::from_le_bytes([header[3], header[4]]) as usize;
         let mut payload = vec![0u8; payload_len];
@@ -165,7 +158,7 @@ impl<'p> RynkClient<'p> {
     ) -> Result<Resp, RynkError> {
         self.send(cmd, seq, req).await;
         let frame = self.recv_response(seq).await;
-        assert_eq!(frame.cmd, Ok(cmd), "response must echo the request cmd");
+        assert_eq!(frame.cmd, cmd, "response must echo the request cmd");
         frame.envelope()
     }
 

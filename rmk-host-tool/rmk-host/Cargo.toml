@@ -22,4 +22,8 @@ log.workspace = true
 
 # Tokio is test-only. The library itself has no runtime or timer dependency.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+env_logger = "0.11"
+heapless = { version = "0.9", features = ["serde"] }
+rmk-host-ble = { path = "../rmk-host-ble" }
+rmk-host-serial = { path = "../rmk-host-serial" }
 tokio = { version = "1.47", features = ["test-util", "macros", "rt-multi-thread", "time"] }

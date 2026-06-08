@@ -21,6 +21,9 @@ cargo +stable check -p rmk-host-ble
 log_section "Tests"
 cargo +stable test -p rmk-host
 cargo +stable test -p rmk-host-serial
+# Cross-stack rynk end-to-end test: the real host Client against the real
+# firmware run_session (links rmk for the host target — see rmk-rynk-e2e).
+cargo +stable test -p rmk-rynk-e2e
 
 log_section "Clippy"
 cargo +stable clippy --workspace --all-targets -- -D warnings

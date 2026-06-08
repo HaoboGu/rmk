@@ -11,8 +11,8 @@
 //! ┌──────────────┬───────────┬────────────────────┐
 //! │ CMD u16 LE   │ SEQ u8    │ LEN u16 LE         │  ← 5-byte header
 //! ├──────────────┴───────────┴────────────────────┤
-//! │              postcard-encoded payload          │  ← LEN bytes
-//! └────────────────────────────────────────────────┘
+//! │              postcard-encoded payload         │  ← LEN bytes
+//! └───────────────────────────────────────────────┘
 //! ```
 //!
 //! - **CMD** — `0x0000..=0x7FFF` request/response, `0x8000..=0xFFFF` topic.
@@ -32,27 +32,16 @@
 //!
 //! ## Module layout
 //!
-//! - [`cmd`] — `Cmd` enum (request, response, topic tags)
-//! - [`message`] — `RynkMessage` (mutable view over wire bytes; header
-//!   parsed once at construction, accessors are infallible)
-//! - [`buffer`] — `RYNK_MIN_BUFFER_SIZE` const computed from `MaxSize` of
-//!   every wire type
-//! - `system` — handshake (`ProtocolVersion`, `DeviceCapabilities`,
-//!   `StorageResetMode`, `BehaviorConfig`)
-//! - `keymap`, `encoder`, `macro_data`, `combo`, `morse`,
-//!   `fork` — per-domain request/response types
-//! - `status` — runtime status types (`MatrixState`, `PeripheralStatus`)
-//!
-//! (The per-domain modules are private; their types are re-exported at
-//! `protocol::rynk::*`.)
+//! The per-domain modules (`keymap`, `encoder`, `combo`, …) are private;
+//! their types are re-exported flat at `protocol::rynk::*`. Only `cmd`,
+//! `message`, and `buffer` are public.
 //!
 //! ## Protocol handshake
 //!
 //! 1. Host connects over USB bulk or BLE GATT (length-prefixed messages).
 //! 2. Host sends `Cmd::GetVersion`. If `major` differs from the host's
 //!    supported major, or `minor` exceeds the host's known max, the host
-//!    aborts with an "update host" diagnostic. `GetVersion`'s shape is
-//!    permanent — never modified, even across major bumps.
+//!    aborts with an "update host" diagnostic.
 //! 3. Host sends `Cmd::GetCapabilities` to learn layout, feature flags,
 //!    and limits.
 //! 4. Host gates every subsequent call on the capability flags.
@@ -65,7 +54,6 @@
 //! - `major` bump: `Cmd` variant retyped; struct field reshaped; enum
 //!   variant renamed/renumbered. `Cmd::GetVersion`'s shape is exempt —
 //!   changing it is forbidden even across major bumps.
-//! - Neither: no wire change.
 
 pub mod buffer;
 pub mod cmd;
@@ -97,22 +85,14 @@ pub use self::morse::*;
 pub use self::status::*;
 pub use self::system::*;
 
-/// CMD high bit marking a topic (server → host push). Requests/responses live
-/// in `0x0000..=0x7FFF`; topics in `0x8000..=0xFFFF`.
-pub const RYNK_TOPIC_BIT: u16 = 0x8000;
-
 /// Largest single GATT write/notification on the Rynk BLE characteristics.
 pub const RYNK_BLE_CHUNK_SIZE: usize = 244;
 
-/// Rynk GATT service UUID, shared by the firmware's `#[gatt_service]`
-/// (trouble's `Uuid: From<u128>` handles the little-endian wire order) and the
-/// host's GATT discovery (`uuid::Uuid::from_u128`). The service UUID is not
-/// advertised, so it can't be a scan filter — hosts discover it over GATT
-/// after attaching.
+/// Rynk GATT service UUID
 pub const RYNK_SERVICE_UUID: u128 = 0x10900067_537f_4f0a_9b55_929e271f61ab;
-/// `input_data` characteristic (server → host, `read | notify`).
+/// Rynk `input_data` characteristic UUID.
 pub const RYNK_INPUT_CHAR_UUID: u128 = 0x80f9319b_0c74_43a5_9738_c59d6dda3db9;
-/// `output_data` characteristic (host → server, `read | write | write-without-response`).
+/// Rynk `output_data` characteristic UUID.
 pub const RYNK_OUTPUT_CHAR_UUID: u128 = 0x19802524_6f90_4346_93c2_63dbc509ab55;
 
 /// Protocol-level error returned in every response payload.
@@ -132,27 +112,9 @@ pub enum RynkError {
     Unimplemented,
     /// The request decoded cleanly but is semantically invalid.
     Invalid,
-    /// The frame is well-formed but its CMD tag is not one this build knows —
-    /// a feature-gated-out command, a newer peer's command, or coincidental
-    /// garbage on a desynced stream; the receiver cannot tell which.
+    /// The frame is well-formed but its CMD is unknown.
     UnknownCmd,
 }
-
-impl core::fmt::Display for RynkError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(match self {
-            Self::Malformed => "malformed request",
-            Self::NotReady => "device not ready",
-            Self::StorageFault => "storage write failed",
-            Self::Internal => "internal firmware error",
-            Self::Unimplemented => "command not implemented",
-            Self::Invalid => "invalid request",
-            Self::UnknownCmd => "unknown command",
-        })
-    }
-}
-
-impl core::error::Error for RynkError {}
 
 #[cfg(test)]
 pub(crate) mod test_utils {
@@ -339,37 +301,122 @@ mod tests {
     /// Lock down postcard's actual byte encoding for stability-critical
     /// values. A diff in this snapshot indicates wire-format drift; if
     /// intentional, regenerate the snapshot and bump `ProtocolVersion::CURRENT`.
+    ///
+    /// One exemplar per Rynk wire type, plus every variant of the positional
+    /// enums (`KeyAction`, `Action`, and the status enums) so a reordered or
+    /// inserted variant flips the bytes. Postcard tags enums by declaration
+    /// order, *not* the `#[repr]` discriminant, so the keycode exemplars also
+    /// pin variant ordinals. Structs use distinct per-field values so a field
+    /// swap is caught too. Only feature-independent values belong here: the
+    /// gated `Action::Steno`, the `bulk` request/response payloads, and
+    /// `PeripheralStatus` are excluded so every `rynk` feature set yields the
+    /// same snapshot.
     #[test]
     fn wire_values_locked() {
+        use crate::action::{Action, EncoderAction, KeyAction, KeyboardAction, LightAction};
+        use crate::battery::{BatteryStatus, ChargeState};
+        use crate::ble::{BleState, BleStatus};
+        use crate::combo::Combo;
+        use crate::connection::{ConnectionStatus, UsbState};
+        use crate::fork::{Fork, StateBits};
+        use crate::keycode::{ConsumerKey, HidKeyCode, KeyCode, SpecialKey, SystemControlKey};
+        use crate::led_indicator::LedIndicator;
+        use crate::modifier::ModifierCombination;
+        use crate::morse::{Morse, MorseMode, MorseProfile, TAP};
+        use crate::mouse_button::MouseButtons;
+
         let mut bitmap: heapless::Vec<u8, MATRIX_BITMAP_SIZE> = heapless::Vec::new();
         bitmap.extend_from_slice(&[0x05, 0x00, 0x20]).unwrap();
         let matrix = MatrixState { pressed_bitmap: bitmap };
 
-        use crate::action::{Action, KeyAction};
-        use crate::keycode::{HidKeyCode, KeyCode};
+        // Distinct ascending per-field values so a field reorder flips bytes.
+        let capabilities = DeviceCapabilities {
+            num_layers: 1,
+            num_rows: 2,
+            num_cols: 3,
+            num_encoders: 4,
+            max_combos: 5,
+            max_combo_keys: 6,
+            max_macros: 7,
+            macro_space_size: 8,
+            max_morse: 9,
+            max_patterns_per_key: 10,
+            max_forks: 11,
+            storage_enabled: true,
+            lighting_enabled: false,
+            is_split: true,
+            num_split_peripherals: 12,
+            ble_enabled: false,
+            num_ble_profiles: 13,
+            max_payload_size: 14,
+            max_bulk_keys: 15,
+            macro_chunk_size: 16,
+            bulk_transfer_supported: true,
+        };
+        let behavior = BehaviorConfig {
+            combo_timeout_ms: 50,
+            oneshot_timeout_ms: 500,
+            tap_interval_ms: 200,
+            tap_capslock_interval_ms: 20,
+        };
+        let connection = ConnectionStatus {
+            usb: UsbState::Configured,
+            ble: BleStatus {
+                profile: 1,
+                state: BleState::Advertising,
+            },
+            preferred: ConnectionType::Ble,
+        };
+        // All three sub-bitfields distinct so a StateBits field swap shows.
+        let state_bits = StateBits::new_from(
+            ModifierCombination::LCTRL,
+            LedIndicator::CAPS_LOCK,
+            MouseButtons::BUTTON1,
+        );
+        let combo = Combo::new(
+            [KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A)))],
+            KeyAction::Morse(1),
+            Some(2),
+        );
+        let fork = Fork::new(
+            KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A))),
+            KeyAction::No,
+            KeyAction::Morse(2),
+            state_bits,
+            StateBits::default(),
+            ModifierCombination::LSHIFT,
+            true,
+        );
+        // Pins Morse's custom serde shape: (MorseProfile, Vec<(u16, Action)>).
+        let mut morse_actions = heapless::LinearMap::new();
+        morse_actions
+            .insert(TAP, Action::Key(KeyCode::Hid(HidKeyCode::A)))
+            .unwrap();
+        let morse = Morse {
+            profile: MorseProfile::const_default(),
+            actions: morse_actions,
+        };
+        let mut macro_bytes = heapless::Vec::new();
+        macro_bytes.extend_from_slice(&[0x01, 0x02, 0x03]).unwrap();
+        let macro_data = MacroData { data: macro_bytes };
+        let mut unlock_keys: heapless::Vec<(u8, u8), UNLOCK_KEYS_SIZE> = heapless::Vec::new();
+        unlock_keys.push((1, 2)).unwrap();
+        unlock_keys.push((3, 4)).unwrap();
+        let unlock = UnlockChallenge {
+            key_positions: unlock_keys,
+        };
+        let encoder = EncoderAction::new(KeyAction::Morse(3), KeyAction::No);
+        let profile = MorseProfile::new(None, Some(MorseMode::Normal), Some(200), Some(150));
 
         let entries: alloc::vec::Vec<(&str, alloc::vec::Vec<u8>)> = alloc::vec![
-            // KeyAction/Action ride GetKeyAction/SetKeyAction; their postcard
-            // tags are positional, so pin exemplars to catch tag drift. Only
-            // feature-independent variants go here (the gated `Action::Steno`
-            // would make the snapshot differ by feature set).
+            // --- Response envelope + connection ---
             ("ConnectionType::Ble", encode(&ConnectionType::Ble)),
             ("ConnectionType::Usb", encode(&ConnectionType::Usb)),
-            ("KeyAction::Morse(3)", encode(&KeyAction::Morse(3))),
             (
-                "KeyAction::Single(Action::Key(Hid(A)))",
-                encode(&KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A)))),
+                "Result<(),RynkError>::Err(StorageFault)",
+                encode::<Result<(), RynkError>>(&Err(RynkError::StorageFault)),
             ),
-            (
-                "KeyPosition{layer:0,row:5,col:13}",
-                encode(&KeyPosition {
-                    layer: 0,
-                    row: 5,
-                    col: 13,
-                }),
-            ),
-            ("MatrixState{[0x05,0x00,0x20]}", encode(&matrix)),
-            ("ProtocolVersion{1,0}", encode(&ProtocolVersion { major: 1, minor: 0 }),),
+            ("Result<(),RynkError>::Ok", encode::<Result<(), RynkError>>(&Ok(()))),
             ("RynkError::Internal", encode(&RynkError::Internal)),
             ("RynkError::Invalid", encode(&RynkError::Invalid)),
             ("RynkError::Malformed", encode(&RynkError::Malformed)),
@@ -377,13 +424,206 @@ mod tests {
             ("RynkError::StorageFault", encode(&RynkError::StorageFault)),
             ("RynkError::Unimplemented", encode(&RynkError::Unimplemented)),
             ("RynkError::UnknownCmd", encode(&RynkError::UnknownCmd)),
+            // --- KeyAction: every variant tag (positional) ---
+            ("KeyAction::No", encode(&KeyAction::No)),
+            ("KeyAction::Transparent", encode(&KeyAction::Transparent)),
             (
-                "Result<(),RynkError>::Err(StorageFault)",
-                encode::<Result<(), RynkError>>(&Err(RynkError::StorageFault)),
+                "KeyAction::Single(Action::Key(Hid(A)))",
+                encode(&KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A)))),
             ),
-            ("Result<(),RynkError>::Ok", encode::<Result<(), RynkError>>(&Ok(()))),
+            ("KeyAction::Tap(Action::No)", encode(&KeyAction::Tap(Action::No))),
+            (
+                "KeyAction::TapHold(Key(A),LayerOn(3))",
+                encode(&KeyAction::TapHold(
+                    Action::Key(KeyCode::Hid(HidKeyCode::A)),
+                    Action::LayerOn(3),
+                    MorseProfile::const_default(),
+                )),
+            ),
+            ("KeyAction::Morse(3)", encode(&KeyAction::Morse(3))),
+            // --- Action: every feature-independent variant tag (positional) ---
+            ("Action::No", encode(&Action::No)),
+            ("Action::Key(Hid(A))", encode(&Action::Key(KeyCode::Hid(HidKeyCode::A)))),
+            (
+                "Action::Modifier(LCtrl)",
+                encode(&Action::Modifier(ModifierCombination::LCTRL))
+            ),
+            (
+                "Action::KeyWithModifier(A,LShift)",
+                encode(&Action::KeyWithModifier(
+                    KeyCode::Hid(HidKeyCode::A),
+                    ModifierCombination::LSHIFT
+                )),
+            ),
+            ("Action::LayerOn(1)", encode(&Action::LayerOn(1))),
+            (
+                "Action::LayerOnWithModifier(2,LCtrl)",
+                encode(&Action::LayerOnWithModifier(2, ModifierCombination::LCTRL)),
+            ),
+            ("Action::LayerOff(3)", encode(&Action::LayerOff(3))),
+            ("Action::LayerToggle(4)", encode(&Action::LayerToggle(4))),
+            ("Action::DefaultLayer(5)", encode(&Action::DefaultLayer(5))),
+            ("Action::LayerToggleOnly(6)", encode(&Action::LayerToggleOnly(6))),
+            ("Action::TriLayerLower", encode(&Action::TriLayerLower)),
+            ("Action::TriLayerUpper", encode(&Action::TriLayerUpper)),
+            ("Action::TriggerMacro(7)", encode(&Action::TriggerMacro(7))),
+            ("Action::OneShotLayer(8)", encode(&Action::OneShotLayer(8))),
+            (
+                "Action::OneShotModifier(LAlt)",
+                encode(&Action::OneShotModifier(ModifierCombination::LALT))
+            ),
+            (
+                "Action::OneShotKey(Hid(B))",
+                encode(&Action::OneShotKey(KeyCode::Hid(HidKeyCode::B)))
+            ),
+            ("Action::Light(RgbTog)", encode(&Action::Light(LightAction::RgbTog))),
+            (
+                "Action::KeyboardControl(Bootloader)",
+                encode(&Action::KeyboardControl(KeyboardAction::Bootloader)),
+            ),
+            (
+                "Action::Special(GraveEscape)",
+                encode(&Action::Special(SpecialKey::GraveEscape))
+            ),
+            ("Action::User(9)", encode(&Action::User(9))),
+            // --- KeyCode discriminants (postcard tags by ordinal, not repr) ---
+            ("KeyCode::Hid(A)", encode(&KeyCode::Hid(HidKeyCode::A))),
+            (
+                "KeyCode::Consumer(VolumeIncrement)",
+                encode(&KeyCode::Consumer(ConsumerKey::VolumeIncrement)),
+            ),
+            (
+                "KeyCode::SystemControl(Sleep)",
+                encode(&KeyCode::SystemControl(SystemControlKey::Sleep))
+            ),
+            // --- Bitfields: pin LSB bit order ---
+            (
+                "ModifierCombination(LCtrl|RGui)",
+                encode(&(ModifierCombination::LCTRL | ModifierCombination::RGUI)),
+            ),
+            (
+                "LedIndicator(Num|Scroll)",
+                encode(&(LedIndicator::NUM_LOCK | LedIndicator::SCROLL_LOCK))
+            ),
+            (
+                "MouseButtons(B1|B8)",
+                encode(&(MouseButtons::BUTTON1 | MouseButtons::BUTTON8))
+            ),
+            ("MorseProfile(Normal,200,150)", encode(&profile)),
+            // --- Keymap / encoder / behavior config payloads ---
+            (
+                "KeyPosition{layer:0,row:5,col:13}",
+                encode(&KeyPosition {
+                    layer: 0,
+                    row: 5,
+                    col: 13
+                })
+            ),
+            ("EncoderAction{Morse(3),No}", encode(&encoder)),
+            ("Combo{[Single(A)],Morse(1),L2}", encode(&combo)),
+            ("Fork{Single(A),No,Morse(2)}", encode(&fork)),
+            ("StateBits{LCtrl,Caps,B1}", encode(&state_bits)),
+            ("Morse{TAP->Key(A)}", encode(&morse)),
+            ("MacroData{[0x01,0x02,0x03]}", encode(&macro_data)),
+            // --- Status / system responses ---
+            ("MatrixState{[0x05,0x00,0x20]}", encode(&matrix)),
+            ("DeviceCapabilities{1..16}", encode(&capabilities)),
+            ("BehaviorConfig{50,500,200,20}", encode(&behavior)),
+            ("ConnectionStatus{Configured,{1,Adv},Ble}", encode(&connection)),
+            ("ProtocolVersion{1,0}", encode(&ProtocolVersion { major: 1, minor: 0 })),
+            (
+                "LockStatus{true,false,3}",
+                encode(&LockStatus {
+                    locked: true,
+                    awaiting_keys: false,
+                    remaining_keys: 3
+                }),
+            ),
+            ("UnlockChallenge{[(1,2),(3,4)]}", encode(&unlock)),
+            ("BatteryStatus::Unavailable", encode(&BatteryStatus::Unavailable)),
+            (
+                "BatteryStatus::Available{Discharging,85}",
+                encode(&BatteryStatus::Available {
+                    charge_state: ChargeState::Discharging,
+                    level: Some(85)
+                }),
+            ),
+            ("ChargeState::Charging", encode(&ChargeState::Charging)),
+            ("ChargeState::Discharging", encode(&ChargeState::Discharging)),
+            ("ChargeState::Unknown", encode(&ChargeState::Unknown)),
+            ("BleState::Advertising", encode(&BleState::Advertising)),
+            ("BleState::Connected", encode(&BleState::Connected)),
+            ("BleState::Inactive", encode(&BleState::Inactive)),
+            (
+                "BleStatus{2,Connected}",
+                encode(&BleStatus {
+                    profile: 2,
+                    state: BleState::Connected
+                })
+            ),
+            ("UsbState::Disabled", encode(&UsbState::Disabled)),
+            ("UsbState::Enabled", encode(&UsbState::Enabled)),
+            ("UsbState::Configured", encode(&UsbState::Configured)),
+            ("UsbState::Suspended", encode(&UsbState::Suspended)),
             ("StorageResetMode::Full", encode(&StorageResetMode::Full)),
             ("StorageResetMode::LayoutOnly", encode(&StorageResetMode::LayoutOnly)),
+            // --- Request payloads: pin field order of the Get/Set structs ---
+            (
+                "SetKeyRequest{{0,5,13},Morse(7)}",
+                encode(&SetKeyRequest {
+                    position: KeyPosition {
+                        layer: 0,
+                        row: 5,
+                        col: 13
+                    },
+                    action: KeyAction::Morse(7),
+                }),
+            ),
+            (
+                "GetEncoderRequest{1,2}",
+                encode(&GetEncoderRequest {
+                    encoder_id: 1,
+                    layer: 2
+                })
+            ),
+            (
+                "SetEncoderRequest{1,2,{Morse(3),No}}",
+                encode(&SetEncoderRequest {
+                    encoder_id: 1,
+                    layer: 2,
+                    action: encoder
+                }),
+            ),
+            (
+                "GetMacroRequest{1,256}",
+                encode(&GetMacroRequest { index: 1, offset: 256 })
+            ),
+            (
+                "SetMacroRequest{1,2,[0x01,0x02,0x03]}",
+                encode(&SetMacroRequest {
+                    index: 1,
+                    offset: 2,
+                    data: macro_data
+                }),
+            ),
+            (
+                "SetComboRequest{3,combo}",
+                encode(&SetComboRequest {
+                    index: 3,
+                    config: combo
+                })
+            ),
+            (
+                "SetMorseRequest{0,morse}",
+                encode(&SetMorseRequest {
+                    index: 0,
+                    config: morse
+                })
+            ),
+            (
+                "SetForkRequest{2,fork}",
+                encode(&SetForkRequest { index: 2, config: fork })
+            ),
         ];
         let view: alloc::vec::Vec<(&str, &[u8])> = entries.iter().map(|(l, b)| (*l, b.as_slice())).collect();
 

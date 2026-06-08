@@ -81,12 +81,12 @@ impl<'a> RynkService<'a> {
         Ok(())
     }
 
-    #[cfg(feature = "bulk_transfer")]
+    #[cfg(feature = "bulk")]
     pub(crate) async fn handle_get_keymap_bulk(&self, _msg: &mut RynkMessage<'_>) -> Result<usize, RynkError> {
         Err(RynkError::Unimplemented)
     }
 
-    #[cfg(feature = "bulk_transfer")]
+    #[cfg(feature = "bulk")]
     pub(crate) async fn handle_set_keymap_bulk(&self, _msg: &mut RynkMessage<'_>) -> Result<usize, RynkError> {
         Err(RynkError::Unimplemented)
     }

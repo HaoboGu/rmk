@@ -37,7 +37,10 @@ pub struct DeviceCapabilities {
     pub num_encoders: u8,
     pub max_combos: u8,
     pub max_combo_keys: u8,
+    /// Number of macros supported, set by the user at compile time. `0`
+    /// disables macros: the host MUST NOT use them or consult `macro_space_size`.
     pub max_macros: u8,
+    /// Byte size of the flat macro region; only meaningful when `max_macros > 0`.
     pub macro_space_size: u16,
     pub max_morse: u8,
     pub max_patterns_per_key: u8,
@@ -82,14 +85,9 @@ impl MaxSize for UnlockChallenge {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[non_exhaustive]
 pub enum StorageResetMode {
-    /// Reset all stored data — including saved keymap edits **and BLE
-    /// bonds**.
+    /// Reset all stored data — including keymap and BLE bonds.
     Full,
-    /// Reset only the layout/keymap data, preserving bonds.
-    ///
-    /// Not implemented yet: current firmware rejects this mode with
-    /// [`RynkError::Unimplemented`](super::RynkError::Unimplemented) rather
-    /// than silently over-wiping. Mode-aware reset lands in a later phase.
+    /// Reset only the layout/keymap data, preserving BLE bonds.
     LayoutOnly,
 }
 

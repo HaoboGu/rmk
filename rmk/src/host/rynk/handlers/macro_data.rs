@@ -9,16 +9,10 @@ use super::super::RynkService;
 impl<'a> RynkService<'a> {
     pub(crate) async fn handle_get_macro(&self, msg: &mut RynkMessage<'_>) -> Result<usize, RynkError> {
         let r = msg.request::<GetMacroRequest>()?;
-        // Read exactly MACRO_DATA_SIZE bytes starting at `offset` — the reply
-        // is ALWAYS a full-length chunk. The keymap accessor zero-fills any
-        // read that runs past the end of the macro space, so a short chunk is
-        // never an end signal: the host bounds its reads by the
-        // `macro_space_size` capability and parses the macro encoding itself
-        // for termination.
-        //
-        // `index` is reserved for a future per-macro indirection layer and is
-        // not used today — the entire buffer is one flat region.
-        let _ = r.index;
+        // Reply is always a full MACRO_DATA_SIZE chunk (zero-filled past the
+        // macro space), so length is no end signal — the host terminates by
+        // its capability size and the macro encoding itself.
+        let _ = r.index; // reserved for a future per-macro indirection layer
         let mut buf = [0u8; MACRO_DATA_SIZE];
         self.ctx.read_macro_buffer(r.offset as usize, &mut buf);
         let mut data: Vec<u8, MACRO_DATA_SIZE> = Vec::new();

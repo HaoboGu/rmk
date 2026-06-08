@@ -37,10 +37,10 @@ cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features
 # Rynk: runs the `rynk_loopback` end-to-end tests, which drive the real
 # `run_session` over an in-memory embedded-io duplex (request/response Cmds,
 # topic-emit, and oversized-frame resync). The feature flags also add *compile*
-# coverage for the gated handler arms: `bulk_transfer` pulls in every bulk Cmd
+# coverage for the gated handler arms: `bulk` pulls in every bulk Cmd
 # handler, `_ble` the BLE-only handlers, and `_ble` + `split` the peripheral-status
 # handler — those arms are compiled here, not all exercised at runtime.
-cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "rynk,bulk_transfer,_ble,split,storage,async_matrix"
+cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features --features "rynk,bulk,_ble,split,storage,async_matrix"
 # Rynk again with the BLE/split/bulk handlers OFF: exercises the gated arms' absence
 # and the `GetCapabilities` feature flags in their false state (so the cfg!()-based
 # assertions aren't tautological), plus the no-`_ble`/no-`split` topic set.
@@ -51,3 +51,8 @@ cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features
 # rmk-types needs a --doc pass.
 cargo test --manifest-path rmk-types/Cargo.toml --doc
 cargo test --manifest-path rmk-types/Cargo.toml --features host --doc
+
+# Host tooling is a separate workspace; build it + run rmk-host's tests and the
+# cross-stack rynk end-to-end test (real Client against the real run_session).
+# (.github/ci/host.sh also runs the wasm32 check and clippy.)
+(cd "$repo_root/rmk-host-tool" && cargo build --workspace --all-targets && cargo test -p rmk-host && cargo test -p rmk-rynk-e2e)
