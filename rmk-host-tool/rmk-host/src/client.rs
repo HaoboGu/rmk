@@ -15,21 +15,55 @@ use rmk_types::led_indicator::LedIndicator;
 use rmk_types::morse::Morse;
 use rmk_types::protocol::rynk::{
     BehaviorConfig, Cmd, DeviceCapabilities, GetEncoderRequest, GetMacroRequest, KeyPosition, MacroData, MatrixState,
-    PeripheralStatus, ProtocolVersion, RYNK_HEADER_SIZE, RYNK_MIN_BUFFER_SIZE, RYNK_TOPIC_BIT, RynkError, RynkMessage,
-    SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetMacroRequest, SetMorseRequest,
-    StorageResetMode,
+    PeripheralStatus, ProtocolVersion, RYNK_HEADER_SIZE, RYNK_MIN_BUFFER_SIZE, RynkError, RynkMessage, SetComboRequest,
+    SetEncoderRequest, SetForkRequest, SetKeyRequest, SetMacroRequest, SetMorseRequest, StorageResetMode,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 
-use crate::transport::{RequestError, TopicFrame, Transport, TransportError};
+use crate::transport::{Transport, TransportError};
 
 /// Queued topic frames before dropping the oldest.
 const EVENT_QUEUE_CAPACITY: usize = 64;
 
-/// Largest frame accepted from the device.
-const MAX_FRAME_SIZE: usize = 4 * RYNK_MIN_BUFFER_SIZE;
+/// A raw topic frame (server → host push), delivered via [`Client::next_event`].
+#[derive(Debug, Clone)]
+pub struct TopicFrame {
+    pub cmd: Cmd,
+    pub payload: Vec<u8>,
+}
+
+/// Errors from one request round trip.
+#[derive(Debug, Error)]
+pub enum RequestError {
+    #[error(transparent)]
+    Transport(#[from] TransportError),
+    /// The firmware accepted the request but answered with an error.
+    #[error("device rejected {0:?}")]
+    Rejected(RynkError),
+    #[error("request encode failed for {0:?} (request exceeds tx buffer?)")]
+    Encode(Cmd),
+    /// The encoded request frame is larger than the device's advertised
+    /// [`max_payload_size`](DeviceCapabilities::max_payload_size)
+    #[error("request {cmd:?} frame is {frame_len} bytes; device accepts at most {max}")]
+    TooLarge { cmd: Cmd, frame_len: usize, max: usize },
+    #[error("response decode failed for {cmd:?}: {source}")]
+    Deserialize { cmd: Cmd, source: postcard::Error },
+    #[error("response for {cmd:?} had trailing bytes")]
+    TrailingBytes { cmd: Cmd },
+    #[error("response cmd mismatch: sent {sent:?}, got {got:?}")]
+    CmdMismatch { sent: Cmd, got: Cmd },
+    /// A topic-range `Cmd` was passed to a request method — topics are
+    /// server→host push only.
+    #[error("{0:?} is a topic, not a request")]
+    TopicCmd(Cmd),
+    /// The cached device capabilities say this command's feature is absent, so
+    /// the client rejected it locally without touching the wire — distinct from
+    /// a firmware [`Rejected`](Self::Rejected) reply.
+    #[error("device does not support {0:?}: {1}")]
+    Unsupported(Cmd, &'static str),
+}
 
 /// Errors that can happen during [`Client::connect`].
 #[derive(Debug, Error)]
@@ -53,12 +87,34 @@ pub enum ConnectError {
     },
 }
 
-/// Link lifecycle. `Dead` is terminal: rebuild the client.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum LinkState {
-    Ready,
-    /// The link is closed; every call fails fast.
-    Dead,
+/// A decoded firmware topic push (server → host), delivered by
+/// [`Client::next_event`].
+///
+/// Mirrors the firmware's topic set. [`Event::Unknown`] carries a topic this
+/// build doesn't recognize or one whose payload failed to decode, so a
+/// forward-compatible frame surfaces instead of being silently dropped.
+///
+/// Topics are **best-effort**: the link can drop a push (a full in-client queue
+/// — see [`Client::events_dropped`] — or, on BLE, an OS-level notification drop
+/// the client cannot observe). When a current value matters, read it with the
+/// matching `Get*` call ([`Client::get_connection_status`], [`Client::get_wpm`],
+/// …), which the protocol provides for exactly this.
+#[derive(Debug, Clone)]
+pub enum Event {
+    /// Active layer changed.
+    LayerChange(u8),
+    /// Words-per-minute estimate updated.
+    WpmUpdate(u16),
+    /// Connection status changed (same payload as [`Client::get_connection_status`]).
+    ConnectionChange(ConnectionStatus),
+    /// Sleep state changed.
+    SleepState(bool),
+    /// Host LED indicator (caps/num/scroll lock, …) changed.
+    LedIndicator(LedIndicator),
+    /// Battery status changed (BLE firmware only).
+    BatteryStatus(BatteryStatus),
+    /// A topic this build doesn't recognize, or one whose payload failed to decode.
+    Unknown(TopicFrame),
 }
 
 /// Rynk client over a [`Transport`].
@@ -72,7 +128,9 @@ pub struct Client<T: Transport> {
     rx_buf: Vec<u8>,
     /// Request SEQ, cycling through `1..=255`.
     next_seq: u8,
-    link: LinkState,
+    /// Set once the link is unrecoverable; every call then fails fast until the
+    /// client is dropped and rebuilt.
+    dead: bool,
     /// Queued topic frames.
     events: VecDeque<TopicFrame>,
     /// Topics dropped from a full queue.
@@ -83,6 +141,10 @@ pub struct Client<T: Transport> {
     protocol_version: ProtocolVersion,
     /// Set after handshake.
     capabilities: Option<DeviceCapabilities>,
+    /// Largest frame either side may put on the wire — header + the device's
+    /// advertised [`max_payload_size`](DeviceCapabilities::max_payload_size),
+    /// set at connect time.
+    max_frame_size: usize,
 }
 
 impl<T: Transport> Client<T> {
@@ -92,12 +154,15 @@ impl<T: Transport> Client<T> {
             transport,
             rx_buf: Vec::with_capacity(4096),
             next_seq: 1,
-            link: LinkState::Ready,
+            dead: false,
             events: VecDeque::new(),
             events_dropped: 0,
             tx_buf: vec![0u8; RYNK_MIN_BUFFER_SIZE],
+            // Construction-only placeholder; `connect` overwrites it with the
+            // handshake value before handing the client out.
             protocol_version: ProtocolVersion::CURRENT,
             capabilities: None,
+            max_frame_size: RYNK_MIN_BUFFER_SIZE,
         }
     }
 
@@ -117,12 +182,21 @@ impl<T: Transport> Client<T> {
         }
         client.protocol_version = version;
 
-        let caps = client.request_raw(Cmd::GetCapabilities, &()).await?;
+        let caps: DeviceCapabilities = client.request_raw(Cmd::GetCapabilities, &()).await?;
+        // The device's frames are at most header + max_payload_size
+        client.max_frame_size = RYNK_HEADER_SIZE + caps.max_payload_size as usize;
         client.capabilities = Some(caps);
         Ok(client)
     }
 
     /// Cached capability snapshot from connect time.
+    ///
+    /// Stored as `Option` only to cover the brief unhandshaked window inside
+    /// [`connect`](Self::connect): `new` is private and `connect` sets this before
+    /// returning `Ok`, so once a caller holds a `Client` it is always `Some` and
+    /// the `expect` cannot fire. (Building the client incrementally — rather than
+    /// after the handshake — is what lets topic frames arriving *during* the
+    /// handshake be queued instead of dropped.)
     pub fn capabilities(&self) -> &DeviceCapabilities {
         self.capabilities
             .as_ref()
@@ -141,11 +215,16 @@ impl<T: Transport> Client<T> {
 
     /// `false` once the link is dead — drop the client and reconnect.
     pub fn is_alive(&self) -> bool {
-        self.link != LinkState::Dead
+        !self.dead
     }
 
-    /// Topics dropped because the event queue was full while no consumer
-    /// was draining [`next_event`](Self::next_event).
+    /// Count of topics evicted from the in-client queue because it was full
+    /// while no consumer was draining [`next_event`](Self::next_event).
+    ///
+    /// Counts **only** in-client queue overflow — not OS/BLE-level notification
+    /// drops below the transport, which the client cannot observe. Treat topics
+    /// as best-effort (see [`Event`]) and re-read current values with the
+    /// matching `Get*` call when they matter.
     pub fn events_dropped(&self) -> u64 {
         self.events_dropped
     }
@@ -153,29 +232,46 @@ impl<T: Transport> Client<T> {
     /// Clear the RX reassembly buffer after a caller-owned timeout or other
     /// external cancellation point. This does not reopen a dead link.
     pub fn resync(&mut self) {
-        if self.link != LinkState::Dead {
+        if !self.dead {
             self.rx_buf.clear();
         }
     }
 
-    /// Read the next topic frame. Queued topics are returned first. Cancel-safe.
-    pub async fn next_event(&mut self) -> Result<TopicFrame, TransportError> {
+    /// Read the next topic push, decoded into a typed [`Event`]. Queued topics
+    /// are returned first. Cancel-safe.
+    ///
+    /// Topics are best-effort — see [`Event`] for recovering a missed push via
+    /// the `Get*` snapshot calls.
+    pub async fn next_event(&mut self) -> Result<Event, TransportError> {
         if let Some(ev) = self.events.pop_front() {
-            return Ok(ev);
+            return Ok(Self::decode_event(ev));
         }
-        if self.link == LinkState::Dead {
+        if self.dead {
             return Err(TransportError::Disconnected);
         }
         loop {
             match self.next_frame().await {
-                Ok((cmd, _seq, payload)) if cmd.is_topic() => return Ok(TopicFrame { cmd, payload }),
+                Ok((cmd, _seq, payload)) if cmd.is_topic() => {
+                    return Ok(Self::decode_event(TopicFrame { cmd, payload }));
+                }
                 // Stale response.
                 Ok(_) => {}
                 Err(e) => {
-                    self.link = LinkState::Dead;
+                    self.dead = true;
                     return Err(e);
                 }
             }
+        }
+    }
+
+    /// Reject a command locally when its required capability is absent, before
+    /// touching the wire. Keeps capability gating in one place (the client holds
+    /// the cached caps) instead of every caller re-deriving it.
+    fn require_capability(&self, present: bool, cmd: Cmd, reason: &'static str) -> Result<(), RequestError> {
+        if present {
+            Ok(())
+        } else {
+            Err(RequestError::Unsupported(cmd, reason))
         }
     }
 
@@ -191,13 +287,13 @@ impl<T: Transport> Client<T> {
         if cmd.is_topic() {
             return Err(RequestError::TopicCmd(cmd));
         }
-        if self.link == LinkState::Dead {
+        if self.dead {
             return Err(TransportError::Disconnected.into());
         }
         let (seq, frame_len) = self.encode(cmd, req)?;
         if let Err(e) = self.transport.send(&self.tx_buf[..frame_len]).await {
             // A partial send desyncs the device; the link is unrecoverable.
-            self.link = LinkState::Dead;
+            self.dead = true;
             return Err(e.into());
         }
 
@@ -205,7 +301,7 @@ impl<T: Transport> Client<T> {
             let (got_cmd, got_seq, payload) = match self.next_frame().await {
                 Ok(frame) => frame,
                 Err(e) => {
-                    self.link = LinkState::Dead;
+                    self.dead = true;
                     return Err(RequestError::Transport(e));
                 }
             };
@@ -233,7 +329,7 @@ impl<T: Transport> Client<T> {
         if !rest.is_empty() {
             return Err(RequestError::TrailingBytes { cmd });
         }
-        Ok(env?)
+        env.map_err(RequestError::Rejected)
     }
 
     fn queue_topic(&mut self, cmd: Cmd, payload: Vec<u8>) {
@@ -248,14 +344,38 @@ impl<T: Transport> Client<T> {
         self.events.push_back(TopicFrame { cmd, payload });
     }
 
+    /// Decode a topic frame into a typed [`Event`], falling back to
+    /// [`Event::Unknown`] for an unrecognized topic or a payload that fails to
+    /// decode.
+    fn decode_event(frame: TopicFrame) -> Event {
+        let decoded = match frame.cmd {
+            Cmd::LayerChange => Self::decode_topic::<u8>(&frame.payload).map(Event::LayerChange),
+            Cmd::WpmUpdate => Self::decode_topic::<u16>(&frame.payload).map(Event::WpmUpdate),
+            Cmd::ConnectionChange => {
+                Self::decode_topic::<ConnectionStatus>(&frame.payload).map(Event::ConnectionChange)
+            }
+            Cmd::SleepState => Self::decode_topic::<bool>(&frame.payload).map(Event::SleepState),
+            Cmd::LedIndicator => Self::decode_topic::<LedIndicator>(&frame.payload).map(Event::LedIndicator),
+            Cmd::BatteryStatusTopic => Self::decode_topic::<BatteryStatus>(&frame.payload).map(Event::BatteryStatus),
+            _ => None,
+        };
+        decoded.unwrap_or(Event::Unknown(frame))
+    }
+
+    /// Decode a topic payload, lenient about trailing bytes so a newer firmware
+    /// that appends fields to a topic still decodes on an older host.
+    fn decode_topic<V: DeserializeOwned>(payload: &[u8]) -> Option<V> {
+        postcard::take_from_bytes::<V>(payload).ok().map(|(v, _)| v)
+    }
+
     /// Send one request frame without waiting for a reply.
     async fn send_no_reply<Req: Serialize>(&mut self, cmd: Cmd, req: &Req) -> Result<(), RequestError> {
-        if self.link == LinkState::Dead {
+        if self.dead {
             return Err(TransportError::Disconnected.into());
         }
         let (_, frame_len) = self.encode(cmd, req)?;
         if let Err(e) = self.transport.send(&self.tx_buf[..frame_len]).await {
-            self.link = LinkState::Dead;
+            self.dead = true;
             return Err(e.into());
         }
         Ok(())
@@ -265,27 +385,22 @@ impl<T: Transport> Client<T> {
     async fn next_frame(&mut self) -> Result<(Cmd, u8, Vec<u8>), TransportError> {
         loop {
             if self.rx_buf.len() >= RYNK_HEADER_SIZE {
-                let cmd_raw = u16::from_le_bytes([self.rx_buf[0], self.rx_buf[1]]);
-                let cmd = Cmd::from_repr(cmd_raw);
+                let cmd = Cmd::from_le_bytes([self.rx_buf[0], self.rx_buf[1]]);
                 let seq = self.rx_buf[2];
                 let payload_len = u16::from_le_bytes([self.rx_buf[3], self.rx_buf[4]]) as usize;
                 let frame_len = RYNK_HEADER_SIZE + payload_len;
 
-                if (cmd.is_none() && cmd_raw & RYNK_TOPIC_BIT == 0) || frame_len > MAX_FRAME_SIZE {
-                    log::debug!(
-                        "rynk: malformed header (cmd={cmd_raw:#06x}), dropping {} bytes",
-                        self.rx_buf.len()
-                    );
+                // Unreachable under a conforming peer: the device never emits a
+                // frame larger than the `max_frame_size` it advertised. Reaching
+                // here means the byte stream is corrupt or desynced — clear and
+                // re-sync from the next chunk.
+                if frame_len > self.max_frame_size {
+                    log::debug!("rynk: oversized frame header, dropping {} bytes", self.rx_buf.len());
                     self.rx_buf.clear();
                     continue;
                 }
 
                 if self.rx_buf.len() >= frame_len {
-                    let Some(cmd) = cmd else {
-                        // Unknown topic from a newer firmware.
-                        self.rx_buf.drain(..frame_len);
-                        continue;
-                    };
                     let payload = self.rx_buf[RYNK_HEADER_SIZE..frame_len].to_vec();
                     self.rx_buf.drain(..frame_len);
                     return Ok((cmd, seq, payload));
@@ -307,6 +422,14 @@ impl<T: Transport> Client<T> {
         let frame_len = RynkMessage::build(&mut self.tx_buf, cmd, seq, req)
             .map_err(|_| RequestError::Encode(cmd))?
             .frame_len();
+
+        if frame_len > self.max_frame_size {
+            return Err(RequestError::TooLarge {
+                cmd,
+                frame_len,
+                max: self.max_frame_size,
+            });
+        }
         Ok((seq, frame_len))
     }
 }
@@ -466,15 +589,26 @@ impl<T: Transport> Client<T> {
         self.request_raw(Cmd::GetMatrixState, &()).await
     }
 
-    /// Read battery status. Only meaningful on BLE firmware
-    /// ([`DeviceCapabilities::ble_enabled`]).
+    /// Read battery status. BLE firmware only ([`DeviceCapabilities::ble_enabled`]);
+    /// returns [`RequestError::Unsupported`] otherwise, without touching the wire.
     pub async fn get_battery_status(&mut self) -> Result<BatteryStatus, RequestError> {
+        self.require_capability(
+            self.capabilities().ble_enabled,
+            Cmd::GetBatteryStatus,
+            "BLE not enabled",
+        )?;
         self.request_raw(Cmd::GetBatteryStatus, &()).await
     }
 
-    /// Read one split peripheral's status by slot. Only meaningful on a split
-    /// BLE keyboard ([`DeviceCapabilities::is_split`] and `ble_enabled`).
+    /// Read one split peripheral's status by slot. Split BLE keyboards only
+    /// ([`DeviceCapabilities::is_split`] and `ble_enabled`); returns
+    /// [`RequestError::Unsupported`] otherwise, without touching the wire.
     pub async fn get_peripheral_status(&mut self, slot: u8) -> Result<PeripheralStatus, RequestError> {
+        self.require_capability(
+            self.capabilities().is_split && self.capabilities().ble_enabled,
+            Cmd::GetPeripheralStatus,
+            "not a split BLE keyboard",
+        )?;
         self.request_raw(Cmd::GetPeripheralStatus, &slot).await
     }
 
@@ -506,20 +640,30 @@ impl<T: Transport> Client<T> {
         self.request_raw(Cmd::GetConnectionStatus, &()).await
     }
 
-    /// Read BLE status (active profile, connection state). Only meaningful on
-    /// BLE firmware ([`DeviceCapabilities::ble_enabled`]).
+    /// Read BLE status (active profile, connection state). BLE firmware only
+    /// ([`DeviceCapabilities::ble_enabled`]); returns [`RequestError::Unsupported`]
+    /// otherwise, without touching the wire.
     pub async fn get_ble_status(&mut self) -> Result<BleStatus, RequestError> {
+        self.require_capability(self.capabilities().ble_enabled, Cmd::GetBleStatus, "BLE not enabled")?;
         self.request_raw(Cmd::GetBleStatus, &()).await
     }
 
-    /// Switch to a BLE profile by slot.
+    /// Switch to a BLE profile by slot. BLE firmware only; returns
+    /// [`RequestError::Unsupported`] otherwise, without touching the wire.
     pub async fn switch_ble_profile(&mut self, slot: u8) -> Result<(), RequestError> {
+        self.require_capability(
+            self.capabilities().ble_enabled,
+            Cmd::SwitchBleProfile,
+            "BLE not enabled",
+        )?;
         self.request_raw(Cmd::SwitchBleProfile, &slot).await
     }
 
     /// Clear (unbond) a BLE profile by slot. Tears down the active link if it
-    /// targets the connected profile.
+    /// targets the connected profile. BLE firmware only; returns
+    /// [`RequestError::Unsupported`] otherwise, without touching the wire.
     pub async fn clear_ble_profile(&mut self, slot: u8) -> Result<(), RequestError> {
+        self.require_capability(self.capabilities().ble_enabled, Cmd::ClearBleProfile, "BLE not enabled")?;
         self.request_raw(Cmd::ClearBleProfile, &slot).await
     }
 }
@@ -529,8 +673,9 @@ mod tests {
     use std::collections::VecDeque;
     use std::time::Duration;
 
-    use super::*;
     use tokio::time::timeout;
+
+    use super::*;
 
     enum Step {
         Chunk(Vec<u8>),
@@ -658,29 +803,44 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn malformed_header_clears_buffer() {
-        let mut c = raw_client(vec![
-            Step::Chunk(header(0x7fff, 0xEE, 5)),
-            Step::Chunk(reply(Cmd::GetWpm, 1, 42u16)),
-        ]);
-        let got = c.get_wpm().await.unwrap();
-        assert_eq!(got, 42);
-    }
-
-    #[tokio::test]
-    async fn unknown_topic_skipped_by_len() {
-        let mut chunk = header(0x80ff, 0, 3);
-        chunk.extend_from_slice(&[1, 2, 3]);
+    async fn unknown_cmd_drained_by_len() {
+        let mut chunk = header(0x7fff, 0xEE, 5);
+        chunk.extend_from_slice(&[1, 2, 3, 4, 5]);
         chunk.extend_from_slice(&reply(Cmd::GetWpm, 1, 42u16));
         let mut c = raw_client(vec![Step::Chunk(chunk)]);
         let got = c.get_wpm().await.unwrap();
         assert_eq!(got, 42);
     }
 
+    #[tokio::test]
+    async fn unknown_topic_cmd_queued_by_len() {
+        let mut chunk = header(0x80ff, 0, 3);
+        chunk.extend_from_slice(&[1, 2, 3]);
+        chunk.extend_from_slice(&reply(Cmd::GetWpm, 1, 42u16));
+        let mut c = raw_client(vec![Step::Chunk(chunk)]);
+        let got = c.get_wpm().await.unwrap();
+        assert_eq!(got, 42);
+        let ev = c.next_event().await.unwrap();
+        assert!(matches!(ev, Event::Unknown(ref f) if f.cmd == Cmd::from_raw(0x80ff) && f.payload == [1, 2, 3]));
+    }
+
+    #[tokio::test]
+    async fn unknown_response_cmd_mismatch_detected() {
+        let mut c = raw_client(vec![Step::Chunk(reply(Cmd::from_raw(0x7fff), 1, 42u16))]);
+        let r = c.get_wpm().await;
+        assert!(matches!(
+            r,
+            Err(RequestError::CmdMismatch {
+                sent: Cmd::GetWpm,
+                got,
+            }) if got == Cmd::from_raw(0x7fff)
+        ));
+    }
+
     #[tokio::test(start_paused = true)]
     async fn caller_timeout_then_resyncs_phantom_frame() {
         let mut c = raw_client(vec![
-            Step::Chunk(header(Cmd::GetWpm as u16, 0xEE, 100)),
+            Step::Chunk(header(Cmd::GetWpm.raw(), 0xEE, 100)),
             Step::Hang,
             Step::Chunk(reply(Cmd::GetWpm, 2, 42u16)),
         ]);
@@ -723,16 +883,14 @@ mod tests {
         let got = c.get_wpm().await.unwrap();
         assert_eq!(got, 42);
         let ev = c.next_event().await.unwrap();
-        assert_eq!(ev.cmd, Cmd::LayerChange);
-        assert_eq!(ev.payload, vec![3]);
+        assert!(matches!(ev, Event::LayerChange(3)));
     }
 
     #[tokio::test]
     async fn next_event_reads_from_link() {
         let mut c = raw_client(vec![Step::Chunk(topic(Cmd::LayerChange, 7u8))]);
         let ev = c.next_event().await.unwrap();
-        assert_eq!(ev.cmd, Cmd::LayerChange);
-        assert_eq!(ev.payload, vec![7]);
+        assert!(matches!(ev, Event::LayerChange(7)));
     }
 
     #[tokio::test]
@@ -782,7 +940,7 @@ mod tests {
         let mut tail = vec![7u8]; // the LayerChange payload, arriving after cancel
         tail.extend_from_slice(&reply(Cmd::GetWpm, 1, 42u16));
         let mut c = raw_client(vec![
-            Step::Chunk(header(Cmd::LayerChange as u16, 0, 1)), // topic header, payload pending
+            Step::Chunk(header(Cmd::LayerChange.raw(), 0, 1)), // topic header, payload pending
             Step::Hang,
             Step::Chunk(tail),
         ]);
@@ -791,8 +949,7 @@ mod tests {
         let got = c.get_wpm().await.unwrap();
         assert_eq!(got, 42);
         let ev = c.next_event().await.unwrap();
-        assert_eq!(ev.cmd, Cmd::LayerChange);
-        assert_eq!(ev.payload, vec![7]);
+        assert!(matches!(ev, Event::LayerChange(7)));
     }
 
     // ── handshake ──
@@ -808,6 +965,73 @@ mod tests {
         assert_eq!(client.capabilities().num_cols, 14);
         assert_eq!(client.protocol_version(), ProtocolVersion::CURRENT);
         assert_eq!(client.get_wpm().await.unwrap(), 37);
+    }
+
+    #[tokio::test]
+    async fn capability_gate_rejects_without_wire_send() {
+        // caps() reports ble_enabled = false. A BLE-only call must reject locally
+        // with `Unsupported` and consume NO transport step — the mock has none
+        // left after the handshake, so a wire send would surface `Disconnected`.
+        let t = MockTransport::new(vec![
+            Step::Chunk(reply(Cmd::GetVersion, 1, ProtocolVersion::CURRENT)),
+            Step::Chunk(reply(Cmd::GetCapabilities, 2, caps())),
+        ]);
+        let mut client = Client::connect(t).await.unwrap();
+        assert!(!client.capabilities().ble_enabled);
+        let r = client.get_battery_status().await;
+        assert!(matches!(r, Err(RequestError::Unsupported(Cmd::GetBatteryStatus, _))));
+        assert!(client.is_alive(), "a locally-gated reject must not kill the link");
+    }
+
+    #[tokio::test]
+    async fn oversized_request_rejected_locally() {
+        // Firmware advertises a tiny max_payload_size. A request whose encoded
+        // frame exceeds it must be rejected locally with `TooLarge`, consuming
+        // NO transport step (the mock has none left after the handshake, so a
+        // wire send would surface `Disconnected`) and without killing the link.
+        let mut tiny = caps();
+        tiny.max_payload_size = 4;
+        let t = MockTransport::new(vec![
+            Step::Chunk(reply(Cmd::GetVersion, 1, ProtocolVersion::CURRENT)),
+            Step::Chunk(reply(Cmd::GetCapabilities, 2, tiny)),
+        ]);
+        let mut client = Client::connect(t).await.unwrap();
+        let r = client.set_key(0, 0, 0, KeyAction::Morse(3)).await;
+        assert!(matches!(
+            r,
+            Err(RequestError::TooLarge {
+                cmd: Cmd::SetKeyAction,
+                ..
+            })
+        ));
+        assert!(
+            client.is_alive(),
+            "a locally-rejected oversized request must not kill the link"
+        );
+    }
+
+    #[tokio::test]
+    async fn next_event_decodes_typed_payload() {
+        // A ConnectionChange topic must decode into the typed Event variant.
+        let status = ConnectionStatus {
+            preferred: ConnectionType::Ble,
+            ..Default::default()
+        };
+        let mut c = raw_client(vec![Step::Chunk(topic(Cmd::ConnectionChange, status))]);
+        let ev = c.next_event().await.unwrap();
+        match ev {
+            Event::ConnectionChange(s) => assert_eq!(s.preferred, ConnectionType::Ble),
+            other => panic!("expected ConnectionChange, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn next_event_undecodable_payload_is_unknown() {
+        // A known topic cmd whose payload can't decode (LayerChange needs 1 byte,
+        // here it's empty) surfaces as Event::Unknown rather than being dropped.
+        let mut c = raw_client(vec![Step::Chunk(header(Cmd::LayerChange.raw(), 0, 0))]);
+        let ev = c.next_event().await.unwrap();
+        assert!(matches!(ev, Event::Unknown(ref f) if f.cmd == Cmd::LayerChange && f.payload.is_empty()));
     }
 
     #[tokio::test]

@@ -17,9 +17,6 @@ impl MaxSize for MacroData {
 }
 
 /// Request payload for `GetMacro`.
-///
-/// The host reads macro data in chunks of up to `MACRO_DATA_SIZE` bytes.
-/// A response shorter than `MACRO_DATA_SIZE` signals the end of the macro.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 pub struct GetMacroRequest {
     pub index: u8,
@@ -28,8 +25,8 @@ pub struct GetMacroRequest {
 
 /// Request payload for `SetMacro`.
 ///
-/// The host writes macro data in chunks of up to `MACRO_DATA_SIZE` bytes.
-/// A final chunk shorter than `MACRO_DATA_SIZE` signals the end of the macro.
+/// Writes are by `offset`; chunk length carries no end-of-macro meaning, and
+/// writes past the macro region are truncated by the firmware.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 pub struct SetMacroRequest {
     pub index: u8,

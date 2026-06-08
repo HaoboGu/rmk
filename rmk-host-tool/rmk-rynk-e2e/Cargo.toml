@@ -1,0 +1,43 @@
+# This crate exists only to host the cross-stack Rynk integration test. It is the
+# one place that links BOTH the host client (`rmk-host`) and the firmware (`rmk`)
+# into a single test binary — putting that dev-dep on `rmk` inside `rmk-host`
+# itself would force `rmk-types/host` (and serde/std → ssmarshal) onto every host
+# build, so it gets its own crate. See `tests/loopback.rs`.
+[package]
+name = "rmk-rynk-e2e"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.85"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "End-to-end test: the real rmk-host Client driven against the real rmk firmware run_session"
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+# The firmware, built for the host target with the full rynk feature set so its
+# wire surface matches the host client's (`rmk-types/host` is the maximal config).
+# `default-features = false` drops `defmt` (conflicts with `log`, not host-friendly);
+# `std` provides embassy-time's mock-driver so linking succeeds.
+rmk = { path = "../../rmk", default-features = false, features = [
+    "std",
+    "log",
+    "rynk",
+    "storage",
+    "bulk",
+    "_ble",
+    "split",
+    "steno",
+] }
+rmk-host = { path = "../rmk-host" }
+rmk-types.workspace = true
+embassy-sync = "0.8"
+embassy-futures = "0.1"
+embedded-io-async = "0.7"
+# Provides a critical-section impl on host (embassy-sync's mutexes and the
+# firmware's FLASH_CHANNEL need one); `rmk` only declares it in its own dev-deps.
+critical-section = { version = "1.2", features = ["std"] }
+tokio = { version = "1.47", features = ["macros", "rt"] }

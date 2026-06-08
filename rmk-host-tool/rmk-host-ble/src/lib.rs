@@ -2,6 +2,11 @@
 //!
 //! Reuses an already connected keyboard when possible, then falls back to a
 //! short scan by device name.
+//!
+//! The already-connected path attaches to every OS-connected device exposing a
+//! HID/Battery/Rynk service and probes it for the Rynk GATT service; a non-Rynk
+//! peripheral fails service discovery and is skipped, but it is briefly attached
+//! during the probe.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -70,14 +75,20 @@ impl BleTransport {
             .await
             .map_err(|e| TransportError::Io(e.to_string()))?;
 
-        // Prefer an already-connected device.
-        let connected = adapter
+        // Prefer an already-connected device. A connected device is radio-silent
+        // — it won't reappear in the scan below — so we must not skip a
+        // service-matched one just because its GAP name is momentarily unreadable
+        // or doesn't carry the hint. Try every candidate, best name-match first,
+        // and only fall through to the scan once they've all failed to attach.
+        let mut connected = adapter
             .connected_devices_with_services(CONNECTED_LOOKUP_SERVICES)
             .await
             .map_err(|e| TransportError::Io(e.to_string()))?;
+        // Stable sort: name-matches (key `false`) first, the rest in discovery order.
+        connected.sort_by_key(|d| !d.name().is_ok_and(|n| n.contains(name_hint)));
         for d in connected {
-            if d.name().is_ok_and(|n| n.contains(name_hint)) {
-                return attach(&adapter, d).await;
+            if let Ok(transport) = attach(&adapter, d).await {
+                return Ok(transport);
             }
         }
 
@@ -109,8 +120,10 @@ impl BleTransport {
 impl Transport for BleTransport {
     async fn send(&mut self, frame: &[u8]) -> Result<(), TransportError> {
         for chunk in frame.chunks(self.write_chunk) {
+            // Acknowledged write: a silently dropped chunk would desync the
+            // firmware's stream reassembler, which has no mid-frame resync.
             self.output_char
-                .write_without_response(chunk)
+                .write(chunk)
                 .await
                 .map_err(|e| TransportError::Io(e.to_string()))?;
         }
@@ -138,6 +151,9 @@ pub async fn connect_ble_name(name_hint: &str) -> Result<Client<BleTransport>, C
     connect_transport(BleTransport::connect_with_name(name_hint).await?).await
 }
 
+// Intentionally duplicated in `rmk-host-serial` rather than shared: `rmk-host`
+// is deliberately runtime-free (no `tokio`, builds for `wasm32`), so the
+// timeout wrapper can't live there. Each transport crate owns its own runtime.
 async fn connect_transport(transport: BleTransport) -> Result<Client<BleTransport>, ConnectError> {
     tokio::time::timeout(HANDSHAKE_TIMEOUT, Client::connect(transport))
         .await

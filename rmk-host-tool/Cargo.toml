@@ -4,6 +4,7 @@ members = [
     "rmk-host",
     "rmk-host-serial",
     "rmk-host-ble",
+    "rmk-rynk-e2e",
 ]
 
 [workspace.package]
@@ -16,17 +17,11 @@ version = "0.1.0"
 
 [workspace.dependencies]
 rmk-types = { path = "../rmk-types", features = ["host"] }
-postcard = { version = "1.1", features = ["use-std"] }
-serde = { version = "1.0", features = ["derive"] }
+postcard = { version = "1.1", features = ["experimental-derive"] }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
 thiserror = "2.0"
 log = "0.4"
 tokio = "1.47"
 tokio-serial = "5.4"
 bluest = "0.6"
 futures = "0.3"
-
-# Larger context: rmk-types under `features = ["host"]` enables `rynk`, `bulk`,
-# `_ble`, `split`, and `steno`. That gives the host crate the union of every
-# wire-type Vec capacity (`COMBO_SIZE = MAX_COMBO_SIZE`, etc.) and every
-# cfg-gated enum variant (`Action::Steno`) so a single Client build can talk
-# to any firmware regardless of its compiled-in features and limits.

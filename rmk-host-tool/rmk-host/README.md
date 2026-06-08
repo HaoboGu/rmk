@@ -11,8 +11,10 @@ and byte I/O live in separate transport crates such as `rmk-host-serial` and
 ## Concepts
 
 - **[`Client`]** drives the protocol over a [`Transport`]: handshake, a typed
-  method per command, and pull-based topic delivery via `next_event`. Requests
-  are serialized through `&mut self` — no background task, no shared state.
+  method per command, and pull-based topic delivery via `next_event`, which
+  decodes each push into a typed `Event` (topics are best-effort — re-read a
+  missed value with the matching `Get*` call). Requests are serialized through
+  `&mut self` — no background task, no shared state.
 - **[`Transport`]** is a byte pipe. A third-party transport is its own crate
   implementing `Transport` against `rmk-host`; an app depends on `rmk-host`
   plus that crate and calls [`Client::connect`].

@@ -38,11 +38,8 @@ rynk = []
 # Enables multi-element bulk keymap/combo/morse endpoints and BULK_SIZE constant.
 bulk = ["rynk"]
 # Host tool: uses protocol ceiling values for Vec capacities.
-# Enables all optional command groups *and* cfg-gated wire-type variants
-# (e.g. `Action::Steno`) so the host can decode any firmware's data.
 host = ["rynk", "bulk", "_ble", "split", "steno"]
 # Build-time only features: forwarded from rmk to control constant generation in build.rs.
-# Also used as `#[cfg(feature = "...")]` guards for protocol command/topic gating.
 _ble = []
 split = []
 display = []

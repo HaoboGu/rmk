@@ -8,9 +8,10 @@
 //!   against a wire transport until it closes; emits topic frames between
 //!   request/response turns.
 //!
-//! Topic handling lives in [`topics::TopicSubscribers`] which the session
-//! drains; cache-only events (peripheral status) are mirrored into `ctx`
-//! and not surfaced on the wire.
+//! Topic handling lives in [`topics::TopicSubscribers`], which the session
+//! drains and emits on the wire between request/response turns — these topics
+//! are the only server→host pushes. Snapshot state such as peripheral status
+//! is not a topic; it is pull-only via its `Get*` handler.
 
 mod handlers;
 pub(crate) mod topics;
@@ -19,7 +20,7 @@ pub mod uart;
 use embassy_futures::select::{Either, select};
 use embedded_io_async::{Read, Write};
 use rmk_types::constants::RYNK_BUFFER_SIZE;
-use rmk_types::protocol::rynk::{Cmd, RYNK_HEADER_SIZE, RYNK_MIN_BUFFER_SIZE, RYNK_TOPIC_BIT, RynkError, RynkMessage};
+use rmk_types::protocol::rynk::{Cmd, RYNK_HEADER_SIZE, RYNK_MIN_BUFFER_SIZE, RynkError, RynkMessage};
 #[allow(unused_imports)] // re-exported at `crate::host` for downstream users
 pub use uart::run_rynk_uart;
 
@@ -75,9 +76,9 @@ impl<'a> RynkService<'a> {
             Cmd::SetDefaultLayer => self.handle_set_default_layer(msg).await?,
             Cmd::GetEncoderAction => self.handle_get_encoder_action(msg).await?,
             Cmd::SetEncoderAction => self.handle_set_encoder_action(msg).await?,
-            #[cfg(feature = "bulk_transfer")]
+            #[cfg(feature = "bulk")]
             Cmd::GetKeymapBulk => self.handle_get_keymap_bulk(msg).await?,
-            #[cfg(feature = "bulk_transfer")]
+            #[cfg(feature = "bulk")]
             Cmd::SetKeymapBulk => self.handle_set_keymap_bulk(msg).await?,
 
             // Macro
@@ -87,17 +88,17 @@ impl<'a> RynkService<'a> {
             // Combo
             Cmd::GetCombo => self.handle_get_combo(msg).await?,
             Cmd::SetCombo => self.handle_set_combo(msg).await?,
-            #[cfg(feature = "bulk_transfer")]
+            #[cfg(feature = "bulk")]
             Cmd::GetComboBulk => self.handle_get_combo_bulk(msg).await?,
-            #[cfg(feature = "bulk_transfer")]
+            #[cfg(feature = "bulk")]
             Cmd::SetComboBulk => self.handle_set_combo_bulk(msg).await?,
 
             // Morse
             Cmd::GetMorse => self.handle_get_morse(msg).await?,
             Cmd::SetMorse => self.handle_set_morse(msg).await?,
-            #[cfg(feature = "bulk_transfer")]
+            #[cfg(feature = "bulk")]
             Cmd::GetMorseBulk => self.handle_get_morse_bulk(msg).await?,
-            #[cfg(feature = "bulk_transfer")]
+            #[cfg(feature = "bulk")]
             Cmd::SetMorseBulk => self.handle_set_morse_bulk(msg).await?,
 
             // Fork
@@ -129,14 +130,11 @@ impl<'a> RynkService<'a> {
             Cmd::GetSleepState => self.handle_get_sleep_state(msg).await?,
             Cmd::GetLedIndicator => self.handle_get_led_indicator(msg).await?,
 
-            // Topic CMDs — server→host push only. `run_session` drops such
-            // frames before dispatch; this arm is defense for direct
-            // `dispatch` callers.
-            Cmd::LayerChange | Cmd::WpmUpdate | Cmd::ConnectionChange | Cmd::SleepState | Cmd::LedIndicator => {
-                return Err(RynkError::Invalid);
-            }
-            #[cfg(feature = "_ble")]
-            Cmd::BatteryStatusTopic => return Err(RynkError::Invalid),
+            // Topic CMDs are server→host push only. `run_session` drops
+            // topic-range frames before dispatch; this arm is defense for
+            // direct `dispatch` callers and unknown future topics.
+            cmd if cmd.is_topic() => return Err(RynkError::Invalid),
+            _ => return Err(RynkError::UnknownCmd),
         };
         Ok(payload_len)
     }
@@ -189,17 +187,25 @@ impl RynkService<'_> {
                 }
             };
 
-            // 2. Read the declared payload length (LEN u16 LE) from the header.
+            // 2. Read the declared payload length (LEN u16 LE) and CMD.
             let payload_n = u16::from_le_bytes([buf[3], buf[4]]) as usize;
             let frame_len = RYNK_HEADER_SIZE + payload_n;
-            if frame_len > buf.len() {
-                // The payload declared won't fit into buf.
-                // Reply with an error then drain the declared payload off
-                // the wire to resync the stream before the next frame.
-                warn!("Rynk: frame_len {} exceeds buffer {}", frame_len, buf.len());
-                let resp_len = RynkMessage::encode_error_reply(&mut buf, RynkError::Malformed);
-                if tx.write_all(&buf[..resp_len]).await.is_err() {
-                    return;
+            let cmd = Cmd::from_le_bytes([buf[0], buf[1]]);
+
+            // 3. Drop non-dispatchable frames, draining the declared payload to
+            // resync the stream. Topic-range CMDs are push-only and draw no
+            // reply — a high-bit error frame would be queued by the host as a
+            // phantom topic; oversized frames reply Malformed (unless also a
+            // topic, checked here so the high-bit case never gets an error).
+            if cmd.is_topic() || frame_len > buf.len() {
+                if cmd.is_topic() {
+                    warn!("Rynk: dropping topic-range request {:?}", cmd);
+                } else {
+                    warn!("Rynk: frame_len {} exceeds buffer {}", frame_len, buf.len());
+                    let resp_len = RynkMessage::encode_error_reply(&mut buf, RynkError::Malformed);
+                    if tx.write_all(&buf[..resp_len]).await.is_err() {
+                        return;
+                    }
                 }
                 let mut remaining = payload_n;
                 while remaining > 0 {
@@ -213,19 +219,9 @@ impl RynkService<'_> {
                 continue;
             }
 
-            // 3. Read exactly the payload.
+            // 4. Read exactly the payload.
             if rx.read_exact(&mut buf[RYNK_HEADER_SIZE..frame_len]).await.is_err() {
                 return;
-            }
-
-            // 4. Topic-range CMDs are server→host push only — a request here
-            // is a misbehaving or desynced peer. Echoing an error would hand
-            // the peer a high-bit frame it queues as a phantom topic, so
-            // drop the frame without replying.
-            let cmd_raw = u16::from_le_bytes([buf[0], buf[1]]);
-            if cmd_raw & RYNK_TOPIC_BIT != 0 {
-                warn!("Rynk: dropping topic-range request 0x{:04x}", cmd_raw);
-                continue;
             }
 
             // 5. Dispatch in place over the full buffer.
@@ -235,10 +231,9 @@ impl RynkService<'_> {
                     msg.frame_len()
                 }
                 Err(e) => {
-                    // Steps 1–3 guarantee the buffer holds the whole frame,
-                    // so the only failure here is `UnknownCmd` — echo it
-                    // (cmd/seq preserved) so the host can tell "this build
-                    // doesn't know the command" from a malformed frame.
+                    // Steps 1–3 should guarantee the buffer holds the whole
+                    // frame. If validation still fails, echo the structural
+                    // error with cmd/seq preserved.
                     warn!("Rynk: invalid frame: {:?}", e);
                     RynkMessage::encode_error_reply(&mut buf, e)
                 }
@@ -317,11 +312,20 @@ mod tests {
     /// empty payload — the response is written into the full session buffer,
     /// not this slot, so no padding is needed.
     fn get_version_frame(seq: u8) -> Vec<u8> {
-        let cmd = Cmd::GetVersion as u16;
+        let cmd = Cmd::GetVersion.raw();
         let payload_len: u16 = 0;
         let total = RYNK_HEADER_SIZE + payload_len as usize;
         let mut v = vec![0u8; total];
         v[0..2].copy_from_slice(&cmd.to_le_bytes());
+        v[2] = seq;
+        v[3..5].copy_from_slice(&payload_len.to_le_bytes());
+        v
+    }
+
+    /// A bare 5-byte header with `cmd`, `seq`, and a declared `payload_len`.
+    fn header(cmd_raw: u16, seq: u8, payload_len: u16) -> Vec<u8> {
+        let mut v = vec![0u8; RYNK_HEADER_SIZE];
+        v[0..2].copy_from_slice(&cmd_raw.to_le_bytes());
         v[2] = seq;
         v[3..5].copy_from_slice(&payload_len.to_le_bytes());
         v
@@ -381,11 +385,7 @@ mod tests {
         for (i, expected_seq) in [0u8, 1u8].iter().enumerate() {
             let off = i * RESP_FRAME_LEN;
             let resp = &tx.captured[off..off + RESP_FRAME_LEN];
-            assert_eq!(
-                &resp[0..2],
-                &(Cmd::GetVersion as u16).to_le_bytes(),
-                "response {i} cmd echo",
-            );
+            assert_eq!(&resp[0..2], &Cmd::GetVersion.to_le_bytes(), "response {i} cmd echo",);
             assert_eq!(resp[2], *expected_seq, "response {i} seq echo");
             assert_eq!(
                 &resp[3..5],
@@ -457,7 +457,7 @@ mod tests {
             resp.len() > RYNK_HEADER_SIZE,
             "response must carry a payload, not just a header"
         );
-        assert_eq!(&resp[0..2], &(Cmd::GetVersion as u16).to_le_bytes(), "cmd echo");
+        assert_eq!(&resp[0..2], &Cmd::GetVersion.to_le_bytes(), "cmd echo");
         assert_eq!(resp[2], 0x42, "seq echo");
 
         let payload_len = u16::from_le_bytes([resp[3], resp[4]]) as usize;
@@ -471,5 +471,100 @@ mod tests {
         let decoded: Result<ProtocolVersion, RynkError> =
             postcard::from_bytes(&resp[RYNK_HEADER_SIZE..]).expect("response payload must decode");
         assert_eq!(decoded, Ok(ProtocolVersion::CURRENT));
+    }
+
+    /// A topic-range CMD arriving as a request is dropped without a reply — a
+    /// high-bit error frame would be queued by the host as a phantom topic. Its
+    /// payload is drained, so the session resyncs and answers the next request.
+    #[test]
+    fn run_session_drops_topic_range_request_without_reply() {
+        let mut behavior = BehaviorConfig::default();
+        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
+        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+        let config = RmkConfig::default();
+        let service = RynkService::new(&keymap, &config);
+
+        // Topic-range request: LayerChange with a 1-byte payload, then a real
+        // GetVersion — both in one chunk.
+        let mut combined = header(Cmd::LayerChange.raw(), 0, 1);
+        combined.push(0xAB);
+        combined.extend_from_slice(&get_version_frame(7));
+
+        let mut chunks = VecDeque::new();
+        chunks.push_back(combined);
+
+        let mut rx = ChunkRead { chunks };
+        let mut tx = VecWrite { captured: Vec::new() };
+
+        block_on(service.run_session(&mut rx, &mut tx));
+
+        const RESP_FRAME_LEN: usize = RYNK_HEADER_SIZE + 3;
+        assert_eq!(
+            tx.captured.len(),
+            RESP_FRAME_LEN,
+            "topic-range request must draw no reply; only the GetVersion answers"
+        );
+        assert_eq!(&tx.captured[0..2], &Cmd::GetVersion.to_le_bytes(), "cmd echo");
+        assert_eq!(tx.captured[2], 7, "reply is for the GetVersion that followed");
+    }
+
+    /// Regression for the topic/oversize ordering: an oversized declared LEN on
+    /// a topic-range CMD must still draw no reply. Before the fix the oversize
+    /// branch ran first and echoed a high-bit error frame.
+    #[test]
+    fn run_session_oversized_topic_frame_draws_no_reply() {
+        let mut behavior = BehaviorConfig::default();
+        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
+        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+        let config = RmkConfig::default();
+        let service = RynkService::new(&keymap, &config);
+
+        // LayerChange topic with LEN = u16::MAX (far past the session buffer);
+        // no payload follows, so the drain hits EOF and the session ends.
+        let mut chunks = VecDeque::new();
+        chunks.push_back(header(Cmd::LayerChange.raw(), 0, u16::MAX));
+
+        let mut rx = ChunkRead { chunks };
+        let mut tx = VecWrite { captured: Vec::new() };
+
+        block_on(service.run_session(&mut rx, &mut tx));
+
+        assert!(
+            tx.captured.is_empty(),
+            "oversized topic-range frame must draw no reply, got {} bytes",
+            tx.captured.len()
+        );
+    }
+
+    /// The non-topic half of the same branch: an oversized declared LEN on a
+    /// normal request still draws a `Malformed` reply with cmd/seq preserved.
+    #[test]
+    fn run_session_oversized_request_replies_malformed() {
+        let mut behavior = BehaviorConfig::default();
+        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
+        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+        let config = RmkConfig::default();
+        let service = RynkService::new(&keymap, &config);
+
+        // GetVersion with LEN = u16::MAX; no payload follows, drain hits EOF.
+        let mut chunks = VecDeque::new();
+        chunks.push_back(header(Cmd::GetVersion.raw(), 0x55, u16::MAX));
+
+        let mut rx = ChunkRead { chunks };
+        let mut tx = VecWrite { captured: Vec::new() };
+
+        block_on(service.run_session(&mut rx, &mut tx));
+
+        assert!(!tx.captured.is_empty(), "oversized request must draw a Malformed reply");
+        assert_eq!(&tx.captured[0..2], &Cmd::GetVersion.to_le_bytes(), "cmd echo");
+        assert_eq!(tx.captured[2], 0x55, "seq echo");
+        let payload_len = u16::from_le_bytes([tx.captured[3], tx.captured[4]]) as usize;
+        let decoded: Result<(), RynkError> =
+            postcard::from_bytes(&tx.captured[RYNK_HEADER_SIZE..RYNK_HEADER_SIZE + payload_len])
+                .expect("error reply must decode");
+        assert_eq!(decoded, Err(RynkError::Malformed));
     }
 }

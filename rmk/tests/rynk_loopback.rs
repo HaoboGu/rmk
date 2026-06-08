@@ -42,7 +42,7 @@ use rmk_types::protocol::rynk::{
 };
 
 use crate::common::rynk_link::link_session;
-use crate::common::wrap_keymap;
+use crate::common::{wrap_keymap, wrap_keymap_with_encoders};
 
 /// Build a tiny 1-layer 2-row 2-col keymap so the test doesn't depend
 /// on the size of the helper module's default keyboard.
@@ -69,6 +69,18 @@ fn service_2_layers() -> RynkService<'static> {
     let per_key: &'static PositionalConfig<2, 2> = Box::leak(Box::new(PositionalConfig::default()));
     let keymap = [[[KeyAction::No; 2]; 2]; 2];
     let km = wrap_keymap(keymap, per_key, behavior);
+    let config: &'static RmkConfig<'static> = Box::leak(Box::new(RmkConfig::default()));
+    RynkService::new(km, config)
+}
+
+/// A keymap with 2 encoders, so `GetCapabilities` can report a non-zero
+/// `num_encoders` and the encoder endpoints become reachable.
+fn service_with_encoders() -> RynkService<'static> {
+    let behavior: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
+    let per_key: &'static PositionalConfig<2, 2> = Box::leak(Box::new(PositionalConfig::default()));
+    let keymap = [[[KeyAction::No; 2]; 2]; 1];
+    let encoder_map = [[EncoderAction::default(); 2]; 1];
+    let km = wrap_keymap_with_encoders(keymap, encoder_map, per_key, behavior);
     let config: &'static RmkConfig<'static> = Box::leak(Box::new(RmkConfig::default()));
     RynkService::new(km, config)
 }
@@ -114,7 +126,7 @@ fn get_capabilities() {
         assert_eq!(caps.is_split, cfg!(feature = "split"));
         // Bulk transfer reads as fully absent — flag AND count — until the
         // handlers are implemented (today they all answer `Unimplemented`);
-        // both flip back to tracking the `bulk_transfer` feature together
+        // both flip back to tracking the `bulk` feature together
         // with the handlers.
         assert!(!caps.bulk_transfer_supported);
         assert_eq!(caps.max_bulk_keys, 0);
@@ -250,13 +262,13 @@ fn set_default_layer_rejects_truncated_payload() {
     let service = service_2_layers();
     link_session(&service, async |client| {
         let mut header = [0u8; RYNK_HEADER_SIZE];
-        header[0..2].copy_from_slice(&(Cmd::SetDefaultLayer as u16).to_le_bytes());
+        header[0..2].copy_from_slice(&Cmd::SetDefaultLayer.to_le_bytes());
         header[2] = 0x16;
         header[3..5].copy_from_slice(&0u16.to_le_bytes());
         client.send_raw(&header).await;
 
         let reply = client.recv_response(0x16).await;
-        assert_eq!(reply.cmd, Ok(Cmd::SetDefaultLayer));
+        assert_eq!(reply.cmd, Cmd::SetDefaultLayer);
         assert_eq!(reply.envelope::<()>(), Err(RynkError::Malformed));
 
         let layer = client.request::<(), u8>(Cmd::GetDefaultLayer, 0x17, &()).await;
@@ -293,7 +305,45 @@ fn encoder_action_out_of_range() {
     });
 }
 
-#[cfg(feature = "bulk_transfer")]
+#[test]
+fn capabilities_report_configured_encoder_count() {
+    // A keymap with encoders must advertise them (regression: capabilities
+    // hardcoded `num_encoders: 0`, hiding fully-wired encoder endpoints from any
+    // capability-respecting host). The endpoint is reachable once advertised.
+    let service = service_with_encoders();
+    link_session(&service, async |client| {
+        let caps = client
+            .request::<(), DeviceCapabilities>(Cmd::GetCapabilities, 0x07, &())
+            .await
+            .expect("Ok envelope");
+        assert_eq!(
+            caps.num_encoders, 2,
+            "capabilities must reflect the configured encoder count"
+        );
+
+        // In-range encoder is now reachable (would be `Invalid` if num_encoders==0).
+        let get = GetEncoderRequest {
+            encoder_id: 1,
+            layer: 0,
+        };
+        let action = client
+            .request::<_, EncoderAction>(Cmd::GetEncoderAction, 0x08, &get)
+            .await;
+        assert_eq!(action, Ok(EncoderAction::default()));
+
+        // Out-of-range encoder id (==count) is still rejected.
+        let oor = GetEncoderRequest {
+            encoder_id: 2,
+            layer: 0,
+        };
+        let r = client
+            .request::<_, EncoderAction>(Cmd::GetEncoderAction, 0x09, &oor)
+            .await;
+        assert_eq!(r, Err(RynkError::Invalid));
+    });
+}
+
+#[cfg(feature = "bulk")]
 #[test]
 fn keymap_bulk_is_unimplemented() {
     use rmk_types::protocol::rynk::{GetKeymapBulkRequest, SetKeymapBulkRequest};
@@ -401,7 +451,7 @@ fn combo_rejects_out_of_range() {
     });
 }
 
-#[cfg(feature = "bulk_transfer")]
+#[cfg(feature = "bulk")]
 #[test]
 fn combo_bulk_is_unimplemented() {
     use rmk_types::protocol::rynk::{GetComboBulkRequest, GetComboBulkResponse, SetComboBulkRequest};
@@ -474,7 +524,7 @@ fn morse_rejects_out_of_range() {
     });
 }
 
-#[cfg(feature = "bulk_transfer")]
+#[cfg(feature = "bulk")]
 #[test]
 fn morse_bulk_is_unimplemented() {
     use rmk_types::protocol::rynk::{GetMorseBulkRequest, GetMorseBulkResponse, SetMorseBulkRequest};
@@ -766,11 +816,10 @@ fn drops_battery_topic_cmd_from_host() {
 #[test]
 fn unknown_cmd_over_the_wire_gets_unknown_cmd_reply() {
     let service = service();
-    // Cmd tags this build has no discriminant for, one per range. 0x0006 (a
+    // Cmd tags this build does not handle, one per range. 0x0006 (a
     // v2-reserved request slot, standing in for a feature-gated-out or newer
-    // peer's command): `try_from` rejects it before dispatch and answers
-    // UnknownCmd — not Malformed: the frame itself was sound — echoing the
-    // offending cmd/seq bytes. 0xFFFF (topic range): dropped without a reply,
+    // peer's command): dispatch answers UnknownCmd, not Malformed, because the
+    // frame itself was sound. 0xFFFF (topic range): dropped without a reply,
     // like every topic-range request. Neither desyncs the session.
     link_session(&service, async |client| {
         let mut header = [0u8; RYNK_HEADER_SIZE];
@@ -779,7 +828,11 @@ fn unknown_cmd_over_the_wire_gets_unknown_cmd_reply() {
         // payload_len stays 0
         client.send_raw(&header).await;
         let reply = client.recv_response(0x21).await;
-        assert_eq!(reply.cmd, Err(0x0006), "error reply echoes the unknown cmd bytes");
+        assert_eq!(
+            reply.cmd,
+            Cmd::from_raw(0x0006),
+            "error reply echoes the unknown cmd bytes"
+        );
         assert_eq!(reply.envelope::<()>(), Err(RynkError::UnknownCmd));
 
         let mut header = [0u8; RYNK_HEADER_SIZE];
@@ -821,7 +874,7 @@ fn oversized_frame_is_rejected_then_stream_resyncs() {
     let recovered = link_session(&service, async |client| {
         let payload_n = (RYNK_BUFFER_SIZE - RYNK_HEADER_SIZE + 1) as u16;
         let mut bad = [0u8; RYNK_HEADER_SIZE];
-        bad[0..2].copy_from_slice(&(Cmd::GetVersion as u16).to_le_bytes());
+        bad[0..2].copy_from_slice(&Cmd::GetVersion.to_le_bytes());
         bad[2] = 0x55; // seq — echoed on the error reply
         bad[3..5].copy_from_slice(&payload_n.to_le_bytes());
         client.send_raw(&bad).await;
@@ -855,7 +908,7 @@ fn topic_layer_change() {
     let v = link_session(&service, async |client| {
         publish_event(LayerChangeEvent::new(3));
         let frame = client.recv_topic().await;
-        assert_eq!(frame.cmd, Ok(Cmd::LayerChange));
+        assert_eq!(frame.cmd, Cmd::LayerChange);
         frame.raw::<u8>()
     });
     assert_eq!(v, 3);
@@ -867,7 +920,7 @@ fn topic_wpm_update() {
     let v = link_session(&service, async |client| {
         publish_event(WpmUpdateEvent::new(42));
         let frame = client.recv_topic().await;
-        assert_eq!(frame.cmd, Ok(Cmd::WpmUpdate));
+        assert_eq!(frame.cmd, Cmd::WpmUpdate);
         frame.raw::<u16>()
     });
     assert_eq!(v, 42);
@@ -879,7 +932,7 @@ fn topic_sleep_state() {
     let v = link_session(&service, async |client| {
         publish_event(SleepStateEvent::new(true));
         let frame = client.recv_topic().await;
-        assert_eq!(frame.cmd, Ok(Cmd::SleepState));
+        assert_eq!(frame.cmd, Cmd::SleepState);
         frame.raw::<bool>()
     });
     assert!(v);
@@ -891,7 +944,7 @@ fn topic_led_indicator() {
     let v = link_session(&service, async |client| {
         publish_event(LedIndicatorEvent::new(LedIndicator::from_bits(0b0000_0101)));
         let frame = client.recv_topic().await;
-        assert_eq!(frame.cmd, Ok(Cmd::LedIndicator));
+        assert_eq!(frame.cmd, Cmd::LedIndicator);
         frame.raw::<LedIndicator>()
     });
     assert_eq!(v, LedIndicator::from_bits(0b0000_0101));
@@ -909,7 +962,7 @@ fn topic_connection_change() {
         };
         publish_event(ConnectionStatusChangeEvent(status));
         let frame = client.recv_topic().await;
-        assert_eq!(frame.cmd, Ok(Cmd::ConnectionChange));
+        assert_eq!(frame.cmd, Cmd::ConnectionChange);
         frame.raw::<ConnectionStatus>()
     });
     assert_eq!(v.preferred, ConnectionType::Ble);
@@ -926,7 +979,7 @@ fn topic_battery_status() {
     let v = link_session(&service, async |client| {
         publish_event(BatteryStatusEvent(expected));
         let frame = client.recv_topic().await;
-        assert_eq!(frame.cmd, Ok(Cmd::BatteryStatusTopic));
+        assert_eq!(frame.cmd, Cmd::BatteryStatusTopic);
         frame.raw::<BatteryStatus>()
     });
     assert_eq!(v, expected);

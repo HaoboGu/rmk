@@ -11,8 +11,8 @@
 //! ┌──────────────┬───────────┬────────────────────┐
 //! │ CMD u16 LE   │ SEQ u8    │ LEN u16 LE         │  ← 5-byte header
 //! ├──────────────┴───────────┴────────────────────┤
-//! │              postcard-encoded payload          │  ← LEN bytes
-//! └────────────────────────────────────────────────┘
+//! │              postcard-encoded payload         │  ← LEN bytes
+//! └───────────────────────────────────────────────┘
 //! ```
 //!
 //! - **CMD** — `0x0000..=0x7FFF` request/response, `0x8000..=0xFFFF` topic.
@@ -32,27 +32,16 @@
 //!
 //! ## Module layout
 //!
-//! - [`cmd`] — `Cmd` enum (request, response, topic tags)
-//! - [`message`] — `RynkMessage` (mutable view over wire bytes; header
-//!   parsed once at construction, accessors are infallible)
-//! - [`buffer`] — `RYNK_MIN_BUFFER_SIZE` const computed from `MaxSize` of
-//!   every wire type
-//! - `system` — handshake (`ProtocolVersion`, `DeviceCapabilities`,
-//!   `StorageResetMode`, `BehaviorConfig`)
-//! - `keymap`, `encoder`, `macro_data`, `combo`, `morse`,
-//!   `fork` — per-domain request/response types
-//! - `status` — runtime status types (`MatrixState`, `PeripheralStatus`)
-//!
-//! (The per-domain modules are private; their types are re-exported at
-//! `protocol::rynk::*`.)
+//! The per-domain modules (`keymap`, `encoder`, `combo`, …) are private;
+//! their types are re-exported flat at `protocol::rynk::*`. Only `cmd`,
+//! `message`, and `buffer` are public.
 //!
 //! ## Protocol handshake
 //!
 //! 1. Host connects over USB bulk or BLE GATT (length-prefixed messages).
 //! 2. Host sends `Cmd::GetVersion`. If `major` differs from the host's
 //!    supported major, or `minor` exceeds the host's known max, the host
-//!    aborts with an "update host" diagnostic. `GetVersion`'s shape is
-//!    permanent — never modified, even across major bumps.
+//!    aborts with an "update host" diagnostic.
 //! 3. Host sends `Cmd::GetCapabilities` to learn layout, feature flags,
 //!    and limits.
 //! 4. Host gates every subsequent call on the capability flags.
@@ -65,7 +54,6 @@
 //! - `major` bump: `Cmd` variant retyped; struct field reshaped; enum
 //!   variant renamed/renumbered. `Cmd::GetVersion`'s shape is exempt —
 //!   changing it is forbidden even across major bumps.
-//! - Neither: no wire change.
 
 pub mod buffer;
 pub mod cmd;
@@ -97,22 +85,14 @@ pub use self::morse::*;
 pub use self::status::*;
 pub use self::system::*;
 
-/// CMD high bit marking a topic (server → host push). Requests/responses live
-/// in `0x0000..=0x7FFF`; topics in `0x8000..=0xFFFF`.
-pub const RYNK_TOPIC_BIT: u16 = 0x8000;
-
 /// Largest single GATT write/notification on the Rynk BLE characteristics.
 pub const RYNK_BLE_CHUNK_SIZE: usize = 244;
 
-/// Rynk GATT service UUID, shared by the firmware's `#[gatt_service]`
-/// (trouble's `Uuid: From<u128>` handles the little-endian wire order) and the
-/// host's GATT discovery (`uuid::Uuid::from_u128`). The service UUID is not
-/// advertised, so it can't be a scan filter — hosts discover it over GATT
-/// after attaching.
+/// Rynk GATT service UUID
 pub const RYNK_SERVICE_UUID: u128 = 0x10900067_537f_4f0a_9b55_929e271f61ab;
-/// `input_data` characteristic (server → host, `read | notify`).
+/// Rynk `input_data` characteristic UUID.
 pub const RYNK_INPUT_CHAR_UUID: u128 = 0x80f9319b_0c74_43a5_9738_c59d6dda3db9;
-/// `output_data` characteristic (host → server, `read | write | write-without-response`).
+/// Rynk `output_data` characteristic UUID.
 pub const RYNK_OUTPUT_CHAR_UUID: u128 = 0x19802524_6f90_4346_93c2_63dbc509ab55;
 
 /// Protocol-level error returned in every response payload.
@@ -132,27 +112,9 @@ pub enum RynkError {
     Unimplemented,
     /// The request decoded cleanly but is semantically invalid.
     Invalid,
-    /// The frame is well-formed but its CMD tag is not one this build knows —
-    /// a feature-gated-out command, a newer peer's command, or coincidental
-    /// garbage on a desynced stream; the receiver cannot tell which.
+    /// The frame is well-formed but its CMD is unknown.
     UnknownCmd,
 }
-
-impl core::fmt::Display for RynkError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(match self {
-            Self::Malformed => "malformed request",
-            Self::NotReady => "device not ready",
-            Self::StorageFault => "storage write failed",
-            Self::Internal => "internal firmware error",
-            Self::Unimplemented => "command not implemented",
-            Self::Invalid => "invalid request",
-            Self::UnknownCmd => "unknown command",
-        })
-    }
-}
-
-impl core::error::Error for RynkError {}
 
 #[cfg(test)]
 pub(crate) mod test_utils {

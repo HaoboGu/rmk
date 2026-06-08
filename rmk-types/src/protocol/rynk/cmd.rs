@@ -21,133 +21,172 @@
 //! Lock variants (`GetLockStatus`, `UnlockRequest`, `LockRequest`) are
 //! reserved for v2 at `0x0006`, `0x0007`, `0x0008`.
 
-use strum::FromRepr;
+/// CMD high bit marking a topic (server → host push). Requests/responses live
+/// in `0x0000..=0x7FFF`; topics in `0x8000..=0xFFFF`.
+const RYNK_TOPIC_BIT: u16 = 0x8000;
 
 /// Command tag carried in the header CMD field.
-///
-/// The wire encoding is a plain `u16 LE` written by [`RynkMessage::build`](super::RynkMessage::build) —
-/// `Cmd` is never postcard-encoded, so no `Serialize`/`Deserialize`/`MaxSize`
-/// derives are needed here.
-#[repr(u16)]
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, FromRepr)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Cmd {
+#[repr(transparent)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Cmd(u16);
+
+#[allow(non_upper_case_globals)]
+impl Cmd {
     // ── System (0x00xx) ──
-    GetVersion = 0x0001,
-    GetCapabilities = 0x0002,
-    Reboot = 0x0003,
-    BootloaderJump = 0x0004,
-    StorageReset = 0x0005,
+    pub const GetVersion: Self = Self(0x0001);
+    pub const GetCapabilities: Self = Self(0x0002);
+    pub const Reboot: Self = Self(0x0003);
+    pub const BootloaderJump: Self = Self(0x0004);
+    pub const StorageReset: Self = Self(0x0005);
     // 0x0006..=0x0008 reserved for v2 lock gate
 
     // ── Keymap (0x01xx) — includes encoder ──
-    GetKeyAction = 0x0101,
-    SetKeyAction = 0x0102,
-    GetDefaultLayer = 0x0103,
-    SetDefaultLayer = 0x0104,
-    GetEncoderAction = 0x0105,
-    SetEncoderAction = 0x0106,
+    pub const GetKeyAction: Self = Self(0x0101);
+    pub const SetKeyAction: Self = Self(0x0102);
+    pub const GetDefaultLayer: Self = Self(0x0103);
+    pub const SetDefaultLayer: Self = Self(0x0104);
+    pub const GetEncoderAction: Self = Self(0x0105);
+    pub const SetEncoderAction: Self = Self(0x0106);
     #[cfg(feature = "bulk")]
-    GetKeymapBulk = 0x0107,
+    pub const GetKeymapBulk: Self = Self(0x0107);
     #[cfg(feature = "bulk")]
-    SetKeymapBulk = 0x0108,
+    pub const SetKeymapBulk: Self = Self(0x0108);
 
     // ── Macro (0x02xx) ──
-    GetMacro = 0x0201,
-    SetMacro = 0x0202,
+    pub const GetMacro: Self = Self(0x0201);
+    pub const SetMacro: Self = Self(0x0202);
 
     // ── Combo (0x03xx) ──
-    GetCombo = 0x0301,
-    SetCombo = 0x0302,
+    pub const GetCombo: Self = Self(0x0301);
+    pub const SetCombo: Self = Self(0x0302);
     #[cfg(feature = "bulk")]
-    GetComboBulk = 0x0303,
+    pub const GetComboBulk: Self = Self(0x0303);
     #[cfg(feature = "bulk")]
-    SetComboBulk = 0x0304,
+    pub const SetComboBulk: Self = Self(0x0304);
 
     // ── Morse (0x04xx) ──
-    GetMorse = 0x0401,
-    SetMorse = 0x0402,
+    pub const GetMorse: Self = Self(0x0401);
+    pub const SetMorse: Self = Self(0x0402);
     #[cfg(feature = "bulk")]
-    GetMorseBulk = 0x0403,
+    pub const GetMorseBulk: Self = Self(0x0403);
     #[cfg(feature = "bulk")]
-    SetMorseBulk = 0x0404,
+    pub const SetMorseBulk: Self = Self(0x0404);
 
     // ── Fork (0x05xx) ──
-    GetFork = 0x0501,
-    SetFork = 0x0502,
+    pub const GetFork: Self = Self(0x0501);
+    pub const SetFork: Self = Self(0x0502);
 
     // ── Behavior (0x06xx) ──
-    GetBehaviorConfig = 0x0601,
-    SetBehaviorConfig = 0x0602,
+    pub const GetBehaviorConfig: Self = Self(0x0601);
+    pub const SetBehaviorConfig: Self = Self(0x0602);
 
     // ── Connection (0x07xx) ──
-    GetConnectionType = 0x0701,
+    pub const GetConnectionType: Self = Self(0x0701);
     /// Full `ConnectionStatus` snapshot — same payload the `ConnectionChange`
     /// topic pushes, so a host can recover a missed push.
-    GetConnectionStatus = 0x0702,
+    pub const GetConnectionStatus: Self = Self(0x0702);
     #[cfg(feature = "_ble")]
-    GetBleStatus = 0x0703,
+    pub const GetBleStatus: Self = Self(0x0703);
     #[cfg(feature = "_ble")]
-    SwitchBleProfile = 0x0704,
+    pub const SwitchBleProfile: Self = Self(0x0704);
     #[cfg(feature = "_ble")]
-    ClearBleProfile = 0x0705,
+    pub const ClearBleProfile: Self = Self(0x0705);
 
     // ── Status (0x08xx) ──
-    GetCurrentLayer = 0x0801,
-    GetMatrixState = 0x0802,
+    pub const GetCurrentLayer: Self = Self(0x0801);
+    pub const GetMatrixState: Self = Self(0x0802);
     #[cfg(feature = "_ble")]
-    GetBatteryStatus = 0x0803,
+    pub const GetBatteryStatus: Self = Self(0x0803);
     #[cfg(all(feature = "_ble", feature = "split"))]
-    GetPeripheralStatus = 0x0804,
+    pub const GetPeripheralStatus: Self = Self(0x0804);
     /// Latest WPM, sourced from the `WpmUpdate` topic snapshot.
-    GetWpm = 0x0805,
+    pub const GetWpm: Self = Self(0x0805);
     /// Latest sleep flag, sourced from the `SleepState` topic snapshot.
-    GetSleepState = 0x0806,
+    pub const GetSleepState: Self = Self(0x0806);
     /// Latest HID LED bitmap, sourced from the `LedIndicator` topic snapshot.
-    GetLedIndicator = 0x0807,
+    pub const GetLedIndicator: Self = Self(0x0807);
 
     // ── Topics (0x80xx, server → host push) ──
-    LayerChange = 0x8001,
-    WpmUpdate = 0x8002,
-    ConnectionChange = 0x8003,
-    SleepState = 0x8004,
-    LedIndicator = 0x8005,
+    pub const LayerChange: Self = Self(0x8001);
+    pub const WpmUpdate: Self = Self(0x8002);
+    pub const ConnectionChange: Self = Self(0x8003);
+    pub const SleepState: Self = Self(0x8004);
+    pub const LedIndicator: Self = Self(0x8005);
     #[cfg(feature = "_ble")]
-    BatteryStatusTopic = 0x8006,
-}
+    pub const BatteryStatusTopic: Self = Self(0x8006);
 
-impl Cmd {
+    /// Build a command tag from its raw wire value.
+    pub const fn from_raw(raw: u16) -> Self {
+        Self(raw)
+    }
+
+    /// Build a command tag from the header's little-endian CMD bytes.
+    pub const fn from_le_bytes(bytes: [u8; 2]) -> Self {
+        Self(u16::from_le_bytes(bytes))
+    }
+
+    /// Return the raw wire value.
+    pub const fn raw(self) -> u16 {
+        self.0
+    }
+
+    /// Return the header's little-endian CMD bytes.
+    pub const fn to_le_bytes(self) -> [u8; 2] {
+        self.0.to_le_bytes()
+    }
+
     /// Returns `true` for topic / unsolicited push CMDs (high bit set).
     pub const fn is_topic(self) -> bool {
-        self as u16 & super::RYNK_TOPIC_BIT != 0
+        self.0 & RYNK_TOPIC_BIT != 0
+    }
+}
+
+impl core::fmt::Debug for Cmd {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Cmd(0x{:04x})", self.0)
+    }
+}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for Cmd {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(fmt, "Cmd(0x{=u16:04x})", self.0)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    extern crate alloc;
+
+    use alloc::format;
+
     use super::*;
 
     #[test]
     fn topic_mask() {
         assert!(Cmd::LayerChange.is_topic());
         assert!(Cmd::WpmUpdate.is_topic());
+        assert!(Cmd::from_raw(0x80ff).is_topic());
         assert!(!Cmd::GetVersion.is_topic());
         assert!(!Cmd::SetKeyAction.is_topic());
     }
 
     #[test]
-    fn from_repr_unknown_returns_none() {
-        assert!(Cmd::from_repr(0x0000).is_none());
-        assert!(Cmd::from_repr(0x00FF).is_none());
-        assert!(Cmd::from_repr(0xFFFF).is_none());
+    fn raw_values_round_trip() {
+        for cmd in [
+            Cmd::GetVersion,
+            Cmd::SetKeyAction,
+            Cmd::LayerChange,
+            Cmd::from_raw(0xffff),
+        ] {
+            assert_eq!(Cmd::from_raw(cmd.raw()), cmd);
+            assert_eq!(Cmd::from_le_bytes(cmd.to_le_bytes()), cmd);
+        }
     }
 
     #[test]
-    fn from_repr_known_round_trips() {
-        // Sanity for a handful of variants — the derive guarantees every
-        // compiled variant round-trips, so an exhaustive list is unnecessary.
-        for cmd in [Cmd::GetVersion, Cmd::SetKeyAction, Cmd::LayerChange] {
-            assert_eq!(Cmd::from_repr(cmd as u16), Some(cmd));
-        }
+    fn debug_is_compact_raw_value() {
+        assert_eq!(format!("{:?}", Cmd::GetVersion), "Cmd(0x0001)");
+        assert_eq!(format!("{:?}", Cmd::from_raw(0x80ff)), "Cmd(0x80ff)");
     }
 }

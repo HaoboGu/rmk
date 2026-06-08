@@ -1,6 +1,10 @@
 //! Transport trait and shared transport errors.
+//!
+//! This module is the narrow byte-link seam a transport crate implements: just
+//! [`Transport`], [`TransportError`], and [`MaybeSend`]. Request-layer types
+//! (`RequestError`, `TopicFrame`) live in [`crate::client`] with the protocol
+//! logic that owns them.
 
-use rmk_types::protocol::rynk::Cmd;
 use thiserror::Error;
 
 /// A byte link to a Rynk device.
@@ -12,13 +16,6 @@ pub trait Transport: MaybeSend {
     fn recv(&mut self) -> impl core::future::Future<Output = Result<Vec<u8>, TransportError>> + MaybeSend;
 }
 
-/// A raw topic frame.
-#[derive(Debug, Clone)]
-pub struct TopicFrame {
-    pub cmd: Cmd,
-    pub payload: Vec<u8>,
-}
-
 /// Transport setup and I/O errors.
 #[derive(Debug, Error)]
 pub enum TransportError {
@@ -28,28 +25,6 @@ pub enum TransportError {
     Io(String),
     #[error("device not found: {0}")]
     DeviceNotFound(String),
-}
-
-/// Errors from one request round trip.
-#[derive(Debug, Error)]
-pub enum RequestError {
-    #[error(transparent)]
-    Transport(#[from] TransportError),
-    /// The firmware accepted the request but answered with an error.
-    #[error("device rejected {0}")]
-    Rejected(#[from] rmk_types::protocol::rynk::RynkError),
-    #[error("request encode failed for {0:?} (request exceeds tx buffer?)")]
-    Encode(Cmd),
-    #[error("response decode failed for {cmd:?}: {source}")]
-    Deserialize { cmd: Cmd, source: postcard::Error },
-    #[error("response for {cmd:?} had trailing bytes")]
-    TrailingBytes { cmd: Cmd },
-    #[error("response cmd mismatch: sent {sent:?}, got {got:?}")]
-    CmdMismatch { sent: Cmd, got: Cmd },
-    /// A topic-range `Cmd` was passed to a request method — topics are
-    /// server→host push only.
-    #[error("{0:?} is a topic, not a request")]
-    TopicCmd(Cmd),
 }
 
 /// `Send` on native targets, no-op on `wasm32`.
