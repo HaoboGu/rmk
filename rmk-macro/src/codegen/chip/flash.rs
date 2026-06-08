@@ -6,6 +6,8 @@ use quote::quote;
 use rmk_config::resolved::Hardware;
 use rmk_config::resolved::hardware::ChipSeries;
 
+use super::gpio::convert_gpio_str_to_output_pin;
+
 pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
     if hardware.storage.is_none() {
         // This config actually does nothing if storage is disabled
@@ -75,6 +77,15 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                 let state_size = dfu.state_size;
                 let dfu_offset = dfu.dfu_offset;
                 let dfu_size = dfu.dfu_size;
+                let dfu_led = dfu.led.as_ref().map(|c| {
+                    convert_gpio_str_to_output_pin(&hardware.chip, c.pin.clone(), false)
+                });
+                let dfu_led_init = match dfu_led {
+                    Some(pin) => quote! {
+                        ::rmk::dfu::set_led(Some(#pin));
+                    },
+                    None => quote! {},
+                };
                 quote! {
                     let flash = ::rmk::storage::async_flash_wrapper(
                         ::rmk::dfu::init_flash(
@@ -87,6 +98,7 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                             #dfu_size,
                         )
                     );
+                    #dfu_led_init
                 }
             }
             }

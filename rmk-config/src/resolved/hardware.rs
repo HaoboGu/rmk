@@ -29,6 +29,7 @@ pub struct DfuConfig {
     pub dfu_offset: u32,
     pub dfu_size: u32,
     pub page_size: u32,
+    pub led: Option<PinConfig>,
 }
 
 /// Complete hardware configuration for init code generation.
@@ -78,6 +79,7 @@ impl crate::KeyboardTomlConfig {
                     dfu_offset: d.dfu_offset.unwrap_or(0x87000),
                     dfu_size: d.dfu_size.unwrap_or(516 * 1024),
                     page_size: d.page_size.unwrap_or(4096),
+                    led: d.led.clone().map(|pin| PinConfig { pin, low_active: false }),
                 }
             } else {
                 // Auto-calculate using bootymcbootface formula:
@@ -92,6 +94,7 @@ impl crate::KeyboardTomlConfig {
                     dfu_offset: 0x7000 + half_flash,
                     dfu_size: half_flash + page_size,
                     page_size,
+                    led: d.led.clone().map(|pin| PinConfig { pin, low_active: false }),
                 }
             }
         });

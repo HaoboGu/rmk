@@ -496,7 +496,7 @@ pub(crate) struct StorageConfig {
 /// Config for DFU partition layout (embassy-boot).
 ///
 /// These values must match the bootloader's `memory.x` / linker script.
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct DfuTomlConfig {
     /// Offset of the boot state partition
@@ -514,6 +514,9 @@ pub(crate) struct DfuTomlConfig {
     /// calculated automatically using the bootymcbootface formula.
     /// Defaults to 2 MB (2097152) when omitted.
     pub flash_size: Option<u32>,
+    /// Optional DFU activity LED pin, e.g. `"PIN_16"`. When set, the LED
+    /// is lit while a DFU download is in progress.
+    pub led: Option<String>,
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]

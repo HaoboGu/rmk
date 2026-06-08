@@ -10,7 +10,7 @@ mod vial;
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_rp::gpio::{Input, Output};
+    use embassy_rp::gpio::{Input, Level, Output};
 use embassy_rp::peripherals::USB;
 use embassy_rp::usb::{Driver, InterruptHandler};
 use embassy_rp::{bind_interrupts, dma};
@@ -75,11 +75,13 @@ async fn main(_spawner: Spawner) {
         DFU_SIZE,
     ));
 
+    rmk::dfu::set_led(Some(Output::new(p.PIN_25, Level::Low)));
+
     let keyboard_device_config = DeviceConfig {
         vid: 0x4c4b,
         pid: 0x4643,
         manufacturer: "Haobo",
-        product_name: "RMK Keyboard",
+        product_name: "RMK Keyboard RP2040 embassy-boot use_rust example",
         serial_number: "vial:f64c2b3c:000001",
     };
 
