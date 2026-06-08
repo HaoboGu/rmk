@@ -637,6 +637,14 @@ git commit -m "docs: SK shapes + unified [behavior.sticky_key]; pure-mod vs tap-
 
 ---
 
+**STAGE 4 COMPLETE (2026-06-08).** Commit: `242d5945` (docs: SK shapes + unified [behavior.sticky_key]; pure-mod vs tap-key magic-field rule). 3 files, +74/−46.
+
+- **Files:** `docs/docs/main/docs/configuration/behavior.md` (merged the three old sections — `## One-Shot`, `## One-Shot Modifiers`, `## Sticky Key` — into one `## Sticky Key` section: three-shape table, 5-field config table with defaults, chain-mode vs quick-release detail, `:::warning` magic-field callout, default-values block, OSSM/quick-release/longer-timeout examples, and a `### Migration from OSM / OSL` subsection with table + accepted-breaks bullets; fixed the morse example `OSL(1)`→`SK(MO(1))`), `layout.md` (deleted the `OSL(n)`/`OSM(modifier)` list items, merged into one `SK(...)` item documenting all three shapes, dropped the removed 5-positional sentence, renumbered the list 1–8), `appendix.md` (replaced the `one_shot`/`one_shot_modifiers` example blocks with one `sticky_key` block listing all 5 fields).
+- **Reviews:** spec ✅ (independently verified) and code-quality ✅ "Ready to merge: Yes" after fixes. Adjudication — all findings ACCEPTED & FIXED: (spec) appendix block was missing `max_repeat`/`release_on_layer_change` → added all 5; magic-field rationale imprecise for the layer case → rewrote to "a tap-key SK sends its modifier eagerly and holds it across repeats; a layer SK sends no modifier at all." (code-quality) `activate_on_keypress` table cell described `false` behavior under the field (verified against `sticky_key.rs:144-146` — `true` fires on the SK's OWN press) → corrected; pre-existing dead anchor `./layout#keymap-config` on the rewritten cross-link → fixed to `#keyboard-layout-configuration` (folded in only because I was already authoring that line). Reviewer's "both files link to it" was imprecise — only `behavior.md:101` did.
+- **No source/test/toml touched** — docs-only. A stray untracked `docs/superpowers/plans/2026-05-22-sticky-key.md` was accidentally swept into an interim amend by `git add docs/`; removed via `git reset --soft` + targeted re-stage, left on disk untracked. Final commit is exactly the 3 config docs.
+
+---
+
 ## Stage 5 — Local verification, hardware testing, and wire/Vial migration evaluation (DP-4)
 
 **Goal:** Run the complete local suite and capture the **DP-4** wire/Vial/storage migration finding before any move toward PR #859. **This stage does not push to the PR.** The user runs hardware testing personally.
