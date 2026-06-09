@@ -1,18 +1,24 @@
 # Flashing Firmware
 
-The last step is to flash compiled firmware to your microcontroller. RMK supports flashing the firmware via uf2 bootloader or debug probe.
+The last step is to flash compiled firmware to your microcontroller. RMK supports flashing the
+firmware via uf2 bootloader or debug probe.
 
 ## Use uf2 bootloader
 
-Flashing using uf2 bootloader is easy: set your board to bootloader mode, then a USB drive should appear in your computer. Copy the uf2 firmware to the USB drive, and that's it!
+Flashing using uf2 bootloader is easy: set your board to bootloader mode, then a USB drive should
+appear in your computer. Copy the uf2 firmware to the USB drive, and that's it!
 
 If you're using macOS, an error might appear, you can safely ignore it.
 
 ### Tips for nRF52840
 
-For nRF52840, you need to check whether your have a uf2 bootloader flashed to your board. If you can enter bootloader mode, there will be an USB drive shown in your computer. If there's `INFO_UF2.TXT` in the USB drive, you have it! 
+For nRF52840, you need to check whether your have a uf2 bootloader flashed to your board. If you can
+enter bootloader mode, there will be an USB drive shown in your computer. If there's `INFO_UF2.TXT`
+in the USB drive, you have it!
 
-The [Adafruit_nRF52_Bootloader](https://github.com/adafruit/Adafruit_nRF52_Bootloader) for nRF52840 has a special MBR section at the beginning of the flash, ensure that the flash origin in `memory.x` starts with 0x00001000:
+The [Adafruit_nRF52_Bootloader](https://github.com/adafruit/Adafruit_nRF52_Bootloader) for nRF52840
+has a special MBR section at the beginning of the flash, ensure that the flash origin in `memory.x`
+starts with 0x00001000:
 
 ```
 MEMORY
@@ -35,8 +41,9 @@ If you have a debug probe and don't want to use the bootloader, use the followin
 
 ### Tips for the STM32F411 Blackpill / F401 Bluepill
 
-For STM32 MCUs the memory.x file us usually created by the embassy-stm32 crate and a memory.x file doesnt have to be created.
-This will result in a file similar to this: (you can find that in the target directory)
+For STM32 MCUs the memory.x file us usually created by the embassy-stm32 crate and a memory.x file
+doesnt have to be created. This will result in a file similar to this: (you can find that in the
+target directory)
 
 ```
 MEMORY
@@ -46,16 +53,17 @@ MEMORY
 }
 ```
 
-Where the LENGTH value may vary, depending on the chip.
-This setup works fine for the default stm32-dfu bootloader and the debug probe.
+Where the LENGTH value may vary, depending on the chip. This setup works fine for the default
+stm32-dfu bootloader and the debug probe.
 
 #### Use tinyuf2 bootloader for stm32
 
-For some STM32 there is a [tinyuf2 bootloader](https://github.com/adafruit/tinyuf2) available.
-Using that you can just drop the finished uf2 file onto the device like it's an USB stick.
+For some STM32 there is a [tinyuf2 bootloader](https://github.com/adafruit/tinyuf2) available. Using
+that you can just drop the finished uf2 file onto the device like it's an USB stick.
 
-Because the bootloader takes up 64K at the beginnning of the first sector, we need to shift the flash
-address accordingly. To do this first run `cargo build --release` at least once. get your generated memory.x file out of the target directory:
+Because the bootloader takes up 64K at the beginnning of the first sector, we need to shift the
+flash address accordingly. To do this first run `cargo build --release` at least once. get your
+generated memory.x file out of the target directory:
 
 ```shell
 # pwd in project root
@@ -64,8 +72,7 @@ find ./target -name "memory.x"
 # ./target/thumbv7em-none-eabi/release/build/embassy-stm32-588e747b0f59bbf9/out/memory.x
 ```
 
-(The exact path may vary, because of the hash)
-copy this to your project root:
+(The exact path may vary, because of the hash) copy this to your project root:
 
 ```shell
 cp ./target/thumbv7em-none-eabi/release/build/embassy-stm32-dbac6b60f6194464/out/memory.x ./
@@ -82,6 +89,7 @@ MEMORY
 ```
 
 For tinyuf2 shift the FLASH region by 64K and adjust the length accordingly:
+
 ```
 MEMORY
 {
@@ -91,29 +99,34 @@ MEMORY
 ```
 
 Then build the firmware using
+
 ```shell
 cargo make uf2 --release
 ```
 
-To flash, double tap `NRST` an the board, the board will go into bootloader mode and appear as a
-USB flash drive. Drop the *.uf2 files into the drive, the board will then reboot into the firmware.
+To flash, double tap `NRST` an the board, the board will go into bootloader mode and appear as a USB
+flash drive. Drop the \*.uf2 files into the drive, the board will then reboot into the firmware.
 
 ## Use debug probe
 
-If you have a debug probe like [daplink](https://daplink.io/), [jlink](https://www.segger.com/products/debug-probes/j-link/) or [stlink](https://github.com/stlink-org/stlink)(stm32 only), things become much easier: connect it with your board and host, make sure you have installed [probe-rs](https://probe.rs/), then just run
+If you have a debug probe like [daplink](https://daplink.io/),
+[jlink](https://www.segger.com/products/debug-probes/j-link/) or
+[stlink](https://github.com/stlink-org/stlink)(stm32 only), things become much easier: connect it
+with your board and host, make sure you have installed [probe-rs](https://probe.rs/), then just run
 
 ```shell
 cargo run --release
 ```
 
-Then the command configured in `.cargo/config.toml` will be executed. The firmware will be flashed to your microcontroller and run automatically, yay!
+Then the command configured in `.cargo/config.toml` will be executed. The firmware will be flashed
+to your microcontroller and run automatically, yay!
 
 ## Next Steps
 
-Now you've finished the RMK's user guide. For the next steps, you can checkout features that RMK provides or explore how to configure RMK keyboard:
+Now you've finished the RMK's user guide. For the next steps, you can checkout features that RMK
+provides or explore how to configure RMK keyboard:
 
-
-import { LinkCard } from '@theme';
+import { LinkCard } from '@theme'
 
 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px"}}>
 <LinkCard
@@ -128,4 +141,3 @@ import { LinkCard } from '@theme';
       description="Explore how to configure RMK keyboard"
 />
 </div>
-

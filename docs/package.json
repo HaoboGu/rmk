@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "node fetch-docs.js",
+    "postinstall": "tsx fetch-docs.ts",
     "build": "rspress build",
     "check": "prettier .",
     "dev": "rspress dev",
@@ -12,16 +12,18 @@
     "preview": "rspress preview"
   },
   "dependencies": {
-    "@rspress/core": "^2.0.5"
+    "@rspress/core": "^2.0.14"
   },
   "devDependencies": {
-    "@iconify/json": "^2.2.447",
+    "@iconify/json": "^2.2.484",
     "@iconify/tailwind4": "^1.2.3",
-    "@rspress/plugin-sitemap": "^2.0.5",
-    "@tailwindcss/postcss": "^4.2.1",
-    "@types/react": "^19.2.14",
-    "prettier": "3.6.2",
-    "tailwindcss": "^4.2.1"
+    "@rsbuild/plugin-tailwindcss": "^2.0.2",
+    "@rspress/plugin-llms": "^2.0.14",
+    "@rspress/plugin-sitemap": "^2.0.14",
+    "@types/react": "^19.2.17",
+    "prettier": "3.8.3",
+    "tailwindcss": "^4.3.0",
+    "tsx": "^4.22.4"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

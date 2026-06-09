@@ -58,6 +58,7 @@ The `quick_release` option controls when the one-shot modifier is released:
 - `true`: the modifier is released when the next key is **pressed** (equivalent to ZMK `&skq`). Only the initial press of the next key is modified; key repeat will not include the modifier.
 
 Default values:
+
 ```toml
 [behavior.one_shot_modifiers]
 activate_on_keypress = false
@@ -65,12 +66,14 @@ quick_release = false
 ```
 
 OSSM example:
+
 ```toml
 [behavior.one_shot_modifiers]
 activate_on_keypress = true
 ```
 
 Quick-release example:
+
 ```toml
 [behavior.one_shot_modifiers]
 quick_release = true

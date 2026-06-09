@@ -16,7 +16,7 @@ Each key connects directly to its own GPIO pin, eliminating the matrix grid and 
 
 ### Bidirectional Matrix
 
-The bidirectional matrix design uses dynamically switchable GPIO pins that can change between input and output modes during the scan cycle. Because the bidirectional matrix is more complicated than the normal matrix, only the [Rust API](https://github.com/HaoboGu/rmk/blob/main/rmk/src/matrix/bidirectional_matrix.rs) is provided at the moment. 
+The bidirectional matrix design uses dynamically switchable GPIO pins that can change between input and output modes during the scan cycle. Because the bidirectional matrix is more complicated than the normal matrix, only the [Rust API](https://github.com/HaoboGu/rmk/blob/main/rmk/src/matrix/bidirectional_matrix.rs) is provided at the moment.
 
 ## Async Matrix Feature
 
