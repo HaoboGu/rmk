@@ -1,0 +1,141 @@
+# Use embassy-boot bootloader
+
+::: tip
+This feature is only available for **RP2040** (Raspberry Pi Pico, Pi Pico W, and other RP2040 boards).
+:::
+
+[embassy-boot](https://github.com/embassy-rs/embassy/tree/main/embassy-boot) is a bootloader framework from the Embassy project. It splits the flash into two firmware slots (active and DFU download), so updating is **safe even if power is lost or the transfer fails** — the old firmware remains intact and the bootloader can roll back automatically. You can build your own bootloader using the `embassy-boot-rp` crate, or use a pre-built one like **bootymcbootface**.
+
+[bootymcbootface](https://codeberg.org/Schievel/bootymcbootface/) is a pre-built embassy-boot bootloader for RP2040. It sits at the beginning of flash and handles the dual-slot firmware switching and rollback on boot. RMK itself provides the DFU USB interface (via `embassy-usb-dfu`) for subsequent updates, so once bootymcbootface and RMK are flashed, you never need to press BOOTSEL again.
+
+RMK's `[dfu]` configuration is tuned for bootymcbootface's `memory.x` partition layout, so the default settings work out of the box.
+
+## Prerequisites
+
+### bootymcbootface
+
+You need the [bootymcbootface](https://codeberg.org/Schievel/bootymcbootface/) bootloader in the **correct flash size** for your board. The available versions are named by flash size, e.g.:
+
+- `bootymcbootface_2MB.uf2` – for 2 MB flash
+- `bootymcbootface_4MB.uf2` – for 4 MB flash
+- `bootymcbootface_8MB.uf2` – for 8 MB flash
+- `bootymcbootface_16MB.uf2` – for 16 MB flash
+
+The **2 MB version works with larger flash chips too** (e.g. 4 MB or 8 MB). It only uses the first 2 MB of flash, the rest remains unused. If you want to use the full flash, pick the matching variant.
+
+### Compile RMK with DFU support
+
+RMK must be compiled with the `dfu` and `dfu_rp` features and the **matching flash size**.
+
+When using `rmkit init`, you will be asked whether you want to use embassy-boot and can enter the flash size. `rmkit` handles all necessary adjustments automatically.
+
+If configuring manually, ensure:
+
+- `Cargo.toml` uses the `dfu_rp` feature instead of `rp2040`
+- `keyboard.toml` has `[storage]` and `[dfu]` sections
+- The flash partitioning in `memory.x` matches your bootloader and flash size (see `rmk/examples/use_rust/rp2040_embassy_boot/`)
+
+**Important:** The bootymcbootface version and the RMK compilation must use the **same flash size**. Example: bootymcbootface 2 MB → RMK with 2 MB flash configuration.
+
+::: tip
+You can still flash firmware via UF2 or probe-rs — as long as it was built with the correct `memory.x` for the embassy-boot partition layout (i.e. with `dfu_rp` feature), it will land in the active firmware slot and leave bootymcbootface untouched.
+
+If you flash a RMK firmware built with a **normal** `memory.x` (without embassy-boot), it will start at flash address `0x0` and **overwrite bootymcbootface**.
+:::
+
+## Step-by-step guide
+
+### First-time flashing
+
+The first time, you need to flash the bootloader first, then RMK.
+
+#### 1. Flash bootymcbootface
+
+**Method A – via UF2:**
+1. Put your RP2040 into bootloader mode (hold BOOTSEL button, plug in USB, release)
+2. A USB drive named `RPI-RP2` should appear
+3. Copy the matching `bootymcbootface_<size>.uf2` to the drive
+4. The RP2040 reboots – the bootloader is now active
+
+*(If an LED is configured, it will turn on during a DFU transfer and turn off when done.)*
+
+**Method B – via debug probe (probe-rs):**
+```shell
+probe-rs run --chip RP2040 bootymcbootface_<size>.elf
+# or
+cargo run --release
+```
+(Make sure your project targets the bootloader binary)
+
+#### 2. Flash RMK firmware
+
+Now flash the actual RMK firmware. The bootloader stays in place.
+
+**Method A – via UF2:**
+The embassy-boot bootloader also provides a UF2 mode. Put the board into bootloader mode (double-tap reset or BOOTSEL, depending on the board), then copy the RMK firmware `.uf2` file to the drive.
+
+**Method B – via debug probe (probe-rs):**
+```shell
+probe-rs run --chip RP2040 target/thumbv6m-none-eabi/release/your-firmware
+```
+
+### All subsequent updates via DFU
+
+Once bootymcbootface and the RMK firmware have been flashed once, all future updates can be done **easily over USB via DFU**.
+
+#### Generate the .bin file
+
+DFU flashing requires a `.bin` file (not `.elf` or `.uf2`). You have two options:
+
+**Option 1 – using `rust-objcopy` (or `arm-none-eabi-objcopy`):**
+```shell
+rust-objcopy -O binary target/thumbv6m-none-eabi/release/your-firmware your-firmware.bin
+```
+
+**Option 2 – using `cargo make bin`:**
+```shell
+cargo make bin --release
+```
+(Requires a `Makefile.toml` with a `bin` task — the generated template already includes one.)
+
+#### Flash via dfu-util
+
+```shell
+dfu-util -a 0 -d ,, -D your-firmware.bin
+```
+
+Or with a device ID if multiple devices are connected:
+```shell
+dfu-util -a 0 -d 1209:1234 -D your-firmware.bin
+```
+
+Find your device's VID:PID via `lsusb` on Linux or Device Manager (under "Universal Serial Bus devices") on Windows.
+
+**Installing `dfu-util`:**
+- Linux: `sudo apt install dfu-util` (Debian/Ubuntu) or `sudo pacman -S dfu-util` (Arch)
+- macOS: `brew install dfu-util`
+- Windows: Download from [dfu-util.sourceforge.net](https://dfu-util.sourceforge.net/)
+
+`dfu-util` will automatically detect the board when it is in DFU mode. The RMK firmware enters DFU mode on reset, or (optional) when the `unlock_keys` configured in `keyboard.toml` are pressed.
+
+#### Unlocking DFU (optional, dfu_lock)
+
+If your firmware was compiled with the `dfu_lock` feature, DFU starts in a **locked** state. To unlock:
+
+1. Press the key combination configured as `unlock_keys` in `keyboard.toml` (default: `[[0, 0], [1, 1]]`)
+2. If an LED is configured, it will light up for half a second, then blink **"D F U"** in Morse code (`-.. ..-. ..-` — dash-dot-dot, dot-dot-dash-dot, dot-dot-dash)
+3. You now have **10 seconds** to start the DFU download
+4. Once the download begins, the LED stays on — the firmware update is in progress
+5. After the update completes, the LED turns off and the board reboots
+
+If no DFU download starts within 10 seconds, the lock re-engages and the LED turns off. Press the unlock keys again to retry.
+
+#### LED behavior during DFU transfer (optional)
+
+If an LED pin is configured in `keyboard.toml` (`[dfu] led = "PIN_25"`):
+
+| State | LED behavior |
+|---|---|
+| DFU download started | On |
+| Writing data blocks | Toggles on each block |
+| DFU finished / system reset | Off |
