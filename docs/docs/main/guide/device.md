@@ -56,7 +56,7 @@ Notes:
 
 RMK's input device framework is designed to provide a simple yet extensible way to handle both keys and sensors. Below is an overview of the framework:
 
-![input_device_framework](/images/input_device_framework.excalidraw.svg)
+![input_device_framework](../images/input_device_framework.excalidraw.svg)
 
 To implement a new input device in RMK, you need to:
 
