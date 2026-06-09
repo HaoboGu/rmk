@@ -129,7 +129,6 @@ serial = [
 serial = [{ instance = "PIO0", tx_pin = "PIN_0", rx_pin = "PIN_0" }]
 ```
 
-
 ## Define central and peripherals via `keyboard.toml`
 
 See [this section](../configuration/split_keyboard) for more details.
@@ -168,7 +167,6 @@ let mut matrix = Matrix::<
 ```
 
 On the central, you should also run the peripheral manager for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
-
 
 import { Rust, Toml, Tab, Tabs } from '@theme'
 

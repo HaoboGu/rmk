@@ -7,6 +7,7 @@ RMK's processor system provides a unified interface for components that consume 
 Processors subscribe to events and react accordingly. Events are published by [Input Devices](./input_device) or other processors. For details about events, see the [Event](./event) documentation.
 
 Processors can operate in two modes:
+
 - **Event-driven** - React to events as they arrive
 - **Polling** - Perform periodic updates at specified intervals (in addition to handling events)
 
@@ -30,10 +31,12 @@ impl MyProcessor {
 ```
 
 **Parameters:**
+
 - `subscribe = [Event1, Event2, ...]` (required): Event types to subscribe to (see [Built-in Events](./event#built-in-events))
 - `poll_interval = <ms>` (optional): Enable polling with fixed interval, requires `poll()` method
 
 **How it works:**
+
 - `#[processor]` implements `Processor` and `Runnable` traits automatically
 - Event handlers are automatically routed based on method naming: `on_<event_name>_event()`
 - Method names follow snake_case conversion of event type names
@@ -55,6 +58,7 @@ mod my_keyboard {
 ```
 
 Available registration modes:
+
 - `#[register_processor(event)]`: Event-driven mode, reacts to subscribed events
 - `#[register_processor(poll)]`: Polling mode, requires `poll_interval` parameter in `#[processor]` macro
 

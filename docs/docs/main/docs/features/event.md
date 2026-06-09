@@ -27,25 +27,30 @@ RMK uses an event-driven architecture for communication between components. Even
 RMK provides built-in event types organized by category:
 
 **Input Events** (`rmk::event::input`):
+
 - `KeyboardEvent` - Key press/release event from matrix or encoders
 - `ModifierEvent` - Modifier key combination changes
 - `PointingEvent` - Pointing device events (mouse movement, scroll)
 
 **State Events** (`rmk::event::state`):
+
 - `LayerChangeEvent` - Active layer changed
 - `LedIndicatorEvent` - LED indicator state changed (NumLock, CapsLock, ScrollLock)
 - `WpmUpdateEvent` - Words per minute updated
 - `SleepStateEvent` - Sleep state changed
 
 **Battery Events** (`rmk::event::battery`):
+
 - `BatteryAdcEvent` - Raw battery ADC reading
 - `ChargingStateEvent` - Charging state changed
 - `BatteryStatusEvent` - Battery status changed (includes level and charging status)
 
 **Connection Events** (`rmk::event::connection`):
+
 - `ConnectionStatusChangeEvent` - Full `ConnectionStatus` snapshot (USB lifecycle, BLE profile/state, preferred transport); fires on every transition
 
 **Split Keyboard Events** (`rmk::event::split`, when split is enabled):
+
 - `PeripheralConnectedEvent` - Peripheral connection state changed
 - `CentralConnectedEvent` - Connected to central state changed
 - `PeripheralBatteryEvent` - Peripheral battery status changed
@@ -72,14 +77,16 @@ pub struct AnotherEvent {
 ```
 
 **Parameters:**
+
 - `channel_size` (optional): Buffer size of the event channel. Default is 8 for Channel, 1 for PubSub.
 - `subs` (optional): Max subscribers. If specified, uses PubSub channel. Default is 4.
 - `pubs` (optional): Max publishers. If specified, uses PubSub channel. Default is 1.
 
 ::: note Channel types
+
 - **Channel**: Each event is consumed by **one** subscriber. If multiple subscribers exist, only one receives each event.
 - **PubSub**: Each event is broadcast to **all** subscribers. Specify `subs` or `pubs` to enable.
-:::
+  :::
 
 ### Multi-event Enums
 

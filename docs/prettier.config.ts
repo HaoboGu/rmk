@@ -14,7 +14,7 @@ const config: Config = {
         proseWrap: 'preserve'
       }
     }
-  ],
+  ]
 }
 
 export default config

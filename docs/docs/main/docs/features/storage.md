@@ -14,7 +14,6 @@ By default, RMK saves data to your microcontroller's internal flash memory.
 
 - For Rust API users, you can configure storage via the `RmkConfig.storage_config` field, which accepts a `StorageConfig` struct.
 
-
 ::: warning
 Ensure you allocate sufficient storage space for your keymap and bonding information. 32 KiB is generally adequate for most keyboards.
 :::

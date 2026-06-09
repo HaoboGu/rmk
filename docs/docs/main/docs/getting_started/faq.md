@@ -118,7 +118,7 @@ Caused by:
   Unable to generate bindings: NotExist("./third_party/nordic/nrfxlib/softdevice_controller/include/sdc_soc.h")
   stack backtrace:
      0: std::panicking::begin_panic_handler
-               at /rustc/29483883eed69d5fb4db01964cdf2af4d86e9cb2/library\std\src\panicking.rs:697   
+               at /rustc/29483883eed69d5fb4db01964cdf2af4d86e9cb2/library\std\src\panicking.rs:697
      ...
   note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
 ```

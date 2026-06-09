@@ -53,7 +53,6 @@ The transform might be not very intuitive, please read the document below for mo
 
 #### How it works
 
-
 1. Device reads values from each axis
 2. Adds the `bias` value to each axis to make the value close to 0 when the joystick is released
 3. About the `transform` matrix:
@@ -78,7 +77,6 @@ The transform might be not very intuitive, please read the document below for mo
 3. If the mouse moves too fast, gradually increase the `transform` value until you find the right sensitivity
 
 4. If the mouse jitters, gradually increase the `resolution` value until the jitter disappears
-
 
 ## `rust` configuration
 
