@@ -7,7 +7,7 @@ import versions from './versions.json' with { type: 'json' }
 export default defineConfig({
   root: path.join(__dirname, 'docs'),
   title: 'RMK',
-  icon: '/rmk_logo.svg',
+  icon: '/favicon.ico',
   logo: {
     light: '/rmk_logo.svg',
     dark: '/rmk_logo.svg'
