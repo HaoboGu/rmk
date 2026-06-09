@@ -12,6 +12,7 @@ use syn::ItemMod;
 use crate::codegen::display::expand_display_interrupt;
 use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
 use crate::codegen::input_device::iqs5xx::expand_iqs5xx_interrupts;
+use crate::codegen::input_device::iqs9151::expand_iqs9151_interrupts;
 
 /// Expand `bind_interrupt!` stuffs, and other code before `main` function
 pub(crate) fn expand_bind_interrupt(hardware: &Hardware, item_mod: &ItemMod) -> TokenStream2 {
@@ -92,6 +93,19 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
             .unwrap_or(Vec::new()),
     };
     let iqs5xx_interrupt = expand_iqs5xx_interrupts(&chip.series, &iqs5xx_config);
+    let iqs9151_config = match board {
+        BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => {
+            input_device.clone().iqs9151.unwrap_or(Vec::new())
+        }
+        BoardConfig::Split(split_config) => split_config
+            .central
+            .input_device
+            .clone()
+            .unwrap_or(InputDeviceConfig::default())
+            .iqs9151
+            .unwrap_or(Vec::new()),
+    };
+    let iqs9151_interrupt = expand_iqs9151_interrupts(&chip.series, &iqs9151_config);
 
     match chip.series {
         rmk_config::resolved::hardware::ChipSeries::Stm32 => {
@@ -246,6 +260,7 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
                     RTC0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     #pmw33xx_spi_interrupts
                     #iqs5xx_interrupt
+                    #iqs9151_interrupt
                     #display_interrupt
                     #extern_irqs
                 });
@@ -304,6 +319,7 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
                     #dma_irq_0
                     #pio0_irq_0
                     #iqs5xx_interrupt
+                    #iqs9151_interrupt
                     #display_interrupt
                 });
                 #ble_task

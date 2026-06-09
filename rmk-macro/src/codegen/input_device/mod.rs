@@ -1,6 +1,7 @@
 use adc::expand_adc_device;
 use encoder::expand_encoder_device;
 use iqs5xx::expand_iqs5xx_device;
+use iqs9151::expand_iqs9151_device;
 use pmw33xx::expand_pmw33xx_device;
 use pmw3610::expand_pmw3610_device;
 use proc_macro2::{Ident, TokenStream};
@@ -13,6 +14,7 @@ use rmk_config::resolved::hardware::{
 pub(crate) mod adc;
 pub(crate) mod encoder;
 pub(crate) mod iqs5xx;
+pub(crate) mod iqs9151;
 pub(crate) mod pmw33xx;
 pub(crate) mod pmw3610;
 
@@ -291,6 +293,63 @@ pub(crate) fn expand_input_device_config(
                 initialization.extend(initializer.initializer);
                 let processor_name = initializer.var_name;
                 processors.push(quote! { #processor_name });
+            }
+        }
+    }
+
+    // generate IQS9151 configuration
+    let (iqs9151_device_initializers, iqs9151_processor_initializers) = match board {
+        BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => {
+            expand_iqs9151_device(input_device.clone().iqs9151.unwrap_or(Vec::new()), chip)
+        }
+        BoardConfig::Split(split_config) => expand_iqs9151_device(
+            split_config
+                .central
+                .input_device
+                .clone()
+                .unwrap_or(InputDeviceConfig::default())
+                .iqs9151
+                .unwrap_or(Vec::new()),
+            chip,
+        ),
+    };
+
+    for initializer in iqs9151_device_initializers {
+        initialization.extend(initializer.initializer);
+        let device_name = initializer.var_name;
+        devices.push(quote! { #device_name });
+    }
+
+    let mut has_iqs9151_processor = !iqs9151_processor_initializers.is_empty();
+    for initializer in iqs9151_processor_initializers {
+        initialization.extend(initializer.initializer);
+        let processor_name = initializer.var_name;
+        processors.push(quote! { #processor_name });
+    }
+
+    // For split keyboards, also generate processors for IQS9151 devices on peripherals
+    // The devices run on peripherals, but processors need to run on central to handle the events
+    if let BoardConfig::Split(split_config) = board {
+        for peripheral in &split_config.peripheral {
+            if has_iqs9151_processor {
+                break;
+            }
+            let peripheral_iqs9151_config = peripheral
+                .input_device
+                .clone()
+                .unwrap_or(InputDeviceConfig::default())
+                .iqs9151
+                .unwrap_or(Vec::new());
+
+            // Only generate processors (not devices) for peripheral IQS9151
+            let (_, peripheral_iqs9151_processors) =
+                expand_iqs9151_device(peripheral_iqs9151_config, chip);
+
+            for initializer in peripheral_iqs9151_processors {
+                initialization.extend(initializer.initializer);
+                let processor_name = initializer.var_name;
+                processors.push(quote! { #processor_name });
+                has_iqs9151_processor = true;
             }
         }
     }

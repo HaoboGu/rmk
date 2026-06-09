@@ -859,6 +859,7 @@ pub struct InputDeviceConfig {
     pub pmw3610: Option<Vec<Pmw3610Config>>,
     pub pmw33xx: Option<Vec<Pmw33xxConfig>>,
     pub iqs5xx: Option<Vec<Iqs5xxConfig>>,
+    pub iqs9151: Option<Vec<Iqs9151Config>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -992,6 +993,43 @@ pub struct Iqs5xxConfig {
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Iqs5xxI2cConfig {
+    pub instance: String,
+    pub sda: String,
+    pub scl: String,
+}
+
+/// Azoteq IQS9151 trackpad configuration.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Iqs9151Config {
+    /// Name of the trackpad (used for variable naming).
+    pub name: String,
+    /// RMK pointing-device id (0-255). Defaults to 0.
+    pub id: Option<u8>,
+    /// I²C bus the trackpad is connected to. The bus is dedicated to this
+    /// device — sharing with other I²C peripherals (e.g. an OLED) is not yet
+    /// supported via TOML.
+    pub i2c: Iqs9151I2cConfig,
+    /// Optional active-low `RDY` pin. Strongly recommended; without it the
+    /// driver falls back to timed polling and may stall the bus through
+    /// clock-stretching.
+    pub rdy: Option<String>,
+    /// Invert X in the PointingProcessor.
+    #[serde(default)]
+    pub proc_invert_x: bool,
+    /// Invert Y in the PointingProcessor.
+    #[serde(default)]
+    pub proc_invert_y: bool,
+    /// Swap X and Y in the PointingProcessor.
+    #[serde(default)]
+    pub proc_swap_xy: bool,
+}
+
+/// I²C bus configuration for the IQS9151. Distinct from the generic
+/// `I2cConfig` because the default IQS9151 address is fixed at `0x56`.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Iqs9151I2cConfig {
     pub instance: String,
     pub sda: String,
     pub scl: String,
@@ -1220,5 +1258,38 @@ subs = 2
         assert_eq!(config.event.layer_change.channel_size, 1);
         assert_eq!(config.event.layer_change.pubs, 2);
         assert_eq!(config.event.layer_change.subs, 2);
+    }
+
+    #[test]
+    fn test_iqs9151_input_device_config() {
+        let user_toml = r#"
+[[input_device.iqs9151]]
+name = "trackpad"
+id = 7
+rdy = "P1_11"
+i2c.instance = "TWISPI0"
+i2c.sda = "P0_04"
+i2c.scl = "P0_05"
+proc_invert_x = true
+"#;
+        let config: KeyboardTomlConfig = Config::builder()
+            .add_source(File::from_str(user_toml, FileFormat::Toml))
+            .build()
+            .unwrap()
+            .try_deserialize()
+            .unwrap();
+
+        let iqs9151 = config.input_device.unwrap().iqs9151.unwrap();
+
+        assert_eq!(iqs9151.len(), 1);
+        assert_eq!(iqs9151[0].name, "trackpad");
+        assert_eq!(iqs9151[0].id, Some(7));
+        assert_eq!(iqs9151[0].rdy.as_deref(), Some("P1_11"));
+        assert_eq!(iqs9151[0].i2c.instance, "TWISPI0");
+        assert_eq!(iqs9151[0].i2c.sda, "P0_04");
+        assert_eq!(iqs9151[0].i2c.scl, "P0_05");
+        assert!(iqs9151[0].proc_invert_x);
+        assert!(!iqs9151[0].proc_invert_y);
+        assert!(!iqs9151[0].proc_swap_xy);
     }
 }
