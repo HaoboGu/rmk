@@ -9,8 +9,8 @@ export default defineConfig({
   title: 'RMK',
   icon: '/favicon.ico',
   logo: {
-    light: '/rmk_logo.svg',
-    dark: '/rmk_logo.svg'
+    light: '/logo.svg',
+    dark: '/logo.svg'
   },
   outDir: 'dist',
   plugins: [
