@@ -124,6 +124,9 @@ vial = ["host"]
 ## Enable vial lock feature
 vial_lock = ["vial", "host_security"]
 
+## Enable DFU lock feature — physical key unlock for DFU firmware download
+dfu_lock = ["dfu-rp", "host_security"]
+
 ## Enable physical key unlock and matrix state tracking (shared between vial_lock and rmk_protocol)
 host_security = []
 

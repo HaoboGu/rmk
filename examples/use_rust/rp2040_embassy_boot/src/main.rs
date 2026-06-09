@@ -10,7 +10,7 @@ mod vial;
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-    use embassy_rp::gpio::{Input, Level, Output};
+use embassy_rp::gpio::{Input, Level, Output};
 use embassy_rp::peripherals::USB;
 use embassy_rp::usb::{Driver, InterruptHandler};
 use embassy_rp::{bind_interrupts, dma};
@@ -112,6 +112,16 @@ async fn main(_spawner: Spawner) {
     .await;
 
     rmk::dfu::mark_booted();
+
+    // Optional DFU lock — requires the `dfu_lock` Cargo feature.
+    // Specify the physical keys to press simultaneously to unlock DFU firmware
+    // download. The keys are (row, col) pairs matching your matrix layout.
+    // The lock state is checked by the DFU USB handler on each download start.
+    // To use, create a `DfuLock` and poll it periodically:
+    //
+    //   let unlock_keys: &[(u8, u8)] = &[(0, 0), (1, 1)];
+    //   let dfu_lock = rmk::dfu::DfuLock::new(unlock_keys);
+    //   // Call dfu_lock.process_unlock(&keymap).await in a loop.
 
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);

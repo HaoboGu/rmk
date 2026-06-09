@@ -1,5 +1,7 @@
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicPtr, Ordering};
+#[cfg(feature = "dfu_lock")]
+use core::sync::atomic::AtomicBool;
 
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::blocking_mutex::Mutex;
@@ -44,7 +46,6 @@ use embassy_usb::class::dfu::consts::Status;
 #[cfg(feature = "dfu-rp")]
 use embassy_usb::class::dfu::dfu_mode::{self, DfuState};
 
-
 #[cfg(feature = "dfu-rp")]
 type FlashType = Flash<'static, FLASH, Blocking, FLASH_SIZE>;
 #[cfg(feature = "dfu-rp")]
@@ -59,7 +60,8 @@ static MANAGER_CELL: StaticCell<DfuFlashManager> = StaticCell::new();
 #[cfg(feature = "dfu-rp")]
 static MANAGER_PTR: AtomicPtr<DfuFlashManager> = AtomicPtr::new(core::ptr::null_mut());
 #[cfg(feature = "dfu-rp")]
-static LED_MUTEX: AtomicPtr<Mutex<NoopRawMutex, RefCell<Option<Output<'static>>>>> = AtomicPtr::new(core::ptr::null_mut());
+static LED_MUTEX: AtomicPtr<Mutex<NoopRawMutex, RefCell<Option<Output<'static>>>>> =
+    AtomicPtr::new(core::ptr::null_mut());
 
 #[cfg(feature = "dfu-rp")]
 pub struct DfuFlashManager {
@@ -107,67 +109,82 @@ impl DfuFlashManager {
     }
 }
 
-/// DFU handler wrapper that toggles an optional LED on start/finish/reset.
-#[cfg(feature = "dfu-rp")]
-struct RmkDfuHandler<H> {
-    inner: H,
-    led: Option<Output<'static>>,
-}
-
-#[cfg(feature = "dfu-rp")]
-impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
-    fn start(&mut self) -> Result<(), Status> {
-        if let Some(ref mut led) = self.led {
-            led.set_high();
-        }
-        self.inner.start()
-    }
-
-    fn write(&mut self, data: &[u8]) -> Result<(), Status> {
-        self.inner.write(data)
-    }
-
-    fn finish(&mut self) -> Result<(), Status> {
-        let res = self.inner.finish();
-        if let Some(ref mut led) = self.led {
-            led.set_low();
-        }
-        res
-    }
-
-    fn system_reset(&mut self) {
-        if let Some(ref mut led) = self.led {
-            led.set_low();
-        }
-        self.inner.system_reset()
-    }
-}
-
-/// Store an optional DFU LED pin for use by the DFU USB handler.
-///
-/// Must be called before `take_led()` (i.e. before USB setup).
+/// Store an optional DFU LED pin globally.
 #[cfg(feature = "dfu-rp")]
 pub fn set_led(led: Option<Output<'static>>) {
-    static LED_CELL: StaticCell<Mutex<NoopRawMutex, RefCell<Option<Output<'static>>>>> = StaticCell::new();
+    static LED_CELL: StaticCell<Mutex<NoopRawMutex, RefCell<Option<Output<'static>>>>> =
+        StaticCell::new();
     let m = LED_CELL.init(Mutex::new(RefCell::new(led)));
     LED_MUTEX.store(m as *const _ as *mut _, Ordering::Release);
 }
 
-/// Take the DFU LED (consumed once during USB setup).
+/// Run a closure with the global DFU LED, if configured.
 #[cfg(feature = "dfu-rp")]
-pub(crate) fn take_led() -> Option<Output<'static>> {
+fn with_led<F, R>(f: F) -> Option<R>
+where
+    F: FnOnce(&mut Output<'static>) -> R,
+{
     let ptr = LED_MUTEX.load(Ordering::Acquire);
     if ptr.is_null() {
         return None;
     }
     let m = unsafe { &*ptr };
-    m.lock(|cell| cell.borrow_mut().take())
+    m.lock(|cell| cell.borrow_mut().as_mut().map(f))
+}
+
+/// DFU lock state (shared between keyboard loop and DFU handler).
+#[cfg(feature = "dfu_lock")]
+static DFU_LOCKED: AtomicBool = AtomicBool::new(true);
+
+/// Set to true once `RmkDfuHandler::start()` begins a DFU download.
+#[cfg(feature = "dfu_lock")]
+static DFU_STARTED: AtomicBool = AtomicBool::new(false);
+
+#[cfg(feature = "dfu_lock")]
+pub fn is_dfu_unlocked() -> bool {
+    !DFU_LOCKED.load(Ordering::Acquire)
+}
+
+/// DFU handler wrapper that blinks an LED during transfer and checks the
+/// DFU lock (if `dfu_lock` feature is enabled).
+#[cfg(feature = "dfu-rp")]
+struct RmkDfuHandler<H> {
+    inner: H,
+}
+
+#[cfg(feature = "dfu-rp")]
+impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
+    fn start(&mut self) -> Result<(), Status> {
+        #[cfg(feature = "dfu_lock")]
+        if !is_dfu_unlocked() {
+            info!("dfu_lock: DFU download rejected — keys not unlocked");
+            return Err(Status::ErrVendor);
+        }
+        #[cfg(feature = "dfu_lock")]
+        DFU_STARTED.store(true, Ordering::Release);
+        info!("dfu_lock: DFU download started");
+        with_led(|led| led.set_high());
+        self.inner.start()
+    }
+
+    fn write(&mut self, data: &[u8]) -> Result<(), Status> {
+        with_led(|led| led.toggle());
+        self.inner.write(data)
+    }
+
+    fn finish(&mut self) -> Result<(), Status> {
+        let res = self.inner.finish();
+        with_led(|led| led.set_low());
+        res
+    }
+
+    fn system_reset(&mut self) {
+        with_led(|led| led.set_low());
+        self.inner.system_reset()
+    }
 }
 
 /// Initialize the blocking flash, create the DFU manager and store it globally.
-///
-/// Returns the storage partition (blocking flash) which the caller should wrap
-/// in `async_flash_wrapper` for use with `initialize_keymap_and_storage`.
 #[cfg(feature = "dfu-rp")]
 pub fn init_flash(
     flash_peri: Peri<'static, FLASH>,
@@ -205,7 +222,7 @@ pub fn mark_booted() {
     }
 }
 
-/// Retrieve the global DFU manager (returns `None` before `init_flash` is called).
+/// Retrieve the global DFU manager.
 #[cfg(feature = "dfu-rp")]
 pub fn get_manager() -> Option<&'static DfuFlashManager> {
     let ptr = MANAGER_PTR.load(Ordering::Acquire);
@@ -216,16 +233,12 @@ pub fn get_manager() -> Option<&'static DfuFlashManager> {
     }
 }
 
-/// Register a DFU interface on the USB builder using the given manager.
-///
-/// `led` is an optional GPIO output pin that is set high while a DFU
-/// download is in progress and low when idle / finished.
+/// Register a DFU interface on the USB builder.
 #[cfg(feature = "dfu-rp")]
 pub fn register_dfu_interface<D: Driver<'static>>(
     builder: &mut Builder<'static, D>,
     mgr: &'static DfuFlashManager,
     product_name: &'static str,
-    led: Option<Output<'static>>,
 ) {
     use embassy_boot_rp::BlockingFirmwareUpdater;
     use embassy_boot_rp::FirmwareUpdaterConfig;
@@ -247,16 +260,12 @@ pub fn register_dfu_interface<D: Driver<'static>>(
     let attrs = DfuAttributes::CAN_DOWNLOAD | DfuAttributes::WILL_DETACH;
 
     let inner = FirmwareHandler::new(updater, ResetImmediate);
-    let handler = RmkDfuHandler { inner, led };
+    let handler = RmkDfuHandler { inner };
     let state = DfuState::new(handler, attrs);
 
-    type DfuStateInner = RmkDfuHandler<FirmwareHandler<
-        'static,
-        PartitionType,
-        PartitionType,
-        ResetImmediate,
-        BLOCK_SIZE,
-    >>;
+    type DfuStateInner = RmkDfuHandler<
+        FirmwareHandler<'static, PartitionType, PartitionType, ResetImmediate, BLOCK_SIZE>,
+    >;
     static DFU_STATE: StaticCell<DfuState<DfuStateInner>> = StaticCell::new();
     let state_ref = DFU_STATE.init(state);
 
@@ -286,4 +295,114 @@ pub fn register_dfu_interface<D: Driver<'static>>(
         string_val: product_name,
     });
     builder.handler(string_provider);
+}
+
+// ---------------------------------------------------------------------------
+// dfu_lock — physical key unlock for DFU firmware download
+// ---------------------------------------------------------------------------
+
+/// DfuLock state machine that checks a physical key combination to unlock DFU.
+#[cfg(feature = "dfu_lock")]
+pub struct DfuLock<'a> {
+    unlocked: AtomicBool,
+    unlock_keys: &'a [(u8, u8)],
+}
+
+#[cfg(feature = "dfu_lock")]
+impl<'a> DfuLock<'a> {
+    pub fn new(unlock_keys: &'a [(u8, u8)]) -> Self {
+        Self {
+            unlocked: AtomicBool::new(false),
+            unlock_keys,
+        }
+    }
+
+    /// Poll the unlock keys. On first detection of all keys pressed:
+    /// unlock DFU, then loop Morse "D F U" for 10 s or until DFU download
+    /// actually starts. If nothing starts within 10 s the lock re-engages.
+    pub async fn process_unlock(&self, keymap: &'a crate::keymap::KeyMap<'a>) {
+        if self.unlock_keys.is_empty() {
+            return;
+        }
+        let all_pressed = self
+            .unlock_keys
+            .iter()
+            .all(|(row, col)| keymap.read_matrix_key(*row, *col));
+        if all_pressed && !self.unlocked.load(Ordering::Relaxed) {
+            self.unlocked.store(true, Ordering::Release);
+            DFU_LOCKED.store(false, Ordering::Release);
+            info!("dfu_lock: unlock keys pressed, DFU unlocked for 10 s");
+            use embassy_time::Timer;
+            with_led(|led| led.set_high());
+            Timer::after_millis(500).await;
+
+            let deadline = embassy_time::Instant::now()
+                + embassy_time::Duration::from_secs(10);
+            loop {
+                if DFU_STARTED.load(Ordering::Acquire) {
+                    info!("dfu_lock: DFU download started, staying unlocked");
+                    with_led(|led| led.set_high());
+                    break;
+                }
+                if embassy_time::Instant::now() >= deadline {
+                    info!("dfu_lock: unlock expired (10 s timeout)");
+                    DFU_LOCKED.store(true, Ordering::Release);
+                    self.unlocked.store(false, Ordering::Release);
+                    with_led(|led| led.set_low());
+                    break;
+                }
+                morse_blink_dfu().await;
+            }
+        }
+    }
+}
+
+/// Blink "D F U" in Morse code on the DFU LED.
+#[cfg(feature = "dfu_lock")]
+async fn morse_blink_dfu() {
+    use embassy_time::Timer;
+
+    /// Element timing in milliseconds
+    const DOT: u64 = 100;
+    const DASH: u64 = 300;
+    const PAUSE_ELEMENT: u64 = 100;
+    const PAUSE_LETTER: u64 = 300;
+
+    macro_rules! dot {
+        () => {
+            with_led(|led| led.set_high());
+            Timer::after_millis(DOT).await;
+            with_led(|led| led.set_low());
+            Timer::after_millis(PAUSE_ELEMENT).await;
+        };
+    }
+    macro_rules! dash {
+        () => {
+            with_led(|led| led.set_high());
+            Timer::after_millis(DASH).await;
+            with_led(|led| led.set_low());
+            Timer::after_millis(PAUSE_ELEMENT).await;
+        };
+    }
+    macro_rules! letter_gap {
+        () => {
+            Timer::after_millis(PAUSE_LETTER - PAUSE_ELEMENT).await;
+        };
+    }
+
+    // D = -..
+    dash!();
+    dot!();
+    dot!();
+    letter_gap!();
+    // F = ..-.
+    dot!();
+    dot!();
+    dash!();
+    dot!();
+    letter_gap!();
+    // U = ..-
+    dot!();
+    dot!();
+    dash!();
 }

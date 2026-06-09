@@ -242,7 +242,6 @@ impl<D: Driver<'static>> UsbTransport<D> {
                     &mut builder,
                     mgr,
                     product_name,
-                    ::rmk::dfu::take_led(),
                 );
             }
         }
