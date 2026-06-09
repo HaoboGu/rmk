@@ -1,5 +1,6 @@
 import * as path from 'node:path'
 import { defineConfig } from '@rspress/core'
+import { pluginLlms } from '@rspress/plugin-llms';
 import { pluginSitemap } from '@rspress/plugin-sitemap'
 import { pluginTailwindcss } from '@rsbuild/plugin-tailwindcss'
 
@@ -17,7 +18,8 @@ export default defineConfig({
   plugins: [
     pluginSitemap({
       siteUrl: 'https://rmk.rs'
-    })
+    }),
+    pluginLlms()
   ],
   builderConfig: {
     plugins: [pluginTailwindcss()]
@@ -31,6 +33,7 @@ export default defineConfig({
   },
   globalStyles: path.join(__dirname, 'docs/styles/index.css'),
   themeConfig: {
+    llmsUI: true,
     socialLinks: [
       {
         icon: 'github',

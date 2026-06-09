@@ -21,6 +21,9 @@ importers:
       '@rsbuild/plugin-tailwindcss':
         specifier: ^2.0.2
         version: 2.0.2(@rsbuild/core@2.0.11)(webpack@5.107.2)
+      '@rspress/plugin-llms':
+        specifier: ^2.0.14
+        version: 2.0.14(@rspress/core@2.0.14(@rspack/core@2.0.6(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2))
       '@rspress/plugin-sitemap':
         specifier: ^2.0.14
         version: 2.0.14(@rspress/core@2.0.14(@rspack/core@2.0.6(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2))
@@ -372,6 +375,12 @@ packages:
     resolution: {integrity: sha512-k59i08zwBGgHrjHw8CK1m4CeTrKPvZRmV54bxubQl6AdDdmhJK6WrNg3UthwWmd38scKtqF40ATXDE8RMiNcNA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
+
+  '@rspress/plugin-llms@2.0.14':
+    resolution: {integrity: sha512-e3Rqs2/JdnfRx88N+8J1NsLnwWj2iSWxwG8v+48gP3L53WOHfjEqGwPXEX2NjudPLKoyGdu6mZKFcLQKVOvnXQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    peerDependencies:
+      '@rspress/core': ^2.0.10
 
   '@rspress/plugin-sitemap@2.0.14':
     resolution: {integrity: sha512-Gpone22PvXGfGRSyi/WM8IXgsvKhNspXqHjtPD3g62jX8SJL3kpj2YZ2V28WEkg672fICauUYXrpre74Rddcsw==}
@@ -1961,6 +1970,17 @@ snapshots:
       - core-js
       - micromark
       - micromark-util-types
+      - supports-color
+
+  '@rspress/plugin-llms@2.0.14(@rspress/core@2.0.14(@rspack/core@2.0.6(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2))':
+    dependencies:
+      '@rspress/core': 2.0.14(@rspack/core@2.0.6(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2)
+      remark-mdx: 3.1.1
+      remark-parse: 11.0.0
+      remark-stringify: 11.0.0
+      unified: 11.0.5
+      unist-util-visit: 5.1.0
+    transitivePeerDependencies:
       - supports-color
 
   '@rspress/plugin-sitemap@2.0.14(@rspress/core@2.0.14(@rspack/core@2.0.6(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2))':
