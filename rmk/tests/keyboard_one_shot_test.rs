@@ -21,20 +21,20 @@ mod one_shot_test {
         [[
             // Layer 0
             sk_mod!(ModifierCombination::new_from(false, false, false, true, false)), // OSM LShift
-            sk_layer!(1),                                                               // OSL Layer 1
-            k!(A),                                                                 // Regular key A
-            th!(B, C),                                                             // Tap-hold key B, C
+            sk_layer!(1),                                                             // OSL Layer 1
+            k!(A),                                                                    // Regular key A
+            th!(B, C),                                                                // Tap-hold key B, C
             sk_mod!(ModifierCombination::new_from(false, false, false, false, true)), // OSM LCtrl
-            wm!(B, ModifierCombination::new_from(false, true, false, false, false)), // WM B with LGUI
+            wm!(B, ModifierCombination::new_from(false, true, false, false, false)),  // WM B with LGUI
         ]],
         [[
             // Layer 1
             sk_mod!(ModifierCombination::new_from(false, false, false, true, true)), // OSM LShift + LCtrl
-            k!(No),                                                               // No action
-            k!(C),                                                                // Layer 1 key C
-            k!(D),                                                                // Layer 1 key D
-            k!(E),                                                                // Layer 1 key E
-            k!(F),                                                                // Layer 1 key F
+            k!(No),                                                                  // No action
+            k!(C),                                                                   // Layer 1 key C
+            k!(D),                                                                   // Layer 1 key D
+            k!(E),                                                                   // Layer 1 key E
+            k!(F),                                                                   // Layer 1 key F
         ]],
     ];
 

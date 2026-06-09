@@ -26,15 +26,15 @@ const KEYMAP: [[[KeyAction; 6]; 1]; 2] = [
     ]],
     [[
         // Layer 1
-        sk!(Tab, ModifierCombination::LALT), // col 0: SK(Tab, LAlt)
+        sk!(Tab, ModifierCombination::LALT),  // col 0: SK(Tab, LAlt)
         sk!(Tab, ModifierCombination::LCTRL), // col 1: SK(Tab, LCtrl)
         sk!(
             Tab,
             ModifierCombination::new_from_vals(true, true, false, false, false, false, false, false)
         ), // col 2: SK(Tab, LCtrl|LShift)
-        a!(Transparent),                                 // col 3: Transparent
-        a!(Transparent),                                 // col 4: Transparent → LShift
-        a!(No),                                          // col 5: No
+        a!(Transparent),                      // col 3: Transparent
+        a!(Transparent),                      // col 4: Transparent → LShift
+        a!(No),                               // col 5: No
     ]],
 ];
 

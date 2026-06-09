@@ -114,7 +114,10 @@ impl Keyboard<'_> {
             // Latch-replacement rule: a pure-mod press accumulates onto an existing pure-mod
             // latch, but REPLACES a latched layer (deactivate it and drop the layer; the
             // single mutually-exclusive latch holds at most one SK).
-            if let StickyKeyState::Active { layer: Some(layer_num), .. } = self.sticky_key_state {
+            if let StickyKeyState::Active {
+                layer: Some(layer_num), ..
+            } = self.sticky_key_state
+            {
                 self.keymap.deactivate_layer(layer_num);
                 self.sticky_key_state = StickyKeyState::None;
             }
@@ -129,9 +132,7 @@ impl Keyboard<'_> {
                         deadline,
                     };
                 }
-                StickyKeyState::Active {
-                    mods, deadline: d, ..
-                } => {
+                StickyKeyState::Active { mods, deadline: d, .. } => {
                     // Accumulate (3c) and refresh the timeout deadline. The unified latch holds
                     // at most one SK at a time; pressing a different-shaped SK while one is active
                     // accumulates onto the existing latch rather than replacing it (no test or
@@ -220,8 +221,7 @@ impl Keyboard<'_> {
                     }
                 }
                 StickyKeyState::Active {
-                    phase: SkPhase::Held,
-                    ..
+                    phase: SkPhase::Held, ..
                 } => {
                     // Held-mode: the layer stayed active while the SK was physically held.
                     // Releasing the SK deactivates the layer now (no HID report).
@@ -384,7 +384,10 @@ impl Keyboard<'_> {
         };
 
         // For the layer shape, deactivate the active layer before clearing the latch.
-        if let StickyKeyState::Active { layer: Some(layer_num), .. } = self.sticky_key_state {
+        if let StickyKeyState::Active {
+            layer: Some(layer_num), ..
+        } = self.sticky_key_state
+        {
             self.keymap.deactivate_layer(layer_num);
         }
 

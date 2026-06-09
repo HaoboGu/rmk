@@ -730,31 +730,35 @@ mod tests {
         let aliases = HashMap::new();
         let layer_names = HashMap::new();
 
-        let keymap = "SK(Tab, [LAlt]) SK(Tab, [LCtrl]) SK(Tab, [LCtrl | LShift], 3, 2000, true)";
+        // Exercise all three SK shapes: tap-key SK(key, [mods]), pure-mod
+        // SK(<modifier>) (one-shot modifier), and layer SK(MO(n)) (one-shot layer).
+        let keymap = "SK(Tab, [LAlt]) SK(Tab, [LCtrl | LShift]) SK(LGui) SK(MO(1))";
         let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
 
         assert!(result.is_ok());
         assert_eq!(
             result.unwrap(),
-            vec![
-                "SK(Tab, [LAlt])",
-                "SK(Tab, [LCtrl])",
-                "SK(Tab, [LCtrl | LShift], 3, 2000, true)"
-            ]
+            vec!["SK(Tab, [LAlt])", "SK(Tab, [LCtrl | LShift])", "SK(LGui)", "SK(MO(1))"]
         );
     }
 
     #[test]
     fn test_sk_action_grammar() {
         let test_cases = vec![
+            // Tap-key shape: SK(key, [mods])
             "SK(Tab, [LAlt])",
             "SK(Tab, [LCtrl])",
             "SK(Tab, [LCtrl | LShift])",
-            "SK(Tab, [LAlt], 5)",
-            "SK(Tab, [LAlt], 5, 3000)",
-            "SK(Tab, [LAlt], 5, 3000, true)",
             "SK(Tab, [])",
             "sk(Tab, [LAlt])",
+            // Pure-mod shape: SK(<modifier>) — one-shot modifier
+            "SK(LGui)",
+            "SK(LCtrl | LShift)",
+            "sk(lalt)",
+            // Layer shape: SK(MO(n)) — one-shot layer
+            "SK(MO(1))",
+            "SK(MO(3))",
+            "sk(mo(2))",
         ];
 
         for input in test_cases {
