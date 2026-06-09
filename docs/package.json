@@ -12,16 +12,16 @@
     "preview": "rspress preview"
   },
   "dependencies": {
-    "@rspress/core": "^2.0.5"
+    "@rspress/core": "^2.0.14"
   },
   "devDependencies": {
-    "@iconify/json": "^2.2.447",
+    "@iconify/json": "^2.2.484",
     "@iconify/tailwind4": "^1.2.3",
-    "@rspress/plugin-sitemap": "^2.0.5",
-    "@tailwindcss/postcss": "^4.2.1",
-    "@types/react": "^19.2.14",
-    "prettier": "3.6.2",
-    "tailwindcss": "^4.2.1"
+    "@rspress/plugin-sitemap": "^2.0.14",
+    "@tailwindcss/postcss": "^4.3.0",
+    "@types/react": "^19.2.17",
+    "prettier": "3.8.3",
+    "tailwindcss": "^4.3.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
