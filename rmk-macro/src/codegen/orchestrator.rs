@@ -233,7 +233,7 @@ fn expand_main(
     let (registered_processor_initializers, mut registered_processors) =
         expand_registered_processor_init(hardware, &item_mod);
 
-    // Add dfu_lock polling task if unlock keys are configured.
+    // Add dfu_lock task that blocks (yielded) on DFU_UNLOCK_SIGNAL.wait().
     // Check the feature at macro-expansion time so we never emit `#[cfg]`
     // into the user's crate (avoids "unexpected cfg condition" warnings).
     let dfu_lock_enabled = is_feature_enabled(&rmk_features, "dfu_lock");
@@ -244,7 +244,6 @@ fn expand_main(
                     let dfu_lock = ::rmk::dfu::DfuLock::new(&DFU_UNLOCK_KEYS);
                     loop {
                         dfu_lock.process_unlock(&keymap).await;
-                        ::rmk::embassy_time::Timer::after_millis(50).await;
                     }
                 }
             } else {

@@ -3,8 +3,9 @@ use core::sync::atomic::{AtomicPtr, Ordering};
 #[cfg(feature = "dfu_lock")]
 use core::sync::atomic::AtomicBool;
 
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::blocking_mutex::raw::{CriticalSectionRawMutex, NoopRawMutex};
 use embassy_sync::blocking_mutex::Mutex;
+use embassy_sync::signal::Signal;
 use embassy_usb::types::StringIndex;
 use embassy_usb::control::{InResponse, OutResponse, Request};
 use embassy_usb::driver::Driver;
@@ -140,6 +141,11 @@ static DFU_LOCKED: AtomicBool = AtomicBool::new(true);
 #[cfg(feature = "dfu_lock")]
 static DFU_STARTED: AtomicBool = AtomicBool::new(false);
 
+/// Signaled by `RmkDfuHandler::start()` when a blocked DFU download is rejected.
+/// Triggers the unlock key polling window in `process_unlock`.
+#[cfg(feature = "dfu_lock")]
+static DFU_UNLOCK_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+
 #[cfg(feature = "dfu_lock")]
 pub fn is_dfu_unlocked() -> bool {
     !DFU_LOCKED.load(Ordering::Acquire)
@@ -157,6 +163,7 @@ impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
     fn start(&mut self) -> Result<(), Status> {
         #[cfg(feature = "dfu_lock")]
         if !is_dfu_unlocked() {
+            DFU_UNLOCK_SIGNAL.signal(());
             info!("dfu_lock: DFU download rejected — keys not unlocked");
             return Err(Status::ErrVendor);
         }
@@ -318,42 +325,66 @@ impl<'a> DfuLock<'a> {
         }
     }
 
-    /// Poll the unlock keys. On first detection of all keys pressed:
-    /// unlock DFU, then loop Morse "D F U" for 10 s or until DFU download
-    /// actually starts. If nothing starts within 10 s the lock re-engages.
+    /// Called by the orchestrator loop. Blocks (yielded) on
+    /// `DFU_UNLOCK_SIGNAL.wait()` until a DFU download is rejected by
+    /// `RmkDfuHandler::start()`, then opens a 10 s unlock window with the LED
+    /// solid on and polls the configured unlock keys at 50 ms. If the keys are
+    /// pressed within that window the DFU lock is released and the LED blinks
+    /// Morse "D F U".
     pub async fn process_unlock(&self, keymap: &'a crate::keymap::KeyMap<'a>) {
         if self.unlock_keys.is_empty() {
             return;
         }
-        let all_pressed = self
-            .unlock_keys
-            .iter()
-            .all(|(row, col)| keymap.read_matrix_key(*row, *col));
-        if all_pressed && !self.unlocked.load(Ordering::Relaxed) {
-            self.unlocked.store(true, Ordering::Release);
-            DFU_LOCKED.store(false, Ordering::Release);
-            info!("dfu_lock: unlock keys pressed, DFU unlocked for 10 s");
-            use embassy_time::Timer;
-            with_led(|led| led.set_high());
-            Timer::after_millis(500).await;
 
-            let deadline = embassy_time::Instant::now()
-                + embassy_time::Duration::from_secs(10);
-            loop {
-                if DFU_STARTED.load(Ordering::Acquire) {
-                    info!("dfu_lock: DFU download started, staying unlocked");
-                    with_led(|led| led.set_high());
-                    break;
-                }
-                if embassy_time::Instant::now() >= deadline {
-                    info!("dfu_lock: unlock expired (10 s timeout)");
-                    DFU_LOCKED.store(true, Ordering::Release);
-                    self.unlocked.store(false, Ordering::Release);
-                    with_led(|led| led.set_low());
-                    break;
-                }
-                morse_blink_dfu().await;
+        // Phase 1: wait (yielded) until a DFU unlock request arrives
+        DFU_UNLOCK_SIGNAL.wait().await;
+
+        // Phase 2: start the 10 s unlock window, wait for keypress or timeout.
+        // LED solid on to signal "press unlock keys now".
+        info!("dfu_lock: DFU activity detected, unlock window open for 10 s");
+        info!("dfu_lock: waiting for unlock keys");
+        with_led(|led| led.set_high());
+        let deadline =
+            embassy_time::Instant::now() + embassy_time::Duration::from_secs(10);
+        loop {
+            let all_pressed = self
+                .unlock_keys
+                .iter()
+                .all(|(row, col)| keymap.read_matrix_key(*row, *col));
+            if all_pressed {
+                self.unlocked.store(true, Ordering::Release);
+                DFU_LOCKED.store(false, Ordering::Release);
+                info!("dfu_lock: unlock keys pressed, DFU unlocked for 10 s");
+                break;
             }
+            if embassy_time::Instant::now() >= deadline {
+                info!("dfu_lock: unlock window expired (10 s timeout)");
+                DFU_LOCKED.store(true, Ordering::Release);
+                with_led(|led| led.set_low());
+                return;
+            }
+            embassy_time::Timer::after_millis(50).await;
+        }
+
+        // Phase 3: unlocked — wait until DFU download starts or 10 s pass.
+        // LED blinks Morse "D F U" to signal "ready to flash".
+        info!("dfu_lock: unlocked, signalling with Morse DFU");
+        let deadline =
+            embassy_time::Instant::now() + embassy_time::Duration::from_secs(10);
+        loop {
+            if DFU_STARTED.load(Ordering::Acquire) {
+                info!("dfu_lock: DFU download started, staying unlocked");
+                with_led(|led| led.set_high());
+                break;
+            }
+            if embassy_time::Instant::now() >= deadline {
+                info!("dfu_lock: unlock expired (10 s timeout)");
+                DFU_LOCKED.store(true, Ordering::Release);
+                self.unlocked.store(false, Ordering::Release);
+                with_led(|led| led.set_low());
+                break;
+            }
+            morse_blink_dfu().await;
         }
     }
 }
