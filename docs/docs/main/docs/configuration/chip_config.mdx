@@ -65,11 +65,9 @@ rmk::dfu::set_led(Some(Output::new(p.PIN_25, Level::Low)));
 // Mark boot as successful (so bootloader doesn't revert on reset)
 rmk::dfu::mark_booted();
 
-// Optional: DFU lock with physical key unlock
+// Optional: DFU lock with physical key unlock. Requires the `dfu_lock` Cargo feature.
+// Unlock is handled automatically by the #[rmk_keyboard] macro — no manual loop needed.
 // let unlock_keys: &[(u8, u8)] = &[(0, 0), (1, 1)];
-// let dfu_lock = rmk::dfu::DfuLock::new(unlock_keys);
-// Then poll in your main loop:
-// dfu_lock.process_unlock(&keymap).await;
 ```
 
 </Tab>
@@ -93,14 +91,16 @@ Your `memory.x` must match this partition layout — see the [flashing guide](..
 
 #### `led` (optional)
 
-A GPIO pin that lights up during DFU transfer. On the Raspberry Pi Pico, the built-in LED is on pin 25.
+A GPIO pin for the DFU LED. On the Raspberry Pi Pico, the built-in LED is on pin 25.
+See the [LED behavior table](../user_guide/flash_firmware/use_embassy_boot.mdx#led-behavior-during-dfu-transfer-optional) for the full state machine.
 
 #### `unlock_keys` (optional, dfu_lock)
 
-When the `dfu_lock` feature is enabled, the keyboard starts with DFU **locked**. To unlock, all keys in `unlock_keys` must be pressed simultaneously. The keys are identified by their physical matrix position `(row, column)`, not by keycode.
+Physical key positions that unlock DFU firmware downloads. Requires the `dfu_lock` Cargo feature. Keys are identified by their matrix position `(row, column)`, not by keycode.
+
+Detailed unlock workflow in the [DFU lock section](../user_guide/flash_firmware/use_embassy_boot.mdx#unlocking-dfu-optional-dfu_lock).
 
 ::: tip
-The unlock keys use the physical matrix position (row, column), not the keycode.
 Choose keys that are easy to press simultaneously but not commonly pressed together accidentally.
 :::
 
