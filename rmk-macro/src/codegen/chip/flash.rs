@@ -4,7 +4,7 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use rmk_config::resolved::Hardware;
-use rmk_config::resolved::hardware::ChipSeries;
+use rmk_config::resolved::hardware::{ChipSeries, DfuConfig};
 
 use super::gpio::convert_gpio_str_to_output_pin;
 
@@ -86,7 +86,9 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                     },
                     None => quote! {},
                 };
+                let dfu_unlock_keys = expand_dfu_unlock_keys(dfu);
                 quote! {
+                    #dfu_unlock_keys
                     let flash = ::rmk::storage::async_flash_wrapper(
                         ::rmk::dfu::init_flash(
                             p.FLASH,
@@ -109,4 +111,23 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
     );
 
     flash_init
+}
+
+/// Generate the `DFU_UNLOCK_KEYS` constant from the resolved DFU config.
+fn expand_dfu_unlock_keys(dfu: &DfuConfig) -> TokenStream2 {
+    if dfu.unlock_keys.is_empty() {
+        return quote! {};
+    }
+    let keys_expr = dfu
+        .unlock_keys
+        .iter()
+        .map(|key| {
+            let row = key[0];
+            let col = key[1];
+            quote! { (#row, #col) }
+        })
+        .collect::<Vec<_>>();
+    quote! {
+        const DFU_UNLOCK_KEYS: &[(u8, u8)] = &[#(#keys_expr), *];
+    }
 }

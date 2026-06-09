@@ -517,6 +517,8 @@ pub(crate) struct DfuTomlConfig {
     /// Optional DFU activity LED pin, e.g. `"PIN_16"`. When set, the LED
     /// is lit while a DFU download is in progress.
     pub led: Option<String>,
+    /// Unlock keys for DFU lock (optional)
+    pub unlock_keys: Option<Vec<[u8; 2]>>,
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]
