@@ -22,11 +22,11 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
     let clear_storage = storage.clear_storage;
     let clear_layout = storage.clear_layout;
 
-    // With dfu-rp, the flash is already a partition that starts at the
+    // With dfu_rp, the flash is already a partition that starts at the
     // storage offset, so the relative offset must be 0.
-    #[cfg(feature = "dfu-rp")]
+    #[cfg(feature = "dfu_rp")]
     let storage_start_addr = 0usize;
-    #[cfg(not(feature = "dfu-rp"))]
+    #[cfg(not(feature = "dfu_rp"))]
     let storage_start_addr = _start_addr;
 
     let mut flash_init = quote! {
@@ -50,7 +50,7 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                 }
             }
         ChipSeries::Rp2040 => {
-            #[cfg(not(feature = "dfu-rp"))]
+            #[cfg(not(feature = "dfu_rp"))]
             {
                 quote! {
                     const FLASH_SIZE: usize = 2 * 1024 * 1024;
@@ -59,7 +59,7 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                     );
                 }
             }
-            #[cfg(feature = "dfu-rp")]
+            #[cfg(feature = "dfu_rp")]
             {
                 let storage = hardware.storage.as_ref();
                 let storage_start = storage.map(|s| s.start_addr).unwrap_or(0) as u32;
@@ -71,7 +71,7 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                     storage_start + storage_num_sectors * erase_size
                 };
                 let dfu = hardware.dfu.as_ref().expect(
-                    "[dfu] section is required in keyboard.toml (or chip default) when dfu-rp is enabled"
+                    "[dfu] section is required in keyboard.toml (or chip default) when dfu_rp is enabled"
                 );
                 let state_offset = dfu.state_offset;
                 let state_size = dfu.state_size;

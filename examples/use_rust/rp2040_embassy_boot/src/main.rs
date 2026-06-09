@@ -67,7 +67,7 @@ async fn main(_spawner: Spawner) {
 
     let flash = async_flash_wrapper(rmk::dfu::init_flash(
         p.FLASH,
-        0,               // storage_start (relative, dfu-rp partitions the flash)
+        0,               // storage_start (relative, dfu_rp partitions the flash)
         STORAGE_END,
         STATE_OFFSET,
         STATE_SIZE,
