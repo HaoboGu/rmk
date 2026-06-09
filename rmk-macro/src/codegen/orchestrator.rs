@@ -440,9 +440,9 @@ pub(crate) fn expand_keymap_and_storage(hardware: &Hardware, layout: &Layout) ->
     };
 
     if hardware.storage.is_some() {
-        #[cfg(feature = "dfu-rp")]
+        #[cfg(feature = "dfu_rp")]
         let mark = quote! { ::rmk::dfu::mark_booted(); };
-        #[cfg(not(feature = "dfu-rp"))]
+        #[cfg(not(feature = "dfu_rp"))]
         let mark = quote! {};
 
         quote! {

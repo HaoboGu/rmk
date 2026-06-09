@@ -125,7 +125,7 @@ vial = ["host"]
 vial_lock = ["vial", "host_security"]
 
 ## Enable DFU lock feature — physical key unlock for DFU firmware download
-dfu_lock = ["dfu-rp", "host_security"]
+dfu_lock = ["dfu_rp", "host_security"]
 
 ## Enable physical key unlock and matrix state tracking (shared between vial_lock and rmk_protocol)
 host_security = []
@@ -229,7 +229,7 @@ zsa_voyager_bl = []
 ## Enable DFU firmware update support (USB DFU interface)
 dfu = ["dep:embassy-usb-dfu", "dep:embassy-embedded-hal"]
 ## Enable RP2040-specific DFU with embassy-boot-rp (implies `dfu` and `rp2040`)
-dfu-rp = ["dfu", "dep:embassy-boot-rp", "rp2040", "rmk-macro/dfu-rp"]
+dfu_rp = ["dfu", "dep:embassy-boot-rp", "rp2040", "rmk-macro/dfu_rp"]
 
 ## Enable Plover HID stenography support: adds the steno HID descriptor,
 ## the steno USB writer endpoint, and the `Action::Steno` variant.
