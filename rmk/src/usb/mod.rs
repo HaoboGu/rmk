@@ -1,8 +1,6 @@
 use embassy_futures::join::join4;
 use embassy_futures::select::{Either, select};
 use embassy_sync::signal::Signal;
-#[cfg(feature = "host")]
-use embassy_usb::class::hid::HidReaderWriter;
 use embassy_usb::class::hid::{HidReader, HidWriter, ReportId, RequestHandler};
 use embassy_usb::control::OutResponse;
 use embassy_usb::driver::{Driver, EndpointError};
@@ -17,13 +15,16 @@ use crate::config::DeviceConfig;
 use crate::core_traits::Runnable;
 #[cfg(feature = "steno")]
 use crate::hid::StenoReport;
-#[cfg(feature = "host")]
-use crate::hid::ViaReport;
 use crate::hid::{
     CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report, run_led_reader,
 };
 use crate::light::UsbLedReader;
 use crate::state::{current_usb_state, set_usb_state};
+
+#[cfg(feature = "rynk")]
+pub(crate) mod rynk;
+#[cfg(feature = "vial")]
+pub(crate) mod vial;
 
 pub(crate) static USB_REMOTE_WAKEUP: Signal<RawMutex, ()> = Signal::new();
 
@@ -189,20 +190,32 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
 /// USB transport runnable. Owns the embassy-usb device + every HID
 /// reader/writer pair and runs them concurrently for the lifetime of the
 /// program.
-pub struct UsbTransport<D: Driver<'static>> {
+pub struct UsbTransport<'a, D: Driver<'static>> {
     device: UsbDevice<'static, D>,
     keyboard_reader: HidReader<'static, D, 1>,
     keyboard_writer: HidWriter<'static, D, 8>,
     other_writer: HidWriter<'static, D, 9>,
     #[cfg(feature = "steno")]
     steno_writer: HidWriter<'static, D, 9>,
-    #[cfg(feature = "host")]
-    host_rw: HidReaderWriter<'static, D, 32, 32>,
     #[cfg(feature = "usb_log")]
     logger: Option<embassy_usb::class::cdc_acm::CdcAcmClass<'static, D>>,
+    /// Host-protocol transport halves: CDC-ACM under `rynk`, 32-byte HID
+    /// reports under `vial`.
+    #[cfg(feature = "rynk")]
+    host_reader: embassy_usb::class::cdc_acm::BufferedReceiver<'static, D>,
+    #[cfg(feature = "rynk")]
+    host_writer: embassy_usb::class::cdc_acm::Sender<'static, D>,
+    #[cfg(feature = "vial")]
+    host_reader: HidReader<'static, D, 32>,
+    #[cfg(feature = "vial")]
+    host_writer: HidWriter<'static, D, 32>,
+    #[cfg(feature = "host")]
+    host_service: Option<&'a crate::host::HostService<'a>>,
+    #[cfg(not(feature = "host"))]
+    _phantom: core::marker::PhantomData<&'a ()>,
 }
 
-impl<D: Driver<'static>> UsbTransport<D> {
+impl<'a, D: Driver<'static>> UsbTransport<'a, D> {
     pub fn new(driver: D, device_config: DeviceConfig<'static>) -> Self {
         // nRF chips don't have a stable USB serial number unless one is derived
         // from the FICR. Override here so user code doesn't have to know.
@@ -228,10 +241,11 @@ impl<D: Driver<'static>> UsbTransport<D> {
         let other_writer = add_usb_writer!(&mut builder, CompositeReport, 9, 16);
         #[cfg(feature = "steno")]
         let steno_writer = add_usb_writer!(&mut builder, StenoReport, 9, 16);
-        #[cfg(feature = "host")]
-        let host_rw = add_usb_reader_writer!(&mut builder, ViaReport, 32, 32, 32);
         #[cfg(feature = "usb_log")]
         let logger = Some(add_usb_logger!(&mut builder));
+
+        #[cfg(any(feature = "rynk", feature = "vial"))]
+        let (host_reader, host_writer) = crate::host::build_host_usb(&mut builder);
 
         let (keyboard_reader, keyboard_writer) = keyboard_rw.split();
         let device = builder.build();
@@ -243,15 +257,28 @@ impl<D: Driver<'static>> UsbTransport<D> {
             other_writer,
             #[cfg(feature = "steno")]
             steno_writer,
-            #[cfg(feature = "host")]
-            host_rw,
             #[cfg(feature = "usb_log")]
             logger,
+            #[cfg(any(feature = "rynk", feature = "vial"))]
+            host_reader,
+            #[cfg(any(feature = "rynk", feature = "vial"))]
+            host_writer,
+            #[cfg(feature = "host")]
+            host_service: None,
+            #[cfg(not(feature = "host"))]
+            _phantom: core::marker::PhantomData,
         }
+    }
+
+    /// Attach the host-protocol service
+    #[cfg(feature = "host")]
+    pub fn with_host_service(mut self, service: &'a crate::host::HostService<'a>) -> Self {
+        self.host_service = Some(service);
+        self
     }
 }
 
-impl<D: Driver<'static>> Runnable for UsbTransport<D> {
+impl<D: Driver<'static>> Runnable for UsbTransport<'_, D> {
     async fn run(&mut self) -> ! {
         let Self {
             device,
@@ -260,10 +287,16 @@ impl<D: Driver<'static>> Runnable for UsbTransport<D> {
             other_writer,
             #[cfg(feature = "steno")]
             steno_writer,
-            #[cfg(feature = "host")]
-            host_rw,
             #[cfg(feature = "usb_log")]
             logger,
+            #[cfg(any(feature = "rynk", feature = "vial"))]
+            host_reader,
+            #[cfg(any(feature = "rynk", feature = "vial"))]
+            host_writer,
+            #[cfg(feature = "host")]
+            host_service,
+            #[cfg(not(feature = "host"))]
+                _phantom: _,
         } = self;
 
         let usb_device_task = async {
@@ -294,8 +327,14 @@ impl<D: Driver<'static>> Runnable for UsbTransport<D> {
         let led_task = run_led_reader(&mut led_reader, ConnectionType::Usb);
 
         let host_and_extras = async {
-            #[cfg(feature = "host")]
-            let host_task = crate::host::usb::run_usb_host(host_rw);
+            #[cfg(any(feature = "rynk", feature = "vial"))]
+            let host_task = async {
+                if let Some(service) = *host_service {
+                    crate::host::run_host_usb(host_reader, host_writer, service).await
+                } else {
+                    core::future::pending::<()>().await
+                }
+            };
             #[cfg(not(feature = "host"))]
             let host_task = core::future::pending::<()>();
 

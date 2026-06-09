@@ -13,8 +13,6 @@
 //! `X1`..`X26` (indices 38-63).
 
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 /// Report ID byte that prefixes every Plover HID input report on the wire.
@@ -26,7 +24,6 @@ pub const PLOVER_HID_REPORT_ID: u8 = 0x50;
 /// Plover HID key chart. See module docs for the full list.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub struct StenoKey(pub u8);
 
 impl StenoKey {

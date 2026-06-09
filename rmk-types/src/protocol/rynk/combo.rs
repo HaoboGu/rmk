@@ -1,13 +1,12 @@
 //! Combo endpoint types.
 
 use postcard::experimental::max_size::MaxSize;
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::combo::Combo;
 
 /// Request payload for `SetCombo`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 pub struct SetComboRequest {
     pub index: u8,
     pub config: Combo,
@@ -20,21 +19,20 @@ pub struct SetComboRequest {
 mod bulk {
     use heapless::Vec;
     use postcard::experimental::max_size::MaxSize;
-    use postcard_schema::Schema;
     use serde::{Deserialize, Serialize};
 
     use crate::combo::Combo;
     use crate::constants::BULK_SIZE;
 
     /// Request payload for `GetComboBulk`.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
     pub struct GetComboBulkRequest {
         pub start_index: u8,
         pub count: u8,
     }
 
     /// Bulk request payload for setting multiple combos at once.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     pub struct SetComboBulkRequest {
         pub start_index: u8,
         pub configs: Vec<Combo, BULK_SIZE>,
@@ -45,7 +43,7 @@ mod bulk {
     }
 
     /// Bulk response for getting multiple combos at once.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     pub struct GetComboBulkResponse {
         pub configs: Vec<Combo, BULK_SIZE>,
     }
@@ -63,7 +61,7 @@ mod tests {
     use super::*;
     use crate::action::KeyAction;
     use crate::constants::COMBO_SIZE;
-    use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+    use crate::protocol::rynk::test_utils::{assert_max_size_bound, round_trip};
 
     /// Build a `Combo` filled to `COMBO_SIZE` actions plus a `Some` layer —
     /// the worst case for the manual `MaxSize` impl on `Combo`.
@@ -107,7 +105,7 @@ mod tests {
         use super::full_combo;
         use crate::combo::Combo;
         use crate::constants::BULK_SIZE;
-        use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+        use crate::protocol::rynk::test_utils::{assert_max_size_bound, round_trip};
 
         #[test]
         fn round_trip_set_combo_bulk_request_max_capacity() {

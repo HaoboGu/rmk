@@ -1,8 +1,6 @@
 //! Rotary encoder actions.
 
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use super::KeyAction;
@@ -12,7 +10,6 @@ use super::KeyAction;
 /// Both fields default to `KeyAction::No` (no action).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub struct EncoderAction {
     /// Action triggered when the encoder is rotated clockwise.
     pub clockwise: KeyAction,

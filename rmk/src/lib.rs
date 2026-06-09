@@ -18,8 +18,14 @@
 #![cfg_attr(not(test), no_std)]
 
 // Mutual exclusivity guard
-#[cfg(all(feature = "rmk_protocol", feature = "vial"))]
-compile_error!("features `rmk_protocol` and `vial` are mutually exclusive");
+#[cfg(all(feature = "rynk", feature = "vial"))]
+compile_error!("features `rynk` and `vial` are mutually exclusive");
+
+// `host` only provides the configurator plumbing; it needs a concrete protocol
+// (`rynk` or `vial`) to expose a `HostService`. The reverse direction is
+// enforced by Cargo: `vial` and `rynk` both pull in `host`.
+#[cfg(all(feature = "host", not(any(feature = "rynk", feature = "vial"))))]
+compile_error!("feature `host` requires enabling either `rynk` or `vial`");
 
 // Re-export self as ::rmk for macro-generated code to work both inside and outside the crate
 extern crate self as rmk;

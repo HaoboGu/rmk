@@ -3,7 +3,7 @@ use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor};
 
 use super::battery_service::BatteryService;
 use super::device_info::DeviceConfigurationService;
-#[cfg(feature = "host")]
+#[cfg(feature = "vial")]
 use crate::hid::ViaReport;
 use crate::hid::{CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report};
 
@@ -11,24 +11,60 @@ use crate::hid::{CompositeReport, CompositeReportType, HidError, HidWriterTrait,
 // per-connection client-specific attribute buffer size.
 pub(crate) const CCCD_TABLE_SIZE: usize = trouble_host::config::CLIENT_ATT_TABLE_SIZE;
 
-// `gatt_server` compiles every member regardless of the surrounding `cfg` —
-// gating an individual field with `#[cfg(feature = "host")]` doesn't work. So
-// the whole struct is duplicated, with and without `host_service`.
-#[cfg(feature = "host")]
+#[cfg(feature = "rynk")]
+use crate::host::rynk::RYNK_BLE_CHUNK_SIZE;
+
+#[cfg(feature = "vial")]
 #[gatt_server]
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
     pub(crate) hid_service: HidService,
-    pub(crate) host_service: VialService,
+    pub(crate) vial_service: VialService,
     pub(crate) composite_service: CompositeService,
     pub(crate) device_config_service: DeviceConfigurationService,
 }
 
+#[cfg(feature = "rynk")]
+#[gatt_server]
+pub(crate) struct Server {
+    pub(crate) battery_service: BatteryService,
+    pub(crate) hid_service: HidService,
+    pub(crate) rynk_service: RynkService,
+    pub(crate) composite_service: CompositeService,
+    pub(crate) device_config_service: DeviceConfigurationService,
+}
+
+#[cfg(not(feature = "host"))]
+#[gatt_server]
+pub(crate) struct Server {
+    pub(crate) battery_service: BatteryService,
+    pub(crate) hid_service: HidService,
+    pub(crate) composite_service: CompositeService,
+    pub(crate) device_config_service: DeviceConfigurationService,
+}
+
+/// Rynk-over-GATT transport. The host writes request chunks to `output_data`;
+/// the firmware replies via `input_data` notify. Variable-length values use
+/// `heapless::Vec` so each notify only spends MTU − 3 bytes for the bytes it
+/// actually carries (a fixed `[u8; N]` would always send N).
+///
+/// `gatt_events_task` forwards `output_data` writes into
+/// [`crate::channel::RYNK_BLE_RX_PIPE`] for [`crate::ble::rynk::run_host_ble`] to drain.
+#[cfg(feature = "rynk")]
+#[gatt_service(uuid = "10900067-537f-4f0a-9b55-929e271f61ab")]
+pub(crate) struct RynkService {
+    #[descriptor(uuid = "2908", read, value = [0u8, 1u8])]
+    #[characteristic(uuid = "80f9319b-0c74-43a5-9738-c59d6dda3db9", read, notify)]
+    pub(crate) input_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
+    #[characteristic(uuid = "19802524-6f90-4346-93c2-63dbc509ab55", read, write, write_without_response)]
+    pub(crate) output_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
+}
+
 /// GATT service exposing the Vial-over-HID protocol. The keyboard writes replies via
 /// `input_data` notify; hosts push requests through `output_data`. `gatt_events_task`
-/// forwards `output_data` writes into `HOST_REQUEST_CHANNEL`, and `host::run_ble_host`
-/// drains `HOST_BLE_REPLY` to notify `input_data`.
-#[cfg(feature = "host")]
+/// forwards `output_data` writes into [`crate::channel::VIAL_BLE_RX_CHANNEL`] for
+/// [`crate::ble::vial::run_host_ble`] to drain.
+#[cfg(feature = "vial")]
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
 pub(crate) struct VialService {
     #[characteristic(uuid = "2a4a", read, value = [0x01, 0x01, 0x00, 0x03])]
@@ -45,15 +81,6 @@ pub(crate) struct VialService {
     #[descriptor(uuid = "2908", read, value = [0u8, 2u8])]
     #[characteristic(uuid = "2a4d", read, write, write_without_response)]
     pub(crate) output_data: [u8; 32],
-}
-
-#[cfg(not(feature = "host"))]
-#[gatt_server]
-pub(crate) struct Server {
-    pub(crate) battery_service: BatteryService,
-    pub(crate) hid_service: HidService,
-    pub(crate) composite_service: CompositeService,
-    pub(crate) device_config_service: DeviceConfigurationService,
 }
 
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
