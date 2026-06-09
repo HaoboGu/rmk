@@ -1,6 +1,7 @@
 import * as path from 'node:path'
 import { defineConfig } from '@rspress/core'
-import {pluginSitemap } from "@rspress/plugin-sitemap"
+import { pluginSitemap } from "@rspress/plugin-sitemap"
+import { pluginTailwindcss } from '@rsbuild/plugin-tailwindcss'
 
 import versions from './versions.json' with { type: 'json' }
 
@@ -18,6 +19,9 @@ export default defineConfig({
       siteUrl: "https://rmk.rs"
     }),
   ],
+  builderConfig: {
+    plugins: [pluginTailwindcss()],
+  },
   multiVersion: {
     default: versions.map((branch) => branch.split('/').pop()!)[0],
     versions: ['main', ...versions.map((branch) => branch.split('/').pop()!)]
