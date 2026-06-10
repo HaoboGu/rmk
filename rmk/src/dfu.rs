@@ -29,8 +29,15 @@ impl Handler for DfuStringProvider {
     }
 }
 
-/// Total flash size for RP2040.
-pub const FLASH_SIZE: usize = 2 * 1024 * 1024;
+/// Total flash size passed to the embassy-rp Flash const generic.
+///
+/// Set to 16 MB (the maximum common RP2040 flash size) so that the same
+/// binary works on boards with 2, 4, 8 or 16 MB flash.  `new_blocking()`
+/// ignores this value at runtime — it is only used for software bounds
+/// checking inside embassy-rp.  Because all flash access goes through
+/// `BlockingPartition` (which has its own partition-sized bounds checks),
+/// overshooting the const generic is safe.
+pub const FLASH_SIZE: usize = 16 * 1024 * 1024;
 
 #[cfg(feature = "dfu_rp")]
 use embassy_embedded_hal::flash::partition::BlockingPartition;
