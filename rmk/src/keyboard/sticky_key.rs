@@ -111,15 +111,12 @@ impl Keyboard<'_> {
         let deadline = (config.timeout != Duration::MAX).then(|| Instant::now() + config.timeout);
 
         if event.pressed {
-            // Latch-replacement rule: a pure-mod press accumulates onto an existing pure-mod
-            // latch, but REPLACES a latched layer (deactivate it and drop the layer; the
-            // single mutually-exclusive latch holds at most one SK).
-            if let StickyKeyState::Active {
-                layer: Some(layer_num), ..
-            } = self.sticky_key_state
-            {
-                self.keymap.deactivate_layer(layer_num);
-                self.sticky_key_state = StickyKeyState::None;
+            // Single mutually-exclusive latch: a pure-mod press accumulates (3c) onto an
+            // existing pure-mod latch, but REPLACES any other shape (layer or tap-key).
+            // Releasing the foreign latch first deactivates a held layer and drops its mods
+            // cleanly, so only a same-shape (pure-mod) latch can reach the accumulate arm below.
+            if self.sticky_key_state.is_active() && !self.sticky_key_state.is_pure_mod() {
+                self.release_sticky_key_if_active().await;
             }
             match &mut self.sticky_key_state {
                 StickyKeyState::None => {
@@ -133,10 +130,7 @@ impl Keyboard<'_> {
                     };
                 }
                 StickyKeyState::Active { mods, deadline: d, .. } => {
-                    // Accumulate (3c) and refresh the timeout deadline. The unified latch holds
-                    // at most one SK at a time; pressing a different-shaped SK while one is active
-                    // accumulates onto the existing latch rather than replacing it (no test or
-                    // spec covers concurrent mixed shapes — single-latch assumption).
+                    // Same-shape pure-mod re-press: accumulate (3c) and refresh the deadline.
                     *mods |= params.keep;
                     *d = deadline;
                 }
@@ -241,6 +235,13 @@ impl Keyboard<'_> {
         let deadline = (config.timeout != Duration::MAX).then(|| Instant::now() + config.timeout);
 
         if event.pressed {
+            // Single mutually-exclusive latch: a tap-key press cycles (repeat_count) an existing
+            // tap-key latch, but REPLACES any other shape. Release the foreign latch first so only
+            // a same-shape tap-key latch can reach the cycle arm below.
+            if self.sticky_key_state.is_active() && !self.sticky_key_state.is_tap_key() {
+                self.release_sticky_key_if_active().await;
+            }
+
             let mut should_deactivate = false;
 
             match &mut self.sticky_key_state {
@@ -259,7 +260,9 @@ impl Keyboard<'_> {
                     deadline: d,
                     ..
                 } => {
-                    *repeat_count += 1;
+                    // Saturating so an unbounded (`max_repeat == 0`) cycle can never overflow
+                    // the counter and panic on a debug build after 65535 presses.
+                    *repeat_count = repeat_count.saturating_add(1);
                     if config.max_repeat > 0 && *repeat_count > config.max_repeat {
                         should_deactivate = true;
                     } else {

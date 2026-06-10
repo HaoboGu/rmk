@@ -5,7 +5,7 @@ use rmk::config::{BehaviorConfig, PositionalConfig, StickyKeyConfig};
 use rmk::keyboard::Keyboard;
 use rmk::types::action::KeyAction;
 use rmk::types::modifier::ModifierCombination;
-use rmk::{a, k, mo, sk, sk_mod};
+use rmk::{a, k, mo, sk, sk_layer, sk_mod};
 use rusty_fork::rusty_fork_test;
 
 use crate::common::{KC_LALT, KC_LCTRL, KC_LGUI, KC_LSHIFT, wrap_keymap};
@@ -79,6 +79,37 @@ fn create_test_keyboard_puremod() -> Keyboard<'static> {
     let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
     let per_key_config: &'static PositionalConfig<1, 6> = Box::leak(Box::new(PositionalConfig::default()));
     Keyboard::new(wrap_keymap(KEYMAP_PUREMOD, per_key_config, behavior_config))
+}
+
+// KEYMAP_MIXED: all three SK shapes on layer 0, used to exercise the mutually-exclusive
+// latch (pressing a different-shape SK while one is latched REPLACES it, never merges).
+// Layer 0: SK(LGui)  SK(Tab,LAlt)  SK(MO(1))  P            No  No
+// Layer 1: Trns      Trns          Trns       Z            No  No
+//          (cols 0-2 fall through to layer 0 so the SKs stay pressable while layer 1 is
+//           latched; col 3 = Z is a detector — it only resolves when layer 1 leaked.)
+const KEYMAP_MIXED: [[[KeyAction; 6]; 1]; 2] = [
+    [[
+        sk_mod!(ModifierCombination::LGUI),  // col 0: pure-mod SK(LGui)
+        sk!(Tab, ModifierCombination::LALT), // col 1: tap-key SK(Tab, LAlt)
+        sk_layer!(1),                        // col 2: layer SK(MO(1))
+        k!(P),                               // col 3: P (layer-0 terminating key)
+        a!(No),                              // col 4
+        a!(No),                              // col 5
+    ]],
+    [[
+        a!(Transparent), // col 0 → layer-0 SK(LGui)
+        a!(Transparent), // col 1 → layer-0 SK(Tab, LAlt)
+        a!(Transparent), // col 2 → layer-0 SK(MO(1))
+        k!(Z),           // col 3: Z — detector for a leaked layer 1
+        a!(No),          // col 4
+        a!(No),          // col 5
+    ]],
+];
+
+fn create_test_keyboard_mixed() -> Keyboard<'static> {
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
+    let per_key_config: &'static PositionalConfig<1, 6> = Box::leak(Box::new(PositionalConfig::default()));
+    Keyboard::new(wrap_keymap(KEYMAP_MIXED, per_key_config, behavior_config))
 }
 
 fn create_test_keyboard() -> Keyboard<'static> {
@@ -513,6 +544,92 @@ rusty_fork_test! {
             expected_reports: [
                 [KC_LCTRL | KC_LSHIFT, [kc_to_u8!(P), 0, 0, 0, 0, 0]],  // P with LCtrl|LShift
                 [0, [0, 0, 0, 0, 0, 0]],                                  // All released
+            ]
+        };
+    }
+
+    /// StickyKey Test 12 (regression): a tap-key SK pressed while a PURE-MOD SK is latched
+    /// REPLACES it — the latch is mutually exclusive, so the old modifier is dropped, not
+    /// merged. Without the replacement guard the tap-key press would OR the pure-mod's LGui
+    /// onto the report, yielding LGui+LAlt+Tab instead of just LAlt+Tab.
+    ///
+    /// Sequence: tap SK(LGui) (col 0), press/release SK(Tab,LAlt) (col 1)
+    /// Expected: LAlt+Tab (LGui dropped), then LAlt held.
+    #[test]
+    fn test_sk_tap_key_replaces_pure_mod() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_mixed(),
+            sequence: [
+                [0, 0, true,  10],  // Press SK(LGui)
+                [0, 0, false, 10],  // Release SK(LGui) → pure-mod latched (no report)
+                [0, 1, true,  10],  // Press SK(Tab, LAlt) → replaces pure-mod
+                [0, 1, false, 10],  // Release SK
+            ],
+            expected_reports: [
+                [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // tap-key press: LAlt+Tab (LGui dropped)
+                [KC_LALT, [0, 0, 0, 0, 0, 0]],                 // tap-key release: LAlt held
+            ]
+        };
+    }
+
+    /// StickyKey Test 13 (regression): a pure-mod SK pressed while a TAP-KEY SK is latched
+    /// REPLACES it. The tap-key's held LAlt is released (its own report) and the next basic
+    /// key gets the new pure-mod's LGui applied through it — OSM terminating-key behavior —
+    /// not the stale LAlt. Without the guard the pure-mod's LGui would merge onto the tap-key
+    /// latch, leaving the shape as tap-key and applying LAlt+LGui.
+    ///
+    /// Sequence: press/release SK(Tab,LAlt) (col 1), tap SK(LGui) (col 0), tap P (col 3)
+    /// Expected: LAlt+Tab, LAlt held, LAlt released, LGui+P, all released.
+    #[test]
+    fn test_sk_pure_mod_replaces_tap_key() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_mixed(),
+            sequence: [
+                [0, 1, true,  10],  // Press SK(Tab, LAlt)
+                [0, 1, false, 10],  // Release SK → tap-key latched (LAlt held)
+                [0, 0, true,  10],  // Press SK(LGui) → replaces tap-key (drops LAlt)
+                [0, 0, false, 10],  // Release SK(LGui) → pure-mod latched
+                [0, 3, true,  10],  // Press P → LGui applied through it
+                [0, 3, false, 10],  // Release P
+            ],
+            expected_reports: [
+                [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // tap-key press: LAlt+Tab
+                [KC_LALT, [0, 0, 0, 0, 0, 0]],                 // tap-key release: LAlt held
+                [0, [0, 0, 0, 0, 0, 0]],                        // pure-mod press: tap-key released (LAlt dropped)
+                [KC_LGUI, [kc_to_u8!(P), 0, 0, 0, 0, 0]],    // P with LGui (terminating key)
+                [0, [0, 0, 0, 0, 0, 0]],                        // P release: all clear
+            ]
+        };
+    }
+
+    /// StickyKey Test 14 (regression): a tap-key SK pressed while a LAYER SK is latched
+    /// REPLACES it — the orphaned-layer bug. The latched layer must be deactivated, so the
+    /// later basic key resolves on layer 0 (P), not the leaked layer 1 (Z). Without the guard
+    /// the tap-key press would bump the layer latch's repeat_count, leaving layer 1 active
+    /// forever and sending the key with no modifier.
+    ///
+    /// Sequence: press/release SK(MO(1)) (col 2), press/release SK(Tab,LAlt) (col 1), tap P (col 3)
+    /// Expected: LAlt+Tab, LAlt held, then P resolves on LAYER 0 (the tap-key early-releases
+    /// its LAlt before the foreign key, per the tap-key terminating-key rule, so P is sent
+    /// clean) — crucially P, not the leaked layer-1 Z.
+    #[test]
+    fn test_sk_tap_key_replaces_layer() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_mixed(),
+            sequence: [
+                [0, 2, true,  10],  // Press SK(MO(1)) → layer 1 active
+                [0, 2, false, 10],  // Release SK → layer latched
+                [0, 1, true,  10],  // Press SK(Tab, LAlt) (col 1 Trns → layer-0 tap-key) → replaces layer
+                [0, 1, false, 10],  // Release SK → tap-key latched (LAlt held)
+                [0, 3, true,  10],  // Press col 3 → resolves to P on layer 0 (layer 1 deactivated)
+                [0, 3, false, 10],  // Release
+            ],
+            expected_reports: [
+                [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // tap-key press: LAlt+Tab (layer dropped, no report)
+                [KC_LALT, [0, 0, 0, 0, 0, 0]],                 // tap-key release: LAlt held
+                [0, [0, 0, 0, 0, 0, 0]],                        // P press: tap-key early-releases LAlt
+                [0, [kc_to_u8!(P), 0, 0, 0, 0, 0]],          // P sent clean on layer 0 (NOT Z) — layer 1 gone
+                [0, [0, 0, 0, 0, 0, 0]],                        // P release
             ]
         };
     }

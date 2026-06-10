@@ -242,7 +242,19 @@ pub(crate) fn parse_key(
                         ::rmk::sk!(#ident, #keep_modifiers)
                     }
                 } else {
-                    // Pure-mod shape: SK(LGui) — OSM replacement
+                    // Pure-mod shape: SK(LGui) — OSM replacement.
+                    //
+                    // A nested action other than MO(n) (e.g. SK(TG(1)), SK(TO(2))) parses as a
+                    // valid `sk_action` in the pest grammar (it accepts the broad `layer_action`)
+                    // but is NOT a supported SK layer shape. Catch it here with a targeted message
+                    // instead of falling through to the generic "not a modifier" panic below.
+                    if inner.contains('(') {
+                        panic!(
+                            "\n\u{274c} keyboard.toml: SK only supports MO(n) as its layer shape (got `{inner}`). \
+                             Usage: SK(LGui) | SK(Tab, [LAlt]) | SK(MO(n))"
+                        );
+                    }
+
                     let modifiers = parse_modifiers(inner);
 
                     if modifiers.is_empty() {
