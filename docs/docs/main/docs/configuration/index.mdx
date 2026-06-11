@@ -1,28 +1,41 @@
 # Configuration
 
-RMK provides a simple and declarative way to configure your keyboard using a TOML configuration file, requiring no Rust programming knowledge. You can also use Rust API which offers maximum flexibility and control over your keyboard's behavior.
+RMK provides a simple and declarative way to configure your keyboard using a TOML configuration
+file, requiring no Rust programming knowledge. You can also use Rust API which offers maximum
+flexibility and control over your keyboard's behavior.
 
-In this section, we will introduce how to configure your keyboard in detail. The documentation will mainly focus on `keyboard.toml` but still provide Rust API code example if needed.
+In this section, we will introduce how to configure your keyboard in detail. The documentation will
+mainly focus on `keyboard.toml` but still provide Rust API code example if needed.
 
 ## `keyboard.toml`
 
-The `keyboard.toml` file is the central configuration for nearly every aspect of your keyboard setup. The following sections can be configured in your `keyboard.toml`:
+The `keyboard.toml` file is the central configuration for nearly every aspect of your keyboard
+setup. The following sections can be configured in your `keyboard.toml`:
 
-- **[Keyboard and Matrix](./keyboard_matrix.md)** - Basic keyboard information and physical key matrix definition
+- **[Keyboard and Matrix](./keyboard_matrix.md)** - Basic keyboard information and physical key
+  matrix definition
 - **[Layout](./layout.md)** - Keyboard layout and default keymap configuration
 - **[Split Keyboard](./split_keyboard.md)** - Configuration for split keyboard setups
 - **[Storage](./storage.mdx)** - On-board configuration and keymap storage settings
-- **[Behavior](./behavior.md)** - Advanced keyboard behaviors (one-shot keys, tri-layer, tap-hold, morse key, home row mods, etc.)
-- **[Input Devices](./input_device)** - Configuration for rotary encoders, joysticks, and other input devices
+- **[Behavior](./behavior.md)** - Advanced keyboard behaviors (one-shot keys, tri-layer, tap-hold,
+  morse key, home row mods, etc.)
+- **[Input Devices](./input_device)** - Configuration for rotary encoders, joysticks, and other
+  input devices
 - **[Wireless/Bluetooth](./wireless.md)** - Wireless and Bluetooth connectivity settings
 - **[Lighting](./light.md)** - RGB lighting and LED configuration
-- **[RMK Config](./rmk_config.md)** - Internal RMK settings (./communication channels, macro limits, etc.)
+- **[RMK Config](./rmk_config.md)** - Internal RMK settings (./communication channels, macro limits,
+  etc.)
 - **[Complete Reference](./appendix.md)** - Full specification and examples for `keyboard.toml`
 
-We also provide pre-configured templates for popular microcontroller chips in the [`rmk-config/src/default_config`](https://github.com/HaoboGu/rmk/blob/main/rmk-config/src/default_config) directory. You can use then when generating project using [rmkit](https://github.com/HaoboGu/rmkit). Contributions for additional chip configurations are welcome!
+We also provide pre-configured templates for popular microcontroller chips in the
+[`rmk-config/src/default_config`](https://github.com/HaoboGu/rmk/blob/main/rmk-config/src/default_config)
+directory. You can use then when generating project using [rmkit](https://github.com/HaoboGu/rmkit).
+Contributions for additional chip configurations are welcome!
 
-For a complete specification of all TOML configuration options, please refer to the other documentation chapters under `Configuration` section.
+For a complete specification of all TOML configuration options, please refer to the other
+documentation chapters under `Configuration` section.
 
 ## Rust API
 
-All Rust API that RMK provides can be found in https://docs.rs/rmk, you can also refer to `examples/use_rust` in RMK's main repository for comprehensive examples.
+All Rust API that RMK provides can be found in https://docs.rs/rmk, you can also refer to
+`examples/use_rust` in RMK's main repository for comprehensive examples.

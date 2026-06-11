@@ -22,7 +22,6 @@ Output Pin (Column) → |>| → Input Pin (Row)
 
 By default, RMK assumes that your pins are **col2row**, meaning that the output pins (anodes) represent the columns and the input pins (cathodes) represent the rows. If your schematic shows the opposite, you need to [change the configuration to **row2col**](../getting_started/faq#my-matrix-is-row2col-the-matrix-doesnt-work)
 
-
 ### Standard Matrix Configuration
 
 For keyboards using a traditional diode matrix:
@@ -128,7 +127,7 @@ A safe procedure to flash the peripheral side:
 3. Flash.
 4. Remove USB connector between peripheral side and host.
 5. Restore USB connector between central side and host.
-:::
+   :::
 
 **Bootmagic Behavior:**
 
@@ -139,6 +138,7 @@ If `bootmagic` is omitted, no scan is performed and there is zero runtime overhe
 ### Debouncer
 
 RMK has two debouncer modes, "default" and "fast":
+
 - The default mode uses a counter-based algorithm that registers a key only after its counter exceeds a certain threshold.
 - The fast mode, on the other hand, reacts instantly to a key press and then waits briefly before accepting the next input.
 
@@ -156,10 +156,11 @@ unlock_keys = [[0, 0], [0, 1]]  # Keys at (row=0,col=0) and (row=0,col=1)
 ```
 
 ::: tip
+
 - The unlock keys use the physical matrix position (row, column), not the keycode
 - Choose keys that are easy to press simultaneously but not commonly pressed together accidentally
 - See the [Vial Support](../features/vial_support.mdx) page for more details on Vial configuration
-:::
+  :::
 
 ## Troubleshooting
 

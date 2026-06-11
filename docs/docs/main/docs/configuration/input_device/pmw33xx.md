@@ -51,7 +51,8 @@ proc_invert_x = true
 
 ### Split
 
-To add the sensor to the central or peripheral use 
+To add the sensor to the central or peripheral use
+
 ```toml
 [[split.central.input_device.pmw33xx]]
 name = ...
@@ -69,6 +70,7 @@ For a split keyboard this must be added to the file (`central.rs` or `peripheral
 ::: Warning
 
 For nrf52 chips you need to add an interrupt for the used SPI. For example when using SPI2:
+
 ```rust
 use ::embassy_nrf::spim;
 
@@ -156,4 +158,3 @@ This should be added to the `central.rs`-File even if the sensor is on split per
 
     run_all!(pmw3360_processor, /* other processors and devices */)
 ```
-

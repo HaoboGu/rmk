@@ -1,6 +1,5 @@
 # Rotary encoders
 
-
 A rotary encoder is a common input device that is used for volume control, page scrolling, and other functions.
 
 It typically has two output pins (A and B) that generate quadrature signals as the encoder is rotated. By interpreting these signals, the direction and amount of rotation can be determined. Every time the encoder is rotated for some given amount, it generates a clockwise (CW) or counter-clockwise (CCW) event, which can be mapped to any key action like a normal key.
@@ -70,6 +69,7 @@ A `encoders` field under `[[layer]]` is a 2D array where each entry corresponds 
 The `encoder_map` under `[layout]` is a 3D array where each entry is a 2D array as described above, representing the encoder actions for that layer.
 
 **Structure**:
+
 ```toml
 [[layer]]  # Layer 0
 encoders = [[CW, CCW], [CW, CCW], ...]  # Encoder 0, encoder 1, ...
@@ -124,6 +124,7 @@ encoder_map = [
 ```
 
 **Notes:**
+
 - If the actions for an encoder are not specified in `encoders` or `encoder_map`, they will default to no action.
 - The number of encoder entries should match the number of physical encoders defined in `[[input_device.encoder]]`.
 
@@ -174,9 +175,9 @@ pub const fn get_default_encoder_map() -> [[EncoderAction; NUM_ENCODER]; NUM_LAY
         // Layer 0
         [
             // Encoder 0: (Clockwise, Counter-Clockwise)
-            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)), 
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
             // Encoder 1:
-            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)), 
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
         ],
         ...
     ]

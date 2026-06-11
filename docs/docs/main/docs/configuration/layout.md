@@ -161,12 +161,15 @@ Please note that alias names may not contain white spaces and they are case sens
 
 ## Assigning the left/right hand to a position
 
-
 # default profile for morse, tap dance and tap-hold keys:
+
 [behavior.morse]
 enable_flow_tap = true,
 prior_idle_time = "120ms"
 hold_on_other_press = true
 hold_timeout = "250ms"
 gap_timeout = "250ms"
+
+```
+
 ```
