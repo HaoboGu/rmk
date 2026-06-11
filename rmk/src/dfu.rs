@@ -44,6 +44,10 @@ impl Handler for DfuStringProvider {
 /// overshooting the const generic is safe.
 pub const FLASH_SIZE: usize = 16 * 1024 * 1024;
 
+/// DFU transfer block size in bytes. Larger values speed up firmware
+/// downloads. Must match the USB control buffer size used by the host.
+pub const BLOCK_SIZE_DFU: usize = 512;
+
 #[cfg(feature = "dfu_rp")]
 use embassy_embedded_hal::flash::partition::BlockingPartition;
 #[cfg(feature = "dfu_rp")]
@@ -276,7 +280,6 @@ pub fn register_dfu_interface<D: Driver<'static>>(
     let aligned: &'static mut [u8] = ALIGNED.init([0; 1]);
     let updater = BlockingFirmwareUpdater::new(config, aligned);
 
-    const BLOCK_SIZE: usize = 256;
     let attrs = DfuAttributes::CAN_DOWNLOAD | DfuAttributes::WILL_DETACH;
 
     let inner = FirmwareHandler::new(updater, ResetImmediate);
@@ -284,7 +287,7 @@ pub fn register_dfu_interface<D: Driver<'static>>(
     let state = DfuState::new(handler, attrs);
 
     type DfuStateInner = RmkDfuHandler<
-        FirmwareHandler<'static, PartitionType, PartitionType, ResetImmediate, BLOCK_SIZE>,
+        FirmwareHandler<'static, PartitionType, PartitionType, ResetImmediate, BLOCK_SIZE_DFU>,
     >;
     static DFU_STATE: StaticCell<DfuState<DfuStateInner>> = StaticCell::new();
     let state_ref = DFU_STATE.init(state);
@@ -300,8 +303,8 @@ pub fn register_dfu_interface<D: Driver<'static>>(
             attrs.bits(),
             0xc4,
             0x09,
-            (BLOCK_SIZE & 0xff) as u8,
-            ((BLOCK_SIZE >> 8) & 0xff) as u8,
+            (BLOCK_SIZE_DFU & 0xff) as u8,
+            ((BLOCK_SIZE_DFU >> 8) & 0xff) as u8,
             0x10,
             0x01,
         ],
