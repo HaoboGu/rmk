@@ -233,31 +233,22 @@ fn expand_main(
     let (registered_processor_initializers, mut registered_processors) =
         expand_registered_processor_init(hardware, &item_mod);
 
-    // Add dfu_lock task that blocks (yielded) on DFU_UNLOCK_SIGNAL.wait().
+    // Declare dfu_lock (if enabled) so it can be pushed as a Runnable task.
     // Check the feature at macro-expansion time so we never emit `#[cfg]`
     // into the user's crate (avoids "unexpected cfg condition" warnings).
     let dfu_lock_enabled = is_feature_enabled(&rmk_features, "dfu_lock");
-    if let Some(ref dfu) = hardware.dfu {
-        if !dfu.unlock_keys.is_empty() {
-            let task_body = if dfu_lock_enabled {
-                quote! {
-                    let dfu_lock = ::rmk::dfu::DfuLock::new(&DFU_UNLOCK_KEYS);
-                    loop {
-                        dfu_lock.process_unlock(&keymap).await;
-                    }
-                }
-            } else {
-                quote! {
-                    loop {
-                        core::future::pending::<()>().await;
-                    }
-                }
-            };
-            registered_processors.push(quote! {
-                async { #task_body }
-            });
+    let dfu_lock_init = if let Some(ref dfu) = hardware.dfu {
+        if dfu_lock_enabled && !dfu.unlock_keys.is_empty() {
+            registered_processors.push(quote! { dfu_lock.run() });
+            quote! {
+                let mut dfu_lock = ::rmk::dfu::DfuLock::new(&DFU_UNLOCK_KEYS, &keymap);
+            }
+        } else {
+            quote! {}
         }
-    }
+    } else {
+        quote! {}
+    };
 
     // Display configuration — for unibody use top-level, for split use central's config
     let display_config = match &hardware.board {
@@ -392,6 +383,9 @@ fn expand_main(
 
             // Initialize watchdog
             #watchdog_init
+
+            // Initialize dfu lock
+            #dfu_lock_init
 
             // Start
             #run_rmk

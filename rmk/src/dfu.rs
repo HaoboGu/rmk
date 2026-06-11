@@ -2,9 +2,14 @@ use core::cell::RefCell;
 use core::sync::atomic::{AtomicPtr, Ordering};
 #[cfg(feature = "dfu_lock")]
 use core::sync::atomic::AtomicBool;
+#[cfg(feature = "dfu_lock")]
+use crate::core_traits::Runnable;
 
-use embassy_sync::blocking_mutex::raw::{CriticalSectionRawMutex, NoopRawMutex};
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+#[cfg(feature = "dfu_lock")]
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::Mutex;
+#[cfg(feature = "dfu_lock")]
 use embassy_sync::signal::Signal;
 use embassy_usb::types::StringIndex;
 use embassy_usb::control::{InResponse, OutResponse, Request};
@@ -321,28 +326,24 @@ pub fn register_dfu_interface<D: Driver<'static>>(
 pub struct DfuLock<'a> {
     unlocked: AtomicBool,
     unlock_keys: &'a [(u8, u8)],
+    keymap: &'a crate::keymap::KeyMap<'a>,
 }
 
 #[cfg(feature = "dfu_lock")]
 impl<'a> DfuLock<'a> {
-    pub fn new(unlock_keys: &'a [(u8, u8)]) -> Self {
+    pub fn new(unlock_keys: &'a [(u8, u8)], keymap: &'a crate::keymap::KeyMap<'a>) -> Self {
         Self {
             unlocked: AtomicBool::new(false),
             unlock_keys,
+            keymap,
         }
     }
 
-    /// Called by the orchestrator loop. Blocks (yielded) on
-    /// `DFU_UNLOCK_SIGNAL.wait()` until a DFU download is rejected by
-    /// `RmkDfuHandler::start()`, then opens a 10 s unlock window with the LED
-    /// solid on and polls the configured unlock keys at 50 ms. If the keys are
-    /// pressed within that window the DFU lock is released and the LED blinks
-    /// Morse "D F U".
-    pub async fn process_unlock(&self, keymap: &'a crate::keymap::KeyMap<'a>) {
-        if self.unlock_keys.is_empty() {
-            return;
-        }
-
+    /// One unlock cycle: block (yielded) on `DFU_UNLOCK_SIGNAL.wait()` until a
+    /// DFU download is rejected, then open a 10 s unlock window polling the
+    /// configured unlock keys at 50 ms. If the keys are pressed within that
+    /// window the lock is released and the LED blinks Morse "D F U".
+    pub(crate) async fn process_unlock(&self) {
         // Phase 1: wait (yielded) until a DFU unlock request arrives
         DFU_UNLOCK_SIGNAL.wait().await;
 
@@ -357,7 +358,7 @@ impl<'a> DfuLock<'a> {
             let all_pressed = self
                 .unlock_keys
                 .iter()
-                .all(|(row, col)| keymap.read_matrix_key(*row, *col));
+                .all(|(row, col)| self.keymap.read_matrix_key(*row, *col));
             if all_pressed {
                 self.unlocked.store(true, Ordering::Release);
                 DFU_LOCKED.store(false, Ordering::Release);
@@ -392,6 +393,15 @@ impl<'a> DfuLock<'a> {
                 break;
             }
             morse_blink_dfu().await;
+        }
+    }
+}
+
+#[cfg(feature = "dfu_lock")]
+impl<'a> Runnable for DfuLock<'a> {
+    async fn run(&mut self) -> ! {
+        loop {
+            self.process_unlock().await;
         }
     }
 }
