@@ -254,18 +254,48 @@ impl<S: PointingDriver> PointingDevice<S> {
 }
 
 /// Pointing mode determines how raw XY motion is interpreted
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum PointingMode {
     /// Default cursor mode - XY maps to mouse XY movement
-    #[default]
-    Cursor,
+    Cursor(CursorConfig),
     /// Scroll mode - XY maps to wheel (vertical) and pan (horizontal)
     Scroll(ScrollConfig),
     /// Sniper mode - XY maps to cursor but at reduced sensitivity
     Sniper(SniperConfig),
     /// Caret mode, XY maps to vertical and horizontal caret movement
     Caret(CaretConfig),
+}
+
+impl Default for PointingMode {
+    fn default() -> Self {
+        Self::Cursor(CursorConfig::default())
+    }
+}
+
+/// Configuration for cursor mode
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct CursorConfig {
+    /// Multiplier for X axis. Higher = more output per unit of motion. 0 disables X.
+    pub multiplier_x: u8,
+    /// Multiplier for Y axis. Higher = more output per unit of motion. 0 disables Y.
+    pub multiplier_y: u8,
+    /// Invert X axis movement.
+    pub invert_x: bool,
+    /// Invert Y axis movement.
+    pub invert_y: bool,
+}
+
+impl Default for CursorConfig {
+    fn default() -> Self {
+        Self {
+            multiplier_x: 1,
+            multiplier_y: 1,
+            invert_x: false,
+            invert_y: false,
+        }
+    }
 }
 
 /// Configuration for caret mode
@@ -531,15 +561,21 @@ impl<'a> PointingProcessor<'a> {
 
         let buttons = self.keymap.mouse_buttons();
         match self.current_mode {
-            PointingMode::Cursor | PointingMode::Scroll(_) | PointingMode::Sniper(_) => {
+            PointingMode::Cursor(_) | PointingMode::Scroll(_) | PointingMode::Sniper(_) => {
                 // modes that generate mouse reports
                 let mouse_report = match self.current_mode {
-                    PointingMode::Cursor => MouseReport {
-                        buttons,
-                        x: x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
-                        y: y.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
-                        wheel: 0,
-                        pan: 0,
+                    PointingMode::Cursor(cursor_config) => {
+                        let out_x = x * cursor_config.multiplier_x as i16;
+                        let out_y = y * cursor_config.multiplier_y as i16;
+                        let out_x = if cursor_config.invert_x { -out_x } else { out_x };
+                        let out_y = if cursor_config.invert_y { -out_y } else { out_y };
+                        MouseReport {
+                            buttons,
+                            x: out_x.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                            y: out_y.clamp(i8::MIN as i16, i8::MAX as i16) as i8,
+                            wheel: 0,
+                            pan: 0,
+                        }
                     },
                     PointingMode::Scroll(scroll_config) => {
                         let (sx, sy) =
@@ -1363,14 +1399,14 @@ mod tests {
 
     #[test]
     fn test_pointing_mode_default_is_cursor() {
-        assert_eq!(PointingMode::default(), PointingMode::Cursor);
+        assert_eq!(PointingMode::default(), PointingMode::Cursor(CursorConfig::default()));
     }
 
     #[test]
     fn test_pointing_mode_array_default() {
         let modes: [PointingMode; 4] = [PointingMode::default(); 4];
         for mode in &modes {
-            assert_eq!(*mode, PointingMode::Cursor);
+            assert_eq!(*mode, PointingMode::Cursor(CursorConfig::default()));
         }
     }
 
@@ -1387,13 +1423,37 @@ mod tests {
         assert_eq!(acc.remainder_y, 0);
     }
 
+    #[test]
+    fn test_pointing_cursor_multiplier_scales_motion() {
+        let config = CursorConfig {
+            multiplier_x: 2,
+            multiplier_y: 3,
+            invert_x: false,
+            invert_y: false,
+        };
+        assert_eq!(10 * config.multiplier_x as i16, 20);
+        assert_eq!(10 * config.multiplier_y as i16, 30);
+    }
+
+    #[test]
+    fn test_pointing_cursor_invert_axes() {
+        let config = CursorConfig {
+            multiplier_x: 1,
+            multiplier_y: 1,
+            invert_x: true,
+            invert_y: true,
+        };
+        assert_eq!(-(10 * config.multiplier_x as i16), -10);
+        assert_eq!(-(10 * config.multiplier_y as i16), -10);
+    }
+
     // === Integration tests for PointingProcessor ===
 
     #[test]
     fn test_pointing_processor_mode_selection() {
         // Test that the processor correctly selects the mode based on current layer
         let modes = [
-            PointingMode::Cursor,
+            PointingMode::Cursor(CursorConfig::default()),
             PointingMode::Scroll(ScrollConfig::default()),
             PointingMode::Sniper(SniperConfig {
                 multiplier: 1,
@@ -1402,7 +1462,7 @@ mod tests {
                 invert_y: false,
             }),
             PointingMode::Caret(CaretConfig::default()),
-            PointingMode::Cursor,
+            PointingMode::Cursor(CursorConfig::default()),
         ];
 
         // Verify all modes are correctly stored
@@ -1653,7 +1713,7 @@ mod tests {
 
         // Verify all default to Cursor
         for mode in &modes {
-            assert_eq!(*mode, PointingMode::Cursor);
+            assert_eq!(*mode, PointingMode::Cursor(CursorConfig::default()));
         }
     }
 

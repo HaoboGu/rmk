@@ -1,0 +1,231 @@
+# Pointing Processor
+
+The PointingProcessor converts raw sensor motion events into HID mouse reports (or caret key taps). Four modes are available, switched via a processor in your configuration.
+
+## Modes
+
+### Cursor
+
+Maps X/Y deltas directly to mouse cursor movement with optional scaling.
+
+```rust
+rmk::input_device::pointing::CursorConfig {
+    multiplier_x: 1, // scales X delta. 0 disables X.
+    multiplier_y: 1, // scales Y delta. 0 disables Y.
+    invert_x: false,
+    invert_y: false,
+}
+```
+
+Formula: `output = delta * multiplier`. No accumulator and no divisor — every sample is processed immediately. Small movements are never swallowed, which is exactly what you want for cursor tracking.
+
+### Scroll
+
+Maps X to horizontal pan and Y to vertical wheel scrolling.
+
+```rust
+rmk::input_device::pointing::ScrollConfig {
+    multiplier_x: 1, // scales X delta before divisor
+    divisor_x: 8,    // divides X motion. 0 disables X.
+    multiplier_y: 1, // scales Y delta before divisor
+    divisor_y: 8,    // divides Y motion. 0 disables Y.
+    invert_x: false,
+    invert_y: false, // when false, sensor +Y → wheel -1 (scroll up)
+}
+```
+
+Uses the `MotionAccumulator`: `total = remainder + delta * multiplier`, then `output = total / divisor`. The **remainder** (the part that didn't produce output) is kept for the next sample. Without this, small deltas like `3` with `divisor=8` would always produce `0` and the sensor would feel dead.
+
+| Sample | delta | total | output (total/8) | remainder |
+|--------|-------|-------|-----------------|-----------|
+| 1 | 5 | 0+5=5 | 0 | 5 |
+| 2 | 5 | 5+5=10 | 1 | 10−1×8=2 |
+| 3 | 5 | 2+5=7 | 0 | 7 |
+
+### Sniper
+
+Maps X/Y to cursor at reduced sensitivity for precision aiming.
+
+```rust
+rmk::input_device::pointing::SniperConfig {
+    multiplier: 1, // scales delta before divisor (same for both axes)
+    divisor: 4,    // divides motion. 0 disables both axes.
+    invert_x: false,
+    invert_y: false,
+}
+```
+
+Uses the same `MotionAccumulator` as Scroll mode.
+
+### Caret
+
+Maps X/Y to arrow key taps (up/down/left/right). No mouse report is generated.
+
+```rust
+rmk::input_device::pointing::CaretConfig {
+    disable_x: false,  // disable horizontal caret taps
+    disable_y: false,  // disable vertical caret taps
+    invert_x: false,
+    invert_y: false,
+    threshold: 100,    // minimum accumulated motion (|dx|+|dy|) to trigger a tap
+    keycode_up: HidKeyCode::Up,
+    keycode_down: HidKeyCode::Down,
+    keycode_left: HidKeyCode::Left,
+    keycode_right: HidKeyCode::Right,
+}
+```
+
+Uses `MotionAccumulator` in persistent mode: `total = remainder + delta`, output = `total / divisor`, but the **full total** stays in the accumulator (not just the remainder). The consumer (caret logic) decides when to reset the accumulator via `reset_x()`/`reset_y()` after a tap has been triggered.
+
+## Mode switching
+
+Users can define a processor, in this case called `PointingProcessorController`, which subscribes to events (e.g. layer changes) and updates the active mode. The example below switches to Cursor on layer 0, Sniper on layer 1, Scroll on layer 2, and Caret on layer 3 or when key bound to User0 is pressed:
+
+```rust
+```rust title="src/pointingproccontroller.rs"
+use rmk::{
+    event::{LayerChangeEvent, KeyboardEvent, KeyboardEventPos, PointingProcessorEvent, publish_event},
+    input_device::pointing::PointingMode, types::keycode::HidKeyCode,
+};
+use rmk_macro::processor;
+
+#[processor(subscribe = [LayerChangeEvent, KeyboardEvent])] // could be any other event
+#[derive(Default)]
+pub struct PointingProcessorController<'a> {
+    keymap: &'a KeyMap<'a>, // you can omit this (and the lifetime 'a) if you don't use the KeyboardEvent
+}
+
+impl PointingProcessorController {
+    pub fn new(keymap: &'a KeyMap<'a>) -> Self {
+        Self {
+            keymap,
+        }
+    }
+
+    async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
+        match event.0 {
+            0 => {
+                publish_event(PointingProcessorEvent {
+                    device_id: 255,
+                    mode: PointingMode::Cursor(rmk::input_device::pointing::CursorConfig::default()),
+                });
+            }
+            1 => {
+                publish_event(PointingProcessorEvent {
+                    device_id: 255,
+                    mode: PointingMode::Sniper(rmk::input_device::pointing::SniperConfig {
+                        multiplier: 1, // scales sensor delta before divisor
+                        divisor: 8, // divides motion for precision aiming
+                        invert_x: false,
+                        invert_y: false,
+                    }),
+                });
+            }
+            2 => {
+                publish_event(PointingProcessorEvent {
+                    device_id: 255,
+                    mode: PointingMode::Scroll(rmk::input_device::pointing::ScrollConfig {
+                        multiplier_x: 1, // scales X delta before divisor
+                        divisor_x: 16, // divides X motion for scrolling precision
+                        multiplier_y: 1, // scales Y delta before divisor
+                        divisor_y: 16, // divides Y motion for scrolling precision
+                        invert_x: false,
+                        invert_y: false,
+                    }),
+                });
+            }
+            3 => {
+                publish_event(PointingProcessorEvent {
+                    device_id: 255,
+                    mode: PointingMode::Caret(rmk::input_device::pointing::CaretConfig {
+                        disable_x: false, // disable horizontal caret taps
+                        disable_y: false, // disable vertical caret taps
+                        invert_x: false,
+                        invert_y: false,
+                        threshold: 100, // minimum accumulated motion (|dx|+|dy|) to trigger a tap
+                        keycode_up: HidKeyCode::Up,
+                        keycode_down: HidKeyCode::Down,
+                        keycode_left: HidKeyCode::Left,
+                        keycode_right: HidKeyCode::Right,
+                    }),
+                });
+            }
+
+            _ => {}
+        }
+    }
+
+    pub async fn on_keyboard_event(&mut self, event: KeyboardEvent) {
+        if let KeyboardEventPos::Key(pos) = event.pos {
+            let keyevent = self
+                .keymap
+                .action_at_pos(self.current_layer as usize, pos.row, pos.col);
+            if event.pressed {
+                match keyevent {
+                    KeyAction::Single(Action::User(0)) => {
+                        publish_event(PointingProcessorEvent {
+                            device_id: 255,
+                            mode: PointingMode::Caret(rmk::input_device::pointing::CaretConfig {
+                                disable_x: false, // disable horizontal caret taps
+                                disable_y: false, // disable vertical caret taps
+                                invert_x: false,
+                                invert_y: false,
+                                threshold: 100, // minimum accumulated motion (|dx|+|dy|) to trigger a tap
+                                keycode_up: HidKeyCode::Up,
+                                keycode_down: HidKeyCode::Down,
+                                keycode_left: HidKeyCode::Left,
+                                keycode_right: HidKeyCode::Right,
+                            }),
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+```
+
+Register the controller on the **central** side (always — even if the sensor is on a peripheral):
+
+<Tabs>
+<Tab label={<Toml />}>
+
+```rust title="src/central.rs"
+// always into central.rs/ main.rs, regardless of where the sensor is connected.
+#![no_main]
+#![no_std]
+
+mod pointingproccontroller;
+
+use rmk::macros::rmk_central;
+use crate::pointingproccontroller::PointingProcessorController;
+
+#[rmk_central]
+mod keyboard_central {
+    use super::*;
+
+    #[register_processor(event)] 
+    fn pointing_processor_controller() -> PointingProcessorController {
+        PointingProcessorController::new()
+    }
+}
+```
+
+</Tab>
+<Tab label={<Rust />}>
+
+```rust title="src/central.rs"
+// always into central.rs/ main.rs, regardless of where the sensor is connected.
+	mod pointingproccontroller;
+	use crate::pointingproccontroller::PointingProcessorController;
+// ...
+    let mut pointing_controller = PointingProcessorController::default();
+    run_all!(
+		/* other processors go here */
+        pointing_controller,
+    ),
+```
+
+</Tab>
+</Tabs>
