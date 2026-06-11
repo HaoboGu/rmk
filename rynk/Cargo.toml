@@ -1,0 +1,87 @@
+[package]
+name = "rynk"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.85"
+authors.workspace = true
+description = "Runtime-free host-side Rynk protocol client"
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["keyboard", "firmware", "rmk", "protocol", "host"]
+
+# Transport-agnostic protocol client (Client / Transport trait / wire types).
+# It pulls in no transport or async-runtime dependencies; concrete transports
+# live in sibling crates and depend on this one.
+[dependencies]
+rmk-types.workspace = true
+embedded-io-async.workspace = true
+postcard.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+# The firmware, built for the host target with the full rynk feature set so its
+# wire surface matches the host client's (`rmk-types/host` is the maximal config).
+# `default-features = false` drops `defmt` (conflicts with `log`, not host-friendly);
+# `std` provides embassy-time's mock-driver so linking succeeds.
+rmk = { path = "../rmk", default-features = false, features = [
+    "std",
+    "log",
+    "rynk",
+    "storage",
+    "bulk",
+    "_ble",
+    "split",
+    "steno",
+] }
+embassy-sync = "0.8"
+embassy-futures = "0.1"
+# Provides a critical-section impl on host (embassy-sync's mutexes and the
+# firmware's FLASH_CHANNEL need one); `rmk` only declares it in its own dev-deps.
+critical-section = { version = "1.2", features = ["std"] }
+# `test-util` for paused-time unit tests, `rt-multi-thread` + `time` for
+# `examples/hw_test.rs` (`#[tokio::main]`, topic-drain timeout); the loopback
+# test pins `current_thread` explicitly.
+tokio = { version = "1.47", features = ["test-util", "macros", "rt", "rt-multi-thread", "time"] }
+
+# examples/hw_test.rs only. These stay dev-dependencies so the library itself
+# remains runtime- and transport-free.
+rynk-ble = { path = "rynk-ble" }
+rynk-serial = { path = "rynk-serial" }
+env_logger = "0.11"
+heapless = { version = "0.9", features = ["serde"] }
+
+[workspace]
+resolver = "2"
+members = [
+    "rynk-serial",
+    "rynk-ble",
+]
+default-members = [
+    ".",
+    "rynk-serial",
+    "rynk-ble",
+]
+
+[workspace.package]
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Host-side tooling for the Rynk protocol — RMK's native host communication channel"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/haobogu/rmk"
+version = "0.1.0"
+
+[workspace.dependencies]
+rmk-types = { path = "../rmk-types", features = ["host"] }
+embedded-io-async = "0.7"
+embedded-io-adapters = "0.7"
+postcard = { version = "1.1", features = ["experimental-derive"] }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+thiserror = "2.0"
+log = "0.4"
+tokio = "1.47"
+tokio-serial = "5.4"
+bluest = "0.6"
+futures = "0.3"

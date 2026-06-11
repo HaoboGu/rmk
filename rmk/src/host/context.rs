@@ -338,7 +338,7 @@ impl<'a> KeyboardContext<'a> {
     }
 
     pub async fn set_fork(&self, idx: u8, fork: Fork) {
-        let valid = self.keymap.with_forks_mut(|forks| {
+        let _valid = self.keymap.with_forks_mut(|forks| {
             if let Some(slot) = forks.get_mut(idx as usize) {
                 *slot = fork;
                 true
@@ -346,11 +346,10 @@ impl<'a> KeyboardContext<'a> {
                 false
             }
         });
-        if !valid {
-            return;
-        }
         #[cfg(feature = "storage")]
-        FLASH_CHANNEL.send(FlashOperationMessage::Fork { idx, fork }).await;
+        if _valid {
+            FLASH_CHANNEL.send(FlashOperationMessage::Fork { idx, fork }).await;
+        }
     }
 
     // ── Matrix state (host_security) ─────────────────────────────────────

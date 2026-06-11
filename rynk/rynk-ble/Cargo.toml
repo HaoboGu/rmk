@@ -1,0 +1,24 @@
+[package]
+name = "rynk-ble"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.85"
+authors.workspace = true
+description = "BLE GATT transport for the Rynk host library"
+license.workspace = true
+repository.workspace = true
+keywords = ["keyboard", "firmware", "rmk", "protocol", "ble"]
+
+# Native BLE GATT via `bluest`: the notify bridge task + its channel.
+[dependencies]
+rynk = { path = ".." }
+rmk-types.workspace = true
+bluest.workspace = true
+futures.workspace = true
+log.workspace = true
+# `rt` for `tokio::spawn`; `sync` for the bridge mpsc/oneshot; `time` for the
+# scan timeout and attach retry backoff.
+tokio = { version = "1.47", default-features = false, features = ["rt", "sync", "time"] }
+
+[dev-dependencies]
+tokio = { version = "1.47", features = ["macros", "rt"] }

@@ -18,7 +18,7 @@ mod tests {
     use crate::action::KeyAction;
     use crate::fork::StateBits;
     use crate::modifier::ModifierCombination;
-    use crate::protocol::rynk::test_utils::round_trip;
+    use crate::protocol::rynk::tests::round_trip;
 
     #[test]
     fn round_trip_set_fork_request() {

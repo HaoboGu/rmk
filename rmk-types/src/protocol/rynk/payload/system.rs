@@ -26,7 +26,7 @@ impl ProtocolVersion {
 ///
 /// The host reads this once after connecting to learn the firmware's layout,
 /// feature set, and protocol limits.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 pub struct DeviceCapabilities {
     // -- Layout --
     pub num_layers: u8,
@@ -37,7 +37,10 @@ pub struct DeviceCapabilities {
     pub num_encoders: u8,
     pub max_combos: u8,
     pub max_combo_keys: u8,
+    /// Number of macros supported, set by the user at compile time. `0`
+    /// disables macros: the host MUST NOT use them or consult `macro_space_size`.
     pub max_macros: u8,
+    /// Byte size of the flat macro region; only meaningful when `max_macros > 0`.
     pub macro_space_size: u16,
     pub max_morse: u8,
     pub max_patterns_per_key: u8,
@@ -82,9 +85,9 @@ impl MaxSize for UnlockChallenge {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[non_exhaustive]
 pub enum StorageResetMode {
-    /// Reset all stored data.
+    /// Reset all stored data — including keymap and BLE bonds.
     Full,
-    /// Reset only the layout/keymap data.
+    /// Reset only the layout/keymap data, preserving BLE bonds.
     LayoutOnly,
 }
 
@@ -100,7 +103,7 @@ pub struct BehaviorConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::rynk::test_utils::{assert_max_size_bound, round_trip};
+    use crate::protocol::rynk::tests::{assert_max_size_bound, round_trip};
 
     #[test]
     fn round_trip_protocol_version() {
