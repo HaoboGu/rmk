@@ -1,21 +1,22 @@
 use core::cell::RefCell;
-use core::sync::atomic::{AtomicPtr, Ordering};
 #[cfg(feature = "dfu_lock")]
 use core::sync::atomic::AtomicBool;
-#[cfg(feature = "dfu_lock")]
-use crate::core_traits::Runnable;
+use core::sync::atomic::{AtomicPtr, Ordering};
 
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-#[cfg(feature = "dfu_lock")]
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::Mutex;
 #[cfg(feature = "dfu_lock")]
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+#[cfg(feature = "dfu_lock")]
 use embassy_sync::signal::Signal;
-use embassy_usb::types::StringIndex;
 use embassy_usb::control::{InResponse, OutResponse, Request};
 use embassy_usb::driver::Driver;
+use embassy_usb::types::StringIndex;
 use embassy_usb::{Builder, Handler};
 use static_cell::StaticCell;
+
+#[cfg(feature = "dfu_lock")]
+use crate::core_traits::Runnable;
 
 struct DfuStringProvider {
     string_idx: StringIndex,
@@ -51,13 +52,13 @@ pub const BLOCK_SIZE_DFU: usize = 512;
 #[cfg(feature = "dfu_rp")]
 use embassy_embedded_hal::flash::partition::BlockingPartition;
 #[cfg(feature = "dfu_rp")]
+use embassy_rp::Peri;
+#[cfg(feature = "dfu_rp")]
 use embassy_rp::flash::{Blocking, Flash};
 #[cfg(feature = "dfu_rp")]
 use embassy_rp::gpio::Output;
 #[cfg(feature = "dfu_rp")]
 use embassy_rp::peripherals::FLASH;
-#[cfg(feature = "dfu_rp")]
-use embassy_rp::Peri;
 #[cfg(feature = "dfu_rp")]
 use embassy_usb::class::dfu::consts::Status;
 #[cfg(feature = "dfu_rp")]
@@ -129,8 +130,7 @@ impl DfuFlashManager {
 /// Store an optional DFU LED pin globally.
 #[cfg(feature = "dfu_rp")]
 pub fn set_led(led: Option<Output<'static>>) {
-    static LED_CELL: StaticCell<Mutex<NoopRawMutex, RefCell<Option<Output<'static>>>>> =
-        StaticCell::new();
+    static LED_CELL: StaticCell<Mutex<NoopRawMutex, RefCell<Option<Output<'static>>>>> = StaticCell::new();
     let m = LED_CELL.init(Mutex::new(RefCell::new(led)));
     LED_MUTEX.store(m as *const _ as *mut _, Ordering::Release);
 }
@@ -250,11 +250,7 @@ pub fn mark_booted() {
 #[cfg(feature = "dfu_rp")]
 pub fn get_manager() -> Option<&'static DfuFlashManager> {
     let ptr = MANAGER_PTR.load(Ordering::Acquire);
-    if ptr.is_null() {
-        None
-    } else {
-        Some(unsafe { &*ptr })
-    }
+    if ptr.is_null() { None } else { Some(unsafe { &*ptr }) }
 }
 
 /// Register a DFU interface on the USB builder.
@@ -264,8 +260,7 @@ pub fn register_dfu_interface<D: Driver<'static>>(
     mgr: &'static DfuFlashManager,
     product_name: &'static str,
 ) {
-    use embassy_boot_rp::BlockingFirmwareUpdater;
-    use embassy_boot_rp::FirmwareUpdaterConfig;
+    use embassy_boot_rp::{BlockingFirmwareUpdater, FirmwareUpdaterConfig};
     use embassy_usb::class::dfu::consts::DfuAttributes;
     use embassy_usb_dfu::ResetImmediate;
     use embassy_usb_dfu::dfu::FirmwareHandler;
@@ -286,9 +281,8 @@ pub fn register_dfu_interface<D: Driver<'static>>(
     let handler = RmkDfuHandler { inner };
     let state = DfuState::new(handler, attrs);
 
-    type DfuStateInner = RmkDfuHandler<
-        FirmwareHandler<'static, PartitionType, PartitionType, ResetImmediate, BLOCK_SIZE_DFU>,
-    >;
+    type DfuStateInner =
+        RmkDfuHandler<FirmwareHandler<'static, PartitionType, PartitionType, ResetImmediate, BLOCK_SIZE_DFU>>;
     static DFU_STATE: StaticCell<DfuState<DfuStateInner>> = StaticCell::new();
     let state_ref = DFU_STATE.init(state);
 
@@ -355,8 +349,7 @@ impl<'a> DfuLock<'a> {
         info!("dfu_lock: DFU activity detected, unlock window open for 10 s");
         info!("dfu_lock: waiting for unlock keys");
         with_led(|led| led.set_high());
-        let deadline =
-            embassy_time::Instant::now() + embassy_time::Duration::from_secs(10);
+        let deadline = embassy_time::Instant::now() + embassy_time::Duration::from_secs(10);
         loop {
             let all_pressed = self
                 .unlock_keys
@@ -380,8 +373,7 @@ impl<'a> DfuLock<'a> {
         // Phase 3: unlocked — wait until DFU download starts or 10 s pass.
         // LED blinks Morse "D F U" to signal "ready to flash".
         info!("dfu_lock: unlocked, signalling with Morse DFU");
-        let deadline =
-            embassy_time::Instant::now() + embassy_time::Duration::from_secs(10);
+        let deadline = embassy_time::Instant::now() + embassy_time::Duration::from_secs(10);
         loop {
             if DFU_STARTED.load(Ordering::Acquire) {
                 info!("dfu_lock: DFU download started, staying unlocked");

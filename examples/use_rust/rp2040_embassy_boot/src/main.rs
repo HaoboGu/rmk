@@ -52,7 +52,7 @@ async fn main(_spawner: Spawner) {
     //
     // ⚠  You can define your own FLASH_SIZE, but then you must build and
     //    flash a custom bootymcbootface with a matching memory.x!
-    const FLASH_SIZE: u32 = 2 * 1024 * 1024;       // 2 MB (default)
+    const FLASH_SIZE: u32 = 2 * 1024 * 1024; // 2 MB (default)
     // const FLASH_SIZE: u32 = 4 * 1024 * 1024;    // 4 MB
     // const FLASH_SIZE: u32 = 8 * 1024 * 1024;    // 8 MB
     // const FLASH_SIZE: u32 = 16 * 1024 * 1024;   // 16 MB
@@ -67,7 +67,7 @@ async fn main(_spawner: Spawner) {
 
     let flash = async_flash_wrapper(rmk::dfu::init_flash(
         p.FLASH,
-        0,               // storage_start (relative, dfu_rp partitions the flash)
+        0, // storage_start (relative, dfu_rp partitions the flash)
         STORAGE_END,
         STATE_OFFSET,
         STATE_SIZE,
@@ -134,7 +134,6 @@ async fn main(_spawner: Spawner) {
 
     let mut watchdog_runner = Rp2040Watchdog::default_runner(embassy_rp::watchdog::Watchdog::new(p.WATCHDOG));
 
-
     run_all!(
         matrix,
         storage,
@@ -142,8 +141,7 @@ async fn main(_spawner: Spawner) {
         wpm_processor,
         keyboard,
         host_service,
-        watchdog_runner
-        // dfu_lock
+        watchdog_runner // , dfu_lock
     )
     .await;
 }
