@@ -369,6 +369,10 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         }
                     }
                     GattEvent::Write(event) => {
+                        // Reject host-channel writes on an unencrypted link before
+                        // they reach the Rynk session, not just at the ATT reply.
+                        let encrypted = conn.raw().security_level()?.encrypted();
+
                         #[cfg(feature = "vial")]
                         let host_control_point_match = event.handle() == host_control_point.handle;
                         #[cfg(not(feature = "vial"))]
@@ -429,10 +433,14 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
 
                                 #[cfg(feature = "rynk")]
                                 if !data.is_empty() {
-                                    debug!("Got Rynk packet ({} bytes)", data.len());
-                                    // Awaits the pipe's backpressure when the rynk
-                                    // consumer falls behind.
-                                    crate::channel::RYNK_BLE_RX_PIPE.write_all(data).await;
+                                    if encrypted {
+                                        debug!("Got Rynk packet ({} bytes)", data.len());
+                                        // Awaits the pipe's backpressure when the rynk
+                                        // consumer falls behind.
+                                        crate::channel::RYNK_BLE_RX_PIPE.write_all(data).await;
+                                    } else {
+                                        warn!("Rynk: dropping {}-byte write on unencrypted link", data.len());
+                                    }
                                 }
 
                                 handled = true;
@@ -445,7 +453,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             }
                         }
 
-                        if conn.raw().security_level()?.encrypted() {
+                        if encrypted {
                             None
                         } else {
                             Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
@@ -681,7 +689,7 @@ pub(crate) async fn set_conn_params<
 async fn run_ble_keyboard<
     'a,
     'b,
-    'r,
+    #[cfg(feature = "host")] 'r,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 >(
     server: &'b Server<'_>,

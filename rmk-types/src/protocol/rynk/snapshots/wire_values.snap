@@ -1,23 +1,90 @@
-# Wire-format value snapshot — DO NOT edit by hand.
+# Wire-format TYPE snapshot — DO NOT edit by hand.
 # File: snapshots/wire_values.snap
-# Each entry is the postcard byte encoding of a fixed value. A diff here means
-# the wire format changed (either intentionally or by accident). If intentional,
-# bump ProtocolVersion::CURRENT and regenerate:
+# Each entry is the postcard byte encoding of one wire-type exemplar. A diff
+# here means a type's payload encoding changed (field reorder, variant
+# renumber, …). If intentional, bump ProtocolVersion::CURRENT and regenerate:
 #   UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rynk wire_values
 # Format: <label>  <hex bytes>
 
-ConnectionType::Ble                      01
-ConnectionType::Usb                      00
-KeyPosition{layer:0,row:5,col:13}        00 05 0d
-MatrixState{[0x05,0x00,0x20]}            03 05 00 20
-ProtocolVersion{1,0}                     01 00
-Result<(),RynkError>::Err(StorageFault)  01 02
-Result<(),RynkError>::Ok                 00
-RynkError::Internal                      03
-RynkError::Invalid                       05
-RynkError::Malformed                     00
-RynkError::NotReady                      01
-RynkError::StorageFault                  02
-RynkError::Unimplemented                 04
-StorageResetMode::Full                   00
-StorageResetMode::LayoutOnly             01
+Action::DefaultLayer(5)                   08 05
+Action::Key(Hid(A))                       01 00 04
+Action::KeyWithModifier(A,LShift)         03 00 04 02
+Action::KeyboardControl(Bootloader)       11 00
+Action::LayerOff(3)                       06 03
+Action::LayerOn(1)                        04 01
+Action::LayerOnWithModifier(2,LCtrl)      05 02 01
+Action::LayerToggle(4)                    07 04
+Action::LayerToggleOnly(6)                09 06
+Action::Light(RgbTog)                     10 07
+Action::Modifier(LCtrl)                   02 01
+Action::No                                00
+Action::OneShotKey(Hid(B))                0f 00 05
+Action::OneShotLayer(8)                   0d 08
+Action::OneShotModifier(LAlt)             0e 04
+Action::Special(GraveEscape)              12 00
+Action::TriLayerLower                     0a
+Action::TriLayerUpper                     0b
+Action::TriggerMacro(7)                   0c 07
+Action::User(9)                           13 09
+BatteryStatus::Available{Discharging,85}  01 01 01 55
+BatteryStatus::Unavailable                00
+BehaviorConfig{50,500,200,20}             32 f4 03 c8 01 14
+BleState::Advertising                     00
+BleState::Connected                       01
+BleState::Inactive                        02
+BleStatus{2,Connected}                    02 01
+ChargeState::Charging                     00
+ChargeState::Discharging                  01
+ChargeState::Unknown                      02
+Combo{[Single(A)],Morse(1),L2}            01 02 01 00 04 05 01 01 02
+ConnectionStatus{Configured,{1,Adv},Ble}  02 01 00 01
+ConnectionType::Ble                       01
+ConnectionType::Usb                       00
+DeviceCapabilities{1..16}                 01 02 03 04 05 06 07 08 09 0a 0b 01 00 01 0c 00 0d 0e 0f 10 01
+EncoderAction{Morse(3),No}                05 03 00
+Fork{Single(A),No,Morse(2)}               02 01 00 04 00 05 02 01 02 01 00 00 00 02 01
+GetEncoderRequest{1,2}                    01 02
+GetMacroRequest{1,256}                    01 80 02
+KeyAction::Morse(3)                       05 03
+KeyAction::No                             00
+KeyAction::Single(Action::Key(Hid(A)))    02 01 00 04
+KeyAction::Tap(Action::No)                03 00
+KeyAction::TapHold(Key(A),LayerOn(3))     04 01 00 04 04 03 00
+KeyAction::Transparent                    01
+KeyCode::Consumer(VolumeIncrement)        01 12
+KeyCode::Hid(A)                           00 04
+KeyCode::SystemControl(Sleep)             02 02
+KeyPosition{layer:0,row:5,col:13}         00 05 0d
+LedIndicator(Num|Scroll)                  05
+LockStatus{true,false,3}                  01 00 03
+MacroData{[0x01,0x02,0x03]}               03 01 02 03
+MatrixState{[0x05,0x00,0x20]}             03 05 00 20
+ModifierCombination(LCtrl|RGui)           81
+MorseProfile(Normal,200,150)              c8 81 d8 84 0c
+Morse{TAP->Key(A)}                        00 01 02 01 00 04
+MouseButtons(B1|B8)                       81
+ProtocolVersion::CURRENT                  00 01
+ProtocolVersion{1,0}                      01 00
+Result<(),RynkError>::Err(StorageFault)   01 02
+Result<(),RynkError>::Ok                  00
+RynkError::Internal                       03
+RynkError::Invalid                        05
+RynkError::Malformed                      00
+RynkError::NotReady                       01
+RynkError::StorageFault                   02
+RynkError::Unimplemented                  04
+RynkError::UnknownCmd                     06
+SetComboRequest{3,combo}                  03 01 02 01 00 04 05 01 01 02
+SetEncoderRequest{1,2,{Morse(3),No}}      01 02 05 03 00
+SetForkRequest{2,fork}                    02 02 01 00 04 00 05 02 01 02 01 00 00 00 02 01
+SetKeyRequest{{0,5,13},Morse(7)}          00 05 0d 05 07
+SetMacroRequest{1,2,[0x01,0x02,0x03]}     01 02 03 01 02 03
+SetMorseRequest{0,morse}                  00 00 01 02 01 00 04
+StateBits{LCtrl,Caps,B1}                  01 02 01
+StorageResetMode::Full                    00
+StorageResetMode::LayoutOnly              01
+UnlockChallenge{[(1,2),(3,4)]}            02 01 02 03 04
+UsbState::Configured                      02
+UsbState::Disabled                        00
+UsbState::Enabled                         01
+UsbState::Suspended                       03

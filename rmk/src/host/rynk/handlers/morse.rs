@@ -1,18 +1,24 @@
 //! Morse handlers.
 
+use rmk_types::morse::Morse;
+use rmk_types::protocol::rynk::command::{GetMorse, SetMorse};
+#[cfg(feature = "bulk")]
+use rmk_types::protocol::rynk::command::{GetMorseBulk, SetMorseBulk};
+#[cfg(feature = "bulk")]
+use rmk_types::protocol::rynk::{GetMorseBulkRequest, GetMorseBulkResponse, SetMorseBulkRequest};
 use rmk_types::protocol::rynk::{RynkError, SetMorseRequest};
 
 use super::super::RynkService;
+use super::Handle;
 
-impl<'a> RynkService<'a> {
-    pub(crate) async fn handle_get_morse(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (idx, _) = postcard::take_from_bytes::<u8>(payload).map_err(|_| RynkError::Malformed)?;
-        let morse = self.ctx.get_morse(idx).ok_or(RynkError::Invalid)?;
-        Self::write_response(&morse, payload)
+impl Handle<GetMorse> for RynkService<'_> {
+    async fn handle(&self, idx: u8) -> Result<Morse, RynkError> {
+        self.ctx.get_morse(idx).ok_or(RynkError::Invalid)
     }
+}
 
-    pub(crate) async fn handle_set_morse(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (r, _) = postcard::take_from_bytes::<SetMorseRequest>(payload).map_err(|_| RynkError::Malformed)?;
+impl Handle<SetMorse> for RynkService<'_> {
+    async fn handle(&self, r: SetMorseRequest) -> Result<(), RynkError> {
         if (r.index as usize) >= self.ctx.morses_len() {
             return Err(RynkError::Invalid);
         }
@@ -21,16 +27,20 @@ impl<'a> RynkService<'a> {
                 *m = r.config;
             })
             .await;
-        Self::write_response(&(), payload)
+        Ok(())
     }
+}
 
-    #[cfg(feature = "bulk_transfer")]
-    pub(crate) async fn handle_get_morse_bulk(&self, _payload: &mut [u8]) -> Result<usize, RynkError> {
+#[cfg(feature = "bulk")]
+impl Handle<GetMorseBulk> for RynkService<'_> {
+    async fn handle(&self, _req: GetMorseBulkRequest) -> Result<GetMorseBulkResponse, RynkError> {
         Err(RynkError::Unimplemented)
     }
+}
 
-    #[cfg(feature = "bulk_transfer")]
-    pub(crate) async fn handle_set_morse_bulk(&self, _payload: &mut [u8]) -> Result<usize, RynkError> {
+#[cfg(feature = "bulk")]
+impl Handle<SetMorseBulk> for RynkService<'_> {
+    async fn handle(&self, _req: SetMorseBulkRequest) -> Result<(), RynkError> {
         Err(RynkError::Unimplemented)
     }
 }

@@ -1,0 +1,74 @@
+[package]
+name = "rynk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Runtime-free host-side Rynk protocol client"
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["keyboard", "firmware", "rmk", "protocol", "host"]
+
+[dependencies]
+rmk-types.workspace = true
+embedded-io-async.workspace = true
+postcard.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+rmk = { path = "../rmk", default-features = false, features = [
+    "std",
+    "log",
+    "rynk",
+    "storage",
+    "bulk",
+    "_ble",
+    "split",
+    "steno",
+] }
+embassy-sync = "0.8"
+embassy-futures = "0.1"
+critical-section = { version = "1.2", features = ["std"] }
+tokio = { version = "1.47", features = ["test-util", "macros", "rt", "rt-multi-thread", "time"] }
+
+rynk-ble = { path = "rynk-ble" }
+rynk-serial = { path = "rynk-serial" }
+env_logger = "0.11"
+heapless = { version = "0.9", features = ["serde"] }
+
+[workspace]
+resolver = "2"
+members = [
+    "rynk-serial",
+    "rynk-ble",
+]
+default-members = [
+    ".",
+    "rynk-serial",
+    "rynk-ble",
+]
+
+[workspace.package]
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Host-side tooling for the Rynk protocol — RMK's native host communication channel"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/haobogu/rmk"
+version = "0.1.0"
+rust-version = "1.85"
+
+[workspace.dependencies]
+rmk-types = { path = "../rmk-types", features = ["host"] }
+embedded-io-async = "0.7"
+embedded-io-adapters = "0.7"
+postcard = { version = "1.1", default-features = false, features = ["experimental-derive"] }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+thiserror = "2.0"
+log = "0.4"
+tokio = "1.47"
+tokio-serial = "5.4"
+bluest = "0.6"
+futures-util = "0.3"

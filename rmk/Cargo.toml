@@ -105,7 +105,7 @@ features = ["split", "vial", "async_matrix", "_ble"]
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["defmt", "storage", "vial", "watchdog"]
+default = ["defmt", "storage", "rynk", "watchdog"]
 
 ## Enable hardware watchdog support
 watchdog = ["rmk-macro/watchdog"]
@@ -126,7 +126,7 @@ host_security = []
 rynk = ["host", "rmk-types/rynk"]
 
 ## Enable bulk transfer endpoints for the Rynk protocol on MCUs with sufficient RAM
-bulk_transfer = ["rynk", "rmk-types/bulk"]
+bulk = ["rynk", "rmk-types/bulk"]
 
 ## Enable the storage. The storage is optional to save memory
 storage = [
@@ -224,11 +224,16 @@ steno = ["rmk-types/steno"]
 ## Internal feature that indicates no USB is used, this feature will be auto-activated for some chips
 _no_usb = []
 
+## Internal feature marking chips whose USB peripheral enumerates at high speed
+## (480 Mbps). High-speed bulk endpoints must use a 512-byte max packet size;
+## auto-activated for the relevant chips.
+_usb_high_speed = []
+
 #! ### BLE feature flags
 #!
 #! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder of RMK repo for their usages.
 ## Enable feature if you want to use nRF54LM20 with BLE.
-nrf54lm20_ble = ["_nrf_ble"]
+nrf54lm20_ble = ["_nrf_ble", "_usb_high_speed"]
 ## Enable feature if you want to use nRF54L15 with BLE.
 nrf54l15_ble = ["_nrf_ble", "_no_usb"]
 ## Enable feature if you want to use nRF52840 with BLE.

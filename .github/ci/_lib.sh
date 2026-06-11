@@ -33,17 +33,27 @@ log_section() {
 }
 
 # Feature-set matrix for rmk check/clippy/test. An empty entry means
-# `--no-default-features` with no extra features on top. Kept here so
-# check.sh and test.sh stay in lockstep — a set added for check is also
-# exercised by tests, and vice versa.
+# `--no-default-features` with no extra features on top. This is the single
+# source of truth: check.sh, test.sh, and scripts/test_all.sh all consume it,
+# so a set added here is checked, clippy'd, and tested everywhere.
 RMK_FEATURESETS=(
     ""
     "log,std"
     "storage"
     "async_matrix,storage"
+    "vial,storage"
+    "vial,_ble"
+    "split,async_matrix"
+    "split,async_matrix,_ble"
+    "split,vial,async_matrix"
+    "split,vial,async_matrix,_ble"
     "split,vial,storage"
     "passkey_entry"
     "split,vial,storage,passkey_entry"
+    "vial,storage,steno"
+    "split,vial,storage,async_matrix,_ble,steno"
+    "rynk,bulk,_ble,split,storage,async_matrix"
+    "rynk,storage"
 )
 
 # Examples auto-discovery skiplist. Reasons:

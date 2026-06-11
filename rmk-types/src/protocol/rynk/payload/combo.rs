@@ -61,7 +61,7 @@ mod tests {
     use super::*;
     use crate::action::KeyAction;
     use crate::constants::COMBO_SIZE;
-    use crate::protocol::rynk::test_utils::{assert_max_size_bound, round_trip};
+    use crate::protocol::rynk::tests::{assert_max_size_bound, round_trip};
 
     /// Build a `Combo` filled to `COMBO_SIZE` actions plus a `Some` layer —
     /// the worst case for the manual `MaxSize` impl on `Combo`.
@@ -105,7 +105,7 @@ mod tests {
         use super::full_combo;
         use crate::combo::Combo;
         use crate::constants::BULK_SIZE;
-        use crate::protocol::rynk::test_utils::{assert_max_size_bound, round_trip};
+        use crate::protocol::rynk::tests::{assert_max_size_bound, round_trip};
 
         #[test]
         fn round_trip_set_combo_bulk_request_max_capacity() {

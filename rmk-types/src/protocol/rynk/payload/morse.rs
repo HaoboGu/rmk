@@ -64,7 +64,7 @@ mod tests {
     use crate::keycode::{HidKeyCode, KeyCode};
     use crate::modifier::ModifierCombination;
     use crate::morse::{MorsePattern, MorseProfile};
-    use crate::protocol::rynk::test_utils::{assert_max_size_bound, round_trip};
+    use crate::protocol::rynk::tests::{assert_max_size_bound, round_trip};
 
     /// Build a `Morse` whose `actions` `LinearMap` is filled to `MORSE_SIZE`
     /// distinct entries, each using a multi-field `Action` variant so both the
@@ -126,7 +126,7 @@ mod tests {
         use super::full_morse;
         use crate::constants::BULK_SIZE;
         use crate::morse::Morse;
-        use crate::protocol::rynk::test_utils::{assert_max_size_bound, round_trip};
+        use crate::protocol::rynk::tests::{assert_max_size_bound, round_trip};
 
         #[test]
         fn round_trip_set_morse_bulk_request_max_capacity() {
