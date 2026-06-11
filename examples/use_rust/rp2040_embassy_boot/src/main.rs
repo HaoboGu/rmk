@@ -119,9 +119,9 @@ async fn main(_spawner: Spawner) {
     // The lock state is checked by the DFU USB handler on each download start.
     // To use, create a `DfuLock` and poll it periodically:
     //
-    //   let unlock_keys: &[(u8, u8)] = &[(0, 0), (1, 1)];
-    //   let dfu_lock = rmk::dfu::DfuLock::new(unlock_keys);
-    //   // Call dfu_lock.process_unlock(&keymap).await in a loop.
+    // let unlock_keys: &[(u8, u8)] = &[(0, 0), (1, 1)];
+    // let mut dfu_lock = ::rmk::dfu::DfuLock::new(unlock_keys, &keymap);
+    // add dfu_lock to run_all!()
 
     let debouncer = DefaultDebouncer::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
@@ -134,6 +134,7 @@ async fn main(_spawner: Spawner) {
 
     let mut watchdog_runner = Rp2040Watchdog::default_runner(embassy_rp::watchdog::Watchdog::new(p.WATCHDOG));
 
+
     run_all!(
         matrix,
         storage,
@@ -142,6 +143,7 @@ async fn main(_spawner: Spawner) {
         keyboard,
         host_service,
         watchdog_runner
+        // dfu_lock
     )
     .await;
 }
