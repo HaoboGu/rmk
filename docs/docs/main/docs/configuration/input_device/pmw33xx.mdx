@@ -237,7 +237,8 @@ impl PointingProcessorController {
                 publish_event(PointingProcessorEvent {
                     device_id: 255,
                     mode: PointingMode::Sniper(rmk::input_device::pointing::SniperConfig {
-                        divisor: 8,
+                        multiplier: 1, // scales sensor delta before divisor
+                        divisor: 8, // divides motion for precision aiming
                         invert_x: false,
                         invert_y: false,
                     }),
@@ -247,8 +248,10 @@ impl PointingProcessorController {
                 publish_event(PointingProcessorEvent {
                     device_id: 255,
                     mode: PointingMode::Scroll(rmk::input_device::pointing::ScrollConfig {
-                        divisor_x: 16,
-                        divisor_y: 16,
+                        multiplier_x: 1, // scales X delta before divisor
+                        divisor_x: 16, // divides X motion for scrolling precision
+                        multiplier_y: 1, // scales Y delta before divisor
+                        divisor_y: 16, // divides Y motion for scrolling precision
                         invert_x: false,
                         invert_y: false,
                     }),
@@ -258,11 +261,11 @@ impl PointingProcessorController {
                 publish_event(PointingProcessorEvent {
                     device_id: 255,
                     mode: PointingMode::Caret(rmk::input_device::pointing::CaretConfig {
-                        disable_x: false,
-                        disable_y: false,
+                        disable_x: false, // disable horizontal caret taps
+                        disable_y: false, // disable vertical caret taps
                         invert_x: false,
                         invert_y: false,
-                        threshold: 100,
+                        threshold: 100, // minimum accumulated motion (|dx|+|dy|) to trigger a tap
                         keycode_up: HidKeyCode::Up,
                         keycode_down: HidKeyCode::Down,
                         keycode_left: HidKeyCode::Left,
