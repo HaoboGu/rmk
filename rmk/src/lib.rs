@@ -60,6 +60,8 @@ pub mod channel;
 pub mod config;
 pub mod core_traits;
 pub mod debounce;
+#[cfg(feature = "dfu")]
+pub mod dfu;
 #[cfg(feature = "display")]
 pub mod display;
 pub mod driver;
@@ -85,8 +87,6 @@ pub mod storage;
 pub mod usb;
 #[cfg(feature = "watchdog")]
 pub mod watchdog;
-#[cfg(feature = "dfu")]
-pub mod dfu;
 
 // Test-only helper that drives `embassy-time/mock-driver` from the
 // `#[cfg(test)]` modules under `src/`. Mirrors the same helper at
