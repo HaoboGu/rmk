@@ -37,9 +37,11 @@ pub struct MyBatteryReader {
 ```
 
 **Parameters:**
+
 - `publish = EventType` (required): The event type this device publishes.
 
 **How it works:**
+
 - `#[input_device]` implements both `InputDevice` and `Runnable` traits automatically.
 - You only need to implement a `read_<event_name>_event()` method that **returns** the event. The macro will automatically publish the returned event to the corresponding event channel.
 - The method name is derived from the event type name by converting it to snake_case and stripping the `Event` suffix:
@@ -168,13 +170,13 @@ impl InputSensor {
 
 ::: warning Beware of infinite event loops
 When combining input device and processor, be careful not to create event loops:
+
 - **Direct loop**: Subscribing to an event you publish yourself
 - **Indirect loop**: Device A subscribes to X and publishes Y, Device B subscribes to Y and publishes X — this forms a cycle
 - **Longer chains**: A→B→C→A loops are also possible (A publishes B, B publishes C, C publishes A)
 
 Event loops cause infinite cycles and hang your firmware.
 :::
-
 
 ## Related Documentation
 

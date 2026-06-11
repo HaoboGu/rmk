@@ -6,7 +6,7 @@ hero:
   text: A feature-rich Rust keyboard firmware
   tagline: Join our Discord server for discussions, support, and community collaboration!
   image:
-    src: /rmk_logo.svg
+    src: /logo.svg
     alt: RMK Logo
   actions:
     - theme: brand

@@ -1,33 +1,42 @@
 # Split keyboard
 
-RMK supports multi-split keyboard, which contains one central board and unlimited peripheral boards. The host is connected to the central board via USB or BLE.
+RMK supports multi-split keyboard, which contains one central board and unlimited peripheral boards.
+The host is connected to the central board via USB or BLE.
 
-::: info
-There are many examples for split keyboards in [RMK examples folder](https://github.com/HaoboGu/rmk/tree/main/examples/use_config).
-:::
+::: info There are many examples for split keyboards in
+[RMK examples folder](https://github.com/HaoboGu/rmk/tree/main/examples/use_config). :::
 
 ## Communication
 
 RMK supports both wired and wireless communication.
 
-Currently, the communication type indicates that how split central communicates with split peripherals. How the central talks with the host depends only on the central.
+Currently, the communication type indicates that how split central communicates with split
+peripherals. How the central talks with the host depends only on the central.
 
-- Wireless Split (BLE): The central connects to the host using BLE (Bluetooth Low Energy) or USB if the cable is plugged in.
+- Wireless Split (BLE): The central connects to the host using BLE (Bluetooth Low Energy) or USB if
+  the cable is plugged in.
 - Wired Split (Serial): The central connects to the host using USB only.
 
 ### Wired split
 
-RMK supports most existing opensource serial based split keyboard hardwares using UART, USART, PIO, etc.
+RMK supports most existing opensource serial based split keyboard hardwares using UART, USART, PIO,
+etc.
 
-::: details
-RMK uses `embedded-io-async` as the abstract layer of wired communication. Any device that implements `embedded-io-async::Read` and `embedded-io-async::Write` traits can be used as RMK split central/peripheral. That unlocks many possibilities of RMK's split keyboard.
+::: details RMK uses `embedded-io-async` as the abstract layer of wired communication. Any device
+that implements `embedded-io-async::Read` and `embedded-io-async::Write` traits can be used as RMK
+split central/peripheral. That unlocks many possibilities of RMK's split keyboard.
 
-The most common implementations of those traits are serial ports(UART/USART), such as `embassy_rp::uart::BufferedUart` and `embassy_stm32::usart::BufferedUart`. 
-:::
+The most common implementations of those traits are serial ports(UART/USART), such as
+`embassy_rp::uart::BufferedUart` and `embassy_stm32::usart::BufferedUart`. :::
 
-For keyboards connected using only a single wire, e.g. a 3-pole TRS cable, for the **RP2040 only** RMK implements a half-duplex UART serial port, `rmk::split::rp::uart::BufferedUart`, using one or both of the Programmable IO (PIO) blocks available on the RP2040 chip. The PIO serial port also supports full-duplex over two wires, and can be used when the central/peripheral connection does not use the pins connected to the chip's standard UART ports.
+For keyboards connected using only a single wire, e.g. a 3-pole TRS cable, for the **RP2040 only**
+RMK implements a half-duplex UART serial port, `rmk::split::rp::uart::BufferedUart`, using one or
+both of the Programmable IO (PIO) blocks available on the RP2040 chip. The PIO serial port also
+supports full-duplex over two wires, and can be used when the central/peripheral connection does not
+use the pins connected to the chip's standard UART ports.
 
-To use the RP2040's PIO UART driver, you need to enable the `rp2040` feature gate in your `Cargo.toml`:
+To use the RP2040's PIO UART driver, you need to enable the `rp2040` feature gate in your
+`Cargo.toml`:
 
 ```toml {3}
 rmk = { version = "...", features = [
@@ -38,11 +47,10 @@ rmk = { version = "...", features = [
 
 ### Wireless split
 
-RMK supports BLE wireless split on nRF52, ESP32 and Pi Pico W right now. For BLE split, the central and peripheral parts are connected via BLE, and the host is connected to the central via USB or BLE.
+RMK supports BLE wireless split on nRF52, ESP32 and Pi Pico W right now. For BLE split, the central
+and peripheral parts are connected via BLE, and the host is connected to the central via USB or BLE.
 
-::: tip
-[storage](./storage.md) feature is required for BLE split.
-:::
+::: tip [storage](./storage.md) feature is required for BLE split. :::
 
 ## Split keyboard project
 
@@ -57,7 +65,8 @@ keyboard.toml
 Cargo.toml
 ```
 
-In `Cargo.toml`, the `split` feature should be enabled, and the `[[bin]]` section should be added for both central and peripheral:
+In `Cargo.toml`, the `split` feature should be enabled, and the `[[bin]]` section should be added
+for both central and peripheral:
 
 ```toml
 rmk = { version = "...", features = [
@@ -86,4 +95,5 @@ path = "src/peripheral2.rs"
 
 ## Configuration
 
-For the detailed configuration of split keyboards, refer to [Split Keyboard Configuration](../configuration/split_keyboard) documentation
+For the detailed configuration of split keyboards, refer to
+[Split Keyboard Configuration](../configuration/split_keyboard) documentation

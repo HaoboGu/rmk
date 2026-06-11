@@ -1,23 +1,29 @@
 import * as path from 'node:path'
 import { defineConfig } from '@rspress/core'
-import {pluginSitemap } from "@rspress/plugin-sitemap"
+import { pluginLlms } from '@rspress/plugin-llms';
+import { pluginSitemap } from '@rspress/plugin-sitemap'
+import { pluginTailwindcss } from '@rsbuild/plugin-tailwindcss'
 
 import versions from './versions.json' with { type: 'json' }
 
 export default defineConfig({
   root: path.join(__dirname, 'docs'),
   title: 'RMK',
-  icon: '/rmk_logo.svg',
+  icon: '/favicon.ico',
   logo: {
-    light: '/rmk_logo.svg',
-    dark: '/rmk_logo.svg'
+    light: '/logo.svg',
+    dark: '/logo.svg'
   },
   outDir: 'dist',
   plugins: [
     pluginSitemap({
-      siteUrl: "https://rmk.rs"
+      siteUrl: 'https://rmk.rs'
     }),
+    pluginLlms()
   ],
+  builderConfig: {
+    plugins: [pluginTailwindcss()]
+  },
   multiVersion: {
     default: versions.map((branch) => branch.split('/').pop()!)[0],
     versions: ['main', ...versions.map((branch) => branch.split('/').pop()!)]
@@ -27,6 +33,7 @@ export default defineConfig({
   },
   globalStyles: path.join(__dirname, 'docs/styles/index.css'),
   themeConfig: {
+    llmsUI: true,
     socialLinks: [
       {
         icon: 'github',

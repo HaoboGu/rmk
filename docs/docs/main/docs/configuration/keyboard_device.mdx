@@ -1,10 +1,12 @@
 # Keyboard Device
 
-Keyboard device configuration contains keyboard name, USB VID/PID, etc, which is the information about your keyboard that appears to the operating system or identifies your device. 
+Keyboard device configuration contains keyboard name, USB VID/PID, etc, which is the information
+about your keyboard that appears to the operating system or identifies your device.
 
 ## Basic Configuration
 
-The keyboard device info is defined in `[keyboard]` section of `keyboard.toml`, or `device_config` field in `RmkConfig` struct:
+The keyboard device info is defined in `[keyboard]` section of `keyboard.toml`, or `device_config`
+field in `RmkConfig` struct:
 
 import { Rust, Toml, Tab, Tabs } from '@theme'
 
@@ -48,7 +50,8 @@ let rmk_config = RmkConfig {
 
 ::: info
 
-To make your keyboard to be recognized by Vial, the `serial_number` shall start with `vial:f64c2b3c:`
+To make your keyboard to be recognized by Vial, the `serial_number` shall start with
+`vial:f64c2b3c:`
 
 :::
 
@@ -77,11 +80,12 @@ board = "nice!nano_v2"  # Pre-configured board
 - **Nordic nRF52 Series**: `nrf52840`, `nrf52833`, `nrf52832`, `nrf52811`, `nrf52810`
 - **Espressif ESP32 Series**: `esp32c3`, `esp32c6`, `esp32s3`
 - **Raspberry Pi**: `rp2040`
-- **STM32 Series**: Any STM32 chip supported by [embassy-stm32](https://github.com/embassy-rs/embassy/blob/main/embassy-stm32/Cargo.toml) with USB capability
+- **STM32 Series**: Any STM32 chip supported by
+  [embassy-stm32](https://github.com/embassy-rs/embassy/blob/main/embassy-stm32/Cargo.toml) with USB
+  capability
 
-::: info
-`rp2350` is currently supported via the Rust API examples, but `keyboard.toml` chip selection only recognizes `rp2040` for now.
-:::
+::: info `rp2350` is currently supported via the Rust API examples, but `keyboard.toml` chip
+selection only recognizes `rp2040` for now. :::
 
 #### Supported Development Boards
 
@@ -90,13 +94,12 @@ board = "nice!nano_v2"  # Pre-configured board
 - `pi_pico_w` - Raspberry Pi Pico W with WiFi/BLE
 - `XIAO BLE` - Seeed Studio XIAO nRF52840
 
-::: tip
-Board names are case-sensitive.
-:::
+::: tip Board names are case-sensitive. :::
 
 ## USB Configuration
 
-For microcontrollers that lack full USB device functionality (such as the nRF52832 or ESP32-C3), USB support must be explicitly disabled:
+For microcontrollers that lack full USB device functionality (such as the nRF52832 or ESP32-C3), USB
+support must be explicitly disabled:
 
 ```toml
 [keyboard]

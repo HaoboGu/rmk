@@ -26,8 +26,8 @@ There are a few more things that you need to do:
 1. Enable the `exti` feature for your `embassy-stm32` dependency in `Cargo.toml`
 2. Ensure that your input pins don't share the same EXTI channel
 3. For configuration:
-    - If you're using `keyboard.toml`, you are all set. The `[rmk_keyboard]` macro will automatically check your `Cargo.toml` and handle it for you.
-    - If you're using Rust code, you'll need to use `ExtiInput` for your input pins:
+   - If you're using `keyboard.toml`, you are all set. The `[rmk_keyboard]` macro will automatically check your `Cargo.toml` and handle it for you.
+   - If you're using Rust code, you'll need to use `ExtiInput` for your input pins:
 
 ```rust
     let pd9 = ExtiInput::new(p.PD9,  p.EXTI9, Pull::Down);
@@ -44,11 +44,14 @@ There are a few more things that you need to do:
 Some boards, such as the nice!nano have an external 3.3V regulator that can be used to power the LEDs. If not used, the regulator can be disabled by pulling `P0_13` low to safe power.
 
 In the case of the nice!nano, this can be done by adding the following line to `main.rs`
+
 ```rust
     // Disable external voltage regulator
     Output::new(peripherals.P0_13, Level::Low, OutputDrive::Standard).persist();
 ```
+
 or the following snippet to your `keyboard.toml`:
+
 ```toml
 [[output]]
 pin = "P0_13"
