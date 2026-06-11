@@ -77,9 +77,11 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                 let state_size = dfu.state_size;
                 let dfu_offset = dfu.dfu_offset;
                 let dfu_size = dfu.dfu_size;
-                let dfu_led = dfu.led.as_ref().map(|c| {
-                    convert_gpio_str_to_output_pin(&hardware.chip, c.pin.clone(), false)
-                });
+                let dfu_led = match &dfu.led {
+                    Some(c) if c.pin == "none" => None,
+                    Some(c) => Some(convert_gpio_str_to_output_pin(&hardware.chip, c.pin.clone(), false)),
+                    None => Some(convert_gpio_str_to_output_pin(&hardware.chip, "PIN_25".to_string(), false)),
+                };
                 let dfu_led_init = match dfu_led {
                     Some(pin) => quote! {
                         ::rmk::dfu::set_led(Some(#pin));
