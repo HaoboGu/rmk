@@ -119,7 +119,7 @@ let pmw3610_motion = Some(Input::new(p.P0_02, Pull::Up));
 
 let pmw3610_spi = BitBangSpiBus::new(pmw3610_sck, pmw3610_sdio);
 
-const POINTING_DEV_ID: u8 = 0 // this ID can be anything form 0-255. Just make sure you don't use the same number twice for different sensors to avoid confusion. 
+const POINTING_DEV_ID: u8 = 0; // this ID can be anything from 0-255. Just make sure you don't use the same number twice for different sensors to avoid confusion.
 let mut pmw3610_device = PointingDevice::<Pmw3610<_, _, _>>::new(
     POINTING_DEV_ID
     pmw3610_spi,
@@ -130,7 +130,7 @@ let mut pmw3610_device = PointingDevice::<Pmw3610<_, _, _>>::new(
 
 // If you want to customize the report rate (Hz):
 // let mut pmw3610_device = Pmw3610Device::with_report_hz(
-//     POINTING_DEV_ID
+//     POINTING_DEV_ID,
 //     pmw3610_spi,
 //     pmw3610_cs,
 //     pmw3610_motion,
@@ -152,14 +152,14 @@ This should be added to the `central.rs`-File even if the sensor is on split per
 ```rust
     use rmk::input_device::pointing::{ PointingProcessor, PointingProcessorConfig };
 
-    let pmw3360_proc_config = PointingProcessorConfig {
+    let pmw3610_proc_config = PointingProcessorConfig {
         // invert_x: true, // invert axis if neccesary
         // invert_y: true,
         // swap_y: true,
         ..Default::default()
     };
 
-    let mut pmw3360_processor = PointingProcessor::new(&keymap, pmw3360_proc_config);
+    let mut pmw3360_processor = PointingProcessor::new(&keymap, pmw3610_proc_config);
 
 run_all!(pmw3610_processor, /* other processors and devices */)
 ```
@@ -263,7 +263,7 @@ import { Tab, Tabs, Rust, Toml } from '@theme'
 <Tabs>
 <Tab label={<Toml />}>
 
-```toml title="src/central.rs"
+```rust title="src/central.rs"
 // always into central.rs/ main.rs, regardless of where the sensor is connected.
 #![no_main]
 #![no_std]
