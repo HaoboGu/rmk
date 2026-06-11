@@ -21,7 +21,7 @@ You need the [bootymcbootface](https://codeberg.org/Schievel/bootymcbootface/) b
 - `bootymcbootface_8MB.uf2` – for 8 MB flash
 - `bootymcbootface_16MB.uf2` – for 16 MB flash
 
-The **2 MB version works with larger flash chips too** (e.g. 4 MB or 8 MB). It only uses the first 2 MB of flash, the rest remains unused. If you want to use the full flash, pick the matching variant.
+The **2 MB version works with larger flash chips too** (e.g. 4 MB or 8 MB). It only uses the first 2 MB of flash, the rest remains unused. Since RMK is not so big, a flash of 2MB is sufficient most of the times. (But keep in mind when using embassy-boot, the flash is partitioned into ACTIVE and DFU and the firmware has to fit into the ACTIVE partition. Which is only 512K on a 2MB RP2040 then.)  If you want to use the full flash, pick the matching variant.
 
 ### Compile RMK with DFU support
 
@@ -31,8 +31,8 @@ When using `rmkit init`, you will be asked whether you want to use embassy-boot 
 
 If configuring manually, ensure:
 
-- `Cargo.toml` uses the `dfu_rp` feature instead of `rp2040`
-- `keyboard.toml` has `[storage]` and `[dfu]` sections
+- `Cargo.toml` uses the `dfu_rp` feature
+- `keyboard.toml` has `[dfu]` section
 - The flash partitioning in `memory.x` matches your bootloader and flash size (see `rmk/examples/use_rust/rp2040_embassy_boot/`)
 
 **Important:** The bootymcbootface version and the RMK compilation must use the **same flash size**. Example: bootymcbootface 2 MB → RMK with 2 MB flash configuration.
@@ -41,6 +41,10 @@ If configuring manually, ensure:
 You can still flash firmware via UF2 or probe-rs — as long as it was built with the correct `memory.x` for the embassy-boot partition layout (i.e. with `dfu_rp` feature), it will land in the active firmware slot and leave bootymcbootface untouched.
 
 If you flash a RMK firmware built with a **normal** `memory.x` (without embassy-boot), it will start at flash address `0x0` and **overwrite bootymcbootface**.
+:::
+
+::: tip 
+the embassy-boot bootloader and RMK will never overwrite the RP2040’s uf2 bootloader. It exists in ROM and can not be overwritten
 :::
 
 ## Step-by-step guide
@@ -57,13 +61,11 @@ The first time, you need to flash the bootloader first, then RMK.
 3. Copy the matching `bootymcbootface_<size>.uf2` to the drive
 4. The RP2040 reboots – the bootloader is now active
 
-*(If an LED is configured, it will turn on during a DFU transfer and turn off when done.)*
-
 **Method B – via debug probe (probe-rs):**
 ```shell
-probe-rs run --chip RP2040 bootymcbootface_<size>.elf
+probe-rs run --chip RP2040 bootymcbootface_<size> (elf)
 # or
-cargo run --release
+cargo run --release // in the bootymcbootface project directory
 ```
 (Make sure your project targets the bootloader binary)
 
@@ -72,7 +74,7 @@ cargo run --release
 Now flash the actual RMK firmware. The bootloader stays in place.
 
 **Method A – via UF2:**
-The embassy-boot bootloader also provides a UF2 mode. Put the board into bootloader mode (double-tap reset or BOOTSEL, depending on the board), then copy the RMK firmware `.uf2` file to the drive.
+Put the board into bootloader mode (hold BOOTSEL button, plug in USB, release), then copy the RMK firmware `.uf2` file to the appearing `RPI-RP2` drive.
 
 **Method B – via debug probe (probe-rs):**
 ```shell
@@ -96,7 +98,7 @@ rust-objcopy -O binary target/thumbv6m-none-eabi/release/your-firmware your-firm
 ```shell
 cargo make bin --release
 ```
-(Requires a `Makefile.toml` with a `bin` task — the generated template already includes one.)
+(Requires a `Makefile.toml` with a `bin` task — the generated template from `rmkit` already includes one.)
 
 #### Flash via dfu-util
 
@@ -116,28 +118,28 @@ Find your device's VID:PID via `lsusb` on Linux or Device Manager (under "Univer
 - macOS: `brew install dfu-util`
 - Windows: Download from [dfu-util.sourceforge.net](https://dfu-util.sourceforge.net/)
 
-`dfu-util` will automatically detect the board — the RMK firmware exposes a DFU USB interface on every boot. No need to press BOOTSEL or trigger a special mode. (With the optional `dfu_lock` feature, DFU downloads start in a locked state and require a physical key press to unlock — see below.)
+`dfu-util` will automatically detect the board — the RMK firmware exposes a DFU USB interface at runtime. No need to press BOOTSEL or trigger a special mode. (With the optional `dfu_lock` feature, DFU downloads require a physical key press to unlock — see below.)
 
 #### Unlocking DFU (optional, dfu_lock)
 
-If your firmware was compiled with the `dfu_lock` feature, DFU starts in a **locked** state. To unlock:
+If your RMK was compiled with the `dfu_lock` feature, DFU starts in a **locked** state. To unlock:
 
 1. Run `dfu-util -D your-firmware.bin` — the download will be rejected, but this signals the keyboard to open the unlock window
 2. The DFU LED turns **solid on** — you have **10 seconds** to press the `unlock_keys` combination configured in `keyboard.toml` (e.g. `[[0, 0], [1, 1]]`)
 3. Once the keys are pressed, the LED blinks **"D F U"** in Morse code (`-.. ..-. ..-`) — the DFU lock is released for another **10 seconds**
-4. Re-run `dfu-util -D your-firmware.bin` — this time the download proceeds, the LED stays on, and the firmware is updated
+4. Re-run `dfu-util -D your-firmware.bin` — this time the download proceeds, the LED flickers, and the firmware is updated
 5. After the update completes, the LED turns off and the board reboots
 
 If you don't press the unlock keys within the first 10 seconds, the window closes and the LED turns off. If no DFU download starts within the unlocked 10 seconds, the lock re-engages automatically. In both cases just repeat from step 1.
 
 #### LED behavior during DFU transfer (optional)
 
-If an LED pin is configured in `keyboard.toml` (`[dfu] led = "PIN_25"`):
+If an LED pin is configured in `keyboard.toml` (default PIN_25, if not `[dfu] led = "none"`):
 
 | State | LED behavior |
 |---|---|---|
 | Unlock window open (waiting for keys) | Solid on |
 | DFU unlocked (ready for dfu-util) | Blinks Morse "D F U" |
 | DFU download started | On |
-| Writing data blocks | Toggles on each block |
+| Writing data blocks | Toggles on each block (flickers) |
 | DFU finished / system reset | Off |

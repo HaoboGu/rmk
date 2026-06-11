@@ -20,10 +20,11 @@ flash_size = 2097152
 # (Optional) Flash page size in bytes (4096 for RP2040).
 page_size = 4096
 
-# (Optional) DFU activity LED pin, e.g. "PIN_25".
-led = "PIN_25"
+# (Optional) DFU activity LED pin, default "PIN_25".
+led = "PIN_25" 
+led = "none" to omit DFU LED 
 
-# (Optional) Unlock keys for dfu_lock (physical matrix positions). Only works with dfu_lock feature.
+# (Optional) Unlock keys for dfu_lock (physical matrix positions). Only works with dfu_lock feature enabled.
 # Format: [[row, col], [row, col], ...]
 unlock_keys = [[0, 0], [1, 1]]
 
@@ -39,6 +40,7 @@ unlock_keys = [[0, 0], [1, 1]]
 
 ```rust title="main.rs"
 // Partition layout (must match bootloader's memory.x)
+// only change FLASH_SIZE when using bootymcbootface, the rest ist automatically calculated.
 const FLASH_SIZE: u32 = 2 * 1024 * 1024;
 const PAGE_SIZE: u32 = 4096;
 const HALF_FLASH: u32 = FLASH_SIZE / 4;
@@ -50,9 +52,18 @@ const STORAGE_END: u32 = FLASH_SIZE - 32 * PAGE_SIZE;
 
 // Initialize DFU flash + partitions (returns storage partition)
 let flash = async_flash_wrapper(rmk::dfu::init_flash(
-    p.FLASH,
-    0,            // storage_start
-    STORAGE_END,  // storage_end
+    p.FLASH,// Optional: DFU lock with physical key unlock. Requires the `dfu_lock` Cargo feature.
+let unlock_keys: &[(u8, u8)] = &[(0, 0), (1, 1)];
+let dfu_lock = ::rmk::dfu::DfuLock::new(&DFU_UNLOCK_KEYS);
+// Then run the dfu_lock in run_all!()
+// ...
+	run_all!(
+		// other processors
+		dfu_lock,
+	)
+
+    0, // storage_start, this is the address inside the storage partition of the flash, not the actual flash address
+    STORAGE_END,
     STATE_OFFSET,
     STATE_SIZE,
     DFU_OFFSET,
@@ -66,8 +77,14 @@ rmk::dfu::set_led(Some(Output::new(p.PIN_25, Level::Low)));
 rmk::dfu::mark_booted();
 
 // Optional: DFU lock with physical key unlock. Requires the `dfu_lock` Cargo feature.
-// Unlock is handled automatically by the #[rmk_keyboard] macro — no manual loop needed.
-// let unlock_keys: &[(u8, u8)] = &[(0, 0), (1, 1)];
+let unlock_keys: &[(u8, u8)] = &[(0, 0), (1, 1)];
+let mut dfu_lock = ::rmk::dfu::DfuLock::new(unlock_keys, &keymap);
+// Then add dfu_lock in run_all!()
+// ...
+	run_all!(
+		// other processors ... 
+		dfu_lock,
+	)
 ```
 
 </Tab>
@@ -84,6 +101,8 @@ The bootloader divides flash into regions. The defaults follow the [bootymcbootf
 | Active firmware | `0x7000` (28 KB) | `flash_size / 4` |
 | DFU download | follows active | `flash_size / 4 + page_size` |
 | Storage | follows DFU | rest of flash |
+
+The DFU partition size follows embassy-boot guidelines, the additional page is used for status information during flashing.
 
 All `[dfu]` fields are optional. The partition values are auto-calculated from `flash_size` and `page_size` using the bootymcbootface formula. If you supply any of `state_offset`, `state_size`, `dfu_offset`, or `dfu_size` directly, auto-calculation is disabled and your values are used as-is.
 
