@@ -61,18 +61,13 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
             }
             #[cfg(feature = "dfu_rp")]
             {
-                let storage = hardware.storage.as_ref();
-                let storage_start = storage.map(|s| s.start_addr).unwrap_or(0) as u32;
-                let storage_num_sectors = storage.map(|s| s.num_sectors).unwrap_or(0) as u32;
-                let erase_size = 4096u32;
-                let storage_end = if storage_start == 0 {
-                    2 * 1024 * 1024 - erase_size * storage_num_sectors
-                } else {
-                    storage_start + storage_num_sectors * erase_size
-                };
                 let dfu = hardware.dfu.as_ref().expect(
                     "[dfu] section is required in keyboard.toml (or chip default) when dfu_rp is enabled"
                 );
+                let storage_num_sectors = hardware.storage.as_ref().map(|s| s.num_sectors).unwrap_or(32) as u32;
+                let erase_size = 4096u32;
+                let storage_start = dfu.dfu_offset + dfu.dfu_size;
+                let storage_end = storage_start + storage_num_sectors * erase_size;
                 let state_offset = dfu.state_offset;
                 let state_size = dfu.state_size;
                 let dfu_offset = dfu.dfu_offset;
