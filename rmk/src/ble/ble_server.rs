@@ -12,7 +12,7 @@ use crate::hid::{CompositeReport, CompositeReportType, HidError, HidWriterTrait,
 pub(crate) const CCCD_TABLE_SIZE: usize = trouble_host::config::CLIENT_ATT_TABLE_SIZE;
 
 #[cfg(feature = "rynk")]
-use crate::host::rynk::RYNK_BLE_CHUNK_SIZE;
+use rmk_types::protocol::rynk::{RYNK_BLE_CHUNK_SIZE, RYNK_INPUT_CHAR_UUID, RYNK_OUTPUT_CHAR_UUID, RYNK_SERVICE_UUID};
 
 #[cfg(feature = "vial")]
 #[gatt_server]
@@ -51,12 +51,12 @@ pub(crate) struct Server {
 /// `gatt_events_task` forwards `output_data` writes into
 /// [`crate::channel::RYNK_BLE_RX_PIPE`] for [`crate::ble::rynk::run_host_ble`] to drain.
 #[cfg(feature = "rynk")]
-#[gatt_service(uuid = "10900067-537f-4f0a-9b55-929e271f61ab")]
+#[gatt_service(uuid = RYNK_SERVICE_UUID)]
 pub(crate) struct RynkService {
     #[descriptor(uuid = "2908", read, value = [0u8, 1u8])]
-    #[characteristic(uuid = "80f9319b-0c74-43a5-9738-c59d6dda3db9", read, notify)]
+    #[characteristic(uuid = RYNK_INPUT_CHAR_UUID, read, notify)]
     pub(crate) input_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
-    #[characteristic(uuid = "19802524-6f90-4346-93c2-63dbc509ab55", read, write, write_without_response)]
+    #[characteristic(uuid = RYNK_OUTPUT_CHAR_UUID, read, write, write_without_response)]
     pub(crate) output_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
 }
 

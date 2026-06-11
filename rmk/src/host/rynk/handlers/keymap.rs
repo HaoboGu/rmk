@@ -1,61 +1,61 @@
 //! Keymap and encoder handlers (encoder is part of keymap's `0x01xx` Cmd group).
 
+use rmk_types::action::{EncoderAction, KeyAction};
+use rmk_types::protocol::rynk::command::{
+    GetDefaultLayer, GetEncoderAction, GetKeyAction, SetDefaultLayer, SetEncoderAction, SetKeyAction,
+};
+#[cfg(feature = "bulk")]
+use rmk_types::protocol::rynk::command::{GetKeymapBulk, SetKeymapBulk};
 use rmk_types::protocol::rynk::{GetEncoderRequest, KeyPosition, RynkError, SetEncoderRequest, SetKeyRequest};
+#[cfg(feature = "bulk")]
+use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
 
 use super::super::RynkService;
+use super::Handle;
 
-impl<'a> RynkService<'a> {
-    pub(crate) async fn handle_get_key_action(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (pos, _) = postcard::take_from_bytes::<KeyPosition>(payload).map_err(|_| RynkError::Malformed)?;
-        let (rows, cols, num_layers) = self.ctx.keymap_dimensions();
-        // An out-of-range position is a semantic error — reads and writes use
-        // the same bounds (see `handle_set_key_action`).
-        if (pos.layer as usize) >= num_layers || (pos.row as usize) >= rows || (pos.col as usize) >= cols {
-            return Err(RynkError::Invalid);
-        }
-        let action = self.ctx.get_action(pos.layer, pos.row, pos.col);
-        Self::write_response(&action, payload)
+impl Handle<GetKeyAction> for RynkService<'_> {
+    async fn handle(&self, pos: KeyPosition) -> Result<KeyAction, RynkError> {
+        self.check_key_position(&pos)?;
+        Ok(self.ctx.get_action(pos.layer, pos.row, pos.col))
     }
+}
 
-    pub(crate) async fn handle_set_key_action(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (set, _) = postcard::take_from_bytes::<SetKeyRequest>(payload).map_err(|_| RynkError::Malformed)?;
-        let (rows, cols, num_layers) = self.ctx.keymap_dimensions();
-        if (set.position.layer as usize) >= num_layers
-            || (set.position.row as usize) >= rows
-            || (set.position.col as usize) >= cols
-        {
-            return Err(RynkError::Invalid);
-        }
+impl Handle<SetKeyAction> for RynkService<'_> {
+    async fn handle(&self, set: SetKeyRequest) -> Result<(), RynkError> {
+        self.check_key_position(&set.position)?;
         self.ctx
             .set_action(set.position.layer, set.position.row, set.position.col, set.action)
             .await;
-        Self::write_response(&(), payload)
+        Ok(())
     }
+}
 
-    pub(crate) async fn handle_get_default_layer(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let layer = self.ctx.default_layer();
-        Self::write_response(&layer, payload)
+impl Handle<GetDefaultLayer> for RynkService<'_> {
+    async fn handle(&self, _: ()) -> Result<u8, RynkError> {
+        Ok(self.ctx.default_layer())
     }
+}
 
-    pub(crate) async fn handle_set_default_layer(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (layer, _) = postcard::take_from_bytes::<u8>(payload).map_err(|_| RynkError::Malformed)?;
+impl Handle<SetDefaultLayer> for RynkService<'_> {
+    async fn handle(&self, layer: u8) -> Result<(), RynkError> {
         let (_, _, num_layers) = self.ctx.keymap_dimensions();
         if (layer as usize) >= num_layers {
             return Err(RynkError::Invalid);
         }
         self.ctx.set_default_layer(layer).await;
-        Self::write_response(&(), payload)
+        Ok(())
     }
+}
 
-    pub(crate) async fn handle_get_encoder_action(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (r, _) = postcard::take_from_bytes::<GetEncoderRequest>(payload).map_err(|_| RynkError::Malformed)?;
+impl Handle<GetEncoderAction> for RynkService<'_> {
+    async fn handle(&self, r: GetEncoderRequest) -> Result<EncoderAction, RynkError> {
         self.check_encoder_bounds(r.layer, r.encoder_id)?;
-        let action = self.ctx.get_encoder(r.layer, r.encoder_id).ok_or(RynkError::Invalid)?;
-        Self::write_response(&action, payload)
+        self.ctx.get_encoder(r.layer, r.encoder_id).ok_or(RynkError::Invalid)
     }
+}
 
-    pub(crate) async fn handle_set_encoder_action(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (r, _) = postcard::take_from_bytes::<SetEncoderRequest>(payload).map_err(|_| RynkError::Malformed)?;
+impl Handle<SetEncoderAction> for RynkService<'_> {
+    async fn handle(&self, r: SetEncoderRequest) -> Result<(), RynkError> {
         self.check_encoder_bounds(r.layer, r.encoder_id)?;
         // No clean "set whole encoder" accessor exists yet — split into two writes.
         self.ctx
@@ -64,7 +64,19 @@ impl<'a> RynkService<'a> {
         self.ctx
             .set_encoder_counter_clockwise(r.layer, r.encoder_id, r.action.counter_clockwise)
             .await;
-        Self::write_response(&(), payload)
+        Ok(())
+    }
+}
+
+impl RynkService<'_> {
+    /// `Invalid` for a key position outside the live keymap geometry. Reads and
+    /// writes share these bounds.
+    fn check_key_position(&self, pos: &KeyPosition) -> Result<(), RynkError> {
+        let (rows, cols, num_layers) = self.ctx.keymap_dimensions();
+        if (pos.layer as usize) >= num_layers || (pos.row as usize) >= rows || (pos.col as usize) >= cols {
+            return Err(RynkError::Invalid);
+        }
+        Ok(())
     }
 
     /// `Invalid` for an out-of-range encoder. Checks `layer` and `encoder_id`
@@ -78,14 +90,18 @@ impl<'a> RynkService<'a> {
         }
         Ok(())
     }
+}
 
-    #[cfg(feature = "bulk_transfer")]
-    pub(crate) async fn handle_get_keymap_bulk(&self, _payload: &mut [u8]) -> Result<usize, RynkError> {
+#[cfg(feature = "bulk")]
+impl Handle<GetKeymapBulk> for RynkService<'_> {
+    async fn handle(&self, _req: GetKeymapBulkRequest) -> Result<GetKeymapBulkResponse, RynkError> {
         Err(RynkError::Unimplemented)
     }
+}
 
-    #[cfg(feature = "bulk_transfer")]
-    pub(crate) async fn handle_set_keymap_bulk(&self, _payload: &mut [u8]) -> Result<usize, RynkError> {
+#[cfg(feature = "bulk")]
+impl Handle<SetKeymapBulk> for RynkService<'_> {
+    async fn handle(&self, _req: SetKeymapBulkRequest) -> Result<(), RynkError> {
         Err(RynkError::Unimplemented)
     }
 }

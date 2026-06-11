@@ -150,9 +150,28 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     let mut usb_config = embassy_usb::Config::new(keyboard_config.vid, keyboard_config.pid);
     usb_config.manufacturer = Some(keyboard_config.manufacturer);
     usb_config.product = Some(keyboard_config.product_name);
-    usb_config.serial_number = Some(keyboard_config.serial_number);
+    // The Rynk host library needs a marker to find RMK keyboards without
+    // probing every serial device on the system.
+    // `RYNK_SERIAL_MAGIC` is prepended to the USB serial number as the marker
+    // of Rynk devices.
+    #[cfg(feature = "rynk")]
+    let serial_number = {
+        static SERIAL: StaticCell<heapless::String<64>> = StaticCell::new();
+        let s = SERIAL.init(heapless::String::new());
+        let _ = s.push_str(rmk_types::protocol::rynk::RYNK_SERIAL_MAGIC);
+        let _ = s.push_str(keyboard_config.serial_number);
+        s.as_str()
+    };
+    #[cfg(not(feature = "rynk"))]
+    let serial_number = keyboard_config.serial_number;
+    usb_config.serial_number = Some(serial_number);
     usb_config.max_power = 450;
     usb_config.supports_remote_wakeup = true;
+
+    #[cfg(feature = "_usb_high_speed")]
+    {
+        usb_config.max_speed = embassy_usb::UsbDeviceSpeed::High;
+    }
 
     // Required for windows compatibility.
     usb_config.max_packet_size_0 = 64;
@@ -161,10 +180,10 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     usb_config.device_protocol = 0x01;
     usb_config.composite_with_iads = true;
 
-    // Extra HID interfaces (usb_log, steno) overflow the 128-byte config descriptor buffer.
-    #[cfg(any(feature = "usb_log", feature = "steno"))]
+    // Extra endpoints (usb_log, steno, rynk) overflow the 128-byte config descriptor buffer.
+    #[cfg(any(feature = "usb_log", feature = "steno", feature = "rynk"))]
     const USB_BUF_SIZE: usize = 256;
-    #[cfg(not(any(feature = "usb_log", feature = "steno")))]
+    #[cfg(not(any(feature = "usb_log", feature = "steno", feature = "rynk")))]
     const USB_BUF_SIZE: usize = 128;
 
     static CONFIG_DESC: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
@@ -371,7 +390,7 @@ macro_rules! add_usb_logger {
         // The usb logger can be only initialized once, so just use a fixed name for the state
         static LOGGER_STATE: StaticCell<State> = StaticCell::new();
         let state = LOGGER_STATE.init(State::new());
-        CdcAcmClass::new($usb_builder, state, 64)
+        CdcAcmClass::new($usb_builder, state, embassy_usb_logger::MAX_PACKET_SIZE as u16)
     }};
 }
 

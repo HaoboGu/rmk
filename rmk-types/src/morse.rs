@@ -21,7 +21,7 @@ use crate::constants::MORSE_SIZE;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum MorseMode {
-    /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
+    /// Same as QMK's permissive hold: <https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes>
     /// When another key is pressed and released during the current morse key is held,
     /// the hold action of current morse key will be triggered
     PermissiveHold,

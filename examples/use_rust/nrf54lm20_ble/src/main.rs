@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 
-mod vial;
 #[macro_use]
 mod macros;
 mod keymap;
@@ -23,7 +22,7 @@ use panic_probe as _;
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::{BleTransport, build_ble_stack};
-use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
@@ -32,7 +31,6 @@ use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::usb::UsbTransport;
 use rmk::{DefaultPacketPool, HostResources, KeymapData, PacketPool, initialize_keymap_and_storage, run_all};
 use static_cell::StaticCell;
-use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 type RandomSource = cracen::Cracen<'static, Blocking>;
 
@@ -57,8 +55,6 @@ const FLASH_SECTORS: u8 = 6;
 
 const L2CAP_TXQ: u8 = 4;
 const L2CAP_RXQ: u8 = 4;
-
-const UNLOCK_KEYS: &[(u8, u8)] = &[(0, 0), (0, 1)];
 
 fn build_sdc<'d, const N: usize>(
     p: nrf_sdc::Peripherals<'d>,
@@ -189,7 +185,6 @@ async fn main(spawner: Spawner) {
         product_name: "RMK nRF54LM20A",
         serial_number: "vial:f64c2b3c:000054",
     };
-    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, UNLOCK_KEYS);
     let storage_config = StorageConfig {
         start_addr: FLASH_START_ADDR,
         num_sectors: FLASH_SECTORS,
@@ -197,7 +192,6 @@ async fn main(spawner: Spawner) {
     };
     let rmk_config = RmkConfig {
         device_config: keyboard_device_config,
-        vial_config,
         storage_config,
         ..Default::default()
     };

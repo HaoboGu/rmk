@@ -1,28 +1,33 @@
 //! System handlers — handshake, reboot, bootloader jump, storage reset.
 
 use rmk_types::constants;
-use rmk_types::protocol::rynk::{DeviceCapabilities, ProtocolVersion, RynkError, StorageResetMode};
+use rmk_types::protocol::rynk::command::{BootloaderJump, GetCapabilities, GetVersion, Reboot, StorageReset};
+use rmk_types::protocol::rynk::{DeviceCapabilities, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, StorageResetMode};
 
 use super::super::RynkService;
+use super::Handle;
 
-impl<'a> RynkService<'a> {
-    pub(crate) async fn handle_get_version(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        Self::write_response(&ProtocolVersion::CURRENT, payload)
+impl Handle<GetVersion> for RynkService<'_> {
+    async fn handle(&self, _: ()) -> Result<ProtocolVersion, RynkError> {
+        Ok(ProtocolVersion::CURRENT)
     }
+}
 
-    pub(crate) async fn handle_get_capabilities(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
+impl Handle<GetCapabilities> for RynkService<'_> {
+    async fn handle(&self, _: ()) -> Result<DeviceCapabilities, RynkError> {
         let (rows, cols, num_layers) = self.ctx.keymap_dimensions();
-        let caps = DeviceCapabilities {
+        Ok(DeviceCapabilities {
             // Layout (live, from the configured keymap)
             num_layers: num_layers as u8,
             num_rows: rows as u8,
             num_cols: cols as u8,
 
             // Input device limits (compile-time from keyboard.toml)
-            num_encoders: 0, // TODO Phase 6: surface encoder count
+            num_encoders: self.ctx.num_encoders() as u8,
             max_combos: constants::COMBO_MAX_NUM as u8,
             max_combo_keys: constants::COMBO_MAX_LENGTH as u8,
-            max_macros: 0, // macro slots are implicit in MACRO_SPACE_SIZE
+            // TODO: make this a user-defined constant in keyboard.toml ([rmk] section).
+            max_macros: 16,
             macro_space_size: constants::MACRO_SPACE_SIZE as u16,
             max_morse: constants::MORSE_MAX_NUM as u8,
             max_patterns_per_key: constants::MAX_PATTERNS_PER_KEY as u8,
@@ -39,47 +44,38 @@ impl<'a> RynkService<'a> {
             num_ble_profiles: constants::NUM_BLE_PROFILE as u8,
 
             // Protocol limits
-            max_payload_size: rmk_types::protocol::rynk::RYNK_MAX_PAYLOAD as u16,
-            max_bulk_keys: bulk_size() as u8,
+            max_payload_size: (constants::RYNK_BUFFER_SIZE - RYNK_HEADER_SIZE) as u16,
             macro_chunk_size: constants::MACRO_DATA_SIZE as u16,
-            bulk_transfer_supported: cfg!(feature = "bulk_transfer"),
-        };
-        Self::write_response(&caps, payload)
-    }
-
-    pub(crate) async fn handle_reboot(&self, _payload: &mut [u8]) -> Result<usize, RynkError> {
-        // Fire-and-forget: synchronous reset never returns on real hardware,
-        // and there's no way to guarantee a response makes it onto the wire
-        // before the reset takes effect.
-        crate::boot::reboot_keyboard();
-        Ok(0)
-    }
-
-    pub(crate) async fn handle_bootloader_jump(&self, _payload: &mut [u8]) -> Result<usize, RynkError> {
-        // Fire-and-forget, same reasoning as `handle_reboot`: the bootloader
-        // jump is synchronous on real hardware, so we don't attempt to ack.
-        crate::boot::jump_to_bootloader();
-        Ok(0)
-    }
-
-    pub(crate) async fn handle_storage_reset(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (_mode, _) = postcard::take_from_bytes::<StorageResetMode>(payload).map_err(|_| RynkError::Malformed)?;
-        // KeyboardContext::reset_storage() does not currently honor the
-        // `LayoutOnly` mode (always Full). Phase 6 wires mode-aware reset.
-        self.ctx.reset_storage().await;
-        Self::write_response(&(), payload)
+            // TODO: Implement Bulk transfer
+            max_bulk_keys: 0,
+            bulk_transfer_supported: false,
+        })
     }
 }
 
-/// Bulk-size constant under feature gate. `bulk_transfer` enables the
-/// `bulk` feature in `rmk-types` which emits `constants::BULK_SIZE`.
-fn bulk_size() -> usize {
-    #[cfg(feature = "bulk_transfer")]
-    {
-        constants::BULK_SIZE
+impl Handle<Reboot> for RynkService<'_> {
+    async fn handle(&self, _: ()) -> Result<(), RynkError> {
+        // Fire-and-forget: synchronous reset never returns on real hardware.
+        crate::boot::reboot_keyboard();
+        Ok(())
     }
-    #[cfg(not(feature = "bulk_transfer"))]
-    {
-        0
+}
+
+impl Handle<BootloaderJump> for RynkService<'_> {
+    async fn handle(&self, _: ()) -> Result<(), RynkError> {
+        // Fire-and-forget, same reasoning as `Reboot`.
+        crate::boot::jump_to_bootloader();
+        Ok(())
+    }
+}
+
+impl Handle<StorageReset> for RynkService<'_> {
+    async fn handle(&self, mode: StorageResetMode) -> Result<(), RynkError> {
+        if mode != StorageResetMode::Full {
+            // TODO: Reset required storage range
+            return Err(RynkError::Unimplemented);
+        }
+        self.ctx.reset_storage().await;
+        Ok(())
     }
 }

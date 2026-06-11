@@ -165,7 +165,8 @@ impl<'a> KeyboardContext<'a> {
 
     /// Replace the combo at `idx` with `config` (or remove it if `config` is
     /// empty) and persist. No-op if `idx` is out of range.
-    pub async fn set_combo(&self, idx: u8, config: ComboConfig) {
+    /// Returns `false` when `idx` is out of range (no slot written).
+    pub async fn set_combo(&self, idx: u8, config: ComboConfig) -> bool {
         let valid = self.keymap.with_combos_mut(|combos| {
             if (idx as usize) >= combos.len() {
                 return false;
@@ -178,12 +179,13 @@ impl<'a> KeyboardContext<'a> {
             true
         });
         if !valid {
-            return;
+            return false;
         }
         #[cfg(feature = "storage")]
         FLASH_CHANNEL.send(FlashOperationMessage::Combo { idx, config }).await;
         #[cfg(not(feature = "storage"))]
         let _ = config;
+        true
     }
 
     // ── Morses ─────────────────────────────────────────
@@ -337,7 +339,9 @@ impl<'a> KeyboardContext<'a> {
         self.keymap.with_forks(|forks| forks.get(idx as usize).copied())
     }
 
-    pub async fn set_fork(&self, idx: u8, fork: Fork) {
+    /// Replace the fork at `idx` with `fork` and persist.
+    /// Returns `false` when `idx` is out of range (no slot written).
+    pub async fn set_fork(&self, idx: u8, fork: Fork) -> bool {
         let valid = self.keymap.with_forks_mut(|forks| {
             if let Some(slot) = forks.get_mut(idx as usize) {
                 *slot = fork;
@@ -346,11 +350,11 @@ impl<'a> KeyboardContext<'a> {
                 false
             }
         });
-        if !valid {
-            return;
-        }
         #[cfg(feature = "storage")]
-        FLASH_CHANNEL.send(FlashOperationMessage::Fork { idx, fork }).await;
+        if valid {
+            FLASH_CHANNEL.send(FlashOperationMessage::Fork { idx, fork }).await;
+        }
+        valid
     }
 
     // ── Matrix state (host_security) ─────────────────────────────────────

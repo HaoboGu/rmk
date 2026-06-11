@@ -1,0 +1,71 @@
+# Wire-format FRAME snapshot — DO NOT edit by hand.
+# File: snapshots/wire_frames.snap
+# Each entry is a full Rynk frame — 5-byte header (CMD u16 LE + SEQ u8 + LEN
+# u16 LE) + postcard payload — one per protocol message; the label names the
+# decoded payload (`()` = empty). A diff means the header, a CMD number, or a
+# message frame changed. If intentional, bump ProtocolVersion::CURRENT and regenerate:
+#   UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rynk wire_frames
+# Format: <label>  <hex bytes>
+
+BootloaderJump reply Ok(())                                             04 00 01 01 00 00
+BootloaderJump request ()                                               04 00 01 00 00
+ConnectionChange topic ConnectionStatus{Configured,{1,Adv},Ble}         03 80 00 04 00 02 01 00 01
+GetBehaviorConfig reply Ok(BehaviorConfig{50,500,200,20})               01 06 01 07 00 00 32 f4 03 c8 01 14
+GetBehaviorConfig request ()                                            01 06 01 00 00
+GetCapabilities reply Ok(DeviceCapabilities{1..16})                     02 00 01 16 00 00 01 02 03 04 05 06 07 08 09 0a 0b 01 00 01 0c 00 0d 0e 0f 10 01
+GetCapabilities request ()                                              02 00 01 00 00
+GetCombo reply Ok(Combo{[Single(A)],Morse(1),L2})                       01 03 01 0a 00 00 01 02 01 00 04 05 01 01 02
+GetCombo request 3                                                      01 03 01 01 00 03
+GetConnectionStatus reply Ok(ConnectionStatus{Configured,{1,Adv},Ble})  02 07 01 05 00 00 02 01 00 01
+GetConnectionStatus request ()                                          02 07 01 00 00
+GetConnectionType reply Ok(Ble)                                         01 07 01 02 00 00 01
+GetConnectionType request ()                                            01 07 01 00 00
+GetCurrentLayer reply Ok(1)                                             01 08 01 02 00 00 01
+GetCurrentLayer request ()                                              01 08 01 00 00
+GetDefaultLayer reply Ok(2)                                             03 01 01 02 00 00 02
+GetDefaultLayer request ()                                              03 01 01 00 00
+GetEncoderAction reply Ok(EncoderAction{Morse(3),No})                   05 01 01 04 00 00 05 03 00
+GetEncoderAction request GetEncoderRequest{1,2}                         05 01 01 02 00 01 02
+GetFork reply Ok(Fork{Single(A),No,Morse(2)})                           01 05 01 10 00 00 02 01 00 04 00 05 02 01 02 01 00 00 00 02 01
+GetFork request 2                                                       01 05 01 01 00 02
+GetKeyAction reply Ok(Morse(7))                                         01 01 01 03 00 00 05 07
+GetKeyAction request KeyPosition{0,5,13}                                01 01 01 03 00 00 05 0d
+GetLedIndicator reply Ok(LedIndicator(Num|Scroll))                      07 08 01 02 00 00 05
+GetLedIndicator request ()                                              07 08 01 00 00
+GetMacro reply Ok(MacroData{[0x01,0x02,0x03]})                          01 02 01 05 00 00 03 01 02 03
+GetMacro request GetMacroRequest{1,256}                                 01 02 01 03 00 01 80 02
+GetMatrixState reply Ok(MatrixState{[0x05,0x00,0x20]})                  02 08 01 05 00 00 03 05 00 20
+GetMatrixState request ()                                               02 08 01 00 00
+GetMorse reply Ok(Morse{TAP->Key(A)})                                   01 04 01 07 00 00 00 01 02 01 00 04
+GetMorse request 0                                                      01 04 01 01 00 00
+GetSleepState reply Ok(true)                                            06 08 01 02 00 00 01
+GetSleepState request ()                                                06 08 01 00 00
+GetVersion reply Ok(CURRENT)                                            01 00 01 03 00 00 00 01
+GetVersion request ()                                                   01 00 01 00 00
+GetWpm reply Ok(42)                                                     05 08 01 02 00 00 2a
+GetWpm request ()                                                       05 08 01 00 00
+LayerChange topic 3                                                     01 80 00 01 00 03
+LedIndicatorChange topic LedIndicator(Num|Scroll)                       05 80 00 01 00 05
+Reboot reply Ok(())                                                     03 00 01 01 00 00
+Reboot request ()                                                       03 00 01 00 00
+SetBehaviorConfig reply Ok(())                                          02 06 01 01 00 00
+SetBehaviorConfig request BehaviorConfig{50,500,200,20}                 02 06 01 06 00 32 f4 03 c8 01 14
+SetCombo reply Ok(())                                                   02 03 01 01 00 00
+SetCombo request SetComboRequest{3,combo}                               02 03 01 0a 00 03 01 02 01 00 04 05 01 01 02
+SetDefaultLayer reply Ok(())                                            04 01 01 01 00 00
+SetDefaultLayer request 2                                               04 01 01 01 00 02
+SetEncoderAction reply Ok(())                                           06 01 01 01 00 00
+SetEncoderAction request SetEncoderRequest{1,2,{Morse(3),No}}           06 01 01 05 00 01 02 05 03 00
+SetFork reply Ok(())                                                    02 05 01 01 00 00
+SetFork request SetForkRequest{2,fork}                                  02 05 01 10 00 02 02 01 00 04 00 05 02 01 02 01 00 00 00 02 01
+SetKeyAction reply Err(Invalid)                                         02 01 01 02 00 01 05
+SetKeyAction reply Ok(())                                               02 01 01 01 00 00
+SetKeyAction request SetKeyRequest{{0,5,13},Morse(7)}                   02 01 01 05 00 00 05 0d 05 07
+SetMacro reply Ok(())                                                   02 02 01 01 00 00
+SetMacro request SetMacroRequest{1,2,[0x01,0x02,0x03]}                  02 02 01 06 00 01 02 03 01 02 03
+SetMorse reply Ok(())                                                   02 04 01 01 00 00
+SetMorse request SetMorseRequest{0,morse}                               02 04 01 07 00 00 00 01 02 01 00 04
+SleepState topic true                                                   04 80 00 01 00 01
+StorageReset reply Ok(())                                               05 00 01 01 00 00
+StorageReset request StorageResetMode::Full                             05 00 01 01 00 00
+WpmUpdate topic 42                                                      02 80 00 01 00 2a
