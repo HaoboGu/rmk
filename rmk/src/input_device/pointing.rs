@@ -456,7 +456,7 @@ impl MotionAccumulator {
         } else {
             let total_x = self.remainder_x.saturating_add(dx * ratio_x.0 as i16);
             let out = total_x / ratio_x.1 as i16;
-            self.remainder_x = total_x; 
+            self.remainder_x = total_x;
             out
         };
 
@@ -576,11 +576,14 @@ impl<'a> PointingProcessor<'a> {
                             wheel: 0,
                             pan: 0,
                         }
-                    },
+                    }
                     PointingMode::Scroll(scroll_config) => {
-                        let (sx, sy) =
-                            self.accumulator
-                                .accumulate(x, y, (scroll_config.multiplier_x ,scroll_config.divisor_x), (scroll_config.multiplier_y, scroll_config.divisor_y));
+                        let (sx, sy) = self.accumulator.accumulate(
+                            x,
+                            y,
+                            (scroll_config.multiplier_x, scroll_config.divisor_x),
+                            (scroll_config.multiplier_y, scroll_config.divisor_y),
+                        );
                         if sx == 0 && sy == 0 {
                             return;
                         }
@@ -598,9 +601,12 @@ impl<'a> PointingProcessor<'a> {
                         }
                     }
                     PointingMode::Sniper(sniper_config) => {
-                        let (sx, sy) = self
-                            .accumulator
-                            .accumulate(x, y, (sniper_config.multiplier, sniper_config.divisor), (sniper_config.multiplier, sniper_config.divisor));
+                        let (sx, sy) = self.accumulator.accumulate(
+                            x,
+                            y,
+                            (sniper_config.multiplier, sniper_config.divisor),
+                            (sniper_config.multiplier, sniper_config.divisor),
+                        );
                         if sx == 0 && sy == 0 {
                             return;
                         }
@@ -1034,14 +1040,14 @@ mod tests {
         let mut acc = MotionAccumulator::default();
 
         // divisor=8: 3/8 = 0 remainder 3
-        let (ox, oy) = acc.accumulate(3, 3, (1,8), (1,8));
+        let (ox, oy) = acc.accumulate(3, 3, (1, 8), (1, 8));
         assert_eq!(ox, 0);
         assert_eq!(oy, 0);
         assert_eq!(acc.remainder_x, 3);
         assert_eq!(acc.remainder_y, 3);
 
         // 3+6=9, 9/8=1 remainder 1
-        let (ox, oy) = acc.accumulate(6, 6, (1,8), (1,8));
+        let (ox, oy) = acc.accumulate(6, 6, (1, 8), (1, 8));
         assert_eq!(ox, 1);
         assert_eq!(oy, 1);
         assert_eq!(acc.remainder_x, 1);
@@ -1053,7 +1059,7 @@ mod tests {
         let mut acc = MotionAccumulator::default();
 
         // Negative motion: -10/4 = -2 remainder -2
-        let (ox, oy) = acc.accumulate(-10, -10, (1,4), (1,4));
+        let (ox, oy) = acc.accumulate(-10, -10, (1, 4), (1, 4));
         assert_eq!(ox, -2);
         assert_eq!(oy, -2);
         assert_eq!(acc.remainder_x, -2);
@@ -1063,7 +1069,7 @@ mod tests {
     #[test]
     fn test_motion_accumulator_reset() {
         let mut acc = MotionAccumulator::default();
-        acc.accumulate(3, 5, (1,8), (1,8));
+        acc.accumulate(3, 5, (1, 8), (1, 8));
         assert_ne!(acc.remainder_x, 0);
 
         acc.reset();
@@ -1075,20 +1081,20 @@ mod tests {
     fn test_motion_accumulator_zero_divisor_disables_axis() {
         let mut acc = MotionAccumulator::default();
         // divisor 0 should disable that axis (output 0)
-        let (ox, oy) = acc.accumulate(5, -3, (1,0), (1,0));
+        let (ox, oy) = acc.accumulate(5, -3, (1, 0), (1, 0));
         assert_eq!(ox, 0);
         assert_eq!(oy, 0);
 
         // One axis disabled, the other active
-        let (ox, oy) = acc.accumulate(10, 10, (1,0), (1,2));
+        let (ox, oy) = acc.accumulate(10, 10, (1, 0), (1, 2));
         assert_eq!(ox, 0); // X disabled
         assert_eq!(oy, 5); // 10/2 = 5
 
         // Remainder should not accumulate on disabled axis
         acc.reset();
-        acc.accumulate(3, 3, (1,0), (1,8));
-        acc.accumulate(3, 3, (1,0), (1,8));
-        let (ox, oy) = acc.accumulate(3, 3, (1,0), (1,8));
+        acc.accumulate(3, 3, (1, 0), (1, 8));
+        acc.accumulate(3, 3, (1, 0), (1, 8));
+        let (ox, oy) = acc.accumulate(3, 3, (1, 0), (1, 8));
         assert_eq!(ox, 0); // X always 0
         assert_eq!(oy, 1); // (3+3+3)/8 = 1 remainder 1
     }
@@ -1097,7 +1103,7 @@ mod tests {
     fn test_motion_accumulator_asymmetric_divisors() {
         let mut acc = MotionAccumulator::default();
         // Different divisors for x and y
-        let (ox, oy) = acc.accumulate(10, 10, (1,2), (1,5));
+        let (ox, oy) = acc.accumulate(10, 10, (1, 2), (1, 5));
         assert_eq!(ox, 5); // 10/2
         assert_eq!(oy, 2); // 10/5
     }
@@ -1109,14 +1115,14 @@ mod tests {
         // output is just total / divisor. This is what caret mode needs:
         // the caller decides when to "spend" the remainder (via reset_x/y).
         let mut acc = MotionAccumulator::default();
-        let (ox, oy) = acc.accumulate_persistent(150, 0, (1,100), (1,100));
+        let (ox, oy) = acc.accumulate_persistent(150, 0, (1, 100), (1, 100));
         assert_eq!(ox, 1); // 150 / 100
         assert_eq!(oy, 0);
         assert_eq!(acc.remainder_x, 150); // total, NOT 50
         assert_eq!(acc.remainder_y, 0);
 
         // Second call: total_x = 150 + 50 = 200, out=2, remainder=200
-        let (ox, oy) = acc.accumulate_persistent(50, 0, (1,100), (1,100));
+        let (ox, oy) = acc.accumulate_persistent(50, 0, (1, 100), (1, 100));
         assert_eq!(ox, 2); // 200 / 100
         assert_eq!(oy, 0);
         assert_eq!(acc.remainder_x, 200);
@@ -1128,14 +1134,14 @@ mod tests {
         // X and Y remainders are independent in accumulate_persistent:
         // movement on one axis never touches the other's running total.
         let mut acc = MotionAccumulator::default();
-        let (ox, oy) = acc.accumulate_persistent(150, 0, (1,100), (1,100));
+        let (ox, oy) = acc.accumulate_persistent(150, 0, (1, 100), (1, 100));
         assert_eq!(ox, 1);
         assert_eq!(oy, 0);
         assert_eq!(acc.remainder_x, 150);
         assert_eq!(acc.remainder_y, 0);
 
         // Now move purely on Y. X total is preserved (still 150), Y starts fresh.
-        let (ox, oy) = acc.accumulate_persistent(0, 150, (1,100), (1,100));
+        let (ox, oy) = acc.accumulate_persistent(0, 150, (1, 100), (1, 100));
         assert_eq!(ox, 1); // X total 150 / 100
         assert_eq!(oy, 1); // Y total 150 / 100
         assert_eq!(acc.remainder_x, 150);
@@ -1151,26 +1157,26 @@ mod tests {
         // that slow deltas are not lost.
         let mut acc = MotionAccumulator::default();
 
-        let (ox, oy) = acc.accumulate_persistent(30, 30, (1,100), (1,100));
+        let (ox, oy) = acc.accumulate_persistent(30, 30, (1, 100), (1, 100));
         assert_eq!(ox, 0);
         assert_eq!(oy, 0);
         assert_eq!(acc.remainder_x, 30);
         assert_eq!(acc.remainder_y, 30);
 
-        let (ox, oy) = acc.accumulate_persistent(30, 30, (1,100), (1,100));
+        let (ox, oy) = acc.accumulate_persistent(30, 30, (1, 100), (1, 100));
         assert_eq!(ox, 0);
         assert_eq!(oy, 0);
         assert_eq!(acc.remainder_x, 60);
         assert_eq!(acc.remainder_y, 60);
 
-        let (ox, oy) = acc.accumulate_persistent(30, 30, (1,100), (1,100));
+        let (ox, oy) = acc.accumulate_persistent(30, 30, (1, 100), (1, 100));
         assert_eq!(ox, 0);
         assert_eq!(oy, 0);
         assert_eq!(acc.remainder_x, 90);
         assert_eq!(acc.remainder_y, 90);
 
         // Crosses threshold: total 90 + 20 = 110, out=1, remainder=110
-        let (ox, oy) = acc.accumulate_persistent(20, 20, (1,100), (1,100));
+        let (ox, oy) = acc.accumulate_persistent(20, 20, (1, 100), (1, 100));
         assert_eq!(ox, 1);
         assert_eq!(oy, 1);
         assert_eq!(acc.remainder_x, 110);
@@ -1186,18 +1192,18 @@ mod tests {
         // small counter-direction samples silently "use up" the running
         // total and block taps in the new direction.
         let mut acc = MotionAccumulator::default();
-        acc.accumulate_persistent(80, 0, (1,100), (1,100));
+        acc.accumulate_persistent(80, 0, (1, 100), (1, 100));
         assert_eq!(acc.remainder_x, 80);
 
         // Counter-direction sample of 30: total = 80 - 30 = 50, no tap.
-        let (ox, oy) = acc.accumulate_persistent(-30, 0, (1,100), (1,100));
+        let (ox, oy) = acc.accumulate_persistent(-30, 0, (1, 100), (1, 100));
         assert_eq!(ox, 0);
         assert_eq!(oy, 0);
         assert_eq!(acc.remainder_x, 50);
 
         // Cross zero: total = 50 - 80 = -30, remainder becomes negative.
         // No tap fires (still sub-threshold), but the total is now signed.
-        let (ox, oy) = acc.accumulate_persistent(-80, 0, (1,100), (1,100));
+        let (ox, oy) = acc.accumulate_persistent(-80, 0, (1, 100), (1, 100));
         assert_eq!(ox, 0);
         assert_eq!(oy, 0);
         assert_eq!(acc.remainder_x, -30);
@@ -1210,7 +1216,7 @@ mod tests {
         // sign change so a stale total in the previous direction cannot
         // bleed into the next sample.
         let mut acc = MotionAccumulator::default();
-        acc.accumulate_persistent(80, 80, (1,100), (1,100));
+        acc.accumulate_persistent(80, 80, (1, 100), (1, 100));
         assert_eq!(acc.remainder_x, 80);
         assert_eq!(acc.remainder_y, 80);
 
@@ -1219,7 +1225,7 @@ mod tests {
         assert_eq!(acc.remainder_y, 80);
 
         // Y continues to build; X is fresh
-        let (ox, oy) = acc.accumulate_persistent(30, 30, (1,100), (1,100));
+        let (ox, oy) = acc.accumulate_persistent(30, 30, (1, 100), (1, 100));
         assert_eq!(ox, 0); // 30 / 100
         assert_eq!(oy, 1); // (80 + 30) / 100
         assert_eq!(acc.remainder_x, 30);
@@ -1236,7 +1242,7 @@ mod tests {
         // though the current CaretConfig uses the same divisor on both
         // axes, the accumulator must work when they differ.
         let mut acc = MotionAccumulator::default();
-        let (ox, oy) = acc.accumulate_persistent(10, 10, (1,2), (1,5));
+        let (ox, oy) = acc.accumulate_persistent(10, 10, (1, 2), (1, 5));
         assert_eq!(ox, 5); // 10 / 2
         assert_eq!(oy, 2); // 10 / 5
         assert_eq!(acc.remainder_x, 10);
@@ -1248,7 +1254,7 @@ mod tests {
         // divisor=1: every unit becomes output; remainder still tracks
         // the full signed total so successive calls keep growing it.
         let mut acc = MotionAccumulator::default();
-        let (ox, oy) = acc.accumulate_persistent(7, -3, (1,1), (1,1));
+        let (ox, oy) = acc.accumulate_persistent(7, -3, (1, 1), (1, 1));
         assert_eq!(ox, 7);
         assert_eq!(oy, -3);
         assert_eq!(acc.remainder_x, 7);
@@ -1257,7 +1263,7 @@ mod tests {
         // divisor=0 on X: axis is disabled (output 0, remainder_x = 0).
         // divisor=255 on Y: maximal u8 divisor; 50/255 = 0, remainder_y = 50.
         let mut acc = MotionAccumulator::default();
-        let (ox, oy) = acc.accumulate_persistent(50, 50, (1,0), (1,255));
+        let (ox, oy) = acc.accumulate_persistent(50, 50, (1, 0), (1, 255));
         assert_eq!(ox, 0);
         assert_eq!(oy, 0);
         assert_eq!(acc.remainder_x, 0);
@@ -1413,7 +1419,7 @@ mod tests {
     #[test]
     fn test_motion_accumulator_change_resets_accumulator() {
         let mut acc = MotionAccumulator::default();
-        acc.accumulate(3, 5, (1,8), (1,8));
+        acc.accumulate(3, 5, (1, 8), (1, 8));
         assert_eq!(acc.remainder_x, 3);
         assert_eq!(acc.remainder_y, 5);
 
@@ -1484,7 +1490,12 @@ mod tests {
         };
 
         // Small motion that doesn't produce output
-        let (sx, sy) = acc.accumulate(3, 3, (config.multiplier_x, config.divisor_x), (config.multiplier_y, config.divisor_y));
+        let (sx, sy) = acc.accumulate(
+            3,
+            3,
+            (config.multiplier_x, config.divisor_x),
+            (config.multiplier_y, config.divisor_y),
+        );
         assert_eq!(sx, 0);
         assert_eq!(sy, 0);
 
@@ -1493,7 +1504,12 @@ mod tests {
         assert_eq!(acc.remainder_y, 3);
 
         // Additional motion should accumulate
-        let (sx, sy) = acc.accumulate(6, 6, (config.multiplier_x, config.divisor_x), (config.multiplier_y, config.divisor_y));
+        let (sx, sy) = acc.accumulate(
+            6,
+            6,
+            (config.multiplier_x, config.divisor_x),
+            (config.multiplier_y, config.divisor_y),
+        );
         assert_eq!(sx, 1); // (3+6)/8 = 1 remainder 1
         assert_eq!(sy, 1);
         assert_eq!(acc.remainder_x, 1);
@@ -1511,7 +1527,12 @@ mod tests {
         };
 
         // Test that motion is divided correctly
-        let (sx, sy) = acc.accumulate(10, -10, (config.multiplier, config.divisor), (config.multiplier, config.divisor));
+        let (sx, sy) = acc.accumulate(
+            10,
+            -10,
+            (config.multiplier, config.divisor),
+            (config.multiplier, config.divisor),
+        );
         assert_eq!(sx, 2); // 10/4 = 2 remainder 2
         assert_eq!(sy, -2); // -10/4 = -2 remainder -2
         assert_eq!(acc.remainder_x, 2);
@@ -1523,14 +1544,14 @@ mod tests {
         let mut acc = MotionAccumulator::default();
 
         // Test negative motion with divisor
-        let (ox, oy) = acc.accumulate(-15, -20, (1,4), (1,5));
+        let (ox, oy) = acc.accumulate(-15, -20, (1, 4), (1, 5));
         assert_eq!(ox, -3); // -15/4 = -3 remainder -3
         assert_eq!(oy, -4); // -20/5 = -4 remainder 0
         assert_eq!(acc.remainder_x, -3);
         assert_eq!(acc.remainder_y, 0);
 
         // Mix positive and negative
-        let (ox, oy) = acc.accumulate(5, 10, (1,4), (1,5));
+        let (ox, oy) = acc.accumulate(5, 10, (1, 4), (1, 5));
         assert_eq!(ox, 0); // (-3+5)/4 = 0 remainder 2
         assert_eq!(oy, 2); // (0+10)/5 = 2 remainder 0
         assert_eq!(acc.remainder_x, 2);
@@ -1563,8 +1584,8 @@ mod tests {
         let mut acc_inverted = MotionAccumulator::default();
 
         let divisor = 1u8;
-        let (_, sy_default) = acc_default.accumulate(0, 10, (1,divisor), (1,divisor));
-        let (_, sy_inverted) = acc_inverted.accumulate(0, 10, (1,divisor), (1,divisor));
+        let (_, sy_default) = acc_default.accumulate(0, 10, (1, divisor), (1, divisor));
+        let (_, sy_inverted) = acc_inverted.accumulate(0, 10, (1, divisor), (1, divisor));
 
         // Default: wheel = -sy = -10
         let wheel_default = -sy_default;
@@ -1585,7 +1606,12 @@ mod tests {
             invert_y: true,
         };
 
-        let (sx, sy) = acc.accumulate(5, -3, (config.multiplier, config.divisor), (config.multiplier, config.divisor));
+        let (sx, sy) = acc.accumulate(
+            5,
+            -3,
+            (config.multiplier, config.divisor),
+            (config.multiplier, config.divisor),
+        );
         let out_x = if config.invert_x { -sx } else { sx };
         let out_y = if config.invert_y { -sy } else { sy };
 
@@ -1606,7 +1632,12 @@ mod tests {
         };
 
         // Test asymmetric divisors
-        let (sx, sy) = acc.accumulate(16, 16, (config.multiplier_x, config.divisor_x), (config.multiplier_x, config.divisor_y));
+        let (sx, sy) = acc.accumulate(
+            16,
+            16,
+            (config.multiplier_x, config.divisor_x),
+            (config.multiplier_x, config.divisor_y),
+        );
         assert_eq!(sx, 4); // 16/4 = 4
         assert_eq!(sy, 2); // 16/8 = 2
     }
@@ -1622,7 +1653,12 @@ mod tests {
             invert_x: false,
             invert_y: false,
         };
-        let (sx, sy) = acc.accumulate(10, 10, (config.multiplier_x, config.divisor_x), (config.multiplier_y, config.divisor_y));
+        let (sx, sy) = acc.accumulate(
+            10,
+            10,
+            (config.multiplier_x, config.divisor_x),
+            (config.multiplier_y, config.divisor_y),
+        );
         assert_eq!(sx, 3); // (0+10*3)/8 = 3 r6
         assert_eq!(sy, 3);
         assert_eq!(acc.remainder_x, 6);
@@ -1640,7 +1676,12 @@ mod tests {
             invert_x: false,
             invert_y: false,
         };
-        let (sx, sy) = acc.accumulate(10, -10, (config.multiplier_x, config.divisor_x), (config.multiplier_y, config.divisor_y));
+        let (sx, sy) = acc.accumulate(
+            10,
+            -10,
+            (config.multiplier_x, config.divisor_x),
+            (config.multiplier_y, config.divisor_y),
+        );
         assert_eq!(sx, 2); // (0+10*2)/8 = 2 r4
         assert_eq!(sy, -3); // (0+(-10)*3)/8 = -3 r-6
         assert_eq!(acc.remainder_x, 4);
@@ -1659,14 +1700,24 @@ mod tests {
             invert_y: false,
         };
         // First call: sub-threshold, only remainder accumulates
-        let (sx, sy) = acc.accumulate(2, 2, (config.multiplier_x, config.divisor_x), (config.multiplier_y, config.divisor_y));
+        let (sx, sy) = acc.accumulate(
+            2,
+            2,
+            (config.multiplier_x, config.divisor_x),
+            (config.multiplier_y, config.divisor_y),
+        );
         assert_eq!(sx, 0); // (0+2*3)/8 = 0 r6
         assert_eq!(sy, 0);
         assert_eq!(acc.remainder_x, 6);
         assert_eq!(acc.remainder_y, 6);
 
         // Second call: crosses threshold, multiplier applies to remainder too
-        let (sx, sy) = acc.accumulate(2, 2, (config.multiplier_x, config.divisor_x), (config.multiplier_y, config.divisor_y));
+        let (sx, sy) = acc.accumulate(
+            2,
+            2,
+            (config.multiplier_x, config.divisor_x),
+            (config.multiplier_y, config.divisor_y),
+        );
         assert_eq!(sx, 1); // (6+2*3)/8 = 12/8 = 1 r4
         assert_eq!(sy, 1);
         assert_eq!(acc.remainder_x, 4);
@@ -1682,7 +1733,12 @@ mod tests {
             invert_x: false,
             invert_y: false,
         };
-        let (sx, sy) = acc.accumulate(5, 0, (config.multiplier, config.divisor), (config.multiplier, config.divisor));
+        let (sx, sy) = acc.accumulate(
+            5,
+            0,
+            (config.multiplier, config.divisor),
+            (config.multiplier, config.divisor),
+        );
         assert_eq!(sx, 3); // (0+5*3)/4 = 3 r3
         assert_eq!(sy, 0);
         assert_eq!(acc.remainder_x, 3);
@@ -1698,7 +1754,12 @@ mod tests {
             invert_x: false,
             invert_y: false,
         };
-        let (sx, sy) = acc.accumulate(-3, 0, (config.multiplier, config.divisor), (config.multiplier, config.divisor));
+        let (sx, sy) = acc.accumulate(
+            -3,
+            0,
+            (config.multiplier, config.divisor),
+            (config.multiplier, config.divisor),
+        );
         assert_eq!(sx, -2); // (0+(-3)*3)/4 = -9/4 = -2 r-1
         assert_eq!(sy, 0);
         assert_eq!(acc.remainder_x, -1);
@@ -1722,13 +1783,13 @@ mod tests {
         let mut acc = MotionAccumulator::default();
 
         // Test with large values that might overflow
-        let (ox, oy) = acc.accumulate(i16::MAX, i16::MAX, (1,1), (1,1));
+        let (ox, oy) = acc.accumulate(i16::MAX, i16::MAX, (1, 1), (1, 1));
         assert_eq!(ox, i16::MAX);
         assert_eq!(oy, i16::MAX);
 
         // Reset and test negative saturation
         acc.reset();
-        let (ox, oy) = acc.accumulate(i16::MIN, i16::MIN, (1,1), (1,1));
+        let (ox, oy) = acc.accumulate(i16::MIN, i16::MIN, (1, 1), (1, 1));
         assert_eq!(ox, i16::MIN);
         assert_eq!(oy, i16::MIN);
     }
