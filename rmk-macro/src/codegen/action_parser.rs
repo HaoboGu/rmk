@@ -107,6 +107,12 @@ pub(crate) fn expand_profile(profile: &MorseProfile) -> proc_macro2::TokenStream
         quote! { ::core::option::Option::None }
     };
 
+    let enable_flow_tap = if let Some(enable) = profile.enable_flow_tap {
+        quote! { ::core::option::Option::Some(#enable) }
+    } else {
+        quote! { ::core::option::Option::None }
+    };
+
     let hold_timeout_ms = match &profile.hold_timeout_ms {
         Some(t) => {
             let timeout = *t as u16;
@@ -123,7 +129,10 @@ pub(crate) fn expand_profile(profile: &MorseProfile) -> proc_macro2::TokenStream
         None => quote! { ::core::option::Option::None },
     };
 
-    quote! { rmk::types::morse::MorseProfile::new(#unilateral_tap, #mode, #hold_timeout_ms, #gap_timeout_ms) }
+    quote! {
+        rmk::types::morse::MorseProfile::new(#unilateral_tap, #mode, #hold_timeout_ms, #gap_timeout_ms)
+            .with_enable_flow_tap(#enable_flow_tap)
+    }
 }
 
 pub(crate) fn expand_profile_name(
@@ -453,15 +462,43 @@ pub(crate) fn get_key_with_alias(key: String) -> Ident {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rmk_config::resolved::behavior::MorseProfile;
 
     fn expand(key: &str) -> String {
         parse_key(key.to_string(), &None).to_string()
+    }
+
+    fn profile(enable_flow_tap: Option<bool>) -> MorseProfile {
+        MorseProfile {
+            enable_flow_tap,
+            unilateral_tap: Some(true),
+            permissive_hold: None,
+            hold_on_other_press: None,
+            normal_mode: Some(true),
+            hold_timeout_ms: Some(250),
+            gap_timeout_ms: Some(250),
+        }
     }
 
     // Normalize away the whitespace that `TokenStream::to_string` inserts so
     // assertions can match the structure without being brittle about spacing.
     fn squash(s: &str) -> String {
         s.chars().filter(|c| !c.is_whitespace()).collect()
+    }
+
+    #[test]
+    fn expand_profile_emits_flow_tap_override() {
+        let disabled = expand_profile(&profile(Some(false))).to_string();
+        assert!(disabled.contains("with_enable_flow_tap"));
+        assert!(disabled.contains("Option :: Some (false)"));
+
+        let enabled = expand_profile(&profile(Some(true))).to_string();
+        assert!(enabled.contains("with_enable_flow_tap"));
+        assert!(enabled.contains("Option :: Some (true)"));
+
+        let inherit = expand_profile(&profile(None)).to_string();
+        assert!(inherit.contains("with_enable_flow_tap"));
+        assert!(inherit.contains("Option :: None"));
     }
 
     #[test]

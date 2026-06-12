@@ -1,17 +1,18 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig};
-use rmk::k;
+use heapless::Vec;
+use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, PositionalConfig};
 use rmk::keyboard::Keyboard;
 use rmk::keyboard::combo::{Combo, ComboConfig};
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
-use rmk_types::morse::{MorseMode, MorseProfile};
+use rmk::{a, k};
+use rmk_types::morse::{Morse, MorseMode, MorseProfile};
 
 use crate::common::morse::create_simple_morse_keyboard;
-use crate::common::{KC_LGUI, KC_LSHIFT};
+use crate::common::{KC_LGUI, KC_LSHIFT, wrap_keymap};
 
 fn create_hold_on_other_key_press_keyboard() -> Keyboard<'static> {
     create_simple_morse_keyboard(BehaviorConfig {
@@ -82,6 +83,136 @@ fn create_hold_on_other_key_press_keyboard_with_combo() -> Keyboard<'static> {
         },
         ..BehaviorConfig::default()
     })
+}
+
+fn create_profile_flow_tap_keyboard(
+    global_enable_flow_tap: bool,
+    profile_enable_flow_tap: Option<bool>,
+) -> Keyboard<'static> {
+    let profile = MorseProfile::new(
+        Some(false),
+        Some(MorseMode::HoldOnOtherPress),
+        Some(250u16),
+        Some(250u16),
+    )
+    .with_enable_flow_tap(profile_enable_flow_tap);
+    let keymap = [[[
+        k!(A),
+        KeyAction::TapHold(
+            Action::Key(KeyCode::Hid(HidKeyCode::B)),
+            Action::Modifier(ModifierCombination::LSHIFT),
+            profile,
+        ),
+    ]]];
+    let behavior_config = BehaviorConfig {
+        morse: MorsesConfig {
+            enable_flow_tap: global_enable_flow_tap,
+            prior_idle_time: Duration::from_millis(120),
+            default_profile: MorseProfile::new(
+                Some(false),
+                Some(MorseMode::HoldOnOtherPress),
+                Some(250u16),
+                Some(250u16),
+            ),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
+    let per_key_config: &'static PositionalConfig<1, 2> = Box::leak(Box::new(PositionalConfig::default()));
+    Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
+}
+
+fn create_profile_flow_tap_morse_keyboard(
+    global_enable_flow_tap: bool,
+    profile_enable_flow_tap: Option<bool>,
+) -> Keyboard<'static> {
+    let profile = MorseProfile::new(
+        Some(false),
+        Some(MorseMode::HoldOnOtherPress),
+        Some(250u16),
+        Some(250u16),
+    )
+    .with_enable_flow_tap(profile_enable_flow_tap);
+    let keymap = [[[k!(A), KeyAction::Morse(0)]]];
+    let behavior_config = BehaviorConfig {
+        morse: MorsesConfig {
+            enable_flow_tap: global_enable_flow_tap,
+            prior_idle_time: Duration::from_millis(120),
+            default_profile: MorseProfile::new(
+                Some(false),
+                Some(MorseMode::HoldOnOtherPress),
+                Some(250u16),
+                Some(250u16),
+            ),
+            morses: Vec::from_slice(&[Morse::new_from_vial(
+                Action::Key(KeyCode::Hid(HidKeyCode::B)),
+                Action::Modifier(ModifierCombination::LSHIFT),
+                Action::No,
+                Action::No,
+                profile,
+            )])
+            .unwrap(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
+    let per_key_config: &'static PositionalConfig<1, 2> = Box::leak(Box::new(PositionalConfig::default()));
+    Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
+}
+
+fn create_flow_tap_layer_cache_keyboard() -> Keyboard<'static> {
+    let disabled_flow_profile = MorseProfile::new(
+        Some(false),
+        Some(MorseMode::HoldOnOtherPress),
+        Some(250u16),
+        Some(250u16),
+    )
+    .with_enable_flow_tap(Some(false));
+    let enabled_flow_profile = MorseProfile::new(
+        Some(false),
+        Some(MorseMode::HoldOnOtherPress),
+        Some(250u16),
+        Some(250u16),
+    )
+    .with_enable_flow_tap(Some(true));
+    let keymap = [
+        [[
+            k!(A),
+            KeyAction::TapHold(
+                Action::Key(KeyCode::Hid(HidKeyCode::D)),
+                Action::LayerOn(1),
+                disabled_flow_profile,
+            ),
+            KeyAction::TapHold(
+                Action::Key(KeyCode::Hid(HidKeyCode::B)),
+                Action::Modifier(ModifierCombination::LSHIFT),
+                enabled_flow_profile,
+            ),
+        ]],
+        [[a!(Transparent), a!(Transparent), k!(Kp1)]],
+    ];
+    let behavior_config = BehaviorConfig {
+        morse: MorsesConfig {
+            enable_flow_tap: false,
+            prior_idle_time: Duration::from_millis(120),
+            default_profile: MorseProfile::new(
+                Some(false),
+                Some(MorseMode::HoldOnOtherPress),
+                Some(250u16),
+                Some(250u16),
+            ),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
+    let per_key_config: &'static PositionalConfig<1, 3> = Box::leak(Box::new(PositionalConfig::default()));
+    Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
 
 #[test]
@@ -1197,6 +1328,119 @@ fn test_flow_tap() {
             [0, [0, 0, 0, 0, 0, 0]], // Release B
             [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Press C
             [0, [0, 0, 0, 0, 0, 0]], // Release C
+        ]
+    };
+}
+
+#[test]
+fn profile_flow_tap_true_overrides_global_false() {
+    key_sequence_test! {
+        keyboard: create_profile_flow_tap_keyboard(false, Some(true)),
+        sequence: [
+            [0, 0, true, 30],  // Press A
+            [0, 0, false, 30], // Release A
+            [0, 1, true, 20],  // Press mt!(B, LShift) -> profile Flow Tap
+            [0, 0, true, 10],  // Press A while B is flow-tapped
+            [0, 0, false, 10], // Release A
+            [0, 1, false, 10], // Release B
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]],
+            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+#[test]
+fn profile_flow_tap_false_overrides_global_true() {
+    key_sequence_test! {
+        keyboard: create_profile_flow_tap_keyboard(true, Some(false)),
+        sequence: [
+            [0, 0, true, 30],  // Press A
+            [0, 0, false, 30], // Release A
+            [0, 1, true, 20],  // Press mt!(B, LShift), profile disables Flow Tap
+            [0, 0, true, 10],  // Press A, causing hold-on-other-press
+            [0, 0, false, 10], // Release A
+            [0, 1, false, 10], // Release B
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+#[test]
+fn morse_profile_flow_tap_true_overrides_global_false() {
+    key_sequence_test! {
+        keyboard: create_profile_flow_tap_morse_keyboard(false, Some(true)),
+        sequence: [
+            [0, 0, true, 30],  // Press A
+            [0, 0, false, 30], // Release A
+            [0, 1, true, 20],  // Press TD(0) -> profile Flow Tap
+            [0, 0, true, 10],  // Press A while B is flow-tapped
+            [0, 0, false, 10], // Release A
+            [0, 1, false, 10], // Release TD(0)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]],
+            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+#[test]
+fn morse_profile_flow_tap_false_overrides_global_true() {
+    key_sequence_test! {
+        keyboard: create_profile_flow_tap_morse_keyboard(true, Some(false)),
+        sequence: [
+            [0, 0, true, 30],  // Press A
+            [0, 0, false, 30], // Release A
+            [0, 1, true, 20],  // Press TD(0), profile disables Flow Tap
+            [0, 0, true, 10],  // Press A, causing hold-on-other-press
+            [0, 0, false, 10], // Release A
+            [0, 1, false, 10], // Release TD(0)
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+#[test]
+fn flow_tap_rechecks_current_key_after_held_key_changes_layer() {
+    key_sequence_test! {
+        keyboard: create_flow_tap_layer_cache_keyboard(),
+        sequence: [
+            [0, 0, true, 30],  // Press A
+            [0, 0, false, 30], // Release A
+            [0, 1, true, 20],  // Press LT(1, D), profile disables Flow Tap
+            [0, 2, true, 10],  // Press flow-tap key, but held LT activates layer 1 first
+            [0, 2, false, 10], // Release Kp1 from layer 1
+            [0, 1, false, 10], // Release LT
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
         ]
     };
 }
