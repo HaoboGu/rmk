@@ -30,6 +30,9 @@
 //! )
 //! .await;
 //! ```
+//!
+//! For keyboards wired with active-low 595 outputs and pull-up row inputs,
+//! set the final const generic to `true`.
 
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -57,6 +60,7 @@ pub struct Hc595Matrix<
     const COL: usize,
     const ROW_OFFSET: usize = 0,
     const COL_OFFSET: usize = 0,
+    const ACTIVE_LOW: bool = false,
 > {
     spi: SPI,
     latch: LATCH,
@@ -78,7 +82,8 @@ impl<
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-> Hc595Matrix<SPI, LATCH, In, D, ROW, COL, ROW_OFFSET, COL_OFFSET>
+    const ACTIVE_LOW: bool,
+> Hc595Matrix<SPI, LATCH, In, D, ROW, COL, ROW_OFFSET, COL_OFFSET, ACTIVE_LOW>
 {
     const NUM_BYTES: usize = {
         if COL > SR_MAX_BYTES * 8 {
@@ -109,16 +114,28 @@ impl<
     }
 
     fn col_bitmask(col_idx: usize) -> [u8; SR_MAX_BYTES] {
-        let mut buf = [0u8; SR_MAX_BYTES];
+        let mut buf = if ACTIVE_LOW {
+            [0xFFu8; SR_MAX_BYTES]
+        } else {
+            [0u8; SR_MAX_BYTES]
+        };
         let byte_pos = col_idx / 8;
         let bit_pos = col_idx % 8;
-        buf[Self::NUM_BYTES - 1 - byte_pos] = 1 << bit_pos;
+        if ACTIVE_LOW {
+            buf[Self::NUM_BYTES - 1 - byte_pos] &= !(1 << bit_pos);
+        } else {
+            buf[Self::NUM_BYTES - 1 - byte_pos] = 1 << bit_pos;
+        }
         buf
     }
 
     async fn clear_columns(&mut self) {
-        let zeros = [0u8; SR_MAX_BYTES];
-        self.pulse_latch(&zeros[..Self::NUM_BYTES]).await;
+        let idle = if ACTIVE_LOW {
+            [0xFFu8; SR_MAX_BYTES]
+        } else {
+            [0u8; SR_MAX_BYTES]
+        };
+        self.pulse_latch(&idle[..Self::NUM_BYTES]).await;
     }
 
     async fn read_keyboard_event(&mut self) -> KeyboardEvent {
@@ -137,11 +154,12 @@ impl<
 
                 for row_idx in r_start..ROW {
                     let pin_high = self.row_pins[row_idx].is_high().ok().unwrap_or(false);
+                    let key_active = if ACTIVE_LOW { !pin_high } else { pin_high };
 
                     let debounce_state = self.debouncer.detect_change_with_debounce(
                         row_idx,
                         col_idx,
-                        pin_high,
+                        key_active,
                         &self.key_states[col_idx][row_idx],
                     );
 
@@ -194,7 +212,8 @@ impl<
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-> MatrixTrait<ROW, COL> for Hc595Matrix<SPI, LATCH, In, D, ROW, COL, ROW_OFFSET, COL_OFFSET>
+    const ACTIVE_LOW: bool,
+> MatrixTrait<ROW, COL> for Hc595Matrix<SPI, LATCH, In, D, ROW, COL, ROW_OFFSET, COL_OFFSET, ACTIVE_LOW>
 {
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
