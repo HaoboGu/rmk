@@ -110,6 +110,9 @@ run_all!(trackpad, trackpad_proc, /* matrix, ... */);
 wired to a peripheral. The peripheral runs the `Iqs5xx` device and forwards
 events over the split link; the central converts them to USB/BLE HID reports.
 
+You can switch between Cursor, Scroll, Sniper and Caret modes per layer.
+See the [PointingProcessor](./pointing_processor) page for all options.
+
 :::
 
 ## RDY vs polling

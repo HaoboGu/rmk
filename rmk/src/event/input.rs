@@ -10,8 +10,8 @@ use rmk_macro::event;
 use rmk_types::modifier::ModifierCombination;
 use serde::{Deserialize, Serialize};
 
+use crate::input_device::pointing::PointingMode;
 use crate::input_device::rotary_encoder::Direction;
-
 // ============================================================================
 // Keyboard Events
 // ============================================================================
@@ -109,7 +109,12 @@ pub struct ModifierEvent {
 )]
 #[derive(Serialize, Deserialize, Clone, Debug, Copy, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct PointingEvent(pub [AxisEvent; 3]);
+pub struct PointingEvent {
+    /// The id of the pointing device that produced this event.
+    pub device_id: u8,
+    /// Raw axis values (X, Y, Z).
+    pub axes: [AxisEvent; 3],
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Copy, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -151,4 +156,14 @@ pub enum Axis {
 pub struct PointingSetCpiEvent {
     pub device_id: u8,
     pub cpi: u16,
+}
+
+/// Pointing processor event
+/// TODO: Make the channel size configurable
+#[event(channel_size = 8, pubs = 2, subs = 2)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct PointingProcessorEvent {
+    pub device_id: u8,
+    pub mode: PointingMode,
 }

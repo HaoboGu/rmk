@@ -20,7 +20,16 @@
     "type": "dir",
     "name": "input_device",
     "label": "Input Device",
-    "collapsed": true
+    "collapsed": true,
+    "items": [
+      "index",
+      "pointing_processor",
+      "encoder",
+      "joystick",
+      "pmw33xx",
+      "pmw3610",
+      "iqs5xx"
+    ]
   },
   "display",
   "event",
