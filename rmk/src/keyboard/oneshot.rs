@@ -1,5 +1,5 @@
 use embassy_futures::select::{Either, select};
-use embassy_time::Timer;
+use embassy_time::{Instant, Timer};
 use rmk_types::modifier::ModifierCombination;
 
 use crate::event::KeyboardEvent;
@@ -72,22 +72,48 @@ impl<'a> Keyboard<'a> {
             match self.osm_state {
                 OneShotState::Initial(cur_modifiers) | OneShotState::Single(cur_modifiers) => {
                     self.osm_state = OneShotState::Single(cur_modifiers);
-                    let timeout = Timer::after(self.keymap.one_shot_timeout());
-                    match select(timeout, self.keyboard_event_subscriber.next_message_pure()).await {
-                        Either::First(_) => {
-                            // Timeout, release modifiers
-                            self.update_osl(event);
-                            self.osm_state = OneShotState::None;
+                    let quick_release = self.keymap.one_shot_modifiers_config().quick_release;
 
-                            // Send release report because modifiers were held
-                            if activate_on_keypress {
-                                self.send_keyboard_report_with_resolved_modifiers(false).await;
+                    // If unprocessed_events already contains a consuming event, skip the
+                    // await loop — waiting on the subscriber would miss it because events
+                    // already dequeued from the channel live only in unprocessed_events.
+                    let already_has_consumer = self
+                        .unprocessed_events
+                        .iter()
+                        .any(|e| (quick_release && e.pressed) || (!quick_release && !e.pressed));
+
+                    if !already_has_consumer {
+                        let deadline = Instant::now() + self.keymap.one_shot_timeout();
+                        loop {
+                            let now = Instant::now();
+                            if now >= deadline {
+                                self.update_osl(event);
+                                self.osm_state = OneShotState::None;
+                                if activate_on_keypress {
+                                    self.send_keyboard_report_with_resolved_modifiers(false).await;
+                                }
+                                break;
                             }
-                        }
-                        Either::Second(e) => {
-                            // New event, send it to queue
-                            if self.unprocessed_events.push(e).is_err() {
-                                warn!("Unprocessed event queue is full, dropping event");
+                            let timeout = Timer::after(deadline - now);
+                            match select(timeout, self.keyboard_event_subscriber.next_message_pure()).await {
+                                Either::First(_) => {
+                                    self.update_osl(event);
+                                    self.osm_state = OneShotState::None;
+                                    if activate_on_keypress {
+                                        self.send_keyboard_report_with_resolved_modifiers(false).await;
+                                    }
+                                    break;
+                                }
+                                Either::Second(e) => {
+                                    if self.unprocessed_events.push(e).is_err() {
+                                        warn!("Unprocessed event queue is full, dropping event");
+                                    }
+                                    // If this event would consume the OSM, stop waiting
+                                    if (quick_release && e.pressed) || (!quick_release && !e.pressed) {
+                                        break;
+                                    }
+                                    // Non-consuming event (e.g. layer key release), keep waiting
+                                }
                             }
                         }
                     }
@@ -136,17 +162,33 @@ impl<'a> Keyboard<'a> {
                 OneShotState::Initial(l) | OneShotState::Single(l) => {
                     self.osl_state = OneShotState::Single(l);
 
-                    let timeout = embassy_time::Timer::after(self.keymap.one_shot_timeout());
-                    match select(timeout, self.keyboard_event_subscriber.next_message_pure()).await {
-                        Either::First(_) => {
+                    let deadline = Instant::now() + self.keymap.one_shot_timeout();
+                    loop {
+                        let now = Instant::now();
+                        if now >= deadline {
                             // Timeout, deactivate layer
                             self.keymap.deactivate_layer(layer_num);
                             self.osl_state = OneShotState::None;
+                            break;
                         }
-                        Either::Second(e) => {
-                            // New event, send it to queue
-                            if self.unprocessed_events.push(e).is_err() {
-                                warn!("Unprocessed event queue is full, dropping event");
+                        let timeout = Timer::after(deadline - now);
+                        match select(timeout, self.keyboard_event_subscriber.next_message_pure()).await {
+                            Either::First(_) => {
+                                // Timeout, deactivate layer
+                                self.keymap.deactivate_layer(layer_num);
+                                self.osl_state = OneShotState::None;
+                                break;
+                            }
+                            Either::Second(e) => {
+                                // New event, send it to queue
+                                if self.unprocessed_events.push(e).is_err() {
+                                    warn!("Unprocessed event queue is full, dropping event");
+                                }
+                                // A key press consumes the one-shot layer.
+                                if e.pressed {
+                                    break;
+                                }
+                                // Release events (e.g. layer key release) don't consume, keep waiting
                             }
                         }
                     }
