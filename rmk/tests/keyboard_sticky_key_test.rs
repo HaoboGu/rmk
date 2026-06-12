@@ -633,4 +633,76 @@ rusty_fork_test! {
             ]
         };
     }
+
+    /// StickyKey Test 15: `activate_on_keypress` is IGNORED for tap-key SKs.
+    ///
+    /// Docs: `activate_on_keypress` is "honored only for pure-mod SKs" and is
+    /// "silently ignored for tap-key SKs". A tap-key already sends its modifier
+    /// eagerly on the first press, so the flag has nothing to tune. With
+    /// activate_on_keypress=true the report stream must be identical to the
+    /// default tap-key flow (cf. test_sk_basic_flow_press_twice).
+    #[test]
+    fn test_sk_tap_key_ignores_activate_on_keypress() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
+                sticky_key: StickyKeyConfig {
+                    activate_on_keypress: true,    // pure-mod-only knob — must be ignored here
+                    release_on_layer_change: true, // match create_test_keyboard so MO release cleans up
+                    ..StickyKeyConfig::default()
+                },
+                ..BehaviorConfig::default()
+            }),
+            sequence: [
+                [0, 3, true,  10],  // Press MO(1)
+                [0, 0, true,  10],  // Press SK(Tab, LAlt)
+                [0, 0, false, 10],  // Release SK
+                [0, 0, true,  10],  // Press SK again
+                [0, 0, false, 10],  // Release SK
+                [0, 3, false, 10],  // Release MO(1)
+            ],
+            expected_reports: [
+                [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // SK press: Alt+Tab
+                [KC_LALT, [0, 0, 0, 0, 0, 0]],                 // SK release: Alt held
+                [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // SK press again: Alt+Tab
+                [KC_LALT, [0, 0, 0, 0, 0, 0]],                 // SK release: Alt held
+                [0, [0, 0, 0, 0, 0, 0]],                        // MO release: SK cleaned up
+            ]
+        };
+    }
+
+    /// StickyKey Test 16: `quick_release` is IGNORED for tap-key SKs.
+    ///
+    /// Docs: `quick_release` is "honored only for pure-mod SKs" and is "silently
+    /// ignored for tap-key SKs". Its pure-mod semantics (release the modifier on
+    /// the next key *press*) have nothing to tune on a tap-key, which deliberately
+    /// holds its modifier across repeats. With quick_release=true the report stream
+    /// must be identical to the default tap-key flow (cf. test_sk_basic_flow_press_twice).
+    #[test]
+    fn test_sk_tap_key_ignores_quick_release() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
+                sticky_key: StickyKeyConfig {
+                    quick_release: true,           // pure-mod-only knob — must be ignored here
+                    release_on_layer_change: true, // match create_test_keyboard so MO release cleans up
+                    ..StickyKeyConfig::default()
+                },
+                ..BehaviorConfig::default()
+            }),
+            sequence: [
+                [0, 3, true,  10],  // Press MO(1)
+                [0, 0, true,  10],  // Press SK(Tab, LAlt)
+                [0, 0, false, 10],  // Release SK
+                [0, 0, true,  10],  // Press SK again
+                [0, 0, false, 10],  // Release SK
+                [0, 3, false, 10],  // Release MO(1)
+            ],
+            expected_reports: [
+                [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // SK press: Alt+Tab
+                [KC_LALT, [0, 0, 0, 0, 0, 0]],                 // SK release: Alt held
+                [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // SK press again: Alt+Tab
+                [KC_LALT, [0, 0, 0, 0, 0, 0]],                 // SK release: Alt held
+                [0, [0, 0, 0, 0, 0, 0]],                        // MO release: SK cleaned up
+            ]
+        };
+    }
 }
