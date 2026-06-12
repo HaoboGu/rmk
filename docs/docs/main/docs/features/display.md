@@ -37,11 +37,26 @@ For `keyboard.toml` users, see the [Display Configuration](../configuration/disp
 For `use_rust` keyboards, initialize the display manually and pass it to `DisplayProcessor`:
 
 ```rust
+// above main function
+
+use embassy_rp::i2c::{self, I2c}; // use embassy HAL crate of your chip (for example RP2040)
+
+bind_interrupts!(struct Irqs {
+    // ... other interrupts ...
+    I2C1_IRQ => i2c::InterruptHandler<I2C1>; // example: I2C1
+});
+
 use rmk::display::DisplayProcessor;
 use rmk::core_traits::Runnable;
 
 // SSD1306 via ssd1306 crate
 use ssd1306::{I2CDisplayInterface, Ssd1306Async, prelude::*};
+
+// in main function
+// use embassy HAL crate of your chip (for example RP2040)
+let config = embassy_rp::i2c::Config::default();
+// for example using I2C1 on PIN_3 (scl) and PIN_2 (sda)
+let i2c = I2c::new_async(p.I2C1, p.PIN_3, p.PIN_2, Irqs, config);
 
 let interface = I2CDisplayInterface::new(i2c);
 let display = Ssd1306Async::new(interface, DisplaySize128x32, DisplayRotation::Rotate0)
