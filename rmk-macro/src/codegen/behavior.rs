@@ -24,8 +24,8 @@ fn expand_tri_layer(tri_layer: &Option<[u8; 3]>) -> proc_macro2::TokenStream {
 
 fn expand_sticky_key(behavior: &Behavior) -> proc_macro2::TokenStream {
     let timeout = match behavior.sticky_key_timeout_ms {
-        Some(millis) => quote! { ::embassy_time::Duration::from_millis(#millis) },
-        None => quote! { ::embassy_time::Duration::from_secs(1) },
+        Some(millis) => quote! { ::rmk::embassy_time::Duration::from_millis(#millis) },
+        None => quote! { ::rmk::embassy_time::Duration::from_secs(1) },
     };
     let activate_on_keypress = behavior.sticky_key_activate_on_keypress.unwrap_or(false);
     let quick_release = behavior.sticky_key_quick_release.unwrap_or(false);
