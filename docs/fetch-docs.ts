@@ -1,19 +1,24 @@
-import { execSync } from 'child_process'
-import { readFileSync, mkdirSync, existsSync } from 'fs'
+import { execSync } from 'node:child_process'
+import { readFileSync, mkdirSync, existsSync } from 'node:fs'
 
-const versions = JSON.parse(readFileSync(new URL('./versions.json', import.meta.url)))
+const versions = JSON.parse(
+  readFileSync(new URL('./versions.json', import.meta.url), 'utf8')
+) as string[]
 const docsRoot = 'docs'
 
 versions.forEach((branch) => {
-  const version = branch.split('/').pop()
-  const targetDir = docsRoot + '/' + version
+  const version = branch.split('/').pop()!
+  const targetDir = `${docsRoot}/${version}`
 
   if (!existsSync(targetDir)) {
     mkdirSync(targetDir, { recursive: true })
   }
 
   // Set and fetch branch
-  execSync(`git remote remove rmk-origin 2>/dev/null || true`, { stdio: 'inherit', shell: 'bash' })
+  execSync(`git remote remove rmk-origin 2>/dev/null || true`, {
+    stdio: 'inherit',
+    shell: 'bash'
+  })
   execSync(`git remote add rmk-origin https://github.com/HaoboGu/rmk.git`, {
     stdio: 'inherit',
     shell: 'bash'

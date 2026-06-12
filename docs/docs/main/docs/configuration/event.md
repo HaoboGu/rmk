@@ -47,28 +47,28 @@ peripheral_battery.subs = 4
 
 ## Configurable Event Names
 
-| Config Name | Event Type | Default Notes |
-|-------------|------------|---------------|
-| **Input Events** | | |
-| `keyboard` | `KeyboardEvent` | channel_size=16 |
-| `modifier` | `ModifierEvent` | |
-| `pointing` | `PointingEvent` | channel_size=8 |
-| **State Events** | | |
-| `layer_change` | `LayerChangeEvent` | subs=4 |
-| `wpm_update` | `WpmUpdateEvent` | |
-| `led_indicator` | `LedIndicatorEvent` | |
-| `sleep_state` | `SleepStateEvent` | |
-| **Battery Events** | | |
-| `battery_adc` | `BatteryAdcEvent` | channel_size=2 |
-| `charging_state` | `ChargingStateEvent` | channel_size=2 |
-| `battery_status` | `BatteryStatusEvent` | subs=4 |
-| **Connection Events** | | |
+| Config Name                | Event Type                    | Default Notes          |
+| -------------------------- | ----------------------------- | ---------------------- |
+| **Input Events**           |                               |                        |
+| `keyboard`                 | `KeyboardEvent`               | channel_size=16        |
+| `modifier`                 | `ModifierEvent`               |                        |
+| `pointing`                 | `PointingEvent`               | channel_size=8         |
+| **State Events**           |                               |                        |
+| `layer_change`             | `LayerChangeEvent`            | subs=4                 |
+| `wpm_update`               | `WpmUpdateEvent`              |                        |
+| `led_indicator`            | `LedIndicatorEvent`           |                        |
+| `sleep_state`              | `SleepStateEvent`             |                        |
+| **Battery Events**         |                               |                        |
+| `battery_adc`              | `BatteryAdcEvent`             | channel_size=2         |
+| `charging_state`           | `ChargingStateEvent`          | channel_size=2         |
+| `battery_status`           | `BatteryStatusEvent`          | subs=4                 |
+| **Connection Events**      |                               |                        |
 | `connection_status_change` | `ConnectionStatusChangeEvent` | channel_size=2, pubs=2 |
-| **Split Events** | | |
-| `peripheral_connected` | `PeripheralConnectedEvent` | |
-| `central_connected` | `CentralConnectedEvent` | |
-| `peripheral_battery` | `PeripheralBatteryEvent` | channel_size=2, subs=2 |
-| `clear_peer` | `ClearPeerEvent` | |
+| **Split Events**           |                               |                        |
+| `peripheral_connected`     | `PeripheralConnectedEvent`    |                        |
+| `central_connected`        | `CentralConnectedEvent`       |                        |
+| `peripheral_battery`       | `PeripheralBatteryEvent`      | channel_size=2, subs=2 |
+| `clear_peer`               | `ClearPeerEvent`              |                        |
 
 ## Related Documentation
 

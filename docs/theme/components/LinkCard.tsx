@@ -1,4 +1,12 @@
-export const LinkCard = ({ title, description, href }: { title: string; description: string; href: string }) => {
+export const LinkCard = ({
+  title,
+  description,
+  href
+}: {
+  title: string
+  description: string
+  href: string
+}) => {
   return (
     <a
       href={href}
@@ -7,5 +15,5 @@ export const LinkCard = ({ title, description, href }: { title: string; descript
       <span className="font-bold text-xl"> {title} </span>
       <p> {description} </p>
     </a>
-  );
-};
+  )
+}

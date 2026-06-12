@@ -49,12 +49,12 @@ passkey_entry_timeout = 120
 
 During passkey mode, the keyboard intercepts all keypresses. Only the following keys are recognized:
 
-| Key | Action |
-| --- | --- |
-| `0`–`9` (top row or numpad) | Enter a digit |
-| `Enter` / `Numpad Enter` | Submit the 6-digit passkey |
-| `Escape` | Cancel pairing |
-| `Backspace` | Delete the last digit |
+| Key                         | Action                     |
+| --------------------------- | -------------------------- |
+| `0`–`9` (top row or numpad) | Enter a digit              |
+| `Enter` / `Numpad Enter`    | Submit the 6-digit passkey |
+| `Escape`                    | Cancel pairing             |
+| `Backspace`                 | Delete the last digit      |
 
 All other keys are silently discarded while passkey mode is active.
 
@@ -75,5 +75,6 @@ adc_divider_total = 2806
 ```
 
 Notes:
+
 - If `[split.central]` provides battery ADC settings, they override the top-level `[ble]` battery settings for the central.
 - Peripherals do **not** fall back to `[ble]`; to enable peripheral battery reporting, set ADC values per peripheral.

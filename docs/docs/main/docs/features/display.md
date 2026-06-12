@@ -4,20 +4,20 @@ RMK has built-in support for OLED and other small displays through the `DisplayP
 
 ## Supported Drivers
 
-| Driver | Chip(s) | Feature flag |
-|---|---|---|
-| SSD1306 | SSD1306 | `ssd1306` |
+| Driver     | Chip(s)                         | Feature flag |
+| ---------- | ------------------------------- | ------------ |
+| SSD1306    | SSD1306                         | `ssd1306`    |
 | oled-async | SH1106, SH1107, SH1108, SSD1309 | `oled_async` |
 
 ### Supported Sizes
 
-| Driver | Supported resolutions |
-|---|---|
+| Driver  | Supported resolutions               |
+| ------- | ----------------------------------- |
 | SSD1306 | 128x64, 128x32, 96x16, 72x40, 64x48 |
-| SH1106 | 128x64 |
-| SH1107 | 64x128, 128x128 |
-| SH1108 | 64x160, 96x160, 128x160, 160x160 |
-| SSD1309 | 128x64 |
+| SH1106  | 128x64                              |
+| SH1107  | 64x128, 128x128                     |
+| SH1108  | 64x160, 96x160, 128x160, 160x160    |
+| SSD1309 | 128x64                              |
 
 All drivers support 0, 90, 180 and 270 degree rotation.
 
@@ -135,26 +135,26 @@ renderer = "my_crate::MyRenderer"
 
 The `ctx` argument passed to `render` carries a snapshot of the current keyboard state:
 
-| Field | Type | Description |
-|---|---|---|
-| `layer` | `u8` | Current active layer index |
-| `wpm` | `u16` | Words-per-minute estimate |
-| `caps_lock` | `bool` | Caps Lock indicator state |
-| `num_lock` | `bool` | Num Lock indicator state |
-| `modifiers` | `ModifierCombination` | Active modifier keys (Shift, Ctrl, Alt, GUI) |
-| `key_pressed` | `bool` | Whether a key is currently held down |
-| `key_press_latch` | `bool` | True if a key was pressed since the last render; cleared after each render |
-| `sleeping` | `bool` | Whether the keyboard is in sleep mode |
-| `battery` | `BatteryStateEvent` | Battery charge level and state |
+| Field             | Type                  | Description                                                                |
+| ----------------- | --------------------- | -------------------------------------------------------------------------- |
+| `layer`           | `u8`                  | Current active layer index                                                 |
+| `wpm`             | `u16`                 | Words-per-minute estimate                                                  |
+| `caps_lock`       | `bool`                | Caps Lock indicator state                                                  |
+| `num_lock`        | `bool`                | Num Lock indicator state                                                   |
+| `modifiers`       | `ModifierCombination` | Active modifier keys (Shift, Ctrl, Alt, GUI)                               |
+| `key_pressed`     | `bool`                | Whether a key is currently held down                                       |
+| `key_press_latch` | `bool`                | True if a key was pressed since the last render; cleared after each render |
+| `sleeping`        | `bool`                | Whether the keyboard is in sleep mode                                      |
+| `battery`         | `BatteryStateEvent`   | Battery charge level and state                                             |
 
 Feature-gated fields (require the corresponding RMK feature to be enabled):
 
-| Field | Feature | Description |
-|---|---|---|
-| `ble_status` | `_ble` | BLE connection profile and state |
-| `central_connected` | `split` | Whether the central is connected (peripheral side) |
-| `peripherals_connected` | `split` | Per-peripheral connection state array |
-| `peripheral_batteries` | `split` + `_ble` | Per-peripheral battery state array |
+| Field                   | Feature          | Description                                        |
+| ----------------------- | ---------------- | -------------------------------------------------- |
+| `ble_status`            | `_ble`           | BLE connection profile and state                   |
+| `central_connected`     | `split`          | Whether the central is connected (peripheral side) |
+| `peripherals_connected` | `split`          | Per-peripheral connection state array              |
+| `peripheral_batteries`  | `split` + `_ble` | Per-peripheral battery state array                 |
 
 ::: tip `key_press_latch` vs `key_pressed`
 Use `key_press_latch` when you want to react to a new key press — it stays `true` even if the key was released before the render ran. Use `key_pressed` to reflect the real-time held state (e.g. to display a held-key animation).

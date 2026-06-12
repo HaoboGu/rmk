@@ -1,29 +1,29 @@
 [
-    "keyboard_device",
-    "keyboard_matrix",
-    "layout",
-    {
-        "type": "dir",
-        "name": "keymap_configuration",
-        "label": "Keymap Configuration",
-        "collapsed": true
-    },
-    "light",
-    "behavior",
-    "split_keyboard",
-    "wireless",
-    "storage",
-    "host_config",
-    "output",
-    "chip_config",
-    {
-        "type": "dir",
-        "name": "input_device",
-        "label": "Input Device",
-        "collapsed": true
-    },
-    "display",
-    "event",
-    "rmk_config",
-    "appendix"
+  "keyboard_device",
+  "keyboard_matrix",
+  "layout",
+  {
+    "type": "dir",
+    "name": "keymap_configuration",
+    "label": "Keymap Configuration",
+    "collapsed": true
+  },
+  "light",
+  "behavior",
+  "split_keyboard",
+  "wireless",
+  "storage",
+  "host_config",
+  "output",
+  "chip_config",
+  {
+    "type": "dir",
+    "name": "input_device",
+    "label": "Input Device",
+    "collapsed": true
+  },
+  "display",
+  "event",
+  "rmk_config",
+  "appendix"
 ]

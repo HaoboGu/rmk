@@ -8,23 +8,23 @@ Configures the display for non-split keyboards. For split keyboards, use `[split
 
 ### Display Fields
 
-| Field | Required | Default | Description |
-|---|---|---|---|
-| `driver` | Yes | — | Display driver: `ssd1306`, `sh1106`, `sh1107`, `sh1108`, or `ssd1309` |
-| `size` | Yes | — | Display resolution (e.g. `"128x64"`, `"128x32"`) |
-| `rotation` | No | `0` | Display rotation in degrees: `0`, `90`, `180`, or `270` |
-| `renderer` | No | `"LogoRenderer"` | Renderer to use. Built-in: `"OledRenderer"`, `"LogoRenderer"`. Custom: full Rust path (e.g. `"my_crate::MyRenderer"`) |
-| `render_interval` | No | — | Poll interval in ms for periodic redraws (animations). Omit for event-driven only |
-| `min_render_interval` | No | `33` | Minimum time in ms between event-driven renders. Coalesces rapid events to avoid flickering |
+| Field                 | Required | Default          | Description                                                                                                           |
+| --------------------- | -------- | ---------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `driver`              | Yes      | —                | Display driver: `ssd1306`, `sh1106`, `sh1107`, `sh1108`, or `ssd1309`                                                 |
+| `size`                | Yes      | —                | Display resolution (e.g. `"128x64"`, `"128x32"`)                                                                      |
+| `rotation`            | No       | `0`              | Display rotation in degrees: `0`, `90`, `180`, or `270`                                                               |
+| `renderer`            | No       | `"LogoRenderer"` | Renderer to use. Built-in: `"OledRenderer"`, `"LogoRenderer"`. Custom: full Rust path (e.g. `"my_crate::MyRenderer"`) |
+| `render_interval`     | No       | —                | Poll interval in ms for periodic redraws (animations). Omit for event-driven only                                     |
+| `min_render_interval` | No       | `33`             | Minimum time in ms between event-driven renders. Coalesces rapid events to avoid flickering                           |
 
 ### `[display.protocol.i2c]`
 
-| Field | Required | Default | Description |
-|---|---|---|---|
-| `instance` | Yes | — | I2C peripheral instance (e.g. `"I2C0"`, `"I2C1"`, `"TWISPI0"`) |
-| `sda` | Yes | — | SDA pin |
-| `scl` | Yes | — | SCL pin |
-| `address` | No | `0x3C` | 7-bit I2C address |
+| Field      | Required | Default | Description                                                    |
+| ---------- | -------- | ------- | -------------------------------------------------------------- |
+| `instance` | Yes      | —       | I2C peripheral instance (e.g. `"I2C0"`, `"I2C1"`, `"TWISPI0"`) |
+| `sda`      | Yes      | —       | SDA pin                                                        |
+| `scl`      | Yes      | —       | SCL pin                                                        |
+| `address`  | No       | `0x3C`  | 7-bit I2C address                                              |
 
 ### Example
 
