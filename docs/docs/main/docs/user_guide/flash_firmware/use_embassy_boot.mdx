@@ -8,7 +8,28 @@ This feature is only available for **RP2040** (Raspberry Pi Pico, Pi Pico W, and
 
 [bootymcbootface](https://codeberg.org/Schievel/bootymcbootface/) is a pre-built embassy-boot bootloader for RP2040. It sits at the beginning of flash and handles the dual-slot firmware switching and rollback on boot. RMK itself provides the DFU USB interface (via `embassy-usb-dfu`) for subsequent updates, so once bootymcbootface and RMK are flashed, you never need to press BOOTSEL again.
 
-RMK's `[dfu]` configuration is tuned for bootymcbootface's `memory.x` partition layout, so the default settings work out of the box.
+RMK and bootymcbootface use an **identical partition formula** so the layout always fits perfectly:
+
+```rust
+// bootloader+state = 28K (fixed)
+// storage = 128K (fixed — 32 sectors × 4K for persistent keymap storage)
+// remaining = flash_size - 28K - 128K
+// ACTIVE    = (remaining - 4K) / 2
+// DFU       = ACTIVE + 4K  (1 page delta required by embassy-boot swap)
+```
+
+The 4K page delta is an **invariant of embassy-boot's swap algorithm**: the DFU slot must always be exactly one erase page larger than the ACTIVE slot. Storage is reserved at the end of flash and **cannot be reconfigured** when using bootymcbootface — it is always 128K (32 sectors × 4K).
+
+| Region      | 2MB               | 4MB               | 8MB               | 16MB              |
+|-------------|-------------------|-------------------|-------------------|-------------------|
+| Boot+State  | 28K (0x7000)      | 28K (0x7000)      | 28K (0x7000)      | 28K (0x7000)      |
+| ACTIVE      | **944K** (0xEC000)| **1968K** (0x1EC000) | **4016K** (0x3EC000) | **8112K** (0x7EC000) |
+| DFU         | **948K** (0xED000)| **1972K** (0x1ED000) | **4020K** (0x3ED000) | **8116K** (0x7ED000) |
+| Storage     | 128K (0x20000)    | 128K (0x20000)    | 128K (0x20000)    | 128K (0x20000)    |
+
+The size of the ACTIVE Region is what you need to plug in as the flash size in `memory.x`. 
+
+If you override `flash_size` in your `keyboard.toml`'s `[dfu]` section, RMK's auto-calc recomputes the layout on the fly. You never need to manually set `dfu_offset` or `dfu_size` when using bootymcbootface.
 
 ## Prerequisites
 
@@ -16,12 +37,12 @@ RMK's `[dfu]` configuration is tuned for bootymcbootface's `memory.x` partition 
 
 You need the [bootymcbootface](https://codeberg.org/Schievel/bootymcbootface/) bootloader in the **correct flash size** for your board. The available versions are named by flash size, e.g.:
 
-- `bootymcbootface_2MB.uf2` – for 2 MB flash
-- `bootymcbootface_4MB.uf2` – for 4 MB flash
-- `bootymcbootface_8MB.uf2` – for 8 MB flash
-- `bootymcbootface_16MB.uf2` – for 16 MB flash
+- `bootymcbootface-rp2040-2mb.uf2` – for 2 MB flash
+- `bootymcbootface-rp2040-4mb.uf2` – for 4 MB flash
+- `bootymcbootface-rp2040-8mb.uf2` – for 8 MB flash
+- `bootymcbootface-rp2040-16mb.uf2` – for 16 MB flash
 
-The **2 MB version works with larger flash chips too** (e.g. 4 MB or 8 MB). It only uses the first 2 MB of flash, the rest remains unused. Since RMK is not so big, a flash of 2MB is sufficient most of the times. (But keep in mind when using embassy-boot, the flash is partitioned into ACTIVE and DFU and the firmware has to fit into the ACTIVE partition. Which is only 512K on a 2MB RP2040 then.)  If you want to use the full flash, pick the matching variant.
+The **2 MB version works with larger flash chips too** (e.g. 4 MB or 8 MB), using only the first 2 MB. On 2 MB you get 944K of ACTIVE space, which is ample for most RMK firmwares. If you need more room (e.g. with large keymaps, Vial, or many features), pick the matching flash size variant — see the table above for exact slot sizes.
 
 ### Compile RMK with DFU support
 
@@ -58,7 +79,7 @@ The first time, you need to flash the bootloader first, then RMK.
 **Method A – via UF2:**
 1. Put your RP2040 into bootloader mode (hold BOOTSEL button, plug in USB, release)
 2. A USB drive named `RPI-RP2` should appear
-3. Copy the matching `bootymcbootface_<size>.uf2` to the drive
+3. Copy the matching `bootymcbootface-rp2040-<size>mb.uf2` to the drive
 4. The RP2040 reboots – the bootloader is now active
 
 **Method B – via debug probe (probe-rs):**
