@@ -40,6 +40,7 @@ enabled = true
 # 2 * 1024 * 1024;    // 2 MB (default)
 # 4 * 1024 * 1024;    // 4 MB
 # and so on
+# the addresses for the state, dfu, active and storage partitions are then automatically calculated.
 # Uncomment and adjust to override:
 # [dfu]
 # flash_size = 2097152   # total flash (default: 2 MB)

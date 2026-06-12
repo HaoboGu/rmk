@@ -4,9 +4,12 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use rmk_config::resolved::Hardware;
-use rmk_config::resolved::hardware::{ChipSeries, DfuConfig};
+use rmk_config::resolved::hardware::ChipSeries;
 
+#[cfg(feature = "dfu_rp")]
 use super::gpio::convert_gpio_str_to_output_pin;
+#[cfg(feature = "dfu_rp")]
+use rmk_config::resolved::hardware::DfuConfig;
 
 pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
     if hardware.storage.is_none() {
@@ -111,6 +114,7 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
 }
 
 /// Generate the `DFU_UNLOCK_KEYS` constant from the resolved DFU config.
+#[cfg(feature = "dfu_rp")]
 fn expand_dfu_unlock_keys(dfu: &DfuConfig) -> TokenStream2 {
     if dfu.unlock_keys.is_empty() {
         return quote! {};

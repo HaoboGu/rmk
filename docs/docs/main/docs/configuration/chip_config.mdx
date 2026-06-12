@@ -94,13 +94,13 @@ let mut dfu_lock = ::rmk::dfu::DfuLock::new(unlock_keys, &keymap);
 
 The bootloader divides flash into regions. The defaults follow the [bootymcbootface](https://codeberg.org/Schievel/bootymcbootface/) convention and are automatically calculated from `flash_size`:
 
-| Region | Offset | Size |
-|---|---|---|
-| Bootloader | `0x0000000` | 28 KB |
-| Boot state | `0x6000` (24 KB) | 4 KB |
-| Active firmware | `0x7000` (28 KB) | `flash_size / 4` |
-| DFU download | follows active | `flash_size / 4 + page_size` |
-| Storage | follows DFU | rest of flash |
+| Region          | Offset           | Size                                                                               |
+|-----------------|------------------|------------------------------------------------------------------------------------|
+| Bootloader      | `0x0000000`      | 28 KB                                                                              |
+| Boot state      | `0x6000` (24 KB) | 4 KB                                                                               |
+| Active firmware | `0x7000` (28 KB) | (flash_size - 28K (= BOOT2 size + embassy-boot + embassy-boot state) - STORAGE_SIZE - page_size) / 2|
+| DFU download    | follows active   | `active_size + page_size`                                                       |
+| Storage         | follows DFU      | rest of flash                                                                      |
 
 The DFU partition size follows embassy-boot guidelines, the additional page is used for status information during flashing.
 

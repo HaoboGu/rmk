@@ -44,35 +44,53 @@ async fn main(_spawner: Spawner) {
         config_matrix_pins_rp!(peripherals: p, input: [PIN_6, PIN_7, PIN_8, PIN_9], output: [PIN_19, PIN_20, PIN_21]);
 
     // Flash layout using the bootymcbootface formula:
-    //   state at 0x6000 (4K), active from 0x7000 (flash/4),
-    //   dfu follows active (flash/4 + page_size)
+    //   state at 0x6000 (4K), active from 0x7000 (size: (flash_size - 28K (= BOOT2 size + embassy-boot + embassy-boot state) - STORAGE_SIZE (= 128K) - page_size (= 4K)) / 2),
+    //   dfu follows active (active_size + page_size (= 4K))
     //
     // All offsets (DFU_OFFSET, DFU_SIZE, STORAGE_END, etc.) are derived
     // automatically from FLASH_SIZE below — change only that constant.
     //
-    // ⚠  You can define your own FLASH_SIZE, but then you must build and
-    //    flash a custom bootymcbootface with a matching memory.x!
+    // ⚠  You can define your own FLASH_SIZE and addresses, but then you must build and
+    //    flash a custom embassy-boot bootloader with a matching memory.x!
     const FLASH_SIZE: u32 = 2 * 1024 * 1024; // 2 MB (default)
     // const FLASH_SIZE: u32 = 4 * 1024 * 1024;    // 4 MB
     // const FLASH_SIZE: u32 = 8 * 1024 * 1024;    // 8 MB
     // const FLASH_SIZE: u32 = 16 * 1024 * 1024;   // 16 MB
-    const PAGE_SIZE: u32 = 4096;
-    const HALF_FLASH: u32 = FLASH_SIZE / 4;
+    const PAGE_SIZE: u32 = 4 * 1024;
+    const STORAGE_SIZE: u32 = 128 * 1024; // 32 sectors × 4K after ACTIVE+DFU
     const STATE_OFFSET: u32 = 0x6000;
     const STATE_SIZE: u32 = 0x1000;
-    const DFU_OFFSET: u32 = 0x7000 + HALF_FLASH;
-    const DFU_SIZE: u32 = HALF_FLASH + PAGE_SIZE;
+    let remaining = FLASH_SIZE
+        - 28 * 1024 // size of boot 2 + embassy-boot + embassy-boot state
+        - STORAGE_SIZE;
+    let active_offset = 0x7000; // after 28K bootloader + state
+    let active_size = (remaining - PAGE_SIZE) / 2; // DFU = ACTIVE + 1 page (embassy-boot requirement)
+    let dfu_size = active_size + PAGE_SIZE; // embassy-boot needs that extra page for swap info
+    let dfu_offset = active_offset + active_size as u32; // dfu after active
+    let storage_start = dfu_offset + dfu_size; // storage after active + dfu
+    let storage_end = storage_start + STORAGE_SIZE as u32;
+    assert!(storage_end == FLASH_SIZE); // sanity check that we fit everything in flash
 
-    const STORAGE_END: u32 = FLASH_SIZE - 32 * PAGE_SIZE;
+    info!(
+        "Flash layout: state @ 0x{:04X} ({}K), active @ 0x{:04X} ({}K), dfu @ 0x{:04X} ({}K), storage @ 0x{:04X}-0x{:04X}",
+        STATE_OFFSET,
+        STATE_SIZE / 1024,
+        active_offset,
+        active_size / 1024,
+        dfu_offset,
+        dfu_size / 1024,
+        storage_start,
+        storage_end
+    );
 
     let flash = async_flash_wrapper(rmk::dfu::init_flash(
         p.FLASH,
-        0, // storage_start (relative, dfu_rp partitions the flash)
-        STORAGE_END,
+        storage_start,
+        storage_end,
         STATE_OFFSET,
         STATE_SIZE,
-        DFU_OFFSET,
-        DFU_SIZE,
+        dfu_offset,
+        dfu_size,
     ));
 
     rmk::dfu::set_led(Some(Output::new(p.PIN_25, Level::Low)));

@@ -84,17 +84,23 @@ impl crate::KeyboardTomlConfig {
                     unlock_keys: d.unlock_keys.clone().unwrap_or_default(),
                 }
             } else {
-                // Auto-calculate using bootymcbootface formula:
-                //   state at 0x6000 (4K), active from 0x7000 (flash/4),
-                //   dfu follows active (flash/4 + page_size)
+                // Auto-calculate: use ALL remaining flash for ACTIVE+DFU+storage
+                // layout: [28K bootloader+state][ACTIVE][DFU(ACTIVE+1page)][storage]
                 let flash_size = d.flash_size.unwrap_or(2 * 1024 * 1024);
-                let half_flash = flash_size / 4;
                 let page_size = d.page_size.unwrap_or(4096);
+                let bootloader_state_end = 0x7000u32; // 28K
+                let storage_size = if storage_toml.enabled {
+                    storage_toml.num_sectors.unwrap_or(2) as u32 * page_size
+                } else {
+                    0
+                };
+                let remaining = flash_size - bootloader_state_end - storage_size;
+                let active_size = (remaining - page_size) / 2;
                 DfuConfig {
                     state_offset: 0x6000,
                     state_size: 0x1000,
-                    dfu_offset: 0x7000 + half_flash,
-                    dfu_size: half_flash + page_size,
+                    dfu_offset: bootloader_state_end + active_size,
+                    dfu_size: active_size + page_size,
                     page_size,
                     led: d.led.clone().map(|pin| PinConfig { pin, low_active: false }),
                     unlock_keys: d.unlock_keys.clone().unwrap_or_default(),
