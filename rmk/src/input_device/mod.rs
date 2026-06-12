@@ -78,7 +78,7 @@ pub trait InputDevice: Runnable {
 /// ```
 #[macro_export]
 macro_rules! run_all {
-    ($( $dev:ident ),*) => {{
+    ($( $dev:ident ),* $(,)*) => {{
         use $crate::core_traits::Runnable;
         $crate::join_all!(
             $(
