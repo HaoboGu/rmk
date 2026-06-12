@@ -141,7 +141,7 @@ pub(crate) enum FlashOperationMessage {
     ConnectionType(ConnectionType),
     // Timeout time for combos
     ComboTimeout(u16),
-    // Timeout time for one-shot keys
+    // Timeout time for sticky keys (variant name kept for storage-format stability)
     OneShotTimeout(u16),
     // Interval for tap actions
     TapInterval(u16),
@@ -306,8 +306,8 @@ pub(crate) struct BehaviorConfig {
 
     // Timeout time for combos
     pub(crate) combo_timeout: u16,
-    // Timeout time for one-shot keys
-    pub(crate) one_shot_timeout: u16,
+    // Timeout time for sticky (one-shot) keys
+    pub(crate) sticky_key_timeout: u16,
     // Interval for tap actions
     pub(crate) tap_interval: u16,
     // Interval for tapping capslock.
@@ -333,7 +333,7 @@ impl From<&config::BehaviorConfig> for StorageData {
             prior_idle_time: behavior.morse.prior_idle_time.as_millis() as u16,
             morse_default_profile: behavior.morse.default_profile,
             combo_timeout: behavior.combo.timeout.as_millis() as u16,
-            one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,
+            sticky_key_timeout: behavior.sticky_key.timeout.as_millis() as u16,
             tap_interval: behavior.tap.tap_interval,
             tap_capslock_interval: behavior.tap.tap_capslock_interval,
         })
@@ -511,7 +511,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             behavior_config.morse.default_profile = c.morse_default_profile;
 
             behavior_config.combo.timeout = Duration::from_millis(c.combo_timeout as u64);
-            behavior_config.one_shot.timeout = Duration::from_millis(c.one_shot_timeout as u64);
+            behavior_config.sticky_key.timeout = Duration::from_millis(c.sticky_key_timeout as u64);
             behavior_config.tap.tap_interval = c.tap_interval;
             behavior_config.tap.tap_capslock_interval = c.tap_capslock_interval;
         }
@@ -800,8 +800,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 FlashOperationMessage::ComboTimeout(combo_timeout) => {
                     update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, combo_timeout)
                 }
-                FlashOperationMessage::OneShotTimeout(one_shot_timeout) => {
-                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, one_shot_timeout)
+                FlashOperationMessage::OneShotTimeout(sticky_key_timeout) => {
+                    update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, sticky_key_timeout)
                 }
                 FlashOperationMessage::TapInterval(tap_interval) => {
                     update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, tap_interval)

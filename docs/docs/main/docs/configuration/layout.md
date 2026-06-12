@@ -122,11 +122,15 @@ The `layer.keys` string should follow several rules:
    2. Use `MO(n)` to create a layer activate action, `n` is the layer number
    3. Use `LM(n, modifier)` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`
    4. Use `LT(n, key, <profile_name>)` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html), The `profile_name` is optional, which defines the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning)
-   5. Use `OSL(n)` to create a one-shot layer action, `n` is the layer number
-   6. Use `OSM(modifier)` to create a one-shot modifier action. The modifier can be chained in the same way as `WM`
-   7. Use `TT(n)` to create a layer activate or tap toggle action, `n` is the layer number
-   8. Use `TG(n)` to create a layer toggle action, `n` is the layer number
-   9. Use `TO(n)` to create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
+   5. Use `SK(...)` to create a sticky key action — behavior is selected by argument shape:
+      - `SK(modifier)` — one-shot modifier (replaces the removed `OSM`): the modifier is held for the next key press, then released automatically. Modifiers chain like `WM`, e.g. `SK(LCtrl|LShift)`.
+      - `SK(MO(n))` — one-shot layer (replaces the removed `OSL`): layer `n` is active for the next key press, then released.
+      - `SK(key, [modifier])` — tap-key (Alt+Tab-style cycling): the modifier stays held across repeated presses of `key` until any non-SK, non-modifier key is pressed. The modifier list is in `[ ]` and can be chained, e.g. `SK(Tab, [LCtrl|LShift])`.
+
+      See [Sticky Key](./behavior#sticky-key) for global config (`timeout`, `activate_on_keypress`, `quick_release`, etc.).
+   6. Use `TT(n)` to create a layer activate or tap toggle action, `n` is the layer number
+   7. Use `TG(n)` to create a layer toggle action, `n` is the layer number
+   8. Use `TO(n)` to create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
 
 The definitions of these operations are the same as QMK's; you can find them [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [file an issue](https://github.com/HaoboGu/rmk/issues/new).
 

@@ -391,7 +391,7 @@ impl KeyboardTomlConfig {
                                     key_action_sequence.push(action);
                                 }
 
-                                Rule::osm_action => {
+                                Rule::sk_action => {
                                     let action = inner_pair.as_str().to_string();
                                     key_action_sequence.push(action);
                                 }
@@ -414,13 +414,6 @@ impl KeyboardTomlConfig {
                                 Rule::lt_action => {
                                     key_action_sequence.push(Self::layer_name_resolver("LT", inner_pair, layer_names)?);
                                     //"LT(".to_owned() + &Self::layer_name_resolver(inner_pair, layer_names)? + ")");
-                                }
-                                Rule::osl_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver(
-                                        "OSL",
-                                        inner_pair,
-                                        layer_names,
-                                    )?);
                                 }
                                 Rule::tt_action => {
                                     key_action_sequence.push(Self::layer_name_resolver("TT", inner_pair, layer_names)?);
@@ -729,6 +722,60 @@ mod tests {
                 input,
                 expected_rule
             );
+        }
+    }
+
+    #[test]
+    fn test_sk_action_parsing() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+
+        // Exercise all three SK shapes: tap-key SK(key, [mods]), pure-mod
+        // SK(<modifier>) (one-shot modifier), and layer SK(MO(n)) (one-shot layer).
+        let keymap = "SK(Tab, [LAlt]) SK(Tab, [LCtrl | LShift]) SK(LGui) SK(MO(1))";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            vec!["SK(Tab, [LAlt])", "SK(Tab, [LCtrl | LShift])", "SK(LGui)", "SK(MO(1))"]
+        );
+    }
+
+    #[test]
+    fn test_sk_action_grammar() {
+        let test_cases = vec![
+            // Tap-key shape: SK(key, [mods])
+            "SK(Tab, [LAlt])",
+            "SK(Tab, [LCtrl])",
+            "SK(Tab, [LCtrl | LShift])",
+            "SK(Tab, [])",
+            "sk(Tab, [LAlt])",
+            // Pure-mod shape: SK(<modifier>) — one-shot modifier
+            "SK(LGui)",
+            "SK(LCtrl | LShift)",
+            "sk(lalt)",
+            // Layer shape: SK(MO(n)) — one-shot layer
+            "SK(MO(1))",
+            "SK(MO(3))",
+            "sk(mo(2))",
+        ];
+
+        for input in test_cases {
+            let result = ConfigParser::parse(Rule::key_map, input);
+            assert!(result.is_ok(), "Failed to parse: {}", input);
+
+            let mut found_sk = false;
+            for pair in result.unwrap() {
+                if pair.as_rule() == Rule::key_map {
+                    for inner_pair in pair.into_inner() {
+                        if inner_pair.as_rule() == Rule::sk_action {
+                            found_sk = true;
+                        }
+                    }
+                }
+            }
+            assert!(found_sk, "Input should be parsed as sk_action: {}", input);
         }
     }
 }
