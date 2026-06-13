@@ -236,7 +236,7 @@ fn expand_main(
     // Declare dfu_lock (if enabled) so it can be pushed as a Runnable task.
     // Check the feature at macro-expansion time so we never emit `#[cfg]`
     // into the user's crate (avoids "unexpected cfg condition" warnings).
-    let dfu_lock_enabled = is_feature_enabled(&rmk_features, "dfu_lock");
+    let dfu_lock_enabled = is_feature_enabled(rmk_features, "dfu_lock");
     let dfu_lock_init = if let Some(ref dfu) = hardware.dfu {
         if dfu_lock_enabled && !dfu.unlock_keys.is_empty() {
             registered_processors.push(quote! { dfu_lock.run() });
