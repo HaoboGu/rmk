@@ -39,35 +39,54 @@ unlock_keys = [[0, 0], [1, 1]]
 <Tab label={<Rust />}>
 
 ```rust title="main.rs"
-// Partition layout (must match bootloader's memory.x)
-// only change FLASH_SIZE when using bootymcbootface, the rest ist automatically calculated.
-const FLASH_SIZE: u32 = 2 * 1024 * 1024;
-const PAGE_SIZE: u32 = 4096;
-const HALF_FLASH: u32 = FLASH_SIZE / 4;
+// Flash layout using the bootymcbootface formula:
+//   state at 0x6000 (4K), active from 0x7000 (size: (flash_size - 28K (= BOOT2 size + embassy-boot + embassy-boot state) - STORAGE_SIZE (= 128K) - page_size (= 4K)) / 2),
+//   dfu follows active (active_size + page_size (= 4K))
+//
+// All offsets (DFU_OFFSET, DFU_SIZE, STORAGE_OFFSET, etc.) are derived
+// automatically from FLASH_SIZE below — change only that constant when using bootymcbootface.
+//
+// ⚠  You can define your own FLASH_SIZE and addresses, but then you must build and
+//    flash a custom embassy-boot bootloader with a matching memory.x!
+const FLASH_SIZE: u32 = 2 * 1024 * 1024; // 2 MB (default)
+// const FLASH_SIZE: u32 = 4 * 1024 * 1024;    // 4 MB
+// const FLASH_SIZE: u32 = 8 * 1024 * 1024;    // 8 MB
+// const FLASH_SIZE: u32 = 16 * 1024 * 1024;   // 16 MB
+const PAGE_SIZE: u32 = 4 * 1024;
+const STORAGE_SIZE: u32 = 128 * 1024; // 32 sectors × 4K after ACTIVE+DFU
 const STATE_OFFSET: u32 = 0x6000;
 const STATE_SIZE: u32 = 0x1000;
-const DFU_OFFSET: u32 = 0x7000 + HALF_FLASH;
-const DFU_SIZE: u32 = HALF_FLASH + PAGE_SIZE;
-const STORAGE_END: u32 = FLASH_SIZE - 32 * PAGE_SIZE;
+const ACTIVE_OFFSET: u32 = 0x7000; // after 28K bootloader + state
+let remaining: u32 = FLASH_SIZE
+    - 28 * 1024 // size of boot 2 + embassy-boot + embassy-boot state
+    - STORAGE_SIZE;
+let active_size: u32 = (remaining - PAGE_SIZE) / 2; // DFU = ACTIVE + 1 page (embassy-boot requirement)
+let dfu_size: u32 = active_size + PAGE_SIZE; // embassy-boot needs that extra page for swap info
+let dfu_offset: u32 = ACTIVE_OFFSET + active_size; // dfu after active
+let storage_offset: u32 = dfu_offset + dfu_size; // storage after active + dfu
+let storage_size: u32 = STORAGE_SIZE;
+assert!(storage_offset + storage_size == FLASH_SIZE); // sanity check that we fit everything in flash
 
-// Initialize DFU flash + partitions (returns storage partition)
+info!(
+    "Flash layout: state @ 0x{:04X} ({}K), active @ 0x{:04X} ({}K), dfu @ 0x{:04X} ({}K), storage @ 0x{:04X} ({}K)",
+    STATE_OFFSET,
+    STATE_SIZE / 1024,
+    ACTIVE_OFFSET,
+    active_size / 1024,
+    dfu_offset,
+    dfu_size / 1024,
+    storage_offset,
+    storage_size / 1024
+);
+
 let flash = async_flash_wrapper(rmk::dfu::init_flash(
-    p.FLASH,// Optional: DFU lock with physical key unlock. Requires the `dfu_lock` Cargo feature.
-let unlock_keys: &[(u8, u8)] = &[(0, 0), (1, 1)];
-let dfu_lock = ::rmk::dfu::DfuLock::new(&DFU_UNLOCK_KEYS);
-// Then run the dfu_lock in run_all!()
-// ...
-	run_all!(
-		// other processors
-		dfu_lock,
-	)
-
-    0, // storage_start, this is the address inside the storage partition of the flash, not the actual flash address
-    STORAGE_END,
+    p.FLASH,
+    storage_offset,
+    storage_size,
     STATE_OFFSET,
     STATE_SIZE,
-    DFU_OFFSET,
-    DFU_SIZE,
+    dfu_offset,
+    dfu_size,
 ));
 
 // Optional: assign a DFU activity LED
