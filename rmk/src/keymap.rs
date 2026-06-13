@@ -326,6 +326,11 @@ impl KeyMapInner<'_> {
 }
 
 // ── Public KeyMap API (interior borrow hidden) ────────────────────────
+//
+// Every method borrows `inner`, mutates, and drops within one sync call — the
+// borrow never spans an `.await`. Embassy's scheduler is cooperative, so a
+// borrow held across an await would let another task observe the borrowed cell
+// and panic. New methods must return owned values, not borrow guards.
 
 impl<'a> KeyMap<'a> {
     /// Flatten [`KeymapData`] and build the `KeyMap`.

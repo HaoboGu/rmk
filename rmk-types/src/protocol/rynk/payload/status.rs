@@ -35,7 +35,7 @@ mod tests {
     use heapless::Vec;
 
     use super::*;
-    use crate::protocol::rynk::test_utils::{assert_max_size_bound, round_trip};
+    use crate::protocol::rynk::tests::{assert_max_size_bound, round_trip};
 
     #[test]
     fn round_trip_matrix_state() {

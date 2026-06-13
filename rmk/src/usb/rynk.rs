@@ -7,7 +7,9 @@ use static_cell::StaticCell;
 
 use crate::host::rynk::RynkService;
 
-/// Max packet size for the CDC-ACM bulk endpoints.
+#[cfg(feature = "_usb_high_speed")]
+const RYNK_USB_MAX_PACKET_SIZE: u16 = 512;
+#[cfg(not(feature = "_usb_high_speed"))]
 const RYNK_USB_MAX_PACKET_SIZE: u16 = 64;
 
 /// `BufferedReceiver` needs one packet worth of scratch to satisfy

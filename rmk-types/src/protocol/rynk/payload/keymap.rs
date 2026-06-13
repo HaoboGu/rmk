@@ -80,7 +80,7 @@ pub use bulk::*;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::rynk::test_utils::round_trip;
+    use crate::protocol::rynk::tests::round_trip;
 
     #[test]
     fn round_trip_key_position() {
@@ -113,7 +113,7 @@ mod tests {
         use crate::keycode::{HidKeyCode, KeyCode};
         use crate::modifier::ModifierCombination;
         use crate::morse::MorseProfile;
-        use crate::protocol::rynk::test_utils::{assert_max_size_bound, round_trip};
+        use crate::protocol::rynk::tests::{assert_max_size_bound, round_trip};
 
         /// Largest-encoded `KeyAction` variant: `TapHold` wraps two multi-field
         /// `Action`s and a `MorseProfile(u32)`, many times the size of

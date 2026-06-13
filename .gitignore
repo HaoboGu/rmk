@@ -15,6 +15,7 @@ rmk/Cargo.lock
 rmk-macro/Cargo.lock
 rmk-config/Cargo.lock
 rmk-types/Cargo.lock
+rynk/Cargo.lock
 
 # esp idf build files
 .embuild

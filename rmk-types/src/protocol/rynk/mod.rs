@@ -11,8 +11,8 @@
 //! ┌──────────────┬───────────┬────────────────────┐
 //! │ CMD u16 LE   │ SEQ u8    │ LEN u16 LE         │  ← 5-byte header
 //! ├──────────────┴───────────┴────────────────────┤
-//! │              postcard-encoded payload          │  ← LEN bytes
-//! └────────────────────────────────────────────────┘
+//! │              postcard-encoded payload         │  ← LEN bytes
+//! └───────────────────────────────────────────────┘
 //! ```
 //!
 //! - **CMD** — `0x0000..=0x7FFF` request/response, `0x8000..=0xFFFF` topic.
@@ -32,307 +32,93 @@
 //!
 //! ## Module layout
 //!
-//! - [`cmd`] — `Cmd` enum (request, response, topic tags)
-//! - [`message`] — `RynkMessage` (mutable view over wire bytes; header
-//!   parsed once at construction, accessors are infallible)
-//! - [`buffer`] — `RYNK_MIN_BUFFER_SIZE` const computed from `MaxSize` of
-//!   every wire type
-//! - [`system`] — handshake (`ProtocolVersion`, `DeviceCapabilities`,
-//!   `StorageResetMode`, `BehaviorConfig`)
-//! - [`keymap`], [`encoder`], [`macro_data`], [`combo`], [`morse`],
-//!   [`fork`] — per-domain request/response types
-//! - [`status`] — runtime status types (`MatrixState`, `PeripheralStatus`)
+//! Layering, bottom-up; each module imports only from the ones below it:
+//!
+//! - `payload/` — wire vocabulary: the per-domain payload types
+//!   (`keymap`, `encoder`, `combo`, …), pure serde data. Private; everything
+//!   is re-exported flat at `protocol::rynk::*`.
+//! - `error` — [`RynkError`], the protocol error code carried in every
+//!   response envelope. Private; re-exported at `protocol::rynk::RynkError`.
+//! - [`command`] — the [`Cmd`] identifier *and* the ICD table that binds each
+//!   command to its payload types: the named `Cmd` constants, the
+//!   `GetVersion`-style marker types, and the payload-size folds.
+//! - [`endpoint`] — the [`Endpoint`](endpoint::Endpoint)/[`Topic`](endpoint::Topic)
+//!   trait contracts the table's marker types implement.
+//! - [`message`] — frame format: the 5-byte header carrying a `Cmd`, the
+//!   [`RynkMessage`] buffer view, the `Result<T, RynkError>` envelope.
+//!
+//! The BLE transport binding (GATT UUIDs, chunk size) is a handful of
+//! consts at the bottom of this file, off to the side of the wire-format
+//! stack. Only `command`, `endpoint` and `message` are public.
 //!
 //! ## Protocol handshake
 //!
 //! 1. Host connects over USB bulk or BLE GATT (length-prefixed messages).
-//! 2. Host sends `Cmd::GetVersion`. If `major` differs from the host's
-//!    supported major, or `minor` exceeds the host's known max, the host
-//!    aborts with an "update host" diagnostic. `GetVersion`'s shape is
-//!    permanent — never modified, even across major bumps.
+//! 2. Host sends `Cmd::GetVersion`. The host aborts only if `major`
+//!    differs from its own; any `minor` under the same major connects,
+//!    in both directions (see the version bump policy below).
 //! 3. Host sends `Cmd::GetCapabilities` to learn layout, feature flags,
 //!    and limits.
 //! 4. Host gates every subsequent call on the capability flags.
 //!
 //! ### Version bump policy
 //!
-//! - `minor` bump: new `Cmd` variant appended; new field appended to a
-//!   wire struct (with explicit version handling); new variant in a wire
-//!   enum (including `RynkError`).
-//! - `major` bump: `Cmd` variant retyped; struct field reshaped; enum
-//!   variant renamed/renumbered. `Cmd::GetVersion`'s shape is exempt —
-//!   changing it is forbidden even across major bumps.
-//! - Neither: no wire change.
+//! Within one `major`, every wire change must keep old hosts working —
+//! that is what makes `minor` purely informational at connect time.
+//!
+//! - `minor` bump (additive only):
+//!   - New request/response `Cmd` pair. Old firmware answers
+//!     `RynkError::UnknownCmd`; hosts gate new calls on capabilities.
+//!   - New topic, or a field appended to an existing topic payload. Old
+//!     hosts surface unknown topics verbatim and ignore trailing topic
+//!     bytes — that leniency is part of this contract.
+//!   - New `RynkError` variant (the enum is `#[non_exhaustive]`). It
+//!     only travels on a command's error path; an old host fails to
+//!     decode that one reply, but the LEN-delimited framing keeps the
+//!     stream synced.
+//! - `major` bump (host refuses to connect):
+//!   - Any change to an existing request or response payload layout —
+//!     including appending a field; hosts reject trailing response
+//!     bytes as a wire/type mismatch.
+//!   - A `Cmd` retyped or renumbered; an enum variant renamed,
+//!     renumbered, or reordered.
+//!
+//! The probe is frozen across **all** majors: the 5-byte header layout,
+//! `Cmd::GetVersion = 0x0001`, and its `Result<ProtocolVersion,
+//! RynkError>` reply with `ProtocolVersion {major: u8, minor: u8}` may
+//! never change — they are what let any host identify any firmware.
+//! Two golden files enforce this policy: `snapshots/wire_values.snap`
+//! (test `wire_values_locked`) pins each type's payload encoding, and
+//! `snapshots/wire_frames.snap` (test `wire_frames_locked`) pins the full
+//! frame — header layout, CMD numbers, the `Result<T, RynkError>` reply
+//! envelope, and the frozen probe — for every protocol message.
+//!
+//! The `Cmd` ↔ payload-type association itself is declared once, in
+//! [`command`]: firmware handlers and the host client both compile
+//! against that table, so the two ends cannot disagree about a
+//! command's request/response (or a topic's payload) types.
 
-pub mod buffer;
-pub mod cmd;
+pub mod command;
+pub mod endpoint;
 pub mod message;
 
-mod combo;
-mod encoder;
-mod fork;
-mod keymap;
-mod macro_data;
-mod morse;
-mod status;
-mod system;
-
-use postcard::experimental::max_size::MaxSize;
-use serde::{Deserialize, Serialize};
-
-// Re-export every submodule's public items into `protocol::rynk::*` for
-// convenient downstream import.
-pub use self::buffer::{RYNK_MAX_PAYLOAD, RYNK_MIN_BUFFER_SIZE};
-pub use self::cmd::Cmd;
-pub use self::combo::*;
-pub use self::encoder::*;
-pub use self::fork::*;
-pub use self::keymap::*;
-pub use self::macro_data::*;
-pub use self::message::{RYNK_HEADER_SIZE, RynkMessage};
-pub use self::morse::*;
-pub use self::status::*;
-pub use self::system::*;
-
-/// Protocol-level error returned in every response payload.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[non_exhaustive]
-pub enum RynkError {
-    /// The request could not be decoded
-    Malformed,
-    /// Device is not currently in a state to satisfy the request
-    NotReady,
-    /// Persistent storage failed on a write path (flash erase/write error)
-    StorageFault,
-    /// Internal firmware fault.
-    Internal,
-    /// Command is recognized but the handler is not implemented yet.
-    Unimplemented,
-    /// The request decoded cleanly but is semantically invalid.
-    Invalid,
-}
+mod error;
+mod payload;
 
 #[cfg(test)]
-pub(crate) mod test_utils {
-    extern crate alloc;
+pub(crate) mod tests;
 
-    use alloc::vec;
+pub use self::command::{Cmd, RYNK_MAX_PAYLOAD};
+pub use self::error::RynkError;
+pub use self::message::{RYNK_HEADER_SIZE, RYNK_MIN_BUFFER_SIZE, RynkHeader, RynkMessage};
+pub use self::payload::*;
 
-    use postcard::experimental::max_size::MaxSize;
-    use serde::{Deserialize, Serialize};
+/// Largest single GATT write/notification on the Rynk BLE characteristics.
+pub const RYNK_BLE_CHUNK_SIZE: usize = 244;
 
-    /// Buffer size used by round-trip / max-size helpers.
-    ///
-    /// Sized at twice the type's declared `POSTCARD_MAX_SIZE` plus a small
-    /// fixed slack so that:
-    /// - under feature configurations with a large `BULK_SIZE`, max-capacity
-    ///   bulk payloads still fit comfortably;
-    /// - an under-counted manual `MaxSize` impl produces a clear assertion
-    ///   failure in `assert_max_size_bound` instead of a `SerializeBufferFull`
-    ///   panic.
-    fn buffer_capacity<T: MaxSize>() -> usize {
-        T::POSTCARD_MAX_SIZE.saturating_mul(2).saturating_add(64)
-    }
-
-    /// Postcard round-trip helper used by every submodule's tests.
-    pub fn round_trip<T>(val: &T) -> T
-    where
-        T: Serialize + for<'de> Deserialize<'de> + PartialEq + core::fmt::Debug + MaxSize,
-    {
-        let mut buf = vec![0u8; buffer_capacity::<T>()];
-        let bytes = postcard::to_slice(val, &mut buf).expect("serialize");
-        let decoded: T = postcard::from_bytes(bytes).expect("deserialize");
-        assert_eq!(&decoded, val);
-        decoded
-    }
-
-    /// Assert that `val` serializes within its declared `POSTCARD_MAX_SIZE`.
-    /// Use alongside `round_trip` in max-capacity tests to catch
-    /// under-counted manual `MaxSize` impls.
-    pub fn assert_max_size_bound<T>(val: &T)
-    where
-        T: Serialize + MaxSize,
-    {
-        let mut buf = vec![0u8; buffer_capacity::<T>()];
-        let bytes = postcard::to_slice(val, &mut buf).expect("serialize");
-        assert!(
-            bytes.len() <= T::POSTCARD_MAX_SIZE,
-            "{} encoded to {} bytes but POSTCARD_MAX_SIZE = {}",
-            core::any::type_name::<T>(),
-            bytes.len(),
-            T::POSTCARD_MAX_SIZE,
-        );
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Wire-format value snapshot harness (golden-file test)
-// ---------------------------------------------------------------------------
-//
-// Schema drift detection: a single `wire_values.snap` file holds one
-// exemplar per wire type, postcard-encoded. Any field reorder / type change
-// / variant renumber flips the bytes for the affected type and fails CI.
-// If the change is intentional, bump `ProtocolVersion::CURRENT` and
-// regenerate the snapshot.
-
-#[cfg(test)]
-pub(crate) mod snapshot {
-    extern crate alloc;
-    extern crate std;
-
-    use alloc::format;
-    use alloc::string::String;
-    use alloc::vec::Vec;
-    use std::path::PathBuf;
-    use std::{env, fs};
-
-    /// Format a byte slice as lowercase, space-separated hex.
-    pub fn hex(bytes: &[u8]) -> String {
-        let mut s = String::with_capacity(bytes.len() * 3);
-        for (i, b) in bytes.iter().enumerate() {
-            if i > 0 {
-                s.push(' ');
-            }
-            s.push_str(&format!("{:02x}", b));
-        }
-        s
-    }
-
-    /// Build the snapshot text for a list of (label, encoded bytes) pairs.
-    pub fn format_value_snapshot(rel_path: &str, entries: &[(&str, &[u8])]) -> String {
-        let mut sorted: Vec<&(&str, &[u8])> = entries.iter().collect();
-        sorted.sort_by_key(|(label, _)| *label);
-
-        let label_width = sorted.iter().map(|(l, _)| l.len()).max().unwrap_or(0);
-
-        let mut out = String::new();
-        out.push_str(&format!(
-            "# Wire-format value snapshot — DO NOT edit by hand.\n\
-             # File: {}\n\
-             # Each entry is the postcard byte encoding of a fixed value. A diff here means\n\
-             # the wire format changed (either intentionally or by accident). If intentional,\n\
-             # bump ProtocolVersion::CURRENT and regenerate:\n\
-             #   UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rynk wire_values\n\
-             # Format: <label>  <hex bytes>\n\
-             \n",
-            rel_path,
-        ));
-        for (label, bytes) in sorted {
-            out.push_str(&format!("{:width$}  {}\n", label, hex(bytes), width = label_width));
-        }
-        out
-    }
-
-    /// Compare actual snapshot text against the on-disk file.
-    /// When `UPDATE_SNAPSHOTS` is set, write the file instead.
-    pub fn assert_snapshot(rel_path: &str, actual: String) {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("src/protocol/rynk")
-            .join(rel_path);
-
-        if env::var_os("UPDATE_SNAPSHOTS").is_some() {
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent)
-                    .unwrap_or_else(|e| panic!("create snapshot dir {}: {}", parent.display(), e));
-            }
-            fs::write(&path, &actual).unwrap_or_else(|e| panic!("write snapshot {}: {}", path.display(), e));
-            return;
-        }
-
-        let expected = fs::read_to_string(&path).unwrap_or_else(|e| {
-            panic!(
-                "missing snapshot {} ({}). Run with UPDATE_SNAPSHOTS=1 to create.",
-                path.display(),
-                e,
-            )
-        });
-
-        if expected != actual {
-            panic!(
-                "snapshot mismatch: {}\n\
-                 --- expected ---\n{}\
-                 --- actual ---\n{}\
-                 If intentional, regenerate with UPDATE_SNAPSHOTS=1 and bump ProtocolVersion::CURRENT.",
-                path.display(),
-                expected,
-                actual,
-            );
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Tests: top-level type round-trips + wire-format snapshot
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    extern crate alloc;
-
-    use super::*;
-    use crate::connection::ConnectionType;
-
-    #[test]
-    fn round_trip_rynk_error_and_result() {
-        use super::test_utils::round_trip;
-        round_trip(&RynkError::Malformed);
-        round_trip(&RynkError::NotReady);
-        round_trip(&RynkError::StorageFault);
-        round_trip(&RynkError::Internal);
-        round_trip(&RynkError::Unimplemented);
-        round_trip(&RynkError::Invalid);
-        let ok: Result<(), RynkError> = Ok(());
-        let err: Result<(), RynkError> = Err(RynkError::StorageFault);
-        let _ = round_trip(&ok);
-        let _ = round_trip(&err);
-    }
-
-    fn encode<T: serde::Serialize>(val: &T) -> alloc::vec::Vec<u8> {
-        let mut buf = [0u8; 256];
-        let bytes = postcard::to_slice(val, &mut buf).expect("encode");
-        bytes.to_vec()
-    }
-
-    /// Lock down postcard's actual byte encoding for stability-critical
-    /// values. A diff in this snapshot indicates wire-format drift; if
-    /// intentional, regenerate the snapshot and bump `ProtocolVersion::CURRENT`.
-    #[test]
-    fn wire_values_locked() {
-        let mut bitmap: heapless::Vec<u8, MATRIX_BITMAP_SIZE> = heapless::Vec::new();
-        bitmap.extend_from_slice(&[0x05, 0x00, 0x20]).unwrap();
-        let matrix = MatrixState { pressed_bitmap: bitmap };
-
-        let entries: alloc::vec::Vec<(&str, alloc::vec::Vec<u8>)> = alloc::vec![
-            ("ConnectionType::Ble", encode(&ConnectionType::Ble)),
-            ("ConnectionType::Usb", encode(&ConnectionType::Usb)),
-            (
-                "KeyPosition{layer:0,row:5,col:13}",
-                encode(&KeyPosition {
-                    layer: 0,
-                    row: 5,
-                    col: 13,
-                }),
-            ),
-            ("MatrixState{[0x05,0x00,0x20]}", encode(&matrix)),
-            ("ProtocolVersion{1,0}", encode(&ProtocolVersion { major: 1, minor: 0 }),),
-            ("RynkError::Internal", encode(&RynkError::Internal)),
-            ("RynkError::Invalid", encode(&RynkError::Invalid)),
-            ("RynkError::Malformed", encode(&RynkError::Malformed)),
-            ("RynkError::NotReady", encode(&RynkError::NotReady)),
-            ("RynkError::StorageFault", encode(&RynkError::StorageFault)),
-            ("RynkError::Unimplemented", encode(&RynkError::Unimplemented)),
-            (
-                "Result<(),RynkError>::Err(StorageFault)",
-                encode::<Result<(), RynkError>>(&Err(RynkError::StorageFault)),
-            ),
-            ("Result<(),RynkError>::Ok", encode::<Result<(), RynkError>>(&Ok(()))),
-            ("StorageResetMode::Full", encode(&StorageResetMode::Full)),
-            ("StorageResetMode::LayoutOnly", encode(&StorageResetMode::LayoutOnly)),
-        ];
-        let view: alloc::vec::Vec<(&str, &[u8])> = entries.iter().map(|(l, b)| (*l, b.as_slice())).collect();
-
-        let actual = snapshot::format_value_snapshot("snapshots/wire_values.snap", &view);
-        snapshot::assert_snapshot("snapshots/wire_values.snap", actual);
-    }
-}
+/// Rynk GATT service UUID
+pub const RYNK_SERVICE_UUID: u128 = 0x10900067_537f_4f0a_9b55_929e271f61ab;
+/// Rynk `input_data` characteristic UUID.
+pub const RYNK_INPUT_CHAR_UUID: u128 = 0x80f9319b_0c74_43a5_9738_c59d6dda3db9;
+/// Rynk `output_data` characteristic UUID.
+pub const RYNK_OUTPUT_CHAR_UUID: u128 = 0x19802524_6f90_4346_93c2_63dbc509ab55;

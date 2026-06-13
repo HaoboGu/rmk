@@ -78,6 +78,22 @@ jobs:
         run: cargo install --locked cargo-expand
       - run: .github/ci/test.sh
 
+  # Host tooling lives in its own workspace, so it gets its own job.
+  host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-host
+          cache-directories: |
+            target/ci
+      - run: .github/ci/host.sh
+
   # Discover buildable examples for the matrix
   discover:
     runs-on: ubuntu-latest

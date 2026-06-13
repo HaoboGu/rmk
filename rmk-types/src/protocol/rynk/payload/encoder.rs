@@ -25,7 +25,7 @@ mod tests {
     use super::*;
     use crate::action::{Action, KeyAction};
     use crate::keycode::{ConsumerKey, KeyCode};
-    use crate::protocol::rynk::test_utils::round_trip;
+    use crate::protocol::rynk::tests::round_trip;
 
     #[test]
     fn round_trip_encoder_requests() {

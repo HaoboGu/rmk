@@ -2,17 +2,29 @@
 //! plus the live getters for WPM / sleep / LED. Each value is read from its
 //! producer-owned current-value accessor, not a host-side cache.
 
+#[cfg(feature = "_ble")]
+use rmk_types::battery::BatteryStatus;
+use rmk_types::led_indicator::LedIndicator;
+#[cfg(all(feature = "_ble", feature = "split"))]
+use rmk_types::protocol::rynk::PeripheralStatus;
+#[cfg(feature = "_ble")]
+use rmk_types::protocol::rynk::command::GetBatteryStatus;
+#[cfg(all(feature = "_ble", feature = "split"))]
+use rmk_types::protocol::rynk::command::GetPeripheralStatus;
+use rmk_types::protocol::rynk::command::{GetCurrentLayer, GetLedIndicator, GetMatrixState, GetSleepState, GetWpm};
 use rmk_types::protocol::rynk::{MATRIX_BITMAP_SIZE, MatrixState, RynkError};
 
 use super::super::RynkService;
+use super::Handle;
 
-impl<'a> RynkService<'a> {
-    pub(crate) async fn handle_get_current_layer(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let layer = self.ctx.active_layer();
-        Self::write_response(&layer, payload)
+impl Handle<GetCurrentLayer> for RynkService<'_> {
+    async fn handle(&self, _: ()) -> Result<u8, RynkError> {
+        Ok(self.ctx.active_layer())
     }
+}
 
-    pub(crate) async fn handle_get_matrix_state(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
+impl Handle<GetMatrixState> for RynkService<'_> {
+    async fn handle(&self, _: ()) -> Result<MatrixState, RynkError> {
         // Sized for the maximum supported geometry — host slices it down
         // using num_rows / num_cols from `DeviceCapabilities`.
         let mut bitmap: heapless::Vec<u8, MATRIX_BITMAP_SIZE> = heapless::Vec::new();
@@ -24,39 +36,42 @@ impl<'a> RynkService<'a> {
         #[cfg(feature = "host_security")]
         self.ctx.read_matrix_state(&mut bitmap);
 
-        let state = MatrixState { pressed_bitmap: bitmap };
-        Self::write_response(&state, payload)
+        Ok(MatrixState { pressed_bitmap: bitmap })
     }
+}
 
-    #[cfg(feature = "_ble")]
-    pub(crate) async fn handle_get_battery_status(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let status = self.ctx.battery_status();
-        Self::write_response(&status, payload)
+#[cfg(feature = "_ble")]
+impl Handle<GetBatteryStatus> for RynkService<'_> {
+    async fn handle(&self, _: ()) -> Result<BatteryStatus, RynkError> {
+        Ok(self.ctx.battery_status())
     }
+}
 
-    /// `Cmd::GetPeripheralStatus` — payload is a peripheral slot id. The
-    /// snapshot is owned by the split central
-    /// ([`current_peripheral_status`](crate::split::ble::central::current_peripheral_status)),
-    /// fed at the `PeripheralConnectedEvent` / `PeripheralBatteryEvent` publish sites.
-    #[cfg(all(feature = "_ble", feature = "split"))]
-    pub(crate) async fn handle_get_peripheral_status(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let (id, _) = postcard::take_from_bytes::<u8>(payload).map_err(|_| RynkError::Malformed)?;
-        let status = crate::split::ble::central::current_peripheral_status(id as usize).ok_or(RynkError::Invalid)?;
-        Self::write_response(&status, payload)
+/// `Cmd::GetPeripheralStatus` — payload is a peripheral slot id. The
+/// snapshot is owned by the split central
+/// ([`current_peripheral_status`](crate::split::ble::central::current_peripheral_status)),
+/// fed at the `PeripheralConnectedEvent` / `PeripheralBatteryEvent` publish sites.
+#[cfg(all(feature = "_ble", feature = "split"))]
+impl Handle<GetPeripheralStatus> for RynkService<'_> {
+    async fn handle(&self, id: u8) -> Result<PeripheralStatus, RynkError> {
+        crate::split::ble::central::current_peripheral_status(id as usize).ok_or(RynkError::Invalid)
     }
+}
 
-    pub(crate) async fn handle_get_wpm(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let wpm = crate::processor::builtin::wpm::current_wpm();
-        Self::write_response(&wpm, payload)
+impl Handle<GetWpm> for RynkService<'_> {
+    async fn handle(&self, _: ()) -> Result<u16, RynkError> {
+        Ok(crate::processor::builtin::wpm::current_wpm())
     }
+}
 
-    pub(crate) async fn handle_get_sleep_state(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let sleep = crate::state::current_sleep_state();
-        Self::write_response(&sleep, payload)
+impl Handle<GetSleepState> for RynkService<'_> {
+    async fn handle(&self, _: ()) -> Result<bool, RynkError> {
+        Ok(crate::state::current_sleep_state())
     }
+}
 
-    pub(crate) async fn handle_get_led_indicator(&self, payload: &mut [u8]) -> Result<usize, RynkError> {
-        let led = self.ctx.led_indicator();
-        Self::write_response(&led, payload)
+impl Handle<GetLedIndicator> for RynkService<'_> {
+    async fn handle(&self, _: ()) -> Result<LedIndicator, RynkError> {
+        Ok(self.ctx.led_indicator())
     }
 }

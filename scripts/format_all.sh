@@ -9,6 +9,9 @@ cd rmk-macro && cargo +nightly fmt && cd ..
 cd rmk-config && cargo +nightly fmt && cd ..
 cd rmk-types && cargo +nightly fmt && cd ..
 
+# Format the host tooling workspace (formats every member crate)
+cd rynk && cargo +nightly fmt --all && cd ..
+
 # Format all directories under examples/use_rust
 for dir in examples/use_rust/*/; do
     if [ -d "$dir" ] && [ -d "$dir/src" ]; then

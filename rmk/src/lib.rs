@@ -27,6 +27,13 @@ compile_error!("features `rynk` and `vial` are mutually exclusive");
 #[cfg(all(feature = "host", not(any(feature = "rynk", feature = "vial"))))]
 compile_error!("feature `host` requires enabling either `rynk` or `vial`");
 
+#[cfg(all(feature = "usb_log", feature = "_usb_high_speed"))]
+compile_error!(
+    "`usb_log` is not supported on high-speed USB chips yet: embassy-usb-logger \
+     only handles 64-byte packets, which high-speed bulk endpoints can't use. \
+     Use `defmt` logging on these chips."
+);
+
 // Re-export self as ::rmk for macro-generated code to work both inside and outside the crate
 extern crate self as rmk;
 
