@@ -96,8 +96,8 @@ pub struct DfuFlashManager {
 impl DfuFlashManager {
     fn new(
         flash_mutex: &'static MutexType,
-        storage_start: u32,
-        storage_end: u32,
+        storage_offset: u32,
+        storage_size: u32,
         state_offset: u32,
         state_size: u32,
         dfu_offset: u32,
@@ -109,8 +109,8 @@ impl DfuFlashManager {
             state_size,
             dfu_offset,
             dfu_size,
-            storage_offset: storage_start,
-            storage_size: storage_end - storage_start,
+            storage_offset,
+            storage_size,
         }
     }
 
@@ -211,8 +211,8 @@ impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
 #[cfg(feature = "dfu_rp")]
 pub fn init_flash(
     flash_peri: Peri<'static, FLASH>,
-    storage_start: u32,
-    storage_end: u32,
+    storage_offset: u32,
+    storage_size: u32,
     state_offset: u32,
     state_size: u32,
     dfu_offset: u32,
@@ -222,8 +222,8 @@ pub fn init_flash(
     let flash_mutex: &'static MutexType = FLASH_CELL.init(Mutex::new(RefCell::new(raw_flash)));
     let mgr = MANAGER_CELL.init(DfuFlashManager::new(
         flash_mutex,
-        storage_start,
-        storage_end,
+        storage_offset,
+        storage_size,
         state_offset,
         state_size,
         dfu_offset,

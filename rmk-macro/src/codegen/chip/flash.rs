@@ -69,8 +69,8 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                 );
                 let storage_num_sectors = hardware.storage.as_ref().map(|s| s.num_sectors).unwrap_or(32) as u32;
                 let erase_size = 4096u32;
-                let storage_start = dfu.dfu_offset + dfu.dfu_size;
-                let storage_end = storage_start + storage_num_sectors * erase_size;
+                let storage_offset = dfu.dfu_offset + dfu.dfu_size;
+                let storage_size = storage_num_sectors * erase_size;
                 let state_offset = dfu.state_offset;
                 let state_size = dfu.state_size;
                 let dfu_offset = dfu.dfu_offset;
@@ -92,8 +92,8 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                     let flash = ::rmk::storage::async_flash_wrapper(
                         ::rmk::dfu::init_flash(
                             p.FLASH,
-                            #storage_start,
-                            #storage_end,
+                            #storage_offset,
+                            #storage_size,
                             #state_offset,
                             #state_size,
                             #dfu_offset,
