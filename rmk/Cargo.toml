@@ -234,6 +234,12 @@ dfu_rp = ["dfu", "dep:embassy-boot-rp", "dep:embassy-boot", "rp2040", "rmk-macro
 ## Enable nRF DFU firmware update support (add a chip feature like `nrf52840` too)
 dfu_nrf = ["dfu", "dep:embassy-boot", "dep:embassy-nrf", "rmk-macro/dfu_nrf"]
 
+## Enable split firmware update over UART (requires `dfu_rp` + `split`)
+dfu_split = ["dfu_rp", "split"]
+
+## Force DFU update even when firmware hash matches (for testing)
+dfu_split_force_update = ["dfu_split"]
+
 ## Enable Plover HID stenography support: adds the steno HID descriptor,
 ## the steno USB writer endpoint, and the `Action::Steno` variant.
 steno = ["rmk-types/steno"]

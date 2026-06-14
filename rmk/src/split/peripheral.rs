@@ -23,6 +23,8 @@ use crate::event::{ModifierEvent, SleepStateEvent, WpmUpdateEvent};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::update_status;
+#[cfg(feature = "dfu_split")]
+
 
 /// Run the split peripheral service.
 ///
@@ -64,7 +66,9 @@ pub(crate) struct SplitPeripheral<S: SplitWriter + SplitReader> {
 
 impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     pub(crate) fn new(split_driver: S) -> Self {
-        Self { split_driver }
+        Self {
+            split_driver,
+        }
     }
 
     /// Run the peripheral keyboard service.
@@ -72,6 +76,18 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     /// The peripheral uses the general matrix, does scanning and send the key events through `SplitWriter`.
     /// If also receives split messages from the central through `SplitReader`.
     pub(crate) async fn run(&mut self) {
+        // Proactively announce our firmware hash so the central can detect
+        // us even when it booted first and already gave up waiting for a
+        // query response.
+        #[cfg(feature = "dfu_split")]
+        {
+            let hash = crate::dfu::read_embedded_firmware_hash();
+            self.split_driver
+                .write(&SplitMessage::FirmwareHashResponse(hash))
+                .await
+                .ok();
+        }
+
         let mut key_sub = KeyboardEvent::subscriber();
         #[cfg(feature = "_ble")]
         let mut charging_state_sub = ChargingStateEvent::subscriber();
@@ -134,6 +150,52 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         #[cfg(feature = "display")]
                         SplitMessage::SleepState(sleeping) => {
                             publish_event(SleepStateEvent::new(sleeping));
+                        }
+                        // --- dfu_split: firmware update handlers ---
+                        #[cfg(feature = "dfu_split")]
+                        SplitMessage::FirmwareHashQuery => {
+                            let hash = crate::dfu::read_embedded_firmware_hash();
+                            info!("dfu_split: hash query, responding with {:#x}", hash);
+                            self.split_driver
+                                .write(&SplitMessage::FirmwareHashResponse(hash))
+                                .await
+                                .ok();
+                        }
+                        #[cfg(feature = "dfu_split")]
+                        SplitMessage::FirmwareChunk { offset, data } => {
+                            use crate::dfu::get_dfu_handler;
+                            if let Some(handler) = get_dfu_handler() {
+                                let actual_len = data.0.len();
+                                match handler.write_chunk(offset as u32, &data.0[..actual_len]) {
+                                    Ok(()) => {
+                                        info!("dfu_split: wrote {} bytes at offset {}", actual_len, offset);
+                                        self.split_driver
+                                            .write(&SplitMessage::FirmwareChunkAck { offset })
+                                            .await
+                                            .ok();
+                                    }
+                                    Err(()) => {
+                                        error!("dfu_split: write error at offset {}", offset);
+                                    }
+                                }
+                            } else {
+                                error!("dfu_split: RmkDfuHandler not initialized");
+                            }
+                        }
+                        #[cfg(feature = "dfu_split")]
+                        SplitMessage::FirmwareUpdateComplete(_crc32) => {
+                            use crate::dfu::get_dfu_handler;
+                            if let Some(handler) = get_dfu_handler() {
+                                info!("dfu_split: firmware update complete, marking updated + reset");
+                                self.split_driver
+                                    .write(&SplitMessage::FirmwareUpdateConfirm)
+                                    .await
+                                    .ok();
+                                embassy_time::Timer::after_millis(50).await;
+                                handler.mark_updated_and_reset().ok();
+                            } else {
+                                error!("dfu_split: RmkDfuHandler not initialized");
+                            }
                         }
                         _ => (),
                     },

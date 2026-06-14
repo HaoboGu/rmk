@@ -1,16 +1,15 @@
 use core::cell::RefCell;
 #[cfg(feature = "dfu_lock")]
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::AtomicBool;
+#[cfg(feature = "dfu_split")]
+use core::sync::atomic::AtomicU32;
+use core::sync::atomic::{AtomicPtr, Ordering};
 
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::once_lock::OnceLock;
 #[cfg(feature = "dfu_lock")]
 use embassy_sync::signal::Signal;
-use embassy_usb::control::{InResponse, OutResponse, Request};
-use embassy_usb::driver::Driver;
-use embassy_usb::types::StringIndex;
-use embassy_usb::{Builder, Handler};
 use static_cell::StaticCell;
 
 #[cfg(feature = "dfu_lock")]
@@ -76,7 +75,7 @@ use {
     embassy_embedded_hal::flash::partition::BlockingPartition,
 };
 
-#[cfg(feature = "dfu_rp")]
+#[cfg(any(feature = "dfu_split", feature = "dfu_rp"))]
 type FlashType = Flash<'static, FLASH, Blocking, FLASH_SIZE>;
 #[cfg(feature = "dfu_nrf")]
 type FlashType = Nvmc<'static>;
@@ -278,12 +277,9 @@ pub fn get_manager() -> Option<&'static DfuFlashManager> {
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 pub fn register_dfu_interface<D: Driver<'static>>(
     builder: &mut Builder<'static, D>,
-    mgr: &'static DfuFlashManager,
     product_name: &'static str,
 ) {
     use embassy_usb::class::dfu::consts::DfuAttributes;
-    use embassy_usb_dfu::ResetImmediate;
-    use embassy_usb_dfu::dfu::FirmwareHandler;
 
     let dfu_part = mgr.dfu_partition();
     let state_part = mgr.state_partition();
@@ -297,13 +293,9 @@ pub fn register_dfu_interface<D: Driver<'static>>(
 
     let attrs = DfuAttributes::CAN_DOWNLOAD | DfuAttributes::WILL_DETACH;
 
-    let inner = FirmwareHandler::new(updater, ResetImmediate);
-    let handler = RmkDfuHandler { inner };
-    let state = DfuState::new(handler, attrs);
+    let state = DfuState::new(DfuHandlerRef(handler), attrs);
 
-    type DfuStateInner =
-        RmkDfuHandler<FirmwareHandler<'static, PartitionType, PartitionType, ResetImmediate, BLOCK_SIZE_DFU>>;
-    static DFU_STATE: StaticCell<DfuState<DfuStateInner>> = StaticCell::new();
+    static DFU_STATE: StaticCell<DfuState<DfuHandlerRef>> = StaticCell::new();
     let state_ref = DFU_STATE.init(state);
 
     let string_idx = builder.string();
