@@ -521,7 +521,7 @@ impl<'a> PointingProcessor<'a> {
         }
     }
 
-    /// Set the pointing mode for a specific layer
+    /// Set the pointing mode
     pub fn set_pointing_mode(&mut self, mode: PointingMode) -> &mut Self {
         self.current_mode = mode;
         self
@@ -565,8 +565,8 @@ impl<'a> PointingProcessor<'a> {
                 // modes that generate mouse reports
                 let mouse_report = match self.current_mode {
                     PointingMode::Cursor(cursor_config) => {
-                        let out_x = x * cursor_config.multiplier_x as i16;
-                        let out_y = y * cursor_config.multiplier_y as i16;
+                        let out_x = x.saturating_mul(cursor_config.multiplier_x as i16);
+                        let out_y = y.saturating_mul(cursor_config.multiplier_y as i16);
                         let out_x = if cursor_config.invert_x { -out_x } else { out_x };
                         let out_y = if cursor_config.invert_y { -out_y } else { out_y };
                         MouseReport {
@@ -689,18 +689,22 @@ fn compute_caret_taps(
         return None;
     }
 
-    enum Axis {
+    enum MovementAxis {
         X,
         Y,
     }
-    let axis = if dx.abs() >= dy.abs() { Axis::X } else { Axis::Y };
+    let axis = if dx.abs() >= dy.abs() {
+        MovementAxis::X
+    } else {
+        MovementAxis::Y
+    };
 
     let keycode = match axis {
-        Axis::X => match (dx > 0, cfg.invert_x) {
+        MovementAxis::X => match (dx > 0, cfg.invert_x) {
             (true, false) | (false, true) => cfg.keycode_right,
             (true, true) | (false, false) => cfg.keycode_left,
         },
-        Axis::Y => match (dy > 0, cfg.invert_y) {
+        MovementAxis::Y => match (dy > 0, cfg.invert_y) {
             // default: +Y => down
             (true, false) | (false, true) => cfg.keycode_down,
             (true, true) | (false, false) => cfg.keycode_up,
@@ -712,14 +716,14 @@ fn compute_caret_taps(
     let mut count: u8 = 0;
     while (dx.abs() + dy.abs()) > cfg.threshold {
         let (reduce_x, reduce_y) = match axis {
-            Axis::X => {
+            MovementAxis::X => {
                 let r = if dx > 0 { -cfg.threshold } else { cfg.threshold };
-                accumulator.reset_y(); // reset non-dominant axis
+                accumulator.reset_y(); //  non-dominant axis
                 (r, 0)
             }
-            Axis::Y => {
+            MovementAxis::Y => {
                 let r = if dy > 0 { -cfg.threshold } else { cfg.threshold };
-                accumulator.reset_x(); // reset non-dominant axis
+                accumulator.reset_x(); //  non-dominant axis
                 (0, r)
             }
         };
@@ -732,8 +736,8 @@ fn compute_caret_taps(
 
     // Drop the non-dominant axis so stale samples cannot bleed in.
     match axis {
-        Axis::X => accumulator.reset_y(),
-        Axis::Y => accumulator.reset_x(),
+        MovementAxis::X => accumulator.reset_y(),
+        MovementAxis::Y => accumulator.reset_x(),
     }
 
     if count == 0 { None } else { Some((keycode, count)) }

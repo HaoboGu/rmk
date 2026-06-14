@@ -81,7 +81,6 @@ Uses `MotionAccumulator` in persistent mode: `total = remainder + delta`, output
 
 Users can define a processor, in this case called `PointingProcessorController`, which subscribes to events (e.g. layer changes) and updates the active mode. The example below switches to Cursor on layer 0, Sniper on layer 1, Scroll on layer 2, and Caret on layer 3 or when key bound to User0 is pressed:
 
-```rust
 ```rust title="src/pointingproccontroller.rs"
 use rmk::{
     event::{LayerChangeEvent, KeyboardEvent, KeyboardEventPos, PointingProcessorEvent, publish_event},
