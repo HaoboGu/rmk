@@ -714,15 +714,20 @@ fn compute_caret_taps(
         let (reduce_x, reduce_y) = match axis {
             Axis::X => {
                 let r = if dx > 0 { -cfg.threshold } else { cfg.threshold };
+                accumulator.reset_y(); // reset non-dominant axis
                 (r, 0)
             }
             Axis::Y => {
                 let r = if dy > 0 { -cfg.threshold } else { cfg.threshold };
+                accumulator.reset_x(); // reset non-dominant axis
                 (0, r)
             }
         };
         (dx, dy) = accumulator.accumulate_persistent(reduce_x, reduce_y, (1, divisor_x), (1, divisor_y));
         count = count.saturating_add(1);
+        if count == u8::MAX {
+            break; // safety break to prevent infinite loop
+        }
     }
 
     // Drop the non-dominant axis so stale samples cannot bleed in.
@@ -1399,6 +1404,18 @@ mod tests {
         assert_eq!(a.remainder_x, 100);
         // One more unit pushes over
         assert_eq!(compute_caret_taps(1, 0, &mut a, &cfg()), Some((HidKeyCode::Right, 1)));
+    }
+
+    #[test]
+    fn test_compute_caret_taps_diagonal_motion() {
+        let mut a = acc();
+        let result = compute_caret_taps(250, 250, &mut a, &cfg());
+        // X dominant, |250|=250, threshold=100 → 2 taps
+        // Iter 1: reduce_x=-100 → total=(150, 0), |150|>100 → tap
+        // Iter 2: reduce_x=-100 → total=(50, 0), |50|<=100 → stop
+        assert_eq!(result, Some((HidKeyCode::Right, 2)));
+        assert_eq!(a.remainder_x, 50);
+        assert_eq!(a.remainder_y, 0);
     }
 
     // === PointingMode tests ===
