@@ -10,6 +10,10 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::once_lock::OnceLock;
 #[cfg(feature = "dfu_lock")]
 use embassy_sync::signal::Signal;
+use embassy_usb::control::{InResponse, OutResponse, Request};
+use embassy_usb::driver::Driver;
+use embassy_usb::types::StringIndex;
+use embassy_usb::{Builder, Handler};
 use static_cell::StaticCell;
 
 #[cfg(feature = "dfu_lock")]
@@ -75,7 +79,7 @@ use {
     embassy_embedded_hal::flash::partition::BlockingPartition,
 };
 
-#[cfg(any(feature = "dfu_split", feature = "dfu_rp"))]
+#[cfg(feature = "dfu_rp")]
 type FlashType = Flash<'static, FLASH, Blocking, FLASH_SIZE>;
 #[cfg(feature = "dfu_nrf")]
 type FlashType = Nvmc<'static>;
@@ -277,9 +281,13 @@ pub fn get_manager() -> Option<&'static DfuFlashManager> {
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 pub fn register_dfu_interface<D: Driver<'static>>(
     builder: &mut Builder<'static, D>,
+    mgr: &'static DfuFlashManager,
     product_name: &'static str,
 ) {
+    use embassy_boot_rp::{BlockingFirmwareUpdater, FirmwareUpdaterConfig};
     use embassy_usb::class::dfu::consts::DfuAttributes;
+    use embassy_usb_dfu::ResetImmediate;
+    use embassy_usb_dfu::dfu::FirmwareHandler;
 
     let dfu_part = mgr.dfu_partition();
     let state_part = mgr.state_partition();
@@ -293,9 +301,13 @@ pub fn register_dfu_interface<D: Driver<'static>>(
 
     let attrs = DfuAttributes::CAN_DOWNLOAD | DfuAttributes::WILL_DETACH;
 
-    let state = DfuState::new(DfuHandlerRef(handler), attrs);
+    let inner = FirmwareHandler::new(updater, ResetImmediate);
+    let handler = RmkDfuHandler { inner };
+    let state = DfuState::new(handler, attrs);
 
-    static DFU_STATE: StaticCell<DfuState<DfuHandlerRef>> = StaticCell::new();
+    type DfuStateInner =
+        RmkDfuHandler<FirmwareHandler<'static, PartitionType, PartitionType, ResetImmediate, BLOCK_SIZE_DFU>>;
+    static DFU_STATE: StaticCell<DfuState<DfuStateInner>> = StaticCell::new();
     let state_ref = DFU_STATE.init(state);
 
     let string_idx = builder.string();
@@ -324,6 +336,135 @@ pub fn register_dfu_interface<D: Driver<'static>>(
         string_val: product_name,
     });
     builder.handler(string_provider);
+}
+
+// ---------------------------------------------------------------------------
+// dfu_split — split peripheral firmware update over UART
+// ---------------------------------------------------------------------------
+
+/// Simple DFU handler for split-peripheral firmware updates.
+///
+/// Created on-demand via [`SplitDfuHandler::new`]; no global singleton needed.
+/// Each method call clones the partition handles and locks the flash mutex
+/// internally via `BlockingPartition`.
+#[cfg(feature = "dfu_split")]
+pub struct SplitDfuHandler {
+    dfu_partition: PartitionType,
+    state_partition: PartitionType,
+    erased: bool,
+}
+
+#[cfg(feature = "dfu_split")]
+impl SplitDfuHandler {
+    /// Create a new handler from the global [`DfuFlashManager`].
+    /// Returns `None` if `init_flash` has not been called yet.
+    pub fn new() -> Option<Self> {
+        let mgr = get_manager()?;
+        Some(Self {
+            dfu_partition: mgr.dfu_partition(),
+            state_partition: mgr.state_partition(),
+            erased: false,
+        })
+    }
+
+    /// Write a chunk of firmware data at the given partition offset.
+    ///
+    /// On the first call the **entire** DFU partition is erased once;
+    /// subsequent calls only write.  This matches the split protocol
+    /// which sends sequential chunks from offset 0.
+    pub fn write_chunk(&mut self, offset: u32, data: &[u8]) -> Result<(), ()> {
+        use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
+        let mut dfu = self.dfu_partition.clone();
+        if !self.erased {
+            let cap = dfu.capacity() as u32;
+            dfu.erase(0, cap).map_err(|_| ())?;
+            self.erased = true;
+        }
+        dfu.write(offset, data).map_err(|_| ())
+    }
+
+    /// Mark firmware as valid and reset into the new image.
+    pub fn mark_updated_and_reset(&self) -> Result<(), ()> {
+        use embassy_boot_rp::{BlockingFirmwareUpdater, FirmwareUpdaterConfig};
+        let config = FirmwareUpdaterConfig {
+            dfu: self.dfu_partition.clone(),
+            state: self.state_partition.clone(),
+        };
+        static ALIGNED: StaticCell<[u8; 1]> = StaticCell::new();
+        let mut updater = BlockingFirmwareUpdater::new(config, ALIGNED.init([0; 1]));
+        updater.mark_updated().map_err(|_| ())?;
+        cortex_m::peripheral::SCB::sys_reset()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// dfu_split — firmware update data for split peripheral firmware update
+// ---------------------------------------------------------------------------
+
+/// Global pointer to the peripheral firmware binary (set by central).
+#[cfg(feature = "dfu_split")]
+static FW_UPDATE_PTR: AtomicPtr<u8> = AtomicPtr::new(core::ptr::null_mut());
+/// Length of the peripheral firmware binary.
+#[cfg(feature = "dfu_split")]
+static FW_UPDATE_LEN: AtomicU32 = AtomicU32::new(0);
+/// CRC32 of the peripheral firmware binary.
+#[cfg(feature = "dfu_split")]
+static FW_UPDATE_HASH: AtomicU32 = AtomicU32::new(0);
+
+/// Store a reference to the peripheral firmware binary and its CRC32 hash.
+///
+/// The central calls this before starting the split peripheral manager so
+/// that `PeripheralManager` can verify and update the peripheral's firmware
+/// at connection time.
+#[cfg(feature = "dfu_split")]
+pub fn set_firmware_update_data(firmware: &'static [u8], hash: u32) {
+    FW_UPDATE_PTR.store(firmware.as_ptr() as *mut u8, Ordering::Release);
+    FW_UPDATE_LEN.store(firmware.len() as u32, Ordering::Release);
+    FW_UPDATE_HASH.store(hash, Ordering::Release);
+}
+
+/// Retrieve the stored peripheral firmware data, if any.
+#[cfg(feature = "dfu_split")]
+pub fn get_firmware_update_data() -> Option<(&'static [u8], u32)> {
+    let ptr = FW_UPDATE_PTR.load(Ordering::Acquire);
+    if ptr.is_null() {
+        return None;
+    }
+    let len = FW_UPDATE_LEN.load(Ordering::Acquire) as usize;
+    let slice = unsafe { core::slice::from_raw_parts(ptr, len) };
+    let hash = FW_UPDATE_HASH.load(Ordering::Acquire);
+    Some((slice, hash))
+}
+
+/// Return the CRC32 of this device's currently running firmware binary.
+///
+/// Reads the ACTIVE flash partition from `__vector_table` to `__veneer_limit`
+/// and computes CRC32 on the fly.  The result is cached in a static so that
+/// subsequent calls are instant.
+#[cfg(feature = "dfu_split")]
+pub fn read_embedded_firmware_hash() -> u32 {
+    use core::sync::atomic::AtomicU32;
+
+    static CACHED_HASH: AtomicU32 = AtomicU32::new(0);
+
+    let cached = CACHED_HASH.load(Ordering::Acquire);
+    if cached != 0 {
+        return cached;
+    }
+
+    unsafe extern "C" {
+        static __vector_table: u8;
+        static __veneer_limit: u8;
+    }
+
+    let start = unsafe { &__vector_table as *const u8 };
+    let end = unsafe { &__veneer_limit as *const u8 };
+    let len = end as usize - start as usize;
+    let data = unsafe { core::slice::from_raw_parts(start, len) };
+    let hash = crate::crc32::crc32(data);
+
+    CACHED_HASH.store(hash, Ordering::Release);
+    hash
 }
 
 // ---------------------------------------------------------------------------

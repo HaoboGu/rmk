@@ -23,8 +23,6 @@ use crate::event::{ModifierEvent, SleepStateEvent, WpmUpdateEvent};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::update_status;
-#[cfg(feature = "dfu_split")]
-
 
 /// Run the split peripheral service.
 ///
@@ -62,12 +60,16 @@ pub async fn run_rmk_split_peripheral<
 /// The split peripheral instance.
 pub(crate) struct SplitPeripheral<S: SplitWriter + SplitReader> {
     split_driver: S,
+    #[cfg(feature = "dfu_split")]
+    dfu_handler: Option<crate::dfu::SplitDfuHandler>,
 }
 
 impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     pub(crate) fn new(split_driver: S) -> Self {
         Self {
             split_driver,
+            #[cfg(feature = "dfu_split")]
+            dfu_handler: None,
         }
     }
 
@@ -163,29 +165,26 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         }
                         #[cfg(feature = "dfu_split")]
                         SplitMessage::FirmwareChunk { offset, data } => {
-                            use crate::dfu::get_dfu_handler;
-                            if let Some(handler) = get_dfu_handler() {
-                                let actual_len = data.0.len();
-                                match handler.write_chunk(offset as u32, &data.0[..actual_len]) {
-                                    Ok(()) => {
-                                        info!("dfu_split: wrote {} bytes at offset {}", actual_len, offset);
-                                        self.split_driver
-                                            .write(&SplitMessage::FirmwareChunkAck { offset })
-                                            .await
-                                            .ok();
-                                    }
-                                    Err(()) => {
-                                        error!("dfu_split: write error at offset {}", offset);
-                                    }
+                            let handler = self.dfu_handler.get_or_insert_with(|| {
+                                crate::dfu::SplitDfuHandler::new().expect("dfu_split: FlashManager not initialized")
+                            });
+                            let actual_len = data.0.len();
+                            match handler.write_chunk(offset as u32, &data.0[..actual_len]) {
+                                Ok(()) => {
+                                    info!("dfu_split: wrote {} bytes at offset {}", actual_len, offset);
+                                    self.split_driver
+                                        .write(&SplitMessage::FirmwareChunkAck { offset })
+                                        .await
+                                        .ok();
                                 }
-                            } else {
-                                error!("dfu_split: RmkDfuHandler not initialized");
+                                Err(()) => {
+                                    error!("dfu_split: write error at offset {}", offset);
+                                }
                             }
                         }
                         #[cfg(feature = "dfu_split")]
                         SplitMessage::FirmwareUpdateComplete(_crc32) => {
-                            use crate::dfu::get_dfu_handler;
-                            if let Some(handler) = get_dfu_handler() {
+                            if let Some(ref mut handler) = self.dfu_handler {
                                 info!("dfu_split: firmware update complete, marking updated + reset");
                                 self.split_driver
                                     .write(&SplitMessage::FirmwareUpdateConfirm)
@@ -194,7 +193,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                                 embassy_time::Timer::after_millis(50).await;
                                 handler.mark_updated_and_reset().ok();
                             } else {
-                                error!("dfu_split: RmkDfuHandler not initialized");
+                                error!("dfu_split: no active DFU session");
                             }
                         }
                         _ => (),

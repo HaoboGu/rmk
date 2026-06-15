@@ -236,8 +236,12 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
         }
 
         #[cfg(feature = "dfu_split_force_update")]
-        info!("dfu_split: force update enabled, ignoring hash match");
+        info!("dfu_split: force update enabled, ignoring hash (peripheral={:#x}, expected={:#x}) match",
+            peripheral_hash,
+            expected_hash,
+        );
 
+        #[cfg(not(feature = "dfu_split_force_update"))]
         info!(
             "dfu_split: firmware hash mismatch (peripheral={:#x}, expected={:#x}), starting update ({} bytes)",
             peripheral_hash,
