@@ -380,11 +380,14 @@ impl SplitDfuHandler {
             dfu.erase(0, cap).map_err(|_| ())?;
             self.erased = true;
         }
-        dfu.write(offset, data).map_err(|_| ())
+        dfu.write(offset, data).map_err(|_| ())?;
+        with_led(|led| led.toggle());
+        Ok(())
     }
 
     /// Mark firmware as valid and reset into the new image.
     pub fn mark_updated_and_reset(&self) -> Result<(), ()> {
+        with_led(|led| led.set_high());
         use embassy_boot_rp::{BlockingFirmwareUpdater, FirmwareUpdaterConfig};
         let config = FirmwareUpdaterConfig {
             dfu: self.dfu_partition.clone(),
