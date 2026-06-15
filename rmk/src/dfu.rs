@@ -352,6 +352,7 @@ pub struct SplitDfuHandler {
     dfu_partition: PartitionType,
     state_partition: PartitionType,
     erased: bool,
+    written_len: u32,
 }
 
 #[cfg(feature = "dfu_split")]
@@ -364,25 +365,46 @@ impl SplitDfuHandler {
             dfu_partition: mgr.dfu_partition(),
             state_partition: mgr.state_partition(),
             erased: false,
+            written_len: 0,
         })
     }
 
     /// Write a chunk of firmware data at the given partition offset.
     ///
     /// On the first call the **entire** DFU partition is erased once;
-    /// subsequent calls only write.  This matches the split protocol
-    /// which sends sequential chunks from offset 0.
+    /// subsequent calls only write.
     pub fn write_chunk(&mut self, offset: u32, data: &[u8]) -> Result<(), ()> {
         use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
         let mut dfu = self.dfu_partition.clone();
+
         if !self.erased {
-            let cap = dfu.capacity() as u32;
+            let cap = ReadNorFlash::capacity(&dfu) as u32;
             dfu.erase(0, cap).map_err(|_| ())?;
             self.erased = true;
         }
+
         dfu.write(offset, data).map_err(|_| ())?;
+        self.written_len = self.written_len.max(offset + data.len() as u32);
         with_led(|led| led.toggle());
         Ok(())
+    }
+
+    /// Read back the entire DFU partition and compute its CRC-32.
+    /// Used by the peripheral for end-to-end verification before resetting.
+    pub fn compute_dfu_crc(&self) -> u32 {
+        use embedded_storage::nor_flash::ReadNorFlash;
+        let mut dfu = self.dfu_partition.clone();
+        let len = self.written_len as usize;
+        let mut crc = crate::crc32::Crc32::new();
+        let mut buf = [0u8; 256];
+        let mut pos = 0u32;
+        while (pos as usize) < len {
+            let chunk_len = core::cmp::min(256, len - pos as usize);
+            dfu.read(pos, &mut buf[..chunk_len]).ok();
+            crc.update(&buf[..chunk_len]);
+            pos += chunk_len as u32;
+        }
+        crc.finalize()
     }
 
     /// Mark firmware as valid and reset into the new image.

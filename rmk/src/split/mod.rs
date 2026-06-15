@@ -68,17 +68,28 @@ pub(crate) enum SplitMessage {
     #[cfg(feature = "dfu_split")]
     FirmwareChunk {
         offset: u32,
+        len: u16,
         data: FirmwareChunkData,
     },
-    /// Peripheral → Central: acknowledge that `offset` bytes have been written.
+    /// Peripheral → Central: acknowledge that `offset` bytes have been written,
+    /// together with the CRC-32 of **this single chunk** (for per-chunk verification).
     #[cfg(feature = "dfu_split")]
     FirmwareChunkAck {
         offset: u32,
+        crc: u32,
     },
-    /// Central → Peripheral: all chunks sent, mark updated and reboot.
-    /// Includes the CRC32 hash of the firmware binary so the peripheral can store it.
+    /// Central → Peripheral: all chunks sent, peripheral should compute DFU CRC.
     #[cfg(feature = "dfu_split")]
-    FirmwareUpdateComplete(u32),
+    FirmwareUpdateComplete,
+    /// Peripheral → Central: CRC-32 of the full DFU partition (read back from flash).
+    #[cfg(feature = "dfu_split")]
+    FirmwareCrcReport(u32),
+    /// Central → Peripheral: end-to-end CRC matches, safe to reset.
+    #[cfg(feature = "dfu_split")]
+    FirmwareCrcOk,
+    /// Central → Peripheral: end-to-end CRC mismatch, do NOT reset.
+    #[cfg(feature = "dfu_split")]
+    FirmwareCrcFail,
     /// Peripheral → Central: confirm mark_updated succeeded, about to reset.
     #[cfg(feature = "dfu_split")]
     FirmwareUpdateConfirm,

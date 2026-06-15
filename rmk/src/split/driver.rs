@@ -173,7 +173,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
         // Only `check_firmware_update` (initial connect) can be force-bypassed;
         // the proactive handler always checks the hash to avoid boot loops.
         if hash == expected_hash {
-            info!("dfu_split: peripheral firmware hash matches ({:#x}), no update needed", hash);
+            info!("dfu_split: firmware hash matches (peripheral={:#x}, expected={:#x}), no update needed", hash, expected_hash);
             return;
         }
 
@@ -231,7 +231,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
 
         #[cfg(not(feature = "dfu_split_force_update"))]
         if peripheral_hash == expected_hash {
-            info!("dfu_split: peripheral firmware hash matches ({:#x}), no update needed", peripheral_hash);
+            info!("dfu_split: firmware hash matches (peripheral={:#x}, expected={:#x}), no update needed", peripheral_hash, expected_hash);
             return;
         }
 
@@ -252,91 +252,175 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
     }
 
     /// Send the full firmware binary to the peripheral in 256-byte chunks.
+    ///
+    /// 1. Per-chunk CRC-32 verification: each Ack carries `CRC32(chunk_data)`;
+    ///    mismatch → retry that chunk (up to 3 tries).
+    /// 2. End-to-end verification: peripheral reads back its DFU partition,
+    ///    sends the CRC-32, central compares against `expected_hash`.
+    ///    Mismatch → retry the entire transfer (up to 3 attempts).
     #[cfg(feature = "dfu_split")]
     async fn send_firmware_update(&mut self, firmware: &[u8], expected_hash: u32) {
+        use crate::crc32::Crc32;
         use crate::dfu::with_led;
         use embassy_time::{Duration, Timer};
         const MAX_RETRIES: u32 = 3;
+        const MAX_ATTEMPTS: u32 = 3;
 
         with_led(|led| led.set_high());
 
-        for (offset, chunk) in firmware.chunks(256).enumerate() {
-            let offset_bytes = (offset * 256) as u32;
-            let mut data = [0u8; 256];
-            data[..chunk.len()].copy_from_slice(chunk);
+        for attempt in 1..=MAX_ATTEMPTS {
+            info!("dfu_split: update attempt {}/{}", attempt, MAX_ATTEMPTS);
 
-            let mut retries = 0;
-            let mut acked = false;
+            let mut central_crc = Crc32::new();
+            let mut all_acked = true;
 
-            while !acked && retries < MAX_RETRIES {
-                if retries > 0 {
-                    info!("dfu_split: retry {}/{} for chunk at offset {}", retries + 1, MAX_RETRIES, offset_bytes);
+            // --- send all chunks, verifying per-chunk CRC on each Ack ---
+            for (offset, chunk) in firmware.chunks(256).enumerate() {
+                let offset_bytes = (offset * 256) as u32;
+                let mut data = [0u8; 256];
+                data[..chunk.len()].copy_from_slice(chunk);
+
+                let chunk_crc = crate::crc32::crc32(&data[..chunk.len()]);
+                central_crc.update(&data[..chunk.len()]);
+
+                let mut retries = 0;
+                let mut acked = false;
+
+                while !acked && retries < MAX_RETRIES {
+                    if retries > 0 {
+                        info!("dfu_split: retry {}/{} for chunk at offset {}", retries + 1, MAX_RETRIES, offset_bytes);
+                    }
+
+                    debug!("dfu_split: sending chunk at offset {} ({} bytes)", offset_bytes, chunk.len());
+                    if self.send(&SplitMessage::FirmwareChunk { offset: offset_bytes, len: chunk.len() as u16, data: super::FirmwareChunkData(data) }).await.is_err() {
+                        error!("dfu_split: disconnected during chunk send");
+                        with_led(|led| led.set_low());
+                        return;
+                    }
+
+                    let got = loop {
+                        match select(self.transceiver.read(), Timer::after(Duration::from_secs(2))).await {
+                            Either::First(Ok(SplitMessage::FirmwareChunkAck { offset: ack_offset, crc: ack_crc })) => {
+                                if ack_offset == offset_bytes {
+                                    if ack_crc == chunk_crc {
+                                        break true;
+                                    }
+                                    warn!("dfu_split: per-chunk CRC mismatch at offset {} (peripheral={:#010x}, central={:#010x})",
+                                        offset_bytes, ack_crc, chunk_crc);
+                                    break false;
+                                }
+                                info!("dfu_split: got ack for offset {}, waiting for {}", ack_offset, offset_bytes);
+                            }
+                            Either::First(Ok(other)) => {
+                                warn!("dfu_split: unexpected message during chunk transfer: {:?}", other);
+                            }
+                            Either::First(Err(e)) => {
+                                error!("dfu_split: read error during chunk transfer: {:?}", e);
+                                break false;
+                            }
+                            Either::Second(_) => break false,
+                        }
+                    };
+                    acked = got;
+                    retries += 1;
                 }
 
-                info!("dfu_split: sending chunk at offset {} ({} bytes)", offset_bytes, chunk.len());
-                if self.send(&SplitMessage::FirmwareChunk { offset: offset_bytes, data: super::FirmwareChunkData(data) }).await.is_err() {
-                    error!("dfu_split: disconnected during chunk send");
+                if !acked {
+                    error!("dfu_split: chunk at offset {} failed after {} retries", offset_bytes, MAX_RETRIES);
+                    all_acked = false;
+                    break;
+                }
+            }
+
+            if !all_acked {
+                continue; // outer retry loop
+            }
+
+            // --- local sanity check: central_crc should match expected_hash ---
+            let local_crc = central_crc.finalize();
+            if local_crc != expected_hash {
+                error!("dfu_split: central CRC mismatch (computed={:#010x}, expected={:#010x}) — aborting",
+                    local_crc, expected_hash);
+                with_led(|led| led.set_low());
+                return; // not a transmission error, something is wrong with the binary
+            }
+
+            // --- end-to-end: ask peripheral to verify DFU partition CRC ---
+            info!("dfu_split: all chunks sent, requesting DFU CRC verification");
+            if self.send(&SplitMessage::FirmwareUpdateComplete).await.is_err() {
+                error!("dfu_split: disconnected during update complete signal");
+                with_led(|led| led.set_low());
+                return;
+            }
+
+            let peripheral_crc = loop {
+                match select(self.transceiver.read(), Timer::after(Duration::from_secs(5))).await {
+                    Either::First(Ok(SplitMessage::FirmwareCrcReport(crc))) => {
+                        break Some(crc);
+                    }
+                    Either::First(Ok(other)) => {
+                        info!("dfu_split: waiting for DFU CRC report, got {:?}", other);
+                    }
+                    Either::First(Err(e)) => {
+                        error!("dfu_split: read error during CRC report: {:?}", e);
+                        break None;
+                    }
+                    Either::Second(_) => {
+                        error!("dfu_split: timeout waiting for DFU CRC report");
+                        break None;
+                    }
+                }
+            };
+
+            let Some(dfu_crc) = peripheral_crc else {
+                continue; // retry
+            };
+
+            if dfu_crc == expected_hash {
+                info!("dfu_split: end-to-end CRC matches (peripheral={:#010x}, central={:#010x}), confirming update", dfu_crc, expected_hash);
+                if self.send(&SplitMessage::FirmwareCrcOk).await.is_err() {
+                    error!("dfu_split: disconnected during CRC OK send");
                     with_led(|led| led.set_low());
                     return;
                 }
 
-                let got = loop {
+                // Wait for peripheral confirm
+                loop {
                     match select(self.transceiver.read(), Timer::after(Duration::from_secs(2))).await {
-                        Either::First(Ok(SplitMessage::FirmwareChunkAck { offset: ack_offset })) => {
-                            if ack_offset == offset_bytes {
-                                break true;
-                            }
-                            info!("dfu_split: got ack for offset {}, waiting for {}", ack_offset, offset_bytes);
+                        Either::First(Ok(SplitMessage::FirmwareUpdateConfirm)) => {
+                            info!("dfu_split: peripheral confirmed, update complete");
+                            with_led(|led| led.set_low());
+                            return;
                         }
                         Either::First(Ok(other)) => {
-                            warn!("dfu_split: unexpected message during chunk transfer: {:?}", other);
+                            info!("dfu_split: waiting for confirm, got {:?}", other);
                         }
                         Either::First(Err(e)) => {
-                            error!("dfu_split: read error during chunk transfer: {:?}", e);
-                            break false;
+                            error!("dfu_split: read error during confirm: {:?}", e);
+                            with_led(|led| led.set_low());
+                            return;
                         }
-                        Either::Second(_) => break false,
+                        Either::Second(_) => {
+                            error!("dfu_split: timeout waiting for firmware update confirm");
+                            // Peripheral may have already reset
+                            with_led(|led| led.set_low());
+                            return;
+                        }
                     }
-                };
-                acked = got;
-                retries += 1;
-            }
-
-            if !acked {
-                error!("dfu_split: chunk at offset {} failed after {} retries, aborting", offset_bytes, MAX_RETRIES);
-                with_led(|led| led.set_low());
-                return;
-            }
-        }
-
-        info!("dfu_split: all chunks sent, signaling update complete");
-        if self.send(&SplitMessage::FirmwareUpdateComplete(expected_hash)).await.is_err() {
-            error!("dfu_split: disconnected during update complete signal");
-            with_led(|led| led.set_low());
-            return;
-        }
-
-        // Wait for peripheral to confirm
-        loop {
-            match select(self.transceiver.read(), Timer::after(Duration::from_secs(2))).await {
-                Either::First(Ok(SplitMessage::FirmwareUpdateConfirm)) => {
-                    info!("dfu_split: peripheral confirmed, update complete");
-                    break;
                 }
-                Either::First(Ok(other)) => {
-                    info!("dfu_split: waiting for confirm, got {:?}", other);
+            } else {
+                warn!("dfu_split: end-to-end CRC mismatch (peripheral={:#010x}, expected={:#010x}), retrying",
+                    dfu_crc, expected_hash);
+                if self.send(&SplitMessage::FirmwareCrcFail).await.is_err() {
+                    error!("dfu_split: disconnected during CRC fail send");
+                    with_led(|led| led.set_low());
+                    return;
                 }
-                Either::First(Err(e)) => {
-                    error!("dfu_split: read error during confirm: {:?}", e);
-                    break;
-                }
-                Either::Second(_) => {
-                    error!("dfu_split: timeout waiting for firmware update confirm");
-                    break;
-                }
+                Timer::after(Duration::from_millis(100)).await;
             }
         }
 
+        error!("dfu_split: all {} update attempts failed, giving up", MAX_ATTEMPTS);
         with_led(|led| led.set_low());
     }
 
@@ -376,7 +460,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 info!("dfu_split: stale hash response ({:#x}) in event loop, should not happen", hash);
             }
             #[cfg(feature = "dfu_split")]
-            SplitMessage::FirmwareChunkAck { offset } => {
+            SplitMessage::FirmwareChunkAck { offset, crc: _ } => {
                 info!("dfu_split: stale chunk ack (offset {}) in event loop, ignoring", offset);
             }
             #[cfg(feature = "dfu_split")]

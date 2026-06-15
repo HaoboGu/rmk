@@ -164,16 +164,19 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                                 .ok();
                         }
                         #[cfg(feature = "dfu_split")]
-                        SplitMessage::FirmwareChunk { offset, data } => {
+                        SplitMessage::FirmwareChunk { offset, len, data } => {
                             let handler = self.dfu_handler.get_or_insert_with(|| {
                                 crate::dfu::SplitDfuHandler::new().expect("dfu_split: FlashManager not initialized")
                             });
-                            let actual_len = data.0.len();
-                            match handler.write_chunk(offset as u32, &data.0[..actual_len]) {
+                            let actual_len = len as usize;
+                            let chunk_data = &data.0[..actual_len];
+                            match handler.write_chunk(offset as u32, chunk_data) {
                                 Ok(()) => {
-                                    info!("dfu_split: wrote {} bytes at offset {}", actual_len, offset);
+                                    let chunk_crc = crate::crc32::crc32(chunk_data);
+                                    debug!("dfu_split: wrote {} bytes at offset {}, chunk_crc={:#010x}",
+                                        actual_len, offset, chunk_crc);
                                     self.split_driver
-                                        .write(&SplitMessage::FirmwareChunkAck { offset })
+                                        .write(&SplitMessage::FirmwareChunkAck { offset, crc: chunk_crc })
                                         .await
                                         .ok();
                                 }
@@ -183,15 +186,51 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                             }
                         }
                         #[cfg(feature = "dfu_split")]
-                        SplitMessage::FirmwareUpdateComplete(_crc32) => {
+                        SplitMessage::FirmwareUpdateComplete => {
                             if let Some(ref mut handler) = self.dfu_handler {
-                                info!("dfu_split: firmware update complete, marking updated + reset");
+                                let dfu_crc = handler.compute_dfu_crc();
+                                info!("dfu_split: DFU partition CRC: {:#010x}", dfu_crc);
                                 self.split_driver
-                                    .write(&SplitMessage::FirmwareUpdateConfirm)
+                                    .write(&SplitMessage::FirmwareCrcReport(dfu_crc))
                                     .await
                                     .ok();
-                                embassy_time::Timer::after_millis(50).await;
-                                handler.mark_updated_and_reset().ok();
+
+                                // Wait for central verdict
+                                let ok = loop {
+                                    use embassy_futures::select::{Either, select};
+                                    match select(self.split_driver.read(), embassy_time::Timer::after(embassy_time::Duration::from_secs(5))).await {
+                                        Either::First(Ok(SplitMessage::FirmwareCrcOk)) => {
+                                            info!("dfu_split: central confirmed DFU CRC, resetting");
+                                            break true;
+                                        }
+                                        Either::First(Ok(SplitMessage::FirmwareCrcFail)) => {
+                                            warn!("dfu_split: central rejected DFU CRC, retrying");
+                                            break false;
+                                        }
+                                        Either::First(Ok(other)) => {
+                                            trace!("dfu_split: waiting for CRC verdict, got {:?}", other);
+                                        }
+                                        Either::First(Err(e)) => {
+                                            error!("dfu_split: read error during CRC verdict: {:?}", e);
+                                            break false;
+                                        }
+                                        Either::Second(_) => {
+                                            error!("dfu_split: timeout waiting for CRC verdict");
+                                            break false;
+                                        }
+                                    }
+                                };
+
+                                if ok {
+                                    self.split_driver
+                                        .write(&SplitMessage::FirmwareUpdateConfirm)
+                                        .await
+                                        .ok();
+                                    embassy_time::Timer::after_millis(50).await;
+                                    handler.mark_updated_and_reset().ok();
+                                } else {
+                                    self.dfu_handler = None;
+                                }
                             } else {
                                 error!("dfu_split: no active DFU session");
                             }
