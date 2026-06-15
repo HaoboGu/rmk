@@ -77,6 +77,12 @@ rmk::input_device::pointing::CaretConfig {
 
 Uses `MotionAccumulator` in persistent mode: `total = remainder + delta`, output = `total / divisor`, but the **full total** stays in the accumulator (not just the remainder). The consumer (caret logic) decides when to reset the accumulator via `reset_x()`/`reset_y()` after a tap has been triggered.
 
+::: note
+
+Caret mode currently gets rid of all pressed modifiers (shift, CTRL) and sends the bare HidKeyCode.
+
+:::
+
 ## Mode switching
 
 Users can define a processor, in this case called `PointingProcessorController`, which subscribes to events (e.g. layer changes) and updates the active mode. The example below switches to Cursor on layer 0, Sniper on layer 1, Scroll on layer 2, and Caret on layer 3 or when key bound to User0 is pressed:
@@ -186,6 +192,8 @@ impl PointingProcessorController {
 ```
 
 Register the controller on the **central** side (always — even if the sensor is on a peripheral):
+
+import { Rust, Toml, Tab, Tabs } from '@theme'
 
 <Tabs>
 <Tab label={<Toml />}>

@@ -648,6 +648,9 @@ impl<'a> PointingProcessor<'a> {
 }
 
 /// Tap a key (press and release with a short delay) - used for caret mode
+/// NOTE: This is a basic implementation because at the current state Keyboard (in keyboard.rs) does not support
+/// sending in KeyActions from the processor layer. If that changes in the future, this can be updated to use KeyActions and support more complex behavior (e.g. modifiers, macros).
+/// For the time being, this sends only simple key taps without modifiers.
 async fn tap_key(keycode: HidKeyCode) {
     // Press
     send_hid_report(Report::KeyboardReport(KeyboardReport {
@@ -1310,7 +1313,7 @@ mod tests {
         let mut a = acc();
         let result = compute_caret_taps(150, 30, &mut a, &cfg());
         // |150|+|30| = 180 > 100. X dominant (150 >= 30). dx>0 + !invert → Right.
-        // Loop: reduce_x=-100 → total=(50, 30), |50|+|30|=80<=100 → stop.
+        // Loop: reduce_x=-100 → total=(50, 0), |50|+|0|=50<=100 → stop.
         assert_eq!(result, Some((HidKeyCode::Right, 1)));
         assert_eq!(a.remainder_x, 50);
         assert_eq!(a.remainder_y, 0); // non-dominant reset
