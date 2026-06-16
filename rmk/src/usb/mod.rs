@@ -242,7 +242,7 @@ impl<D: Driver<'static>> UsbTransport<D> {
         #[cfg(feature = "dfu")]
         {
             let product_name = device_config.product_name;
-            #[cfg(feature = "dfu_rp")]
+            #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
             if let Some(mgr) = ::rmk::dfu::get_manager() {
                 ::rmk::dfu::register_dfu_interface(&mut builder, mgr, product_name);
             }

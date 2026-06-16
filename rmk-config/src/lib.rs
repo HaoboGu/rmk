@@ -90,10 +90,9 @@ pub struct KeyboardTomlConfig {
     /// build.rs also loads event defaults via new_from_toml_path_with_event_defaults()
     #[serde(default)]
     pub(crate) event: EventConfig,
-    /// Whether the user explicitly set a [dfu] section in keyboard.toml.
-    /// Populated during two-pass parsing in new_from_toml_path().
+    /// Whether the user explicitly set a [storage] section in keyboard.toml.
     #[serde(skip)]
-    pub(crate) dfu_user_set: bool,
+    pub(crate) storage_user_set: bool,
 }
 
 impl KeyboardTomlConfig {
@@ -121,7 +120,9 @@ impl KeyboardTomlConfig {
     /// and should not require `[keyboard.board]`/`[keyboard.chip]`.
     pub fn new_from_toml_path_with_event_defaults<P: AsRef<Path>>(config_toml_path: P) -> Self {
         let mut config = Self::parse_from_toml_path(config_toml_path, None);
-        config.dfu_user_set = config.dfu.is_some();
+        config.storage_user_set = config.storage.as_ref().map_or(false, |s| {
+            s.start_addr.is_some() || s.num_sectors.is_some()
+        });
         config.auto_calculate_parameters();
         config
     }
@@ -141,10 +142,9 @@ impl KeyboardTomlConfig {
         // 2. Chip-specific default config
         // 3. User config (highest priority)
         let mut config = Self::parse_from_toml_path(path, Some(default_config_str));
-
-        // Track whether the user explicitly set [dfu] in their keyboard.toml
-        // (as opposed to the value coming only from chip defaults).
-        config.dfu_user_set = user_config.dfu.is_some();
+        config.storage_user_set = user_config.storage.as_ref().map_or(false, |s| {
+            s.start_addr.is_some() || s.num_sectors.is_some()
+        });
 
         config.auto_calculate_parameters();
 

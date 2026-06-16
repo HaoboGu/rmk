@@ -65,48 +65,79 @@ impl crate::KeyboardTomlConfig {
         } else {
             None
         };
-        let dfu = self.get_dfu_config().map(|d| {
-            let has_manual_overrides = self.dfu_user_set
-                && (d.state_offset.is_some()
-                    || d.state_size.is_some()
-                    || d.dfu_offset.is_some()
-                    || d.dfu_size.is_some());
+        let (dfu, dfu_auto_calc) = match self.get_dfu_config() {
+            Some(d) => {
+                let vals = [d.state_offset, d.state_size, d.dfu_offset, d.dfu_size];
+                let any_set = vals.iter().any(|v| v.is_some());
+                let all_set = vals.iter().all(|v| v.is_some());
 
-            if has_manual_overrides {
-                // User manually set [dfu] values → use directly
-                DfuConfig {
-                    state_offset: d.state_offset.unwrap_or(0x6000),
-                    state_size: d.state_size.unwrap_or(0x1000),
-                    dfu_offset: d.dfu_offset.unwrap_or(0x87000),
-                    dfu_size: d.dfu_size.unwrap_or(516 * 1024),
-                    page_size: d.page_size.unwrap_or(4096),
-                    led: d.led.clone().map(|pin| PinConfig { pin, low_active: false }),
-                    unlock_keys: d.unlock_keys.clone().unwrap_or_default(),
+                if any_set && !all_set {
+                    return Err(
+                        "If you set one of state_offset/state_size/dfu_offset/dfu_size, you must set all four"
+                            .to_string(),
+                    );
                 }
-            } else {
-                // Auto-calculate: use ALL remaining flash for ACTIVE+DFU+storage
-                // layout: [28K bootloader+state][ACTIVE][DFU(ACTIVE+1page)][storage]
-                let flash_size = d.flash_size.unwrap_or(2 * 1024 * 1024);
-                let page_size = d.page_size.unwrap_or(4096);
-                let bootloader_state_end = 0x7000u32; // 28K
-                let storage_size = if storage_toml.enabled {
-                    storage_toml.num_sectors.unwrap_or(2) as u32 * page_size
+
+                if all_set {
+                    (
+                        Some(DfuConfig {
+                            state_offset: d.state_offset.unwrap(),
+                            state_size: d.state_size.unwrap(),
+                            dfu_offset: d.dfu_offset.unwrap(),
+                            dfu_size: d.dfu_size.unwrap(),
+                            page_size: d.page_size.unwrap_or(4096),
+                            led: d.led.clone().map(|pin| PinConfig { pin, low_active: false }),
+                            unlock_keys: d.unlock_keys.clone().unwrap_or_default(),
+                        }),
+                        false,
+                    )
                 } else {
-                    0
-                };
-                let remaining = flash_size - bootloader_state_end - storage_size;
-                let active_size = (remaining - page_size) / 2;
-                DfuConfig {
-                    state_offset: 0x6000,
-                    state_size: 0x1000,
-                    dfu_offset: bootloader_state_end + active_size,
-                    dfu_size: active_size + page_size,
-                    page_size,
-                    led: d.led.clone().map(|pin| PinConfig { pin, low_active: false }),
-                    unlock_keys: d.unlock_keys.clone().unwrap_or_default(),
+                    // Auto-calculate: use ALL remaining flash for ACTIVE+DFU+storage
+                    // layout: [28K bootloader+state][ACTIVE][DFU(ACTIVE+1page)][storage]
+                    let flash_size = d.flash_size.unwrap_or(2 * 1024 * 1024);
+                    let page_size = d.page_size.unwrap_or(4096);
+                    let bootloader_state_end = 0x7000u32; // 28K
+                    // Reserve 128 KB for storage behind DFU, DFU auto-calc always assumes this
+                    let storage_size = 32u32 * page_size;
+                    let remaining = flash_size - bootloader_state_end - storage_size;
+                    let active_size = (remaining - page_size) / 2;
+                    (
+                        Some(DfuConfig {
+                            state_offset: 0x6000,
+                            state_size: 0x1000,
+                            dfu_offset: bootloader_state_end + active_size,
+                            dfu_size: active_size + page_size,
+                            page_size,
+                            led: d.led.clone().map(|pin| PinConfig { pin, low_active: false }),
+                            unlock_keys: d.unlock_keys.clone().unwrap_or_default(),
+                        }),
+                        true,
+                    )
                 }
             }
-        });
+            None => (None, false),
+        };
+        if self.storage_user_set
+            && dfu_auto_calc
+            && let Some(storage_cfg) = &self.storage
+        {
+            if let Some(num_sectors) = storage_cfg.num_sectors
+                && num_sectors != 32
+            {
+                eprintln!(
+                    "warning: `[storage].num_sectors = {}` is ignored with DFU auto-calculation. The DFU layout always reserves 128 KB (32 sectors) at the end of flash. Values < 32 waste reserved space, values > 32 risk flash overflow.",
+                    num_sectors
+                );
+            }
+            if let Some(start_addr) = storage_cfg.start_addr
+                && start_addr != 0
+            {
+                eprintln!(
+                    "warning: `[storage].start_addr = {:#x}` has no effect with DFU. The storage partition is automatically placed after the DFU partition.",
+                    start_addr
+                );
+            }
+        }
         let light = self.get_light_config();
         let display = self.get_display_config();
         let output = self.get_output_config()?;

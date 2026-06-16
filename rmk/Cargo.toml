@@ -81,6 +81,7 @@ rp-pac = { version = "7.0.0", optional = true }
 pio = { version = "0.3.0", optional = true }
 fixed = { version = "1.28.0", optional = true }
 embassy-boot-rp = { version = "0.10.0", optional = true }
+embassy-boot = { version = "0.7", optional = true, default-features = false }
 
 # ESP32 dependencies
 esp-hal = { version = "1.1", optional = true }
@@ -125,7 +126,7 @@ vial = ["host"]
 vial_lock = ["vial", "host_security"]
 
 ## Enable DFU lock feature — physical key unlock for DFU firmware download
-dfu_lock = ["dfu_rp", "host_security"]
+dfu_lock = ["host_security"]
 
 ## Enable physical key unlock and matrix state tracking (shared between vial_lock and rmk_protocol)
 host_security = []
@@ -229,7 +230,9 @@ zsa_voyager_bl = []
 ## Enable DFU firmware update support (USB DFU interface)
 dfu = ["dep:embassy-usb-dfu", "dep:embassy-embedded-hal"]
 ## Enable RP2040-specific DFU with embassy-boot-rp (implies `dfu` and `rp2040`)
-dfu_rp = ["dfu", "dep:embassy-boot-rp", "rp2040", "rmk-macro/dfu_rp"]
+dfu_rp = ["dfu", "dep:embassy-boot-rp", "dep:embassy-boot", "rp2040", "rmk-macro/dfu_rp"]
+## Enable nRF DFU firmware update support (add a chip feature like `nrf52840` too)
+dfu_nrf = ["dfu", "dep:embassy-boot", "dep:embassy-nrf", "rmk-macro/dfu_nrf"]
 
 ## Enable Plover HID stenography support: adds the steno HID descriptor,
 ## the steno USB writer endpoint, and the `Action::Steno` variant.
@@ -280,3 +283,6 @@ _ble = ["dep:trouble-host", "dep:rand_core", "dep:bt-hci", "storage", "rmk-types
 [lib]
 # Don't run doctest for lib
 doctest = false
+[workspace.dependencies]
+embassy-nrf = { version = "0.10", features = ["nrf52840"] }
+

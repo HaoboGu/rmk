@@ -10,10 +10,10 @@ mod vial;
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_rp::gpio::{Input, Level, Output};
-use embassy_rp::peripherals::USB;
-use embassy_rp::usb::{Driver, InterruptHandler};
-use embassy_rp::{bind_interrupts, dma};
+use embassy_nrf::gpio::{Input, Level, Output, OutputDrive};
+use embassy_nrf::interrupt::InterruptExt;
+use embassy_nrf::usb::{self, Driver};
+use embassy_nrf::{bind_interrupts, peripherals};
 use keymap::{COL, ROW};
 use panic_probe as _;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
@@ -24,27 +24,34 @@ use rmk::matrix::Matrix;
 use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::storage::async_flash_wrapper;
 use rmk::usb::UsbTransport;
-use rmk::watchdog::Rp2040Watchdog;
 use rmk::{KeymapData, initialize_keymap_and_storage, run_all};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 bind_interrupts!(struct Irqs {
-    USBCTRL_IRQ => InterruptHandler<USB>;
-    DMA_IRQ_0 => dma::InterruptHandler<embassy_rp::peripherals::DMA_CH0>;
+    USBD => usb::InterruptHandler<peripherals::USBD>;
+    CLOCK_POWER => usb::vbus_detect::InterruptHandler;
 });
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     info!("RMK start!");
-    let p = embassy_rp::init(Default::default());
+    let mut config = embassy_nrf::config::Config::default();
+    config.gpiote_interrupt_priority = embassy_nrf::interrupt::Priority::P3;
+    config.time_interrupt_priority = embassy_nrf::interrupt::Priority::P3;
+    embassy_nrf::interrupt::USBD.set_priority(embassy_nrf::interrupt::Priority::P2);
+    embassy_nrf::interrupt::CLOCK_POWER.set_priority(embassy_nrf::interrupt::Priority::P2);
+    config.debug = embassy_nrf::config::Debug::NotConfigured;
+    let p = embassy_nrf::init(config);
+    embassy_nrf::pac::CLOCK.tasks_hfclkstart().write_value(1);
+    while embassy_nrf::pac::CLOCK.events_hfclkstarted().read() != 1 {}
 
-    let driver = Driver::new(p.USB, Irqs);
+    let driver = Driver::new(p.USBD, Irqs, usb::vbus_detect::HardwareVbusDetect::new(Irqs));
 
     let (row_pins, col_pins) =
-        config_matrix_pins_rp!(peripherals: p, input: [PIN_6, PIN_7, PIN_8, PIN_9], output: [PIN_19, PIN_20, PIN_21]);
+        config_matrix_pins_nrf!(peripherals: p, input: [P0_07, P0_22, P0_11, P0_12], output: [P0_13, P0_17, P0_20]);
 
     // Flash layout using the bootymcbootface formula:
-    //   state at 0x6000 (4K), active from 0x7000 (size: (flash_size - 28K (= BOOT2 size + embassy-boot + embassy-boot state) - STORAGE_SIZE (= 128K) - page_size (= 4K)) / 2),
+    //   state at 0x6000 (4K), active from 0x7000 (size: (flash_size - 28K (= embassy-boot + embassy-boot state) - STORAGE_SIZE (= 64K) - page_size (= 4K)) / 2),
     //   dfu follows active (active_size + page_size (= 4K))
     //
     // All offsets (DFU_OFFSET, DFU_SIZE, STORAGE_OFFSET, etc.) are derived
@@ -53,23 +60,20 @@ async fn main(_spawner: Spawner) {
     //
     // ⚠  You can define your own FLASH_SIZE and addresses, but then you must build and
     //    flash a custom embassy-boot bootloader with a matching memory.x!
-    const FLASH_SIZE: u32 = 2 * 1024 * 1024; // 2 MB (default)
-    // const FLASH_SIZE: u32 = 4 * 1024 * 1024;    // 4 MB
-    // const FLASH_SIZE: u32 = 8 * 1024 * 1024;    // 8 MB
-    // const FLASH_SIZE: u32 = 16 * 1024 * 1024;   // 16 MB
+    const FLASH_SIZE: u32 = 1024 * 1024; // 1 MB (nRF52840)
     const PAGE_SIZE: u32 = 4 * 1024;
     const STORAGE_SIZE: u32 = 128 * 1024; // 32 sectors × 4K after ACTIVE+DFU
     const STATE_OFFSET: u32 = 0x6000;
     const STATE_SIZE: u32 = 0x1000;
-    const ACTIVE_OFFSET: u32 = 0x7000; // after 28K bootloader + state
+    const ACTIVE_OFFSET: u32 = 0x7000;
     let remaining: u32 = FLASH_SIZE
-        - 28 * 1024 // size of boot 2 + embassy-boot + embassy-boot state
+        - 28 * 1024 // bootloader (24K) + state (4K)
         - STORAGE_SIZE;
-    let active_size: u32 = (remaining - PAGE_SIZE) / 2; // DFU = ACTIVE + 1 page (embassy-boot requirement)
-    let dfu_size: u32 = active_size + PAGE_SIZE; // embassy-boot needs that extra page for swap info
-    let dfu_offset: u32 = ACTIVE_OFFSET + active_size; // dfu after active
-    let storage_offset: u32 = dfu_offset + dfu_size; // storage after active + dfu
-    assert!(storage_offset + STORAGE_SIZE == FLASH_SIZE); // sanity check that we fit everything in flash
+    let active_size: u32 = (remaining - PAGE_SIZE) / 2;
+    let dfu_size: u32 = active_size + PAGE_SIZE;
+    let dfu_offset: u32 = ACTIVE_OFFSET + active_size;
+    let storage_offset: u32 = dfu_offset + dfu_size;
+    assert!(storage_offset + STORAGE_SIZE == FLASH_SIZE);
 
     info!(
         "Flash layout: state @ 0x{:04X} ({}K), active @ 0x{:04X} ({}K), dfu @ 0x{:04X} ({}K), storage @ 0x{:04X} ({}K)",
@@ -84,7 +88,7 @@ async fn main(_spawner: Spawner) {
     );
 
     let flash = async_flash_wrapper(rmk::dfu::init_flash(
-        p.FLASH,
+        p.NVMC,
         storage_offset,
         STORAGE_SIZE,
         STATE_OFFSET,
@@ -93,13 +97,13 @@ async fn main(_spawner: Spawner) {
         dfu_size,
     ));
 
-    rmk::dfu::set_led(Some(Output::new(p.PIN_25, Level::Low)));
+    rmk::dfu::set_led(Some(Output::new(p.P0_15, Level::Low, OutputDrive::Standard)));
 
     let keyboard_device_config = DeviceConfig {
         vid: 0x4c4b,
         pid: 0x4643,
         manufacturer: "Haobo",
-        product_name: "RMK Keyboard RP2040 embassy-boot use_rust example",
+        product_name: "RMK Keyboard nRF52840 embassy-boot use_rust example",
         serial_number: "vial:f64c2b3c:000001",
     };
 
@@ -113,7 +117,7 @@ async fn main(_spawner: Spawner) {
 
     let mut keymap_data = KeymapData::new(keymap::get_default_keymap());
     let storage_config = StorageConfig {
-        num_sectors: 32,
+        num_sectors: 16,
         start_addr: 0,
         clear_storage: false,
         clear_layout: false,
@@ -150,16 +154,13 @@ async fn main(_spawner: Spawner) {
     let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config);
     let mut wpm_processor = WpmProcessor::new();
 
-    let mut watchdog_runner = Rp2040Watchdog::default_runner(embassy_rp::watchdog::Watchdog::new(p.WATCHDOG));
-
     run_all!(
         matrix,
         storage,
         usb_transport,
         wpm_processor,
         keyboard,
-        host_service,
-        watchdog_runner // , dfu_lock
+        host_service // , dfu_lock
     )
     .await;
 }

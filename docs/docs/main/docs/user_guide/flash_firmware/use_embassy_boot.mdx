@@ -1,35 +1,34 @@
 # Use embassy-boot bootloader
 
-::: tip
-This feature is only available for **RP2040** (Raspberry Pi Pico, Pi Pico W, and other RP2040 boards).
-:::
+[embassy-boot](https://github.com/embassy-rs/embassy/tree/main/embassy-boot) is a bootloader framework from the Embassy project. It splits the flash into two firmware slots (active and DFU download), so updating is **safe even if power is lost or the transfer fails** — the old firmware remains intact and the bootloader can roll back automatically. You can build your own bootloader, or use a pre-built one like **bootymcbootface**.
 
-[embassy-boot](https://github.com/embassy-rs/embassy/tree/main/embassy-boot) is a bootloader framework from the Embassy project. It splits the flash into two firmware slots (active and DFU download), so updating is **safe even if power is lost or the transfer fails** — the old firmware remains intact and the bootloader can roll back automatically. You can build your own bootloader using the `embassy-boot-rp` crate, or use a pre-built one like **bootymcbootface**.
+RMK supports DFU for **RP2040** (via `dfu_rp`) and **nRF52840** (via `dfu_nrf`).
 
-[bootymcbootface](https://codeberg.org/Schievel/bootymcbootface/) is a pre-built embassy-boot bootloader for RP2040. It sits at the beginning of flash and handles the dual-slot firmware switching and rollback on boot. RMK itself provides the DFU USB interface (via `embassy-usb-dfu`) for subsequent updates, so once bootymcbootface and RMK are flashed, you never need to press BOOTSEL again.
+[bootymcbootface](https://codeberg.org/Schievel/bootymcbootface/) is a pre-built embassy-boot bootloader for both platforms. It sits at the beginning of flash and handles the dual-slot firmware switching and rollback on boot. RMK itself provides the DFU USB interface (via `embassy-usb-dfu`) for subsequent updates, so once bootymcbootface and RMK are flashed, you never need to press BOOTSEL again.
 
 RMK and bootymcbootface use an **identical partition formula** so the layout always fits perfectly:
 
-```rust
-// bootloader+state = 28K (fixed)
-// storage = 128K (fixed — 32 sectors × 4K for persistent keymap storage)
-// remaining = flash_size - 28K - 128K
-// ACTIVE    = (remaining - 4K) / 2
-// DFU       = ACTIVE + 4K  (1 page delta required by embassy-boot swap)
+```text
+bootloader+state = 28K (fixed)
+storage = 128K (fixed — 32 sectors × 4K for persistent keymap storage)
+remaining = flash_size - 28K - 128K
+ACTIVE    = (remaining - 4K) / 2
+DFU       = ACTIVE + 4K  (1 page delta required by embassy-boot swap)
 ```
 
 The 4K page delta is an **invariant of embassy-boot's swap algorithm**: the DFU slot must always be exactly one erase page larger than the ACTIVE slot. Storage is reserved at the end of flash and **cannot be reconfigured** when using bootymcbootface — it is always 128K (32 sectors × 4K).
 
-| Region      | 2MB               | 4MB               | 8MB               | 16MB              |
-|-------------|-------------------|-------------------|-------------------|-------------------|
-| Boot+State  | 28K (0x7000)      | 28K (0x7000)      | 28K (0x7000)      | 28K (0x7000)      |
-| ACTIVE      | **944K** (0xEC000)| **1968K** (0x1EC000) | **4016K** (0x3EC000) | **8112K** (0x7EC000) |
-| DFU         | **948K** (0xED000)| **1972K** (0x1ED000) | **4020K** (0x3ED000) | **8116K** (0x7ED000) |
-| Storage     | 128K (0x20000)    | 128K (0x20000)    | 128K (0x20000)    | 128K (0x20000)    |
+| Region      | 2MB (RP2040)      | 4MB (RP2040)      | 8MB (RP2040)      | 16MB (RP2040)   | 1MB (nRF52840)  |
+|-------------|-------------------|-------------------|-------------------|-------------------|------------------|
+| Boot+State  | 28K (0x7000)      | 28K (0x7000)      | 28K (0x7000)      | 28K (0x7000)      | 28K (0x7000)     |
+| ACTIVE      | **944K** (0xEC000)| **1968K** (0x1EC000) | **4016K** (0x3EC000) | **8112K** (0x7EC000) | **432K** (0x73000) |
+| DFU         | **948K** (0xED000)| **1972K** (0x1ED000) | **4020K** (0x3ED000) | **8116K** (0x7ED000) | **436K** (0x7B000) |
+| Storage     | 128K (0x20000)    | 128K (0x20000)    | 128K (0x20000)    | 128K (0x20000)    | 128K (0x20000)   |
 
 The size of the ACTIVE Region is what you need to plug in as the flash size in `memory.x`. 
+(see also the examples `memory.x` in `rmk/examples/use_rust/rp2040_embassy_boot/` for RP2040 or `rmk/examples/use_rust/nrf52840_embassy_boot/` for nRF)
 
-If you override `flash_size` in your `keyboard.toml`'s `[dfu]` section, RMK's auto-calc recomputes the layout on the fly. You never need to manually set `dfu_offset` or `dfu_size` when using bootymcbootface.
+If you override `flash_size` in your `keyboard.toml`'s `[dfu]` section, RMK's auto-calc recomputes the layout on the fly. You never need to manually set the addresses like `dfu_offset` or `dfu_size` when using bootymcbootface.
 
 ## Prerequisites
 
@@ -37,35 +36,51 @@ If you override `flash_size` in your `keyboard.toml`'s `[dfu]` section, RMK's au
 
 You need the [bootymcbootface](https://codeberg.org/Schievel/bootymcbootface/) bootloader in the **correct flash size** for your board. The available versions are named by flash size, e.g.:
 
+**RP2040:**
 - `bootymcbootface-rp2040-2mb.uf2` – for 2 MB flash
-- `bootymcbootface-rp2040-4mb.uf2` – for 4 MB flash
-- `bootymcbootface-rp2040-8mb.uf2` – for 8 MB flash
-- `bootymcbootface-rp2040-16mb.uf2` – for 16 MB flash
+- `bootymcbootface-rp204o-4mb.uf2` – for 4 MB flash
+- `bootymcbootface-rp204o-8mb.uf2` – for 8 MB flash
+- `bootymcbootface-rp204o-16mb.uf2` – for 16 MB flash
 
-The **2 MB version works with larger flash chips too** (e.g. 4 MB or 8 MB), using only the first 2 MB. On 2 MB you get 944K of ACTIVE space, which is ample for most RMK firmwares. If you need more room (e.g. with large keymaps, Vial, or many features), pick the matching flash size variant — see the table above for exact slot sizes.
+::: tip
+The **2 MB version works with larger flash chips too** (e.g. 4 MB or 8 MB), using only the first 2 MB. On 2 MB you get 944K of ACTIVE space, which is ample for most RMK firmwares. If you need more room (e.g. with large keymaps, displays, RGB, or many features), pick the matching flash size variant — see the table above for exact slot sizes.
+:::
+
+**nRF52840:**
+- `bootymcbootface-nrf52840.uf2` – for 1 MB flash
+- `bootymcbootface-nrf52840.elf` – for 1 MB flash, for direct flashing via probe-rs
+
+::: warning
+When using the nRF52840 with the **Adafruit UF2 bootloader**, flashing bootymcbootface **overwrites** the Adafruit bootloader (even when flashing via UF2). Subsequent UF2 uploads won't work.
+:::  
 
 ### Compile RMK with DFU support
 
-RMK must be compiled with the `dfu` and `dfu_rp` features and the **matching flash size**.
+RMK must be compiled with the `dfu` feature and the platform-specific feature:
 
-When using `rmkit init`, you will be asked whether you want to use embassy-boot and can enter the flash size. `rmkit` handles all necessary adjustments automatically.
+- **RP2040**: `dfu_rp`
+- **nRF52840**: `dfu_nrf` — optionally with `nrf52840_ble` for simultaneous BLE support
 
 If configuring manually, ensure:
 
-- `Cargo.toml` uses the `dfu_rp` feature
+- `Cargo.toml` uses the `dfu_rp` (RP2040) or `dfu_nrf` (nRF52840) feature
 - `keyboard.toml` has `[dfu]` section
-- The flash partitioning in `memory.x` matches your bootloader and flash size (see `rmk/examples/use_rust/rp2040_embassy_boot/`)
+- The flash partitioning in `memory.x` matches your bootloader and flash size (see `rmk/examples/use_rust/rp2040_embassy_boot/` for RP2040 or `rmk/examples/use_rust/nrf52840_embassy_boot/` for nRF)
 
-**Important:** The bootymcbootface version and the RMK compilation must use the **same flash size**. Example: bootymcbootface 2 MB → RMK with 2 MB flash configuration.
+**Important:** For RP2040 the bootymcbootface version (2MB, 4MB, ...) and the RMK settings must use the **same flash size**. Example: bootymcbootface 2 MB → RMK with 2 MB flash configuration. So that means, if you have a RP2040 with bigger flash, you can always use a bootymcbootface and a memory.x in your firmware for a smaller flash size, but the both must be for the same flash size.
 
 ::: tip
-You can still flash firmware via UF2 or probe-rs — as long as it was built with the correct `memory.x` for the embassy-boot partition layout (i.e. with `dfu_rp` feature), it will land in the active firmware slot and leave bootymcbootface untouched.
+You can still flash firmware via UF2 (when using RP2040, on nRF52840 the UF2 bootloader was overwritten by bootymcbootface) or probe-rs — as long as it was built with the correct `memory.x` for the embassy-boot partition layout (i.e. with `dfu_rp` or `dfu_nrf` feature), it will land in the active firmware slot and leave bootymcbootface untouched.
 
 If you flash a RMK firmware built with a **normal** `memory.x` (without embassy-boot), it will start at flash address `0x0` and **overwrite bootymcbootface**.
 :::
 
-::: tip 
-the embassy-boot bootloader and RMK will never overwrite the RP2040’s uf2 bootloader. It exists in ROM and can not be overwritten
+::: tip
+On RP2040 the UF2 bootloader lives in ROM and can't be overwritten. On nRF52840 with the Adafruit UF2 bootloader, flashing bootymcbootface via UF2 **overwrites** it — use DFU or probe-rs for subsequent uploads.
+:::
+
+::: tip
+On nRF52840, DFU and BLE can be used **simultaneously**. Enable both `dfu_nrf` and `nrf52840_ble` features in RMK, set `[ble] enabled = true` in `keyboard.toml`, and your keyboard works over USB + BLE with DFU updates (over USB).
 :::
 
 ## Step-by-step guide
@@ -76,35 +91,54 @@ The first time, you need to flash the bootloader first, then RMK.
 
 #### 1. Flash bootymcbootface
 
-**Method A – via UF2:**
+**RP2040 – via UF2:**
 1. Put your RP2040 into bootloader mode (hold BOOTSEL button, plug in USB, release)
 2. A USB drive named `RPI-RP2` should appear
 3. Copy the matching `bootymcbootface-rp2040-<size>mb.uf2` to the drive
 4. The RP2040 reboots – the bootloader is now active
 
-**Method B – via debug probe (probe-rs):**
+**nRF52840 – via UF2:**
+1. Double-tap the reset pin (connect to GND twice within 500 ms) — the LED pulses and a `NICENANO` drive appears
+2. Copy `bootymcbootface-nrf52840.uf2` to the drive
+3. The board reboots — the bootloader is now active
+⚠️ This **overwrites** the Adafruit UF2 bootloader on the nRF52840.
+
+**Via debug probe (probe-rs):**
 ```shell
-probe-rs run --chip RP2040 bootymcbootface_<size> (elf)
-# or
-cargo run --release // in the bootymcbootface project directory
+# in the bootymcbootface directory
+cargo build --relese
+# RP2040
+probe-rs run --chip RP2040 target/thumbv6m-none-eabi/release/bootymcbootface
+# nRF52840
+probe-rs run --chip nRF52840_xxAA target/thumbv7em-none-eabihf/release/bootymcbootface
+# or build and run inside the bootymcbootface project:
+cargo run --release --target thumbv6m-none-eabi --features rp2040-2mb  # RP2040
+cargo run --release --target thumbv7em-none-eabihf --features nrf52840 # nRF52840
 ```
-(Make sure your project targets the bootloader binary)
 
 #### 2. Flash RMK firmware
 
 Now flash the actual RMK firmware. The bootloader stays in place.
 
 **Method A – via UF2:**
-Put the board into bootloader mode (hold BOOTSEL button, plug in USB, release), then copy the RMK firmware `.uf2` file to the appearing `RPI-RP2` drive.
+- **RP2040**: Put the board into bootloader mode (hold BOOTSEL button, plug in USB, release), then copy the RMK firmware `.uf2` file to the appearing `RPI-RP2` drive.
+- **nRF52840**: Since the Adafruit bootloader was overwritten when flashing the bootymcbootface bootloader, this method does not work for nRF52840 anymore.
 
 **Method B – via debug probe (probe-rs):**
 ```shell
+# in your RMK firmware directory
+# RP2040
 probe-rs run --chip RP2040 target/thumbv6m-none-eabi/release/your-firmware
+# nRF52840
+probe-rs run --chip nRF52840_xxAA target/thumbv7em-none-eabihf/release/your-firmware
+
+# or (for both RP2040 and nRF52840)
+cargo run --release
 ```
 
 ### All subsequent updates via DFU
 
-Once bootymcbootface and the RMK firmware have been flashed once, all future updates can be done **easily over USB via DFU**.
+Once bootymcbootface and the RMK firmware have been flashed once, all future updates can be done **easily over USB via DFU**. (but as stated above, as long as the `memory.x` of your firmware fits, you can still use probe-rs (RP2040 and nRF52840) or the UF2 bootloader (RP2040))
 
 #### Generate the .bin file
 
@@ -112,24 +146,27 @@ DFU flashing requires a `.bin` file (not `.elf` or `.uf2`). You have two options
 
 **Option 1 – using `rust-objcopy` (or `arm-none-eabi-objcopy`):**
 ```shell
+# RP2040 (thumbv6m-none-eabi)
 rust-objcopy -O binary target/thumbv6m-none-eabi/release/your-firmware your-firmware.bin
+# nRF52840 (thumbv7em-none-eabihf)
+rust-objcopy -O binary target/thumbv7em-none-eabihf/release/your-firmware your-firmware.bin
 ```
 
 **Option 2 – using `cargo make bin`:**
 ```shell
 cargo make bin --release
 ```
-(Requires a `Makefile.toml` with a `bin` task — the generated template from `rmkit` already includes one.)
+(Requires a `Makefile.toml` with a `bin` task — the generated template from `rmkit` and the examples already include one or see embassy-boot examples.)
 
 #### Flash via dfu-util
 
 ```shell
-dfu-util -a 0 -d ,, -D your-firmware.bin
+dfu-util -D your-firmware.bin -R 
 ```
 
-Or with a device ID if multiple devices are connected:
+Or with a device ID if multiple DFU devices are connected:
 ```shell
-dfu-util -a 0 -d 1209:1234 -D your-firmware.bin
+dfu-util -d 4c4b:4643 -D your-firmware.bin
 ```
 
 Find your device's VID:PID via `lsusb` on Linux or Device Manager (under "Universal Serial Bus devices") on Windows.
@@ -157,10 +194,20 @@ If you don't press the unlock keys within the first 10 seconds, the window close
 
 If an LED pin is configured in `keyboard.toml` (default PIN_25, if not `[dfu] led = "none"`):
 
-| State | LED behavior |
-|---|---|---|
-| Unlock window open (waiting for keys) | Solid on |
-| DFU unlocked (ready for dfu-util) | Blinks Morse "D F U" |
-| DFU download started | On |
-| Writing data blocks | Toggles on each block (flickers) |
-| DFU finished / system reset | Off |
+| State                                 | LED behavior                     |
+|---------------------------------------|----------------------------------|
+| Unlock window open (waiting for keys) | Solid on                         |
+| DFU unlocked (ready for dfu-util)     | Blinks Morse "D F U"             |
+| DFU download started                  | On                               |
+| Writing data blocks                   | Toggles on each block (flickers) |
+| DFU finished / system reset           | Off                              |
+
+Additionally the bootymcbootface bootloader has blinking codes using PIN_25 (RP2040) / P0_15 (nRF52840) as well:
+| State                                                                                                      | LED behavior                       |
+|------------------------------------------------------------------------------------------------------------|------------------------------------|
+| Normal boot — bootloader ran and jumped to ACTIVE                                                          | 2 short blinks (≈2 Hz)             |
+| Bootloader detected a pending DFU→ACTIVE swap and is about to copy                                         | 1 s solid on                       |
+| Previous forward swap completed but the new app did not call =mark_booted()= — reverting to the old ACTIVE | 3 short blinks (50 ms)             |
+| Successful DFU→ACTIVE copy; about to jump                                                                  | 5 short blinks (50 ms)             |
+| Bootloader itself panicked (e.g. flash read error, invalid state partition)                                | Morse SOS (... --- ...), repeating |
+
