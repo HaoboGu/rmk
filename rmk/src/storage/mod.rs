@@ -420,13 +420,17 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         // - For nRF chips: use sectors starting at 0x0006_0000
         // - For other chips: use the last `num_sectors` sectors
         // Otherwise, use storage config setting
-        #[cfg(feature = "_nrf_ble")]
+        // When DFU is active the storage partition already sits at the correct
+        // offset — the _nrf_ble special case (0x60000) only applies without DFU.
+        #[cfg(all(feature = "_nrf_ble", not(any(feature = "dfu_rp", feature = "dfu_nrf"))))]
         let start_addr = if storage_config.start_addr == 0 {
             0x0006_0000
         } else {
             storage_config.start_addr
         };
 
+        #[cfg(not(all(feature = "_nrf_ble", not(any(feature = "dfu_rp", feature = "dfu_nrf")))))]
+        let start_addr = storage_config.start_addr;
         #[cfg(not(feature = "_nrf_ble"))]
         let start_addr = storage_config.start_addr;
 
