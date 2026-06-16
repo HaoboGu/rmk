@@ -43,6 +43,7 @@ impl Handler for DfuStringProvider {
 /// checking inside embassy-rp.  Because all flash access goes through
 /// `BlockingPartition` (which has its own partition-sized bounds checks),
 /// overshooting the const generic is safe.
+#[cfg(feature = "dfu_rp")]
 pub const FLASH_SIZE: usize = 16 * 1024 * 1024;
 
 /// DFU transfer block size in bytes. Larger values speed up firmware
@@ -59,9 +60,9 @@ use embassy_rp::flash::{Blocking, Flash};
 use embassy_rp::gpio::Output;
 #[cfg(feature = "dfu_rp")]
 use embassy_rp::peripherals::FLASH;
-#[cfg(feature = "dfu_rp")]
+#[cfg(feature = "dfu")]
 use embassy_usb::class::dfu::consts::Status;
-#[cfg(feature = "dfu_rp")]
+#[cfg(feature = "dfu")]
 use embassy_usb::class::dfu::dfu_mode::{self, DfuState};
 
 #[cfg(feature = "dfu_rp")]
@@ -169,12 +170,12 @@ pub fn is_dfu_unlocked() -> bool {
 
 /// DFU handler wrapper that blinks an LED during transfer and checks the
 /// DFU lock (if `dfu_lock` feature is enabled).
-#[cfg(feature = "dfu_rp")]
+#[cfg(feature = "dfu")]
 struct RmkDfuHandler<H> {
     inner: H,
 }
 
-#[cfg(feature = "dfu_rp")]
+#[cfg(feature = "dfu")]
 impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
     fn start(&mut self) -> Result<(), Status> {
         #[cfg(feature = "dfu_lock")]
@@ -186,22 +187,26 @@ impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
         #[cfg(feature = "dfu_lock")]
         DFU_STARTED.store(true, Ordering::Release);
         info!("dfu_lock: DFU download started");
+        #[cfg(feature = "dfu_rp")]
         with_led(|led| led.set_high());
         self.inner.start()
     }
 
     fn write(&mut self, data: &[u8]) -> Result<(), Status> {
+        #[cfg(feature = "dfu_rp")]
         with_led(|led| led.toggle());
         self.inner.write(data)
     }
 
     fn finish(&mut self) -> Result<(), Status> {
         let res = self.inner.finish();
+        #[cfg(feature = "dfu_rp")]
         with_led(|led| led.set_low());
         res
     }
 
     fn system_reset(&mut self) {
+        #[cfg(feature = "dfu_rp")]
         with_led(|led| led.set_low());
         self.inner.system_reset()
     }
