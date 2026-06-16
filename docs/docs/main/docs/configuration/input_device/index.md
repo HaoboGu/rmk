@@ -5,6 +5,7 @@ All input devices are defined in the `[input_device]` table. Currently supported
 - [Rotary Encoder (encoder)](./encoder)
 - [Joystick (joystick)](./joystick.md)
 - [PMW3610 Optical Mouse Sensor (pmw3610)](./pmw3610.md)
+- [PMW3360 / PMW3389 Optical Mouse Sensor (pmw33xx)](./pmw33xx.md)
 - [Azoteq IQS5xx Trackpad (iqs5xx)](./iqs5xx.md)
 
 Please refer to the corresponding documentation for detailed configuration settings.

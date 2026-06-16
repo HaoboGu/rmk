@@ -62,12 +62,42 @@ name = ...
 name = ...
 ```
 
+::: warning Multi-device ID assignment
+
+`PointingEvent` carries a `device_id` so that each `PointingProcessor` can be paired
+with a specific sensor. If you have sensors on both halves of a split keyboard,
+assign distinct ids to avoid the central treating them as the same device:
+
+```toml
+# Central side sensor
+[[split.central.input_device.pmw3610]]
+id = 0
+
+# Peripheral side sensor
+[[split.peripheral.input_device.pmw3610]]
+id = 1
+```
+
+The peripheral forwards events to the central with the `device_id` preserved.
+The generated `PointingProcessorConfig` on the central will automatically use the
+matching `device_id` for each sensor.
+
+:::
+
+::: warning Breaking change
+
+Adding `device_id` to `PointingEvent` changes the serialized binary format used by the
+split protocol. Both halves of a split keyboard **must** be flashed with the same
+firmware version at the same time.
+
+:::
+
 ## Rust configuration
 
 Define a `PointingDevice` and add it to `run_all!` macro.
 For a split keyboard this must be added to the file (`central.rs` or `peripheral.rs`) corresponding to the side the sensor is connected to.
 
-::: Warning
+::: warning
 
 For nrf52 chips you need to add an interrupt for the used SPI. For example when using SPI2:
 
@@ -148,6 +178,7 @@ This should be added to the `central.rs`-File even if the sensor is on split per
     use rmk::input_device::pointing::{ PointingProcessor, PointingProcessorConfig };
 
     let pmw3360_proc_config = PointingProcessorConfig {
+		// device_id: 0, // Match the id set on the PointingDevice (default 255 to match all devices)
         // invert_x: true, // invert axis if neccesary
         // invert_y: true,
         // swap_y: true,
@@ -158,3 +189,6 @@ This should be added to the `central.rs`-File even if the sensor is on split per
 
     run_all!(pmw3360_processor, /* other processors and devices */)
 ```
+
+## Pointing Modes
+The PointingProcessor has four modes (Cursor, Scroll, Sniper, Caret) with per‑layer configuration. See the [PointingProcessor](./pointing_processor) page for all options.
