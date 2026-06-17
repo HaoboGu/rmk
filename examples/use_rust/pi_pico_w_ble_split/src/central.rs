@@ -13,7 +13,6 @@ use cyw43_pio::PioSpi;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
-use embassy_rp::clocks::RoscRng;
 use embassy_rp::flash::{Async, Flash};
 use embassy_rp::gpio::{Input, Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, DMA_CH1, PIO0, USB};
@@ -22,7 +21,6 @@ use embassy_rp::usb::{self, Driver};
 use embassy_time as _;
 use keymap::{COL, ROW};
 use panic_probe as _;
-use rand::SeedableRng;
 use rmk::ble::{BleTransport, build_ble_stack};
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
@@ -161,10 +159,8 @@ async fn main(spawner: Spawner) {
     let ble_addr = [0x18, 0xe2, 0x21, 0x88, 0xc0, 0xc7];
 
     let mut host_resources = HostResources::new();
-    let mut rosc_rng = RoscRng {};
-    let mut rng = rand_chacha::ChaCha12Rng::from_rng(&mut rosc_rng).unwrap();
 
-    let stack = build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
+    let stack = build_ble_stack(controller, ble_addr, &mut host_resources).await;
 
     let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config);
     let mut ble_transport = BleTransport::new(&stack, rmk_config).await;

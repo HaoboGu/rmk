@@ -178,6 +178,20 @@ dependencies = [
  "embedded-io-async 0.7.0",
  "futures-intrusive",
  "heapless 0.9.2",
+]
+
+[[package]]
+name = "bt-hci"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f3c66fd0a41a3b3a5906847b1bf5516048ce083e24fa9341a0fa31d3b4cd73d"
+dependencies = [
+ "btuuid",
+ "embassy-sync 0.8.0",
+ "embedded-io 0.7.1",
+ "embedded-io-async 0.7.0",
+ "futures-intrusive",
+ "heapless 0.9.2",
  "serde",
 ]
 
@@ -1149,7 +1163,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23fbff98b06a96b6ce3791ecec5c668524052a068e23aacd23afe17ddba844ce"
 dependencies = [
  "allocator-api2",
- "bt-hci",
+ "bt-hci 0.8.0",
  "cfg-if",
  "docsplay",
  "document-features",
@@ -2237,7 +2251,7 @@ dependencies = [
 name = "rmk"
 version = "0.8.2"
 dependencies = [
- "bt-hci",
+ "bt-hci 0.9.0",
  "byteorder",
  "cortex-m",
  "crc32fast",
@@ -2257,7 +2271,6 @@ dependencies = [
  "log",
  "paste",
  "postcard",
- "rand_core 0.6.4",
  "rmk-macro",
  "rmk-types",
  "sequential-storage",
@@ -2285,7 +2298,7 @@ dependencies = [
 name = "rmk-esp32s3"
 version = "0.2.0"
 dependencies = [
- "bt-hci",
+ "bt-hci 0.9.0",
  "cc",
  "const-gen",
  "embassy-executor",
@@ -2299,7 +2312,6 @@ dependencies = [
  "esp-rtos",
  "esp-storage",
  "json",
- "rand_core 0.6.4",
  "rmk",
  "xz2",
 ]
@@ -2911,11 +2923,12 @@ dependencies = [
 
 [[package]]
 name = "trouble-host"
-version = "0.6.0"
-source = "git+https://github.com/haobogu/trouble?rev=690373fd1166d16225b875435dd0600c92570e7d#690373fd1166d16225b875435dd0600c92570e7d"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb9fe2be24000037431b036ba244cdb1d26f40e1719548553fb43c3fc62d496b"
 dependencies = [
  "aes",
- "bt-hci",
+ "bt-hci 0.9.0",
  "cmac",
  "embassy-futures",
  "embassy-sync 0.8.0",
@@ -2936,8 +2949,9 @@ dependencies = [
 
 [[package]]
 name = "trouble-host-macros"
-version = "0.4.0"
-source = "git+https://github.com/haobogu/trouble?rev=690373fd1166d16225b875435dd0600c92570e7d#690373fd1166d16225b875435dd0600c92570e7d"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2562dc74f79ad12f7bf088da55c936d5eb1d022f2caac9849175326307a5eec1"
 dependencies = [
  "convert_case 0.8.0",
  "darling 0.20.11",

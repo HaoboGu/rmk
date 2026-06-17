@@ -5,7 +5,6 @@ use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join;
 use embassy_futures::select::{Either, Either3, select, select3};
 use embassy_time::{Duration, Timer, with_timeout};
-use rand_core::{CryptoRng, RngCore};
 use rmk_types::ble::BleState;
 use rmk_types::connection::ConnectionType;
 use rmk_types::led_indicator::LedIndicator;
@@ -50,21 +49,14 @@ pub(crate) const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + 1;
 pub(crate) const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
 
 /// Build the BLE stack.
-pub async fn build_ble_stack<
-    'a,
-    C: Controller + ControllerCmdAsync<LeSetPhy>,
-    P: PacketPool,
-    RNG: RngCore + CryptoRng,
->(
+pub async fn build_ble_stack<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
     controller: C,
     host_address: [u8; 6],
-    random_generator: &mut RNG,
     resources: &'a mut HostResources<C, P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX>,
 ) -> Stack<'a, C, P> {
     // Initialize trouble host stack
     trouble_host::new(controller, resources)
         .set_random_address(Address::random(host_address))
-        .set_random_generator_seed(random_generator)
         .build()
 }
 
@@ -319,7 +311,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 passkey_state.clear();
                 error!("[gatt] pairing error: {:?}", err);
             }
-            GattConnectionEvent::Encrypted { security_level } => {
+            GattConnectionEvent::Encrypted { security_level, .. } => {
                 info!("[gatt] encrypted: {:?}", security_level);
                 set_ble_state(BleState::Connected);
             }
@@ -346,13 +338,23 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         #[cfg(not(feature = "host"))]
                         let host_control_point_match = false;
 
+                        // trouble-host 0.7 exposes written bytes via a closure; copy them out
+                        // once so the dispatch below (which awaits) can use them freely.
+                        let mut data_buf = [0u8; 32];
+                        let data_len = event.with_data(|_, data| {
+                            let n = data.len().min(data_buf.len());
+                            data_buf[..n].copy_from_slice(&data[..n]);
+                            data.len()
+                        });
+                        let data = &data_buf[..data_len.min(data_buf.len())];
+
                         if event.handle() == output_keyboard.handle {
-                            if event.data().len() == 1 {
-                                let led_indicator = LedIndicator::from_bits(event.data()[0]);
+                            if data_len == 1 {
+                                let led_indicator = LedIndicator::from_bits(data[0]);
                                 debug!("Got keyboard state: {:?}", led_indicator);
                                 LED_SIGNAL.signal(led_indicator);
                             } else {
-                                warn!("Wrong keyboard state data: {:?}", event.data());
+                                warn!("Wrong keyboard state data: {:?}", data);
                             }
                         } else if event.handle() == input_keyboard.cccd_handle.expect("No CCCD for input keyboard")
                             || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
@@ -372,8 +374,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                 // HID Class spec opcodes for the HID Control Point characteristic:
                                 //   - 0: HID_CTRL_SUSPEND
                                 //   - 1: HID_CTRL_EXIT_SUSPEND
-                                let data = event.data();
-                                if data.len() == 1 {
+                                if data_len == 1 {
                                     match data[0] {
                                         0 => CENTRAL_SLEEP.signal(true),
                                         1 => CENTRAL_SLEEP.signal(false),
@@ -384,13 +385,11 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         } else {
                             #[cfg(feature = "host")]
                             if event.handle() == output_host.handle {
-                                debug!("Got host packet: {:?}", event.data());
-                                if event.data().len() == 32 {
-                                    let mut data = [0u8; 32];
-                                    data.copy_from_slice(event.data());
-                                    crate::channel::enqueue_host_request(ConnectionType::Ble, data).await;
+                                debug!("Got host packet: {:?}", data);
+                                if data_len == 32 {
+                                    crate::channel::enqueue_host_request(ConnectionType::Ble, data_buf).await;
                                 } else {
-                                    warn!("Wrong host packet data: {:?}", event.data());
+                                    warn!("Wrong host packet data: {:?}", data);
                                 }
                             } else if event.handle() == input_host.cccd_handle.expect("No CCCD for input host") {
                                 cccd_updated = true;

@@ -11,22 +11,23 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = ["async_matrix", "nrf52832_ble"] }
-nrf-sdc = { git = "https://github.com/haobogu/nrf-sdc", rev = "ffe59a7aefaaa145a3d2474602f33387f80dcefa", features = [
+nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "3f3a507081a1d69a65e1787ed12bb3e9b6ff4f1a", features = [
     "defmt",
     "peripheral",
+    "central",
     "nrf52832",
 ] }
-nrf-mpsl = { git = "https://github.com/haobogu/nrf-sdc", rev = "ffe59a7aefaaa145a3d2474602f33387f80dcefa", features = [
+nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "3f3a507081a1d69a65e1787ed12bb3e9b6ff4f1a", features = [
     "defmt",
     "critical-section-impl",
     "nrf52832",
 ] }
-bt-hci = { version = "0.8", features = ["defmt"] }
+bt-hci = { version = "0.9", features = ["defmt"] }
 
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.5"
 embassy-time = { version = "0.5", features = ["tick-hz-32_768", "defmt"] }
-embassy-nrf = { version = "0.10", features = [
+embassy-nrf = { version = "0.11", features = [
     "defmt",
     "nrf52832",
     "time-driver-rtc1",
@@ -47,9 +48,6 @@ static_cell = "2"
 once_cell = { version = "1.19", features = [
     "atomic-polyfill",
 ], default-features = false }
-rand = { version = "0.8.4", default-features = false }
-rand_core = { version = "0.6" }
-rand_chacha = { version = "0.3", default-features = false }
 
 
 [build-dependencies]

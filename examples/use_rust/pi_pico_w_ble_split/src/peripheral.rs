@@ -10,14 +10,12 @@ use cyw43_pio::PioSpi;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
-use embassy_rp::clocks::RoscRng;
 use embassy_rp::flash::{Async, Flash};
 use embassy_rp::gpio::{Input, Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, DMA_CH1, PIO0};
 use embassy_rp::pio::{self, Pio};
 use embassy_time as _;
 use panic_probe as _;
-use rand::SeedableRng;
 use rmk::ble::build_ble_stack;
 use rmk::config::StorageConfig;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
@@ -105,10 +103,8 @@ async fn main(spawner: Spawner) {
     let ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
 
     let mut host_resources = HostResources::new();
-    let mut rosc_rng = RoscRng {};
-    let mut rng = rand_chacha::ChaCha12Rng::from_rng(&mut rosc_rng).unwrap();
 
-    let stack = build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
+    let stack = build_ble_stack(controller, ble_addr, &mut host_resources).await;
     let mut watchdog_runner = Rp2040Watchdog::default_runner(embassy_rp::watchdog::Watchdog::new(p.WATCHDOG));
 
     // Start

@@ -11,22 +11,23 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = ["async_matrix", "nrf54l15_ble"] }
-nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "131ff2088ed2bb4f6e50ba49e4976aced21fe7ba", default-features = false, features = [
+nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "3f3a507081a1d69a65e1787ed12bb3e9b6ff4f1a", default-features = false, features = [
      "defmt",
     "peripheral",
+    "central",
     "nrf54l15-app-s",
 ] }
-nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "131ff2088ed2bb4f6e50ba49e4976aced21fe7ba", default-features = false, features = [
+nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "3f3a507081a1d69a65e1787ed12bb3e9b6ff4f1a", default-features = false, features = [
      "defmt",
     "critical-section-impl",
     "nrf54l15-app-s",
 ] }
-bt-hci = { version = "0.8", features = ["defmt"] }
+bt-hci = { version = "0.9", features = ["defmt"] }
 
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.5"
 embassy-time = { version = "0.5", features = ["defmt", "defmt-timestamp-uptime"] }
-embassy-nrf = { version = "0.10", features = [
+embassy-nrf = { version = "0.11", features = [
     "defmt",
     "nrf54l15-app-s",
     "time-driver-grtc",
@@ -44,8 +45,6 @@ defmt-rtt = "1.0"
 panic-probe = { version = "1.0", features = ["print-defmt"] }
 static_cell = "2"
 
-rand_core = { version = "0.6" }
-rand_chacha = { version = "0.3", default-features = false }
 
 [build-dependencies]
 xz2 = "0.1.7"
@@ -71,13 +70,3 @@ debug = true
 opt-level = "z"
 overflow-checks = false
 lto = "fat"
-
-[patch.crates-io]
-embassy-executor = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
-embassy-futures = {git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
-embassy-embedded-hal = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
-embassy-hal-internal = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" } 
-embassy-nrf = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
-embassy-sync = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
-embassy-time = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
-embassy-usb = { git = "https://github.com/HaoboGu/embassy", rev = "49fb7c2cfb26ded88d0b0bb330eda51e29edc35e" }
