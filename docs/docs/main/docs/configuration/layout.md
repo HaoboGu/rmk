@@ -123,8 +123,8 @@ The `layer.keys` string should follow several rules:
    3. Use `LM(n, modifier)` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`
    4. Use `LT(n, key, <profile_name>)` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html), The `profile_name` is optional, which defines the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning)
    5. Use `SK(...)` to create a sticky key action — behavior is selected by argument shape:
-      - `SK(modifier)` — one-shot modifier (replaces the removed `OSM`): the modifier is held for the next key press, then released automatically. Modifiers chain like `WM`, e.g. `SK(LCtrl|LShift)`.
-      - `SK(MO(n))` — one-shot layer (replaces the removed `OSL`): layer `n` is active for the next key press, then released.
+      - `SK(modifier)` — one-shot modifier (also spelled `OSM(modifier)`, an alias): the modifier is held for the next key press, then released automatically. Modifiers chain like `WM`, e.g. `SK(LCtrl|LShift)`.
+      - `SK(MO(n))` — one-shot layer (also spelled `OSL(n)`, an alias): layer `n` is active for the next key press, then released.
       - `SK(key, [modifier])` — tap-key (Alt+Tab-style cycling): the modifier stays held across repeated presses of `key` until any non-SK, non-modifier key is pressed. The modifier list is in `[ ]` and can be chained, e.g. `SK(Tab, [LCtrl|LShift])`.
 
       See [Sticky Key](./behavior#sticky-key) for global config (`timeout`, `activate_on_keypress`, `quick_release`, etc.).

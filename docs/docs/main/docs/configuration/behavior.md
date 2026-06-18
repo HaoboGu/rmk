@@ -33,7 +33,7 @@ Note that `"#layer_name"` could also be used in place of layer numbers.
 
 ## Sticky Key
 
-The `[behavior.sticky_key]` table configures the unified **Sticky Key** (`SK`) feature. `SK` replaces the former `OSM` (one-shot modifier) and `OSL` (one-shot layer) actions, which have been removed and are now a build error.
+The `[behavior.sticky_key]` table configures the unified **Sticky Key** (`SK`) feature. `SK` unifies the former `OSM` (one-shot modifier) and `OSL` (one-shot layer) actions into a single engine. `OSM(mod)` and `OSL(n)` remain available as aliases for `SK(mod)` and `SK(MO(n))` — they desugar to the exact same action, so either spelling works.
 
 ### SK shapes
 
@@ -52,7 +52,7 @@ The `[behavior.sticky_key]` table configures the unified **Sticky Key** (`SK`) f
 | `timeout` | `"1s"` | Auto-release an unused sticky key after this idle time. String suffixed `s` or `ms`. |
 | `activate_on_keypress` | `false` | **Pure-mod SKs only.** When `true`, send the modifier immediately as the SK key itself is pressed, instead of waiting and applying it to the next key. (Also known as One-Shot Sticky Modifiers / OSSM.) |
 | `quick_release` | `false` | **Pure-mod SKs only.** Release the modifier as soon as the next key is *pressed* (`true`) rather than when it is *released* (`false`, chain mode). |
-| `max_repeat` | `0` | Max number of keys the sticky modifier applies to; `0` = unlimited. |
+| `max_repeat` | `0` | **Tap-key SKs only.** Caps how many repeated presses of the key keep the modifier held; `0` = unlimited. Pure-mod (`SK(LGui)`) and layer (`SK(MO(n))`) SKs ignore this — they always apply to exactly one following key. |
 | `release_on_layer_change` | `false` | Whether a layer change releases the sticky key. `false` = it survives layer changes. |
 
 The `quick_release` option in detail:
@@ -62,7 +62,7 @@ The `quick_release` option in detail:
 
 :::warning
 
-`activate_on_keypress` and `quick_release` are honored **only for pure-mod SKs** (`SK(LGui)`). They are **silently ignored** for tap-key SKs (`SK(Tab, [LAlt])`) and layer SKs (`SK(MO(n))`). Both fields tune *when a one-shot modifier is sent and released*: a tap-key SK sends its modifier eagerly and deliberately holds it across repeats, and a layer SK sends no modifier at all — so neither has anything for these fields to tune.
+`activate_on_keypress` and `quick_release` are honored **only for pure-mod SKs** (`SK(LGui)`, equivalently `OSM(LGui)`). They are **silently ignored** for tap-key SKs (`SK(Tab, [LAlt])`) and layer SKs (`SK(MO(n))` / `OSL(n)`). Both fields tune *when a one-shot modifier is sent and released*: a tap-key SK sends its modifier eagerly and deliberately holds it across repeats, and a layer SK sends no modifier at all — so neither has anything for these fields to tune.
 
 :::
 
@@ -102,20 +102,19 @@ For keymap usage, see `SK(...)` in the [keymap configuration](./layout#keyboard-
 
 ### Migration from OSM / OSL
 
-The former `OSM`, `OSL`, the 5-positional `SK` form, and the `[behavior.one_shot]` / `[behavior.one_shot_modifiers]` tables are **removed** — using them is a build error.
+`OSM(mod)` and `OSL(n)` are **still supported** as aliases — they desugar to `SK(mod)` and `SK(MO(n))` respectively, so existing keymaps keep working unchanged. The `SK` forms are the canonical spelling; use whichever you prefer. The old 5-positional `SK` form and the `[behavior.one_shot]` / `[behavior.one_shot_modifiers]` config tables, however, are **removed** — using them is a build error.
 
-| Old | New |
-|-----|-----|
-| `OSM(LGui)` | `SK(LGui)` |
-| `OSL(1)` | `SK(MO(1))` |
-| `SK(Tab, [LAlt], 0, 0, false)` (5-positional) | `SK(Tab, [LAlt])` + `[behavior.sticky_key]` |
-| `[behavior.one_shot]` `timeout` | `[behavior.sticky_key]` `timeout` |
-| `[behavior.one_shot_modifiers]` `activate_on_keypress` / `quick_release` | `[behavior.sticky_key]` `activate_on_keypress` / `quick_release` |
-| `exit_on_layer_change` | `release_on_layer_change` |
+| Old | New (canonical) | Alias still accepted |
+|-----|-----------------|----------------------|
+| `OSM(LGui)` | `SK(LGui)` | `OSM(LGui)` |
+| `OSL(1)` | `SK(MO(1))` | `OSL(1)` |
+| `SK(Tab, [LAlt], 0, 0, false)` (5-positional) | `SK(Tab, [LAlt])` + `[behavior.sticky_key]` | — |
+| `[behavior.one_shot]` `timeout` | `[behavior.sticky_key]` `timeout` | — |
+| `[behavior.one_shot_modifiers]` `activate_on_keypress` / `quick_release` | `[behavior.sticky_key]` `activate_on_keypress` / `quick_release` | — |
+| `exit_on_layer_change` | `release_on_layer_change` | — |
 
 Accepted breaking changes:
 
-- `OSM(...)` and `OSL(...)` keymap actions are **removed** → build error. Use `SK(mod)` and `SK(MO(n))`.
 - The old 5-positional `SK(key, [mod], max_repeat, timeout_ms, exit_on_layer_change)` form is **removed** → build error. The trailing knobs now live in `[behavior.sticky_key]`.
 - The `[behavior.one_shot]` and `[behavior.one_shot_modifiers]` config tables are **removed** → use `[behavior.sticky_key]`.
 - The old per-key `exit_on_layer_change` is renamed to the global `release_on_layer_change` (default `false`).

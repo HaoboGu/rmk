@@ -54,6 +54,15 @@ transparent_action = @{ ("_")+ | (^"Trns" ~ !ASCII_ALPHANUMERIC) } // One or mor
 // Rule 1: WM(key, modifier) - Key with Modifier
 wm_action = { ^"WM" ~ "(" ~ keycode_name ~ "," ~ modifier_combination ~ ")" }
 
+// Rule 4.6: OSM(modifier) - One-Shot Modifier. User-facing alias for the
+// pure-mod sticky key SK(modifier); desugared to SK in keymap_parser.
+osm_action = { ^"OSM" ~ "(" ~ modifier_combination ~ ")" }
+
+// Rule 4.5: OSL(n) - One-Shot Layer. User-facing alias for the layer sticky
+// key SK(MO(n)); desugared to SK in keymap_parser. Kept out of layer_action so
+// nonsense like SK(OSL(n)) stays a grammar error.
+osl_action = { ^"OSL" ~ "(" ~ layer_reference ~ ")" }
+
 // Rule 4.1: DF(n) - Switch Default Layer
 df_action = { ^"DF" ~ "(" ~ layer_reference ~ ")" }
 
@@ -113,7 +122,7 @@ sk_action = {
 // A single key action entry in the map
 // Order is important: more specific function-like rules first, then aliases/specials, then simple keycodes.
 key_action = _{ // Consume surrounding whitespace/comments implicitly
-    wm_action | layer_action | mt_action | th_action | shifted_action | morse_action | trigger_macro_action | sk_action | no_action | transparent_action | simple_keycode
+    wm_action | osm_action | osl_action | layer_action | mt_action | th_action | shifted_action | morse_action | trigger_macro_action | sk_action | no_action | transparent_action | simple_keycode
 }
 
 // The entire key map string: Start, zero or more key actions, End.

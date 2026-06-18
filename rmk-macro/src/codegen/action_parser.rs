@@ -198,6 +198,37 @@ pub(crate) fn parse_key(
                 ::rmk::mo!(#layer)
             }
         }
+        s if s.to_lowercase().starts_with("osl(") => {
+            // OSL(n) — user-facing alias for the layer sticky key SK(MO(n)).
+            // Emits the same `sk_layer!` as SK(MO(n)), so the action is byte-identical.
+            let layer = get_number(s.clone(), s.get(0..4).unwrap(), ")");
+            quote! {
+                ::rmk::sk_layer!(#layer)
+            }
+        }
+        s if s.to_lowercase().starts_with("osm(") => {
+            // OSM(modifier) — user-facing alias for the pure-mod sticky key SK(modifier).
+            // Emits the same `sk_mod!` as SK(modifier), so the action is byte-identical.
+            let prefix = s.get(0..4).unwrap();
+            if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
+                let modifiers = parse_modifiers(internal);
+
+                if modifiers.is_empty() {
+                    panic!(
+                        "\n\u{274c} keyboard.toml: OSM(modifier) is not valid! \
+                         OSM is an alias for SK(modifier). Usage: OSM(LGui) | OSM(LCtrl | LShift)"
+                    );
+                }
+                quote! {
+                    ::rmk::sk_mod!(#modifiers)
+                }
+            } else {
+                panic!(
+                    "\n\u{274c} keyboard.toml: OSM(modifier) invalid. \
+                     OSM is an alias for SK(modifier). Usage: OSM(LGui) | OSM(LCtrl | LShift)"
+                );
+            }
+        }
         s if s.to_lowercase().starts_with("sk(") => {
             let prefix = s.get(0..3).unwrap();
             if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
@@ -550,4 +581,38 @@ pub(crate) fn get_key_with_alias(key: String) -> Ident {
         None => key.as_str(),
     };
     format_ident!("{}", key)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// OSM(modifier)/OSL(n) are aliases that must expand to the exact same
+    /// action tokens as their SK equivalents (sk_mod! / sk_layer!).
+    #[test]
+    fn osm_osl_aliases_match_sk_tokens() {
+        // (alias form, canonical SK form, macro the action must emit)
+        let cases = [
+            ("OSM(LGui)", "SK(LGui)", "sk_mod"),
+            ("OSM(LCtrl | LShift)", "SK(LCtrl | LShift)", "sk_mod"),
+            ("osm(lalt)", "sk(lalt)", "sk_mod"),
+            ("OSL(1)", "SK(MO(1))", "sk_layer"),
+            ("OSL(3)", "SK(MO(3))", "sk_layer"),
+        ];
+
+        for (alias, sk, expected_macro) in cases {
+            let alias_tokens = parse_key(alias.to_string(), &None).to_string();
+            let sk_tokens = parse_key(sk.to_string(), &None).to_string();
+            assert_eq!(
+                alias_tokens, sk_tokens,
+                "{alias} must expand identically to {sk}"
+            );
+            // ...and the shared expansion is the real sticky-key action, not
+            // just two strings that happen to match.
+            assert!(
+                alias_tokens.contains(expected_macro),
+                "{alias} should emit {expected_macro}!, got: {alias_tokens}"
+            );
+        }
+    }
 }
