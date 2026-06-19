@@ -4,12 +4,12 @@ RMK supports DFU firmware updates via [embassy-boot](https://github.com/embassy-
 
 A pre-built bootloader called **bootymcbootface** is available for both platforms. The partition formula is identical:
 
-```rust
-// bootloader+state = 28K (fixed)
-// storage = 128K (fixed — 32 sectors × 4K for persistent keymap storage)
-// remaining = flash_size - 28K - 128K
-// ACTIVE    = (remaining - 4K) / 2
-// DFU       = ACTIVE + 4K
+```text
+bootloader+state = 28K (fixed)
+storage = 128K (fixed — 32 sectors × 4K for persistent keymap storage)
+remaining = flash_size - 28K - 128K
+ACTIVE    = (remaining - 4K) / 2
+DFU       = ACTIVE + 4K
 ```
 
 See the [flashing guide](../user_guide/flash_firmware/use_embassy_boot.mdx) for step-by-step instructions.
@@ -40,17 +40,17 @@ led = "PIN_25"
 unlock_keys = [[0, 0], [1, 1]]
 
 # ── (Optional) Manual overrides (only if auto-calculation is not suitable) ──
-# state_offset = 0x6000
-# state_size   = 0x1000
-# dfu_offset   = 0x87000
-# dfu_size     = 528384
+state_offset = 0x6000
+state_size   = 0x1000
+dfu_offset   = 0x87000
+dfu_size     = 528384
 ```
 
 </Tab>
 <Tab label={<Rust />}>
 
 ```rust title="main.rs"
-/ Flash layout using the bootymcbootface formula:
+// Flash layout using the bootymcbootface formula:
 //   state at 0x6000 (4K), active from 0x7000 (size: (flash_size - 28K (= BOOT2 size + embassy-boot + embassy-boot state) - STORAGE_SIZE (= 128K) - page_size (= 4K)) / 2),
 //   dfu follows active (active_size + page_size (= 4K))
 //
@@ -75,8 +75,7 @@ let active_size: u32 = (remaining - PAGE_SIZE) / 2; // DFU = ACTIVE + 1 page (em
 let dfu_size: u32 = active_size + PAGE_SIZE; // embassy-boot needs that extra page for swap info
 let dfu_offset: u32 = ACTIVE_OFFSET + active_size; // dfu after active
 let storage_offset: u32 = dfu_offset + dfu_size; // storage after active + dfu
-let storage_size: u32 = STORAGE_SIZE;
-assert!(storage_offset + storage_size == FLASH_SIZE); // sanity check that we fit everything in flash
+assert!(storage_offset + STORAGE_SIZE == FLASH_SIZE); // sanity check that we fit everything in flash
 
 info!(
     "Flash layout: state @ 0x{:04X} ({}K), active @ 0x{:04X} ({}K), dfu @ 0x{:04X} ({}K), storage @ 0x{:04X} ({}K)",
@@ -87,13 +86,13 @@ info!(
     dfu_offset,
     dfu_size / 1024,
     storage_offset,
-    storage_size / 1024
+    STORAGE_SIZE / 1024
 );
 
 let flash = async_flash_wrapper(rmk::dfu::init_flash(
     p.FLASH,
     storage_offset,
-    storage_size,
+    STORAGE_SIZE,
     STATE_OFFSET,
     STATE_SIZE,
     dfu_offset,
@@ -144,14 +143,10 @@ led = "P0_15"
 unlock_keys = [[0, 0], [1, 1]]
 
 # ── (Optional) Manual overrides (only if auto-calculation is not suitable) ──
-# state_offset = 0x6000
-# state_size   = 0x1000
-# dfu_offset   = 0x87000
-# dfu_size     = 528384
-
-# (Optional) BLE + DFU simultaneously
-[ble]
-enabled = true
+state_offset = 0x6000
+state_size   = 0x1000
+dfu_offset   = 0x87000
+dfu_size     = 528384
 ```
 
 </Tab>
@@ -181,8 +176,7 @@ let active_size: u32 = (remaining - PAGE_SIZE) / 2;
 let dfu_size: u32 = active_size + PAGE_SIZE;
 let dfu_offset: u32 = ACTIVE_OFFSET + active_size;
 let storage_offset: u32 = dfu_offset + dfu_size;
-let storage_size: u32 = STORAGE_SIZE;
-assert!(storage_offset + storage_size == FLASH_SIZE);
+assert!(storage_offset + STORAGE_SIZE == FLASH_SIZE);
 
 info!(
     "Flash layout: state @ 0x{:04X} ({}K), active @ 0x{:04X} ({}K), dfu @ 0x{:04X} ({}K), storage @ 0x{:04X} ({}K)",
@@ -193,13 +187,13 @@ info!(
     dfu_offset,
     dfu_size / 1024,
     storage_offset,
-    storage_size / 1024
+    STORAGE_SIZE / 1024
 );
 
 let flash = async_flash_wrapper(rmk::dfu::init_flash(
     p.NVMC,
     storage_offset,
-    storage_size,
+    STORAGE_SIZE,
     STATE_OFFSET,
     STATE_SIZE,
     dfu_offset,
@@ -233,13 +227,13 @@ run_all!(
 
 The bootloader divides flash into regions. The defaults follow the [bootymcbootface](https://codeberg.org/Schievel/bootymcbootface/) convention and are automatically calculated from `flash_size`:
 
-| Region          | Offset       | Size                         |
-|-----------------|--------------|------------------------------|
-| Bootloader      | `0x0000000`  | 28 KB                        |
-| Boot state      | `0x6000`     | 4 KB                         |
-| Active firmware | `0x7000`     | `(flash_size - 28K - 128K - 4K) / 2` |
-| DFU download    | follows active | `active_size + 4K`        |
-| Storage         | follows DFU  | 128 KB                       |
+| Region          | Offset         | Size                                 |
+|-----------------|----------------|--------------------------------------|
+| Bootloader(s)   | `0x0000000`    | 28 KB                                |
+| Boot state      | `0x6000`       | 4 KB                                 |
+| Active firmware | `0x7000`       | `(flash_size - 28K - 128K - 4K) / 2` |
+| DFU download    | follows active | `active_size + 4K`                   |
+| Storage         | follows DFU    | 128 KB                               |
 
 The DFU partition size follows embassy-boot guidelines, the additional page is used for status information during flashing.
 

@@ -4,9 +4,6 @@ Flash layout matching bootymcbootface nRF layout:
   ACTIVE (this firmware): 432K at 0x7000
   DFU: 436K at 0x73000
   storage: 128K at 0xE0000
-
-ACTIVE size depends on the default [storage] num_sectors (32 = 128K).
-If you change num_sectors, adjust LENGTH accordingly.
 */
 MEMORY {
 	FLASH : ORIGIN = 0x00007000, LENGTH = 432K

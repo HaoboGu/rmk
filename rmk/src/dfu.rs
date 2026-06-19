@@ -18,6 +18,8 @@ use static_cell::StaticCell;
 #[cfg(feature = "dfu_lock")]
 use crate::core_traits::Runnable;
 
+/// Simple USB string provider for the DFU interface, to show a product name in the host's device manager during DFU mode. The FirmwareHandler of embassy_usb_dfu doesn't use the string index from the interface descriptor, so we have to provide our own handler to return the string when requested by the host.
+/// This is the name string that gets shown with `dfu-util -l` option.
 struct DfuStringProvider {
     string_idx: StringIndex,
     string_val: &'static str,
@@ -229,6 +231,11 @@ impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
     }
 }
 
+#[cfg(feature = "dfu_rp")]
+type FlashPeri = Peri<'static, FLASH>;
+#[cfg(feature = "dfu_nrf")]
+type FlashPeri = Peri<'static, NVMC>;
+
 /// Initialize the blocking flash, create the DFU manager and store it globally.
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 pub fn init_flash(
@@ -242,14 +249,10 @@ pub fn init_flash(
 ) -> PartitionType {
     #[cfg(feature = "dfu_nrf")]
     let raw_flash = Nvmc::new(flash_peri);
-    #[cfg(feature = "dfu_nrf")]
-    let flash_mutex: &'static MutexType = FLASH_CELL.init(Mutex::new(RefCell::new(raw_flash)));
-
     #[cfg(feature = "dfu_rp")]
     let raw_flash = Flash::<_, Blocking, FLASH_SIZE>::new_blocking(flash_peri);
-    #[cfg(feature = "dfu_rp")]
-    let flash_mutex: &'static MutexType = FLASH_CELL.init(Mutex::new(RefCell::new(raw_flash)));
 
+    let flash_mutex: &'static MutexType = FLASH_CELL.init(Mutex::new(RefCell::new(raw_flash)));
     let mgr = MANAGER_CELL.init(DfuFlashManager::new(
         flash_mutex,
         storage_offset,
@@ -262,11 +265,6 @@ pub fn init_flash(
     MANAGER_PTR.store(mgr as *const _ as *mut _, Ordering::Release);
     mgr.storage_partition()
 }
-
-#[cfg(feature = "dfu_rp")]
-type FlashPeri = Peri<'static, FLASH>;
-#[cfg(feature = "dfu_nrf")]
-type FlashPeri = Peri<'static, NVMC>;
 
 /// Mark firmware boot as successful so the bootloader doesn't revert on next reset.
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
@@ -323,16 +321,16 @@ pub fn register_dfu_interface<D: Driver<'static>>(
 
     let mut func = builder.function(0x00, 0x00, 0x00);
     let mut iface = func.interface();
-    let mut alt = iface.alt_setting(0xFE, 0x01, 0x02, Some(string_idx));
+    let mut alt = iface.alt_setting(0xFE, 0x01, 0x02, Some(string_idx)); // class-specific DFU interface with string descriptor for product name
     alt.descriptor(
-        0x21,
+        0x21, // DFU functional descriptor
         &[
             attrs.bits(),
-            0xc4,
+            0xc4, // detach timeout in ms (09c4 = 2500 ms)
             0x09,
-            (BLOCK_SIZE_DFU & 0xff) as u8,
-            ((BLOCK_SIZE_DFU >> 8) & 0xff) as u8,
-            0x10,
+            (BLOCK_SIZE_DFU & 0xff) as u8,        // transfer size low byte
+            ((BLOCK_SIZE_DFU >> 8) & 0xff) as u8, // transfer size high byte
+            0x10,                                 // DFU version 1.1 (BCD 0x0110)
             0x01,
         ],
     );
@@ -420,8 +418,57 @@ impl<'a> DfuLock<'a> {
                 with_led(|led| led.set_low());
                 break;
             }
-            morse_blink_dfu().await;
+            Self::morse_blink_dfu().await;
         }
+    }
+
+    /// Blink "D F U" in Morse code on the DFU LED.
+    async fn morse_blink_dfu() {
+        use embassy_time::Timer;
+
+        /// Element timing in milliseconds
+        const DOT: u64 = 100;
+        const DASH: u64 = 300;
+        const PAUSE_ELEMENT: u64 = 100;
+        const PAUSE_LETTER: u64 = 300;
+
+        macro_rules! dot {
+            () => {
+                with_led(|led| led.set_high());
+                Timer::after_millis(DOT).await;
+                with_led(|led| led.set_low());
+                Timer::after_millis(PAUSE_ELEMENT).await;
+            };
+        }
+        macro_rules! dash {
+            () => {
+                with_led(|led| led.set_high());
+                Timer::after_millis(DASH).await;
+                with_led(|led| led.set_low());
+                Timer::after_millis(PAUSE_ELEMENT).await;
+            };
+        }
+        macro_rules! letter_gap {
+            () => {
+                Timer::after_millis(PAUSE_LETTER - PAUSE_ELEMENT).await;
+            };
+        }
+
+        // D = -..
+        dash!();
+        dot!();
+        dot!();
+        letter_gap!();
+        // F = ..-.
+        dot!();
+        dot!();
+        dash!();
+        dot!();
+        letter_gap!();
+        // U = ..-
+        dot!();
+        dot!();
+        dash!();
     }
 }
 
@@ -432,54 +479,4 @@ impl<'a> Runnable for DfuLock<'a> {
             self.process_unlock().await;
         }
     }
-}
-
-/// Blink "D F U" in Morse code on the DFU LED.
-#[cfg(feature = "dfu_lock")]
-async fn morse_blink_dfu() {
-    use embassy_time::Timer;
-
-    /// Element timing in milliseconds
-    const DOT: u64 = 100;
-    const DASH: u64 = 300;
-    const PAUSE_ELEMENT: u64 = 100;
-    const PAUSE_LETTER: u64 = 300;
-
-    macro_rules! dot {
-        () => {
-            with_led(|led| led.set_high());
-            Timer::after_millis(DOT).await;
-            with_led(|led| led.set_low());
-            Timer::after_millis(PAUSE_ELEMENT).await;
-        };
-    }
-    macro_rules! dash {
-        () => {
-            with_led(|led| led.set_high());
-            Timer::after_millis(DASH).await;
-            with_led(|led| led.set_low());
-            Timer::after_millis(PAUSE_ELEMENT).await;
-        };
-    }
-    macro_rules! letter_gap {
-        () => {
-            Timer::after_millis(PAUSE_LETTER - PAUSE_ELEMENT).await;
-        };
-    }
-
-    // D = -..
-    dash!();
-    dot!();
-    dot!();
-    letter_gap!();
-    // F = ..-.
-    dot!();
-    dot!();
-    dash!();
-    dot!();
-    letter_gap!();
-    // U = ..-
-    dot!();
-    dot!();
-    dash!();
 }

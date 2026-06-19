@@ -29,9 +29,6 @@ keymap = [
     ],
 ]
 
-[storage]
-enabled = true
-
 # DFU partition layout — must match your bootloader's memory.x
 #
 # By default RMK uses the bootymcbootface formula with flash_size from the
@@ -51,15 +48,9 @@ enabled = true
 # state_size = 0x1000
 # dfu_offset = 0x87000
 # dfu_size = 528384
-# Optional DFU activity LED (lit during firmware download)
-# led = "PIN_25"
 
 [dfu]
 led = "PIN_16"
 # Optional DFU lock — physical keys to press simultaneously to unlock DFU firmware download.
 # Requires the `dfu_lock` Cargo feature (not enabled by default).
 unlock_keys = [[0, 0], [1, 1]]
-
-[rmk]
-morse_max_num = 8
-max_patterns_per_key = 8

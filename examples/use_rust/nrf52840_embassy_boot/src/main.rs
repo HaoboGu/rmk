@@ -73,8 +73,7 @@ async fn main(_spawner: Spawner) {
     let dfu_size: u32 = active_size + PAGE_SIZE;
     let dfu_offset: u32 = ACTIVE_OFFSET + active_size;
     let storage_offset: u32 = dfu_offset + dfu_size;
-    let storage_size: u32 = STORAGE_SIZE;
-    assert!(storage_offset + storage_size == FLASH_SIZE);
+    assert!(storage_offset + STORAGE_SIZE == FLASH_SIZE);
 
     info!(
         "Flash layout: state @ 0x{:04X} ({}K), active @ 0x{:04X} ({}K), dfu @ 0x{:04X} ({}K), storage @ 0x{:04X} ({}K)",
@@ -85,13 +84,13 @@ async fn main(_spawner: Spawner) {
         dfu_offset,
         dfu_size / 1024,
         storage_offset,
-        storage_size / 1024
+        STORAGE_SIZE / 1024
     );
 
     let flash = async_flash_wrapper(rmk::dfu::init_flash(
         p.NVMC,
         storage_offset,
-        storage_size,
+        STORAGE_SIZE,
         STATE_OFFSET,
         STATE_SIZE,
         dfu_offset,
