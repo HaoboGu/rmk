@@ -431,9 +431,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
         #[cfg(not(all(feature = "_nrf_ble", not(any(feature = "dfu_rp", feature = "dfu_nrf")))))]
         let start_addr = storage_config.start_addr;
-        #[cfg(not(feature = "_nrf_ble"))]
-        let start_addr = storage_config.start_addr;
-
         // Check storage setting
         info!(
             "Flash capacity {} KB, RMK use {} KB({} sectors) starting from 0x{:X} as storage",
