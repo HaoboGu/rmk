@@ -61,6 +61,36 @@ name = ...
 name = ...
 ```
 
+::: warning Multi-device ID assignment
+
+`PointingEvent` carries a `device_id` so that each `PointingProcessor` can be paired
+with a specific sensor. If you have sensors on both halves of a split keyboard,
+assign distinct ids to avoid the central treating them as the same device:
+
+```toml
+# Central side sensor
+[[split.central.input_device.pmw3610]]
+id = 0
+
+# Peripheral side sensor
+[[split.peripheral.input_device.pmw3610]]
+id = 1
+```
+
+The peripheral forwards events to the central with the `device_id` preserved.
+The generated `PointingProcessorConfig` on the central will automatically use the
+matching `device_id` for each sensor.
+
+:::
+
+::: warning Breaking change
+
+Adding `device_id` to `PointingEvent` changes the serialized binary format used by the
+split protocol. Both halves of a split keyboard **must** be flashed with the same
+firmware version at the same time.
+
+:::
+
 ## Rust configuration
 
 Define a `PointingDevice` and add it to `run_all!` macro.
@@ -90,7 +120,7 @@ let pmw3610_motion = Some(Input::new(p.P0_02, Pull::Up));
 
 let pmw3610_spi = BitBangSpiBus::new(pmw3610_sck, pmw3610_sdio);
 
-const POINTING_DEV_ID: u8 = 0 // this ID can be anything form 0-255. Just make sure you don't use the same number twice for different sensors to avoid confusion.
+const POINTING_DEV_ID: u8 = 0; // this ID can be anything from 0-255. Just make sure you don't use the same number twice for different sensors to avoid confusion.
 let mut pmw3610_device = PointingDevice::<Pmw3610<_, _, _>>::new(
     POINTING_DEV_ID
     pmw3610_spi,
@@ -101,7 +131,7 @@ let mut pmw3610_device = PointingDevice::<Pmw3610<_, _, _>>::new(
 
 // If you want to customize the report rate (Hz):
 // let mut pmw3610_device = Pmw3610Device::with_report_hz(
-//     POINTING_DEV_ID
+//     POINTING_DEV_ID,
 //     pmw3610_spi,
 //     pmw3610_cs,
 //     pmw3610_motion,
@@ -123,14 +153,17 @@ This should be added to the `central.rs`-File even if the sensor is on split per
 ```rust
     use rmk::input_device::pointing::{ PointingProcessor, PointingProcessorConfig };
 
-    let pmw3360_proc_config = PointingProcessorConfig {
+    let pmw3610_proc_config = PointingProcessorConfig {
         // invert_x: true, // invert axis if neccesary
         // invert_y: true,
         // swap_y: true,
         ..Default::default()
     };
 
-    let mut pmw3360_processor = PointingProcessor::new(&keymap, pmw3360_proc_config);
+    let mut pmw3360_processor = PointingProcessor::new(&keymap, pmw3610_proc_config);
 
 run_all!(pmw3610_processor, /* other processors and devices */)
 ```
+
+## Pointing Modes
+The PointingProcessor has four modes (Cursor, Scroll, Sniper, Caret) with per‑layer configuration. See the [PointingProcessor](./pointing_processor) page for all options.

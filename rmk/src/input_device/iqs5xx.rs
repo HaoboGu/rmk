@@ -398,23 +398,26 @@ where
             dx,
             dy,
         );
-        Ok(PointingEvent([
-            AxisEvent {
-                typ: crate::event::AxisValType::Rel,
-                axis: crate::event::Axis::X,
-                value: dx,
-            },
-            AxisEvent {
-                typ: crate::event::AxisValType::Rel,
-                axis: crate::event::Axis::Y,
-                value: dy,
-            },
-            AxisEvent {
-                typ: crate::event::AxisValType::Rel,
-                axis: crate::event::Axis::Z,
-                value: 0,
-            },
-        ]))
+        Ok(PointingEvent {
+            device_id: self.pointing_device_id,
+            axes: [
+                AxisEvent {
+                    typ: crate::event::AxisValType::Rel,
+                    axis: crate::event::Axis::X,
+                    value: dx,
+                },
+                AxisEvent {
+                    typ: crate::event::AxisValType::Rel,
+                    axis: crate::event::Axis::Y,
+                    value: dy,
+                },
+                AxisEvent {
+                    typ: crate::event::AxisValType::Rel,
+                    axis: crate::event::Axis::Z,
+                    value: 0,
+                },
+            ],
+        })
     }
 
     async fn read_pointing_event(&mut self) -> PointingEvent {
@@ -433,7 +436,7 @@ where
             }
             match self.read_motion().await {
                 Ok(e) => {
-                    if e.0.iter().any(|axis| axis.value != 0) {
+                    if e.axes.iter().any(|axis| axis.value != 0) {
                         return e;
                     }
                 }

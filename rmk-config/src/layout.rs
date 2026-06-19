@@ -318,38 +318,52 @@ impl KeyboardTomlConfig {
         Ok(current_keys)
     }
 
-    fn layer_name_resolver(
-        prefix: &str,
-        pair: pest::iterators::Pair<Rule>,
+    /// Reconstruct an action string from a parsed pair, resolving every named
+    /// layer reference (`MO(base)`) to its numeric index (`MO(0)`).
+    ///
+    /// Layer names may appear at any nesting depth (e.g. inside the tap slot of
+    /// `TH(MO(nav), A)`), so this walks the whole subtree, collects the source
+    /// span of each `layer_name`, and rewrites those spans in place. Actions
+    /// without layer names are returned verbatim.
+    fn resolve_layer_names(
+        pair: &pest::iterators::Pair<Rule>,
         layer_names: &HashMap<String, u32>,
     ) -> Result<String, String> {
-        let mut action = prefix.to_string() + "(";
+        let base = pair.as_span().start();
+        let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+        Self::collect_layer_name_spans(pair.clone(), layer_names, &mut replacements)?;
 
-        for inner_pair in pair.into_inner() {
-            match inner_pair.as_rule() {
-                //the first argument is the layer name or layer number
-                Rule::layer_name => {
-                    // Check if the layer name is valid
-                    let layer_name = inner_pair.as_str().to_string();
-                    if let Some(layer_number) = layer_names.get(&layer_name) {
-                        action += layer_number.to_string().as_str();
-                    } else {
-                        return Err(format!("Invalid layer name: {}", layer_name));
-                    }
-                }
-                Rule::layer_number => {
-                    action += inner_pair.as_str();
-                }
-                _ => {
-                    // the second argument is not processed, just forwarded
-                    action += ", ";
-                    action += inner_pair.as_str();
-                }
-            }
+        // Apply right-to-left so earlier byte offsets stay valid.
+        replacements.sort_by_key(|(start, _, _)| *start);
+        let mut result = pair.as_str().to_string();
+        for (start, end, replacement) in replacements.into_iter().rev() {
+            result.replace_range(start - base..end - base, &replacement);
         }
-        action += ")";
+        Ok(result)
+    }
 
-        Ok(action)
+    /// Recursively collect `(start, end, resolved_number)` for every `layer_name`
+    /// in the subtree, validating each against the known layer names.
+    fn collect_layer_name_spans(
+        pair: pest::iterators::Pair<Rule>,
+        layer_names: &HashMap<String, u32>,
+        out: &mut Vec<(usize, usize, String)>,
+    ) -> Result<(), String> {
+        if pair.as_rule() == Rule::layer_name {
+            let layer_name = pair.as_str();
+            match layer_names.get(layer_name) {
+                Some(layer_number) => {
+                    let span = pair.as_span();
+                    out.push((span.start(), span.end(), layer_number.to_string()));
+                }
+                None => return Err(format!("Invalid layer name: {}", layer_name)),
+            }
+            return Ok(());
+        }
+        for inner in pair.into_inner() {
+            Self::collect_layer_name_spans(inner, layer_names, out)?;
+        }
+        Ok(())
     }
 
     fn keymap_parser(
@@ -371,102 +385,15 @@ impl KeyboardTomlConfig {
                     if pair.as_rule() == Rule::key_map {
                         for inner_pair in pair.into_inner() {
                             match inner_pair.as_rule() {
-                                Rule::no_action => {
-                                    let action = inner_pair.as_str().to_string();
-                                    key_action_sequence.push(action);
-                                }
-
-                                Rule::transparent_action => {
-                                    let action = inner_pair.as_str().to_string();
-                                    key_action_sequence.push(action);
-                                }
-
-                                Rule::simple_keycode => {
-                                    let action = inner_pair.as_str().to_string();
-                                    key_action_sequence.push(action);
-                                }
-
-                                Rule::shifted_action => {
-                                    let action = inner_pair.as_str().to_string();
-                                    key_action_sequence.push(action);
-                                }
-
-                                Rule::sk_action => {
-                                    let action = inner_pair.as_str().to_string();
-                                    key_action_sequence.push(action);
-                                }
-
-                                Rule::wm_action => {
-                                    let action = inner_pair.as_str().to_string();
-                                    key_action_sequence.push(action);
-                                }
-
-                                // OSM(modifier)/OSL(n) are user-facing aliases for the pure-mod and
-                                // layer sticky keys. They are forwarded as-is (like sk_action) and
-                                // desugared to SK in the codegen parser, so they work in every context
-                                // SK works (keymap grid and encoders) and produce byte-identical actions.
-                                Rule::osm_action => {
-                                    let action = inner_pair.as_str().to_string();
-                                    key_action_sequence.push(action);
-                                }
-                                Rule::osl_action => {
-                                    let action = inner_pair.as_str().to_string();
-                                    key_action_sequence.push(action);
-                                }
-
-                                //layer actions:
-                                Rule::df_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver("DF", inner_pair, layer_names)?);
-                                }
-                                Rule::mo_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver("MO", inner_pair, layer_names)?);
-                                }
-                                Rule::lm_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver("LM", inner_pair, layer_names)?);
-                                }
-                                Rule::lt_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver("LT", inner_pair, layer_names)?);
-                                    //"LT(".to_owned() + &Self::layer_name_resolver(inner_pair, layer_names)? + ")");
-                                }
-                                Rule::tt_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver("TT", inner_pair, layer_names)?);
-                                }
-                                Rule::tg_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver("TG", inner_pair, layer_names)?);
-                                }
-                                Rule::to_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver("TO", inner_pair, layer_names)?);
-                                }
-
-                                // tap-hold actions:
-                                Rule::mt_action => {
-                                    let action = inner_pair.as_str().to_string();
-                                    key_action_sequence.push(action);
-                                }
-                                Rule::th_action => {
-                                    let action = inner_pair.as_str().to_string();
-                                    key_action_sequence.push(action);
-                                }
-
-                                Rule::morse_action => {
-                                    let action = inner_pair.as_str().to_string();
-                                    key_action_sequence.push(action);
-                                }
-
-                                Rule::trigger_macro_action => {
-                                    let action = inner_pair.as_str().to_string();
-                                    key_action_sequence.push(action);
-                                }
-
                                 Rule::EOI | Rule::WHITESPACE => {
                                     // Ignore End of input marker
                                 }
+                                // Every key action is forwarded as its (alias-resolved) source
+                                // text, with any named layer references resolved to indices.
+                                // This handles layer names nested at any depth, e.g. the tap
+                                // slot of `TH(MO(nav), A)`.
                                 _ => {
-                                    // This case should not be reached
-                                    panic!(
-                                        "Unexpected rule encountered during layer.keys processing:{:?}",
-                                        inner_pair.as_rule()
-                                    );
+                                    key_action_sequence.push(Self::resolve_layer_names(&inner_pair, layer_names)?);
                                 }
                             }
                         }
@@ -735,6 +662,53 @@ mod tests {
                 input,
                 expected_rule
             );
+        }
+    }
+
+    #[test]
+    fn test_nested_actions_in_tap_hold_slots() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+
+        // A single-action form (here WM) can appear in the tap/hold slots of
+        // MT/TH/LT and is forwarded verbatim for the proc-macro to expand.
+        let keymap = "MT(WM(P, RAlt), LShift, HRM) TH(WM(A, LShift), MO(2)) LT(1, WM(Q, LGui))";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok(), "{:?}", result);
+        assert_eq!(
+            result.unwrap(),
+            vec![
+                "MT(WM(P, RAlt), LShift, HRM)",
+                "TH(WM(A, LShift), MO(2))",
+                "LT(1, WM(Q, LGui))",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_layer_name_resolution_nested() {
+        let aliases = HashMap::new();
+        let mut layer_names = HashMap::new();
+        layer_names.insert("nav".to_string(), 3u32);
+
+        // Layer names are resolved to indices even when nested inside a slot.
+        let keymap = "MO(nav) TH(A, MO(nav))";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok(), "{:?}", result);
+        assert_eq!(result.unwrap(), vec!["MO(3)", "TH(A, MO(3))"]);
+    }
+
+    #[test]
+    fn test_composite_actions_rejected_in_slots() {
+        // Tap-hold / morse forms are not single `Action`s, so they cannot nest
+        // inside a slot. The grammar must reject these.
+        let invalid_cases = ["MT(MT(A, LCtrl), LShift)", "TH(TD(0), B)", "MT(LT(1, A), LShift)"];
+
+        for input in invalid_cases {
+            let result = ConfigParser::parse(Rule::key_map, input);
+            assert!(result.is_err(), "Input should be rejected: {}", input);
         }
     }
 

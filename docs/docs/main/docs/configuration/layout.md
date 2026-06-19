@@ -139,6 +139,8 @@ The definitions of these operations are the same as QMK's; you can find them [he
 
 6. For generic key tap-hold, use `TH(key-tap, key-hold, <profile_name>)`, The `profile_name` is optional, which defines the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning)
 
+   The tap/hold slots of `MT`, `TH` and `LT` are not limited to plain keycodes — they accept any single action, so you can nest other actions inside them. For example `MT(WM(P, RAlt), LShift, HRM)` taps `RAlt+P` and holds `LShift` with the `HRM` profile, and `TH(WM(A, LShift), MO(2))` taps `Shift+A` and holds momentary-layer 2. Composite tap-hold/morse forms (`MT`/`TH`/`LT`/`TT`/`TD`) cannot be nested inside a slot.
+
 7. For shifted key, use `SHIFTED(key)`
 
 8. For Morse/Tap Dance, use `TD(n)` or `Morse(n)`, they are same
