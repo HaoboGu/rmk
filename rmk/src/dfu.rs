@@ -1,12 +1,10 @@
 use core::cell::RefCell;
 #[cfg(feature = "dfu_lock")]
-use core::sync::atomic::AtomicBool;
-use core::sync::atomic::{AtomicPtr, Ordering};
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use embassy_sync::blocking_mutex::Mutex;
-#[cfg(feature = "dfu_lock")]
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::once_lock::OnceLock;
 #[cfg(feature = "dfu_lock")]
 use embassy_sync::signal::Signal;
 use embassy_usb::control::{InResponse, OutResponse, Request};
@@ -84,9 +82,9 @@ type FlashType = Flash<'static, FLASH, Blocking, FLASH_SIZE>;
 type FlashType = Nvmc<'static>;
 
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-type MutexType = Mutex<NoopRawMutex, RefCell<FlashType>>;
+type MutexType = Mutex<CriticalSectionRawMutex, RefCell<FlashType>>;
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-type PartitionType = BlockingPartition<'static, NoopRawMutex, FlashType>;
+type PartitionType = BlockingPartition<'static, CriticalSectionRawMutex, FlashType>;
 
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 pub struct DfuFlashManager {
@@ -138,19 +136,14 @@ impl DfuFlashManager {
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 static FLASH_CELL: StaticCell<MutexType> = StaticCell::new();
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-static MANAGER_CELL: StaticCell<DfuFlashManager> = StaticCell::new();
+static MANAGER: OnceLock<DfuFlashManager> = OnceLock::new();
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-static MANAGER_PTR: AtomicPtr<DfuFlashManager> = AtomicPtr::new(core::ptr::null_mut());
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-static LED_MUTEX: AtomicPtr<Mutex<NoopRawMutex, RefCell<Option<Output<'static>>>>> =
-    AtomicPtr::new(core::ptr::null_mut());
+static LED: OnceLock<Mutex<CriticalSectionRawMutex, RefCell<Option<Output<'static>>>>> = OnceLock::new();
 
 /// Store an optional DFU LED pin globally.
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 pub fn set_led(led: Option<Output<'static>>) {
-    static LED_CELL: StaticCell<Mutex<NoopRawMutex, RefCell<Option<Output<'static>>>>> = StaticCell::new();
-    let m = LED_CELL.init(Mutex::new(RefCell::new(led)));
-    LED_MUTEX.store(m as *const _ as *mut _, Ordering::Release);
+    let _ = LED.init(Mutex::new(RefCell::new(led)));
 }
 
 /// Run a closure with the global DFU LED, if configured (platform-specific impl).
@@ -159,12 +152,8 @@ fn with_led<F, R>(f: F) -> Option<R>
 where
     F: FnOnce(&mut Output<'static>) -> R,
 {
-    let ptr = LED_MUTEX.load(Ordering::Acquire);
-    if ptr.is_null() {
-        return None;
-    }
-    let m = unsafe { &*ptr };
-    m.lock(|cell| cell.borrow_mut().as_mut().map(f))
+    LED.try_get()
+        .and_then(|m| m.lock(|cell| cell.borrow_mut().as_mut().map(f)))
 }
 
 /// No-op fallback when DFU is built without an LED-capable platform driver.
@@ -253,7 +242,7 @@ pub fn init_flash(
     let raw_flash = Flash::<_, Blocking, FLASH_SIZE>::new_blocking(flash_peri);
 
     let flash_mutex: &'static MutexType = FLASH_CELL.init(Mutex::new(RefCell::new(raw_flash)));
-    let mgr = MANAGER_CELL.init(DfuFlashManager::new(
+    let mgr = DfuFlashManager::new(
         flash_mutex,
         storage_offset,
         storage_size,
@@ -261,9 +250,10 @@ pub fn init_flash(
         state_size,
         dfu_offset,
         dfu_size,
-    ));
-    MANAGER_PTR.store(mgr as *const _ as *mut _, Ordering::Release);
-    mgr.storage_partition()
+    );
+    let partition = mgr.storage_partition();
+    MANAGER.init(mgr).ok();
+    partition
 }
 
 /// Mark firmware boot as successful so the bootloader doesn't revert on next reset.
@@ -281,8 +271,7 @@ pub fn mark_booted() {
 /// Get a reference to the global DFU flash manager.
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 pub fn get_manager() -> Option<&'static DfuFlashManager> {
-    let ptr = MANAGER_PTR.load(Ordering::Acquire);
-    if ptr.is_null() { None } else { Some(unsafe { &*ptr }) }
+    MANAGER.try_get()
 }
 
 /// Register a DFU interface on the USB builder.
