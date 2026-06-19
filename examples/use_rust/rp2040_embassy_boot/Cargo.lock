@@ -2048,6 +2048,7 @@ dependencies = [
  "crc32fast",
  "defmt 1.1.0",
  "document-features",
+ "embassy-boot",
  "embassy-boot-rp",
  "embassy-embedded-hal",
  "embassy-futures",
