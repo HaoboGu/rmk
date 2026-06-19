@@ -56,12 +56,8 @@ const DFU_WRITE_SIZE: usize = 1;
 #[cfg(feature = "dfu_nrf")]
 const DFU_WRITE_SIZE: usize = 4;
 
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-use {
-    embassy_boot::{BlockingFirmwareState, BlockingFirmwareUpdater, FirmwareUpdaterConfig},
-    embassy_embedded_hal::flash::partition::BlockingPartition,
-};
-
+#[cfg(feature = "dfu_nrf")]
+use embassy_nrf::{Peri, gpio::Output, nvmc::Nvmc, peripherals::NVMC};
 #[cfg(feature = "dfu_rp")]
 use embassy_rp::{
     Peri,
@@ -69,14 +65,15 @@ use embassy_rp::{
     gpio::Output,
     peripherals::FLASH,
 };
-
-#[cfg(feature = "dfu_nrf")]
-use embassy_nrf::{Peri, gpio::Output, nvmc::Nvmc, peripherals::NVMC};
-
 #[cfg(feature = "dfu")]
 use embassy_usb::class::dfu::{
     consts::Status,
     dfu_mode::{self, DfuState},
+};
+#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+use {
+    embassy_boot::{BlockingFirmwareState, BlockingFirmwareUpdater, FirmwareUpdaterConfig},
+    embassy_embedded_hal::flash::partition::BlockingPartition,
 };
 
 #[cfg(feature = "dfu_rp")]
