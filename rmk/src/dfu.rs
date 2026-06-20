@@ -75,7 +75,7 @@ use embassy_usb::class::dfu::{
 };
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 use {
-    embassy_boot::{BlockingFirmwareState, BlockingFirmwareUpdater, FirmwareUpdaterConfig},
+    embassy_boot::BlockingFirmwareState,
     embassy_embedded_hal::flash::partition::BlockingPartition,
 };
 
@@ -151,7 +151,7 @@ pub fn set_led(led: Option<Output<'static>>) {
 
 /// Run a closure with the global DFU LED, if configured (platform-specific impl).
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-fn with_led<F, R>(f: F) -> Option<R>
+pub(crate) fn with_led<F, R>(f: F) -> Option<R>
 where
     F: FnOnce(&mut Output<'static>) -> R,
 {
@@ -161,7 +161,7 @@ where
 
 /// No-op fallback when DFU is built without an LED-capable platform driver.
 #[cfg(all(feature = "dfu", not(any(feature = "dfu_rp", feature = "dfu_nrf"))))]
-fn with_led<F, R>(_: F) -> Option<R> {
+pub(crate) fn with_led<F, R>(_: F) -> Option<R> {
     None
 }
 
