@@ -7,6 +7,7 @@ use syn::{ItemFn, ItemMod};
 
 use super::override_helper::Overwritten;
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn expand_rmk_entry(
     hardware: &Hardware,
     host: &Host,
@@ -206,6 +207,7 @@ pub(crate) fn rmk_entry_select(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn rmk_entry_unibody(
     transport_prelude: TokenStream2,
     transport_tasks: Vec<TokenStream2>,
