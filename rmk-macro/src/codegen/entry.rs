@@ -2,7 +2,7 @@ use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::resolved::hardware::{BoardConfig, CommunicationConfig};
-use rmk_config::resolved::{Hardware, Host};
+use rmk_config::resolved::{Behavior, Hardware, Host};
 use syn::{ItemFn, ItemMod};
 
 use super::override_helper::Overwritten;
@@ -10,6 +10,7 @@ use super::override_helper::Overwritten;
 pub(crate) fn expand_rmk_entry(
     hardware: &Hardware,
     host: &Host,
+    behavior: &Behavior,
     item_mod: &ItemMod,
     devices: Vec<TokenStream2>,
     processors: Vec<TokenStream2>,
@@ -32,6 +33,7 @@ pub(crate) fn expand_rmk_entry(
             .unwrap_or(rmk_entry_select(
                 hardware,
                 host,
+                behavior,
                 devices,
                 processors,
                 registered_processors,
@@ -41,6 +43,7 @@ pub(crate) fn expand_rmk_entry(
         rmk_entry_select(
             hardware,
             host,
+            behavior,
             devices,
             processors,
             registered_processors,
@@ -59,11 +62,17 @@ fn override_rmk_entry(item_fn: &ItemFn) -> TokenStream2 {
 pub(crate) fn rmk_entry_select(
     hardware: &Hardware,
     host: &Host,
+    behavior: &Behavior,
     devices: Vec<TokenStream2>,
     processors: Vec<TokenStream2>,
     registered_processors: Vec<TokenStream2>,
     watchdog_task: Option<TokenStream2>,
 ) -> TokenStream2 {
+    let auto_mouse_layer_task = behavior.auto_mouse_layer.as_ref().map(|_| {
+        quote! {
+            ::rmk::run_auto_mouse_layer_if_enabled(&keymap)
+        }
+    });
     let devices_task = {
         let mut devs = devices.clone();
         devs.push(quote! {matrix});
@@ -107,6 +116,9 @@ pub(crate) fn rmk_entry_select(
             }
             tasks.extend(transport_tasks);
             if let Some(t) = &watchdog_task {
+                tasks.push(t.clone());
+            }
+            if let Some(t) = &auto_mouse_layer_task {
                 tasks.push(t.clone());
             }
             if split_config.connection == "ble" {
@@ -184,6 +196,7 @@ pub(crate) fn rmk_entry_select(
             processors_task,
             registered_processors,
             watchdog_task,
+            auto_mouse_layer_task,
         ),
     };
 
@@ -201,6 +214,7 @@ pub(crate) fn rmk_entry_unibody(
     processors_task: TokenStream2,
     registered_processors: Vec<TokenStream2>,
     watchdog_task: Option<TokenStream2>,
+    auto_mouse_layer_task: Option<TokenStream2>,
 ) -> TokenStream2 {
     let keyboard_task = quote! {
         keyboard.run()
@@ -216,6 +230,9 @@ pub(crate) fn rmk_entry_unibody(
     tasks.extend(registered_processors);
     tasks.extend(transport_tasks);
     if let Some(t) = watchdog_task {
+        tasks.push(t);
+    }
+    if let Some(t) = auto_mouse_layer_task {
         tasks.push(t);
     }
     let joined = join_all_tasks(tasks);

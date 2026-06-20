@@ -18,6 +18,37 @@ pub struct BehaviorConfig {
     pub morse: MorsesConfig,
     pub keyboard_macros: KeyboardMacrosConfig,
     pub mouse_key: MouseKeyConfig,
+    pub auto_mouse_layer: Option<AutoMouseLayerConfig>,
+}
+
+/// Config for auto mouse layer behavior
+///
+/// When a pointing device reports motion above [`AutoMouseLayerConfig::threshold`],
+/// the configured [`AutoMouseLayerConfig::layer`] is activated. The layer is
+/// deactivated once no motion has been reported for [`AutoMouseLayerConfig::timeout`].
+#[derive(Clone, Copy, Debug)]
+pub struct AutoMouseLayerConfig {
+    /// Layer index to activate when pointing-device motion is detected
+    pub layer: u8,
+    /// Idle duration after the last motion before the layer is deactivated
+    pub timeout: Duration,
+    /// Minimum absolute X/Y axis delta to be considered as motion (must be `>= 1`)
+    pub threshold: u16,
+}
+
+impl AutoMouseLayerConfig {
+    pub fn new(layer: u8, timeout: Duration, threshold: u16) -> Self {
+        assert!(threshold >= 1, "AutoMouseLayerConfig::new: threshold must be >= 1");
+        assert!(
+            timeout >= Duration::from_millis(1),
+            "AutoMouseLayerConfig::new: timeout must be at least 1ms"
+        );
+        Self {
+            layer,
+            timeout,
+            threshold,
+        }
+    }
 }
 
 /// Configurations for tap behavior

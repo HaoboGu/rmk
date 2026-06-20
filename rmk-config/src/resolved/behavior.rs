@@ -9,7 +9,20 @@ pub struct Behavior {
     pub macros: Option<Macros>,
     pub forks: Option<Forks>,
     pub morse: Option<Morse>,
+    pub auto_mouse_layer: Option<AutoMouseLayer>,
 }
+
+pub struct AutoMouseLayer {
+    pub layer: u8,
+    pub timeout_ms: u64,
+    pub threshold: u16,
+}
+
+/// Default idle timeout (in milliseconds) for [`AutoMouseLayer`] when not specified in `keyboard.toml`.
+pub const DEFAULT_AUTO_MOUSE_LAYER_TIMEOUT_MS: u64 = 500;
+
+/// Default motion threshold for [`AutoMouseLayer`] when not specified.
+pub const DEFAULT_AUTO_MOUSE_LAYER_THRESHOLD: u16 = 1;
 
 pub struct OneShot {
     pub activate_on_keypress: Option<bool>,
@@ -201,6 +214,12 @@ impl crate::KeyboardTomlConfig {
             }
         });
 
+        let auto_mouse_layer = toml_behavior.auto_mouse_layer.map(|a| AutoMouseLayer {
+            layer: a.layer,
+            timeout_ms: a.timeout.map(|t| t.0).unwrap_or(DEFAULT_AUTO_MOUSE_LAYER_TIMEOUT_MS),
+            threshold: a.threshold.unwrap_or(DEFAULT_AUTO_MOUSE_LAYER_THRESHOLD),
+        });
+
         Ok(Behavior {
             tri_layer,
             one_shot_timeout_ms,
@@ -209,6 +228,7 @@ impl crate::KeyboardTomlConfig {
             macros,
             forks,
             morse,
+            auto_mouse_layer,
         })
     }
 }

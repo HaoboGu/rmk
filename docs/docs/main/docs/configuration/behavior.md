@@ -512,3 +512,62 @@ forks = [
 Please note that the processing of forks happens after combos and before others, so the trigger key must be the one listed in your keymap (or combo output). For example if `LT(2, Backspace)` is in your keymap, then `trigger = "Backspace"` will NOT work, you should "replace" the full key and use `trigger = "LT(2, Backspace)"` instead, like in the example above. You may want to include `F24` or similar dummy keys in your keymap, and use them as trigger for your pre-configured forks, such as Shift/CapsLock dependent macros to enter unicode characters of your language.
 
 Vial does not support fork configuration yet.
+
+## Auto Mouse Layer
+
+The `auto_mouse_layer` sub-table automatically activates a layer when X/Y cursor motion from a pointing device (e.g., PMW3610, trackball) is detected. The layer is deactivated after a `timeout` of inactivity. Scroll-only events do not trigger the layer.
+
+Example configuration:
+
+```toml
+[behavior.auto_mouse_layer]
+layer = 3
+timeout = "600ms"
+threshold = 2
+```
+
+| Field        | Type    | Default | Description |
+|--------------|---------|---------|-------------|
+| `layer`      | integer | —       | Layer index to activate (must be `>= 1` and `< [layout.layers]`). |
+| `timeout`    | string  | `"500ms"`| Inactivity duration before deactivation (e.g., `"600ms"`, `"2s"`). |
+| `threshold`  | integer | `1`     | Minimum absolute X/Y delta to trigger motion (`>= 1`). Increase to filter sensor noise. |
+
+::: warning
+
+Use a dedicated layer that is not bound to any manual keys (like `MO` or `TG`). Because layer states are boolean, manually activating the same layer while the auto-mouse timeout is running may cause the layer to deactivate prematurely when the timeout fires.
+
+:::
+
+::: note Pointer Event Configuration
+
+- **Subscriber Slots**: You must manually increment `[event.pointing].subs` (e.g., increase it by `1`) in your `keyboard.toml` to reserve a subscriber slot for the auto mouse layer's background listener task.
+- **Buffer Size**: If pointing events are dropped under high-frequency input, increase `[event.pointing].channel_size` (default is `8`).
+
+:::
+
+::: note Rust API
+If not using `keyboard.toml`, configure the layer via `BehaviorConfig` and run the helper future alongside your other keyboard tasks:
+
+```rust
+use embassy_time::Duration;
+use rmk::config::{AutoMouseLayerConfig, BehaviorConfig};
+
+// Configure the auto mouse layer
+let mut behavior_config = BehaviorConfig::default();
+behavior_config.auto_mouse_layer = Some(AutoMouseLayerConfig::new(
+    3,                          // layer index
+    Duration::from_millis(600), // timeout duration
+    2,                          // threshold
+));
+
+// Run the auto mouse layer future alongside other tasks
+embassy_futures::join::join(
+    run_all!(
+        matrix,
+        keyboard,
+        // ...other runnables
+    ),
+    rmk::run_auto_mouse_layer_if_enabled(&keymap)
+).await;
+```
+:::

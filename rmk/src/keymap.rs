@@ -466,6 +466,45 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow_mut().toggle_layer(layer_num);
     }
 
+    /// Activate `layer_num` only if it is currently inactive.
+    ///
+    /// Returns `true` if this call performed the activation, `false` if the
+    /// layer was already active (or the index is out of range). Folds the
+    /// "check then activate" sequence into a single borrow so callers can't
+    /// accidentally race against other layer mutations.
+    pub(crate) fn activate_layer_if_inactive(&self, layer_num: u8) -> bool {
+        let mut inner = self.inner.borrow_mut();
+        let idx = layer_num as usize;
+        if idx >= inner.num_layer || inner.layer_state[idx] {
+            return false;
+        }
+        inner.layer_state[idx] = true;
+        inner.update_tri_layer();
+        true
+    }
+
+    /// Symmetric counterpart to [`Self::activate_layer_if_inactive`]: only
+    /// deactivates when the layer is currently active. Skips the
+    /// `update_tri_layer` call (which would publish a `LayerChangeEvent`) when
+    /// the layer is already inactive, avoiding a redundant event publish.
+    pub(crate) fn deactivate_layer_if_active(&self, layer_num: u8) {
+        let mut inner = self.inner.borrow_mut();
+        let idx = layer_num as usize;
+        if idx >= inner.num_layer || !inner.layer_state[idx] {
+            return;
+        }
+        inner.layer_state[idx] = false;
+        inner.update_tri_layer();
+    }
+
+    pub(crate) fn auto_mouse_layer_config(&self) -> Option<crate::config::AutoMouseLayerConfig> {
+        self.inner.borrow().behavior.auto_mouse_layer
+    }
+
+    pub(crate) fn num_layer(&self) -> usize {
+        self.inner.borrow().num_layer
+    }
+
     pub(crate) fn get_activated_layer(&self) -> u8 {
         self.inner.borrow().get_activated_layer()
     }
