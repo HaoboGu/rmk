@@ -160,10 +160,10 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
     /// out because the peripheral was not yet booted).
     #[cfg(feature = "dfu_split")]
     async fn handle_proactive_hash(&mut self, hash: u32) {
-        let (firmware, expected_hash) = match crate::dfu::get_firmware_update_data() {
+        let (firmware, expected_hash) = match crate::dfu::get_firmware_update_data(self.id) {
             Some(d) => d,
             None => {
-                info!("dfu_split: no firmware data set, skipping proactive hash check");
+                info!("dfu_split: no firmware data set for peripheral {}, skipping proactive hash check", self.id);
                 return;
             }
         };
@@ -190,10 +190,10 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
     async fn check_firmware_update(&mut self) {
         use embassy_time::{Duration, Timer};
 
-        let (firmware, expected_hash) = match crate::dfu::get_firmware_update_data() {
+        let (firmware, expected_hash) = match crate::dfu::get_firmware_update_data(self.id) {
             Some(d) => d,
             None => {
-                info!("dfu_split: no firmware data set, skipping update check");
+                info!("dfu_split: no firmware data set for peripheral {}, skipping update check", self.id);
                 return;
             }
         };

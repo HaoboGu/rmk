@@ -1,9 +1,7 @@
 use core::cell::RefCell;
 #[cfg(feature = "dfu_lock")]
 use core::sync::atomic::AtomicBool;
-#[cfg(feature = "dfu_split")]
-use core::sync::atomic::AtomicU32;
-use core::sync::atomic::{AtomicPtr, Ordering};
+use core::sync::atomic::Ordering;
 
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -426,39 +424,49 @@ impl SplitDfuHandler {
 // dfu_split — firmware update data for split peripheral firmware update
 // ---------------------------------------------------------------------------
 
-/// Global pointer to the peripheral firmware binary (set by central).
+/// Firmware update data for a single split peripheral.
 #[cfg(feature = "dfu_split")]
-static FW_UPDATE_PTR: AtomicPtr<u8> = AtomicPtr::new(core::ptr::null_mut());
-/// Length of the peripheral firmware binary.
+struct FirmwareSlot {
+    data: &'static [u8],
+    hash: u32,
+}
+
 #[cfg(feature = "dfu_split")]
-static FW_UPDATE_LEN: AtomicU32 = AtomicU32::new(0);
-/// CRC32 of the peripheral firmware binary.
+const MAX_FW_SLOTS: usize = 8;
+
+/// Global registry mapping peripheral IDs to their update firmware.
 #[cfg(feature = "dfu_split")]
-static FW_UPDATE_HASH: AtomicU32 = AtomicU32::new(0);
+static FW_SLOTS: Mutex<CriticalSectionRawMutex, RefCell<heapless::Vec<(usize, FirmwareSlot), MAX_FW_SLOTS>>> =
+    Mutex::new(RefCell::new(heapless::Vec::new()));
 
 /// Store a reference to the peripheral firmware binary and its CRC32 hash.
 ///
 /// The central calls this before starting the split peripheral manager so
 /// that `PeripheralManager` can verify and update the peripheral's firmware
-/// at connection time.
+/// at connection time.  The `id` must match the peripheral index used in
+/// `[[split.peripheral]]` (or the `id` argument of `run_peripheral_manager`).
+///
+/// Returns `Err(())` if the registry is full (max `MAX_FW_SLOTS` entries).
 #[cfg(feature = "dfu_split")]
-pub fn set_firmware_update_data(firmware: &'static [u8], hash: u32) {
-    FW_UPDATE_PTR.store(firmware.as_ptr() as *mut u8, Ordering::Release);
-    FW_UPDATE_LEN.store(firmware.len() as u32, Ordering::Release);
-    FW_UPDATE_HASH.store(hash, Ordering::Release);
+pub fn set_firmware_update_data(id: usize, firmware: &'static [u8], hash: u32) -> Result<(), ()> {
+    FW_SLOTS.lock(|cell| {
+        let slots = &mut cell.borrow_mut();
+        if let Some(slot) = slots.iter_mut().find(|(i, _)| *i == id) {
+            *slot = (id, FirmwareSlot { data: firmware, hash });
+        } else {
+            slots.push((id, FirmwareSlot { data: firmware, hash })).map_err(|_| ())?;
+        }
+        Ok(())
+    })
 }
 
-/// Retrieve the stored peripheral firmware data, if any.
+/// Retrieve the stored peripheral firmware data for a given peripheral ID, if any.
 #[cfg(feature = "dfu_split")]
-pub fn get_firmware_update_data() -> Option<(&'static [u8], u32)> {
-    let ptr = FW_UPDATE_PTR.load(Ordering::Acquire);
-    if ptr.is_null() {
-        return None;
-    }
-    let len = FW_UPDATE_LEN.load(Ordering::Acquire) as usize;
-    let slice = unsafe { core::slice::from_raw_parts(ptr, len) };
-    let hash = FW_UPDATE_HASH.load(Ordering::Acquire);
-    Some((slice, hash))
+pub fn get_firmware_update_data(id: usize) -> Option<(&'static [u8], u32)> {
+    FW_SLOTS.lock(|cell| {
+        let slots = cell.borrow();
+        slots.iter().find(|(i, _)| *i == id).map(|(_, s)| (s.data, s.hash))
+    })
 }
 
 /// Return the CRC32 of this device's currently running firmware binary.
