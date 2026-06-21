@@ -69,9 +69,9 @@ pub(crate) fn rmk_entry_select(
     registered_processors: Vec<TokenStream2>,
     watchdog_task: Option<TokenStream2>,
 ) -> TokenStream2 {
-    let auto_mouse_layer_task = behavior.auto_mouse_layer.as_ref().map(|_| {
+    let auto_mouse_layer_prelude = behavior.auto_mouse_layer.as_ref().map(|_| {
         quote! {
-            ::rmk::run_auto_mouse_layer_if_enabled(&keymap)
+            let mut auto_mouse_layer = ::rmk::run_auto_mouse_layer_if_enabled(&keymap);
         }
     });
     let devices_task = {
@@ -79,6 +79,9 @@ pub(crate) fn rmk_entry_select(
         devs.push(quote! {matrix});
         if hardware.storage.is_some() {
             devs.push(quote! {storage});
+        }
+        if behavior.auto_mouse_layer.is_some() {
+            devs.push(quote! {auto_mouse_layer});
         }
         quote! {
             ::rmk::run_all! (
@@ -119,9 +122,6 @@ pub(crate) fn rmk_entry_select(
             if let Some(t) = &watchdog_task {
                 tasks.push(t.clone());
             }
-            if let Some(t) = &auto_mouse_layer_task {
-                tasks.push(t.clone());
-            }
             if split_config.connection == "ble" {
                 if !processors.is_empty() {
                     tasks.push(processors_task);
@@ -146,6 +146,7 @@ pub(crate) fn rmk_entry_select(
                 let joined = join_all_tasks(tasks);
                 quote! {
                     #transport_prelude
+                    #auto_mouse_layer_prelude
                     #joined
                 }
             } else if split_config.connection == "serial" {
@@ -180,6 +181,7 @@ pub(crate) fn rmk_entry_select(
                 let joined = join_all_tasks(tasks);
                 quote! {
                     #transport_prelude
+                    #auto_mouse_layer_prelude
                     #joined
                 }
             } else {
@@ -191,13 +193,13 @@ pub(crate) fn rmk_entry_select(
         }
         BoardConfig::UniBody(_) => rmk_entry_unibody(
             transport_prelude,
+            auto_mouse_layer_prelude,
             transport_tasks,
             host_service_task,
             devices_task,
             processors_task,
             registered_processors,
             watchdog_task,
-            auto_mouse_layer_task,
         ),
     };
 
@@ -210,13 +212,13 @@ pub(crate) fn rmk_entry_select(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn rmk_entry_unibody(
     transport_prelude: TokenStream2,
+    auto_mouse_layer_prelude: Option<TokenStream2>,
     transport_tasks: Vec<TokenStream2>,
     host_service_task: Option<TokenStream2>,
     devices_task: TokenStream2,
     processors_task: TokenStream2,
     registered_processors: Vec<TokenStream2>,
     watchdog_task: Option<TokenStream2>,
-    auto_mouse_layer_task: Option<TokenStream2>,
 ) -> TokenStream2 {
     let keyboard_task = quote! {
         keyboard.run()
@@ -234,12 +236,10 @@ pub(crate) fn rmk_entry_unibody(
     if let Some(t) = watchdog_task {
         tasks.push(t);
     }
-    if let Some(t) = auto_mouse_layer_task {
-        tasks.push(t);
-    }
     let joined = join_all_tasks(tasks);
     quote! {
         #transport_prelude
+        #auto_mouse_layer_prelude
         #joined
     }
 }

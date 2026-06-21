@@ -560,14 +560,13 @@ behavior_config.auto_mouse_layer = Some(AutoMouseLayerConfig::new(
     2,                          // threshold
 ));
 
-// Run the auto mouse layer future alongside other tasks
-embassy_futures::join::join(
-    run_all!(
-        matrix,
-        keyboard,
-        // ...other runnables
-    ),
-    rmk::run_auto_mouse_layer_if_enabled(&keymap)
+// include it in `run_all!` alongside the rest:
+let mut auto_mouse_layer = rmk::run_auto_mouse_layer_if_enabled(&keymap);
+run_all!(
+    matrix,
+    keyboard,
+    // ...other runnables
+    auto_mouse_layer,
 ).await;
 ```
 :::

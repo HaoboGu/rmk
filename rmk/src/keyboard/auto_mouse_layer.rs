@@ -7,74 +7,92 @@
 use embassy_futures::select::{Either, select};
 use embassy_time::{Instant, Timer};
 
+use crate::core_traits::Runnable;
 use crate::event::{Axis, AxisValType, EventSubscriber, PointingEvent, SubscribableEvent};
 use crate::keymap::KeyMap;
 
-/// Run the auto mouse layer task if it is enabled in the keymap's behavior
-/// configuration.
-pub async fn run_auto_mouse_layer_if_enabled(keymap: &KeyMap<'_>) {
-    let Some(config) = keymap.auto_mouse_layer_config() else {
-        return;
-    };
-    let num_layer = keymap.num_layer();
-    if (config.layer as usize) >= num_layer {
-        warn!(
-            "auto_mouse_layer: configured layer {} is out of range (keymap has {} layers); \
-             auto mouse layer task will not run",
-            config.layer, num_layer
-        );
-        return;
-    }
-    let threshold = config.threshold.max(1);
+/// [`Runnable`] for the auto mouse layer task.
+///
+/// Construct with [`run_auto_mouse_layer_if_enabled`] and pass to `run_all!`.
+/// If the keymap has no auto mouse layer configured (or its layer is out of
+/// range), [`Runnable::run`] parks forever on [`core::future::pending`] so it
+/// can sit alongside the other tasks without doing anything.
+pub struct AutoMouseLayerRunner<'a, 'k> {
+    keymap: &'a KeyMap<'k>,
+}
 
-    let mut subscriber = PointingEvent::subscriber();
-    // Tracks whether this task is the one that turned the layer on.
-    let mut self_activated = false;
-    // Whether we have already warned about the auto mouse layer overlapping a
-    // manually-activated layer.
-    let mut overlap_warned = false;
+/// Build a [`Runnable`] that activates the configured auto mouse layer on
+/// pointer motion. Pass the returned value to `run_all!`.
+pub fn run_auto_mouse_layer_if_enabled<'a, 'k>(keymap: &'a KeyMap<'k>) -> AutoMouseLayerRunner<'a, 'k> {
+    AutoMouseLayerRunner { keymap }
+}
 
-    loop {
-        // Wait for the next pointing event and filter for cursor motion
-        let event = subscriber.next_event().await;
-        if !is_cursor_motion(&event, threshold) {
-            continue;
-        }
-
-        if keymap.activate_layer_if_inactive(config.layer) {
-            self_activated = true;
-            overlap_warned = false;
-        } else if !overlap_warned {
+impl Runnable for AutoMouseLayerRunner<'_, '_> {
+    async fn run(&mut self) -> ! {
+        let keymap = self.keymap;
+        let Some(config) = keymap.auto_mouse_layer_config() else {
+            core::future::pending().await
+        };
+        let num_layer = keymap.num_layer();
+        if (config.layer as usize) >= num_layer {
             warn!(
-                "auto_mouse_layer: layer {} is already active when motion was detected; \
-                 the layer is likely driven by another key (MO/TG). The auto mouse layer \
-                 will not be deactivated on timeout while overlap holds.",
-                config.layer
+                "auto_mouse_layer: configured layer {} is out of range (keymap has {} layers); \
+                 auto mouse layer task will not run",
+                config.layer, num_layer
             );
-            overlap_warned = true;
+            core::future::pending().await
         }
+        let threshold = config.threshold.max(1);
 
-        // Stay active as long as motion keeps arriving within the timeout
-        // window. Each motion event refreshes the deadline; non-motion events
-        // are ignored without extending it.
-        let mut deadline = Instant::now() + config.timeout;
+        let mut subscriber = PointingEvent::subscriber();
+        // Tracks whether this task is the one that turned the layer on.
+        let mut self_activated = false;
+        // Whether we have already warned about the auto mouse layer overlapping a
+        // manually-activated layer.
+        let mut overlap_warned = false;
+
         loop {
-            match select(Timer::at(deadline), subscriber.next_event()).await {
-                Either::First(_) => {
-                    if self_activated {
-                        keymap.deactivate_layer_if_active(config.layer);
-                        self_activated = false;
+            // Wait for the next pointing event and filter for cursor motion
+            let event = subscriber.next_event().await;
+            if !is_cursor_motion(&event, threshold) {
+                continue;
+            }
+
+            if keymap.activate_layer_if_inactive(config.layer) {
+                self_activated = true;
+                overlap_warned = false;
+            } else if !overlap_warned {
+                warn!(
+                    "auto_mouse_layer: layer {} is already active when motion was detected; \
+                     the layer is likely driven by another key (MO/TG). The auto mouse layer \
+                     will not be deactivated on timeout while overlap holds.",
+                    config.layer
+                );
+                overlap_warned = true;
+            }
+
+            // Stay active as long as motion keeps arriving within the timeout
+            // window. Each motion event refreshes the deadline; non-motion events
+            // are ignored without extending it.
+            let mut deadline = Instant::now() + config.timeout;
+            loop {
+                match select(Timer::at(deadline), subscriber.next_event()).await {
+                    Either::First(_) => {
+                        if self_activated {
+                            keymap.deactivate_layer_if_active(config.layer);
+                            self_activated = false;
+                        }
+                        break;
                     }
-                    break;
-                }
-                Either::Second(next) => {
-                    if !is_cursor_motion(&next, threshold) {
-                        continue;
-                    }
-                    deadline = Instant::now() + config.timeout;
-                    if keymap.activate_layer_if_inactive(config.layer) {
-                        self_activated = true;
-                        overlap_warned = false;
+                    Either::Second(next) => {
+                        if !is_cursor_motion(&next, threshold) {
+                            continue;
+                        }
+                        deadline = Instant::now() + config.timeout;
+                        if keymap.activate_layer_if_inactive(config.layer) {
+                            self_activated = true;
+                            overlap_warned = false;
+                        }
                     }
                 }
             }
