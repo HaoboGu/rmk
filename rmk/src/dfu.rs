@@ -2,6 +2,8 @@ use core::cell::RefCell;
 #[cfg(feature = "dfu_lock")]
 use core::sync::atomic::AtomicBool;
 use core::sync::atomic::Ordering;
+#[cfg(feature = "dfu_split")]
+use core::sync::atomic::AtomicUsize;
 
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -10,7 +12,7 @@ use embassy_sync::once_lock::OnceLock;
 use embassy_sync::signal::Signal;
 use embassy_usb::control::{InResponse, OutResponse, Request};
 use embassy_usb::driver::Driver;
-use embassy_usb::types::StringIndex;
+use embassy_usb::types::{InterfaceNumber, StringIndex};
 use embassy_usb::{Builder, Handler};
 use static_cell::StaticCell;
 
@@ -71,6 +73,8 @@ use embassy_usb::class::dfu::{
     consts::Status,
     dfu_mode::{self, DfuState},
 };
+#[cfg(feature = "dfu")]
+use embassy_usb_dfu::{ResetImmediate, dfu::FirmwareHandler};
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 use {
     embassy_boot::BlockingFirmwareState,
@@ -275,17 +279,128 @@ pub fn get_manager() -> Option<&'static DfuFlashManager> {
     MANAGER.try_get()
 }
 
+/// Max passthrough alt settings supported on a single DFU interface.
+#[cfg(feature = "dfu_split")]
+const MAX_PASSTHROUGH_ALTS: usize = 4;
+
+/// Single USB `Handler` that owns **all** DFU alternate settings.
+///
+/// # Alt-setting routing
+///
+/// Without `dfu_split` this is a thin wrapper around the central `DfuState`
+/// (Alt 0).  With `dfu_split` it additionally holds one passthrough
+/// `DfuState` per split peripheral (Alt 1 … N) and dispatches USB control
+/// requests to the correct sub-handler based on the current alternate
+/// setting, tracked via [`Handler::set_alternate_setting`].
+///
+/// # Flow control for passthrough
+///
+/// The DFU host polls GETSTATUS after every DNLOAD and waits for the
+/// device to leave `dfuDNBUSY` before sending the next block.  We exploit
+/// this: when the PeripheralManager is still forwarding the *previous*
+/// chunk (indicated by `PASSTHROUGH_TARGET != MAX`), `control_in` overrides
+/// the GETSTATUS response to report `dfuDNBUSY`.  As soon as forwarding
+/// completes the host sees the real state and sends the next block
+/// immediately.  This lets the passthrough work at line-speed regardless
+/// of firmware or transport (UART, BLE, …) — no fixed timeouts, no
+/// huge queues.
+#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+struct RmkDfuInterface {
+    central: DfuState<
+        RmkDfuHandler<
+            FirmwareHandler<'static, PartitionType, PartitionType, ResetImmediate, BLOCK_SIZE_DFU>,
+        >,
+    >,
+    #[cfg(feature = "dfu_split")]
+    passthrough: [Option<DfuState<RmkDfuHandler<PassthroughDfuHandler>>>; MAX_PASSTHROUGH_ALTS],
+    #[cfg(feature = "dfu_split")]
+    num_passthrough: usize,
+    current_alt: u8,
+}
+
+#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+impl Handler for RmkDfuInterface {
+    fn set_alternate_setting(&mut self, _iface: InterfaceNumber, alternate_setting: u8) {
+        info!("dfu: set_alternate_setting(iface={}, alt={})", _iface.0, alternate_setting);
+        self.current_alt = alternate_setting;
+    }
+
+    fn control_out(&mut self, req: Request, data: &[u8]) -> Option<OutResponse> {
+        match self.current_alt {
+            0 => self.central.control_out(req, data),
+            #[cfg(feature = "dfu_split")]
+            n => {
+                let idx = (n as usize).wrapping_sub(1);
+                self.passthrough_slots(idx)
+                    .and_then(|s| s.control_out(req, data))
+            }
+            #[cfg(not(feature = "dfu_split"))]
+            _ => None,
+        }
+    }
+
+    fn control_in<'a>(&'a mut self, req: Request, buf: &'a mut [u8]) -> Option<InResponse<'a>> {
+        match self.current_alt {
+            0 => self.central.control_in(req, buf),
+            #[cfg(feature = "dfu_split")]
+            n => {
+                let idx = (n as usize).wrapping_sub(1);
+                // Obtain raw pointer before buf is borrowed by the sub-handler.
+                let buf_ptr = buf.as_mut_ptr();
+                let resp = self.passthrough_slots(idx)
+                    .and_then(|s| s.control_in(req, buf));
+                // Flow control for passthrough: if the PeripheralManager is
+                // still forwarding the previous chunk, tell the host we are
+                // busy so it polls again instead of sending the next block.
+                //
+                // GETSTATUS response layout (6 bytes):
+                //   [0]=status  [1..4]=bwPollTimeout  [4]=state  [5]=iString
+                // We override byte 4 from whatever DfuState returned to
+                // dfuDNBUSY (4).  The host will poll again every 50 ms until
+                // the PeripheralManager finishes and `PASSTHROUGH_TARGET`
+                // becomes `usize::MAX`.
+                //
+                // Safety: `buf_ptr` was captured before the `InResponse`
+                // reference was created.  The write goes through a volatile
+                // store so the compiler does not reorder or elide it.
+                if resp.is_some() && PASSTHROUGH_TARGET.load(Ordering::Acquire) != usize::MAX {
+                    unsafe { core::ptr::write_volatile(buf_ptr.add(4), 4u8); }
+                }
+                resp
+            }
+            #[cfg(not(feature = "dfu_split"))]
+            _ => None,
+        }
+    }
+}
+
+#[cfg(feature = "dfu_split")]
+impl RmkDfuInterface {
+    fn passthrough_slots(
+        &mut self,
+        idx: usize,
+    ) -> Option<&mut DfuState<RmkDfuHandler<PassthroughDfuHandler>>> {
+        self.passthrough.get_mut(idx)?.as_mut()
+    }
+}
+
+#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+static RMK_DFU_INTERFACE: StaticCell<RmkDfuInterface> = StaticCell::new();
+
 /// Register a DFU interface on the USB builder.
+///
+/// Alt 0 is always the central's own DFU flash (for `dfu-util -D central.bin -R`).
+/// Alts 1..N are passthrough slots for split peripherals (requires `dfu_split`).
+/// Pass `num_peripherals = 0` (or omit via cfg) when no passthrough is needed.
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 pub fn register_dfu_interface<D: Driver<'static>>(
     builder: &mut Builder<'static, D>,
     mgr: &'static DfuFlashManager,
     product_name: &'static str,
+    #[cfg(feature = "dfu_split")] num_peripherals: usize,
 ) {
     use embassy_boot_rp::{BlockingFirmwareUpdater, FirmwareUpdaterConfig};
     use embassy_usb::class::dfu::consts::DfuAttributes;
-    use embassy_usb_dfu::ResetImmediate;
-    use embassy_usb_dfu::dfu::FirmwareHandler;
 
     let dfu_part = mgr.dfu_partition();
     let state_part = mgr.state_partition();
@@ -297,26 +412,46 @@ pub fn register_dfu_interface<D: Driver<'static>>(
     let aligned: &'static mut [u8] = ALIGNED.init([0; DFU_WRITE_SIZE]);
     let updater = BlockingFirmwareUpdater::new(config, aligned);
 
-    let attrs = DfuAttributes::CAN_DOWNLOAD | DfuAttributes::WILL_DETACH;
+    // ── Alt 0: Central flash ──
+    let central_attrs = DfuAttributes::CAN_DOWNLOAD | DfuAttributes::WILL_DETACH;
 
     let inner = FirmwareHandler::new(updater, ResetImmediate);
-    let handler = RmkDfuHandler { inner };
-    let state = DfuState::new(handler, attrs);
+    let central_handler = RmkDfuHandler { inner };
+    let central_state = DfuState::new(central_handler, central_attrs);
 
-    type DfuStateInner =
-        RmkDfuHandler<FirmwareHandler<'static, PartitionType, PartitionType, ResetImmediate, BLOCK_SIZE_DFU>>;
-    static DFU_STATE: StaticCell<DfuState<DfuStateInner>> = StaticCell::new();
-    let state_ref = DFU_STATE.init(state);
+    // ── Alt 1..N: Passthrough ──
+    #[cfg(feature = "dfu_split")]
+    let passthrough_count = num_peripherals.min(MAX_PASSTHROUGH_ALTS);
+
+    #[cfg(feature = "dfu_split")]
+    let passthrough = {
+        let mut arr: [Option<DfuState<RmkDfuHandler<PassthroughDfuHandler>>>; MAX_PASSTHROUGH_ALTS] =
+            Default::default();
+        for id in 0..passthrough_count {
+            let state = DfuState::new(
+                RmkDfuHandler {
+                    inner: PassthroughDfuHandler {
+                        target_id: id,
+                        written: 0,
+                    },
+                },
+                DfuAttributes::CAN_DOWNLOAD,
+            );
+            arr[id] = Some(state);
+        }
+        arr
+    };
 
     let string_idx = builder.string();
 
+    // ── Build descriptors ──
     let mut func = builder.function(0x00, 0x00, 0x00);
     let mut iface = func.interface();
     let mut alt = iface.alt_setting(0xFE, 0x01, 0x02, Some(string_idx)); // class-specific DFU interface with string descriptor for product name
     alt.descriptor(
         0x21, // DFU functional descriptor
         &[
-            attrs.bits(),
+            central_attrs.bits(),
             0xc4, // detach timeout in ms (09c4 = 2500 ms)
             0x09,
             (BLOCK_SIZE_DFU & 0xff) as u8,        // transfer size low byte
@@ -325,8 +460,36 @@ pub fn register_dfu_interface<D: Driver<'static>>(
             0x01,
         ],
     );
+
+    #[cfg(feature = "dfu_split")]
+    for _ in 0..passthrough_count {
+        let mut alt = iface.alt_setting(0xFE, 0x01, 0x02, Some(string_idx));
+        alt.descriptor(
+            0x21,
+            &[
+                DfuAttributes::CAN_DOWNLOAD.bits(),
+                0xc4,
+                0x09,
+                (BLOCK_SIZE_DFU & 0xff) as u8,
+                ((BLOCK_SIZE_DFU >> 8) & 0xff) as u8,
+                0x10,
+                0x01,
+            ],
+        );
+    }
+
     drop(func);
-    builder.handler(state_ref);
+
+    // ── Register single handler that routes by alt setting ──
+    let iface_ref = RMK_DFU_INTERFACE.init(RmkDfuInterface {
+        central: central_state,
+        #[cfg(feature = "dfu_split")]
+        passthrough,
+        #[cfg(feature = "dfu_split")]
+        num_passthrough: passthrough_count,
+        current_alt: 0,
+    });
+    builder.handler(iface_ref);
 
     static STRING_PROVIDER: StaticCell<DfuStringProvider> = StaticCell::new();
     let string_provider = STRING_PROVIDER.init(DfuStringProvider {
@@ -467,6 +630,162 @@ pub fn get_firmware_update_data(id: usize) -> Option<(&'static [u8], u32)> {
         let slots = cell.borrow();
         slots.iter().find(|(i, _)| *i == id).map(|(_, s)| (s.data, s.hash))
     })
+}
+
+// ---------------------------------------------------------------------------
+// dfu_split passthrough — forward DFU download to split peripheral in real time
+// ---------------------------------------------------------------------------
+//
+// Architecture
+// ============
+//
+//  Host (dfu-util)                Central (RMK)               Peripheral
+//  ═══════════════                ══════════════               ══════════
+//  USB DNLOAD(block) ────────► DFU handler (ISR)
+//                                  │ store chunk in queue
+//                                  │ return immediately
+//                                  ▼
+//  USB GETSTATUS ◄───────────── RmkDfuInterface (ISR)
+//                                  │ if chunk still pending → dfuDNBUSY
+//                                  │ if chunk done  → Download
+//                                  ▼
+//                            PeripheralManager (async task)
+//                                  │ take chunk from queue
+//                                  │ FirmwareChunk over UART ──────► SplitPeripheral
+//                                  │                                   │ write flash
+//                                  │ ◄──── FirmwareChunkAck ───────── return
+//                                  │ signal done (TARGET = MAX)
+//
+// The key insight is that we **never spin in the USB ISR**.  Chunks are
+// stored in a small fire-and-forget queue and the ISR returns immediately.
+// The PeripheralManager (an async task running on the embassy executor)
+// forwards them over the split link.  GETSTATUS flow-control gives the
+// executor enough time to process each chunk before the host sends the
+// next one.
+
+/// A single firmware chunk received from the host via DFU, destined for a
+/// split peripheral.
+#[cfg(feature = "dfu_split")]
+pub(crate) struct PassthroughChunk {
+    pub offset: u32,
+    pub data: [u8; 256],
+    pub len: u16,
+}
+
+/// Commands flowing from the DFU handler (synchronous USB ISR) to the
+/// PeripheralManager (async embassy task).
+#[cfg(feature = "dfu_split")]
+pub(crate) enum PassthroughCommand {
+    Chunk(PassthroughChunk),
+    Finish,
+}
+
+/// Small fire-and-forget queue.  With GETSTATUS flow-control the actual
+/// backlog rarely exceeds 2–3 chunks, so 4 slots provide ample margin.
+#[cfg(feature = "dfu_split")]
+const PASSTHROUGH_QUEUE_SIZE: usize = 4;
+
+/// Single-producer / single-consumer command queue protected by a critical-
+/// section mutex.  The DFU handler (ISR) pushes, the PeripheralManager pops.
+#[cfg(feature = "dfu_split")]
+static PASSTHROUGH_CMD: Mutex<CriticalSectionRawMutex, RefCell<heapless::Vec<PassthroughCommand, PASSTHROUGH_QUEUE_SIZE>>> =
+    Mutex::new(RefCell::new(heapless::Vec::new()));
+
+/// Signals which peripheral has a pending passthrough command.  Set to the
+/// peripheral id by the DFU handler, cleared to `usize::MAX` by the
+/// PeripheralManager once all pending chunks for that id are consumed.
+///
+/// Also used by `RmkDfuInterface::control_in` for GETSTATUS flow-control:
+/// while `TARGET != MAX` the host sees `dfuDNBUSY` and polls again.
+#[cfg(feature = "dfu_split")]
+pub(crate) static PASSTHROUGH_TARGET: AtomicUsize = AtomicUsize::new(usize::MAX);
+
+/// Check whether a passthrough command is pending for the given peripheral id.
+#[cfg(feature = "dfu_split")]
+pub(crate) fn passthrough_pending(id: usize) -> bool {
+    PASSTHROUGH_TARGET.load(Ordering::Acquire) == id
+}
+
+
+/// DFU handler for passthrough — slices USB DNLOAD data into 256 byte
+/// chunks, pushes them into the queue, and returns immediately.
+///
+/// **Never blocks or spin-waits.**  This runs inside the USB control-request
+/// ISR, so any delay here would starve the embassy executor and prevent the
+/// PeripheralManager from draining the queue.  All forwarding happens
+/// asynchronously in the PeripheralManager task.
+///
+/// GETSTATUS flow-control (see [`RmkDfuInterface`]) ensures the host waits
+/// before sending the next block, giving the executor enough time to forward
+/// each chunk to the peripheral.
+#[cfg(feature = "dfu_split")]
+struct PassthroughDfuHandler {
+    target_id: usize,
+    /// Total bytes written so far, used as the flash offset on the peripheral.
+    written: u32,
+}
+
+/// Push a command into the queue, returning `Err` if full.
+#[cfg(feature = "dfu_split")]
+fn passthrough_push(cmd: PassthroughCommand) -> Result<(), ()> {
+    PASSTHROUGH_CMD.lock(|c| c.borrow_mut().push(cmd).map_err(|_| ()))
+}
+
+/// Take the pending passthrough command from the queue front.
+#[cfg(feature = "dfu_split")]
+pub(crate) fn passthrough_take_command() -> Option<PassthroughCommand> {
+    PASSTHROUGH_CMD.lock(|c| {
+        let v = &mut *c.borrow_mut();
+        if !v.is_empty() { Some(v.remove(0)) } else { None }
+    })
+}
+
+/// Signal that all pending chunks were consumed.
+#[cfg(feature = "dfu_split")]
+pub(crate) fn passthrough_done_if_empty() {
+    let empty = PASSTHROUGH_CMD.lock(|c| c.borrow().is_empty());
+    if empty {
+        PASSTHROUGH_TARGET.store(usize::MAX, Ordering::Release);
+    }
+}
+
+#[cfg(feature = "dfu_split")]
+impl dfu_mode::Handler for PassthroughDfuHandler {
+    fn start(&mut self) -> Result<(), Status> {
+        self.written = 0;
+        Ok(())
+    }
+
+    fn write(&mut self, data: &[u8]) -> Result<(), Status> {
+        for chunk in data.chunks(256) {
+            let mut buf = [0u8; 256];
+            buf[..chunk.len()].copy_from_slice(chunk);
+            if passthrough_push(PassthroughCommand::Chunk(PassthroughChunk {
+                offset: self.written,
+                len: chunk.len() as u16,
+                data: buf,
+            })).is_err() {
+                error!("passthrough queue full");
+                return Err(Status::ErrUnknown);
+            }
+            self.written += chunk.len() as u32;
+        }
+        PASSTHROUGH_TARGET.store(self.target_id, Ordering::Release);
+        Ok(())
+    }
+
+    fn finish(&mut self) -> Result<(), Status> {
+        if passthrough_push(PassthroughCommand::Finish).is_err() {
+            error!("passthrough queue full at finish");
+            return Err(Status::ErrUnknown);
+        }
+        PASSTHROUGH_TARGET.store(self.target_id, Ordering::Release);
+        Ok(())
+    }
+
+    fn system_reset(&mut self) {
+        // No-op: the peripheral resets itself after a successful update.
+    }
 }
 
 /// Return the CRC32 of this device's currently running firmware binary.

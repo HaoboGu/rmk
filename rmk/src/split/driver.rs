@@ -45,13 +45,23 @@ pub(crate) struct PeripheralManager<
     transceiver: T,
     /// Peripheral id
     id: usize,
+    /// Running CRC of the current DFU passthrough transfer.
+    /// Updated with each forwarded chunk; compared against the peripheral's
+    /// DFU-partition CRC when the download completes.
+    #[cfg(feature = "dfu_split")]
+    passthrough_crc: crate::crc32::Crc32,
 }
 
 impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFSET: usize, T: SplitReader + SplitWriter>
     PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, T>
 {
     pub(crate) fn new(transceiver: T, id: usize) -> Self {
-        Self { transceiver, id }
+        Self {
+            transceiver,
+            id,
+            #[cfg(feature = "dfu_split")]
+            passthrough_crc: crate::crc32::Crc32::new(),
+        }
     }
 
     /// Send a message to the peripheral, returning Err on disconnect.
@@ -107,6 +117,18 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
         self.check_firmware_update().await;
 
         loop {
+            // Passthrough DFU commands take priority over normal
+            // peripheral events so that USB control transfers are
+            // not starved while forwarding chunks.
+            #[cfg(feature = "dfu_split")]
+            if crate::dfu::passthrough_pending(self.id) {
+                self.handle_passthrough().await;
+                continue;
+            }
+
+            // Race the next event-to-send against a short timer so the
+            // loop periodically returns control — needed so the
+            // passthrough check above can see newly queued chunks.
             // Use select_biased_with_feature to handle feature-gated subscriber arms
             let next_event_to_peri = async {
                 crate::select_biased_with_feature! {
@@ -133,7 +155,14 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 }
             };
 
-            match select(self.transceiver.read(), next_event_to_peri).await {
+            // Race events against a short timer so we periodically wake up
+            // and can check for DFU passthrough commands.
+            let event_or_timer = select(
+                next_event_to_peri,
+                embassy_time::Timer::after_millis(5),
+            );
+
+            match select(self.transceiver.read(), event_or_timer).await {
                 Either::First(read_result) => match read_result {
                     #[cfg(feature = "dfu_split")]
                     Ok(SplitMessage::FirmwareHashResponse(hash)) => {
@@ -146,10 +175,13 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                         error!("Peripheral message read error: {:?}", e);
                     }
                 },
-                Either::Second(msg) => {
+                Either::Second(Either::First(msg)) => {
                     if self.send(&msg).await.is_err() {
                         return;
                     }
+                }
+                Either::Second(Either::Second(())) => {
+                    // Timer expired — check passthrough at top of next iteration
                 }
             }
         }
@@ -183,6 +215,139 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             hash, expected_hash, len,
         );
         self.send_firmware_update(firmware, expected_hash).await;
+    }
+
+    /// Process all pending DFU passthrough commands.
+    ///
+    /// Called from the main event loop whenever [`crate::dfu::passthrough_pending`]
+    /// returns true.  Drains the passthrough queue completely before returning:
+    ///
+    /// * **Chunk** — sends it to the peripheral via `FirmwareChunk`, waits for
+    ///   the `FirmwareChunkAck`, and accumulates a running CRC‑32 for end‑to‑end
+    ///   verification.
+    /// * **Finish** — all chunks sent; asks the peripheral to compute the DFU
+    ///   partition CRC, compares it against the central's accumulated CRC, and
+    ///   either confirms (`FirmwareCrcOk`) or aborts (`FirmwareCrcFail`).
+    ///
+    /// The running CRC is carried in [`PeripheralManager::passthrough_crc`] so
+    /// that it survives across multiple invocations (the queue is drained
+    /// incrementally as the host sends blocks).
+    #[cfg(feature = "dfu_split")]
+    async fn handle_passthrough(&mut self) {
+        use embassy_time::{Duration, Timer};
+
+        while let Some(cmd) = crate::dfu::passthrough_take_command() {
+            match cmd {
+            crate::dfu::PassthroughCommand::Chunk(chunk) => {
+                debug!("dfu_split/passthrough: sending chunk @ offset {} ({} bytes)", chunk.offset, chunk.len);
+                self.passthrough_crc.update(&chunk.data[..chunk.len as usize]);
+                let msg = SplitMessage::FirmwareChunk {
+                    offset: chunk.offset,
+                    len: chunk.len,
+                    data: super::FirmwareChunkData(chunk.data),
+                };
+                if self.send(&msg).await.is_err() {
+                    error!("dfu_split/passthrough: disconnected during chunk send");
+                    crate::dfu::passthrough_done_if_empty();
+                    return;
+                }
+
+                // Wait for the peripheral to acknowledge this chunk
+                loop {
+                    match select(self.transceiver.read(), Timer::after(Duration::from_secs(2))).await {
+                        Either::First(Ok(SplitMessage::FirmwareChunkAck { offset, .. })) if offset == chunk.offset => {
+                            break;
+                        }
+                        Either::First(Ok(_)) => {}
+                        Either::First(Err(e)) => {
+                            error!("dfu_split/passthrough: read error: {:?}", e);
+                            break;
+                        }
+                        Either::Second(_) => {
+                            error!("dfu_split/passthrough: timeout waiting for chunk ack");
+                            break;
+                        }
+                    }
+                }
+
+                crate::dfu::passthrough_done_if_empty();
+            }
+            crate::dfu::PassthroughCommand::Finish => {
+                info!("dfu_split/passthrough: DFU download complete, starting end-to-end verification");
+
+                // Tell the peripheral to finalize and compute its CRC
+                if self.send(&SplitMessage::FirmwareUpdateComplete).await.is_err() {
+                    error!("dfu_split/passthrough: disconnected during finish");
+                    crate::dfu::passthrough_done_if_empty();
+                    return;
+                }
+
+                // Wait for CRC report from peripheral
+                let crc = loop {
+                    match select(self.transceiver.read(), Timer::after(Duration::from_secs(5))).await {
+                        Either::First(Ok(SplitMessage::FirmwareCrcReport(crc))) => break Some(crc),
+                        Either::First(Ok(_)) => {}
+                        Either::First(Err(e)) => {
+                            error!("dfu_split/passthrough: read error during CRC: {:?}", e);
+                            break None;
+                        }
+                        Either::Second(_) => {
+                            error!("dfu_split/passthrough: timeout waiting for CRC");
+                            break None;
+                        }
+                    }
+                };
+
+                let Some(peripheral_crc) = crc else {
+                    error!("dfu_split/passthrough: CRC verification failed — no response from peripheral");
+                    self.send(&SplitMessage::FirmwareCrcFail).await.ok();
+                    crate::dfu::passthrough_done_if_empty();
+                    return;
+                };
+
+                let central_crc = self.passthrough_crc.finalize();
+                self.passthrough_crc = crate::crc32::Crc32::new(); // reset for next transfer
+
+                if central_crc != peripheral_crc {
+                    error!(
+                        "dfu_split/passthrough: CRC mismatch (central={:#010x}, peripheral={:#010x}) — firmware corrupt",
+                        central_crc, peripheral_crc
+                    );
+                    self.send(&SplitMessage::FirmwareCrcFail).await.ok();
+                    crate::dfu::passthrough_done_if_empty();
+                    return;
+                }
+
+                info!("dfu_split/passthrough: CRC OK (central={:#010x}), confirming update", central_crc);
+                if self.send(&SplitMessage::FirmwareCrcOk).await.is_err() {
+                    error!("dfu_split/passthrough: disconnected during CRC OK");
+                    crate::dfu::passthrough_done_if_empty();
+                    return;
+                }
+
+                // Wait for peripheral to mark updated and reset
+                loop {
+                    match select(self.transceiver.read(), Timer::after(Duration::from_secs(2))).await {
+                        Either::First(Ok(SplitMessage::FirmwareUpdateConfirm)) => {
+                            info!("dfu_split/passthrough: peripheral confirmed, update complete");
+                            break;
+                        }
+                        Either::First(Ok(_)) => {}
+                        Either::First(Err(e)) => {
+                            error!("dfu_split/passthrough: read error during confirm: {:?}", e);
+                            break;
+                        }
+                        Either::Second(_) => {
+                            info!("dfu_split/passthrough: timeout on confirm (peripheral may have reset)");
+                            break;
+                        }
+                    }
+                }
+
+                crate::dfu::passthrough_done_if_empty();
+            }
+        }
+        }
     }
 
     /// Check and optionally update the peripheral's firmware.
@@ -320,7 +485,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                             }
                             Either::Second(_) => break false,
                         }
-                    };
+                };
                     acked = got;
                     retries += 1;
                 }
