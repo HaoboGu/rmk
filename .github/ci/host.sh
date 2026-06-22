@@ -18,7 +18,8 @@ cargo +stable test -p rynk --doc
 
 log_section "Wasm smoke check"
 cargo +stable check -p rynk --lib --target wasm32-unknown-unknown
-cargo +stable check -p rynk-bridge --target wasm32-unknown-unknown
+cargo +stable check -p rynk-wasm --target wasm32-unknown-unknown
 
 log_section "Clippy"
 cargo +stable clippy --workspace --lib --tests --examples -- -D warnings
+cargo +stable clippy -p rynk-wasm --target wasm32-unknown-unknown -- -D warnings

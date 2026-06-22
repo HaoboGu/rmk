@@ -1,0 +1,31 @@
+[package]
+name = "rynk-wasm"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Rynk host support compiled to a wasm package — `rynk` Client + JS-bridge transport, built with wasm-pack"
+
+# Built by `wasm-pack build --target web`; never as a native library. The crate
+# body is gated on `wasm32` (see `src/lib.rs`), so the default native workspace
+# check compiles it to an empty crate rather than failing on the wasm-only deps.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# No native USB/BLE deps. The browser page owns the WebSerial port; the in-crate
+# JS bridge (`mod bridge`) forwards bytes across the wasm boundary.
+rynk = { path = ".." }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+console_error_panic_hook = "0.1"
+console_log = "1"
+log = "0.4"
+# Typed values cross the JS boundary as native JS objects via serde-wasm-bindgen
+# (rmk-types already derive serde).
+serde = "1"
+serde-wasm-bindgen = "0.6"
+# The session actor: one task owns the Client, multiplexing topic reads against
+# request-jobs (mpsc) that reply over oneshot channels.
+futures-channel = "0.3"
+futures-util = "0.3"
