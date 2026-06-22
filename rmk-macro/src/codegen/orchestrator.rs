@@ -250,6 +250,9 @@ fn expand_main(
         quote! {}
     };
 
+    // Register peripheral firmware binaries for automatic dfu_split updates
+    let split_firmware_init = expand_split_firmware_init(&hardware.board);
+
     // Display configuration — for unibody use top-level, for split use central's config
     let display_config = match &hardware.board {
         BoardConfig::UniBody(_) => hardware.display.as_ref(),
@@ -387,8 +390,50 @@ fn expand_main(
             // Initialize dfu lock
             #dfu_lock_init
 
+            // Register peripheral firmware for split dfu updates (embedded path).
+            // Generated only when [[split.peripheral]].firmware is set.
+            #split_firmware_init
+
             // Start
             #run_rmk
+        }
+    }
+}
+
+/// Generate `set_firmware_update_data` calls for each peripheral that has a
+/// `firmware` path configured in `keyboard.toml`.  The firmware binary is
+/// embedded at compile time via `include_bytes!`.
+fn expand_split_firmware_init(board: &BoardConfig) -> TokenStream2 {
+    let BoardConfig::Split(split_config) = board else {
+        return quote! {};
+    };
+
+    let inits: Vec<_> = split_config
+        .peripheral
+        .iter()
+        .enumerate()
+        .filter_map(|(id, p)| {
+            p.firmware.as_ref().map(|path| {
+                quote! {
+                    {
+                        const FW: &[u8] =
+                            ::core::include_bytes!(::core::concat!(
+                                ::core::env!("CARGO_MANIFEST_DIR"), "/", #path
+                            ));
+                        let _ = ::rmk::dfu::set_firmware_update_data(
+                            #id, FW, ::rmk::crc32::crc32(FW)
+                        );
+                    }
+                }
+            })
+        })
+        .collect();
+
+    if inits.is_empty() {
+        quote! {}
+    } else {
+        quote! {
+            #(#inits)*
         }
     }
 }
