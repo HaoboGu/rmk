@@ -274,6 +274,33 @@ pub fn get_manager() -> Option<&'static DfuFlashManager> {
     MANAGER.try_get()
 }
 
+/// Run a USB DFU-only device on the peripheral side of a split keyboard.
+///
+/// Creates a USB device with only a DFU interface (no HID/keyboard) so the
+/// peripheral can be firmware-updated via USB while the normal split
+/// communication (BLE or serial) continues running.
+#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+pub async fn run_peripheral_dfu<D: Driver<'static>>(
+    driver: D,
+    device_config: crate::config::DeviceConfig<'static>,
+) -> ! {
+    use crate::usb::new_usb_builder;
+
+    let mut builder = new_usb_builder(driver, device_config);
+
+    let product_name = device_config.product_name;
+    if let Some(mgr) = get_manager() {
+        register_dfu_interface(&mut builder, mgr, product_name);
+    }
+
+    let mut device = builder.build();
+
+    loop {
+        device.run_until_suspend().await;
+        device.wait_resume().await;
+    }
+}
+
 /// Register a DFU interface on the USB builder.
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 pub fn register_dfu_interface<D: Driver<'static>>(
