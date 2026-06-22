@@ -29,7 +29,11 @@ impl<'a> VialService<'a> {
             ctx,
             vial_config: config.vial_config,
             #[cfg(feature = "vial_lock")]
-            locker: vial_lock::VialLock::new(config.vial_config.unlock_keys, ctx.keymap),
+            locker: vial_lock::VialLock::new(
+                config.vial_config.unlock_keys,
+                ctx.keymap,
+                config.vial_config.vial_insecure,
+            ),
         }
     }
 
