@@ -254,6 +254,9 @@ fn parse_action(key: &str) -> TokenStream2 {
     } else if lower.starts_with("to(") {
         let layer = parse_layer(key);
         return quote! { ::rmk::types::action::Action::LayerToggleOnly(#layer) };
+    } else if lower.starts_with("pdf(") {
+        let layer = parse_layer(key);
+        return quote! { ::rmk::types::action::Action::PersistentDefaultLayer(#layer) };
     } else if lower.starts_with("df(") {
         let layer = parse_layer(key);
         return quote! { ::rmk::types::action::Action::DefaultLayer(#layer) };

@@ -118,7 +118,7 @@ The `layer.keys` string should follow several rules:
 3. For transparent key (`KeyAction::Transparent`), use `_` or `__` (you can put any number of `_`)
 
 4. RMK supports many advanced layer operations:
-   1. Use `DF(n)` to create a switch default layer action, `n` is the layer number
+   1. Use `DF(n)` to create a switch default layer action, `n` is the layer number. Use `PDF(n)` for a persistent version that is saved to storage and restored after reboot
    2. Use `MO(n)` to create a layer activate action, `n` is the layer number
    3. Use `LM(n, modifier)` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`
    4. Use `LT(n, key, <profile_name>)` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html), The `profile_name` is optional, which defines the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning)
