@@ -19,6 +19,9 @@ use static_cell::StaticCell;
 #[cfg(feature = "dfu_lock")]
 use crate::core_traits::Runnable;
 
+#[cfg(all(feature = "dfu_split", not(any(feature = "dfu_rp", feature = "dfu_nrf"))))]
+compile_error!("dfu_split requires at least one of dfu_rp or dfu_nrf to be enabled");
+
 /// Simple USB string provider for the DFU interface, to show a product name in the host's device manager during DFU mode. The FirmwareHandler of embassy_usb_dfu doesn't use the string index from the interface descriptor, so we have to provide our own handler to return the string when requested by the host.
 /// This is the name string that gets shown with `dfu-util -l` option.
 struct DfuStringProvider {

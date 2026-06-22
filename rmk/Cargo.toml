@@ -235,7 +235,7 @@ dfu_rp = ["dfu", "dep:embassy-boot-rp", "dep:embassy-boot", "rp2040", "rmk-macro
 dfu_nrf = ["dfu", "dep:embassy-boot", "dep:embassy-nrf", "rmk-macro/dfu_nrf"]
 
 ## Enable split firmware update over UART (requires `dfu_rp` + `split`)
-dfu_split = ["dfu_rp", "split"]
+dfu_split = ["dfu", "split"]
 
 ## Force DFU update even when firmware hash matches (for testing)
 dfu_split_force_update = ["dfu_split"]
