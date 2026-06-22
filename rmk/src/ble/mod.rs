@@ -114,11 +114,16 @@ where
                 },
             )
             .unwrap();
+        // The serial number characteristic is length limited, so truncate at a char
+        // boundary instead of panicking when the configured serial is too long.
+        let mut serial_number_trimmed = heapless::String::new();
+        for c in serial_number.chars() {
+            if serial_number_trimmed.push(c).is_err() {
+                break;
+            }
+        }
         server
-            .set(
-                &server.device_config_service.serial_number,
-                &heapless::String::try_from(serial_number).unwrap(),
-            )
+            .set(&server.device_config_service.serial_number, &serial_number_trimmed)
             .unwrap();
         server
             .set(
