@@ -323,6 +323,12 @@ struct RmkDfuInterface {
 
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 impl Handler for RmkDfuInterface {
+    /// Called by embassy-usb after the host selects an alternate setting.
+    ///
+    /// Alt 0 → central's own DFU flash.  Alt 1..N → passthrough to a
+    /// split peripheral (only available when `dfu_split` is enabled).
+    /// The value is read by `control_out` and `control_in` to dispatch
+    /// USB requests to the right sub-handler.
     fn set_alternate_setting(&mut self, _iface: InterfaceNumber, alternate_setting: u8) {
         info!("dfu: set_alternate_setting(iface={}, alt={})", _iface.0, alternate_setting);
         self.current_alt = alternate_setting;
@@ -342,6 +348,25 @@ impl Handler for RmkDfuInterface {
         }
     }
 
+    /// Dispatch control-IN requests to the active alternate setting.
+    ///
+    /// Alt 0 is forwarded to the central `DfuState` (normal DFU boots).
+    ///
+    /// For passthrough alts (1..N) this method:
+    ///
+    /// 1. Forwards the request to the passthrough `DfuState` so it can
+    ///    generate the standard response (e.g. `GETSTATUS`, `GETSTATE`).
+    /// 2. **After** the sub-handler writes its response, inspects
+    ///    [`PASSTHROUGH_TARGET`] to decide whether the PeripheralManager
+    ///    has finished processing the previous chunk.
+    /// 3. If the target is still set (chunk not yet forwarded), overrides
+    ///    the `state` byte in the GETSTATUS response to `dfuDNBUSY` (4).
+    ///    The host sees "device busy" and polls again after 50 ms.
+    /// 4. Once the target becomes `usize::MAX` the real DFU state is
+    ///    returned and the host immediately sends the next DNLOAD.
+    ///
+    /// This provides **adaptive flow control**: no fixed timeouts, no
+    /// large queues, no spinning in the USB ISR.
     fn control_in<'a>(&'a mut self, req: Request, buf: &'a mut [u8]) -> Option<InResponse<'a>> {
         match self.current_alt {
             0 => self.central.control_in(req, buf),
@@ -665,6 +690,84 @@ pub fn get_firmware_update_data(id: usize) -> Option<(&'static [u8], u32)> {
 // forwards them over the split link.  GETSTATUS flow-control gives the
 // executor enough time to process each chunk before the host sends the
 // next one.
+//
+// Protocol (embedded firmware update)
+// ====================================
+//
+// ═══ PHASE 0: HANDSHAKE ── hash comparison ─────────────────────────
+//
+//   Central                           Peripheral
+//     │                                   │
+//     ├── FirmwareHashQuery ─────────────>│
+//     │<── FirmwareHashResponse(hash) ────┤
+//     │       (or announced on connect)   │
+//     │                                   │
+//     │  hash == expected_hash?           │
+//     │    ├─ Yes → STOP (up-to-date)     │
+//     │    └─ No  → ⬇                     │
+//
+//
+// ═══ PHASE 1: CHUNK TRANSFER ── per-chunk CRC ─────────────────────
+//   outer attempt loop: 1..3
+//
+//   Central                           Peripheral
+//     │                                   │
+//     │ LED ON, central_crc = Crc32::new()
+//     │   for chunk in firmware[256]:
+//     │     chunk_crc = CRC32(chunk)
+//     │     central_crc.update(chunk)
+//     │   retry = 0
+//     │   ┌─ retry < 3 ─────────────────┐
+//     │   │                             │
+//     ├── FirmwareChunk{offset,data} ──>│
+//     │   │             handler.write_chunk() — erase DFU on 1st call
+//     │   │             CRC32(chunk)          │
+//     │   │<─ FirmwareChunkAck{offset,crc} ───┤
+//     │   │                             │
+//     │   ack_crc == chunk_crc?         │
+//     │     ├─ Yes → next chunk         │
+//     │     └─ No  → retry++ ──────────┘
+//     │   All chunks acked?
+//     │     ├─ Yes → ⬇
+//     │     └─ No  → outer attempt++
+//
+//
+// ═══ PHASE 2: END-TO-END CRC ── flash readback ────────────────────
+//
+//   Central                           Peripheral
+//     │                                   │
+//     │ central_crc.finalize()
+//     │ == expected_hash?
+//     │   ├─ No  → ABORT (binary bug!)
+//     │   └─ Yes → ⬇
+//     │                                   │
+//     ├── FirmwareUpdateComplete ────────>│
+//     │                     handler.compute_dfu_crc()
+//     │                     = CRC32(whole DFU partition)
+//     │<── FirmwareCrcReport(dfu_crc) ────┤
+//     │                                   │
+//     │  dfu_crc == expected_hash?        │
+//     │    ├─ Yes → FirmwareCrcOk ──────>│
+//     │    │                handler.mark_updated_and_reset()
+//     │    │<─ FirmwareUpdateConfirm ─────┤  DONE
+//     │    └─ No  → FirmwareCrcFail ────>│  outer attempt++
+//     │                                   │
+//
+// ═══ RETRY SUMMARY ═════════════════════════════════════════════════
+//
+//   Layer           Max   Trigger              Consequence
+//   ─────           ───   ───────              ──────────
+//   Per-chunk       3×    Ack CRC mismatch     Re-send same chunk
+//                         or 2s timeout
+//   Outer attempt   3×    Chunk never acked    Full restart of
+//                         or E2E CRC mismatch  Phase 1 + 2
+//
+// ═══ SAFETY GATES ═════════════════════════════════════════════════
+//
+//   mark_updated only on FirmwareCrcOk   Never boot into corrupt FW
+//   central_crc == expected_hash         Catch binary bugs
+//   compute_dfu_crc() flash readback     Catch silent flash write errors
+//   Per-chunk CRC in Ack                 Catch packet loss / bitflips
 
 /// A single firmware chunk received from the host via DFU, destined for a
 /// split peripheral.
@@ -694,12 +797,26 @@ const PASSTHROUGH_QUEUE_SIZE: usize = 4;
 static PASSTHROUGH_CMD: Mutex<CriticalSectionRawMutex, RefCell<heapless::Vec<PassthroughCommand, PASSTHROUGH_QUEUE_SIZE>>> =
     Mutex::new(RefCell::new(heapless::Vec::new()));
 
-/// Signals which peripheral has a pending passthrough command.  Set to the
-/// peripheral id by the DFU handler, cleared to `usize::MAX` by the
-/// PeripheralManager once all pending chunks for that id are consumed.
+/// Signals which peripheral has a pending passthrough command.
 ///
-/// Also used by `RmkDfuInterface::control_in` for GETSTATUS flow-control:
-/// while `TARGET != MAX` the host sees `dfuDNBUSY` and polls again.
+/// Set to the peripheral `id` by the DFU handler when a chunk or Finish
+/// command is queued.  Cleared to `usize::MAX` by the
+/// [`passthrough_done_if_empty`] helper once **all** pending commands for
+/// that peripheral have been consumed.
+///
+/// # Flow-control integration
+///
+/// [`RmkDfuInterface::control_in`] reads this atomic on every GETSTATUS
+/// request while a passthrough alternate setting is active.  If the value
+/// differs from `usize::MAX` the GETSTATUS response is overridden to
+/// `dfuDNBUSY`, instructing the host to poll again after 50 ms instead of
+/// sending the next DNLOAD block.  This gives the async executor (running
+/// the `PeripheralManager`) enough CPU time to forward the previous chunk
+/// over the split link.
+///
+/// The flow is therefore **adaptive**: the host automatically waits when
+/// the split link is congested, and proceeds at line-speed when it isn't.
+/// No fixed timeouts, no large RAM queues.
 #[cfg(feature = "dfu_split")]
 pub(crate) static PASSTHROUGH_TARGET: AtomicUsize = AtomicUsize::new(usize::MAX);
 
@@ -728,13 +845,23 @@ struct PassthroughDfuHandler {
     written: u32,
 }
 
-/// Push a command into the queue, returning `Err` if full.
+/// Push a command into the fire-and-forget queue.
+///
+/// Called from the DFU handler ISR — **never blocks or spins**.  Returns
+/// `Err` if the queue is full (should be rare because GETSTATUS flow
+/// control prevents the host from sending the next block while the queue
+/// is draining).
 #[cfg(feature = "dfu_split")]
 fn passthrough_push(cmd: PassthroughCommand) -> Result<(), ()> {
     PASSTHROUGH_CMD.lock(|c| c.borrow_mut().push(cmd).map_err(|_| ()))
 }
 
-/// Take the pending passthrough command from the queue front.
+/// Take the next pending command from the queue (FIFO).
+///
+/// Called by [`PeripheralManager::handle_passthrough`] in the async
+/// executor.  Returns `None` when the queue is empty — the caller then
+/// calls [`passthrough_done_if_empty`] to release the TARGET for the
+/// next host polling cycle.
 #[cfg(feature = "dfu_split")]
 pub(crate) fn passthrough_take_command() -> Option<PassthroughCommand> {
     PASSTHROUGH_CMD.lock(|c| {
@@ -743,7 +870,14 @@ pub(crate) fn passthrough_take_command() -> Option<PassthroughCommand> {
     })
 }
 
-/// Signal that all pending chunks were consumed.
+/// Release [`PASSTHROUGH_TARGET`] when the queue is empty.
+///
+/// Called after every command is fully processed.  If the queue still has
+/// pending commands the target is **not** released, so
+/// [`RmkDfuInterface::control_in`] continues to report `dfuDNBUSY` and
+/// the host keeps polling.  Once empty, the target is reset to
+/// `usize::MAX` and the host sees the real DFU state on its next
+/// GETSTATUS poll.
 #[cfg(feature = "dfu_split")]
 pub(crate) fn passthrough_done_if_empty() {
     let empty = PASSTHROUGH_CMD.lock(|c| c.borrow().is_empty());
@@ -754,11 +888,22 @@ pub(crate) fn passthrough_done_if_empty() {
 
 #[cfg(feature = "dfu_split")]
 impl dfu_mode::Handler for PassthroughDfuHandler {
+    /// Called by DfuState when the host sends the first DNLOAD block
+    /// (block number 0).  Resets the write cursor.
     fn start(&mut self) -> Result<(), Status> {
         self.written = 0;
         Ok(())
     }
 
+    /// Called by DfuState for every subsequent DNLOAD block.
+    ///
+    /// Slices the incoming 512‑byte USB block into 256‑byte chunks and
+    /// pushes them into the fire-and-forget queue.  **Never blocks or
+    /// spins** — the ISR returns immediately and the `PeripheralManager`
+    /// forwards the chunks asynchronously.
+    ///
+    /// GETSTATUS flow control (see [`PASSTHROUGH_TARGET`]) ensures the
+    /// host does not send the next DNLOAD until the queue is drained.
     fn write(&mut self, data: &[u8]) -> Result<(), Status> {
         for chunk in data.chunks(256) {
             let mut buf = [0u8; 256];
@@ -777,6 +922,12 @@ impl dfu_mode::Handler for PassthroughDfuHandler {
         Ok(())
     }
 
+    /// Called by DfuState when the host signals end-of-transfer
+    /// (DNLOAD with `wLength = 0`).
+    ///
+    /// Pushes a [`PassthroughCommand::Finish`] into the queue.  The
+    /// `PeripheralManager` picks it up, asks the peripheral to verify
+    /// the DFU partition CRC, and confirms the update.
     fn finish(&mut self) -> Result<(), Status> {
         if passthrough_push(PassthroughCommand::Finish).is_err() {
             error!("passthrough queue full at finish");
@@ -786,9 +937,10 @@ impl dfu_mode::Handler for PassthroughDfuHandler {
         Ok(())
     }
 
-    fn system_reset(&mut self) {
-        // No-op: the peripheral resets itself after a successful update.
-    }
+    /// No-op — the peripheral resets itself via `mark_updated_and_reset()`
+    /// after a successful update.  The central's USB passthrough handler
+    /// must not reset the central.
+    fn system_reset(&mut self) {}
 }
 
 /// Return the CRC32 of this device's currently running firmware binary.

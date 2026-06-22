@@ -119,7 +119,9 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
         loop {
             // Passthrough DFU commands take priority over normal
             // peripheral events so that USB control transfers are
-            // not starved while forwarding chunks.
+            // not starved while forwarding chunks.  While we are
+            // inside `handle_passthrough` the host polls GETSTATUS
+            // and gets `dfuDNBUSY` — flow control is built in.
             #[cfg(feature = "dfu_split")]
             if crate::dfu::passthrough_pending(self.id) {
                 self.handle_passthrough().await;
@@ -220,18 +222,28 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
     /// Process all pending DFU passthrough commands.
     ///
     /// Called from the main event loop whenever [`crate::dfu::passthrough_pending`]
-    /// returns true.  Drains the passthrough queue completely before returning:
+    /// returns true.  Drains the entire queue before returning:
     ///
-    /// * **Chunk** — sends it to the peripheral via `FirmwareChunk`, waits for
-    ///   the `FirmwareChunkAck`, and accumulates a running CRC‑32 for end‑to‑end
-    ///   verification.
-    /// * **Finish** — all chunks sent; asks the peripheral to compute the DFU
-    ///   partition CRC, compares it against the central's accumulated CRC, and
-    ///   either confirms (`FirmwareCrcOk`) or aborts (`FirmwareCrcFail`).
+    /// * **Chunk** — sends it to the peripheral via `FirmwareChunk`, waits
+    ///   for the `FirmwareChunkAck`, and accumulates a running CRC‑32.
+    /// * **Finish** — all chunks sent; asks the peripheral to compute the
+    ///   DFU partition CRC, compares it against the central's accumulated
+    ///   CRC, and either confirms (`FirmwareCrcOk`) or aborts (`FirmwareCrcFail`).
     ///
-    /// The running CRC is carried in [`PeripheralManager::passthrough_crc`] so
-    /// that it survives across multiple invocations (the queue is drained
-    /// incrementally as the host sends blocks).
+    /// The running CRC lives in [`PeripheralManager::passthrough_crc`] so
+    /// that it survives across invocations (the queue is drained incrementally).
+    ///
+    /// # Flow control
+    ///
+    /// While this method is executing the host polls GETSTATUS.
+    /// [`RmkDfuInterface::control_in`] sees that [`PASSTHROUGH_TARGET`]
+    /// is still busy and returns `dfuDNBUSY`, so the host waits 50 ms and
+    /// polls again.  Once the last chunk is acked and
+    /// [`passthrough_done_if_empty`] clears the target, the real DFU state
+    /// is reported and the host sends the next DNLOAD block immediately.
+    ///
+    /// This prevents the host from overrunning the split-link throughput
+    /// while keeping the USB ISR completely non-blocking.
     #[cfg(feature = "dfu_split")]
     async fn handle_passthrough(&mut self) {
         use embassy_time::{Duration, Timer};

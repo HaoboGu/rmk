@@ -211,3 +211,126 @@ Additionally the bootymcbootface bootloader has blinking codes using PIN_25 (RP2
 | Successful DFU→ACTIVE copy; about to jump                                                                  | 5 short blinks (50 ms)             |
 | Bootloader itself panicked (e.g. flash read error, invalid state partition)                                | Morse SOS (... --- ...), repeating |
 
+---
+
+## Split peripheral updates (dfu_split)
+
+When using a split keyboard with separate microcontrollers for each half,
+`dfu_split` lets you update the peripheral's firmware without a debug
+probe — the central acts as a relay.
+
+In order for this to work, the peripheral needs to be flashed with an embassy-boot bootloader (e.g. bootymcbootface) and with a peripheral firmware that has `dfu_split` enabled. (See above on how to do that)
+
+### Feature flags
+
+```toml
+[dependencies]
+rmk = { features = [ "dfu_rp", "split", "dfu_split"] } # or dfu_nrf instead of dfu_rp
+```
+
+`dfu_split` requires `dfu` (implied by `dfu_rp` / `dfu_nrf`) and `split`.
+
+### Architecture
+
+Two complementary paths are provided:
+
+| Path | Mechanism | When to use |
+|---|---|---|
+| **Embedded** | The central includes the peripheral binary at compile time via `include_bytes!()` and flashes it automatically when the peripheral connects. | CI/CD, production, "flash-and-forget" |
+| **Passthrough** | `dfu-util -a 1 -D peripheral.bin` sends the firmware through the central's USB DFU interface, which forwards it to the peripheral in real time. | Development, ad-hoc updates without recompiling the central |
+
+Both paths split the firmware into 256-byte chunks and send them over the
+split link as `FirmwareChunk` messages. The peripheral writes them to its
+own DFU flash partition, verifies the CRC, and resets into the new image.
+
+### Embedded firmware path
+
+In order to embed the peripherals firmware into the centrals firmware, we need to tell the central during compilation where the binary of the peripheral is. 
+Note that this must be a .bin-file. You can create one using `cargo make bin`
+
+import { Tab, Tabs, Rust, Toml } from '@theme'
+
+<Tabs>
+<Tab label={<Toml />}>
+
+Add a firmware field with the path to the peripherals firmware binary in the peripheral's section. This is a relative path starting from where the Cargo.toml. 
+
+```toml title="keyboard.toml"
+[[split.peripheral]]
+rows     = 2
+cols     = 1
+firmware = "./../peripheral.bin" 
+```
+
+The `#[rmk_central]` macro then generates the `set_firmware_update_data`
+call automatically. When the field is absent the central relies on
+passthrough only.
+
+</Tab>
+<Tab label={<Rust />}>
+
+Add this inside the main function of the central:
+
+```rust title="central.rs"
+const PERIPHERAL_FW: &[u8] = include_bytes!("../peripheral.bin");
+rmk::dfu::set_firmware_update_data(0, PERIPHERAL_FW, rmk::crc32::crc32(PERIPHERAL_FW));
+```
+
+Where the first argument of `set_firmware_update_data` is the index of the peripheral. (The same as the first argument of `run_peripheral_manager`.)
+
+</Tab>
+</Tabs>
+
+After flashing the central, it will ask the peripheral for its firmware checksum, the peripheral answers and if the checksum does not match with the checksum of the embedded firmware, it will start flashing the embedded peripheral firmware onto the peripheral. The blink codes of the led (see above) are the same like during a normal DFU update.
+
+### Passthrough path
+
+```shell
+# Flash peripheral 0
+dfu-util -a 1 -D peripheral.bin
+
+# Flash peripheral 1 (if you have a second peripheral)
+dfu-util -a 2 -D peripheral2.bin
+
+# Flash central
+dfu-util -a 0 -D central.bin -R
+```
+
+This works identically to the normal DFU flash — just select a
+different alternate setting (`-a`).
+
+::: warning
+Do **not** use `-R` (reset) when flashing a peripheral. The peripheral
+resets itself after the update. `-R` would reset the central and abort
+the transfer.
+:::
+
+::: note
+The index of the alternate setting (`-a`) is off by 0 due to technical reasons. So to flash the peripheral with index 0, you have to pass `-a 1`.
+:::
+
+### Peripheral firmware requirements
+
+The peripheral must call `init_flash()` and `mark_booted()` so that the
+bootloader does not revert the update. With `#[rmk_peripheral(id = …)]`
+(TOML API) this is generated automatically when a `[dfu]` section is
+present in `keyboard.toml`.
+
+If you are using the Rust API on the peripheral, ensure you have:
+
+```rust
+rmk::dfu::mark_booted();
+```
+
+in the main function.
+
+Without `mark_booted()` embassy-boot will revert the update (visible as three short blinks of the DFU LED when using bootymcbootface).
+
+### Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| Peripheral blinks 3 times after update | `mark_booted()` not called in the peripheral. Add `[dfu]` to `keyboard.toml` or call `rmk::dfu::mark_booted()` manually. |
+| `dfu-util -a 1` shows `dfuERROR` | Peripheral not connected or its firmware is built without the `dfu_split` feature. |
+| `dfu-util` hangs on `dfuMANIFEST` | Expected — no USB reset was sent. The peripheral has already been updated. Disconnect / reconnect USB, let the host time out or exit dfu-util |
+
