@@ -44,7 +44,7 @@ resolver = "2"
 members = [
     "rynk-serial",
     "rynk-ble",
-    "rynk-bridge",
+    "rynk-wasm",
 ]
 default-members = [
     ".",

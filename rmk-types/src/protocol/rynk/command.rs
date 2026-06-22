@@ -154,8 +154,9 @@ macro_rules! topics {
         };
 
         /// A decoded topic push (server → host), one variant per row of the
-        /// topic table above — generated from it.
-        #[derive(Debug, Clone)]
+        /// topic table above — generated from it. `Serialize` lets the host
+        /// re-emit a decoded topic as JSON (every payload is already a wire type).
+        #[derive(Debug, Clone, serde::Serialize)]
         pub enum TopicEvent {
             $( $(#[$meta])* $name($payload), )*
         }

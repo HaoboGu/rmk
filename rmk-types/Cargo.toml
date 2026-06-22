@@ -19,6 +19,9 @@ strum = { version = "0.28", default-features = false, features = ["derive"] }
 
 bitfield-struct = "0.13"
 
+# TypeScript type generation for the web client (host/codegen-only; gated behind `ts`).
+ts-rs = { version = "12", optional = true }
+
 [build-dependencies]
 rmk-config = { path = "../rmk-config", version = "=0.6.1" }
 toml = "1.0"
@@ -39,6 +42,9 @@ rynk = []
 bulk = ["rynk"]
 # Host tool: uses protocol ceiling values for Vec capacities.
 host = ["rynk", "bulk", "_ble", "split", "steno"]
+# TypeScript type export for the web client. Needs std (ts-rs), so it also flips
+# the crate off `no_std`; only enabled by a codegen run, never by firmware.
+ts = ["dep:ts-rs", "host"]
 # Build-time only features: forwarded from rmk to control constant generation in build.rs.
 _ble = []
 split = []
