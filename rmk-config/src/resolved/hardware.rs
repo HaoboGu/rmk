@@ -86,7 +86,15 @@ impl crate::KeyboardTomlConfig {
                             dfu_offset: d.dfu_offset.unwrap(),
                             dfu_size: d.dfu_size.unwrap(),
                             page_size: d.page_size.unwrap_or(4096),
-                            led: d.led.clone().map(|pin| PinConfig { pin, low_active: false }),
+                            led: d.led
+                                .clone()
+                                .and_then(|pin| {
+                                    if pin.eq_ignore_ascii_case("none") || pin.is_empty() {
+                                        None
+                                    } else {
+                                        Some(PinConfig { pin, low_active: false })
+                                    }
+                                }),
                             unlock_keys: d.unlock_keys.clone().unwrap_or_default(),
                         }),
                         false,
@@ -108,7 +116,15 @@ impl crate::KeyboardTomlConfig {
                             dfu_offset: bootloader_state_end + active_size,
                             dfu_size: active_size + page_size,
                             page_size,
-                            led: d.led.clone().map(|pin| PinConfig { pin, low_active: false }),
+                            led: d.led
+                                .clone()
+                                .and_then(|pin| {
+                                    if pin.eq_ignore_ascii_case("none") || pin.is_empty() {
+                                        None
+                                    } else {
+                                        Some(PinConfig { pin, low_active: false })
+                                    }
+                                }),
                             unlock_keys: d.unlock_keys.clone().unwrap_or_default(),
                         }),
                         true,
