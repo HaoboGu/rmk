@@ -259,13 +259,24 @@ fn expand_split_peripheral(
 
     let imports = expand_custom_imports(&item_mod);
     let mut chip_init = expand_chip_init(hardware, Some(id), &item_mod);
+
     if split_config.connection == "ble" {
-        // Add storage when using BLE split
         let flash_init = expand_flash_init(hardware);
         chip_init.extend(quote! {
             #flash_init
             let mut storage = ::rmk::storage::new_storage_for_split_peripheral(flash, storage_config).await;
         });
+    } else if is_feature_enabled(rmk_features, "dfu_rp")
+        || is_feature_enabled(rmk_features, "dfu_nrf")
+    {
+        let flash_init = expand_flash_init(hardware);
+        chip_init.extend(quote! { #flash_init });
+    }
+
+    // Mark booted when DFU is enabled so the bootloader doesn't
+    // revert the previous update.
+    if is_feature_enabled(rmk_features, "dfu_rp") || is_feature_enabled(rmk_features, "dfu_nrf") {
+        chip_init.extend(quote! { ::rmk::dfu::mark_booted(); });
     }
 
     // Debouncer config
