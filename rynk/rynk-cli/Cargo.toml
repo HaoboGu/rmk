@@ -1,0 +1,21 @@
+[package]
+name = "rynk-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Command-line client for the Rynk protocol"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rynk = { path = ".." }
+rynk-serial = { path = "../rynk-serial" }
+rynk-ble = { path = "../rynk-ble" }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+
+[[bin]]
+name = "rynk"
+path = "src/main.rs"

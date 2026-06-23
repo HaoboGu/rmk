@@ -44,11 +44,13 @@ resolver = "2"
 members = [
     "rynk-serial",
     "rynk-ble",
+    "rynk-cli",
 ]
 default-members = [
     ".",
     "rynk-serial",
     "rynk-ble",
+    "rynk-cli",
 ]
 
 [workspace.package]
