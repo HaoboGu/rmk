@@ -9,9 +9,9 @@ pub(crate) struct VialLock<'a> {
 }
 
 impl<'a> VialLock<'a> {
-    pub fn new(unlock_keys: &'a [(u8, u8)], keymap: &'a KeyMap<'a>) -> Self {
+    pub fn new(unlock_keys: &'a [(u8, u8)], keymap: &'a KeyMap<'a>, insecure: bool) -> Self {
         Self {
-            unlocked: false,
+            unlocked: insecure,
             unlocking: false,
             last_poll: embassy_time::Instant::MIN,
             unlock_keys,
