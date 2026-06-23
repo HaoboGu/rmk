@@ -86,11 +86,6 @@ impl crate::KeyboardTomlConfig {
                             layout.layers, auto_mouse_layer.layer
                         ));
                     }
-                    if auto_mouse_layer.layer == 0 {
-                        return Err(
-                            "keyboard.toml: [behavior.auto_mouse_layer].layer must not be 0 (the startup default layer); pick a dedicated mouse layer".to_string(),
-                        );
-                    }
                     if auto_mouse_layer.threshold == Some(0) {
                         return Err(
                             "keyboard.toml: [behavior.auto_mouse_layer].threshold must be at least 1".to_string(),

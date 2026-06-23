@@ -528,7 +528,7 @@ threshold = 2
 
 | Field        | Type    | Default | Description |
 |--------------|---------|---------|-------------|
-| `layer`      | integer | —       | Layer index to activate (must be `>= 1` and `< [layout.layers]`). |
+| `layer`      | integer | —       | Layer index to activate (must be `< [layout.layers]`). |
 | `timeout`    | string  | `"500ms"`| Inactivity duration before deactivation (e.g., `"600ms"`, `"2s"`). |
 | `threshold`  | integer | `1`     | Minimum absolute X/Y delta to trigger motion (`>= 1`). Increase to filter sensor noise. |
 
