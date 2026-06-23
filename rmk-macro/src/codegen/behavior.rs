@@ -530,6 +530,7 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
             mouse_key: ::rmk::config::MouseKeyConfig::default(),
             tap: ::rmk::config::TapConfig::default(),
             auto_mouse_layer: #auto_mouse_layer,
+            ..Default::default()
         };
     }
 }

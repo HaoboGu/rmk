@@ -8,6 +8,8 @@ For example, if you have two layers, 0 and 1, pressing a key will first check it
 
 The default layer is called the "base" layer. Generally, you cannot access any layers below the default layer. By default, layer 0 is set as the default layer, but you can change this using the `DF` key. Please be cautious when changing the default layer: if you do not have a key to revert the default layer on any layer above the new default, you may lose access to the lower layers. In such cases, you will need to use Vial to update your keymap and set another `DF` key on an accessible layer.
 
+`DF` only changes the default layer until the keyboard loses power. To make the change survive a reboot, use the `PDF` (persistent default layer) key instead — it sets the default layer and saves it to storage, so it is restored on the next boot (requires the `storage` feature).
+
 ## Configuration
 
 For detailed layer and layout configurations, see the [Layout Configuration](../configuration/layout) documentation.

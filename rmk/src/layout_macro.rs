@@ -458,6 +458,25 @@ macro_rules! df {
     };
 }
 
+/// Create a persistent default layer switch action.
+///
+/// Like [`df!`], but the new default layer is saved to storage and restored on
+/// the next boot (requires the `storage` feature). This is the QMK `PDF` key.
+///
+/// # Parameters
+/// - `$x`: Layer number (0-255)
+///
+/// # Example
+/// ```ignore
+/// pdf!(1)  // Set layer 1 as the default layer, persisting across reboots
+/// ```
+#[macro_export]
+macro_rules! pdf {
+    ($x: literal) => {
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::PersistentDefaultLayer($x))
+    };
+}
+
 /// Create a shifted key action.
 ///
 /// This is a convenience macro that creates a key with left shift applied.

@@ -48,6 +48,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             Action::LayerToggleOnly(l) => 0x5200 | l as u16,
             Action::LayerOn(l) => 0x5220 | l as u16,
             Action::DefaultLayer(l) => 0x5240 | l as u16,
+            Action::PersistentDefaultLayer(l) => 0x52E0 | l as u16,
             Action::LayerToggle(l) => 0x5260 | l as u16,
             Action::TriLayerLower => 0x7c77,
             Action::TriLayerUpper => 0x7c78,
@@ -200,6 +201,11 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             warn!("Layer tap toggle {:#X} not supported", via_keycode);
             KeyAction::No
         }
+        0x52E0..=0x52FF => {
+            // Persistent default layer (PDF)
+            let layer = via_keycode as u8 & 0x0F;
+            KeyAction::Single(Action::PersistentDefaultLayer(layer))
+        }
         0x5700..=0x57FF => {
             // Tap dance
             let index = (via_keycode & 0xFF) as u8;
@@ -289,6 +295,34 @@ mod test {
             KeyAction::Single(Action::OneShotModifier(ModifierCombination::new_from(
                 true, false, false, false, true
             ))),
+            from_via_keycode(via_keycode)
+        );
+
+        // DF(3)
+        let via_keycode = 0x5243;
+        assert_eq!(
+            KeyAction::Single(Action::DefaultLayer(3)),
+            from_via_keycode(via_keycode)
+        );
+
+        // PDF(0)
+        let via_keycode = 0x52E0;
+        assert_eq!(
+            KeyAction::Single(Action::PersistentDefaultLayer(0)),
+            from_via_keycode(via_keycode)
+        );
+
+        // PDF(3)
+        let via_keycode = 0x52E3;
+        assert_eq!(
+            KeyAction::Single(Action::PersistentDefaultLayer(3)),
+            from_via_keycode(via_keycode)
+        );
+
+        // PDF(15)
+        let via_keycode = 0x52EF;
+        assert_eq!(
+            KeyAction::Single(Action::PersistentDefaultLayer(15)),
             from_via_keycode(via_keycode)
         );
 
@@ -474,6 +508,18 @@ mod test {
             true, false, false, false, true,
         )));
         assert_eq!(0x52B1, to_via_keycode(a));
+
+        // DF(3)
+        let a = KeyAction::Single(Action::DefaultLayer(3));
+        assert_eq!(0x5243, to_via_keycode(a));
+
+        // PDF(3)
+        let a = KeyAction::Single(Action::PersistentDefaultLayer(3));
+        assert_eq!(0x52E3, to_via_keycode(a));
+
+        // PDF(15)
+        let a = KeyAction::Single(Action::PersistentDefaultLayer(15));
+        assert_eq!(0x52EF, to_via_keycode(a));
 
         // LCtrl(A) -> WithModifier(A)
         let a = KeyAction::Single(Action::KeyWithModifier(
