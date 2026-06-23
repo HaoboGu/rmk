@@ -553,12 +553,14 @@ use embassy_time::Duration;
 use rmk::config::{AutoMouseLayerConfig, BehaviorConfig};
 
 // Configure the auto mouse layer
-let mut behavior_config = BehaviorConfig::default();
-behavior_config.auto_mouse_layer = Some(AutoMouseLayerConfig::new(
-    3,                          // layer index
-    Duration::from_millis(600), // timeout duration
-    2,                          // threshold
-));
+let behavior_config = BehaviorConfig {
+    auto_mouse_layer: Some(AutoMouseLayerConfig::new(
+        3,                          // layer index
+        Duration::from_millis(600), // timeout duration
+        2,                          // threshold
+    )),
+    ..Default::default()
+};
 
 // include it in `run_all!` alongside the rest:
 let mut auto_mouse_layer = rmk::run_auto_mouse_layer_if_enabled(&keymap);
