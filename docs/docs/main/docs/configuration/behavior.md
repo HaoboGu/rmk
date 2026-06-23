@@ -540,7 +540,7 @@ Use a dedicated layer that is not bound to any manual keys (like `MO` or `TG`). 
 
 ::: note Pointer Event Configuration
 
-- **Subscriber Slots**: You must manually increment `[event.pointing].subs` (e.g., increase it by `1`) in your `keyboard.toml` to reserve a subscriber slot for the auto mouse layer's background listener task.
+- **Subscriber Slots**: You must manually increment `[event.pointing].subs` (e.g., increase it by `1`) in your `keyboard.toml` to reserve a subscriber slot for the auto mouse layer's background listener task. See [Event Configuration](./event.md) for the configuration syntax.
 - **Buffer Size**: If pointing events are dropped under high-frequency input, increase `[event.pointing].channel_size` (default is `8`).
 
 :::
