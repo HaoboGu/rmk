@@ -92,8 +92,6 @@ struct KeyMapInner<'a> {
     encoders: Option<&'a mut [EncoderAction]>,
     /// Per-layer activation state
     layer_state: &'a mut [bool],
-    /// Default layer number
-    default_layer: u8,
     /// Layer cache for keys: row * col
     layer_cache: &'a mut [u8],
     /// Layer cache for encoders: num_encoder * 2
@@ -141,11 +139,18 @@ impl KeyMapInner<'_> {
     }
 
     fn get_default_layer(&self) -> u8 {
-        self.default_layer
+        self.behavior.default_layer
     }
 
     fn set_default_layer(&mut self, layer_num: u8) {
-        self.default_layer = layer_num;
+        if layer_num as usize >= self.num_layer {
+            warn!(
+                "Not a valid default layer {}, keyboard supports only {} layers",
+                layer_num, self.num_layer
+            );
+            return;
+        }
+        self.behavior.default_layer = layer_num;
     }
 
     fn get_action_at(&self, pos: KeyboardEventPos, layer_num: usize) -> KeyAction {
@@ -203,7 +208,7 @@ impl KeyMapInner<'_> {
         }
 
         for layer_idx in (0..self.num_layer).rev() {
-            if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
+            if self.layer_state[layer_idx] || layer_idx as u8 == self.behavior.default_layer {
                 let action = self.get_action_at(event.pos, layer_idx);
                 if action == KeyAction::Transparent {
                     continue;
@@ -211,7 +216,7 @@ impl KeyMapInner<'_> {
                 self.save_layer_cache(event.pos, layer_idx as u8);
                 return action;
             }
-            if layer_idx as u8 == self.default_layer {
+            if layer_idx as u8 == self.behavior.default_layer {
                 break;
             }
         }
@@ -221,11 +226,11 @@ impl KeyMapInner<'_> {
 
     fn get_activated_layer(&self) -> u8 {
         for layer_idx in (0..self.num_layer).rev() {
-            if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
+            if self.layer_state[layer_idx] || layer_idx as u8 == self.behavior.default_layer {
                 return layer_idx as u8;
             }
         }
-        self.default_layer
+        self.behavior.default_layer
     }
 
     fn pop_layer_from_cache(&mut self, pos: KeyboardEventPos) -> u8 {
@@ -235,7 +240,7 @@ impl KeyMapInner<'_> {
                 let col = key_pos.col as usize;
                 let ci = self.cache_index(row, col);
                 let layer = self.layer_cache[ci];
-                self.layer_cache[ci] = self.default_layer;
+                self.layer_cache[ci] = self.behavior.default_layer;
                 layer
             }
             KeyboardEventPos::RotaryEncoder(encoder_pos) => {
@@ -243,11 +248,11 @@ impl KeyMapInner<'_> {
                     let ci = self.encoder_cache_index(encoder_pos.id as usize, encoder_pos.direction as usize);
                     if let Some(cache) = self.encoder_layer_cache.get_mut(ci) {
                         let layer = *cache;
-                        *cache = self.default_layer;
+                        *cache = self.behavior.default_layer;
                         return layer;
                     }
                 }
-                self.default_layer
+                self.behavior.default_layer
             }
         }
     }
@@ -357,7 +362,6 @@ impl<'a> KeyMap<'a> {
                 layers,
                 encoders,
                 layer_state,
-                default_layer: 0,
                 layer_cache,
                 encoder_layer_cache,
                 behavior,
@@ -396,11 +400,11 @@ impl<'a> KeyMap<'a> {
         fill_vec(&mut behavior.fork.forks);
         fill_vec(&mut behavior.morse.morses);
 
-        // Read from storage BEFORE flattening (storage expects typed arrays)
+        // Read from storage BEFORE flattening (storage expects typed arrays).
         if let Some(storage) = storage
             && {
                 Ok(())
-                    .and(storage.read_keymap(data).await)
+                    .and(storage.read_keymap(data, behavior).await)
                     .and(storage.read_behavior_config(behavior).await)
                     .and(
                         storage

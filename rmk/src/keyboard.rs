@@ -1275,6 +1275,20 @@ impl<'a> Keyboard<'a> {
                     self.release_sticky_key_if_active().await;
                 }
             }
+            Action::PersistentDefaultLayer(layer_num) => {
+                // Set the default layer and persist it so it survives a reboot
+                self.keymap.set_default_layer(layer_num);
+                if self.keymap.sticky_key_config().release_on_layer_change {
+                    self.release_sticky_key_if_active().await;
+                }
+                // Persist only if the layer was valid (set_default_layer rejects out-of-range)
+                #[cfg(feature = "storage")]
+                if event.pressed && self.keymap.get_default_layer() == layer_num {
+                    crate::channel::FLASH_CHANNEL
+                        .send(crate::storage::FlashOperationMessage::DefaultLayer(layer_num))
+                        .await;
+                }
+            }
             Action::Modifier(modifiers) => {
                 if event.pressed {
                     self.register_modifiers(modifiers);

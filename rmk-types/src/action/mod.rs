@@ -90,6 +90,10 @@ pub enum Action {
     /// Sticky key: a unified one-shot action whose shape (pure-mod, tap-key, or
     /// one-shot-layer) is determined by the [`StickyKeyAction`] payload.
     StickyKey(StickyKeyAction),
+    /// Set the default layer and persist it to storage; restored on next boot.
+    ///
+    /// Runtime behavior matches [`Action::DefaultLayer`]; additionally persisted to flash.
+    PersistentDefaultLayer(u8),
     /// A Plover HID stenography key. Press/release of this key updates the
     /// in-progress steno chord; on first release the accumulated chord is
     /// sent to the host as a vendor HID report.

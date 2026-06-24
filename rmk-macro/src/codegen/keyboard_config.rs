@@ -58,12 +58,14 @@ pub(crate) fn expand_vial_config(host: &Host) -> proc_macro2::TokenStream {
     } else {
         quote! { &[] }
     };
+    let vial_insecure = host.vial_insecure;
     quote! {
         include!(concat!(env!("OUT_DIR"), "/config_generated.rs"));
         const VIAL_CONFIG: ::rmk::config::VialConfig = ::rmk::config::VialConfig {
             vial_keyboard_id: &VIAL_KEYBOARD_ID,
             vial_keyboard_def: &VIAL_KEYBOARD_DEF,
-            unlock_keys: #unlock_keys
+            unlock_keys: #unlock_keys,
+            vial_insecure: #vial_insecure,
         };
     }
 }

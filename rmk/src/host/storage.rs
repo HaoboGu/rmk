@@ -73,6 +73,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     pub(crate) async fn read_keymap(
         &mut self,
         data: &mut crate::keymap::KeymapData<ROW, COL, NUM_LAYER, NUM_ENCODER>,
+        behavior: &mut crate::config::BehaviorConfig,
     ) -> Result<(), ()> {
         // Use fetch_all_items to speed up the keymap reading
         let mut key_iterator = self
@@ -102,6 +103,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     if layer < NUM_LAYER && idx < NUM_ENCODER {
                         data.encoder_map[layer][idx] = action;
                     }
+                }
+                (StorageKey::LayoutConfig, StorageData::LayoutConfig(config)) => {
+                    // Restore the default (base) layer set via a `PDF` key
+                    behavior.default_layer = config.default_layer;
                 }
                 _ => continue,
             }
