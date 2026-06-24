@@ -534,19 +534,19 @@ threshold = 2
 
 ::: warning
 
-Use a dedicated layer that is not bound to any manual keys (like `MO` or `TG`). Because layer states are boolean, manually activating the same layer while the auto-mouse timeout is running may cause the layer to deactivate prematurely when the timeout fires.
+Prefer a dedicated layer that is not bound to any manual keys (like `MO` or `TG`). The auto-mouse task releases its ownership when keyboard-driven changes deactivate the layer, so transient overlap is handled cleanly. Layer state is still a single boolean, however, so pressing `TG(layer)` while auto-mouse is active toggles the layer off instead of pinning it on.
 
 :::
 
-::: note Pointer Event Configuration
+::: note Event Configuration
 
-- **Subscriber Slots**: You must manually increment `[event.pointing].subs` (e.g., increase it by `1`) in your `keyboard.toml` to reserve a subscriber slot for the auto mouse layer's background listener task. See [Event Configuration](./event.md) for the configuration syntax.
-- **Buffer Size**: If pointing events are dropped under high-frequency input, increase `[event.pointing].channel_size` (default is `8`).
+- **Subscriber Slots**: Increment both `[event.pointing].subs` and `[event.layer_change].subs` by `1` in your `keyboard.toml` to reserve slots for this task. See [Event Configuration](./event.md).
+- **Buffer Size**: If pointing events are dropped under high-frequency input, increase `[event.pointing].channel_size` (default `8`). `[event.layer_change].channel_size` defaults to `1` and only needs raising if you burst many layer changes faster than subscribers consume them.
 
 :::
 
 ::: note Rust API
-If not using `keyboard.toml`, configure the layer via `BehaviorConfig` and run the helper future alongside your other keyboard tasks:
+If not using `keyboard.toml`, configure the layer via `BehaviorConfig` and run the helper future alongside your other keyboard tasks. Increase `POINTING_EVENT_SUB_SIZE` and `LAYER_CHANGE_EVENT_SUB_SIZE` by `1` for this task's subscribers.
 
 ```rust
 use embassy_time::Duration;

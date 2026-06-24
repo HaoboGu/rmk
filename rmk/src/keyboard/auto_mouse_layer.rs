@@ -4,11 +4,11 @@
 //! and activates a configured layer whenever cursor motion (X/Y axis) is
 //! detected.
 
-use embassy_futures::select::{Either, select};
+use embassy_futures::select::{Either, Either3, select, select3};
 use embassy_time::{Instant, Timer};
 
 use crate::core_traits::Runnable;
-use crate::event::{Axis, AxisValType, EventSubscriber, PointingEvent, SubscribableEvent};
+use crate::event::{Axis, AxisValType, EventSubscriber, LayerChangeEvent, PointingEvent, SubscribableEvent};
 use crate::keymap::KeyMap;
 
 /// [`Runnable`] for the auto mouse layer task.
@@ -45,15 +45,20 @@ impl Runnable for AutoMouseLayerRunner<'_, '_> {
         let threshold = config.threshold.max(1);
 
         let mut subscriber = PointingEvent::subscriber();
-        // Tracks whether this task is the one that turned the layer on.
+        let mut layer_sub = LayerChangeEvent::subscriber();
+        // Invariant: `false` at the top of the outer loop — every inner-loop
+        // break path resets it.
         let mut self_activated = false;
-        // Whether we have already warned about the auto mouse layer overlapping a
-        // manually-activated layer.
         let mut overlap_warned = false;
 
         loop {
-            // Wait for the next pointing event and filter for cursor motion
-            let event = subscriber.next_event().await;
+            // Drain layer changes so the channel doesn't back up while idle.
+            let event = loop {
+                match select(subscriber.next_event(), layer_sub.next_event()).await {
+                    Either::First(e) => break e,
+                    Either::Second(_) => {}
+                }
+            };
             if !is_cursor_motion(&event, threshold) {
                 continue;
             }
@@ -76,15 +81,15 @@ impl Runnable for AutoMouseLayerRunner<'_, '_> {
             // are ignored without extending it.
             let mut deadline = Instant::now() + config.timeout;
             loop {
-                match select(Timer::at(deadline), subscriber.next_event()).await {
-                    Either::First(_) => {
+                match select3(Timer::at(deadline), subscriber.next_event(), layer_sub.next_event()).await {
+                    Either3::First(_) => {
                         if self_activated {
                             keymap.deactivate_layer_if_active(config.layer);
-                            self_activated = false;
                         }
+                        self_activated = false; // restore outer-loop invariant
                         break;
                     }
-                    Either::Second(next) => {
+                    Either3::Second(next) => {
                         if !is_cursor_motion(&next, threshold) {
                             continue;
                         }
@@ -92,6 +97,15 @@ impl Runnable for AutoMouseLayerRunner<'_, '_> {
                         if keymap.activate_layer_if_inactive(config.layer) {
                             self_activated = true;
                             overlap_warned = false;
+                        }
+                    }
+                    Either3::Third(LayerChangeEvent(top)) => {
+                        // Drop ownership if a keyboard-driven change turned our layer off,
+                        // so the next motion can re-acquire it cleanly.
+                        if self_activated && !keymap.is_layer_active(config.layer) {
+                            self_activated = false;
+                            trace!("auto_mouse_layer: released layer {} (top now {})", config.layer, top);
+                            break;
                         }
                     }
                 }

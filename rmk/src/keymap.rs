@@ -505,6 +505,16 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().behavior.auto_mouse_layer
     }
 
+    /// Whether `layer_num` is set in the layer mask.
+    ///
+    /// Unlike [`Self::active_layer`] (which returns only the topmost), this
+    /// reports each layer individually.
+    pub(crate) fn is_layer_active(&self, layer_num: u8) -> bool {
+        let inner = self.inner.borrow();
+        let idx = layer_num as usize;
+        idx < inner.num_layer && inner.layer_state[idx]
+    }
+
     pub(crate) fn num_layer(&self) -> usize {
         self.inner.borrow().num_layer
     }
@@ -827,5 +837,40 @@ mod test {
         fill_vec(&mut forks);
 
         assert_eq!(forks.len(), FORK_MAX_NUM);
+    }
+
+    #[test]
+    fn is_layer_active_reports_individual_layer_state() {
+        use crate::config::{BehaviorConfig, PositionalConfig};
+        use crate::keymap::{KeyMap, KeymapData};
+
+        let mut data = KeymapData::<1, 1, 4>::new([[[k!(A)]], [[k!(B)]], [[k!(C)]], [[k!(D)]]]);
+        let mut behavior = BehaviorConfig::default();
+        let positional = PositionalConfig::<1, 1>::default();
+        let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
+
+        // Layer 0 is the default but not explicitly set in the mask.
+        assert!(!keymap.is_layer_active(0));
+        assert!(!keymap.is_layer_active(3));
+        // Out-of-range returns false (no panic).
+        assert!(!keymap.is_layer_active(99));
+
+        assert!(keymap.activate_layer_if_inactive(2));
+        assert!(keymap.is_layer_active(2));
+        assert!(!keymap.is_layer_active(1));
+        assert!(!keymap.is_layer_active(3));
+        assert!(!keymap.activate_layer_if_inactive(2));
+
+        keymap.deactivate_layer_if_active(2);
+        assert!(!keymap.is_layer_active(2));
+        keymap.deactivate_layer_if_active(2);
+        assert!(!keymap.is_layer_active(2));
+
+        // Mirrors the auto-mouse Either3::Third guard.
+        assert!(keymap.activate_layer_if_inactive(2));
+        let self_activated = true;
+        assert!(!(self_activated && !keymap.is_layer_active(2)));
+        keymap.deactivate_layer_if_active(2);
+        assert!(self_activated && !keymap.is_layer_active(2));
     }
 }
