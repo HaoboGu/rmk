@@ -57,9 +57,12 @@ use crate::config::PositionalConfig;
 pub mod ble;
 pub mod boot;
 pub mod channel;
+pub mod crc32;
 pub mod config;
 pub mod core_traits;
 pub mod debounce;
+#[cfg(feature = "dfu")]
+pub mod dfu;
 #[cfg(feature = "display")]
 pub mod display;
 pub mod driver;
