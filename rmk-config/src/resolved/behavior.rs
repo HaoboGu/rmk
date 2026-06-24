@@ -3,17 +3,15 @@ use std::collections::HashMap;
 /// Resolved behavioral configuration.
 pub struct Behavior {
     pub tri_layer: Option<[u8; 3]>,
-    pub one_shot_timeout_ms: Option<u64>,
-    pub one_shot_modifiers: Option<OneShot>,
     pub combos: Option<Combos>,
     pub macros: Option<Macros>,
     pub forks: Option<Forks>,
     pub morse: Option<Morse>,
-}
-
-pub struct OneShot {
-    pub activate_on_keypress: Option<bool>,
-    pub quick_release: Option<bool>,
+    pub sticky_key_timeout_ms: Option<u64>,
+    pub sticky_key_activate_on_keypress: Option<bool>,
+    pub sticky_key_quick_release: Option<bool>,
+    pub sticky_key_max_repeat: Option<u16>,
+    pub sticky_key_release_on_layer_change: Option<bool>,
 }
 
 pub struct Combos {
@@ -100,13 +98,6 @@ impl crate::KeyboardTomlConfig {
         let toml_behavior = self.get_behavior_config()?;
 
         let tri_layer = toml_behavior.tri_layer.map(|t| [t.upper, t.lower, t.adjust]);
-
-        let one_shot_timeout_ms = toml_behavior.one_shot.and_then(|o| o.timeout.map(|t| t.0));
-
-        let one_shot_modifiers = toml_behavior.one_shot_modifiers.map(|o| OneShot {
-            activate_on_keypress: o.activate_on_keypress,
-            quick_release: o.quick_release,
-        });
 
         let combos = toml_behavior.combo.map(|c| Combos {
             combos: c
@@ -201,14 +192,24 @@ impl crate::KeyboardTomlConfig {
             }
         });
 
+        let sticky_key = toml_behavior.sticky_key;
+        let sticky_key_timeout_ms = sticky_key.as_ref().and_then(|s| s.timeout.as_ref().map(|t| t.0));
+        let sticky_key_activate_on_keypress = sticky_key.as_ref().and_then(|s| s.activate_on_keypress);
+        let sticky_key_quick_release = sticky_key.as_ref().and_then(|s| s.quick_release);
+        let sticky_key_max_repeat = sticky_key.as_ref().and_then(|s| s.max_repeat);
+        let sticky_key_release_on_layer_change = sticky_key.as_ref().and_then(|s| s.release_on_layer_change);
+
         Ok(Behavior {
             tri_layer,
-            one_shot_timeout_ms,
-            one_shot_modifiers,
             combos,
             macros,
             forks,
             morse,
+            sticky_key_timeout_ms,
+            sticky_key_activate_on_keypress,
+            sticky_key_quick_release,
+            sticky_key_max_repeat,
+            sticky_key_release_on_layer_change,
         })
     }
 }

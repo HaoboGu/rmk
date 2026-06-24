@@ -28,7 +28,7 @@ use crate::keyboard::combo::Combo;
 use crate::keyboard::fork::ActiveFork;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard::mouse::{MouseAction, MouseState};
-use crate::keyboard::oneshot::OneShotState;
+use crate::keyboard::sticky_key::{SkPhase, StickyKeyState};
 use crate::keyboard_macros::MacroOperation;
 use crate::keymap::KeyMap;
 #[cfg(all(feature = "split", feature = "_ble"))]
@@ -40,9 +40,9 @@ pub(crate) mod fork;
 pub(crate) mod held_buffer;
 pub(crate) mod morse;
 pub(crate) mod mouse;
-pub(crate) mod oneshot;
 #[cfg(feature = "steno")]
 pub(crate) mod steno;
+pub(crate) mod sticky_key;
 
 use crate::keymap::HOLD_BUFFER_SIZE;
 
@@ -141,8 +141,11 @@ impl Runnable for Keyboard<'_> {
     /// The report is sent using `send_report`.
     async fn run(&mut self) -> ! {
         loop {
-            // TODO: Now the unprocessed_events is only used in one-shot keys and clear peer key.
-            // Maybe it can be removed in the future?
+            // `unprocessed_events` is still required: the Clear Peer BLE path
+            // (`#[cfg(feature = "split")]`, see below) pushes events here for re-processing.
+            // Do NOT delete the queue or this consumer.
+            // (The OSM/OSL producers were removed once those behaviors moved to the SK engine,
+            // whose timeout is now driven by the deadline race below rather than an inline select.)
             if !self.unprocessed_events.is_empty() {
                 // Process unprocessed events
                 let e = self.unprocessed_events.remove(0);
@@ -152,18 +155,29 @@ impl Runnable for Keyboard<'_> {
                 // Process buffered held key
                 self.process_buffered_key(key).await
             } else {
-                // If mouse repeat is pending, race subscriber against deadline
-                let event = if let Some(deadline) = self.mouse.next_deadline() {
+                // Race subscriber against any pending deadlines (mouse repeat, SK timeout)
+                let sk_deadline = self.sticky_key_state.deadline();
+                let mouse_deadline = self.mouse.next_deadline();
+                let combined_deadline = [sk_deadline, mouse_deadline]
+                    .into_iter()
+                    .flatten()
+                    .reduce(|a, b| a.min(b));
+                let event = if let Some(deadline) = combined_deadline {
                     match with_deadline(deadline, self.keyboard_event_subscriber.next_message_pure()).await {
                         Ok(event) => event,
                         Err(_) => {
-                            // Repeat deadline expired, fire repeat
-                            self.fire_mouse_repeat().await;
+                            let now = Instant::now();
+                            if sk_deadline.is_some_and(|d| now >= d) {
+                                self.release_sticky_key_if_active().await;
+                            }
+                            if mouse_deadline.is_some_and(|d| now >= d) {
+                                self.fire_mouse_repeat().await;
+                            }
                             continue;
                         }
                     }
                 } else {
-                    // No repeat pending, wait indefinitely
+                    // No deadlines pending, wait indefinitely
                     self.keyboard_event_subscriber.next_message_pure().await
                 };
                 self.process_inner(event).await
@@ -200,11 +214,8 @@ pub struct Keyboard<'a> {
     /// Used in repeat-key
     last_key_code: KeyCode,
 
-    /// Oneshot Layer state
-    osl_state: OneShotState<u8>,
-
-    /// Oneshot Modifier state
-    osm_state: OneShotState<ModifierCombination>,
+    /// StickyKey state — holds a modifier+key combination across key presses
+    sticky_key_state: StickyKeyState,
 
     /// Caps Word state machine
     caps_word: CapsWordState,
@@ -257,8 +268,7 @@ impl<'a> Keyboard<'a> {
             keymap,
             keyboard_event_subscriber: KeyboardEvent::subscriber(),
             last_press_time: Instant::now(),
-            osl_state: OneShotState::default(),
-            osm_state: OneShotState::default(),
+            sticky_key_state: StickyKeyState::default(),
             caps_word: CapsWordState::default(),
             with_modifiers: ModifierCombination::default(),
             macro_texting: false,
@@ -1200,21 +1210,44 @@ impl<'a> Keyboard<'a> {
         })
         .await;
 
+        // Release the tap-key StickyKey when any non-SK, non-modifier key is pressed.
+        //
+        // Pure-mod SKs are deliberately NOT released here: the modifier must remain applied
+        // THROUGH the terminating key's report (and is then consumed by `update_sticky_key`
+        // in `process_action_key`, per `quick_release`). Only the tap-key shape releases its
+        // held modifier cleanly before the foreign key registers.
+        if event.pressed && self.sticky_key_state.is_tap_key() {
+            let is_sk_or_modifier = match action {
+                Action::StickyKey(_) | Action::Modifier(_) => true,
+                Action::Key(KeyCode::Hid(hid_key)) if hid_key.is_modifier() => true,
+                _ => false,
+            };
+            if !is_sk_or_modifier {
+                self.release_sticky_key_if_active().await;
+            }
+        }
+
         match action {
             Action::No => {}
             Action::Key(key) => self.process_action_key(key, event).await,
-            Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, event),
+            Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, event).await,
             Action::LayerOff(layer_num) => {
                 // Turn off a layer temporarily when the key is pressed
                 // Reactivate the layer after the key is released
                 if event.pressed {
                     self.keymap.deactivate_layer(layer_num);
+                    if self.keymap.sticky_key_config().release_on_layer_change {
+                        self.release_sticky_key_if_active().await;
+                    }
                 }
             }
             Action::LayerToggle(layer_num) => {
-                // Toggle a layer when the key is release
+                // Toggle a layer when the key is released
                 if !event.pressed {
                     self.keymap.toggle_layer(layer_num);
+                    if self.keymap.sticky_key_config().release_on_layer_change {
+                        self.release_sticky_key_if_active().await;
+                    }
                 }
             }
             Action::LayerToggleOnly(layer_num) => {
@@ -1230,15 +1263,24 @@ impl<'a> Keyboard<'a> {
                     }
                     // Activate the target layer
                     self.keymap.activate_layer(layer_num);
+                    if self.keymap.sticky_key_config().release_on_layer_change {
+                        self.release_sticky_key_if_active().await;
+                    }
                 }
             }
             Action::DefaultLayer(layer_num) => {
                 // Set the default layer
                 self.keymap.set_default_layer(layer_num);
+                if self.keymap.sticky_key_config().release_on_layer_change {
+                    self.release_sticky_key_if_active().await;
+                }
             }
             Action::PersistentDefaultLayer(layer_num) => {
                 // Set the default layer and persist it so it survives a reboot
                 self.keymap.set_default_layer(layer_num);
+                if self.keymap.sticky_key_config().release_on_layer_change {
+                    self.release_sticky_key_if_active().await;
+                }
                 // Persist only if the layer was valid (set_default_layer rejects out-of-range)
                 #[cfg(feature = "storage")]
                 if event.pressed && self.keymap.get_default_layer() == layer_num {
@@ -1255,7 +1297,6 @@ impl<'a> Keyboard<'a> {
                 }
                 //report the modifier press/release in its own hid report
                 self.send_keyboard_report_with_resolved_modifiers(event.pressed).await;
-                self.update_osl(event);
             }
             Action::TriggerMacro(macro_idx) => self.execute_macro(macro_idx, event).await,
             Action::KeyWithModifier(key_code, modifiers) => {
@@ -1280,18 +1321,11 @@ impl<'a> Keyboard<'a> {
                     // they will be "released" the same time as the key (in same hid report)
                     self.held_modifiers &= !(modifiers);
                 }
-                self.process_action_layer_switch(layer_num, event);
+                self.process_action_layer_switch(layer_num, event).await;
                 self.send_keyboard_report_with_resolved_modifiers(event.pressed).await
             }
-            Action::OneShotLayer(l) => {
-                self.process_action_osl(l, event).await;
-                // Process OSM to avoid the OSL state stuck when an OSL is followed by an OSM
-                self.update_osm(event);
-            }
-            Action::OneShotModifier(m) => {
-                self.process_action_osm(m, event).await;
-                // Process OSL to avoid the OSM state stuck when an OSM is followed by an OSL
-                self.update_osl(event);
+            Action::StickyKey(params) => {
+                self.process_action_sticky_key(params, event).await;
             }
             Action::OneShotKey(_k) => warn!("One-shot key is not supported: {:?}", action),
             Action::Light(_light_action) => warn!("Light controll is not supported"),
@@ -1300,12 +1334,12 @@ impl<'a> Keyboard<'a> {
             Action::User(id) => self.process_user(id, event).await,
             Action::TriLayerLower => {
                 // Tri-layer lower, turn layer 1 on and update layer state
-                self.process_action_layer_switch(1, event);
+                self.process_action_layer_switch(1, event).await;
                 self.keymap.update_fn_layer_state();
             }
             Action::TriLayerUpper => {
                 // Tri-layer upper, turn layer 2 on and update layer state
-                self.process_action_layer_switch(2, event);
+                self.process_action_layer_switch(2, event).await;
                 self.keymap.update_fn_layer_state();
             }
             #[cfg(feature = "steno")]
@@ -1345,21 +1379,27 @@ impl<'a> Keyboard<'a> {
     /// - registered modifiers
     /// - one-shot modifiers
     pub fn resolve_explicit_modifiers(&self, pressed: bool) -> ModifierCombination {
-        // if a one-shot modifier is active, decorate the hid report of keypress with those modifiers
+        // if a sticky key is active, decorate the hid report of keypress with its modifiers
         let mut result = self.held_modifiers;
 
-        // OneShotState::Held keeps the temporary modifiers active until the key is released
-        if pressed {
-            if let Some(osm) = self.osm_state.value() {
-                result |= *osm;
+        // Add StickyKey modifiers.
+        //
+        // - Tap-key shape (alt-tab): the modifier is held continuously between presses, so
+        //   it is included on both press and release reports (its own HID key is what gets
+        //   registered/unregistered).
+        // - Pure-mod shape (OSM): the modifier usually applies only on the terminating key's
+        //   press report and is "released" together with the key release — except in held
+        //   mode (key pressed while SK still physically held), where the modifier behaves
+        //   like a normal held modifier and stays applied until the SK itself is released.
+        if let StickyKeyState::Active { mods, phase, .. } = self.sticky_key_state {
+            if self.sticky_key_state.is_pure_mod() {
+                if pressed || phase == SkPhase::Held {
+                    result |= mods;
+                }
+            } else {
+                result |= mods;
             }
-        } else if let OneShotState::Held(osm) = self.osm_state {
-            // One shot modifiers usually "released" together with the key release,
-            // except when oneshot is in "held mode" (to allow Alt+Tab like use cases)
-            // In this later case Held -> None state change will report
-            // the "modifier released" change in a separate hid report
-            result |= osm;
-        };
+        }
 
         result
     }
@@ -1544,21 +1584,23 @@ impl<'a> Keyboard<'a> {
             _ => warn!("KeyCode variant not supported: {:?}", key),
         }
 
-        let quick_release = self.keymap.one_shot_modifiers_config().quick_release;
-        let osm_consumed = self.update_osm(event);
-        if quick_release && osm_consumed && key.is_basic_keyboard_key() && event.pressed {
+        let quick_release = self.keymap.sticky_key_config().quick_release;
+        let sk_consumed = self.update_sticky_key(event);
+        if quick_release && sk_consumed && key.is_basic_keyboard_key() && event.pressed {
             self.send_keyboard_report_with_resolved_modifiers(true).await;
         }
-        self.update_osl(event);
     }
 
     /// Process layer switch action.
-    fn process_action_layer_switch(&mut self, layer_num: u8, event: KeyboardEvent) {
+    async fn process_action_layer_switch(&mut self, layer_num: u8, event: KeyboardEvent) {
         // Change layer state only when the key's state is changed
         if event.pressed {
             self.keymap.activate_layer(layer_num);
         } else {
             self.keymap.deactivate_layer(layer_num);
+            if self.keymap.sticky_key_config().release_on_layer_change {
+                self.release_sticky_key_if_active().await;
+            }
         }
     }
 
@@ -2201,7 +2243,9 @@ mod test {
             let mut keyboard = create_test_keyboard();
 
             // Activate layer 1
-            keyboard.process_action_layer_switch(1, KeyboardEvent::key(0, 0, true));
+            keyboard
+                .process_action_layer_switch(1, KeyboardEvent::key(0, 0, true))
+                .await;
 
             // Press Transparent key (Q on lower layer)
             keyboard.process_inner(KeyboardEvent::key(1, 1, true)).await;
