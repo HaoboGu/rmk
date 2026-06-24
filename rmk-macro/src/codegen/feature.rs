@@ -30,7 +30,7 @@ pub(crate) fn get_rmk_features() -> Option<Vec<String>> {
                 if default_features {
                     feature_set.push("defmt".to_string());
                     feature_set.push("storage".to_string());
-                    feature_set.push("vial".to_string());
+                    feature_set.push("rynk".to_string());
                     feature_set.push("watchdog".to_string());
                 }
                 feature_set
