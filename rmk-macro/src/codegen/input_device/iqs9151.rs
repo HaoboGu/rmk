@@ -1,33 +1,33 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use rmk_config::resolved::hardware::{ChipModel, ChipSeries, Iqs5xxConfig};
+use rmk_config::resolved::hardware::{ChipModel, ChipSeries, Iqs9151Config};
 
 use super::Initializer;
 
-/// Expand IQS5xx device configuration.
+/// Expand IQS9151 device configuration.
 /// Returns (device initializers, processor initializers).
-pub(crate) fn expand_iqs5xx_device(
-    iqs5xx_config: Vec<Iqs5xxConfig>,
+pub(crate) fn expand_iqs9151_device(
+    iqs9151_config: Vec<Iqs9151Config>,
     chip: &ChipModel,
 ) -> (Vec<Initializer>, Vec<Initializer>) {
-    if iqs5xx_config.is_empty() {
+    if iqs9151_config.is_empty() {
         return (Vec::new(), Vec::new());
     }
 
     match chip.series {
         ChipSeries::Nrf52 | ChipSeries::Rp2040 => {}
         _ => {
-            panic!("IQS5xx is only supported on nRF52 and RP2040 chips");
+            panic!("IQS9151 is only supported on nRF52 and RP2040 chips");
         }
     }
 
     let mut device_initializers = vec![];
     let mut processor_initializers = vec![];
 
-    for (idx, sensor) in iqs5xx_config.iter().enumerate() {
+    for (idx, sensor) in iqs9151_config.iter().enumerate() {
         let sensor_id = sensor.id.unwrap_or(0);
         let sensor_name = if sensor.name.is_empty() {
-            format!("iqs5xx_{}_id{}", idx, sensor_id)
+            format!("iqs9151_{}_id{}", idx, sensor_id)
         } else {
             format!("{}_id{}", sensor.name.clone(), sensor_id)
         };
@@ -37,9 +37,6 @@ pub(crate) fn expand_iqs5xx_device(
         let i2c_buf_ident = format_ident!("{}_i2c_buf", sensor_name);
         let i2c_buf_ref_ident = format_ident!("{}_i2c_buf_ref", sensor_name);
         let rdy_ident = format_ident!("{}_rdy", sensor_name);
-        let processor_ident = format_ident!("{}_processor", sensor_name);
-        let processor_ident_config = format_ident!("{}_config", processor_ident);
-
         let instance_ident = format_ident!("{}", sensor.i2c.instance.to_uppercase());
         let sda_ident = format_ident!("{}", sensor.i2c.sda);
         let scl_ident = format_ident!("{}", sensor.i2c.scl);
@@ -89,7 +86,7 @@ pub(crate) fn expand_iqs5xx_device(
                     ::embassy_nrf::twim::Config::default(),
                     #i2c_buf_ref_ident,
                 );
-                let mut #device_ident = ::rmk::input_device::iqs5xx::Iqs5xx::new(
+                let mut #device_ident = ::rmk::input_device::iqs9151::Iqs9151::new(
                     #sensor_id,
                     #i2c_ident,
                     #rdy_ident,
@@ -104,7 +101,7 @@ pub(crate) fn expand_iqs5xx_device(
                     Irqs,
                     ::embassy_rp::i2c::Config::default(),
                 );
-                let mut #device_ident = ::rmk::input_device::iqs5xx::Iqs5xx::new(
+                let mut #device_ident = ::rmk::input_device::iqs9151::Iqs9151::new(
                     #sensor_id,
                     #i2c_ident,
                     #rdy_ident,
@@ -118,38 +115,41 @@ pub(crate) fn expand_iqs5xx_device(
             var_name: device_ident,
         });
 
-        let processor_init = quote! {
-            let #processor_ident_config = ::rmk::input_device::pointing::PointingProcessorConfig {
-                device_id: #sensor_id,
-                invert_x: #proc_invert_x,
-                invert_y: #proc_invert_y,
-                swap_xy: #proc_swap_xy,
+        if processor_initializers.is_empty() {
+            let processor_ident = format_ident!("{}_processor", sensor_name);
+            let processor_ident_config = format_ident!("{}_config", processor_ident);
+            let processor_init = quote! {
+                let #processor_ident_config = ::rmk::input_device::pointing::PointingProcessorConfig {
+                    invert_x: #proc_invert_x,
+                    invert_y: #proc_invert_y,
+                    swap_xy: #proc_swap_xy,
+                };
+                let mut #processor_ident = ::rmk::input_device::pointing::PointingProcessor::new(
+                    &keymap,
+                    #processor_ident_config,
+                );
             };
-            let mut #processor_ident = ::rmk::input_device::pointing::PointingProcessor::new(
-                &keymap,
-                #processor_ident_config,
-            );
-        };
 
-        processor_initializers.push(Initializer {
-            initializer: processor_init,
-            var_name: processor_ident,
-        });
+            processor_initializers.push(Initializer {
+                initializer: processor_init,
+                var_name: processor_ident,
+            });
+        }
     }
 
     (device_initializers, processor_initializers)
 }
 
-/// Generate `bind_interrupts!` entries for the I²C peripherals used by IQS5xx
+/// Generate `bind_interrupts!` entries for the I²C peripherals used by IQS9151
 /// devices on `chip`. Returns an empty token stream if there are no devices.
-pub(crate) fn expand_iqs5xx_interrupts(
+pub(crate) fn expand_iqs9151_interrupts(
     chip_series: &ChipSeries,
-    iqs5xx_config: &[Iqs5xxConfig],
+    iqs9151_config: &[Iqs9151Config],
 ) -> TokenStream {
-    if iqs5xx_config.is_empty() {
+    if iqs9151_config.is_empty() {
         return quote! {};
     }
-    let entries = iqs5xx_config.iter().map(|sensor| {
+    let entries = iqs9151_config.iter().map(|sensor| {
         let instance = format_ident!("{}", sensor.i2c.instance.to_uppercase());
         match chip_series {
             ChipSeries::Nrf52 => quote! {
