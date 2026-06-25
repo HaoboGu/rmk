@@ -59,3 +59,17 @@ incremental = false
 lto = 'thin'
 opt-level = 3
 overflow-checks = false
+
+# esp-radio (crates.io 0.18) still pins bt-hci 0.8, but rmk/trouble-host need bt-hci 0.9.
+# Pin the esp-hal graph to the embassy-rs/esp-hal fork (esp-radio 0.18 + bt-hci 0.9) —
+# the same rev trouble's own esp CI uses. Drop once esp-radio ships bt-hci 0.9.
+[patch.crates-io]
+esp-alloc = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+esp-backtrace = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+esp-bootloader-esp-idf = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+esp-hal = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+esp-println = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+esp-radio = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+esp-rtos = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+esp-storage = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "1d3c3dec8edbf37450d0174b312f8d3d6cc0bf12" }

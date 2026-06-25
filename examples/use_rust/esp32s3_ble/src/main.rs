@@ -16,7 +16,7 @@ use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{Input, InputConfig, Level, Output, OutputConfig, Pull};
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::otg_fs::Usb;
-use esp_hal::otg_fs::asynch::{Config, Driver};
+use esp_hal::otg_fs::embassy_usb_device::{Config, Driver};
 use esp_hal::rng::TrngSource;
 use esp_hal::timer::timg::TimerGroup;
 use esp_radio::ble::controller::BleConnector;
@@ -56,7 +56,7 @@ async fn main(_s: Spawner) {
 
     // Initialize USB
     static mut EP_MEMORY: [u8; 1024] = [0; 1024];
-    let usb = Usb::new(peripherals.USB0, peripherals.GPIO20, peripherals.GPIO19);
+    let usb = Usb::new(peripherals.USB_FS, peripherals.GPIO20, peripherals.GPIO19);
     // Create the driver, from the HAL.
     let config = Config::default();
     let usb_driver = Driver::new(usb, unsafe { &mut *addr_of_mut!(EP_MEMORY) }, config);

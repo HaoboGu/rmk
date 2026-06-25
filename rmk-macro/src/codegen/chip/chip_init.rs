@@ -191,6 +191,7 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                         p.PIN_24,
                         p.PIN_29,
                         ::embassy_rp::dma::Channel::new(p.DMA_CH0, Irqs),
+                        ::embassy_rp::dma::Channel::new(p.DMA_CH2, Irqs),
                     );
 
                     static STATE: ::static_cell::StaticCell<::cyw43::State> = ::static_cell::StaticCell::new();

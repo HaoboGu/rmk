@@ -2054,7 +2054,6 @@ dependencies = [
  "postcard",
  "rmk-macro",
  "rmk-types",
- "rp-pac",
  "sequential-storage",
  "serde",
  "static_cell",
