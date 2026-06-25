@@ -293,6 +293,84 @@ fn create_dusk_rollover_keyboard(use_tap_dance_c: bool) -> Keyboard<'static> {
     Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
 
+fn create_saurus_client_roll_keyboard() -> Keyboard<'static> {
+    let hrm_profile = MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(400u16), Some(250u16));
+    let hrmsgt_profile = MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(400u16), Some(100u16));
+    // Isolate the profile override path: the held key opts out of flow-tap,
+    // while the later key still inherits the global flow-tap setting.
+    let hrmsgt_no_flow_profile = hrmsgt_profile.with_enable_flow_tap(Some(false));
+
+    #[rustfmt::skip]
+    let dusk_layer = [
+        [k!(B),     k!(F), k!(L), k!(D), k!(Q),     k!(Quote), k!(W),     k!(O),  k!(U),     k!(Y)],
+        [td!(0),    k!(S), k!(H), td!(1), k!(K),    k!(J),     td!(2),    k!(A), td!(3),    td!(4)],
+        [k!(X),     k!(V), k!(M), k!(G), k!(Z),     k!(Minus), k!(P),     k!(Comma), k!(Dot), k!(Slash)],
+        [a!(No),    a!(No), k!(Tab), k!(R), k!(Enter), k!(Backspace), k!(Space), k!(Grave), a!(No), a!(No)],
+    ];
+    let no_layer = [[a!(No); 10]; 4];
+    let keymap = [dusk_layer, no_layer, no_layer, no_layer, no_layer];
+
+    let behavior_config = BehaviorConfig {
+        morse: MorsesConfig {
+            enable_flow_tap: true,
+            prior_idle_time: Duration::from_millis(120),
+            default_profile: MorseProfile::new(None, Some(MorseMode::Normal), Some(250u16), Some(250u16)),
+            morses: Vec::from_slice(&[
+                Morse::new_from_vial(
+                    key_action(HidKeyCode::N),
+                    Action::Modifier(ModifierCombination::LSHIFT),
+                    key_action(HidKeyCode::N),
+                    Action::No,
+                    hrmsgt_no_flow_profile,
+                ),
+                Morse::new_from_vial(
+                    key_action(HidKeyCode::T),
+                    Action::LayerOn(3),
+                    key_action(HidKeyCode::T),
+                    Action::No,
+                    hrm_profile,
+                ),
+                Morse::new_from_vial(
+                    key_action(HidKeyCode::C),
+                    Action::LayerOn(3),
+                    key_action(HidKeyCode::C),
+                    Action::No,
+                    hrm_profile,
+                ),
+                Morse::new_from_vial(
+                    key_action(HidKeyCode::E),
+                    Action::Modifier(ModifierCombination::RCTRL),
+                    key_action(HidKeyCode::E),
+                    Action::No,
+                    hrm_profile,
+                ),
+                Morse::new_from_vial(
+                    key_action(HidKeyCode::I),
+                    Action::Modifier(ModifierCombination::RSHIFT),
+                    key_action(HidKeyCode::I),
+                    Action::No,
+                    hrmsgt_profile,
+                ),
+            ])
+            .unwrap(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    #[rustfmt::skip]
+    let hand = [
+        [Hand::Left,    Hand::Left,    Hand::Left,    Hand::Left,    Hand::Left,       Hand::Right,     Hand::Right, Hand::Right,     Hand::Right,     Hand::Right],
+        [Hand::Left,    Hand::Left,    Hand::Left,    Hand::Left,    Hand::Left,       Hand::Right,     Hand::Right, Hand::Right,     Hand::Right,     Hand::Right],
+        [Hand::Left,    Hand::Left,    Hand::Left,    Hand::Left,    Hand::Left,       Hand::Right,     Hand::Right, Hand::Right,     Hand::Right,     Hand::Right],
+        [Hand::Unknown, Hand::Unknown, Hand::Bilateral, Hand::Left, Hand::Bilateral,   Hand::Bilateral, Hand::Right, Hand::Bilateral, Hand::Unknown,   Hand::Unknown],
+    ];
+
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
+    let per_key_config: &'static PositionalConfig<4, 10> = Box::leak(Box::new(PositionalConfig::new(hand)));
+    Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
+}
+
 #[test]
 fn test_tap() {
     key_sequence_test! {
@@ -891,6 +969,52 @@ fn test_flow_tapped_tap_then_hold_after_tap() {
             // RShift would mean the continuation breadcrumb was lost.
             [0, [kc_to_u8!(Backspace), 0, 0, 0, 0, 0]],
             [0, [0, 0, 0, 0, 0, 0]]
+        ]
+    };
+}
+
+/// Regression test for a Saurus-shaped `dusk` layout while typing "client".
+///
+/// The final `e`/`n`/`t` roll leaves `N` pressed before `T`, while `E` only
+/// resolves after `N` is already held. `T` then flow-taps because `E` just
+/// produced a simple keypress. Even when `N` disables flow-tap through a
+/// profile override, the later flow-tapped `T` must not overtake it, or the
+/// host sees "clietn".
+#[test]
+fn test_saurus_client_roll_with_flow_tap_override_keeps_n_before_t() {
+    key_sequence_test! {
+        keyboard: create_saurus_client_roll_keyboard(),
+        sequence: [
+            [1, 6, true, 150],  // Press C, after prior idle time
+            [1, 6, false, 30],  // Release C
+            [0, 2, true, 30],   // Press L
+            [0, 2, false, 30],  // Release L
+            [1, 9, true, 30],   // Press I, flow-tapped after L
+            [1, 9, false, 30],  // Release I
+            [1, 8, true, 150],  // Press E, after prior idle time
+            [1, 0, true, 40],   // Press N while E is unresolved
+            [1, 8, false, 30],  // Release E, resolving it before T
+            [1, 3, true, 30],   // Press T, flow-tapped after E
+            [1, 0, false, 30],  // Release N
+            [1, 3, false, 30],  // Release T
+            [0, 9, true, 300],  // Let T's hold-after-tap breadcrumb expire, then press Y
+            [0, 9, false, 30],  // Release Y
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(L), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(I), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(E), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(N), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(T), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(Y), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
         ]
     };
 }

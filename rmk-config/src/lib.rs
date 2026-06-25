@@ -582,6 +582,8 @@ pub(crate) struct BehaviorConfig {
 /// overrides the defaults given in TapHoldConfig
 #[derive(Clone, Debug, Deserialize, Default)]
 pub(crate) struct MorseProfile {
+    pub enable_flow_tap: Option<bool>,
+
     /// if true, tap-hold key will always send tap action when tapped with the same hand only
     pub unilateral_tap: Option<bool>,
 

@@ -348,6 +348,19 @@ impl<'a> Keyboard<'a> {
         keymap.morse_default_profile().unilateral_tap().unwrap_or(false)
     }
 
+    pub fn is_flow_tap_enabled(keymap: &KeyMap, key_action: &KeyAction) -> bool {
+        match key_action {
+            KeyAction::TapHold(_, _, profile) => profile
+                .enable_flow_tap()
+                .unwrap_or_else(|| keymap.morse_enable_flow_tap()),
+            KeyAction::Morse(index) => keymap
+                .get_morse(*index as usize)
+                .and_then(|morse| morse.profile.enable_flow_tap())
+                .unwrap_or_else(|| keymap.morse_enable_flow_tap()),
+            _ => keymap.morse_enable_flow_tap(),
+        }
+    }
+
     /// Checks if the given pattern can fire its action early even though longer
     /// continuations exist. Returns Some(action) when the hold continuation has
     /// the same action and the tap continuation is not configured.
