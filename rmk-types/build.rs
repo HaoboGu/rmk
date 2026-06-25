@@ -150,8 +150,8 @@ fn generate_constants(bc: &BuildConstants) -> String {
             bc.protocol_macro_chunk_size
         ));
         // Compile-time check: firmware Vec sizes must not exceed protocol ceilings.
-        // Only enforce when the rmk_protocol feature is active.
-        if env::var("CARGO_FEATURE_RMK_PROTOCOL").is_ok() {
+        // Only enforce when the rynk feature is active.
+        if env::var("CARGO_FEATURE_RYNK").is_ok() {
             lines.push("const _: () = assert!(COMBO_SIZE <= MAX_COMBO_SIZE, \"firmware COMBO_SIZE exceeds protocol ceiling MAX_COMBO_SIZE\");".to_string());
             lines.push("const _: () = assert!(MORSE_SIZE <= MAX_MORSE_SIZE, \"firmware MORSE_SIZE exceeds protocol ceiling MAX_MORSE_SIZE\");".to_string());
             lines.push("const _: () = assert!(MACRO_DATA_SIZE <= MAX_MACRO_DATA_SIZE, \"firmware MACRO_DATA_SIZE exceeds protocol ceiling MAX_MACRO_DATA_SIZE\");".to_string());
@@ -161,6 +161,25 @@ fn generate_constants(bc: &BuildConstants) -> String {
         if is_bulk {
             lines.push(format!("pub const BULK_SIZE: usize = {};", bc.protocol_max_bulk_size));
             lines.push("const _: () = assert!(BULK_SIZE <= MAX_BULK_SIZE, \"firmware BULK_SIZE exceeds protocol ceiling MAX_BULK_SIZE\");".to_string());
+        }
+    }
+
+    // Rynk RX/TX buffer size. Only emitted when the `rynk` feature is on
+    // so the constant doesn't leak into non-Rynk builds. `None` falls back
+    // to `RYNK_MIN_BUFFER_SIZE`, which is the compile-time lower bound;
+    // the `rmk/src/host/rynk/mod.rs` const-assert rejects values below it.
+    if env::var("CARGO_FEATURE_RYNK").is_ok() {
+        match bc.rynk_buffer_size {
+            Some(n) => {
+                lines.push(format!("pub const RYNK_BUFFER_SIZE: usize = {n};"));
+            }
+            None => {
+                lines.push(
+                    "pub const RYNK_BUFFER_SIZE: usize = \
+                     crate::protocol::rynk::RYNK_MIN_BUFFER_SIZE;"
+                        .to_string(),
+                );
+            }
         }
     }
 

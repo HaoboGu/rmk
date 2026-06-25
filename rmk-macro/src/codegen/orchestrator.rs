@@ -46,10 +46,10 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
         .expect("failed to resolve layout config");
 
     validate_feature_config_parity(
+        &rmk_features,
         hardware.storage.is_some(),
-        is_feature_enabled(&rmk_features, "storage"),
         host.vial_enabled,
-        is_feature_enabled(&rmk_features, "vial"),
+        host.rynk_enabled,
     )
     .unwrap_or_else(|err| panic!("{err}"));
 
@@ -75,30 +75,35 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
 }
 
 fn validate_feature_config_parity(
-    storage_enabled_in_config: bool,
-    storage_enabled_in_features: bool,
-    vial_enabled_in_config: bool,
-    vial_enabled_in_features: bool,
-) -> Result<(), &'static str> {
-    if storage_enabled_in_config != storage_enabled_in_features {
-        if storage_enabled_in_config {
-            return Err(
-                "If the \"storage\" Cargo feature is disabled, `storage.enabled` must be set to false in keyboard.toml.",
-            );
+    rmk_features: &Option<Vec<String>>,
+    storage_in_config: bool,
+    vial_in_config: bool,
+    rynk_in_config: bool,
+) -> Result<(), String> {
+    // A feature enabled in keyboard.toml must have its rmk Cargo feature enabled, and vice versa.
+    // (Cargo feature, keyboard.toml field, enabled in keyboard.toml?)
+    for (feature, config_field, in_config) in [
+        ("storage", "storage.enabled", storage_in_config),
+        ("vial", "host.vial_enabled", vial_in_config),
+        ("rynk", "host.rynk_enabled", rynk_in_config),
+    ] {
+        if in_config == is_feature_enabled(rmk_features, feature) {
+            continue;
         }
-        return Err(
-            "`storage.enabled = false` in keyboard.toml requires disabling the \"storage\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need).",
-        );
+        return Err(if in_config {
+            format!(
+                "If the \"{feature}\" Cargo feature is disabled, `{config_field}` must be set to false in keyboard.toml."
+            )
+        } else {
+            format!(
+                "`{config_field} = false` in keyboard.toml requires disabling the \"{feature}\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need)."
+            )
+        });
     }
 
-    if vial_enabled_in_config != vial_enabled_in_features {
-        if vial_enabled_in_config {
-            return Err(
-                "If the \"vial\" Cargo feature is disabled, `host.vial_enabled` must be set to false in keyboard.toml.",
-            );
-        }
+    if vial_in_config && rynk_in_config {
         return Err(
-            "`host.vial_enabled = false` in keyboard.toml requires disabling the \"vial\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need).",
+            "`host.vial_enabled` and `host.rynk_enabled` are mutually exclusive — set exactly one to true (the underlying Cargo features for rmk also conflict).".to_string(),
         );
     }
 
@@ -164,16 +169,30 @@ pub(crate) fn expand_imports_and_constants(
 mod tests {
     use super::validate_feature_config_parity;
 
+    /// Build the enabled-Cargo-features list that `validate_feature_config_parity` reads.
+    fn features(enabled: &[&str]) -> Option<Vec<String>> {
+        Some(enabled.iter().map(|f| f.to_string()).collect())
+    }
+
     #[test]
-    fn accepts_matching_storage_and_vial_feature_states() {
-        assert!(validate_feature_config_parity(true, true, true, true).is_ok());
-        assert!(validate_feature_config_parity(false, false, false, false).is_ok());
-        assert!(validate_feature_config_parity(true, true, false, false).is_ok());
+    fn accepts_matching_storage_vial_rynk_feature_states() {
+        assert!(
+            validate_feature_config_parity(&features(&["storage", "vial"]), true, true, false)
+                .is_ok()
+        );
+        assert!(validate_feature_config_parity(&features(&[]), false, false, false).is_ok());
+        assert!(
+            validate_feature_config_parity(&features(&["storage"]), true, false, false).is_ok()
+        );
+        assert!(
+            validate_feature_config_parity(&features(&["storage", "rynk"]), true, false, true)
+                .is_ok()
+        );
     }
 
     #[test]
     fn rejects_storage_enabled_in_config_without_feature() {
-        let err = validate_feature_config_parity(true, false, false, false).unwrap_err();
+        let err = validate_feature_config_parity(&features(&[]), true, false, false).unwrap_err();
         assert_eq!(
             err,
             "If the \"storage\" Cargo feature is disabled, `storage.enabled` must be set to false in keyboard.toml."
@@ -182,7 +201,8 @@ mod tests {
 
     #[test]
     fn rejects_storage_feature_without_config() {
-        let err = validate_feature_config_parity(false, true, false, false).unwrap_err();
+        let err = validate_feature_config_parity(&features(&["storage"]), false, false, false)
+            .unwrap_err();
         assert_eq!(
             err,
             "`storage.enabled = false` in keyboard.toml requires disabling the \"storage\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need)."
@@ -191,7 +211,7 @@ mod tests {
 
     #[test]
     fn rejects_vial_enabled_in_config_without_feature() {
-        let err = validate_feature_config_parity(false, false, true, false).unwrap_err();
+        let err = validate_feature_config_parity(&features(&[]), false, true, false).unwrap_err();
         assert_eq!(
             err,
             "If the \"vial\" Cargo feature is disabled, `host.vial_enabled` must be set to false in keyboard.toml."
@@ -200,10 +220,40 @@ mod tests {
 
     #[test]
     fn rejects_vial_feature_without_config() {
-        let err = validate_feature_config_parity(false, false, false, true).unwrap_err();
+        let err =
+            validate_feature_config_parity(&features(&["vial"]), false, false, false).unwrap_err();
         assert_eq!(
             err,
             "`host.vial_enabled = false` in keyboard.toml requires disabling the \"vial\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need)."
+        );
+    }
+
+    #[test]
+    fn rejects_rynk_enabled_in_config_without_feature() {
+        let err = validate_feature_config_parity(&features(&[]), false, false, true).unwrap_err();
+        assert_eq!(
+            err,
+            "If the \"rynk\" Cargo feature is disabled, `host.rynk_enabled` must be set to false in keyboard.toml."
+        );
+    }
+
+    #[test]
+    fn rejects_rynk_feature_without_config() {
+        let err =
+            validate_feature_config_parity(&features(&["rynk"]), false, false, false).unwrap_err();
+        assert_eq!(
+            err,
+            "`host.rynk_enabled = false` in keyboard.toml requires disabling the \"rynk\" Cargo feature for rmk in Cargo.toml (for example with `default-features = false` and explicitly re-enabling the features you need)."
+        );
+    }
+
+    #[test]
+    fn rejects_vial_and_rynk_both_enabled() {
+        let err = validate_feature_config_parity(&features(&["vial", "rynk"]), false, true, true)
+            .unwrap_err();
+        assert_eq!(
+            err,
+            "`host.vial_enabled` and `host.rynk_enabled` are mutually exclusive — set exactly one to true (the underlying Cargo features for rmk also conflict)."
         );
     }
 }
@@ -251,10 +301,9 @@ fn expand_main(
         quote! {}
     };
 
-    let host_service_init = if host.vial_enabled {
+    let host_service_init = if host.vial_enabled || host.rynk_enabled {
         quote! {
-            let host_ctx = ::rmk::host::KeyboardContext::new(&keymap);
-            let mut host_service = ::rmk::host::HostService::new(&host_ctx, &rmk_config);
+            let host_service = ::rmk::host::HostService::new(&keymap, &rmk_config);
         }
     } else {
         quote! {}
@@ -352,7 +401,7 @@ fn expand_main(
             // Initialize the matrix + keyboard, as `matrix` and `keyboard`
             #matrix_and_keyboard
 
-            // Initialize the host (Vial) service, as `host_service`
+            // Initialize the host (Vial / Rynk) service, as `host_service`
             #host_service_init
 
             // Initialize input device config as `input_device_config` and processor as `processor`

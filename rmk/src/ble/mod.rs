@@ -37,6 +37,10 @@ pub(crate) mod led;
 pub(crate) mod nrf;
 pub mod passkey;
 pub(crate) mod profile;
+#[cfg(feature = "rynk")]
+pub(crate) mod rynk;
+#[cfg(all(feature = "vial", feature = "_ble"))]
+pub(crate) mod vial;
 
 /// Global state of sleep management
 /// - `true`: Indicates central is sleeping
@@ -71,8 +75,7 @@ pub async fn build_ble_stack<
 /// BLE transport runnable. Owns the trouble-host server and profile manager;
 /// `run` joins the background `ble_task` runner with the advertise→connect→serve
 /// loop and runs forever.
-//
-pub struct BleTransport<'b, 's, C>
+pub struct BleTransport<'a, 'b, 's, C>
 where
     's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
@@ -81,9 +84,14 @@ where
     server: Server<'static>,
     profile_manager: ProfileManager<'b, 's, C, DefaultPacketPool>,
     product_name: &'static str,
+    #[cfg(feature = "host")]
+    host_service: Option<&'a crate::host::HostService<'a>>,
+    // Keeps `'a` in the type's parameter list across all feature configurations.
+    #[cfg(not(feature = "host"))]
+    _phantom: core::marker::PhantomData<&'a ()>,
 }
 
-impl<'b, 's, C> BleTransport<'b, 's, C>
+impl<'a, 'b, 's, C> BleTransport<'a, 'b, 's, C>
 where
     's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
@@ -132,11 +140,24 @@ where
             server,
             profile_manager,
             product_name: rmk_config.device_config.product_name,
+            #[cfg(feature = "host")]
+            host_service: None,
+            #[cfg(not(feature = "host"))]
+            _phantom: core::marker::PhantomData,
         }
+    }
+
+    /// Attach the host-protocol service (Vial or Rynk, picked at compile
+    /// time by feature). See
+    /// [`UsbTransport::with_host_service`](crate::usb::UsbTransport::with_host_service).
+    #[cfg(feature = "host")]
+    pub fn with_host_service(mut self, service: &'a crate::host::HostService<'a>) -> Self {
+        self.host_service = Some(service);
+        self
     }
 }
 
-impl<'b, 's, C> Runnable for BleTransport<'b, 's, C>
+impl<'a, 'b, 's, C> Runnable for BleTransport<'a, 'b, 's, C>
 where
     's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
@@ -179,6 +200,8 @@ where
                                 stack,
                                 #[cfg(feature = "storage")]
                                 active_bond_info,
+                                #[cfg(feature = "host")]
+                                self.host_service,
                             ),
                             profile_manager.update_profile(),
                         )
@@ -266,11 +289,16 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let output_keyboard = server.hid_service.output_keyboard;
     let hid_control_point = server.hid_service.hid_control_point;
     let input_keyboard = server.hid_service.input_keyboard;
-    #[cfg(feature = "host")]
+    #[cfg(feature = "vial")]
     let (output_host, input_host, host_control_point) = (
-        server.host_service.output_data,
-        server.host_service.input_data,
-        server.host_service.hid_control_point,
+        server.vial_service.output_data,
+        server.vial_service.input_data,
+        server.vial_service.hid_control_point,
+    );
+    #[cfg(feature = "rynk")]
+    let (output_host, input_host) = (
+        server.rynk_service.output_data.clone(),
+        server.rynk_service.input_data.clone(),
     );
     let mouse = server.composite_service.mouse_report;
     let media = server.composite_service.media_report;
@@ -341,9 +369,13 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         }
                     }
                     GattEvent::Write(event) => {
-                        #[cfg(feature = "host")]
+                        // Reject host-channel writes on an unencrypted link before
+                        // they reach the Rynk session, not just at the ATT reply.
+                        let encrypted = conn.raw().security_level()?.encrypted();
+
+                        #[cfg(feature = "vial")]
                         let host_control_point_match = event.handle() == host_control_point.handle;
-                        #[cfg(not(feature = "host"))]
+                        #[cfg(not(feature = "vial"))]
                         let host_control_point_match = false;
 
                         if event.handle() == output_keyboard.handle {
@@ -383,25 +415,45 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             }
                         } else {
                             #[cfg(feature = "host")]
+                            let mut handled = false;
+                            #[cfg(not(feature = "host"))]
+                            let handled = false;
+                            #[cfg(feature = "host")]
                             if event.handle() == output_host.handle {
-                                debug!("Got host packet: {:?}", event.data());
-                                if event.data().len() == 32 {
-                                    let mut data = [0u8; 32];
-                                    data.copy_from_slice(event.data());
-                                    crate::channel::enqueue_host_request(ConnectionType::Ble, data).await;
+                                let data = event.data();
+                                #[cfg(feature = "vial")]
+                                if data.len() == 32 {
+                                    debug!("Got Vial packet: {:?}", data);
+                                    let mut message = [0u8; 32];
+                                    message.copy_from_slice(data);
+                                    crate::channel::VIAL_BLE_RX_CHANNEL.send(message).await;
                                 } else {
-                                    warn!("Wrong host packet data: {:?}", event.data());
+                                    warn!("Wrong Vial packet data: {:?}", data);
                                 }
-                            } else if event.handle() == input_host.cccd_handle.expect("No CCCD for input host") {
+
+                                #[cfg(feature = "rynk")]
+                                if !data.is_empty() {
+                                    if encrypted {
+                                        debug!("Got Rynk packet ({} bytes)", data.len());
+                                        // Awaits the pipe's backpressure when the rynk
+                                        // consumer falls behind.
+                                        crate::channel::RYNK_BLE_RX_PIPE.write_all(data).await;
+                                    } else {
+                                        warn!("Rynk: dropping {}-byte write on unencrypted link", data.len());
+                                    }
+                                }
+
+                                handled = true;
+                            } else if event.handle() == input_host.cccd_handle.expect("No CCCD for host input") {
                                 cccd_updated = true;
-                            } else {
+                                handled = true;
+                            }
+                            if !handled {
                                 debug!("Write GATT Event to Unknown: {:?}", event.handle());
                             }
-                            #[cfg(not(feature = "host"))]
-                            debug!("Write GATT Event to Unknown: {:?}", event.handle());
                         }
 
-                        if conn.raw().security_level()?.encrypted() {
+                        if encrypted {
                             None
                         } else {
                             Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
@@ -637,12 +689,14 @@ pub(crate) async fn set_conn_params<
 async fn run_ble_keyboard<
     'a,
     'b,
+    #[cfg(feature = "host")] 'r,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 >(
     server: &'b Server<'_>,
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     stack: &Stack<'_, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] active_bond_info: Option<crate::ble::profile::ProfileInfo>,
+    #[cfg(feature = "host")] host_service: Option<&'r crate::host::HostService<'r>>,
 ) {
     let mut ble_hid_server = BleHidServer::new(server, conn);
     let mut ble_led_reader = BleLedReader {};
@@ -688,7 +742,13 @@ async fn run_ble_keyboard<
     let led_task = run_led_reader(&mut ble_led_reader, ConnectionType::Ble);
 
     #[cfg(feature = "host")]
-    let host_task = crate::host::ble::run_ble_host(server.host_service.input_data, conn);
+    let host_task = async {
+        if let Some(service) = host_service {
+            crate::host::run_host_ble(server, conn, service).await;
+        } else {
+            core::future::pending::<()>().await;
+        }
+    };
     #[cfg(not(feature = "host"))]
     let host_task = core::future::pending::<()>();
 

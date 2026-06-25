@@ -331,6 +331,11 @@ impl KeyMapInner<'_> {
 }
 
 // ── Public KeyMap API (interior borrow hidden) ────────────────────────
+//
+// Every method borrows `inner`, mutates, and drops within one sync call — the
+// borrow never spans an `.await`. Embassy's scheduler is cooperative, so a
+// borrow held across an await would let another task observe the borrowed cell
+// and panic. New methods must return owned values, not borrow guards.
 
 impl<'a> KeyMap<'a> {
     /// Flatten [`KeymapData`] and build the `KeyMap`.
@@ -595,6 +600,11 @@ impl<'a> KeyMap<'a> {
         f(&inner.behavior.fork.forks)
     }
 
+    pub(crate) fn with_forks_mut<R>(&self, f: impl FnOnce(&mut [Fork]) -> R) -> R {
+        let mut inner = self.inner.borrow_mut();
+        f(&mut inner.behavior.fork.forks)
+    }
+
     pub(crate) fn with_combos<R>(&self, f: impl FnOnce(&[Option<Combo>]) -> R) -> R {
         let inner = self.inner.borrow();
         f(&inner.behavior.combo.combos)
@@ -648,6 +658,10 @@ impl<'a> KeyMap<'a> {
     }
 
     // ── Encoder access (for Vial GetEncoder/SetEncoder) ──
+
+    pub(crate) fn num_encoders(&self) -> usize {
+        self.inner.borrow().num_encoder
+    }
 
     pub(crate) fn get_encoder_action(&self, layer: usize, id: usize) -> Option<EncoderAction> {
         let inner = self.inner.borrow();

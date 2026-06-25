@@ -10,7 +10,14 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = ["async_matrix", "nrf54lm20_ble"] }
+rmk = { path = "../../../rmk", default-features = false, features = [
+    "rynk",
+    "async_matrix",
+    "nrf54lm20_ble",
+    "storage",
+    "defmt",
+    "watchdog",
+] }
 nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "131ff2088ed2bb4f6e50ba49e4976aced21fe7ba", default-features = false, features = [
     "defmt",
     "peripheral",

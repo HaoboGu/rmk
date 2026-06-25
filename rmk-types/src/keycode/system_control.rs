@@ -1,8 +1,6 @@
 //! System control keycodes.
 
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use super::hid::HidKeyCode;
@@ -13,7 +11,6 @@ use super::hid::HidKeyCode;
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub enum SystemControlKey {
     No = 0x00,
     PowerDown = 0x81,

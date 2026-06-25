@@ -174,10 +174,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             // Non-key events are drop-on-full to keep the split read loop responsive.
             SplitMessage::Pointing(e) => publish_event(e),
             #[cfg(feature = "_ble")]
-            SplitMessage::BatteryStatus(state) => {
-                use crate::event::PeripheralBatteryEvent;
-                publish_event(PeripheralBatteryEvent { id: self.id, state })
-            }
+            SplitMessage::BatteryStatus(state) => crate::split::ble::central::set_peripheral_battery(self.id, state.0),
             _ => warn!("{:?} should not come from peripheral", split_message),
         }
     }

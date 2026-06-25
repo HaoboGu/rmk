@@ -15,7 +15,7 @@ rmk-macro = { version = "=0.7.1", path = "../rmk-macro" }
 rmk-types = { version = "=0.2.2", path = "../rmk-types" }
 embedded-hal = { version = "1.0.0" }
 embedded-hal-async = { version = "1.0.0" }
-embedded-io-async = { version = "0.7", optional = true }
+embedded-io-async = { version = "0.7" }
 embedded-storage = { version = "0.3", optional = true }
 embedded-storage-async = { version = "0.4", optional = true }
 
@@ -41,7 +41,6 @@ sequential-storage = { version = "7.1.0", features = ["postcard"] }
 defmt = { version = "1.0", optional = true }
 log = { version = "0.4", optional = true }
 byteorder = { version = "1", default-features = false, optional = true }
-postcard-rpc = { version = "0.12", optional = true }
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive"] }
 
@@ -106,7 +105,7 @@ features = ["split", "vial", "async_matrix", "_ble"]
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["defmt", "storage", "vial", "vial_lock", "watchdog"]
+default = ["defmt", "storage", "rynk", "watchdog"]
 
 ## Enable hardware watchdog support
 watchdog = ["rmk-macro/watchdog"]
@@ -117,17 +116,17 @@ host = ["dep:byteorder"]
 ## Enable vial support
 vial = ["host"]
 
-## Enable vial lock feature
+## Enable vial lock feature. TODO: remove it, use `host_security`
 vial_lock = ["vial", "host_security"]
 
-## Enable physical key unlock and matrix state tracking (shared between vial_lock and rmk_protocol)
+## Enable physical key unlock and matrix state tracking
 host_security = []
 
-## Enable RMK protocol support (new protocol, mutually exclusive with vial)
-rmk_protocol = ["host", "host_security", "dep:postcard-rpc", "rmk-types/rmk_protocol"]
+## Enable Rynk protocol support (new RMK-native protocol, mutually exclusive with vial)
+rynk = ["host", "rmk-types/rynk"]
 
-## Enable bulk transfer endpoints for RMK protocol on MCUs with sufficient RAM
-bulk_transfer = ["rmk_protocol", "rmk-types/bulk"]
+## Enable bulk transfer endpoints for the Rynk protocol on MCUs with sufficient RAM
+bulk = ["rynk", "rmk-types/bulk"]
 
 ## Enable the storage. The storage is optional to save memory
 storage = [
@@ -199,7 +198,6 @@ async_matrix = []
 
 ## Enable split keyboard support.
 split = [
-    "dep:embedded-io-async",
     "trouble-host?/gatt-client-notification-queue-size-4",
     "rmk-types/split",
 ]
@@ -226,11 +224,16 @@ steno = ["rmk-types/steno"]
 ## Internal feature that indicates no USB is used, this feature will be auto-activated for some chips
 _no_usb = []
 
+## Internal feature marking chips whose USB peripheral enumerates at high speed
+## (480 Mbps). High-speed bulk endpoints must use a 512-byte max packet size;
+## auto-activated for the relevant chips.
+_usb_high_speed = []
+
 #! ### BLE feature flags
 #!
 #! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder of RMK repo for their usages.
 ## Enable feature if you want to use nRF54LM20 with BLE.
-nrf54lm20_ble = ["_nrf_ble"]
+nrf54lm20_ble = ["_nrf_ble", "_usb_high_speed"]
 ## Enable feature if you want to use nRF54L15 with BLE.
 nrf54l15_ble = ["_nrf_ble", "_no_usb"]
 ## Enable feature if you want to use nRF52840 with BLE.

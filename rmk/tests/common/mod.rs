@@ -1,4 +1,6 @@
 pub mod morse;
+#[cfg(feature = "rynk")]
+pub mod rynk_link;
 pub mod test_block_on;
 pub mod test_macro;
 
@@ -16,7 +18,7 @@ use rmk::hid::{KeyboardReport, Report};
 use rmk::keyboard::Keyboard;
 use rmk::keymap::KeyMap;
 use rmk::state::set_usb_state;
-use rmk::types::action::KeyAction;
+use rmk::types::action::{EncoderAction, KeyAction};
 use rmk::types::connection::UsbState;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{KeymapData, a, k, layer, lt, mo, shifted, th, wm};
@@ -186,6 +188,20 @@ pub fn wrap_keymap<'a, const R: usize, const C: usize, const L: usize>(
 ) -> &'a KeyMap<'static> {
     // Box::leak is acceptable in tests
     let data = Box::leak(Box::new(KeymapData::new(keymap)));
+    let keymap = test_block_on::test_block_on(KeyMap::new(data, config, per_key_config));
+    Box::leak(Box::new(keymap))
+}
+
+/// Like [`wrap_keymap`] but with `E` encoders per layer, so tests can exercise
+/// encoder-aware paths (e.g. `GetCapabilities.num_encoders`).
+pub fn wrap_keymap_with_encoders<'a, const R: usize, const C: usize, const L: usize, const E: usize>(
+    keymap: [[[KeyAction; C]; R]; L],
+    encoder_map: [[EncoderAction; E]; L],
+    per_key_config: &'static PositionalConfig<R, C>,
+    config: &'static mut BehaviorConfig,
+) -> &'a KeyMap<'static> {
+    // Box::leak is acceptable in tests
+    let data = Box::leak(Box::new(KeymapData::new_with_encoder(keymap, encoder_map)));
     let keymap = test_block_on::test_block_on(KeyMap::new(data, config, per_key_config));
     Box::leak(Box::new(keymap))
 }
