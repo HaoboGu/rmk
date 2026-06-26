@@ -214,6 +214,8 @@ mod tests {
         buf[3..5].copy_from_slice(&0u16.to_le_bytes());
 
         let msg = RynkMessage::try_from(&mut buf[..]).unwrap();
-        assert_eq!(msg.payload(), &[]);
+        // `&[] as &[u8]`: serde_json (a dev-dep) adds `impl PartialEq<Value> for
+        // u8`, so an untyped empty slice would be ambiguous here.
+        assert_eq!(msg.payload(), &[] as &[u8]);
     }
 }

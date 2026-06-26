@@ -19,12 +19,21 @@ strum = { version = "0.28", default-features = false, features = ["derive"] }
 
 bitfield-struct = "0.13"
 
-# TypeScript type generation for the web client (host/codegen-only; gated behind `ts`).
-ts-rs = { version = "12", optional = true }
+# TypeScript type + wasm-bindgen ABI generation for the web client
+# (host/codegen-only; gated behind `wasm`). serde-wasm-bindgen coupled.
+tsify = { version = "0.5", optional = true, default-features = false, features = ["js"] }
+wasm-bindgen = { version = "0.2", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
 
 [build-dependencies]
 rmk-config = { path = "../rmk-config", version = "=0.6.1" }
 toml = "1.0"
+
+[dev-dependencies]
+# Human-readable parity: the bitfield serde must emit named-bool objects on JSON
+# (serde_json is `is_human_readable`, like serde-wasm-bindgen) while postcard
+# keeps the compact `u8`.
+serde_json = "1"
 
 [features]
 default = []
@@ -42,9 +51,10 @@ rynk = []
 bulk = ["rynk"]
 # Host tool: uses protocol ceiling values for Vec capacities.
 host = ["rynk", "bulk", "_ble", "split", "steno"]
-# TypeScript type export for the web client. Needs std (ts-rs), so it also flips
-# the crate off `no_std`; only enabled by a codegen run, never by firmware.
-ts = ["dep:ts-rs", "host"]
+# TypeScript type + wasm ABI export for the web client. Pulls tsify/wasm-bindgen
+# (std), so it also flips the crate off `no_std`; only enabled by a codegen/wasm
+# build, never by firmware.
+wasm = ["dep:tsify", "dep:wasm-bindgen", "dep:serde-wasm-bindgen", "host"]
 # Build-time only features: forwarded from rmk to control constant generation in build.rs.
 _ble = []
 split = []

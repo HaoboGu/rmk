@@ -11,7 +11,8 @@ pub const UNLOCK_KEYS_SIZE: usize = 2;
 
 /// Protocol version advertised during the connection handshake.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct ProtocolVersion {
     pub major: u8,
     pub minor: u8,
@@ -28,7 +29,8 @@ impl ProtocolVersion {
 /// The host reads this once after connecting to learn the firmware's layout,
 /// feature set, and protocol limits.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct DeviceCapabilities {
     // -- Layout --
     pub num_layers: u8,
