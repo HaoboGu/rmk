@@ -38,6 +38,15 @@ const _: () = core::assert!(
      floor",
 );
 
+/// Serializes dispatch + response write so two concurrent BLE sessions
+/// (custom-GATT and WebHID) sharing one [`RynkService`]/`KeyMap` can't interleave
+/// a future multi-`await` bulk handler into a lost update. `_ble`-gated since
+/// that's the only build with concurrent sessions; there it's global across all
+/// transports (USB/UART acquire it too) — harmless, as only one host configures
+/// at a time.
+#[cfg(feature = "_ble")]
+static RYNK_DISPATCH_GUARD: embassy_sync::mutex::Mutex<crate::RawMutex, ()> = embassy_sync::mutex::Mutex::new(());
+
 /// Transport-agnostic Rynk service.
 pub struct RynkService<'a> {
     pub(super) ctx: KeyboardContext<'a>,
@@ -228,6 +237,11 @@ impl RynkService<'_> {
             let Ok(mut msg) = RynkMessage::try_from(&mut buf[..]) else {
                 return;
             };
+            // Held across dispatch + the response write so a future multi-await
+            // bulk handler can't interleave with the other session's
+            // read-modify-write. Drops on the early `return` below too.
+            #[cfg(feature = "_ble")]
+            let _guard = RYNK_DISPATCH_GUARD.lock().await;
             self.dispatch(&mut msg).await;
             let resp_len = msg.frame_len();
             if tx.write_all(&buf[..resp_len]).await.is_err() {

@@ -3,6 +3,8 @@ use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor};
 
 use super::battery_service::BatteryService;
 use super::device_info::DeviceConfigurationService;
+#[cfg(feature = "rynk")]
+use crate::hid::RynkHidReport;
 #[cfg(feature = "vial")]
 use crate::hid::ViaReport;
 use crate::hid::{CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report};
@@ -12,7 +14,9 @@ use crate::hid::{CompositeReport, CompositeReportType, HidError, HidWriterTrait,
 pub(crate) const CCCD_TABLE_SIZE: usize = trouble_host::config::CLIENT_ATT_TABLE_SIZE;
 
 #[cfg(feature = "rynk")]
-use rmk_types::protocol::rynk::{RYNK_BLE_CHUNK_SIZE, RYNK_INPUT_CHAR_UUID, RYNK_OUTPUT_CHAR_UUID, RYNK_SERVICE_UUID};
+use rmk_types::protocol::rynk::{
+    RYNK_BLE_CHUNK_SIZE, RYNK_HID_REPORT_SIZE, RYNK_INPUT_CHAR_UUID, RYNK_OUTPUT_CHAR_UUID, RYNK_SERVICE_UUID,
+};
 
 #[cfg(feature = "vial")]
 #[gatt_server]
@@ -30,6 +34,7 @@ pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
     pub(crate) hid_service: HidService,
     pub(crate) rynk_service: RynkService,
+    pub(crate) rynk_hid_service: RynkHidService,
     pub(crate) composite_service: CompositeService,
     pub(crate) device_config_service: DeviceConfigurationService,
 }
@@ -58,6 +63,33 @@ pub(crate) struct RynkService {
     pub(crate) input_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
     #[characteristic(uuid = RYNK_OUTPUT_CHAR_UUID, read, write, write_without_response)]
     pub(crate) output_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
+}
+
+/// Rynk config over WebHID — a vendor HID-over-GATT service (cloned from
+/// [`VialService`]) carrying the *same* rynk protocol as [`RynkService`], so a
+/// pure browser can reach the keyboard via WebHID over the OS HID link (Web
+/// Bluetooth can't attach an OS-bonded keyboard, but WebHID rides the HID link).
+/// `gatt_events_task` forwards `output_data` writes into
+/// [`crate::channel::RYNK_HID_BLE_RX_CHANNEL`] for
+/// [`crate::ble::rynk_hid::run_host_ble_hid`] to drain. Fixed 32-byte reports
+/// with the `2908` report-reference descriptors (report ID 0), exactly as Vial.
+#[cfg(feature = "rynk")]
+#[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
+pub(crate) struct RynkHidService {
+    #[characteristic(uuid = "2a4a", read, value = [0x01, 0x01, 0x00, 0x03])]
+    pub(crate) hid_info: [u8; 4],
+    #[characteristic(uuid = "2a4b", read, value = RynkHidReport::desc().try_into().expect("Failed to convert RynkHidReport to [u8; 27]"))]
+    pub(crate) report_map: [u8; 27],
+    #[characteristic(uuid = "2a4c", write_without_response)]
+    pub(crate) hid_control_point: u8,
+    #[characteristic(uuid = "2a4e", read, write_without_response, value = 1)]
+    pub(crate) protocol_mode: u8,
+    #[descriptor(uuid = "2908", read, value = [0u8, 1u8])]
+    #[characteristic(uuid = "2a4d", read, notify)]
+    pub(crate) input_data: [u8; RYNK_HID_REPORT_SIZE],
+    #[descriptor(uuid = "2908", read, value = [0u8, 2u8])]
+    #[characteristic(uuid = "2a4d", read, write, write_without_response)]
+    pub(crate) output_data: [u8; RYNK_HID_REPORT_SIZE],
 }
 
 /// GATT service exposing the Vial-over-HID protocol. The keyboard writes replies via
