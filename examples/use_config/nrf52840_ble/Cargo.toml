@@ -11,22 +11,23 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = ["async_matrix", "nrf52840_ble", "adafruit_bl"] }
-nrf-sdc = { git = "https://github.com/haobogu/nrf-sdc", rev = "ffe59a7aefaaa145a3d2474602f33387f80dcefa", features = [
+nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "abe49d22ebfc85fae134eb082fbfddf752016a55", features = [
     "defmt",
     "peripheral",
+    "central",
     "nrf52840",
 ] }
-nrf-mpsl = { git = "https://github.com/haobogu/nrf-sdc", rev = "ffe59a7aefaaa145a3d2474602f33387f80dcefa", features = [
+nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "abe49d22ebfc85fae134eb082fbfddf752016a55", features = [
     "defmt",
     "critical-section-impl",
     "nrf52840",
 ] }
-bt-hci = { version = "0.8", features = ["defmt"] }
+bt-hci = { version = "0.9", features = ["defmt"] }
 
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.5"
 embassy-time = { version = "0.5", features = ["tick-hz-32_768", "defmt"] }
-embassy-nrf = { version = "0.10", features = [
+embassy-nrf = { version = "0.11", features = [
     "defmt",
     "nrf52840",
     "time-driver-rtc1",
@@ -45,9 +46,6 @@ defmt-rtt = "1.0"
 panic-probe = { version = "1.0", features = ["print-defmt"] }
 static_cell = "2"
 
-rand = { version = "0.8.4", default-features = false }
-rand_core = { version = "0.6" }
-rand_chacha = { version = "0.3", default-features = false }
 
 
 [build-dependencies]

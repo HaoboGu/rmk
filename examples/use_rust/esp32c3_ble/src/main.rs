@@ -42,13 +42,12 @@ async fn main(_s: Spawner) {
     let software_interrupt = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start(timg0.timer0, software_interrupt.software_interrupt0);
     let _trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
-    let mut rng = esp_hal::rng::Trng::try_new().unwrap();
 
     let connector = BleConnector::new(peripherals.BT, Default::default()).unwrap();
     let controller: ExternalController<_, 64> = ExternalController::new(connector);
     let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
     let mut host_resources = HostResources::new();
-    let stack = build_ble_stack(controller, central_addr, &mut rng, &mut host_resources).await;
+    let stack = build_ble_stack(controller, central_addr, &mut host_resources).await;
 
     // Initialize the flash
     let flash = FlashStorage::new(peripherals.FLASH);

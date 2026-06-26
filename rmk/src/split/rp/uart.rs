@@ -9,6 +9,7 @@ use embassy_rp::clocks::clk_sys_freq;
 use embassy_rp::gpio::{Drive, Level, Pull, SlewRate};
 use embassy_rp::interrupt::Priority;
 use embassy_rp::interrupt::typelevel::{Binding, Handler, Interrupt};
+use embassy_rp::pac::io::vals::Oeover;
 use embassy_rp::pio::{
     Common, Config, Direction, FifoJoin, Instance, InterruptHandler, Pin, Pio, PioPin, ShiftDirection, StateMachine,
 };
@@ -19,7 +20,6 @@ use embassy_sync::waitqueue::AtomicWaker;
 use embassy_time::{Duration, Timer};
 use embedded_io_async::{ErrorType, Read, Write};
 use fixed::traits::ToFixed;
-use rp_pac::io::vals::Oeover;
 
 #[derive(Clone, Copy)]
 pub struct IrqBinding;
@@ -63,7 +63,7 @@ impl UartBuffer {
 
 pub trait UartPioAccess {
     fn uart_buffer() -> &'static UartBuffer;
-    fn regs() -> &'static rp_pac::pio::Pio;
+    fn regs() -> &'static embassy_rp::pac::pio::Pio;
 }
 
 macro_rules! impl_pio_access {
@@ -73,15 +73,15 @@ macro_rules! impl_pio_access {
                 static BUFFER: UartBuffer = UartBuffer::new();
                 &BUFFER
             }
-            fn regs() -> &'static rp_pac::pio::Pio {
+            fn regs() -> &'static embassy_rp::pac::pio::Pio {
                 &$pio
             }
         }
     };
 }
 
-impl_pio_access!(embassy_rp::peripherals::PIO0, rp_pac::PIO0);
-impl_pio_access!(embassy_rp::peripherals::PIO1, rp_pac::PIO1);
+impl_pio_access!(embassy_rp::peripherals::PIO0, embassy_rp::pac::PIO0);
+impl_pio_access!(embassy_rp::peripherals::PIO1, embassy_rp::pac::PIO1);
 
 // PIO Buffered UART serial driver
 pub struct BufferedUart<'a, PIO: Instance + UartPioAccess> {
@@ -199,10 +199,12 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
         let pins = [Some(&mut self.pin_rx), self.pin_tx.as_mut()];
 
         for pin in pins.into_iter().flatten() {
-            rp_pac::IO_BANK0
+            embassy_rp::pac::IO_BANK0
                 .gpio(pin.pin() as _)
                 .ctrl()
-                .modify(|f| f.set_oeover(Oeover::INVERT));
+                // `from_bits(1)` = the INVERT/Invert variant; compiles against both
+                // registry and git rp-pac (which renamed the variant casing).
+                .modify(|f| f.set_oeover(Oeover::from_bits(1)));
             pin.set_schmitt(true);
             pin.set_pull(Pull::Up);
             pin.set_slew_rate(SlewRate::Fast);
