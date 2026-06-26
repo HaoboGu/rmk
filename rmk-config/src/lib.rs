@@ -576,7 +576,7 @@ pub(crate) struct BehaviorConfig {
     pub macros: Option<MacrosConfig>,
     pub fork: Option<ForksConfig>,
     pub morse: Option<MorsesConfig>,
-    pub auto_mouse_layer: Option<AutoMouseLayerConfig>,
+    pub auto_mouse_layer: Option<Vec<AutoMouseLayerConfig>>,
 }
 
 /// Configurations for auto mouse layer
@@ -587,6 +587,9 @@ pub(crate) struct BehaviorConfig {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct AutoMouseLayerConfig {
+    /// Pointing device id this entry applies to. When omitted, the entry acts as
+    /// a fallback for events whose `device_id` matches no other entry.
+    pub device_id: Option<u8>,
     /// Layer index to activate on cursor motion
     pub layer: u8,
     /// Idle time after the last cursor motion before the layer is deactivated

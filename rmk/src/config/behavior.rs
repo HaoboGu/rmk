@@ -4,7 +4,10 @@ use rmk_types::fork::Fork;
 use rmk_types::morse::{Morse, MorseMode, MorseProfile};
 
 use crate::keyboard::combo::Combo;
-use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MOUSE_KEY_INTERVAL, MOUSE_WHEEL_INTERVAL};
+use crate::{
+    AUTO_MOUSE_LAYER_MAX_NUM, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MOUSE_KEY_INTERVAL,
+    MOUSE_WHEEL_INTERVAL,
+};
 
 /// Config for configurable action behavior
 #[derive(Debug, Default)]
@@ -20,7 +23,7 @@ pub struct BehaviorConfig {
     pub morse: MorsesConfig,
     pub keyboard_macros: KeyboardMacrosConfig,
     pub mouse_key: MouseKeyConfig,
-    pub auto_mouse_layer: Option<AutoMouseLayerConfig>,
+    pub auto_mouse_layer: Vec<AutoMouseLayerConfig, AUTO_MOUSE_LAYER_MAX_NUM>,
 }
 
 /// Config for auto mouse layer behavior
@@ -28,8 +31,16 @@ pub struct BehaviorConfig {
 /// When a pointing device reports motion above [`AutoMouseLayerConfig::threshold`],
 /// the configured [`AutoMouseLayerConfig::layer`] is activated. The layer is
 /// deactivated once no motion has been reported for [`AutoMouseLayerConfig::timeout`].
+///
+/// `device_id` selects which pointing device this entry applies to. Multiple
+/// entries can be configured; for each incoming [`crate::event::PointingEvent`]
+/// the matching entry (or a fallback entry with `device_id == None`) drives the
+/// layer state.
 #[derive(Clone, Copy, Debug)]
 pub struct AutoMouseLayerConfig {
+    /// Pointing device id this entry applies to. When `None`, the entry acts as
+    /// a fallback for devices not covered by any other entry.
+    pub device_id: Option<u8>,
     /// Layer index to activate when pointing-device motion is detected
     pub layer: u8,
     /// Idle duration after the last motion before the layer is deactivated
@@ -39,13 +50,14 @@ pub struct AutoMouseLayerConfig {
 }
 
 impl AutoMouseLayerConfig {
-    pub fn new(layer: u8, timeout: Duration, threshold: u16) -> Self {
+    pub fn new(device_id: Option<u8>, layer: u8, timeout: Duration, threshold: u16) -> Self {
         assert!(threshold >= 1, "AutoMouseLayerConfig::new: threshold must be >= 1");
         assert!(
             timeout >= Duration::from_millis(1),
             "AutoMouseLayerConfig::new: timeout must be at least 1ms"
         );
         Self {
+            device_id,
             layer,
             timeout,
             threshold,

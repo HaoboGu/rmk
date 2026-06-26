@@ -69,7 +69,8 @@ pub(crate) fn rmk_entry_select(
     registered_processors: Vec<TokenStream2>,
     watchdog_task: Option<TokenStream2>,
 ) -> TokenStream2 {
-    let auto_mouse_layer_prelude = behavior.auto_mouse_layer.as_ref().map(|_| {
+    let auto_mouse_layer_enabled = !behavior.auto_mouse_layer.is_empty();
+    let auto_mouse_layer_prelude = auto_mouse_layer_enabled.then(|| {
         quote! {
             let mut auto_mouse_layer = ::rmk::run_auto_mouse_layer_if_enabled(&keymap);
         }
@@ -80,7 +81,7 @@ pub(crate) fn rmk_entry_select(
         if hardware.storage.is_some() {
             devs.push(quote! {storage});
         }
-        if behavior.auto_mouse_layer.is_some() {
+        if auto_mouse_layer_enabled {
             devs.push(quote! {auto_mouse_layer});
         }
         quote! {

@@ -483,21 +483,29 @@ fn expand_forks(
     }
 }
 
-fn expand_auto_mouse_layer(auto_mouse_layer: &Option<AutoMouseLayer>) -> proc_macro2::TokenStream {
-    match auto_mouse_layer {
-        Some(cfg) => {
-            let layer = cfg.layer;
-            let timeout_ms = cfg.timeout_ms;
-            let threshold = cfg.threshold;
-            quote! {
-                ::core::option::Option::Some(::rmk::config::AutoMouseLayerConfig {
-                    layer: #layer,
-                    timeout: ::embassy_time::Duration::from_millis(#timeout_ms),
-                    threshold: #threshold,
-                })
+fn expand_auto_mouse_layer(auto_mouse_layer: &[AutoMouseLayer]) -> proc_macro2::TokenStream {
+    if auto_mouse_layer.is_empty() {
+        return quote! { ::core::default::Default::default() };
+    }
+    let entries = auto_mouse_layer.iter().map(|cfg| {
+        let layer = cfg.layer;
+        let timeout_ms = cfg.timeout_ms;
+        let threshold = cfg.threshold;
+        let device_id = match cfg.device_id {
+            Some(id) => quote! { ::core::option::Option::Some(#id) },
+            None => quote! { ::core::option::Option::None },
+        };
+        quote! {
+            ::rmk::config::AutoMouseLayerConfig {
+                device_id: #device_id,
+                layer: #layer,
+                timeout: ::embassy_time::Duration::from_millis(#timeout_ms),
+                threshold: #threshold,
             }
         }
-        None => quote! { ::core::option::Option::None },
+    });
+    quote! {
+        ::rmk::heapless::Vec::from_iter([#(#entries),*])
     }
 }
 
