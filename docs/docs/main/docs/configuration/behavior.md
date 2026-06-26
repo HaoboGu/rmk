@@ -524,32 +524,32 @@ Example configuration:
 ```toml
 # Default for every pointing device.
 [[behavior.auto_mouse_layer]]
-layer = 3
+target_layer = 3
 timeout = "600ms"
 threshold = 2
 
 # Override for the second pointing device (device_id = 1).
 [[behavior.auto_mouse_layer]]
 device_id = 1
-layer = 4
+target_layer = 4
 timeout = "500ms"
 threshold = 5
 ```
 
-| Field        | Type    | Default | Description |
-|--------------|---------|---------|-------------|
-| `device_id`  | integer | —       | Pointing device id this entry applies to. Omit for a fallback that matches any device not covered by another entry. At most one fallback (and at most one entry per `device_id`) is allowed. |
-| `layer`      | integer | —       | Layer index to activate (must be `< [layout.layers]`). |
-| `timeout`    | string  | `"500ms"`| Inactivity duration before deactivation (e.g., `"600ms"`, `"2s"`). |
-| `threshold`  | integer | `1`     | Minimum absolute X/Y delta to trigger motion (`>= 1`). Increase to filter sensor noise. |
+| Field          | Type    | Default | Description |
+|----------------|---------|---------|-------------|
+| `device_id`    | integer | —       | Pointing device id this entry applies to. Omit for a fallback that matches any device not covered by another entry. At most one fallback (and at most one entry per `device_id`) is allowed. |
+| `target_layer` | integer | —       | Layer index to activate (must be `< [layout.layers]`). |
+| `timeout`      | string  | `"500ms"`| Inactivity duration before deactivation (e.g., `"600ms"`, `"2s"`). |
+| `threshold`    | integer | `1`     | Minimum absolute X/Y delta to trigger motion (`>= 1`). Increase to filter sensor noise. |
 
 Up to `AUTO_MOUSE_LAYER_MAX_NUM` (4) entries are supported. With `keyboard.toml` a build error is raised if more are configured; via the Rust API any entries beyond the limit are silently dropped.
 
 ::: warning
 
-Prefer a dedicated layer that is not bound to any manual keys (like `MO` or `TG`). The auto-mouse task releases its ownership when keyboard-driven changes deactivate the layer, so transient overlap is handled cleanly. Layer state is still a single boolean, however, so pressing `TG(layer)` while auto-mouse is active toggles the layer off instead of pinning it on.
+Prefer a dedicated layer that is not bound to any manual keys (like `MO` or `TG`). The auto-mouse task releases its ownership when keyboard-driven changes deactivate the layer, so transient overlap is handled cleanly. Layer state is still a single boolean, however, so pressing `TG(target_layer)` while auto-mouse is active toggles the layer off instead of pinning it on.
 
-Also give each entry its own `layer`. Layer state is a single boolean shared by all entries, so if two entries point at the same `layer`, the first entry's `timeout` can deactivate it while the other device is still moving.
+Also give each entry its own `target_layer`. Layer state is a single boolean shared by all entries, so if two entries point at the same `target_layer`, the first entry's `timeout` can deactivate it while the other device is still moving.
 
 :::
 
@@ -574,7 +574,7 @@ use rmk::heapless::Vec;
 let auto_mouse_layer = Vec::from_iter([
     AutoMouseLayerConfig::new(
         None,                       // fallback for every device
-        3,                          // layer index
+        3,                          // target_layer index
         Duration::from_millis(600), // timeout duration
         2,                          // threshold
     ),

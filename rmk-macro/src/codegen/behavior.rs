@@ -488,7 +488,7 @@ fn expand_auto_mouse_layer(auto_mouse_layer: &[AutoMouseLayer]) -> proc_macro2::
         return quote! { ::core::default::Default::default() };
     }
     let entries = auto_mouse_layer.iter().map(|cfg| {
-        let layer = cfg.layer;
+        let target_layer = cfg.target_layer;
         let timeout_ms = cfg.timeout_ms;
         let threshold = cfg.threshold;
         let device_id = match cfg.device_id {
@@ -498,7 +498,7 @@ fn expand_auto_mouse_layer(auto_mouse_layer: &[AutoMouseLayer]) -> proc_macro2::
         quote! {
             ::rmk::config::AutoMouseLayerConfig {
                 device_id: #device_id,
-                layer: #layer,
+                target_layer: #target_layer,
                 timeout: ::embassy_time::Duration::from_millis(#timeout_ms),
                 threshold: #threshold,
             }

@@ -5,7 +5,7 @@
 //! detected.
 //!
 //! Multiple entries can be configured to give each pointing device its own
-//! layer/threshold/timeout. For each event the entry whose `device_id` matches
+//! target_layer/threshold/timeout. For each event the entry whose `device_id` matches
 //! the event's `device_id` is selected first; otherwise the entry with
 //! `device_id == None` (if any) is used as a fallback. Events that match
 //! neither are ignored.
@@ -58,11 +58,11 @@ impl Runnable for AutoMouseLayerRunner<'_, '_> {
         let configs = keymap.auto_mouse_layer_configs();
         let mut entries: Vec<EntryState, AUTO_MOUSE_LAYER_MAX_NUM> = Vec::new();
         for config in configs.iter().copied() {
-            if (config.layer as usize) >= num_layer {
+            if (config.target_layer as usize) >= num_layer {
                 warn!(
-                    "auto_mouse_layer: configured layer {} is out of range (keymap has {} layers); \
+                    "auto_mouse_layer: configured target_layer {} is out of range (keymap has {} layers); \
                      entry for device_id {:?} will be ignored",
-                    config.layer, num_layer, config.device_id
+                    config.target_layer, num_layer, config.device_id
                 );
                 continue;
             }
@@ -107,7 +107,7 @@ impl Runnable for AutoMouseLayerRunner<'_, '_> {
                     let now = Instant::now();
                     for entry in entries.iter_mut() {
                         if entry.self_activated && entry.deadline.is_some_and(|d| d <= now) {
-                            keymap.deactivate_layer_if_active(entry.config.layer);
+                            keymap.deactivate_layer_if_active(entry.config.target_layer);
                             entry.self_activated = false;
                             entry.deadline = None;
                         }
@@ -121,7 +121,7 @@ impl Runnable for AutoMouseLayerRunner<'_, '_> {
                     if !is_cursor_motion(&event, entry.config.threshold) {
                         continue;
                     }
-                    if keymap.activate_layer_if_inactive(entry.config.layer) {
+                    if keymap.activate_layer_if_inactive(entry.config.target_layer) {
                         entry.self_activated = true;
                         entry.overlap_warned = false;
                     } else if !entry.self_activated && !entry.overlap_warned {
@@ -129,7 +129,7 @@ impl Runnable for AutoMouseLayerRunner<'_, '_> {
                             "auto_mouse_layer: layer {} is already active when motion was detected; \
                              the layer is likely driven by another key (MO/TG). The auto mouse layer \
                              will not be deactivated on timeout while overlap holds.",
-                            entry.config.layer
+                            entry.config.target_layer
                         );
                         entry.overlap_warned = true;
                     }
@@ -141,12 +141,12 @@ impl Runnable for AutoMouseLayerRunner<'_, '_> {
                     for entry in entries.iter_mut() {
                         // Drop ownership if a keyboard-driven change turned our layer off,
                         // so the next motion can re-acquire it cleanly.
-                        if entry.self_activated && !keymap.is_layer_active(entry.config.layer) {
+                        if entry.self_activated && !keymap.is_layer_active(entry.config.target_layer) {
                             entry.self_activated = false;
                             entry.deadline = None;
                             trace!(
                                 "auto_mouse_layer: released layer {} (top now {})",
-                                entry.config.layer, top
+                                entry.config.target_layer, top
                             );
                         }
                     }
@@ -226,7 +226,7 @@ mod tests {
         EntryState {
             config: AutoMouseLayerConfig {
                 device_id,
-                layer: 0,
+                target_layer: 0,
                 timeout: embassy_time::Duration::from_millis(100),
                 threshold: 1,
             },

@@ -14,7 +14,7 @@ pub struct Behavior {
 
 pub struct AutoMouseLayer {
     pub device_id: Option<u8>,
-    pub layer: u8,
+    pub target_layer: u8,
     pub timeout_ms: u64,
     pub threshold: u16,
 }
@@ -228,7 +228,7 @@ impl crate::KeyboardTomlConfig {
             .into_iter()
             .map(|a| AutoMouseLayer {
                 device_id: a.device_id,
-                layer: a.layer,
+                target_layer: a.target_layer,
                 timeout_ms: a.timeout.map(|t| t.0).unwrap_or(DEFAULT_AUTO_MOUSE_LAYER_TIMEOUT_MS),
                 threshold: a.threshold.unwrap_or(DEFAULT_AUTO_MOUSE_LAYER_THRESHOLD),
             })

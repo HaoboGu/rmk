@@ -29,8 +29,8 @@ pub struct BehaviorConfig {
 /// Config for auto mouse layer behavior
 ///
 /// When a pointing device reports motion above [`AutoMouseLayerConfig::threshold`],
-/// the configured [`AutoMouseLayerConfig::layer`] is activated. The layer is
-/// deactivated once no motion has been reported for [`AutoMouseLayerConfig::timeout`].
+/// the configured [`AutoMouseLayerConfig::target_layer`] is activated. The layer
+/// is deactivated once no motion has been reported for [`AutoMouseLayerConfig::timeout`].
 ///
 /// `device_id` selects which pointing device this entry applies to. Multiple
 /// entries can be configured; for each incoming [`crate::event::PointingEvent`]
@@ -42,7 +42,7 @@ pub struct AutoMouseLayerConfig {
     /// a fallback for devices not covered by any other entry.
     pub device_id: Option<u8>,
     /// Layer index to activate when pointing-device motion is detected
-    pub layer: u8,
+    pub target_layer: u8,
     /// Idle duration after the last motion before the layer is deactivated
     pub timeout: Duration,
     /// Minimum absolute X/Y axis delta to be considered as motion (must be `>= 1`)
@@ -50,7 +50,7 @@ pub struct AutoMouseLayerConfig {
 }
 
 impl AutoMouseLayerConfig {
-    pub fn new(device_id: Option<u8>, layer: u8, timeout: Duration, threshold: u16) -> Self {
+    pub fn new(device_id: Option<u8>, target_layer: u8, timeout: Duration, threshold: u16) -> Self {
         assert!(threshold >= 1, "AutoMouseLayerConfig::new: threshold must be >= 1");
         assert!(
             timeout >= Duration::from_millis(1),
@@ -58,7 +58,7 @@ impl AutoMouseLayerConfig {
         );
         Self {
             device_id,
-            layer,
+            target_layer,
             timeout,
             threshold,
         }

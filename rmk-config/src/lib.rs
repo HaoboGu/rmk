@@ -582,8 +582,8 @@ pub(crate) struct BehaviorConfig {
 /// Configurations for auto mouse layer
 ///
 /// When motion is detected from a pointing device (e.g. PMW3610), the
-/// specified `layer` is activated. The layer stays active until `timeout`
-/// has elapsed without further motion, then it is deactivated.
+/// specified `target_layer` is activated. The layer stays active until
+/// `timeout` has elapsed without further motion, then it is deactivated.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct AutoMouseLayerConfig {
@@ -591,7 +591,7 @@ pub(crate) struct AutoMouseLayerConfig {
     /// a fallback for events whose `device_id` matches no other entry.
     pub device_id: Option<u8>,
     /// Layer index to activate on cursor motion
-    pub layer: u8,
+    pub target_layer: u8,
     /// Idle time after the last cursor motion before the layer is deactivated
     /// (e.g. `"500ms"` or `"2s"`).
     pub timeout: Option<DurationMillis>,
