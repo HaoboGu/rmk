@@ -576,6 +576,28 @@ pub(crate) struct BehaviorConfig {
     pub macros: Option<MacrosConfig>,
     pub fork: Option<ForksConfig>,
     pub morse: Option<MorsesConfig>,
+    pub auto_mouse_layer: Option<Vec<AutoMouseLayerConfig>>,
+}
+
+/// Configurations for auto mouse layer
+///
+/// When motion is detected from a pointing device (e.g. PMW3610), the
+/// specified `target_layer` is activated. The layer stays active until
+/// `timeout` has elapsed without further motion, then it is deactivated.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AutoMouseLayerConfig {
+    /// Pointing device id this entry applies to. When omitted, the entry acts as
+    /// a fallback for events whose `device_id` matches no other entry.
+    pub device_id: Option<u8>,
+    /// Layer index to activate on cursor motion
+    pub target_layer: u8,
+    /// Idle time after the last cursor motion before the layer is deactivated
+    /// (e.g. `"500ms"` or `"2s"`).
+    pub timeout: Option<DurationMillis>,
+    /// Minimum absolute axis delta required to be considered as motion.
+    /// Defaults to `1` (any motion). Helpful to filter out sensor noise.
+    pub threshold: Option<u16>,
 }
 
 /// Per Key configurations profiles for morse, tap-hold, etc.
