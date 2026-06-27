@@ -69,10 +69,10 @@ pub(crate) struct RynkService {
 /// [`VialService`]) carrying the *same* rynk protocol as [`RynkService`], so a
 /// pure browser can reach the keyboard via WebHID over the OS HID link (Web
 /// Bluetooth can't attach an OS-bonded keyboard, but WebHID rides the HID link).
-/// `gatt_events_task` forwards `output_data` writes into
-/// [`crate::channel::RYNK_HID_BLE_RX_CHANNEL`] for
-/// [`crate::ble::rynk_hid::run_host_ble_hid`] to drain. Fixed 32-byte reports
-/// with the `2908` report-reference descriptors (report ID 0), exactly as Vial.
+/// `gatt_events_task` strips each `output_data` write's 1-byte length prefix and
+/// feeds the payload into [`crate::channel::RYNK_BLE_RX_PIPE`], the same pipe the
+/// single [`crate::ble::rynk::run_host_ble`] session drains. Fixed 32-byte
+/// reports with the `2908` report-reference descriptors (report ID 0), as Vial.
 #[cfg(feature = "rynk")]
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
 pub(crate) struct RynkHidService {

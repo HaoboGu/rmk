@@ -1,4 +1,6 @@
 use core::sync::atomic::AtomicBool;
+#[cfg(feature = "rynk")]
+use core::sync::atomic::Ordering;
 
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
@@ -22,6 +24,8 @@ use crate::ble::led::BleLedReader;
 #[cfg(feature = "passkey_entry")]
 use crate::ble::passkey::{PasskeyInputState, next_gatt_event};
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
+#[cfg(feature = "rynk")]
+use crate::ble::rynk::{ACTIVE_SOURCE, SOURCE_CUSTOM, SOURCE_HID};
 use crate::channel::{BLE_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
 use crate::core_traits::Runnable;
@@ -41,8 +45,6 @@ pub mod passkey;
 pub(crate) mod profile;
 #[cfg(feature = "rynk")]
 pub(crate) mod rynk;
-#[cfg(feature = "rynk")]
-pub(crate) mod rynk_hid;
 #[cfg(all(feature = "vial", feature = "_ble"))]
 pub(crate) mod vial;
 
@@ -445,6 +447,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                         // Awaits the pipe's backpressure when the rynk
                                         // consumer falls behind.
                                         crate::channel::RYNK_BLE_RX_PIPE.write_all(data).await;
+                                        ACTIVE_SOURCE.store(SOURCE_CUSTOM, Ordering::Relaxed);
                                     } else {
                                         warn!("Rynk: dropping {}-byte write on unencrypted link", data.len());
                                     }
@@ -452,22 +455,28 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
 
                                 handled = true;
                             } else if event.handle() == input_host.cccd_handle.expect("No CCCD for host input") {
+                                // Bind the transport only on a real write, not on a CCCD subscribe.
                                 cccd_updated = true;
                                 handled = true;
                             }
 
                             // WebHID transport (RynkHidService): a write is one
-                            // fixed-size HID report. Gate on encryption before
-                            // the channel send, mirroring the rynk pipe arm.
+                            // fixed-size HID report. Strip its 1-byte length
+                            // prefix and join the de-framed payload to the same
+                            // pipe the single session reads (encryption-gated).
                             #[cfg(feature = "rynk")]
                             if !handled && event.handle() == output_hid.handle {
                                 let data = event.data();
                                 if encrypted {
                                     if data.len() == RYNK_HID_REPORT_SIZE {
-                                        debug!("Got Rynk HID report");
-                                        let mut report = [0u8; RYNK_HID_REPORT_SIZE];
-                                        report.copy_from_slice(data);
-                                        crate::channel::RYNK_HID_BLE_RX_CHANNEL.send(report).await;
+                                        // De-frame in a unit-tested helper; the pipe handles
+                                        // cross-read buffering. A len==0 keep-alive yields an
+                                        // empty payload but still marks WebHID as the transport.
+                                        let payload = crate::ble::rynk::hid_report_payload(data);
+                                        if !payload.is_empty() {
+                                            crate::channel::RYNK_BLE_RX_PIPE.write_all(payload).await;
+                                        }
+                                        ACTIVE_SOURCE.store(SOURCE_HID, Ordering::Relaxed);
                                     } else {
                                         warn!("Wrong Rynk HID report size: {}", data.len());
                                     }
@@ -717,9 +726,9 @@ pub(crate) async fn set_conn_params<
 /// Run BLE keyboard for one connection.
 ///
 /// Returns when the GATT events task ends (i.e. the connection drops).
-/// `writer_task`, `led_task`, `host_task`, and `host_hid_task` are all infinite,
-/// so the outer `select(communication_task, inner)` cancels them as a
-/// side-effect of `communication_task` returning. `inner` itself never completes.
+/// `writer_task`, `led_task`, and `host_task` are all infinite, so the outer
+/// `select(communication_task, inner)` cancels them as a side-effect of
+/// `communication_task` returning. `inner` itself never completes.
 async fn run_ble_keyboard<
     'a,
     'b,
@@ -786,21 +795,7 @@ async fn run_ble_keyboard<
     #[cfg(not(feature = "host"))]
     let host_task = core::future::pending::<()>();
 
-    // A second rynk session over the WebHID transport, sharing the same service
-    // (hence KeyMap) as `host_task` — the dispatch guard serializes them. Only
-    // `rynk` exposes a HID transport; `vial`/no-host builds park here.
-    #[cfg(feature = "rynk")]
-    let host_hid_task = async {
-        if let Some(service) = host_service {
-            crate::ble::rynk_hid::run_host_ble_hid(server, conn, service).await;
-        } else {
-            core::future::pending::<()>().await;
-        }
-    };
-    #[cfg(not(feature = "rynk"))]
-    let host_hid_task = core::future::pending::<()>();
-
-    let inner = embassy_futures::join::join4(writer_task, led_task, host_task, host_hid_task);
+    let inner = embassy_futures::join::join3(writer_task, led_task, host_task);
     select(communication_task, inner).await;
 }
 

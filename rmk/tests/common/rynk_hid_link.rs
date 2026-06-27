@@ -1,13 +1,14 @@
 //! HID-framed variant of [`super::rynk_link`]: interposes the 32-byte
-//! length-prefix HID report framing (firmware `RynkHidService` /
-//! `ble::rynk_hid`) between the host client and `run_session`, so the framing
-//! round-trips through the *real* dispatcher.
+//! length-prefix HID report framing (firmware `RynkHidService`, de-framed at the
+//! `ble::rynk` seam via `hid_report_payload` and reply-framed by `MuxBleTx`)
+//! between the host client and `run_session`, so the framing round-trips through
+//! the *real* dispatcher.
 //!
 //! The two pipes carry whole HID reports `[len][payload 0..len][zero-pad to 32]`
-//! (`len == 0` = keep-alive). The device-side `HidRx`/`HidTx` mirror the
-//! firmware `RynkHidBleRx`/`RynkHidBleTx`; the client frames/de-frames
-//! symmetrically. `run_session` itself sees a clean contiguous byte stream and
-//! is unchanged — exactly as the production adapters intend.
+//! (`len == 0` = keep-alive). The device-side `HidRx`/`HidTx` mirror the firmware's
+//! HID framing (`hid_report_payload` de-frame + `MuxBleTx` reply framing); the
+//! client frames/de-frames symmetrically. `run_session` itself sees a clean
+//! contiguous byte stream and is unchanged — exactly as the production seam intends.
 
 use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
@@ -28,7 +29,7 @@ pub type Link = Pipe<NoopRawMutex, RYNK_BUFFER_SIZE>;
 const PAYLOAD: usize = RYNK_HID_REPORT_SIZE - 1;
 
 /// Frame `data` into length-prefixed, zero-padded reports and write each whole
-/// report to `link`. Mirrors `RynkHidBleTx`.
+/// report to `link`. Mirrors the firmware HID reply framing (`ble::rynk::MuxBleTx`).
 async fn write_framed(link: &Link, data: &[u8]) {
     for chunk in data.chunks(PAYLOAD) {
         let mut report = [0u8; RYNK_HID_REPORT_SIZE];
@@ -62,9 +63,10 @@ impl Frame {
 }
 
 /// Device-side Rx: reads whole reports off the pipe and de-frames them into the
-/// byte stream `run_session` reads. Mirrors `ble::rynk_hid::RynkHidBleRx`
-/// (`pending`/`pos` buffer one report's payload across sub-report reads; a
-/// `len == 0` keep-alive loops rather than signalling EOF).
+/// byte stream `run_session` reads. Mirrors the firmware de-frame — `ble::rynk`'s
+/// seam strip (`hid_report_payload`) feeding `RYNK_BLE_RX_PIPE` — with `pending`/
+/// `pos` standing in for the pipe's buffering; a `len == 0` keep-alive loops
+/// rather than signalling EOF.
 struct HidRx<'p> {
     link: &'p Link,
     pending: Vec<u8>,
@@ -99,7 +101,7 @@ impl Read for HidRx<'_> {
 }
 
 /// Device-side Tx: frames `run_session`'s whole-frame writes into reports onto
-/// the pipe. Mirrors `ble::rynk_hid::RynkHidBleTx`.
+/// the pipe. Mirrors the firmware reply framing (`ble::rynk::MuxBleTx`, HID arm).
 struct HidTx<'p> {
     link: &'p Link,
 }

@@ -7,8 +7,6 @@ use embassy_sync::channel::{Channel, TrySendError};
 use embassy_sync::signal::Signal;
 pub use embassy_sync::{blocking_mutex, channel, pubsub, zerocopy_channel};
 use rmk_types::connection::ConnectionType;
-#[cfg(all(feature = "rynk", feature = "_ble"))]
-use rmk_types::protocol::rynk::RYNK_HID_REPORT_SIZE;
 #[cfg(feature = "_ble")]
 use {crate::ble::profile::BleProfileAction, rmk_types::led_indicator::LedIndicator};
 
@@ -113,14 +111,13 @@ pub(crate) static BLE_PROFILE_CHANNEL: Channel<RawMutex, BleProfileAction, 1> = 
 #[cfg(all(feature = "vial", feature = "_ble"))]
 pub(crate) static VIAL_BLE_RX_CHANNEL: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE> = Channel::new();
 
-/// Rynk RX from the BLE GATT `output_data` writes. The 512 B ring is ~2× one MTU's worth of payload.
+/// Rynk RX — the single inbound buffer for both BLE config transports. Producer
+/// contract: it carries **only de-framed rynk bytes**, written from exactly the
+/// two encryption-gated seam arms in `gatt_events_task` — the custom-GATT arm
+/// writes `output_data` raw, the WebHID arm writes `ble::rynk::hid_report_payload`
+/// (the `[len][payload][pad]` prefix/padding stripped there). So the consumer
+/// (`&RYNK_BLE_RX_PIPE` as the session's `Read`) always sees a clean contiguous
+/// stream and needs no transport-framing knowledge. The 512 B ring is ~2× one
+/// MTU's worth; drained by the single [`crate::ble::rynk::run_host_ble`] session.
 #[cfg(all(feature = "rynk", feature = "_ble"))]
 pub(crate) static RYNK_BLE_RX_PIPE: embassy_sync::pipe::Pipe<RawMutex, 512> = embassy_sync::pipe::Pipe::new();
-
-/// Rynk-over-WebHID RX from BLE GATT `output_data` writes — one fixed-size HID
-/// report per write. A `Channel` (not a `Pipe`) preserves the per-report
-/// `[len][payload][pad]` boundary the framing depends on. Pushed by
-/// `gatt_events_task`, drained by [`crate::ble::rynk_hid::run_host_ble_hid`].
-/// Depth 4 mirrors `VIAL_CHANNEL_SIZE`'s default.
-#[cfg(all(feature = "rynk", feature = "_ble"))]
-pub(crate) static RYNK_HID_BLE_RX_CHANNEL: Channel<RawMutex, [u8; RYNK_HID_REPORT_SIZE], 4> = Channel::new();

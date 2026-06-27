@@ -1,124 +1,88 @@
-# Rynk Firmware Plan — BLE config over WebHID (`RynkHidService`)
+# Rynk Firmware Plan — one BLE config session, custom GATT wire unchanged (B-plus)
 
-## Context
+## Status
 
-The rynk web/host client uses **four transports selected by context**:
+`RynkHidService` (rynk config over BLE WebHID) shipped in `c633582f`. This document describes the
+follow-up that is now implemented: **keep both GATT services** (each reaches a disjoint client
+surface — neither can be dropped), and collapse the duplicated firmware machinery below them into a
+**single per-connection session**, while leaving the custom-GATT `RynkService` wire **completely
+unchanged**. The de-frame is unified at the producer seam, not by changing either wire.
 
-| | USB (fastest) | BLE |
+## Why both GATT services stay (don't merge them)
+
+Verified against desktop BLE stacks and confirmed empirically on macOS (a `bluest` probe enumerated
+the bonded keyboard's GATT and saw the custom `RynkService` but **not** the `0x1812` HID service):
+
+| Client | Reaches | Never reaches |
 |---|---|---|
-| **Pure browser** | WebSerial → wasm `Client` | **WebHID** (`0xFF60` HID-over-BT) → wasm `Client` |
-| **Native shell** (Tauri / Electron) | tokio-serial (`rynk-serial`) | bluest (`rynk-ble`, custom GATT, 244 B) |
+| Native app (bluest, `rynk-ble`) | custom 128-bit `RynkService` (full-MTU) | the `0x1812` HID service |
+| Browser (WebHID, `rynk-wasm`) | `0xFF60` vendor report in HOGP (`RynkHidService`) | any custom GATT service |
 
-A pure browser **cannot** reach rynk's custom 128-bit GATT service on an OS-bonded keyboard
-(the device stops advertising once connected as HID; Web Bluetooth can't attach). It **can**
-reach a **vendor HID-over-GATT report via WebHID** — proven, since Vial-web over BLE works on
-macOS — because WebHID rides the OS's existing HID connection.
+A native generic-GATT client can never read a bonded keyboard's `0x1812` HID service — macOS/iOS
+CoreBluetooth filters it from discovery, Windows WinRT returns `AccessDenied`, Linux BlueZ's
+`hog`/`input` plugin hides it. WebHID rides the OS HID stack so it reaches the `0xFF60` vendor report
+but never a custom service; Web Bluetooth blocklists `0x1812`. Peers confirm the split: **ZMK Studio =
+custom service only**, **Vial = HOGP report only**. RMK is the union → two services is correct.
 
-**This plan's only firmware change:** add a second BLE config transport — a vendor HID service
-(`RynkHidService`) carrying the *same* rynk protocol — so the browser gets a seamless pure-web
-BLE path. The custom-GATT `RynkService` stays as the faster native (bluest) path. Both feed the
-same transport-agnostic dispatcher `RynkService::run_session<R: Read, T: Write>`
-(`rmk/src/host/rynk/mod.rs:146`, **unchanged**).
+The only waste was running them as two concurrent sessions. This collapses them into one — **without
+touching the custom-GATT wire**, so the native `rynk-ble` host is unchanged.
 
-Scope: `rmk` + one `rmk-types` const. (Host-side `rmk-types` type-generation is out of scope
-here and keeps the postcard wire byte-identical — u8 unchanged — so it doesn't affect firmware.)
+## Design — one session, de-frame at the seam, custom wire untouched
 
-## Design decisions
+1. **Custom `RynkService` unchanged.** `input_data`/`output_data` stay `heapless::Vec<u8,
+   RYNK_BLE_CHUNK_SIZE>` (244): variable-length, full-MTU notifications, exactly as before WebHID
+   existed. The native bluest host (`rynk/rynk-ble`) speaks the same raw wire — no host change.
+2. **One inbound buffer with a clean producer contract.** Both transports feed the single
+   `RYNK_BLE_RX_PIPE` (`channel.rs`), which carries **only de-framed rynk bytes**. It is written from
+   exactly two encryption-gated arms in `gatt_events_task`: the custom-GATT arm writes its raw
+   `output_data`; the WebHID arm writes `ble::rynk::hid_report_payload(report)` — a pure, unit-tested
+   helper that strips the `[len][payload 0..len][zero-pad to 32]` framing (`len == 0` = keep-alive →
+   nothing written). So the consumer sees a clean contiguous stream and needs no framing knowledge.
+3. **Transport-agnostic interior, one monomorphization.** The session's `Read` is a bare
+   `&RYNK_BLE_RX_PIPE` (the pipe's ring provides cross-read buffering, so no `pending`/`pos` and no
+   `read_exact` re-framing). `RynkService::run_session<Read, Write>` is monomorphized once.
+4. **Outbound mux.** `MuxBleTx` holds both reply characteristics and routes each reply/topic by
+   `ACTIVE_SOURCE: AtomicU8` (`NONE`/`CUSTOM`/`HID`) — raw MTU-chunked on the custom char, or
+   `[len][payload][zero-pad]` 32-byte reports on the HID char. `ACTIVE_SOURCE` is set **only on a real
+   config write** (never on a CCCD subscribe — the OS HOGP driver auto-subscribes the HID input CCCD
+   on bond, which would otherwise mis-route a native session's topics). Reset per connection; one
+   peer per connection means it never flaps.
+5. **One `TopicSubscribers`.** Falls out of (3)–(4): one session → one subscription set → each topic
+   encoded and notified once.
+6. **Deleted:** `ble/rynk_hid.rs`, the second `run_session` future (`join4` → `join3`), and the
+   per-HID RX channel. `RYNK_DISPATCH_GUARD` is kept (`_ble`-gated): it serializes the at-most-two
+   concurrent host sessions (one USB + one BLE) — forward-defense for a future multi-`await` bulk
+   handler.
 
-- **Separate 4th HID GATT service.** RMK already runs three `#[gatt_service(uuid =
-  HUMAN_INTERFACE_DEVICE)]` instances (`HidService`, `CompositeService`, and under vial
-  `VialService` — `ble_server.rs:68/87/105`); a fourth is the same proven pattern, enumerated
-  by WebHID as its own collection. Vendor **usage page `0xFF60` / usage `0x61`** (free —
-  `rynk` and `vial` are mutually exclusive). The `#[gatt_server]` attribute table **auto-sizes**
-  (no manual budget to overflow). Single report, **report ID 0** (the `2908` report-reference
-  descriptors carry `[0,1]`/`[0,2]`, as Vial does) → the host uses `sendReport(0, …)`.
-- **Report size N = 32** (`RYNK_HID_REPORT_SIZE`), matching Vial's proven report. A fixed HID
-  report does **not** auto-fragment: a notification past `ATT_MTU − 3` is silently truncated,
-  not split (`ble/rynk.rs:47-48`), and write-without-response is capped the same — so an
-  N-byte report **requires the negotiated MTU ≥ N + 3**. N = 32 (MTU ≥ 35) is exactly what
-  Vial-over-BLE already proves on real hosts. Raising N to 64 (MTU ≥ 67 — which RMK's ~247-MTU
-  config satisfies) would halve round-trips on large payloads, but that gain is only realized
-  by bulk ops (still `Unimplemented`); keep 32 until bulk lands and MTU ≥ 67 is confirmed on
-  the target host stacks.
-- **Framing — 1-byte per-report length prefix.** Wire layout `[len][payload 0..len][zero-pad to
-  N]` (N=32 → 31 usable bytes/report). Adapters add/strip it so `run_session` sees a clean
-  contiguous byte stream (exactly as the Vial 32-byte adapters hide chunking today). Edge cases:
-  - a frame spanning multiple reports — Tx splits into ≤(N−1)-byte slices, Rx reassembles via
-    the rynk header's `payload_len`;
-  - multiple small frames pack into one report fine;
-  - **`len = 0` is a keep-alive, NOT EOF** — the Rx adapter must loop for the next report and
-    never return `Ok(0)` (which ends the session at `host/rynk/mod.rs:154`);
-  - Rx must buffer **sub-report reads** (`pending`/`pos`, like `rynk-wasm/src/bridge.rs` and
-    `rynk-ble`), because `run_session` reads 5 bytes (header) then N.
+## Measured footprint & speed (nRF54LM20A, `rynk`+`_ble`)
 
-  Chosen over report-aligned framing (which can't carry frames > 63 B without a continuation
-  scheme).
-- **Channel `Channel<RawMutex, [u8;RYNK_HID_REPORT_SIZE], SIZE>`** (preserves report
-  boundaries, like `VIAL_BLE_RX_CHANNEL` at `channel.rs:112`) — **not** a `Pipe` (which would
-  lose the per-report length prefix).
-- **Concurrency guard (the main risk).** The custom-GATT and HID sessions share one
-  `RynkService` → one `KeyboardContext` → one `KeyMap` (`RefCell`, `keymap.rs:80`). The
-  single-threaded embassy executor + no-`await`-across-borrow means **no `RefCell` panic
-  today**, but a future multi-`await` bulk handler (`host/rynk/mod.rs:72-95`, currently
-  `Unimplemented`) could interleave a read-modify-write → lost update. Add a **tight per-turn
-  dispatch guard** (`static Mutex<RawMutex, ()>`) around the dispatch + response write
-  (`mod.rs:231-235`), `_ble`-gated, ~6 lines. (In an `_ble` build the guard is global across
-  *all* transports — USB/UART dispatch acquires it too; harmless, as only one host configures at
-  a time.) Rejected alternative: a single shared-Rx session — a fiddly per-origin Tx demux,
-  since rynk frames carry no transport tag.
-- **Security:** mirror the existing encryption gate (`conn.raw().security_level()?.encrypted()`
-  at `ble/mod.rs:374`; drop + warn on unencrypted at `:436-443`) on the HID output writes,
-  **before** the channel send — otherwise bytes reach the dispatcher before the ATT reply.
-- **Always-on under `rynk` + `_ble`** (both transports compiled in; the browser always has a
-  path). **No advertising change** — HID is discovered via GATT enumeration post-connect
-  (`advertise` at `ble/mod.rs:588` unchanged).
+- **FLASH 406,084 B / RAM 50,700 B** — the smallest of every keep-`Vec<244>` variant.
+- **Speed is identical across all transports regardless of internal design** (the wire is unchanged):
+  USB/Web-Serial `get_macro` p50 ~2.3 ms (~26.7 KiB/s); GATT-over-BLE ~45 ms (~1.4 KiB/s);
+  HID-over-BLE ~60 ms (~0.9 KiB/s). BLE is connection-interval-bound; USB is ~20× faster — the fast
+  path when the keyboard is plugged in, with WebHID-over-BLE the wireless/bonded fallback.
 
-## Steps (file:line anchors)
+## Why this shape (vs the alternatives that were built and measured)
 
-1. **Const** — `pub const RYNK_HID_REPORT_SIZE: usize = 32;` in
-   `rmk-types/src/protocol/rynk/mod.rs` (near `RYNK_BLE_CHUNK_SIZE` `:63`). 32 = Vial-proven,
-   needs MTU ≥ 35; see the report-size decision before raising to 64.
-2. **Descriptor** — `RynkHidReport` in `rmk/src/hid.rs` after `ViaReport` (`:46-59`):
-   `#[gen_hid_descriptor]` with `[u8; RYNK_HID_REPORT_SIZE]` (32) input/output,
-   `usage_page = 0xFF60`, `usage = 0x61`.
-3. **GATT service** — `RynkHidService` in `rmk/src/ble/ble_server.rs`: clone `VialService`
-   (`:67-84`, already 32-byte reports), swap `ViaReport→RynkHidReport`; add the field to the
-   `#[cfg(feature="rynk")] struct Server` (`:29-35`). Leave the vial / no-host variants alone.
-   The macro fixes `report_map: [u8; LEN]` — read LEN off the compile error (as the codebase
-   does for 27/67/111).
-4. **Channel** — `RYNK_HID_BLE_RX_CHANNEL: Channel<RawMutex,[u8;RYNK_HID_REPORT_SIZE],SIZE>` in
-   `rmk/src/channel.rs` after `:116`.
-5. **Adapters + runner** — new `rmk/src/ble/rynk_hid.rs`, mirroring `rmk/src/ble/vial.rs`:
-   `RynkHidBleRx { pending: heapless::Vec<u8,RYNK_HID_REPORT_SIZE>, pos }`, `RynkHidBleTx {
-   input_data: Characteristic<[u8;RYNK_HID_REPORT_SIZE]>, conn }`, and `run_host_ble_hid(server,
-   conn, &RynkService)` that clears the channel and calls `service.run_session(&mut rx, &mut
-   tx)`. Implement the length-prefix framing + the `len=0` keep-alive loop (and the `pending`/
-   `pos` sub-report buffering — unlike `VialBleRx`, which reads whole 32-byte frames). Register
-   the module in `ble/mod.rs`.
-6. **Guard** — `static RYNK_DISPATCH_GUARD: Mutex<RawMutex,()>` in `rmk/src/host/rynk/mod.rs`;
-   acquire around `dispatch` + the response `write_all` (`:231-235`), `_ble`-gated.
-7. **Spawn** — in `rmk/src/ble/mod.rs` `host_task`/`inner` join (`:744-756`), add a
-   `host_hid_task` (→ `join4`) running `run_host_ble_hid` with the **same** `&RynkService` +
-   `conn`; `pending()` when not `rynk`+`_ble` **or** when no host service is bound (mirror
-   `host_task`'s `if let Some(service)`).
-8. **Routing** — cache `rynk_hid_service.output_data`/`input_data` handles (`Characteristic` is
-   `Copy`, no clone) alongside `ble/mod.rs:298-302`; add the `else if event.handle() ==
-   output_hid.handle` write arm + the CCCD arm (`:421-450`), reusing the in-scope `encrypted`
-   flag.
+- **vs changing the custom wire to fixed-32 (the "unify everything" variant):** that is ~1.3 KB
+  smaller, but it changes the custom-GATT wire (forcing a host-crate rewrite and hand-duplicating the
+  decoder across firmware + host, which drifted), and downgrades the native transport to 31-byte
+  reports. Rejected: keep the custom service untouched.
+- **vs a dedicated HID `Channel` + adapter:** a bounded inbound channel can stall the whole GATT loop
+  on `.send().await` if the unbound char is written; the single always-drained Pipe is immune.
+- **vs reading 32-byte frames back off the Pipe with `read_exact`:** that re-acquires a boundary the
+  writer just destroyed and relies on an implicit cross-module "every write is 32 bytes" invariant;
+  stripping at the seam keeps a single, self-delimiting pipe contract.
+- **vs a bind-once `Signal` router:** the `AtomicU8` set-on-write is sufficient (one peer per
+  connection, so the binding can't flip mid-session); a `Signal` costs more for an unreachable guard.
 
-## Reuse
+## Verification
 
-`rmk/src/ble/vial.rs` (adapter template), `ViaReport` (`hid.rs:46`), `RynkService::run_session`
-(`host/rynk/mod.rs:146`, unchanged), and the existing channel + handle-routing patterns.
-
-## Verification (no hardware)
-
-- **Unit-test the framing adapters**: len-prefix correctness, a multi-report frame, two frames
-  packed in one report, a `len=0` keep-alive (must NOT end the stream), sub-report buffering.
-- **Loopback through the real dispatcher**: mirror `rmk/tests/rynk_loopback.rs` via
-  `tests/common/rynk_link.rs`, interposing the HID framing; run `get_version`, a reply that
-  **exceeds one report** to exercise multi-report framing (`get_macro` chunk, or
-  `get_keymap_bulk` when `bulk` is on — note `get_capabilities` is only ~33 B and stays in one
-  report), set/get key, a topic push.
-- **Concurrency test**: two `run_session` instances sharing one `RynkService`, interleaved
-  `Set`/`GetKeyAction`, assert no lost update and no `RefCell` panic (guard in place).
+- Unit tests (`ble/rynk.rs`): `hid_report_payload` framing (strip, `len == 0` keep-alive, oversize and
+  short-slice clamps) + a seam→pipe smoke test that drives a multi-report message through the
+  production de-frame into `RYNK_BLE_RX_PIPE` and reads it back as the contiguous stream the session
+  consumes.
+- Integration (`rynk_loopback`, `rynk_hid_loopback`): both transports round-trip through the real
+  `run_session` — single-report frames, multi-report reassembly, pipelined requests, a topic push.
+- `cargo nextest run --no-default-features --features=split,rynk,storage,async_matrix,_ble` is green
+  (556 tests). Hardware-verified on the nRF54LM20A (boot, encrypted, GATT + WebHID + USB all serve).

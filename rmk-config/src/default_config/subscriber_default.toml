@@ -53,12 +53,11 @@ events = [
 # --- Rynk host-service subscribers ---
 #
 # host/rynk/topics.rs: each `run_session` builds a `TopicSubscribers` that
-# subscribes to all of these. There is one session per host transport channel.
-# An `_ble` build runs TWO BLE sessions concurrently — custom-GATT
-# (`RynkService`) and WebHID (`RynkHidService`) — and a board that also exposes
-# USB runs a third. The `rynk` block reserves the first (always-present) slot;
-# the `rynk` + `_ble` block below reserves two more (the second BLE session +
-# the optional USB session).
+# subscribes to all of these. There is one session per transport that has a host
+# service attached; the two BLE GATT transports (custom-GATT + WebHID) share a
+# single muxed session, so a board exposing both USB and BLE runs two sessions
+# concurrently. Reserve one slot here for the always-present session; the `rynk`
+# + `_ble` entry below adds the second (USB + BLE) slot.
 
 [[subscriber]]
 features = ["rynk"]
@@ -73,16 +72,15 @@ events = [
 [[subscriber]]
 features = ["rynk", "_ble"]
 events = [
-    # battery_status is only subscribed under `_ble`; one slot per concurrent
-    # session (BLE-GATT + BLE-HID + optional USB = 3).
-    { name = "battery_status", count = 3 },
-    # Two more session slots (the second BLE session + the optional USB session)
-    # for the always-on topics, on top of the single slot from the `rynk` block.
-    { name = "layer_change", count = 2 },
-    { name = "wpm_update", count = 2 },
-    { name = "connection_status_change", count = 2 },
-    { name = "sleep_state", count = 2 },
-    { name = "led_indicator", count = 2 },
+    # battery_status is only subscribed under `_ble`; needs one slot per
+    # concurrent session (USB + BLE = 2).
+    { name = "battery_status", count = 2 },
+    # Second session slot for the always-on topics on dual-transport boards.
+    { name = "layer_change" },
+    { name = "wpm_update" },
+    { name = "connection_status_change" },
+    { name = "sleep_state" },
+    { name = "led_indicator" },
 ]
 
 # --- Split-gated internal subscribers ---
