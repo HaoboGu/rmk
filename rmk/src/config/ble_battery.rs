@@ -3,6 +3,7 @@ use embassy_nrf::gpio::{Input, Output};
 
 /// BLE battery/charging GPIO configuration.
 pub struct BleBatteryConfig<'a> {
+    pub enabled: bool,
     #[cfg(feature = "_nrf_ble")]
     pub charge_state_pin: Option<Input<'a>>,
     #[cfg(feature = "_nrf_ble")]
@@ -15,10 +16,20 @@ pub struct BleBatteryConfig<'a> {
     pub _marker: core::marker::PhantomData<&'a ()>,
 }
 
+impl BleBatteryConfig<'_> {
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            ..Default::default()
+        }
+    }
+}
+
 #[cfg(feature = "_nrf_ble")]
 impl<'a> Default for BleBatteryConfig<'a> {
     fn default() -> Self {
         Self {
+            enabled: true,
             charge_state_pin: None,
             charge_led_pin: None,
             charge_state_low_active: false,
@@ -31,6 +42,7 @@ impl<'a> Default for BleBatteryConfig<'a> {
 impl<'a> Default for BleBatteryConfig<'a> {
     fn default() -> Self {
         Self {
+            enabled: false,
             _marker: core::marker::PhantomData,
         }
     }
@@ -45,6 +57,7 @@ impl<'a> BleBatteryConfig<'a> {
         charge_led_low_active: bool,
     ) -> Self {
         Self {
+            enabled: true,
             charge_state_pin,
             charge_state_low_active,
             charge_led_pin,

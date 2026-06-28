@@ -5,3 +5,12 @@
 pub trait Runnable {
     async fn run(&mut self) -> !;
 }
+
+impl<T: Runnable> Runnable for Option<T> {
+    async fn run(&mut self) -> ! {
+        match self {
+            Some(runnable) => runnable.run().await,
+            None => core::future::pending().await,
+        }
+    }
+}
