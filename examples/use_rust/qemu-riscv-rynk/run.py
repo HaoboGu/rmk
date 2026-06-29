@@ -1,35 +1,39 @@
-import socket, struct, subprocess, sys, time
+from pathlib import Path
+import subprocess
 
-PORT, ELF = 9000, "target/riscv32imac-unknown-none-elf/debug/rmk-qemu-riscv"
-H = struct.Struct("<H B H")
+PORT = 9000
+ROOT = Path(__file__).resolve().parents[3]
+HERE = Path(__file__).resolve().parent
+ELF = HERE / "target/riscv32imac-unknown-none-elf/debug/rmk-qemu-riscv"
 
-def recv_exact(s, n):
-    buf = b""
-    while len(buf) < n:
-        c = s.recv(n - len(buf))
-        if not c: raise ConnectionError
-        buf += c
-    return buf
-
-subprocess.run(["cargo", "build"], check=True)
+subprocess.run(["cargo", "build"], cwd=HERE, check=True)
 
 q = subprocess.Popen(
     ["qemu-system-riscv32", "-M", "virt", "-cpu", "rv32",
      "-semihosting", "-nographic", "-bios", "none",
-     "-kernel", ELF, "-serial", f"tcp::{PORT},server,nowait"],
+     "-kernel", str(ELF), "-serial", f"tcp::{PORT},server,nowait"],
     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-print(f'Qemu started, serial on tcp::{PORT}')
+print(f"QEMU started, serial on tcp::{PORT}", flush=True)
 
-s = socket.create_connection(("127.0.0.1", PORT), timeout=5)
-s.sendall(H.pack(0x0001, 1, 0))
-_, _, n = H.unpack(recv_exact(s, 5))
-v = recv_exact(s, n)[1:3]
-print(f"Rynk v{v[0]}.{v[1]} OK", flush=True)
-s.close()
-
-print("Ctrl+C to stop.", flush=True)
 try:
-    q.wait()
-except KeyboardInterrupt:
+    subprocess.run(
+        [
+            "cargo",
+            "run",
+            "--manifest-path",
+            str(ROOT / "rynk/Cargo.toml"),
+            "--example",
+            "qemu_behavior",
+            "--",
+            f"127.0.0.1:{PORT}",
+        ],
+        cwd=ROOT,
+        check=True,
+    )
+finally:
     q.terminate()
-    q.wait()
+    try:
+        q.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        q.kill()
+        q.wait()

@@ -10,12 +10,15 @@ use panic_halt as _;
 use rmk::config::{BehaviorConfig, PositionalConfig, RmkConfig};
 use rmk::host::run_rynk_uart;
 use rmk::keymap::KeymapData;
-use rmk::types::action::KeyAction;
+use rmk::types::action::{EncoderAction, KeyAction};
+use rmk::types::fork::{Fork, StateBits};
+use rmk::types::modifier::ModifierCombination;
+use rmk::types::morse::{Morse, MorseProfile};
 use rmk::{initialize_keymap, k, layer};
 use semihosting::println;
 use static_cell::StaticCell;
-use uart_16550::backend::MmioBackend;
 use uart_16550::Uart16550;
+use uart_16550::backend::MmioBackend;
 
 struct Uart(Uart16550<MmioBackend>);
 
@@ -36,8 +39,7 @@ impl Read for Uart {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         loop {
             let n = self.0.receive_bytes(buf);
-            if n > 0 { return Ok(n) }
-            else { yield_now().await }
+            if n > 0 { return Ok(n) } else { yield_now().await }
         }
     }
 }
@@ -47,18 +49,20 @@ impl Write for Uart {
         let mut sent = 0;
         while sent < buf.len() {
             let n = self.0.send_bytes(&buf[sent..]);
-            if n > 0 { sent += n }
-            else { yield_now().await }
+            if n > 0 { sent += n } else { yield_now().await }
         }
         Ok(sent)
     }
 
-    async fn flush(&mut self) -> Result<(), Self::Error> { Ok(()) }
+    async fn flush(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 const COL: usize = 3;
 const ROW: usize = 3;
 const NUM_LAYER: usize = 2;
+const NUM_ENCODER: usize = 1;
 
 #[rustfmt::skip]
 const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
@@ -76,6 +80,11 @@ const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
     ]
 }
 
+const DEFAULT_ENCODER_MAP: [[EncoderAction; NUM_ENCODER]; NUM_LAYER] = [
+    [EncoderAction::new(k!(KpPlus), k!(KpMinus))],
+    [EncoderAction::new(k!(AudioVolUp), k!(AudioVolDown))],
+];
+
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     println!("[RMK] starting");
@@ -83,8 +92,29 @@ async fn main(_spawner: Spawner) {
     let rx = Uart::new();
     let tx = Uart::new();
 
-    let mut keymap_data = KeymapData::new(get_default_keymap());
+    let mut keymap_data = KeymapData::new_with_encoder(get_default_keymap(), DEFAULT_ENCODER_MAP);
     let mut behavior_config = BehaviorConfig::default();
+    behavior_config
+        .fork
+        .forks
+        .push(Fork::new(
+            k!(A),
+            k!(B),
+            k!(C),
+            StateBits::default(),
+            StateBits::default(),
+            ModifierCombination::default(),
+            true,
+        ))
+        .unwrap();
+    behavior_config
+        .morse
+        .morses
+        .push(Morse {
+            profile: MorseProfile::const_default(),
+            actions: rmk::heapless::LinearMap::new(),
+        })
+        .unwrap();
     let positional_config = PositionalConfig::default();
     let keymap = initialize_keymap(&mut keymap_data, &mut behavior_config, &positional_config).await;
 

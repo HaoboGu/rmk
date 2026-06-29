@@ -32,7 +32,7 @@ rmk = { path = "../rmk", default-features = false, features = [
 embassy-sync = "0.8"
 embassy-futures = "0.1"
 critical-section = { version = "1.2", features = ["std"] }
-tokio = { version = "1.47", features = ["test-util", "macros", "rt", "rt-multi-thread", "time"] }
+tokio = { version = "1.47", features = ["test-util", "macros", "net", "rt", "rt-multi-thread", "time"] }
 
 rynk-ble = { path = "rynk-ble" }
 rynk-serial = { path = "rynk-serial" }
