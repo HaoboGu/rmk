@@ -29,6 +29,8 @@ rmk = { path = "../rmk", default-features = false, features = [
     "split",
     "steno",
 ] }
+# TODO: remove once an embassy-usb release drops the stale `dep:ssmarshal`.
+ssmarshal = { version = "1.0", features = ["std"] }
 embassy-sync = "0.8"
 embassy-futures = "0.1"
 critical-section = { version = "1.2", features = ["std"] }
@@ -44,6 +46,7 @@ resolver = "2"
 members = [
     "rynk-serial",
     "rynk-ble",
+    "rynk-wasm",
 ]
 default-members = [
     ".",

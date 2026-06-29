@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Rynk web demo</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 760px; }
+      button { font-size: 1rem; padding: .5rem 1rem; border-radius: 6px;
+               border: 1px solid #4a90d9; background: #4a90d9; color: #fff; cursor: pointer; }
+      button:disabled { opacity: .5; cursor: default; }
+      #log { background: #111; color: #0f0; padding: 1rem; margin-top: 1rem;
+             white-space: pre-wrap; border-radius: 6px; min-height: 6rem;
+             font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
+  </head>
+  <body>
+    <h1>Rynk web demo</h1>
+    <p>The page (the <b>example shell</b>) owns the transport: it opens a link
+       (USB <b>Web Serial</b>, or BLE via <b>WebHID</b> over the OS HID link), runs
+       the permanent <code>get_version</code> probe, then dynamically loads the
+       version-matched <code>rynk-wasm</code> package and drives the typed session
+       over a JS bridge. Topic pushes (layer changes, WPM, …) stream live once
+       connected — marked <code>📡</code> below. WebHID reaches the firmware's
+       <code>RynkHidService</code> (vendor usage page <code>0xFF60</code>) and rides
+       the existing OS bond, so there is no pairing prompt.</p>
+    <button id="serial">Connect via Serial (USB)</button>
+    <button id="ble">Connect via BLE (WebHID)</button>
+    <pre id="log"></pre>
+
+    <script type="module">
+      const logEl = document.getElementById("log");
+      const serialBtn = document.getElementById("serial");
+      const bleBtn = document.getElementById("ble");
+      const log = (m) => { logEl.textContent += m + "\n"; console.log(m); };
+
+      // One getter call, formatted with the native status glyphs: ✓ value,
+      // · capability absent (skipped), ⚠ device rejected, ✗ transport/other.
+      // Getters return native JS values now; stringify objects for display.
+      async function show(label, fn) {
+        const pad = label.padEnd(16);
+        try {
+          const v = await fn();
+          log(`✓ ${pad} ${v !== null && typeof v === "object" ? JSON.stringify(v) : v}`);
+        } catch (e) {
+          const kind = (e && e.name) || "Error";
+          const glyph = kind === "Unsupported" ? "·" : kind === "Rejected" ? "⚠" : "✗";
+          log(`${glyph} ${pad} ${kind}: ${e && e.message}`);
+        }
+      }
+
+      if (!navigator.serial) {
+        log("⚠ navigator.serial undefined — use Chrome/Edge over http://localhost (not Firefox/Safari, not an IP).");
+      }
+      if (!navigator.hid) {
+        log("⚠ navigator.hid undefined — WebHID (BLE) needs Chrome/Edge over http://localhost.");
+      }
+
+      // ── permanent Rynk wire envelope: frozen across protocol versions by the ICD
+      // and guarded by rmk-types' wire snapshot tests. Mirror of
+      // rmk_types::protocol::rynk (RYNK_HEADER_SIZE, RYNK_TOPIC_BIT, Cmd::GetVersion). ──
+      const RYNK_HEADER = 5;            // cmd:u16 LE, seq:u8, len:u16 LE
+      const RYNK_TOPIC_BIT = 0x8000;    // CMD high bit set ⇒ server→host topic push
+      const CMD_GET_VERSION = 0x0001;
+      const RYNK_HID_REPORT_SIZE = 32;  // firmware RynkHidService report
+
+      const concat = (a, b) => { const c = new Uint8Array(a.length + b.length); c.set(a); c.set(b, a.length); return c; };
+
+      function frame(cmd, seq, body) {
+        const out = new Uint8Array(RYNK_HEADER + body.length);
+        out[0] = cmd & 0xff; out[1] = (cmd >> 8) & 0xff;
+        out[2] = seq;
+        out[3] = body.length & 0xff; out[4] = (body.length >> 8) & 0xff;
+        out.set(body, RYNK_HEADER);
+        return out;
+      }
+
+      // A cancel-safe byte link. A single background loop drains the port into
+      // `rx`; consumers (the probe, the wasm bridge's recv) pull from `rx` and
+      // never touch the reader directly. So dropping a consumer's pending read —
+      // as the wasm actor does when a request preempts a topic read — loses no
+      // bytes: they stay in `rx` for the next read.
+      function link(port) {
+        const reader = port.readable.getReader();
+        let writer;
+        try {
+          writer = port.writable.getWriter();
+        } catch (e) {
+          reader.releaseLock();   // don't leak the read lock if acquiring the writer fails
+          throw e;
+        }
+        let rx = new Uint8Array(0);
+        let closed = false;
+        let wake = null;          // resolve fn of a consumer waiting on `rx`
+
+        const signal = () => { if (wake) { const w = wake; wake = null; w(); } };
+
+        // Background pump: append every chunk to `rx`, wake any waiter, until EOF.
+        (async () => {
+          try {
+            for (;;) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              if (value && value.length) { rx = concat(rx, value); signal(); }
+            }
+          } catch {}
+          closed = true;
+          signal();
+        })();
+
+        // Block until `rx` has bytes or the link closed. The check-then-store is
+        // synchronous, so the pump can't signal into the gap and be missed.
+        async function ready() {
+          while (rx.length === 0 && !closed) await new Promise((res) => { wake = res; });
+        }
+        async function fill(n) {
+          while (rx.length < n) {
+            if (closed) throw new Error("port closed");
+            await ready();
+          }
+        }
+        async function readFrame() {
+          await fill(RYNK_HEADER);
+          const len = rx[3] | (rx[4] << 8);
+          await fill(RYNK_HEADER + len);
+          const f = rx.slice(0, RYNK_HEADER + len);
+          rx = rx.slice(RYNK_HEADER + len);
+          return { cmd: f[0] | (f[1] << 8), seq: f[2], payload: f.slice(RYNK_HEADER) };
+        }
+
+        return {
+          // The permanent version probe: send GetVersion, read the reply, parse
+          // the `Result<ProtocolVersion>` body = [0x00 (Ok), major, minor].
+          async probeVersion() {
+            await writer.write(frame(CMD_GET_VERSION, 1, new Uint8Array(0)));
+            // Skip any topic push (CMD high bit) that races ahead of the reply,
+            // mirroring the driver's frame demux.
+            let f;
+            do { f = await readFrame(); } while (f.cmd & RYNK_TOPIC_BIT);
+            if (f.payload.length < 3 || f.payload[0] !== 0x00) {
+              throw new Error(`bad version reply: [${f.payload}]`);
+            }
+            return { major: f.payload[1], minor: f.payload[2] };
+          },
+          // The JsLink the wasm core consumes: raw byte send/recv over the port.
+          async send(f) { await writer.write(f); },
+          // Cancel-safe: hand back buffered bytes, or wait for the pump. A dropped
+          // call leaves `rx` intact for the next one. Empty array ⇒ EOF.
+          async recv() {
+            await ready();
+            if (rx.length > 0) { const c = rx; rx = new Uint8Array(0); return c; }
+            return new Uint8Array(0);
+          },
+          // Release the reader/writer locks and close the port, so a failed
+          // attempt can be retried without reloading the page.
+          async close() {
+            try { await reader.cancel(); } catch {}
+            try { await writer.abort(); } catch {}
+            try { await port.close(); } catch {}
+          },
+        };
+      }
+
+      // WebHID link (BLE over the OS HID transport). A pure browser can't reach
+      // rynk's custom 128-bit GATT on an OS-bonded keyboard, but it CAN reach the
+      // vendor HID report (firmware RynkHidService, usage page 0xFF60) via WebHID
+      // — the report rides the OS's existing HID link (Web Bluetooth can't attach
+      // a bonded keyboard). Each fixed 32-byte report is just a fragment of the
+      // rynk frame stream (final report zero-padded), delimited by the frame
+      // header's LEN — like a small-MTU GATT notification. The fragmenting lives
+      // here, below the JsLink boundary, so `rx`/send carry the same clean rynk
+      // byte stream as the serial link — `link()` and `hidLink()` are
+      // interchangeable to the probe and the wasm bridge.
+      function hidLink(device) {
+        const N = RYNK_HID_REPORT_SIZE;     // 32
+        let rx = new Uint8Array(0);
+        let remaining = 0;   // bytes left in the in-flight rynk frame; 0 at a boundary
+        let closed = false;
+        let wake = null;
+        const signal = () => { if (wake) { const w = wake; wake = null; w(); } };
+
+        // Each input report is a 32-byte fragment of the frame stream; the frame
+        // header's LEN delimits it, so drop the final report's zero-padding. Same
+        // cancel-safe `rx` pump as the serial link.
+        const onReport = (event) => {
+          const d = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength);
+          if (remaining === 0) remaining = RYNK_HEADER + (d[3] | (d[4] << 8));
+          const take = Math.min(remaining, d.length);
+          remaining -= take;
+          rx = concat(rx, d.slice(0, take));
+          signal();
+        };
+        device.addEventListener("inputreport", onReport);
+
+        async function ready() {
+          while (rx.length === 0 && !closed) await new Promise((res) => { wake = res; });
+        }
+        async function fill(n) {
+          while (rx.length < n) { if (closed) throw new Error("device closed"); await ready(); }
+        }
+        async function readFrame() {
+          await fill(RYNK_HEADER);
+          const len = rx[3] | (rx[4] << 8);
+          await fill(RYNK_HEADER + len);
+          const f = rx.slice(0, RYNK_HEADER + len);
+          rx = rx.slice(RYNK_HEADER + len);
+          return { cmd: f[0] | (f[1] << 8), seq: f[2], payload: f.slice(RYNK_HEADER) };
+        }
+        // Fragment a raw rynk frame into fixed 32-byte reports (final one
+        // zero-padded) and write one per fragment (mirror of the firmware Tx);
+        // the firmware reassembles via the frame header's LEN.
+        async function sendFramed(bytes) {
+          for (let off = 0; off < bytes.length; off += N) {
+            const chunk = bytes.subarray(off, off + N);
+            const report = new Uint8Array(N);
+            report.set(chunk);
+            await device.sendReport(0, report);   // report ID 0
+          }
+        }
+
+        return {
+          async probeVersion() {
+            await sendFramed(frame(CMD_GET_VERSION, 1, new Uint8Array(0)));
+            let f;
+            do { f = await readFrame(); } while (f.cmd & RYNK_TOPIC_BIT);
+            if (f.payload.length < 3 || f.payload[0] !== 0x00) {
+              throw new Error(`bad version reply: [${f.payload}]`);
+            }
+            return { major: f.payload[1], minor: f.payload[2] };
+          },
+          async send(f) { await sendFramed(f); },
+          async recv() {
+            await ready();
+            if (rx.length > 0) { const c = rx; rx = new Uint8Array(0); return c; }
+            return new Uint8Array(0);
+          },
+          async close() {
+            closed = true;
+            device.removeEventListener("inputreport", onReport);
+            try { await device.close(); } catch {}
+            signal();
+          },
+        };
+      }
+
+      // Dynamic, version-matched load. One artifact today; the switch documents
+      // the per-version intent (a real deploy ships rynk_core_v1.wasm, …).
+      async function loadCore(major) {
+        switch (major) {
+          case 0: // protocol v0.x (ProtocolVersion::CURRENT = {0, 1})
+          case 1:
+            return await import("./pkg/rynk_wasm.js");
+          default:
+            throw new Error(`no rynk-core wasm for protocol major ${major}`);
+        }
+      }
+
+      // Session state persists across clicks: the actor keeps streaming topics
+      // until the user disconnects. One session at a time across both transports.
+      let port = null, device = null, l = null, core = null, connected = false;
+
+      async function teardown() {
+        if (core) { try { core.disconnect(); } catch {} }
+        if (l) await l.close();
+        else if (port) { try { await port.close(); } catch {} }
+        port = null; device = null; l = null; core = null; connected = false;
+        serialBtn.textContent = "Connect via Serial (USB)";
+        bleBtn.textContent = "Connect via BLE (WebHID)";
+        serialBtn.disabled = false; bleBtn.disabled = false;
+      }
+
+      // Shared session flow — identical over either transport, since `l` is the
+      // same JsLink shape (`link()` ≡ `hidLink()`). `openLink` runs inside the
+      // click user-gesture (the port/device chooser requires it) and returns the
+      // opened link.
+      async function connectVia(thisBtn, otherBtn, label, openLink) {
+        if (connected) { await teardown(); log("\n— disconnected —"); return; }
+
+        logEl.textContent = "";
+        serialBtn.disabled = true; bleBtn.disabled = true;
+        try {
+          l = await openLink();
+
+          const { major, minor } = await l.probeVersion();
+          log(`${label}: protocol v${major}.${minor} — loading rynk-wasm…`);
+
+          core = await loadCore(major);
+          await core.default();            // wasm-bindgen init (idempotent)
+
+          // Hand the link to the Rust-side session. Topic pushes stream to
+          // `onTopic` for the life of the session; connect() returns capabilities.
+          const onTopic = (ev) => log("📡 " + JSON.stringify(ev));
+          const caps = await core.connect(l, onTopic);
+          connected = true;
+          log(`✓ connected via ${label} — ${caps.num_layers}×${caps.num_rows}×${caps.num_cols} keymap, `
+            + `${caps.max_combos} combos, ${caps.max_forks} forks, ${caps.max_morse} morse, `
+            + `${caps.max_macros} macros, ble=${caps.ble_enabled}\n`);
+
+          // Drive the same typed surface a native Client exposes — one call per
+          // command. A real config UI would also call the set_* / *_bulk functions.
+          await show("version",         () => core.protocol_version());
+          await show("default layer",   () => core.get_default_layer());
+          await show("current layer",   () => core.get_current_layer());
+          await show("key L0(0,0)",     () => core.get_key(0, 0, 0));
+          await show("key L0(0,1)",     () => core.get_key(0, 0, 1));
+          await show("behavior",        () => core.get_behavior());
+          if (caps.max_combos > 0) await show("combo 0", () => core.get_combo(0));
+          if (caps.max_forks  > 0) await show("fork 0",  () => core.get_fork(0));
+          if (caps.max_morse  > 0) await show("morse 0", () => core.get_morse(0));
+          await show("wpm",             () => core.get_wpm());
+          await show("sleep state",     () => core.get_sleep_state());
+          await show("led indicator",   () => core.get_led_indicator());
+          await show("connection type", () => core.get_connection_type());
+          await show("battery",         () => core.get_battery_status());
+          await show("ble status",      () => core.get_ble_status());
+
+          log("\n— listening for topics (type on the keyboard); click to disconnect —");
+          thisBtn.textContent = "Disconnect";
+          thisBtn.disabled = false;       // re-enable so it can disconnect
+          otherBtn.disabled = true;       // one transport at a time
+        } catch (e) {
+          log("ERROR: " + e);
+          console.error(e);
+          await teardown();   // release the transport so the next attempt can reopen it
+        }
+      }
+
+      serialBtn.addEventListener("click", () => connectVia(serialBtn, bleBtn, "USB", async () => {
+        // All serial ports are listed — pick the keyboard's; a J-Link VCOM yields `bad version reply`.
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        return link(port);
+      }));
+
+      bleBtn.addEventListener("click", () => connectVia(bleBtn, serialBtn, "BLE (WebHID)", async () => {
+        // One-time chooser inside the gesture; later visits can reconnect silently
+        // via navigator.hid.getDevices(). Filter to the rynk vendor HID usage.
+        const devs = await navigator.hid.requestDevice({ filters: [{ usagePage: 0xFF60, usage: 0x61 }] });
+        if (!devs.length) throw new Error("no WebHID device chosen");
+        device = devs[0];
+        if (!device.opened) await device.open();
+        return hidLink(device);
+      }));
+
+      // ── Transport auto-selection: getPorts()/getDevices() list only
+      // previously-granted devices and need no user gesture, so port.open() /
+      // device.open() reconnect silently on later visits. Prefer USB (fastest)
+      // when a granted port exists, else BLE via WebHID. First-time access still
+      // needs a button (the chooser must run inside a click gesture).
+      async function grantedSerialPort() {
+        try { return navigator.serial ? (await navigator.serial.getPorts())[0] || null : null; }
+        catch { return null; }
+      }
+      async function grantedHidDevice() {
+        try {
+          const devs = navigator.hid ? await navigator.hid.getDevices() : [];
+          return devs.find((d) => (d.collections || []).some((c) => c.usagePage === 0xFF60)) || devs[0] || null;
+        } catch { return null; }
+      }
+
+      async function autoConnect() {
+        if (connected) return;
+        const p = await grantedSerialPort();
+        if (p) {
+          await connectVia(serialBtn, bleBtn, "USB (auto)", async () => {
+            port = p; await port.open({ baudRate: 115200 }); return link(port);
+          });
+          if (connected) return;
+        }
+        const d = await grantedHidDevice();
+        if (d) {
+          await connectVia(bleBtn, serialBtn, "BLE/WebHID (auto)", async () => {
+            device = d; if (!device.opened) await device.open(); return hidLink(device);
+          });
+        }
+      }
+
+      // Hot-plug: reconnect when a granted transport (re)appears while idle; tear
+      // down when the active transport drops. USB is preferred on the next idle
+      // auto-connect, so unplugging USB falls back to BLE on its reconnect event.
+      navigator.serial?.addEventListener?.("connect", () => { if (!connected) autoConnect(); });
+      navigator.hid?.addEventListener?.("connect", () => { if (!connected) autoConnect(); });
+      const onDrop = () => { if (connected) teardown().then(() => log("\n— transport disconnected —")); };
+      navigator.serial?.addEventListener?.("disconnect", onDrop);
+      navigator.hid?.addEventListener?.("disconnect", onDrop);
+
+      // Silent reconnect on load (previously-granted devices only; no-op otherwise).
+      autoConnect();
+    </script>
+  </body>
+</html>
