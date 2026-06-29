@@ -28,7 +28,7 @@
 //! ### Build-time
 //! - [`constants`] — Generated from `keyboard.toml` by `build.rs`
 
-#![no_std]
+#![cfg_attr(not(feature = "wasm"), no_std)]
 
 pub mod action;
 pub mod battery;
