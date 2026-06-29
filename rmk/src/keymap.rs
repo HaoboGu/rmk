@@ -700,6 +700,20 @@ impl<'a> KeyMap<'a> {
         None
     }
 
+    /// Write both directions of an encoder under one borrow. Returns `false`
+    /// if the slot is out of range.
+    pub(crate) fn set_encoder(&self, layer: usize, id: usize, action: EncoderAction) -> bool {
+        let mut inner = self.inner.borrow_mut();
+        let idx = inner.encoder_index(layer, id);
+        if let Some(encoders) = &mut inner.encoders
+            && let Some(slot) = encoders.get_mut(idx)
+        {
+            *slot = action;
+            return true;
+        }
+        false
+    }
+
     // ── Macro buffer (for Vial DynamicKeymapMacroGetBuffer/SetBuffer) ──
 
     pub(crate) fn read_macro_buffer(&self, offset: usize, target: &mut [u8]) {

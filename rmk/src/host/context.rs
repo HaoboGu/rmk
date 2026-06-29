@@ -136,6 +136,20 @@ impl<'a> KeyboardContext<'a> {
         let _ = updated;
     }
 
+    /// Write both encoder directions in one synchronous RAM update, then persist
+    /// once.
+    pub async fn set_encoder(&self, layer: u8, idx: u8, action: EncoderAction) {
+        let written = self.keymap.set_encoder(layer as usize, idx as usize, action);
+        #[cfg(feature = "storage")]
+        if written {
+            FLASH_CHANNEL
+                .send(FlashOperationMessage::Encoder { idx, layer, action })
+                .await;
+        }
+        #[cfg(not(feature = "storage"))]
+        let _ = written;
+    }
+
     // ── Macros ───────────────────────────────────────────────────────────
 
     pub fn read_macro_buffer(&self, offset: usize, target: &mut [u8]) {

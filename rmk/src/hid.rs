@@ -6,6 +6,8 @@ use embassy_usb::class::hid::ReadError;
 use embassy_usb::driver::EndpointError;
 use rmk_types::connection::ConnectionType;
 use rmk_types::led_indicator::LedIndicator;
+#[cfg(feature = "rynk")]
+use rmk_types::protocol::rynk::RYNK_HID_REPORT_SIZE;
 use serde::Serialize;
 use usbd_hid::descriptor::generator_prelude::*;
 use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
@@ -57,6 +59,33 @@ pub struct ViaReport {
     pub(crate) input_data: [u8; 32],
     pub(crate) output_data: [u8; 32],
 }
+
+/// Vendor HID report carrying the Rynk config protocol over HID.
+#[cfg(feature = "rynk")]
+#[gen_hid_descriptor(
+    (collection = APPLICATION, usage_page = 0xFF60, usage = 0x61) = {
+        (usage = 0x62, logical_min = 0x0) = {
+            #[item_settings(data,variable,absolute)] input_data=input;
+        };
+        (usage = 0x63, logical_min = 0x0) = {
+            #[item_settings(data,variable,absolute)] output_data=output;
+        };
+    }
+)]
+#[derive(Default)]
+pub struct RynkHidReport {
+    // `gen_hid_descriptor` needs a literal length; keep it in lockstep with
+    // RYNK_HID_REPORT_SIZE (asserted below), which sizes the GATT chars/channel.
+    pub(crate) input_data: [u8; 32],
+    pub(crate) output_data: [u8; 32],
+}
+
+// `core::assert!`: a `defmt` build's crate-level `assert!` isn't const-callable.
+#[cfg(feature = "rynk")]
+const _: () = core::assert!(
+    RYNK_HID_REPORT_SIZE == 32,
+    "RynkHidReport literal length must equal RYNK_HID_REPORT_SIZE"
+);
 
 /// Predefined report ids for composite hid report.
 /// Should be same with `#[gen_hid_descriptor]`
