@@ -503,7 +503,7 @@ pub const DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS: u32 = 120;
 pub const MIN_PASSKEY_ENTRY_TIMEOUT_SECS: u32 = 30;
 
 /// Config for chip-specific settings
-#[derive(Clone, Default, Debug, Deserialize)]
+#[derive(Clone, Default, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct ChipConfig {
     /// DCDC regulator 0 enabled (for nrf52840)
@@ -764,6 +764,9 @@ pub struct SplitBoardConfig {
     pub row_offset: usize,
     /// Col offset of the split board
     pub col_offset: usize,
+    /// Chip model for this split board.
+    /// If not set, the top-level keyboard chip is used.
+    pub chip: Option<String>,
     /// Ble address
     pub ble_addr: Option<[u8; 6]>,
     /// Serial config, the vector length should be 1 for peripheral
@@ -1228,5 +1231,121 @@ subs = 2
         assert_eq!(config.event.layer_change.channel_size, 1);
         assert_eq!(config.event.layer_change.pubs, 2);
         assert_eq!(config.event.layer_change.subs, 2);
+    }
+
+    #[test]
+    fn test_split_board_chip_defaults_to_top_level_chip() {
+        let user_toml = r#"
+[keyboard]
+name = "Test"
+vendor_id = 0x1234
+product_id = 0x5678
+chip = "nrf52840"
+
+[layout]
+rows = 4
+cols = 3
+layers = 1
+keymap = [[["A", "B", "C"], ["D", "E", "F"], ["G", "H", "I"], ["J", "K", "L"]]]
+
+[split]
+connection = "ble"
+
+[split.central]
+rows = 2
+cols = 2
+row_offset = 0
+col_offset = 0
+
+[split.central.matrix]
+matrix_type = "normal"
+row_pins = ["P0_00", "P0_01"]
+col_pins = ["P0_02", "P0_03"]
+
+[[split.peripheral]]
+rows = 2
+cols = 1
+row_offset = 2
+col_offset = 2
+
+[split.peripheral.matrix]
+matrix_type = "normal"
+row_pins = ["P0_04", "P0_05"]
+col_pins = ["P0_06"]
+"#;
+        let config: KeyboardTomlConfig = Config::builder()
+            .add_source(File::from_str(user_toml, FileFormat::Toml))
+            .build()
+            .unwrap()
+            .try_deserialize()
+            .unwrap();
+
+        let top_level_chip = config.get_chip_model().unwrap();
+        let peripheral = &config.split.as_ref().unwrap().peripheral[0];
+        let resolved = config.resolve_split_board_chip(peripheral, &top_level_chip);
+        assert_eq!(resolved, top_level_chip);
+    }
+
+    #[test]
+    fn test_split_board_chip_override() {
+        let user_toml = r#"
+[keyboard]
+name = "Test"
+vendor_id = 0x1234
+product_id = 0x5678
+chip = "nrf52840"
+
+[layout]
+rows = 4
+cols = 3
+layers = 1
+keymap = [[["A", "B", "C"], ["D", "E", "F"], ["G", "H", "I"], ["J", "K", "L"]]]
+
+[ble]
+enabled = true
+
+[split]
+connection = "ble"
+
+[split.central]
+rows = 2
+cols = 2
+row_offset = 0
+col_offset = 0
+
+[split.central.matrix]
+matrix_type = "normal"
+row_pins = ["P0_00", "P0_01"]
+col_pins = ["P0_02", "P0_03"]
+
+[[split.peripheral]]
+chip = "rp2040"
+rows = 2
+cols = 1
+row_offset = 2
+col_offset = 2
+
+[split.peripheral.matrix]
+matrix_type = "normal"
+row_pins = ["PIN_4", "PIN_5"]
+col_pins = ["PIN_6"]
+"#;
+        let config: KeyboardTomlConfig = Config::builder()
+            .add_source(File::from_str(user_toml, FileFormat::Toml))
+            .build()
+            .unwrap()
+            .try_deserialize()
+            .unwrap();
+
+        let top_level_chip = config.get_chip_model().unwrap();
+        let peripheral = &config.split.as_ref().unwrap().peripheral[0];
+        let resolved = config.resolve_split_board_chip(peripheral, &top_level_chip);
+        assert_eq!(resolved.series, chip::ChipSeries::Rp2040);
+        assert_eq!(resolved.chip, "rp2040");
+
+        let hardware = config.hardware().unwrap();
+        let (peripheral_chip, peripheral_chip_config) = hardware.chip_for_split_board(peripheral);
+        assert_eq!(peripheral_chip.series, chip::ChipSeries::Rp2040);
+        assert_eq!(peripheral_chip_config, ChipConfig::default());
     }
 }

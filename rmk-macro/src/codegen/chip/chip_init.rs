@@ -2,7 +2,7 @@ use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, quote};
 use rmk_config::resolved::Hardware;
-use rmk_config::resolved::hardware::{BoardConfig, ChipModel, ChipSeries, CommunicationConfig};
+use rmk_config::resolved::hardware::{BoardConfig, ChipConfig, ChipModel, ChipSeries, CommunicationConfig};
 use syn::{ItemFn, ItemMod};
 
 use crate::codegen::override_helper::Overwritten;
@@ -15,6 +15,8 @@ pub(crate) fn expand_chip_init(
     hardware: &Hardware,
     peripheral_id: Option<usize>,
     item_mod: &ItemMod,
+    chip: &ChipModel,
+    chip_config: &ChipConfig,
 ) -> TokenStream2 {
     // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
     if let Some((_, items)) = &item_mod.content {
@@ -26,7 +28,7 @@ pub(crate) fn expand_chip_init(
                 {
                     match Overwritten::from_meta(&item_fn.attrs[0].meta) {
                         Ok(Overwritten::ChipConfig) => {
-                            return Some(override_chip_config(&hardware.chip, item_fn));
+                            return Some(override_chip_config(chip, item_fn));
                         }
                         Ok(Overwritten::ChipInit) => {
                             // Override the whole chip initialization
@@ -38,15 +40,19 @@ pub(crate) fn expand_chip_init(
                 }
                 None
             })
-            .unwrap_or(chip_init_default(hardware, peripheral_id))
+            .unwrap_or(chip_init_default(hardware, peripheral_id, chip, chip_config))
     } else {
-        chip_init_default(hardware, peripheral_id)
+        chip_init_default(hardware, peripheral_id, chip, chip_config)
     }
 }
 
 // Default implementations of chip initialization
-pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize>) -> TokenStream2 {
-    let chip = &hardware.chip;
+pub(crate) fn chip_init_default(
+    hardware: &Hardware,
+    peripheral_id: Option<usize>,
+    chip: &ChipModel,
+    chip_config: &ChipConfig,
+) -> TokenStream2 {
     let communication = &hardware.communication;
     let peri_num = hardware.board.get_num_periphreal();
     let set_io_capabilities = if peripheral_id.is_none() {
@@ -64,7 +70,7 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                 let mut p = ::embassy_stm32::init(config);
         },
         ChipSeries::Nrf52 => {
-            let chip_cfg = &hardware.chip_config;
+            let chip_cfg = chip_config;
             let dcdc_config = if chip.chip == "nrf52840" {
                 let reg0_enabled = chip_cfg.dcdc_reg0.unwrap_or(true);
                 let reg1_enabled = chip_cfg.dcdc_reg1.unwrap_or(true);
@@ -94,7 +100,7 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
             } else {
                 quote! {}
             };
-            let ble_addr = get_ble_addr(hardware, peripheral_id);
+            let ble_addr = get_ble_addr(hardware, chip, peripheral_id);
             // Calculate the size of sdc memory pool.
             // By default it's 6KB, each peripheral increases 2304 bytes
             let sdc_mem_size = if peripheral_id.is_none() {
@@ -155,7 +161,7 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
             }
         }
         ChipSeries::Rp2040 => {
-            let ble_addr = get_ble_addr(hardware, peripheral_id);
+            let ble_addr = get_ble_addr(hardware, chip, peripheral_id);
             if communication.ble_enabled() {
                 quote! {
                     let config = ::embassy_rp::config::Config::default();
@@ -225,7 +231,7 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
             }
         }
         ChipSeries::Esp32 => {
-            let ble_addr = get_ble_addr(hardware, peripheral_id);
+            let ble_addr = get_ble_addr(hardware, chip, peripheral_id);
             quote! {
                 ::esp_println::logger::init_logger_from_env();
                 let p = ::esp_hal::init(::esp_hal::Config::default().with_cpu_clock(::esp_hal::clock::CpuClock::max()));
@@ -275,8 +281,8 @@ fn override_chip_config(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
     initialization_tokens
 }
 
-fn get_ble_addr(hardware: &Hardware, peripheral_id: Option<usize>) -> TokenStream2 {
-    if hardware.chip.series == ChipSeries::Nrf52 {
+fn get_ble_addr(hardware: &Hardware, chip: &ChipModel, peripheral_id: Option<usize>) -> TokenStream2 {
+    if chip.series == ChipSeries::Nrf52 {
         quote! {
             {
                 let ficr = ::embassy_nrf::pac::FICR;
