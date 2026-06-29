@@ -70,6 +70,7 @@ pub struct Morse {
 
 #[derive(Clone)]
 pub struct MorseProfile {
+    pub enable_flow_tap: Option<bool>,
     pub unilateral_tap: Option<bool>,
     pub permissive_hold: Option<bool>,
     pub hold_on_other_press: Option<bool>,
@@ -160,6 +161,7 @@ impl crate::KeyboardTomlConfig {
                 .unwrap_or_default();
 
             let default_profile = MorseProfile {
+                enable_flow_tap: None,
                 unilateral_tap: m.unilateral_tap,
                 permissive_hold: m.permissive_hold,
                 hold_on_other_press: m.hold_on_other_press,
@@ -227,11 +229,62 @@ fn resolve_macro_operation(op: crate::MacroOperation) -> MacroOperation {
 
 fn resolve_morse_profile(p: &crate::MorseProfile) -> MorseProfile {
     MorseProfile {
+        enable_flow_tap: p.enable_flow_tap,
         unilateral_tap: p.unilateral_tap,
         permissive_hold: p.permissive_hold,
         hold_on_other_press: p.hold_on_other_press,
         normal_mode: p.normal_mode,
         hold_timeout_ms: p.hold_timeout.as_ref().map(|t| t.0),
         gap_timeout_ms: p.gap_timeout.as_ref().map(|t| t.0),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use crate::KeyboardTomlConfig;
+
+    #[test]
+    fn morse_profile_enable_flow_tap_resolves_as_override() {
+        let toml = r#"
+[layout]
+rows = 1
+cols = 1
+layers = 1
+keymap = [
+  [
+    ["A"],
+  ],
+]
+
+[behavior.morse]
+enable_flow_tap = true
+
+[behavior.morse.profiles.flow_on]
+enable_flow_tap = true
+
+[behavior.morse.profiles.flow_off]
+enable_flow_tap = false
+
+[behavior.morse.profiles.inherit]
+hold_timeout = "200ms"
+"#;
+
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let path = std::env::temp_dir().join(format!("rmk-config-flow-tap-{}-{}.toml", std::process::id(), unique));
+
+        fs::write(&path, toml).unwrap();
+        let config = KeyboardTomlConfig::new_from_toml_path_with_event_defaults(&path);
+        let _ = fs::remove_file(&path);
+
+        let behavior = config.behavior().unwrap();
+        let morse = behavior.morse.unwrap();
+        assert!(morse.enable_flow_tap);
+        assert_eq!(morse.default_profile.enable_flow_tap, None);
+        assert_eq!(morse.profiles["flow_on"].enable_flow_tap, Some(true));
+        assert_eq!(morse.profiles["flow_off"].enable_flow_tap, Some(false));
+        assert_eq!(morse.profiles["inherit"].enable_flow_tap, None);
     }
 }

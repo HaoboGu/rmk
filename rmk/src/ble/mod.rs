@@ -20,7 +20,7 @@ use crate::ble::led::BleLedReader;
 use crate::ble::passkey::{PasskeyInputState, next_gatt_event};
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use crate::channel::{BLE_REPORT_CHANNEL, LED_SIGNAL};
-use crate::config::RmkConfig;
+use crate::config::{BleBatteryConfig, RmkConfig};
 use crate::core_traits::Runnable;
 use crate::event::SubscribableEvent;
 use crate::hid::{HidWriterTrait, run_led_reader};
@@ -73,6 +73,7 @@ where
     server: Server<'static>,
     profile_manager: ProfileManager<'b, 's, C, DefaultPacketPool>,
     product_name: &'static str,
+    config: BleBatteryConfig<'b>,
 }
 
 impl<'b, 's, C> BleTransport<'b, 's, C>
@@ -124,6 +125,7 @@ where
             server,
             profile_manager,
             product_name: rmk_config.device_config.product_name,
+            config: rmk_config.ble_battery_config,
         }
     }
 }
@@ -171,6 +173,7 @@ where
                                 stack,
                                 #[cfg(feature = "storage")]
                                 active_bond_info,
+                                &self.config,
                             ),
                             profile_manager.update_profile(),
                         )
@@ -642,10 +645,11 @@ async fn run_ble_keyboard<
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     stack: &Stack<'_, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] active_bond_info: Option<crate::ble::profile::ProfileInfo>,
+    config: &BleBatteryConfig<'a>,
 ) {
     let mut ble_hid_server = BleHidServer::new(server, conn);
-    let mut ble_led_reader = BleLedReader {};
-    let mut ble_battery_server = BleBatteryServer::new(server, conn);
+    let mut ble_led_reader = BleLedReader;
+    let mut ble_battery_server = config.enabled.then(|| BleBatteryServer::new(server, conn));
 
     // CCCD lookup uses cached bond info to avoid a cancellable flash read while
     // this future is racing other arms of an outer `select`.

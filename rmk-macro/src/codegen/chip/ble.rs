@@ -81,7 +81,7 @@ pub(crate) fn expand_ble_config(hardware: &Hardware) -> (TokenStream2, TokenStre
             } else {
                 (
                     quote! {
-                        let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
+                        let ble_battery_config = ::rmk::config::BleBatteryConfig::disabled();
                     },
                     quote! {
                         ble_battery_config,

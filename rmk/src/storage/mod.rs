@@ -292,7 +292,7 @@ pub(crate) struct LocalStorageConfig {
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LayoutConfig {
-    default_layer: u8,
+    pub(crate) default_layer: u8,
     layout_option: u32,
 }
 
@@ -329,6 +329,7 @@ impl From<LayoutConfig> for StorageData {
 
 impl From<&config::BehaviorConfig> for StorageData {
     fn from(behavior: &config::BehaviorConfig) -> Self {
+        // Note: default_layer persists via LayoutConfig (restored in read_keymap), not this struct.
         Self::BehaviorConfig(BehaviorConfig {
             prior_idle_time: behavior.morse.prior_idle_time.as_millis() as u16,
             morse_default_profile: behavior.morse.default_profile,
