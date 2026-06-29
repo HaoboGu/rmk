@@ -233,6 +233,26 @@ fn expand_main(
     let (registered_processor_initializers, mut registered_processors) =
         expand_registered_processor_init(hardware, &item_mod);
 
+    // Declare dfu_lock (if enabled) so it can be pushed as a Runnable task.
+    // Check the feature at macro-expansion time so we never emit `#[cfg]`
+    // into the user's crate (avoids "unexpected cfg condition" warnings).
+    let dfu_lock_enabled = is_feature_enabled(rmk_features, "dfu_lock");
+    let dfu_lock_init = if let Some(ref dfu) = hardware.dfu {
+        if dfu_lock_enabled && !dfu.unlock_keys.is_empty() {
+            registered_processors.push(quote! { dfu_lock.run() });
+            quote! {
+                let mut dfu_lock = ::rmk::dfu::DfuLock::new(&DFU_UNLOCK_KEYS, &keymap);
+            }
+        } else {
+            quote! {}
+        }
+    } else {
+        quote! {}
+    };
+
+    // Register peripheral firmware binaries for automatic dfu_split updates
+    let split_firmware_init = expand_split_firmware_init(&hardware.board);
+
     // Display configuration — for unibody use top-level, for split use central's config
     let display_config = match &hardware.board {
         BoardConfig::UniBody(_) => hardware.display.as_ref(),
@@ -367,8 +387,53 @@ fn expand_main(
             // Initialize watchdog
             #watchdog_init
 
+            // Initialize dfu lock
+            #dfu_lock_init
+
+            // Register peripheral firmware for split dfu updates (embedded path).
+            // Generated only when [[split.peripheral]].firmware is set.
+            #split_firmware_init
+
             // Start
             #run_rmk
+        }
+    }
+}
+
+/// Generate `set_firmware_update_data` calls for each peripheral that has a
+/// `firmware` path configured in `keyboard.toml`.  The firmware binary is
+/// embedded at compile time via `include_bytes!`.
+fn expand_split_firmware_init(board: &BoardConfig) -> TokenStream2 {
+    let BoardConfig::Split(split_config) = board else {
+        return quote! {};
+    };
+
+    let inits: Vec<_> = split_config
+        .peripheral
+        .iter()
+        .enumerate()
+        .filter_map(|(id, p)| {
+            p.firmware.as_ref().map(|path| {
+                quote! {
+                    {
+                        const FW: &[u8] =
+                            ::core::include_bytes!(::core::concat!(
+                                ::core::env!("CARGO_MANIFEST_DIR"), "/", #path
+                            ));
+                        let _ = ::rmk::dfu::set_firmware_update_data(
+                            #id, FW, ::rmk::crc32::crc32(FW)
+                        );
+                    }
+                }
+            })
+        })
+        .collect();
+
+    if inits.is_empty() {
+        quote! {}
+    } else {
+        quote! {
+            #(#inits)*
         }
     }
 }
@@ -413,6 +478,11 @@ pub(crate) fn expand_keymap_and_storage(hardware: &Hardware, layout: &Layout) ->
     };
 
     if hardware.storage.is_some() {
+        #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+        let mark = quote! { ::rmk::dfu::mark_booted(); };
+        #[cfg(not(any(feature = "dfu_rp", feature = "dfu_nrf")))]
+        let mark = quote! {};
+
         quote! {
             #initialize_positional_config
             #keymap_data_init
@@ -423,6 +493,7 @@ pub(crate) fn expand_keymap_and_storage(hardware: &Hardware, layout: &Layout) ->
                 &mut behavior_config,
                 &per_key_config,
             ).await;
+            #mark
         }
     } else {
         quote! {

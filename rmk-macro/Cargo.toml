@@ -22,6 +22,9 @@ strum = { version = "0.28", default-features = false, features = ["derive"] }
 [features]
 ## Enable hardware watchdog code generation
 watchdog = []
+dfu_rp = []
+## Enable nRF DFU firmware update code generation
+dfu_nrf = []
 
 [lib]
 proc-macro = true

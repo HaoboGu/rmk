@@ -259,13 +259,29 @@ fn expand_split_peripheral(
 
     let imports = expand_custom_imports(&item_mod);
     let mut chip_init = expand_chip_init(hardware, Some(id), &item_mod);
-    if split_config.connection == "ble" {
-        // Add storage when using BLE split
+
+    // Initialize flash and mark booted when a DFU-capable chip feature is
+    // enabled.  `expand_flash_init` returns empty if no `[dfu]` section is
+    // configured, so this is always safe to emit.
+    let dfu_flash_init = if is_feature_enabled(&rmk_features, "dfu_rp")
+        || is_feature_enabled(&rmk_features, "dfu_nrf")
+    {
         let flash_init = expand_flash_init(hardware);
-        chip_init.extend(quote! {
+        quote! {
             #flash_init
+            ::rmk::dfu::mark_booted();
+        }
+    } else {
+        quote! {}
+    };
+
+    if split_config.connection == "ble" {
+        chip_init.extend(quote! {
+            #dfu_flash_init
             let mut storage = ::rmk::storage::new_storage_for_split_peripheral(flash, storage_config).await;
         });
+    } else {
+        chip_init.extend(quote! { #dfu_flash_init });
     }
 
     // Debouncer config
