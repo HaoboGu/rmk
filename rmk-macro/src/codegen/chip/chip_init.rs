@@ -226,16 +226,32 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
         }
         ChipSeries::Esp32 => {
             let ble_addr = get_ble_addr(hardware, peripheral_id);
+            let cpu_clock = if hardware.chip.series == ChipSeries::Esp32 {
+                match hardware.chip_config.frequency.as_ref() {
+                    Some(&160.0) | None => quote! { ::esp_hal::clock::CpuClock::_160MHz },
+                    Some(&80.0) => quote! { ::esp_hal::clock::CpuClock::_80MHz },
+                    _ => panic!(
+                        "Currently only CPU clocks of 160MHz and 80Mhz are supported for ESP32"
+                    ),
+                }
+            } else {
+                quote! { ::esp_hal::clock::CpuClock::_160MHz }
+            };
             quote! {
                 ::esp_println::logger::init_logger_from_env();
-                let p = ::esp_hal::init(::esp_hal::Config::default().with_cpu_clock(::esp_hal::clock::CpuClock::max()));
+                let p = ::esp_hal::init(
+                    ::esp_hal::Config::default().with_cpu_clock(
+                        #cpu_clock
+                    )
+                );
                 ::esp_alloc::heap_allocator!(size: 72 * 1024);
                 let timg0 = ::esp_hal::timer::timg::TimerGroup::new(p.TIMG0);
                 let software_interrupt = ::esp_hal::interrupt::software::SoftwareInterruptControl::new(p.SW_INTERRUPT);
                 ::esp_rtos::start(timg0.timer0, software_interrupt.software_interrupt0);
                 let _trng_source = ::esp_hal::rng::TrngSource::new(p.RNG, p.ADC1);
                 let mut rng = ::esp_hal::rng::Trng::try_new().unwrap();
-                let connector = ::esp_radio::ble::controller::BleConnector::new(p.BT, Default::default()).unwrap();
+                let ble_config = ::esp_radio::ble::Config::default();
+                let connector = ::esp_radio::ble::controller::BleConnector::new(p.BT, ble_config).unwrap();
                 let controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
                 let ble_addr = #ble_addr;
                 let mut host_resources = ::rmk::HostResources::new();
@@ -268,7 +284,7 @@ fn override_chip_config(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
             let mut p = ::embassy_rp::init(config);
         }),
         ChipSeries::Esp32 => initialization_tokens.extend(quote! {
-            let p = ::esp_hal::init(::esp_hal::Config::default().with_cpu_clock(::esp_hal::clock::CpuClock::max()));
+            let p = ::esp_hal::init(::esp_hal::Config::default());
         }),
     }
 
