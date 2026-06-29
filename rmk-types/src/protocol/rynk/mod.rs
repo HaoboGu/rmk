@@ -62,6 +62,9 @@ pub use self::payload::*;
 /// Largest single GATT write/notification on the Rynk BLE characteristics.
 pub const RYNK_BLE_CHUNK_SIZE: usize = 244;
 
+/// Fixed size of one Rynk-over-WebHID report (`RynkHidService`)
+pub const RYNK_HID_REPORT_SIZE: usize = 32;
+
 /// Rynk GATT service UUID
 pub const RYNK_SERVICE_UUID: u128 = 0x10900067_537f_4f0a_9b55_929e271f61ab;
 /// Rynk `input_data` characteristic UUID.

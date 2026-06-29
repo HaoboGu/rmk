@@ -41,7 +41,7 @@ use rmk_types::protocol::rynk::{
     SetForkRequest, SetKeyRequest, SetMacroRequest, SetMorseRequest, StorageResetMode,
 };
 
-use crate::common::rynk_link::link_session;
+use crate::common::rynk_link::{link_session, link_two_sessions};
 use crate::common::{wrap_keymap, wrap_keymap_with_encoders};
 
 /// Build a `RynkService` over a tiny 1-layer 2-row 2-col keymap, so the tests
@@ -200,6 +200,48 @@ fn get_set_key_action_round_trip() {
 
         let got = client.request::<_, KeyAction>(Cmd::GetKeyAction, 0x02, &position).await;
         assert_eq!(got, Ok(action), "GetKeyAction should read back what Set wrote");
+    });
+}
+
+/// Two `run_session`s over one shared `RynkService` — the production shape when
+/// a board runs the BLE-GATT and BLE-HID (`RynkHidService`) sessions
+/// concurrently. Both build their own `TopicSubscribers` against the global
+/// event channels and share one `KeyMap`; this must not panic (subscriber
+/// overflow or RefCell double-borrow) and writes from one session must be
+/// visible to the other.
+#[test]
+fn concurrent_sessions_share_one_service() {
+    let service = service_2_layers();
+    link_two_sessions(&service, async |a, b| {
+        let position = KeyPosition {
+            layer: 1,
+            row: 0,
+            col: 0,
+        };
+        let key_a = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A)));
+        let key_b = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::B)));
+
+        // Write from session A, then session B, over the shared KeyMap.
+        let set_a = SetKeyRequest {
+            position,
+            action: key_a,
+        };
+        assert_eq!(a.request::<_, ()>(Cmd::SetKeyAction, 0x11, &set_a).await, Ok(()));
+        let set_b = SetKeyRequest {
+            position,
+            action: key_b,
+        };
+        assert_eq!(b.request::<_, ()>(Cmd::SetKeyAction, 0x21, &set_b).await, Ok(()));
+
+        // Both sessions read the same shared state — B's write (the last) wins.
+        let from_a = a.request::<_, KeyAction>(Cmd::GetKeyAction, 0x12, &position).await;
+        let from_b = b.request::<_, KeyAction>(Cmd::GetKeyAction, 0x22, &position).await;
+        assert_eq!(
+            from_a,
+            Ok(key_b),
+            "session A observes session B's write (shared KeyMap)"
+        );
+        assert_eq!(from_b, Ok(key_b), "session B reads back its own write");
     });
 }
 

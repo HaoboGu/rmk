@@ -27,6 +27,7 @@
 //! (`take_from_bytes` rejecting trailing bytes), which is what keeps the two
 //! ends from drifting.
 
+use embassy_futures::join::join;
 use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::pipe::Pipe;
@@ -186,6 +187,48 @@ pub fn link_session<T>(service: &RynkService<'_>, script: impl AsyncFnOnce(&mut 
         );
         match select(device, script(&mut client)).await {
             Either::First(_) => panic!("run_session ended before the client script finished"),
+            Either::Second(value) => value,
+        }
+    })
+}
+
+/// Like [`link_session`] but runs TWO concurrent `run_session`s over the SAME
+/// `service` — the production shape on a board that exposes both BLE-GATT and
+/// BLE-HID (or BLE + USB), where each transport drives its own session against
+/// one shared `RynkService`/`KeyMap` and its own `TopicSubscribers`. Exercises
+/// the dispatch guard and the concurrent-subscriber path. `script` drives both
+/// host ends.
+pub fn link_two_sessions<T>(
+    service: &RynkService<'_>,
+    script: impl AsyncFnOnce(&mut RynkClient<'_>, &mut RynkClient<'_>) -> T,
+) -> T {
+    let (h2d_a, d2h_a, h2d_b, d2h_b) = (Link::new(), Link::new(), Link::new(), Link::new());
+    let mut dev_rx_a: &Link = &h2d_a;
+    let mut dev_tx_a: &Link = &d2h_a;
+    let mut dev_rx_b: &Link = &h2d_b;
+    let mut dev_tx_b: &Link = &d2h_b;
+    let mut client_a = RynkClient {
+        rx: &d2h_a,
+        tx: &h2d_a,
+        buf: [0u8; RYNK_BUFFER_SIZE],
+    };
+    let mut client_b = RynkClient {
+        rx: &d2h_b,
+        tx: &h2d_b,
+        buf: [0u8; RYNK_BUFFER_SIZE],
+    };
+    test_block_on(async {
+        // Both sessions run concurrently and never EOF; the pair is dropped once
+        // the script returns. Either resolving first is a framing/guard bug.
+        let devices = select(
+            join(
+                service.run_session(&mut dev_rx_a, &mut dev_tx_a),
+                service.run_session(&mut dev_rx_b, &mut dev_tx_b),
+            ),
+            rmk::channel::drain_flash_channel_for_test(),
+        );
+        match select(devices, script(&mut client_a, &mut client_b)).await {
+            Either::First(_) => panic!("a run_session ended before the client script finished"),
             Either::Second(value) => value,
         }
     })
