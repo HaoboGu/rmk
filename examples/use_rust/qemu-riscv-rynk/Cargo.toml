@@ -1,0 +1,22 @@
+[package]
+name = "rmk-qemu-riscv"
+version = "0.2.0"
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Keyboard firmware written in Rust"
+homepage = "https://github.com/haobogu/rmk"
+repository = "https://github.com/haobogu/rmk"
+readme = "../../README.md"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+rmk = { path = "../../../rmk", default-features = false, features = ["rynk", "bulk"] }
+embassy-executor = { version = "0.10", features = ["platform-riscv32", "executor-thread"] }
+embassy-futures = { version = "0.1" }
+riscv-rt = "0.18"
+riscv = { version = "0.16", features = ["critical-section-single-hart"] }
+semihosting = { version = "0.1", features = ["stdio"] }
+embedded-io-async = "0.7"
+panic-halt = "1"
+static_cell = "2"
+uart_16550 = "0.6"
