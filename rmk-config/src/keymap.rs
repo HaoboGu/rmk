@@ -1,0 +1,723 @@
+use std::collections::HashMap;
+
+use pest::Parser;
+use pest_derive::Parser;
+
+use crate::{KeyInfo, KeyboardTomlConfig, KeymapConfig};
+
+// Pest parser using the grammar files
+#[derive(Parser)]
+#[grammar = "keymap.pest"]
+pub(crate) struct ConfigParser;
+
+// Max alias resolution depth to prevent infinite loops
+const MAX_ALIAS_RESOLUTION_DEPTH: usize = 10;
+
+impl KeyboardTomlConfig {
+    /// Layout/keymap is mandatory in toml, so we mainly check the sizes
+    pub(crate) fn get_keymap_config(&self) -> Result<(KeymapConfig, Vec<Vec<KeyInfo>>), String> {
+        let aliases = self.aliases.clone().unwrap_or_default();
+        let mut keymap_cfg = self.keymap.clone().expect("keymap config is required");
+        let layers = keymap_cfg.layer.clone();
+        let layout = self.layout.clone().expect("layout config is required");
+
+        // Append the obsolete `[keymap].keymap` array-based layers to the
+        // `[[keymap.layer]]` entries in the resulting KeymapConfig.
+
+        // Check alias keys for whitespace
+        for key in aliases.keys() {
+            if key.chars().any(char::is_whitespace) {
+                return Err(format!(
+                    "keyboard.toml: Alias key '{}' must not contain whitespace characters",
+                    key
+                ));
+            }
+        }
+
+        let mut final_layers = Vec::<Vec<Vec<String>>>::new();
+        let mut key_info: Vec<Vec<KeyInfo>> =
+            vec![vec![KeyInfo::default(); layout.cols as usize]; layout.rows as usize];
+        let mut sequence_to_grid: Option<Vec<(u8, u8)>> = None;
+        if let Some(map) = &layout.map {
+            // process the layout map first to build mapping between the electronic grid and the configuration sequence of keys
+            let mut sequence_number = 0u32;
+            let mut grid_to_sequence: Vec<Vec<Option<u32>>> =
+                vec![vec![None; layout.cols as usize]; layout.rows as usize];
+            match Self::parse_layout_map(map) {
+                Ok(info) => {
+                    let mut coords = Vec::<(u8, u8)>::new();
+                    for (row, col, hand) in &info {
+                        if *row >= layout.rows || *col >= layout.cols {
+                            return Err(format!(
+                                "keyboard.toml: Coordinate ({},{}) in `layout.map` is out of bounds: ([0..{}], [0..{}]) is the expected range",
+                                row,
+                                col,
+                                layout.rows - 1,
+                                layout.cols - 1
+                            ));
+                        }
+                        if grid_to_sequence[*row as usize][*col as usize].is_some() {
+                            return Err(format!(
+                                "keyboard.toml: Duplicate coordinate ({},{}) found in `layout.map`",
+                                row, col
+                            ));
+                        } else {
+                            // Separate coordinates from key info
+                            coords.push((*row, *col));
+                            grid_to_sequence[*row as usize][*col as usize] = Some(sequence_number);
+                            key_info[*row as usize][*col as usize] = KeyInfo { hand: *hand };
+                        }
+                        sequence_number += 1;
+                    }
+                    sequence_to_grid = Some(coords);
+                }
+                Err(parse_err) => {
+                    // Pest error already includes details about the invalid format
+                    return Err(format!("keyboard.toml: Error in `layout.map`: {}", parse_err));
+                }
+            }
+        } else if !layers.is_empty() {
+            return Err("layout.map must be defined to process [[keymap.layer]] entries".to_string());
+        }
+        if let Some(sequence_to_grid) = &sequence_to_grid {
+            // collect layer names first
+            let mut layer_names = HashMap::<String, u32>::new();
+            for (layer_number, layer) in layers.iter().enumerate() {
+                if let Some(name) = &layer.name {
+                    if layer_names.contains_key(name) {
+                        return Err(format!(
+                            "keyboard.toml: Duplicate layer name '{}' found in `[[keymap.layer]]`",
+                            name
+                        ));
+                    }
+                    layer_names.insert(name.clone(), layer_number as u32);
+                }
+            }
+            if layers.len() > keymap_cfg.layers as usize {
+                return Err(
+                    "keyboard.toml: Number of [[keymap.layer]] entries is larger than [keymap].layers".to_string(),
+                );
+            }
+            // Parse each explicitly defined [[keymap.layer]] with pest into the final_layers vector
+            // using the previously defined sequence_to_grid mapping to fill in the
+            // grid shaped classic keymaps
+            let layer_names = layer_names;
+            for (layer_number, layer) in layers.iter().enumerate() {
+                // each layer should contain a sequence of keymap entries
+                // their number and order should match the number and order of the above parsed matrix map
+                match Self::keymap_parser(&layer.keys, &aliases, &layer_names) {
+                    Ok(key_action_sequence) => {
+                        let mut legacy_keymap =
+                            vec![vec!["No".to_string(); layout.cols as usize]; layout.rows as usize];
+                        for (sequence_number, key_action) in key_action_sequence.into_iter().enumerate() {
+                            if sequence_number >= sequence_to_grid.len() {
+                                return Err(format!(
+                                    "keyboard.toml: {} layer #{} contains too many entries (must match layout.map)",
+                                    &layer.name.clone().unwrap_or_default(),
+                                    layer_number
+                                ));
+                            }
+                            let (row, col) = sequence_to_grid[sequence_number];
+                            legacy_keymap[row as usize][col as usize] = key_action.clone();
+                        }
+                        final_layers.push(legacy_keymap);
+                    }
+                    Err(parse_err) => {
+                        return Err(format!("keyboard.toml: Error in `[[keymap.layer]]`: {}", parse_err));
+                    }
+                }
+            }
+        }
+        // Handle the deprecated `[keymap].keymap` field if present
+        if let Some(keymap) = &mut keymap_cfg.keymap {
+            final_layers.append(keymap);
+        }
+        // The required number of layers is less than what's set in keymap
+        // Fill the rest with empty keys
+        if final_layers.len() <= keymap_cfg.layers as usize {
+            for _ in final_layers.len()..keymap_cfg.layers as usize {
+                // Add 2D vector of empty keys
+                final_layers.push(vec![vec!["_".to_string(); layout.cols as usize]; layout.rows as usize]);
+            }
+        } else {
+            return Err(format!(
+                "keyboard.toml: The actual number of layers is larger than {} [keymap].layers: {} [[keymap.layer]] entries + {} layers in [keymap].keymap",
+                keymap_cfg.layers,
+                layers.len(),
+                keymap_cfg
+                    .keymap
+                    .as_ref()
+                    .map(|keymap| keymap.len())
+                    .unwrap_or_default()
+            ));
+        }
+        // Row
+        if final_layers.iter().any(|r| r.len() as u8 != layout.rows) {
+            return Err("keyboard.toml: Row number in keymap doesn't match with [layout.rows]".to_string());
+        }
+        // Col
+        if final_layers
+            .iter()
+            .any(|r| r.iter().any(|c| c.len() as u8 != layout.cols))
+        {
+            return Err("keyboard.toml: Col number in keymap doesn't match with [layout.cols]".to_string());
+        }
+
+        // Process encoder map
+        let mut encoder_map: Vec<Vec<[String; 2]>> = vec![];
+        if let Some(deprecated_encoder_map) = &mut keymap_cfg.encoder_map {
+            encoder_map.append(deprecated_encoder_map);
+        } else {
+            for layer in &layers {
+                let mut encoders = layer.encoders.clone().unwrap_or_default();
+                for [cw, ccw] in &mut encoders {
+                    *cw = Self::alias_resolver(cw, &aliases)?;
+                    *ccw = Self::alias_resolver(ccw, &aliases)?;
+                }
+                encoder_map.push(encoders);
+            }
+        }
+
+        Ok((
+            KeymapConfig {
+                rows: layout.rows,
+                cols: layout.cols,
+                layers: keymap_cfg.layers,
+                keymap: final_layers,
+                encoder_map,
+            },
+            key_info,
+        ))
+    }
+
+    /// Parses and validates a `[layout].map` string using Pest.
+    /// Ensures the string contains only valid coordinates and whitespace.
+    fn parse_layout_map(map: &str) -> Result<Vec<(u8, u8, char)>, String> {
+        match ConfigParser::parse(Rule::layout_map, map) {
+            Ok(pairs) => {
+                let mut key_info = Vec::new();
+                // The top-level pair is 'layout_map'. We need to iterate its inner content.
+                for pair in pairs {
+                    // Should only be one pair matching Rule::layout_map
+                    if pair.as_rule() == Rule::layout_map {
+                        for inner_pair in pair.into_inner() {
+                            match inner_pair.as_rule() {
+                                Rule::keypos_info => {
+                                    let mut items = inner_pair.into_inner(); // Should contain two 'number' pairs
+
+                                    let row_str = items.next().ok_or("Missing row coordinate")?.as_str();
+                                    let col_str = items.next().ok_or("Missing col coordinate")?.as_str();
+
+                                    let row = row_str
+                                        .parse::<u8>()
+                                        .map_err(|e| format!("Failed to parse row '{}': {}", row_str, e))?;
+                                    let col = col_str
+                                        .parse::<u8>()
+                                        .map_err(|e| format!("Failed to parse col '{}': {}", col_str, e))?;
+
+                                    let mut hand = 'C'; // C for center (not specified)
+
+                                    for part in items {
+                                        match part.as_rule() {
+                                            Rule::left_hand => hand = 'L',
+                                            Rule::right_hand => hand = 'R',
+                                            Rule::bilateral_hand => hand = '*',
+                                            _ => {}
+                                        }
+                                    }
+
+                                    key_info.push((row, col, hand));
+                                }
+                                // Geometry-only tokens carry no (row, col) — the key grid ignores
+                                // them; they are consumed by the layout walk instead.
+                                Rule::spacer | Rule::vertical | Rule::encoder_info | Rule::newline => {}
+                                // `layout_map` is compound-atomic now, so WHITESPACE is never emitted here.
+                                Rule::EOI => {}
+                                _ => {
+                                    // This case should not be reached
+                                    return Err(format!(
+                                        "Unexpected rule encountered during layout.map processing: {:?}",
+                                        inner_pair.as_rule()
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(key_info)
+            }
+            Err(e) => Err(format!("Invalid layout.map format: {}", e)),
+        }
+    }
+
+    fn alias_resolver(keys: &str, aliases: &HashMap<String, String>) -> Result<String, String> {
+        let mut current_keys = keys.to_string();
+
+        let mut iterations = 0;
+
+        loop {
+            let mut next_keys = String::with_capacity(current_keys.capacity());
+            let mut made_replacement = false;
+            let mut last_index = 0; // Keep track of where we are in current_keys
+
+            while let Some(at_index) = current_keys[last_index..].find('@') {
+                let start_index = last_index + at_index;
+
+                // Append the text before the '@'
+                next_keys.push_str(&current_keys[last_index..start_index]);
+
+                // Check if it's a valid alias start (@ followed by a non whitespace)
+                if let Some(first_char) = current_keys.as_bytes().get(start_index + 1) {
+                    if !first_char.is_ascii_whitespace() {
+                        // Find the end of the alias identifier
+                        let mut end_index = start_index + 2;
+                        while let Some(c) = current_keys.as_bytes().get(end_index) {
+                            if c.is_ascii_whitespace() {
+                                break;
+                            } else {
+                                end_index += 1;
+                            }
+                        }
+
+                        // Extract the alias key (except the starting '@')
+                        let alias_key = &current_keys[start_index + 1..end_index];
+
+                        // Look up and replace
+                        match aliases.get(alias_key) {
+                            Some(value) => {
+                                next_keys.push_str(value);
+                                made_replacement = true;
+                            }
+                            None => return Err(format!("Undefined alias: {}", alias_key)),
+                        }
+                        last_index = end_index; // Move past the processed alias
+                    } else {
+                        // Not a valid alias start, treat '@' literally
+                        next_keys.push('@');
+                        last_index = start_index + 1;
+                    }
+                } else {
+                    // '@' was the last character, treat it literally
+                    next_keys.push('@');
+                    last_index = start_index + 1;
+                    break; // No more characters after '@'
+                }
+            }
+
+            // Append any remaining part of the string after the last '@' or if no '@' was found
+            next_keys.push_str(&current_keys[last_index..]);
+
+            // Check for termination conditions
+            iterations += 1;
+            if iterations >= MAX_ALIAS_RESOLUTION_DEPTH {
+                return Err(format!(
+                    "Alias resolution exceeded maximum depth ({}), potential infinite loop detected in '{}'",
+                    MAX_ALIAS_RESOLUTION_DEPTH, keys
+                )); // Show original keys for context
+            }
+
+            if !made_replacement {
+                break; // No more replacements needed
+            }
+
+            // Prepare for the next iteration
+            current_keys = next_keys;
+        }
+
+        Ok(current_keys)
+    }
+
+    /// Reconstruct an action string from a parsed pair, resolving every named
+    /// layer reference (`MO(base)`) to its numeric index (`MO(0)`).
+    ///
+    /// Layer names may appear at any nesting depth (e.g. inside the tap slot of
+    /// `TH(MO(nav), A)`), so this walks the whole subtree, collects the source
+    /// span of each `layer_name`, and rewrites those spans in place. Actions
+    /// without layer names are returned verbatim.
+    fn resolve_layer_names(
+        pair: &pest::iterators::Pair<Rule>,
+        layer_names: &HashMap<String, u32>,
+    ) -> Result<String, String> {
+        let base = pair.as_span().start();
+        let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+        Self::collect_layer_name_spans(pair.clone(), layer_names, &mut replacements)?;
+
+        // Apply right-to-left so earlier byte offsets stay valid.
+        replacements.sort_by_key(|(start, _, _)| *start);
+        let mut result = pair.as_str().to_string();
+        for (start, end, replacement) in replacements.into_iter().rev() {
+            result.replace_range(start - base..end - base, &replacement);
+        }
+        Ok(result)
+    }
+
+    /// Recursively collect `(start, end, resolved_number)` for every `layer_name`
+    /// in the subtree, validating each against the known layer names.
+    fn collect_layer_name_spans(
+        pair: pest::iterators::Pair<Rule>,
+        layer_names: &HashMap<String, u32>,
+        out: &mut Vec<(usize, usize, String)>,
+    ) -> Result<(), String> {
+        if pair.as_rule() == Rule::layer_name {
+            let layer_name = pair.as_str();
+            match layer_names.get(layer_name) {
+                Some(layer_number) => {
+                    let span = pair.as_span();
+                    out.push((span.start(), span.end(), layer_number.to_string()));
+                }
+                None => return Err(format!("Invalid layer name: {}", layer_name)),
+            }
+            return Ok(());
+        }
+        for inner in pair.into_inner() {
+            Self::collect_layer_name_spans(inner, layer_names, out)?;
+        }
+        Ok(())
+    }
+
+    fn keymap_parser(
+        layer_keys: &str,
+        aliases: &HashMap<String, String>,
+        layer_names: &HashMap<String, u32>,
+    ) -> Result<Vec<String>, String> {
+        //resolve aliases first
+        let layer_keys = Self::alias_resolver(layer_keys, aliases)?;
+
+        let mut key_action_sequence = Vec::new();
+
+        // Parse the keymap using Pest
+        match ConfigParser::parse(Rule::key_map, &layer_keys) {
+            Ok(pairs) => {
+                // The top-level pair is 'key_map'. We need to iterate its inner content.
+                for pair in pairs {
+                    // Should only be one pair matching Rule::key_map
+                    if pair.as_rule() == Rule::key_map {
+                        for inner_pair in pair.into_inner() {
+                            match inner_pair.as_rule() {
+                                Rule::EOI | Rule::WHITESPACE => {
+                                    // Ignore End of input marker
+                                }
+                                // Every key action is forwarded as its (alias-resolved) source
+                                // text, with any named layer references resolved to indices.
+                                // This handles layer names nested at any depth, e.g. the tap
+                                // slot of `TH(MO(nav), A)`.
+                                _ => {
+                                    key_action_sequence.push(Self::resolve_layer_names(&inner_pair, layer_names)?);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                panic!("Invalid keymap format: {}", e);
+            }
+        }
+
+        Ok(key_action_sequence)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_no_action_parsing() {
+        // Test "No" followed by whitespace
+        let test_cases = vec![
+            ("No ", vec!["No"]),
+            ("No\n", vec!["No"]),
+            ("No\t", vec!["No"]),
+            ("No  A", vec!["No", "A"]),
+            ("A No B", vec!["A", "No", "B"]),
+            ("No No No", vec!["No", "No", "No"]),
+        ];
+
+        for (input, expected) in test_cases {
+            let result = ConfigParser::parse(Rule::key_map, input);
+            assert!(result.is_ok(), "Failed to parse: {}", input);
+
+            let mut actions = Vec::new();
+            for pair in result.unwrap() {
+                if pair.as_rule() == Rule::key_map {
+                    for inner_pair in pair.into_inner() {
+                        match inner_pair.as_rule() {
+                            Rule::no_action | Rule::simple_keycode => {
+                                actions.push(inner_pair.as_str().to_string());
+                            }
+                            Rule::EOI | Rule::WHITESPACE => {}
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            assert_eq!(actions, expected, "Input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_no_vs_no_prefixed_keycodes() {
+        // Test that "No" is parsed as no_action but "NoUsSlash" is parsed as simple_keycode
+        let test_cases = vec![
+            ("No", Rule::no_action),
+            ("NoUsSlash", Rule::simple_keycode),
+            ("NonUsSlash", Rule::simple_keycode),
+            ("NoReturn", Rule::simple_keycode),
+            ("NoBrake", Rule::simple_keycode),
+        ];
+
+        for (input, expected_rule) in test_cases {
+            let result = ConfigParser::parse(Rule::key_map, input);
+            assert!(result.is_ok(), "Failed to parse: {}", input);
+
+            let mut found_rule = None;
+            for pair in result.unwrap() {
+                if pair.as_rule() == Rule::key_map {
+                    for inner_pair in pair.into_inner() {
+                        match inner_pair.as_rule() {
+                            Rule::no_action | Rule::simple_keycode => {
+                                found_rule = Some(inner_pair.as_rule());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            assert_eq!(
+                found_rule,
+                Some(expected_rule),
+                "Input: {} should be parsed as {:?}",
+                input,
+                expected_rule
+            );
+        }
+    }
+
+    #[test]
+    fn test_keymap_parser_with_no_actions() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+
+        // Test parsing a keymap string with "No" actions
+        let keymap = "A B No C No NoUsSlash NonUsSlash D No";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok());
+        let actions = result.unwrap();
+        assert_eq!(
+            actions,
+            vec!["A", "B", "No", "C", "No", "NoUsSlash", "NonUsSlash", "D", "No"]
+        );
+    }
+
+    #[test]
+    fn test_keymap_parser_with_comma_alias() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+
+        let keymap = "A , SHIFTED(,) B";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok());
+        let actions = result.unwrap();
+        assert_eq!(actions, vec!["A", ",", "SHIFTED(,)", "B"]);
+    }
+
+    #[test]
+    fn test_comma_separator_compatibility_in_multi_arg_actions() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+
+        // Comma keeps working as argument separator in multi-argument actions.
+        let keymap = "TH(A, B) TH(Comma, B) TH(A, Comma)";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok());
+        let actions = result.unwrap();
+        assert_eq!(actions, vec!["TH(A, B)", "TH(Comma, B)", "TH(A, Comma)"]);
+    }
+
+    #[test]
+    fn test_multi_arg_actions_reject_symbol_comma_as_key_argument() {
+        let invalid_cases = ["TH(A, ,)", "TH(, ,)", "WM(, LShift)", "LT(1, ,)", "MT(, LShift)"];
+
+        for input in invalid_cases {
+            let result = ConfigParser::parse(Rule::key_map, input);
+            assert!(result.is_err(), "Input should be rejected: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_single_key_arg_actions_accept_symbol_comma() {
+        let valid_cases = ["SHIFTED(,)", "SHIFTED(Comma)", ","];
+
+        for input in valid_cases {
+            let result = ConfigParser::parse(Rule::key_map, input);
+            assert!(result.is_ok(), "Input should be accepted: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_morse_action_parsing() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+
+        // Test parsing a keymap string with TD actions
+        let keymap = "A TD(0) B TD(1) C TD(255)";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok());
+        let actions = result.unwrap();
+        assert_eq!(actions, vec!["A", "TD(0)", "B", "TD(1)", "C", "TD(255)"]);
+    }
+
+    #[test]
+    fn test_macro_trigger_action_parsing() {
+        let aliases = std::collections::HashMap::new();
+        let layer_names = std::collections::HashMap::new();
+
+        // Test parsing a keymap string with macro trigger actions
+        let keymap = "A Macro(0) B MACRO(1) C macro(255)";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok());
+        let actions = result.unwrap();
+        assert_eq!(actions, vec!["A", "Macro(0)", "B", "MACRO(1)", "C", "macro(255)"]);
+    }
+
+    #[test]
+    fn test_morse_action_grammar() {
+        // Test that TD actions are parsed correctly by the grammar
+        let test_cases = vec![
+            ("TD(0)", Rule::morse_action),
+            ("TD(1)", Rule::morse_action),
+            ("TD(255)", Rule::morse_action),
+            ("td(0)", Rule::morse_action), // Case insensitive
+            ("td(1)", Rule::morse_action),
+            ("MORSE(0)", Rule::morse_action),
+            ("MORSE(1)", Rule::morse_action),
+            ("MORSE(255)", Rule::morse_action),
+            ("Morse(0)", Rule::morse_action), // Case insensitive
+            ("morse(1)", Rule::morse_action),
+        ];
+
+        for (input, expected_rule) in test_cases {
+            let result = ConfigParser::parse(Rule::key_map, input);
+            assert!(result.is_ok(), "Failed to parse: {}", input);
+
+            let mut found_rule = None;
+            for pair in result.unwrap() {
+                if pair.as_rule() == Rule::key_map {
+                    for inner_pair in pair.into_inner() {
+                        match inner_pair.as_rule() {
+                            Rule::morse_action => {
+                                found_rule = Some(inner_pair.as_rule());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            assert_eq!(
+                found_rule,
+                Some(expected_rule),
+                "Input: {} should be parsed as {:?}",
+                input,
+                expected_rule
+            );
+        }
+    }
+
+    #[test]
+    fn test_macro_grammar() {
+        // Test that macro actions are parsed correctly by the grammar
+        let test_cases = vec![
+            ("Macro(0)", Rule::trigger_macro_action),
+            ("Macro(1)", Rule::trigger_macro_action),
+            ("Macro(255)", Rule::trigger_macro_action),
+            ("MACRO(0)", Rule::trigger_macro_action), // Case insensitive
+            ("MACRO(1)", Rule::trigger_macro_action),
+            ("macro(0)", Rule::trigger_macro_action), // Case insensitive
+            ("macro(1)", Rule::trigger_macro_action),
+            ("macro(255)", Rule::trigger_macro_action),
+        ];
+
+        for (input, expected_rule) in test_cases {
+            let result = ConfigParser::parse(Rule::key_map, input);
+            assert!(result.is_ok(), "Failed to parse: {}", input);
+
+            let mut found_rule = None;
+            for pair in result.unwrap() {
+                if pair.as_rule() == Rule::key_map {
+                    for inner_pair in pair.into_inner() {
+                        match inner_pair.as_rule() {
+                            Rule::trigger_macro_action => {
+                                found_rule = Some(inner_pair.as_rule());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            assert_eq!(
+                found_rule,
+                Some(expected_rule),
+                "Input: {} should be parsed as {:?}",
+                input,
+                expected_rule
+            );
+        }
+    }
+
+    #[test]
+    fn test_nested_actions_in_tap_hold_slots() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+
+        // A single-action form (here WM) can appear in the tap/hold slots of
+        // MT/TH/LT and is forwarded verbatim for the proc-macro to expand.
+        let keymap = "MT(WM(P, RAlt), LShift, HRM) TH(WM(A, LShift), MO(2)) LT(1, WM(Q, LGui))";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok(), "{:?}", result);
+        assert_eq!(
+            result.unwrap(),
+            vec![
+                "MT(WM(P, RAlt), LShift, HRM)",
+                "TH(WM(A, LShift), MO(2))",
+                "LT(1, WM(Q, LGui))",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_layer_name_resolution_nested() {
+        let aliases = HashMap::new();
+        let mut layer_names = HashMap::new();
+        layer_names.insert("nav".to_string(), 3u32);
+
+        // Layer names are resolved to indices even when nested inside a slot.
+        let keymap = "MO(nav) TH(A, MO(nav))";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok(), "{:?}", result);
+        assert_eq!(result.unwrap(), vec!["MO(3)", "TH(A, MO(3))"]);
+    }
+
+    #[test]
+    fn test_composite_actions_rejected_in_slots() {
+        // Tap-hold / morse forms are not single `Action`s, so they cannot nest
+        // inside a slot. The grammar must reject these.
+        let invalid_cases = ["MT(MT(A, LCtrl), LShift)", "TH(TD(0), B)", "MT(LT(1, A), LShift)"];
+
+        for input in invalid_cases {
+            let result = ConfigParser::parse(Rule::key_map, input);
+            assert!(result.is_err(), "Input should be rejected: {}", input);
+        }
+    }
+}

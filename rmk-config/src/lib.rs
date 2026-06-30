@@ -18,7 +18,9 @@ pub(crate) mod board;
 pub(crate) mod display;
 pub(crate) mod host;
 pub(crate) mod keycode_alias;
+pub(crate) mod keymap;
 pub(crate) mod layout;
+pub use layout::layout_blob_from_toml;
 pub(crate) mod light;
 pub(crate) mod storage;
 
@@ -52,10 +54,10 @@ pub struct KeyboardTomlConfig {
     matrix: Option<MatrixConfig>,
     // Aliases for key maps
     aliases: Option<HashMap<String, String>>,
-    // Layers of key maps
-    layer: Option<Vec<LayerTomlConfig>>,
-    /// Layout config.
-    /// For split keyboard, the total row/col should be defined in this section
+    /// Keymap config: layer count and the per-layer key actions (`[[keymap.layer]]`).
+    keymap: Option<KeymapTomlConfig>,
+    /// Layout config: the physical key arrangement (`map`) plus geometry.
+    /// For split keyboards, the total row/col is defined in this section.
     layout: Option<LayoutTomlConfig>,
     /// Behavior config
     behavior: Option<BehaviorConfig>,
@@ -403,16 +405,58 @@ define_event_config!(
     action,
 );
 
-/// Configurations for keyboard layout
+/// The `[layout]` section: the physical key arrangement plus geometry.
 #[derive(Clone, Debug, Deserialize)]
 #[allow(unused)]
 pub(crate) struct LayoutTomlConfig {
     pub rows: u8,
     pub cols: u8,
+    /// The physical arrangement: an ordered map of `(row,col)` positions with
+    /// optional hand, shape (`@2u`), gaps (`[1.5]`), row-steps (`[y=]`), and
+    /// encoders (`(e,0)`). Its order also defines the order of `[[keymap.layer]]`.
+    pub map: Option<String>,
+    // Physical layout geometry. All optional; no `deny_unknown_fields`.
+    pub default_variant: Option<String>,
+    pub shapes: Option<HashMap<String, ShapeToml>>,
+    pub variant: Option<Vec<VariantToml>>,
+}
+
+/// A named geometry shape from `[layout.shapes]`. Every field optional; widths/
+/// heights default to 1u, nudges/rotation to 0, and `w2/h2/x2/y2` are an
+/// optional second rectangle for L-shaped caps.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub(crate) struct ShapeToml {
+    pub w: Option<f32>,
+    pub h: Option<f32>,
+    pub x: Option<f32>,
+    pub y: Option<f32>,
+    pub r: Option<f32>,
+    pub w2: Option<f32>,
+    pub h2: Option<f32>,
+    pub x2: Option<f32>,
+    pub y2: Option<f32>,
+}
+
+/// One `[[layout.variant]]` render overlay: reshape some keys, hide others.
+#[derive(Clone, Debug, Deserialize)]
+pub(crate) struct VariantToml {
+    pub name: String,
+    pub shapes: Option<HashMap<String, String>>,
+    pub hidden: Option<Vec<String>>,
+}
+
+/// The `[keymap]` section: layer count plus the per-layer key actions.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[allow(unused)]
+pub(crate) struct KeymapTomlConfig {
     pub layers: u8,
-    pub keymap: Option<Vec<Vec<Vec<String>>>>, // Will be deprecated in the future
-    pub matrix_map: Option<String>,            // Temporarily allow both matrix_map and keymap to be set
-    pub encoder_map: Option<Vec<Vec<[String; 2]>>>, // Will be deprecated together with keymap
+    /// Deprecated nested-array keymap; superseded by `[[keymap.layer]]`.
+    pub keymap: Option<Vec<Vec<Vec<String>>>>,
+    /// Deprecated, paired with `keymap`.
+    pub encoder_map: Option<Vec<Vec<[String; 2]>>>,
+    /// Per-layer key actions: `[[keymap.layer]]`.
+    #[serde(default)]
+    pub layer: Vec<LayerTomlConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -553,10 +597,10 @@ impl Default for DependencyConfig {
     }
 }
 
-/// Configurations for keyboard layout
+/// Intermediate resolved keymap grid (rows/cols/layers + per-layer actions).
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct LayoutConfig {
+pub(crate) struct KeymapConfig {
     pub rows: u8,
     pub cols: u8,
     pub layers: u8,

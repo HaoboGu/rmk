@@ -63,7 +63,7 @@ impl Handle<SetEncoderAction> for RynkService<'_> {
 }
 
 impl RynkService<'_> {
-    /// `Invalid` for a key position outside the live keymap geometry. Reads and
+    /// `Invalid` for a key position outside the live keymap grid. Reads and
     /// writes share these bounds.
     fn check_key_position(&self, pos: &KeyPosition) -> Result<(), RynkError> {
         let (rows, cols, num_layers) = self.ctx.keymap_dimensions();

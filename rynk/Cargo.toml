@@ -17,6 +17,7 @@ postcard.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 log.workspace = true
+miniz_oxide = "0.9"
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
 
@@ -73,7 +74,7 @@ rust-version = "1.85"
 rmk-types = { path = "../rmk-types", features = ["host"] }
 embedded-io-async = "0.7"
 embedded-io-adapters = "0.7"
-postcard = { version = "1.1", default-features = false, features = ["experimental-derive"] }
+postcard = { version = "1.1", default-features = false, features = ["experimental-derive", "alloc"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 thiserror = "2.0"
 log = "0.4"

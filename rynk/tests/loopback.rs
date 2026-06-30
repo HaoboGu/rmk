@@ -32,7 +32,9 @@ use rmk_types::action::KeyAction;
 use rmk_types::combo::Combo;
 use rmk_types::constants::{MACRO_DATA_SIZE, RYNK_BUFFER_SIZE};
 use rmk_types::protocol::rynk::{MacroData, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, StorageResetMode};
+use rynk::layout::{Key, Variant};
 use rynk::{Client, IncomingTopic, RynkHostError, TopicEvent};
+use rynk::LayoutInfo;
 
 /// One direction of the in-memory link. Sized to a full Rynk buffer so any
 /// single legal frame fits without the writer blocking on an un-polled reader.
@@ -77,7 +79,39 @@ async fn client_against_run_session() {
     let mut data: KeymapData<2, 2, 2, 0> = KeymapData::new([[[KeyAction::No; 2]; 2]; 2]);
     let keymap = KeyMap::new(&mut data, &mut behavior, &positional).await;
     let config: RmkConfig<'static> = RmkConfig::default();
-    let service = RynkService::new(&keymap, &config);
+
+    // ── built-in physical-layout blob ──
+    // Build a known LayoutInfo and compress it exactly as rmk-config does
+    // (postcard + raw DEFLATE). Round-tripping it through the real GetLayout
+    // paging + inflate + decode exercises the whole layout seam end to end.
+    // Leaked to 'static (the firmware takes `&'static [u8]`; a test leak is fine).
+    let k = |row: u8, col: u8, x: f32| Key {
+        row,
+        col,
+        x,
+        y: 0.5,
+        w: 1.0,
+        h: 1.0,
+        r: 0.0,
+        rect2: None,
+    };
+    let layout_info = LayoutInfo {
+        default_variant: 1,
+        variants: vec![
+            Variant {
+                name: "a".into(),
+                keys: vec![k(0, 0, 0.5), k(0, 1, 1.5), k(0, 2, 2.5)],
+            },
+            Variant {
+                name: "b".into(),
+                keys: vec![k(0, 0, 0.5), k(0, 2, 1.5)],
+            },
+        ],
+        encoders: vec![],
+    };
+    let raw = postcard::to_allocvec(&layout_info).unwrap();
+    let blob: &'static [u8] = Box::leak(miniz_oxide::deflate::compress_to_vec(&raw, 6).into_boxed_slice());
+    let service = RynkService::new(&keymap, &config).with_layout_blob(blob);
 
     // ── in-memory duplex: h2d carries requests, d2h carries responses + topics ──
     let h2d = Link::new();
@@ -152,6 +186,13 @@ async fn client_against_run_session() {
             matches!(rejected, Err(RynkHostError::Rejected(RynkError::Unimplemented))),
             "expected Rejected(Unimplemented), got {rejected:?}"
         );
+
+        // The built-in geometry blob: paged over GetLayout, inflated, and
+        // postcard-decoded end to end — the full serve→fetch→inflate→decode seam.
+        let layout = client.get_layout().await.unwrap();
+        assert_eq!(layout, layout_info, "geometry round-trips through the real stack");
+        assert_eq!(layout.variants.len(), 2, "two render variants");
+        assert_eq!(layout.variants[1].keys.len(), 2, "variant b hides one key");
 
         // A server→host topic push, decoded into a typed IncomingTopic.
         publish_event(LayerChangeEvent::new(3));

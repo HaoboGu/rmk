@@ -3,17 +3,17 @@ use crate::{BehaviorConfig, MacroOperation};
 impl crate::KeyboardTomlConfig {
     pub(crate) fn get_behavior_config(&self) -> Result<BehaviorConfig, String> {
         let default = self.behavior.clone().unwrap_or_default();
-        let (layout, _) = self.get_layout_config().unwrap();
+        let (keymap, _) = self.get_keymap_config().unwrap();
         match self.behavior.clone() {
             Some(mut behavior) => {
                 behavior.tri_layer = match behavior.tri_layer {
                     Some(tri_layer) => {
-                        if tri_layer.upper >= layout.layers {
-                            return Err("keyboard.toml: Tri layer upper is larger than [layout.layers]".to_string());
-                        } else if tri_layer.lower >= layout.layers {
-                            return Err("keyboard.toml: Tri layer lower is larger than [layout.layers]".to_string());
-                        } else if tri_layer.adjust >= layout.layers {
-                            return Err("keyboard.toml: Tri layer adjust is larger than [layout.layers]".to_string());
+                        if tri_layer.upper >= keymap.layers {
+                            return Err("keyboard.toml: Tri layer upper is larger than [keymap].layers".to_string());
+                        } else if tri_layer.lower >= keymap.layers {
+                            return Err("keyboard.toml: Tri layer lower is larger than [keymap].layers".to_string());
+                        } else if tri_layer.adjust >= keymap.layers {
+                            return Err("keyboard.toml: Tri layer adjust is larger than [keymap].layers".to_string());
                         }
                         Some(tri_layer)
                     }
@@ -34,10 +34,10 @@ impl crate::KeyboardTomlConfig {
                             ));
                         }
                         if let Some(layer) = c.layer
-                            && layer >= layout.layers
+                            && layer >= keymap.layers
                         {
                             return Err(format!(
-                                "keyboard.toml: layer in combo #{} is greater than [layout.layers]",
+                                "keyboard.toml: layer in combo #{} is greater than [keymap].layers",
                                 i
                             ));
                         }

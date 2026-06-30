@@ -30,7 +30,7 @@ rmk = { version = "...", features = ["steno"] }
 Use `STN(key)` in your layer keys:
 
 ```toml
-[[layer]]
+[[keymap.layer]]
 keys = [
     "STN(NUM1)",  "STN(NUM1)",  "STN(NUM1)",  "STN(NUM1)",  "STN(NUM1)",   "STN(NUM1)",  "STN(NUM1)",  "STN(NUM1)",  "STN(NUM1)",  "STN(NUM1)",
     "STN(S1)",    "STN(T)",     "STN(P)",     "STN(H)",     "STN(STAR1)",  "STN(STAR1)", "STN(RF)",    "STN(RP)",    "STN(RL)",    "STN(RT)",
