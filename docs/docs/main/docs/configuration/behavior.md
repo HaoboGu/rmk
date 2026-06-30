@@ -561,7 +561,7 @@ Also give each entry its own `target_layer`. Layer state is a single boolean sha
 :::
 
 ::: note Rust API
-If not using `keyboard.toml`, configure the layer via `BehaviorConfig` and run the helper future alongside your other keyboard tasks. Increase `POINTING_EVENT_SUB_SIZE` and `LAYER_CHANGE_EVENT_SUB_SIZE` by `1` for this task's subscribers.
+Configure the layer via `BehaviorConfig` and run the helper future alongside your other keyboard tasks. Subscriber slots are resolved from `keyboard.toml`'s `[event]` section at build time, so increment `[event.pointing].subs` and `[event.layer_change].subs` by `1` there as well.
 
 ```rust
 use embassy_time::Duration;
