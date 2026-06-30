@@ -3,9 +3,11 @@
 //! Leaf types are re-exported directly from the TOML configuration types
 //! Only types with genuine structural transformation are defined here.
 
+use std::collections::HashMap;
+
 // Re-export leaf types from TOML config (now properly named and `pub`)
 pub use crate::board::{BoardConfig, UniBodyConfig};
-pub use crate::chip::{ChipModel, ChipSeries};
+pub use crate::chip::{ChipModel, ChipSeries, parse_chip_model};
 pub use crate::communication::{CommunicationConfig, UsbInfo};
 pub use crate::{
     BleConfig, ChipConfig, CommunicationProtocol, DependencyConfig, DisplayConfig, DisplayDriver, EncoderConfig,
@@ -26,6 +28,8 @@ pub struct Storage {
 pub struct Hardware {
     pub chip: ChipModel,
     pub chip_config: ChipConfig,
+    /// User-supplied `[chip.<name>]` overrides for all chips used in the build.
+    pub chip_configs: HashMap<String, ChipConfig>,
     pub communication: CommunicationConfig,
     pub board: BoardConfig,
     pub storage: Option<Storage>,
@@ -33,6 +37,26 @@ pub struct Hardware {
     pub display: Option<DisplayConfig>,
     pub output: Vec<OutputConfig>,
     pub dependency: DependencyConfig,
+}
+
+impl Hardware {
+    /// Resolve the chip model and chip-specific config for a split board.
+    ///
+    /// If the board defines its own `chip`, that chip is used; otherwise the
+    /// top-level keyboard chip is used.
+    pub fn chip_for_split_board(&self, board_config: &SplitBoardConfig) -> (ChipModel, ChipConfig) {
+        let chip_model = board_config
+            .chip
+            .as_ref()
+            .map(|chip| parse_chip_model(chip).expect("Invalid split board chip"))
+            .unwrap_or_else(|| self.chip.clone());
+        let chip_config = self
+            .chip_configs
+            .get(&chip_model.chip)
+            .cloned()
+            .unwrap_or_default();
+        (chip_model, chip_config)
+    }
 }
 
 impl crate::KeyboardTomlConfig {
@@ -60,6 +84,7 @@ impl crate::KeyboardTomlConfig {
         Ok(Hardware {
             chip,
             chip_config,
+            chip_configs: self.chip.clone().unwrap_or_default(),
             communication,
             board,
             storage,

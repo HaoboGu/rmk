@@ -4,9 +4,9 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use rmk_config::resolved::Hardware;
-use rmk_config::resolved::hardware::ChipSeries;
+use rmk_config::resolved::hardware::{ChipModel, ChipSeries};
 
-pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
+pub(crate) fn expand_flash_init(hardware: &Hardware, chip: &ChipModel) -> TokenStream2 {
     if hardware.storage.is_none() {
         // This config actually does nothing if storage is disabled
         return quote! {
@@ -28,7 +28,7 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
         };
     };
     flash_init.extend(
-    match hardware.chip.series {
+    match chip.series {
             ChipSeries::Stm32 => {
                 quote! {
                     let flash = ::rmk::storage::async_flash_wrapper(::embassy_stm32::flash::Flash::new_blocking(p.FLASH));

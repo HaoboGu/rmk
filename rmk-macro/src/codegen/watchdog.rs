@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::resolved::Hardware;
+use rmk_config::resolved::hardware::ChipModel;
 #[cfg(feature = "watchdog")]
 use rmk_config::resolved::hardware::ChipSeries;
 
@@ -12,8 +12,8 @@ use rmk_config::resolved::hardware::ChipSeries;
 ///
 /// Chips without codegen return empty tokens and `None`.
 #[cfg(feature = "watchdog")]
-pub(crate) fn expand_watchdog_init(hardware: &Hardware) -> (TokenStream2, Option<TokenStream2>) {
-    let init = match hardware.chip.series {
+pub(crate) fn expand_watchdog_init(chip: &ChipModel) -> (TokenStream2, Option<TokenStream2>) {
+    let init = match chip.series {
         ChipSeries::Rp2040 => quote! {
             let mut watchdog_runner = ::rmk::watchdog::Rp2040Watchdog::default_runner(
                 ::embassy_rp::watchdog::Watchdog::new(p.WATCHDOG),
@@ -49,6 +49,6 @@ pub(crate) fn expand_watchdog_init(hardware: &Hardware) -> (TokenStream2, Option
 
 /// No-op when the `watchdog` feature is disabled; codegen emits nothing.
 #[cfg(not(feature = "watchdog"))]
-pub(crate) fn expand_watchdog_init(_hardware: &Hardware) -> (TokenStream2, Option<TokenStream2>) {
+pub(crate) fn expand_watchdog_init(_chip: &ChipModel) -> (TokenStream2, Option<TokenStream2>) {
     (quote! {}, None)
 }
