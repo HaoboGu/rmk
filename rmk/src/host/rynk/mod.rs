@@ -228,6 +228,7 @@ impl RynkService<'_> {
             let Ok(mut msg) = RynkMessage::try_from(&mut buf[..]) else {
                 return;
             };
+
             self.dispatch(&mut msg).await;
             let resp_len = msg.frame_len();
             if tx.write_all(&buf[..resp_len]).await.is_err() {

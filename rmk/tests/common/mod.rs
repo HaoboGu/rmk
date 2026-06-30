@@ -1,5 +1,7 @@
 pub mod morse;
 #[cfg(feature = "rynk")]
+pub mod rynk_hid_link;
+#[cfg(feature = "rynk")]
 pub mod rynk_link;
 pub mod test_block_on;
 pub mod test_macro;

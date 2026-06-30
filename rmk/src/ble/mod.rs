@@ -9,6 +9,8 @@ use rand_core::{CryptoRng, RngCore};
 use rmk_types::ble::BleState;
 use rmk_types::connection::ConnectionType;
 use rmk_types::led_indicator::LedIndicator;
+#[cfg(feature = "rynk")]
+use rmk_types::protocol::rynk::RYNK_HID_REPORT_SIZE;
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
@@ -20,6 +22,8 @@ use crate::ble::led::BleLedReader;
 #[cfg(feature = "passkey_entry")]
 use crate::ble::passkey::{PasskeyInputState, next_gatt_event};
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
+#[cfg(feature = "rynk")]
+use crate::ble::rynk::{RynkBleSource, RynkHidFrameTracker};
 use crate::channel::{BLE_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
 use crate::core_traits::Runnable;
@@ -300,6 +304,9 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
         server.rynk_service.output_data.clone(),
         server.rynk_service.input_data.clone(),
     );
+    // WebHID transport handles — fixed-size [u8; N] chars are Copy (no clone).
+    #[cfg(feature = "rynk")]
+    let (output_hid, input_hid) = (server.rynk_hid_service.output_data, server.rynk_hid_service.input_data);
     let mouse = server.composite_service.mouse_report;
     let media = server.composite_service.media_report;
     let media_control_point = server.composite_service.hid_control_point;
@@ -307,6 +314,10 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
 
     #[cfg(feature = "passkey_entry")]
     let mut passkey_state = PasskeyInputState::new();
+
+    // WebHID de-frame state: tracks the in-flight rynk frame to drop report padding.
+    #[cfg(feature = "rynk")]
+    let mut hid_frame_tracker = RynkHidFrameTracker::new();
 
     loop {
         #[cfg(feature = "passkey_entry")]
@@ -438,6 +449,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                         // Awaits the pipe's backpressure when the rynk
                                         // consumer falls behind.
                                         crate::channel::RYNK_BLE_RX_PIPE.write_all(data).await;
+                                        RynkBleSource::Custom.activate();
                                     } else {
                                         warn!("Rynk: dropping {}-byte write on unencrypted link", data.len());
                                     }
@@ -445,9 +457,36 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
 
                                 handled = true;
                             } else if event.handle() == input_host.cccd_handle.expect("No CCCD for host input") {
+                                // Bind the transport only on a real write, not on a CCCD subscribe.
                                 cccd_updated = true;
                                 handled = true;
                             }
+
+                            // WebHID transport (RynkHidService): each write is a fixed
+                            // 32-byte report — a fragment of the rynk frame stream.
+                            // De-frame (drop padding via the header LEN) into the pipe.
+                            #[cfg(feature = "rynk")]
+                            if !handled && event.handle() == output_hid.handle {
+                                let data = event.data();
+                                if encrypted {
+                                    if data.len() == RYNK_HID_REPORT_SIZE {
+                                        let bytes = hid_frame_tracker.take(data);
+                                        crate::channel::RYNK_BLE_RX_PIPE.write_all(bytes).await;
+                                        RynkBleSource::Hid.activate();
+                                    } else {
+                                        warn!("Wrong Rynk HID report size: {}", data.len());
+                                    }
+                                } else {
+                                    warn!("Rynk HID: dropping {}-byte write on unencrypted link", data.len());
+                                }
+                                handled = true;
+                            } else if !handled
+                                && event.handle() == input_hid.cccd_handle.expect("No CCCD for host hid input")
+                            {
+                                cccd_updated = true;
+                                handled = true;
+                            }
+
                             if !handled {
                                 debug!("Write GATT Event to Unknown: {:?}", event.handle());
                             }

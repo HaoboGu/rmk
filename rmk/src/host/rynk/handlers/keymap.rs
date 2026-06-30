@@ -57,13 +57,7 @@ impl Handle<GetEncoderAction> for RynkService<'_> {
 impl Handle<SetEncoderAction> for RynkService<'_> {
     async fn handle(&self, r: SetEncoderRequest) -> Result<(), RynkError> {
         self.check_encoder_bounds(r.layer, r.encoder_id)?;
-        // No clean "set whole encoder" accessor exists yet — split into two writes.
-        self.ctx
-            .set_encoder_clockwise(r.layer, r.encoder_id, r.action.clockwise)
-            .await;
-        self.ctx
-            .set_encoder_counter_clockwise(r.layer, r.encoder_id, r.action.counter_clockwise)
-            .await;
+        self.ctx.set_encoder(r.layer, r.encoder_id, r.action).await;
         Ok(())
     }
 }
