@@ -1,29 +1,19 @@
-use crate::KeyInfo;
-
-/// Resolved layout configuration for keymap generation.
+/// Resolved physical layout: the compressed, opaque blob the firmware streams
+/// verbatim over `GetLayout`. Empty when there's no `[layout].map`.
 pub struct Layout {
-    pub rows: u8,
-    pub cols: u8,
-    pub layers: u8,
-    pub keymap: Vec<Vec<Vec<String>>>,
-    pub encoder_map: Vec<Vec<[String; 2]>>,
-    pub key_info: Vec<Vec<KeyInfo>>,
-    pub encoder_counts: Vec<usize>,
+    pub blob: Vec<u8>,
 }
 
 impl crate::KeyboardTomlConfig {
-    /// Resolve layout configuration from TOML config.
+    /// Resolve the physical layout blob from the `[layout]` section.
     pub fn layout(&self) -> Result<Layout, String> {
-        let (layout_config, key_info) = self.get_layout_config()?;
-        let board = self.get_board_config()?;
-        Ok(Layout {
-            rows: layout_config.rows,
-            cols: layout_config.cols,
-            layers: layout_config.layers,
-            keymap: layout_config.keymap,
-            encoder_map: layout_config.encoder_map,
-            key_info,
-            encoder_counts: board.get_num_encoder(),
-        })
+        let blob = match &self.layout {
+            Some(l) => {
+                let encoder_counts = self.get_board_config()?.get_num_encoder();
+                crate::layout::build_layout_blob(l, Some(encoder_counts.iter().sum()))?
+            }
+            None => Vec::new(),
+        };
+        Ok(Layout { blob })
     }
 }

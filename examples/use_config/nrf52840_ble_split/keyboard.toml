@@ -9,6 +9,8 @@ chip = "nrf52840"
 [layout]
 rows = 4
 cols = 3
+
+[keymap]
 layers = 2
 keymap = [
     [
@@ -56,7 +58,7 @@ hold_timeout = "240ms"
 gap_timeout = "230ms"
 
 [behavior.morse.profiles]
-# matrix_map may refer these to override the defaults given in [behavior.morse] for some key positions - this example is a home row mod
+# the [layout].map may refer these to override the defaults given in [behavior.morse] for some key positions - this example is a home row mod
 H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
 H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
 

@@ -10,8 +10,8 @@
 use super::endpoint::{Endpoint, Topic, max_const};
 use super::message::RynkMessage;
 use super::{
-    BehaviorConfig, DeviceCapabilities, DeviceInfo, GetEncoderRequest, GetMacroRequest, KeyPosition, LockStatus,
-    MacroData, MatrixState, ProtocolVersion, RynkError, SetComboRequest, SetEncoderRequest, SetForkRequest,
+    BehaviorConfig, DeviceCapabilities, DeviceInfo, GetEncoderRequest, GetMacroRequest, KeyPosition, LayoutChunk,
+    LockStatus, MacroData, MatrixState, ProtocolVersion, RynkError, SetComboRequest, SetEncoderRequest, SetForkRequest,
     SetKeyRequest, SetMacroRequest, SetMorseRequest, StorageResetMode,
 };
 #[cfg(feature = "bulk")]
@@ -209,6 +209,8 @@ endpoints! {
     UnlockPoll = 0x0007: () => LockStatus;
     /// Relock immediately.
     Lock = 0x0008: () => ();
+    /// Get layout blob chunk. `u32` is the byte offset.
+    GetLayout = 0x0009: u32 => LayoutChunk;
     /// Identity strings and USB ids; feature gating stays in `GetCapabilities`.
     GetDeviceInfo = 0x000A: () => DeviceInfo;
 

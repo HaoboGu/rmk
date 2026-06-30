@@ -1,6 +1,6 @@
 use quote::quote;
 use rmk_config::KeyboardTomlConfig;
-use rmk_config::resolved::{Host, Identity, Layout};
+use rmk_config::resolved::{Host, Identity, Keymap};
 
 pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
     // Get the path of the keyboard config file from the environment variable
@@ -12,7 +12,7 @@ pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
 
 pub(crate) fn expand_keyboard_info(
     identity: &Identity,
-    layout: &Layout,
+    keymap: &Keymap,
 ) -> proc_macro2::TokenStream {
     let pid = identity.product_id;
     let vid = identity.vendor_id;
@@ -20,10 +20,10 @@ pub(crate) fn expand_keyboard_info(
     let manufacturer = identity.manufacturer.clone();
     let serial_number = identity.serial_number.clone();
 
-    let num_col = layout.cols as usize;
-    let num_row = layout.rows as usize;
-    let num_layer = layout.layers as usize;
-    let num_encoder = &layout.encoder_counts;
+    let num_col = keymap.cols as usize;
+    let num_row = keymap.rows as usize;
+    let num_layer = keymap.layers as usize;
+    let num_encoder = &keymap.encoder_counts;
     let total_num_encoder: usize = num_encoder.iter().sum();
     quote! {
         pub(crate) const COL: usize = #num_col;

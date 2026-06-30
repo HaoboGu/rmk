@@ -18,3 +18,7 @@ once_cell = "1.19"
 pest = "2.8"
 pest_derive = "2.8"
 paste = "1.0.15"
+# Build-time only (rmk-config never ships in the firmware binary): serialize +
+# compress the layout-geometry blob. The host inflates with the same codec.
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+miniz_oxide = "0.9"

@@ -1,6 +1,6 @@
-/// Test cases for bilateral keys in matrix_map with unilateral_tap
+/// Test cases for bilateral keys in layout map with unilateral_tap
 ///
-/// Keys marked as Hand::Bilateral in the matrix_map are exempt from unilateral_tap,
+/// Keys marked as Hand::Bilateral in the layout map are exempt from unilateral_tap,
 /// allowing same-hand key combinations to use normal mod-tap resolution.
 ///
 /// Keyboard layout (1 row, 5 cols, 2 layers):
@@ -22,7 +22,7 @@ use rmk_types::morse::{MorseMode, MorseProfile};
 use crate::common::KC_LSHIFT;
 use crate::common::morse::create_morse_keyboard;
 
-/// Create a keyboard with col 0 marked as Bilateral in the matrix_map.
+/// Create a keyboard with col 0 marked as Bilateral in the layout map.
 /// Hand: [Bilateral, Left, Right, Right, Right]
 fn create_bilateral_keyboard() -> Keyboard<'static> {
     let hand = [[Hand::Bilateral, Hand::Left, Hand::Right, Hand::Right, Hand::Right]];

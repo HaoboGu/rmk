@@ -2,20 +2,26 @@
 
 ## Keyboard layout configuration
 
-`[matrix]` defines the physical key matrix on your board, while `[layout]` section contains the layout and the default keymap for the keyboard:
+RMK splits the keyboard description into three sections:
+
+- `[matrix]` — the **electrical** key matrix (GPIO wiring), see [matrix configuration](./keyboard_matrix#matrix-configuration).
+- `[layout]` — the **physical** arrangement: the grid size (`rows`/`cols`) and the `map` of key positions.
+- `[keymap]` — the **logical** assignments: the layer count and what each key does.
 
 ```toml
 [layout]
 rows = 5
 cols = 4
-layers = 3
-matrix_map = """
+map = """
     ... the mapping between the "electronic matrix" of your keyboard
         and your key map configuration is described here ...
 """
+
+[keymap]
+layers = 3
 ```
 
-The `matrix_map` is a string built from `(row, col, <hand>)` tuples, listed in the same order as you want to define your keys in your key map.
+The `[layout].map` is a string built from `(row, col, <hand>)` tuples, listed in the same order as you want to define your keys in your keymap.
 
 The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](./keyboard_matrix#matrix-configuration), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts.
 With the help of this matrix map, the configuration of non-regular key matrices can be intuitively arranged in your key maps. (Triple quote mark `"""` is used to limit multi-line strings)
@@ -38,8 +44,7 @@ The `<hand>` is optional, it should only be used when `unilateral_tap = true`. B
 [layout]
 rows = 5
 cols = 4
-layers = 3
-matrix_map = """
+map = """
 (0,0) (0,1) (0,2) (0,3)
 (1,0) (1,1) (1,2) (1,3)
 (2,0) (2,1) (2,2)
@@ -47,24 +52,29 @@ matrix_map = """
    (4,0)      (4,1)
 """
 
-# split ortho example for matrix map, with L/R hand information filled
+[keymap]
+layers = 3
+
+# split ortho example for the layout map, with L/R hand information filled
 [layout]
 rows = 4
 cols = 10
-layers = 3
-matrix_map = """
+map = """
 (0, 0, L)  (0, 1, L)  (0, 2, L)  (0, 3, L)  (0, 4, L)    (0, 5, R)  (0, 6, R)  (0, 7, R)  (0, 8, R)  (0, 9, R)
 (1, 0, L)  (1, 1, L)  (1, 2, L)  (1, 3, L)  (1, 4, L)    (1, 5, R)  (1, 6, R)  (1, 7, R)  (1, 8, R)  (1, 9, R)
 (2, 0, L)  (2, 1, L)  (2, 2, L)  (2, 3, L)  (2, 4, L)    (2, 5, R)  (2, 6, R)  (2, 7, R)  (2, 8, R)  (2, 9, R)
                                  (3, 3, L)  (3, 4, L)    (3, 5, R)  (3, 6, R)
 """
+
+[keymap]
+layers = 3
 ```
 
-Once the layout is defined, the key mapping can be described for each layer:
+Once the layout is defined, the keymap is described for each layer under `[[keymap.layer]]`:
 
 ```toml
 # layer 0 (default):
-[[layer]]
+[[keymap.layer]]
 name = "base_layer" #optional name for the layer
 keys = """
 NumLock KpSlash KpAsterisk KpMinus
@@ -75,7 +85,7 @@ Kp1     Kp2     Kp3        Enter
 """
 
 # layer 1:
-[[layer]]
+[[keymap.layer]]
 name = "mouse_navigation" #optional name for the layer
 keys = """
 TO(base_layer)   @my_cut    @my_copy         @my_paste
@@ -86,11 +96,11 @@ MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
 """
 ```
 
-The number and order of entries on each defined layer must be identical with the number and order of entries in `matrix_map`. White spaces and line breaks are free to vary, but it's worth keeping a consistent arrangement with the real keyboard.
+The number and order of entries on each defined layer must be identical with the number and order of entries in `layout.map`. White spaces and line breaks are free to vary, but it's worth keeping a consistent arrangement with the real keyboard.
 
 ::: warning
 
-If the number of defined layers is smaller than what was defined in `layout.layers`, RMK will fill empty layers automatically (so you can configure them freely in Vial). But the empty layers still consume flash and RAM, so if you don't have enough space for them, it's not recommended to use a big layer count.
+If the number of defined layers is smaller than what was defined in `keymap.layers`, RMK will fill empty layers automatically (so you can configure them freely in Vial). But the empty layers still consume flash and RAM, so if you don't have enough space for them, it's not recommended to use a big layer count.
 
 :::
 
@@ -163,15 +173,10 @@ Please note that alias names may not contain white spaces and they are case sens
 
 ## Assigning the left/right hand to a position
 
-# default profile for morse, tap dance and tap-hold keys:
+The optional `<hand>` marker on each `[layout].map` position tells RMK which hand a key belongs to. It is only used when `unilateral_tap = true` (see [behavior](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning)); otherwise it is ignored.
 
-[behavior.morse]
-enable_flow_tap = true,
-prior_idle_time = "120ms"
-hold_on_other_press = true
-hold_timeout = "250ms"
-gap_timeout = "250ms"
+- `L` — left hand
+- `R` — right hand
+- `*` — bilateral; treated as the opposite hand no matter which hand's modifier was held
 
-```
-
-```
+The marker is the third element of the position tuple, e.g. `(0, 0, L)`. See the split ortho example above for a full map with hand information filled in.

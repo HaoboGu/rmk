@@ -16,6 +16,8 @@ col_pins = ["PA7", "PA8", "PA9"]
 [layout]
 rows = 4
 cols = 3
+
+[keymap]
 layers = 2
 keymap = [
     [

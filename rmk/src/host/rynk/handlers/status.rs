@@ -25,7 +25,7 @@ impl Handle<GetCurrentLayer> for RynkService<'_> {
 
 impl Handle<GetMatrixState> for RynkService<'_> {
     async fn handle(&self, _: ()) -> Result<MatrixState, RynkError> {
-        // Sized for the maximum supported geometry — host slices it down
+        // Sized for the maximum supported matrix — host slices it down
         // using num_rows / num_cols from `DeviceCapabilities`.
         let mut bitmap: heapless::Vec<u8, MATRIX_BITMAP_SIZE> = heapless::Vec::new();
         bitmap.resize_default(MATRIX_BITMAP_SIZE).expect("bitmap size matches");
