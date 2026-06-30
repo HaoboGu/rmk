@@ -42,8 +42,8 @@ struct EntryState {
     config: AutoMouseLayerConfig,
     /// `true` while this entry is the one holding the layer on.
     self_activated: bool,
-    /// Set when the entry is self-activated; the next tick fires at this point
-    /// to release ownership if no motion has refreshed it.
+    /// Set when the entry is self-activated; the layer is deactivated when this
+    /// time is reached unless further motion pushes the deadline forward.
     deadline: Option<Instant>,
     /// Whether we have already warned about the entry's layer overlapping a
     /// manually-activated layer.
@@ -139,13 +139,13 @@ impl Runnable for AutoMouseLayerRunner<'_, '_> {
                 }
                 Tick::Layer(LayerChangeEvent(top)) => {
                     for entry in entries.iter_mut() {
-                        // Drop ownership if a keyboard-driven change turned our layer off,
-                        // so the next motion can re-acquire it cleanly.
+                        // Layer was turned off externally — clear our tracking state so the next
+                        // pointer motion can re-activate it without stale deadline data.
                         if entry.self_activated && !keymap.is_layer_active(entry.config.target_layer) {
                             entry.self_activated = false;
                             entry.deadline = None;
                             trace!(
-                                "auto_mouse_layer: released layer {} (top now {})",
+                                "auto_mouse_layer: cleared tracking for layer {} (top now {})",
                                 entry.config.target_layer, top
                             );
                         }
