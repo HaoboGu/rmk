@@ -73,9 +73,9 @@ matrix_map = """
 
 # here are the aliases for the example layer.keys below
 [aliases]
-my_cut = "WM(X, LCtrl)"
-my_copy = "WM(C, LCtrl)"
-my_paste = "WM(V, LCtrl)"
+MyCut = "WM(X, LCtrl)"
+MyCopy = "WM(C, LCtrl)"
+MyPaste = "WM(V, LCtrl)"
 
 # Key map definitions per layer:
 # The number (and order) of entries on each layer should be
@@ -235,7 +235,7 @@ enabled = true
 # The start address of storage
 start_addr = 0xA0000
 # Number of sectors used for storage, >= 2
-start_addr = 16
+num_sectors = 16
 # Clear storage at keyboard boot.
 # Set it to true will reset the storage(including keymap, BLE bond info, etc.) at each reboot.
 # This option is useful when testing the firmware.
