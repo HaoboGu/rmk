@@ -281,14 +281,14 @@
           // WebHID exposes the device name; WebSerial's getInfo() has only VID/PID,
           // so serial passes null and the wasm side falls back to a default.
           client = await core.connect(l, device?.productName || null);
-          const caps = client.capabilities();
+          const caps = await client.get_capabilities();
           connected = true;
           log(`✓ connected via ${label} (${client.label()}) — ${caps.num_layers}×${caps.num_rows}×${caps.num_cols} keymap, `
             + `${caps.max_combos} combos, ${caps.max_forks} forks, ${caps.max_morse} morse, `
             + `${caps.max_macros} macros, ble=${caps.ble_enabled}\n`);
 
           // Exercise the typed client surface.
-          await show("version",         () => client.protocol_version());
+          await show("version",         () => client.get_version());
           await show("default layer",   () => client.get_default_layer());
           await show("current layer",   () => client.get_current_layer());
           await show("key L0(0,0)",     () => client.get_key(0, 0, 0));

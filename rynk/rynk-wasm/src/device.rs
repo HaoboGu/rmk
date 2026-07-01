@@ -7,7 +7,7 @@
 //! and [`connect`](RynkDevice::connect) (the trait default) handshakes it —
 //! with no Rust-side `discover`.
 
-use rynk::{RynkDevice, TransportError};
+use rynk::{RynkDevice, RynkHostError};
 
 use crate::transport::{JsByteLink, WasmTransport};
 
@@ -38,7 +38,7 @@ impl RynkDevice for WebDevice {
 
     /// Wrap the JS link as a byte transport, carrying the page's label so the
     /// connected client can read it back. Infallible: JS already opened it.
-    async fn open(self) -> Result<WasmTransport, TransportError> {
+    async fn open(self) -> Result<WasmTransport, RynkHostError> {
         let label = self.label();
         Ok(WasmTransport::new(self.link, label))
     }

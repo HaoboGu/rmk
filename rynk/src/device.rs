@@ -14,7 +14,7 @@
 
 use embedded_io_async::{Read, Write};
 
-use crate::driver::{Client, ConnectError, TransportError};
+use crate::driver::{Client, RynkHostError};
 
 /// A Rynk keyboard handle that opens into a [`Client`], on one transport (USB
 /// serial, BLE, web). Discovery is each transport's own inherent call, not part
@@ -30,14 +30,14 @@ pub trait RynkDevice: Sized {
     /// Open the link without handshaking — the per-transport primitive. Consumes
     /// the handle: an open link is one session (a web link, once wrapped, can't
     /// be reopened).
-    async fn open(self) -> Result<Self::Transport, TransportError>;
+    async fn open(self) -> Result<Self::Transport, RynkHostError>;
 
     /// Open the link and complete the Rynk handshake.
     ///
     /// Runtime-free, so it carries no handshake timeout: a silent peer would hang
     /// here. Callers that need a bound wrap this in their runtime's timeout (the
     /// BLE attach inside [`open`](Self::open) is already internally bounded).
-    async fn connect(self) -> Result<Client<Self::Transport>, ConnectError> {
+    async fn connect(self) -> Result<Client<Self::Transport>, RynkHostError> {
         Client::connect(self.open().await?).await
     }
 }

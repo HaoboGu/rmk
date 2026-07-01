@@ -30,12 +30,16 @@ protocol validation stay in Rust.
 
 ```bash
 cd rynk/rynk-wasm
-wasm-pack build --target web        # emits ./pkg/
+./scripts/gen-types.sh              # runs `wasm-pack build` (emits ./pkg/) and refreshes bindings/rynk.d.ts
 python3 -m http.server 8000         # localhost is a secure context for Web Serial / WebHID
 ```
 
 Open Chrome or Edge at `http://localhost:8000` and use `index.html` as the
 reference shell.
+
+`bindings/rynk.d.ts` is the checked-in Rust↔TS wire-type contract, sliced from
+the `wasm-pack` output. Build through `scripts/gen-types.sh` so it stays current;
+CI regenerates it and fails if the committed copy is stale.
 
 ## Minimal Usage
 

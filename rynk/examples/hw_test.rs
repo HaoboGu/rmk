@@ -24,7 +24,7 @@ use rynk::rmk_types::action::EncoderAction;
 use rynk::rmk_types::combo::Combo;
 use rynk::rmk_types::morse::MorseProfile;
 use rynk::rmk_types::protocol::rynk::{MacroData, StorageResetMode};
-use rynk::{Client, RequestError, RynkDevice};
+use rynk::{Client, RynkDevice, RynkHostError};
 use rynk_ble::BleDevice;
 use rynk_serial::SerialDevice;
 
@@ -33,10 +33,10 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Shared failure arm: a device rejection or a capability gate is expected on
 /// some hardware; anything else fails the run.
-fn note_error(fails: &mut u32, label: &str, e: RequestError) {
+fn note_error(fails: &mut u32, label: &str, e: RynkHostError) {
     match e {
-        RequestError::Rejected(e) => warn!("  ⚠ {label} rejected: {e:?}"),
-        RequestError::Unsupported(_, why) => info!("  ({label} skipped: {why})"),
+        RynkHostError::Rejected(e) => warn!("  ⚠ {label} rejected: {e:?}"),
+        RynkHostError::Unsupported(_, why) => info!("  ({label} skipped: {why})"),
         e => {
             error!("  ✗ {label} {e}");
             *fails += 1;
@@ -45,7 +45,7 @@ fn note_error(fails: &mut u32, label: &str, e: RequestError) {
 }
 
 /// Log a value-returning command.
-fn report<V: Debug>(fails: &mut u32, label: &str, res: Result<V, RequestError>) {
+fn report<V: Debug>(fails: &mut u32, label: &str, res: Result<V, RynkHostError>) {
     match res {
         Ok(v) => info!("  ✓ {label:<22} {v:?}"),
         Err(e) => note_error(fails, label, e),
@@ -53,7 +53,7 @@ fn report<V: Debug>(fails: &mut u32, label: &str, res: Result<V, RequestError>) 
 }
 
 /// Log a unit-returning command.
-fn ack(fails: &mut u32, label: &str, res: Result<(), RequestError>) {
+fn ack(fails: &mut u32, label: &str, res: Result<(), RynkHostError>) {
     match res {
         Ok(()) => info!("  ✓ {label}"),
         Err(e) => note_error(fails, label, e),
@@ -62,7 +62,7 @@ fn ack(fails: &mut u32, label: &str, res: Result<(), RequestError>) {
 
 /// Compare a setter's readback against the value written; count mismatches and
 /// errors as failures.
-fn verify<V: Debug + PartialEq>(fails: &mut u32, label: &str, expected: &V, reget: Result<V, RequestError>) {
+fn verify<V: Debug + PartialEq>(fails: &mut u32, label: &str, expected: &V, reget: Result<V, RynkHostError>) {
     match reget {
         Ok(actual) if actual == *expected => info!("  ↺ {label:<18} {expected:?} == {actual:?}"),
         Ok(actual) => {
@@ -119,13 +119,14 @@ async fn run_first<D: RynkDevice>(
 
 /// Exercise non-reboot Rynk commands.
 async fn run_all<T: Read + Write>(mut client: Client<T>, over_ble: bool) -> Result<(), Box<dyn std::error::Error>> {
-    let caps = *client.capabilities();
+    let caps = client.get_capabilities().await?;
+    let version = client.get_version().await?;
     let mut fails = 0u32;
     info!(
         "connected over {} (protocol v{}.{}) — keymap {}×{}×{}, {} combos, {} forks, {} morse, ble={}",
         if over_ble { "BLE" } else { "USB" },
-        client.protocol_version().major,
-        client.protocol_version().minor,
+        version.major,
+        version.minor,
         caps.num_layers,
         caps.num_rows,
         caps.num_cols,

@@ -12,7 +12,7 @@
 use std::time::Duration;
 
 use log::{error, info, warn};
-use rynk::{Client, RequestError, RynkDevice, TransportError};
+use rynk::{Client, RynkDevice, RynkHostError};
 use rynk_serial::{SerialDevice, SerialTransport};
 
 /// Per-request ceiling. A half-open link (a frame header with no payload behind
@@ -38,7 +38,7 @@ async fn main() {
             // the poll branch wins, this future is dropped with no ill effect.
             event = client.next_event() => match event {
                 Ok(ev) => info!("topic {ev:?}"),
-                Err(TransportError::Disconnected) => client = reconnect(client).await,
+                Err(RynkHostError::Disconnected) => client = reconnect(client).await,
                 Err(e) => warn!("event error: {e}"),
             },
             // Periodic request, issued only after select! returns. Bounded by a
@@ -47,7 +47,7 @@ async fn main() {
             // the stalled partial frame so the next tick starts clean.
             _ = poll.tick() => match tokio::time::timeout(REQUEST_TIMEOUT, client.get_wpm()).await {
                 Ok(Ok(wpm)) => info!("wpm = {wpm}"),
-                Ok(Err(RequestError::Transport(TransportError::Disconnected))) => client = reconnect(client).await,
+                Ok(Err(RynkHostError::Disconnected)) => client = reconnect(client).await,
                 Ok(Err(e)) => warn!("get_wpm failed: {e}"),
                 Err(_elapsed) => {
                     warn!("request timed out — resyncing");

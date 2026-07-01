@@ -15,7 +15,7 @@
 use embedded_io_adapters::tokio_1::FromTokio;
 use rmk_types::protocol::rynk::RYNK_SERIAL_MAGIC;
 use rynk::io::{Read, Write};
-use rynk::{RynkDevice, TransportError};
+use rynk::{RynkDevice, RynkHostError};
 use tokio_serial::{ClearBuffer, SerialPort as _, SerialPortBuilderExt, SerialPortInfo, SerialPortType, SerialStream};
 
 /// Required by serial APIs; ignored by USB CDC-ACM devices.
@@ -32,8 +32,8 @@ pub struct SerialTransport {
 
 impl SerialTransport {
     /// List the USB CDC ports whose serial number carries the Rynk marker.
-    fn rynk_serial_ports() -> Result<Vec<SerialPortInfo>, TransportError> {
-        let ports = tokio_serial::available_ports().map_err(|e| TransportError::Io(e.to_string()))?;
+    fn rynk_serial_ports() -> Result<Vec<SerialPortInfo>, RynkHostError> {
+        let ports = tokio_serial::available_ports().map_err(|e| RynkHostError::Io(e.to_string()))?;
         let mut ports: Vec<SerialPortInfo> = ports.into_iter().filter(Self::serial_is_rynk).collect();
         // macOS exposes one USB CDC device as both `/dev/cu.*` and `/dev/tty.*`:
         // keep only the `cu.*` node. Other platforms have no `cu.*` sibling.
@@ -61,10 +61,10 @@ impl SerialTransport {
     }
 
     /// Open a specific serial port path.
-    async fn open(path: &str) -> Result<Self, TransportError> {
+    async fn open(path: &str) -> Result<Self, RynkHostError> {
         let stream = tokio_serial::new(path, CDC_BAUD_RATE)
             .open_native_async()
-            .map_err(|e| TransportError::Io(format!("open {path}: {e}")))?;
+            .map_err(|e| RynkHostError::Io(format!("open {path}: {e}")))?;
         // Best-effort cleanup of stale bytes from an old session.
         let _ = stream.clear(ClearBuffer::Input);
         Ok(Self {
@@ -113,7 +113,7 @@ impl SerialDevice {
     /// List the marked USB CDC ports — one [`SerialDevice`] per Rynk keyboard,
     /// recognized by [`RYNK_SERIAL_MAGIC`] without opening any port. Discovery is
     /// transport-specific, so it's an inherent call, not part of [`RynkDevice`].
-    pub async fn discover() -> Result<Vec<Self>, TransportError> {
+    pub async fn discover() -> Result<Vec<Self>, RynkHostError> {
         Ok(SerialTransport::rynk_serial_ports()?
             .into_iter()
             .map(|port| {
@@ -140,8 +140,8 @@ impl RynkDevice for SerialDevice {
     }
 
     /// Open the port. A device unplugged since discovery surfaces as a normal
-    /// [`TransportError`].
-    async fn open(self) -> Result<SerialTransport, TransportError> {
+    /// [`RynkHostError`].
+    async fn open(self) -> Result<SerialTransport, RynkHostError> {
         SerialTransport::open(&self.path).await
     }
 }
@@ -274,9 +274,10 @@ mod tests {
         let (peer, ours) = pty_pair();
         let device = scripted_firmware(peer, ProtocolVersion::CURRENT);
 
-        let client = Client::connect(transport(ours)).await.unwrap();
-        assert_eq!(client.protocol_version(), ProtocolVersion::CURRENT);
-        assert_eq!(client.capabilities().num_cols, 14);
+        // The serial transport carries the GetVersion+GetCapabilities handshake;
+        // connect succeeding proves the full round trip. The negotiated values are
+        // asserted against the real firmware in the core driver's loopback test.
+        Client::connect(transport(ours)).await.unwrap();
         device.await.unwrap();
     }
 
