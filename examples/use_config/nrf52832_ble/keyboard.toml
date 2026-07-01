@@ -17,6 +17,8 @@ col_pins = ["P0_11", "P0_27", "P0_07"]
 [layout]
 rows = 4
 cols = 3
+
+[keymap]
 layers = 2
 keymap = [
     [

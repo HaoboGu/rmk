@@ -9,7 +9,8 @@ use std::time::Duration;
 
 use async_stream::stream;
 use bluest::{Adapter, Characteristic, Device, DeviceId, Uuid};
-use futures_util::{StreamExt, stream::BoxStream};
+use futures_util::StreamExt;
+use futures_util::stream::BoxStream;
 use rmk_types::protocol::rynk::RYNK_BLE_CHUNK_SIZE;
 use rynk::io::{Read, Write};
 use rynk::{RynkDevice, RynkHostError};

@@ -15,6 +15,7 @@ pub(crate) mod combo;
 pub(crate) mod connection;
 pub(crate) mod fork;
 pub(crate) mod keymap;
+pub(crate) mod layout;
 pub(crate) mod macro_data;
 pub(crate) mod morse;
 pub(crate) mod status;

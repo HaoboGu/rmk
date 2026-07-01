@@ -3,7 +3,7 @@ use quote::quote;
 use rmk_config::resolved::hardware::{
     BoardConfig, ChipSeries, KeyInfo, MatrixConfig, MatrixType, UniBodyConfig,
 };
-use rmk_config::resolved::{Behavior, Hardware, Host, Identity, Layout};
+use rmk_config::resolved::{Behavior, Hardware, Host, Identity, Keymap, Layout};
 
 use super::behavior::expand_behavior_config;
 use super::chip::bind_interrupt::expand_bind_interrupt;
@@ -18,7 +18,7 @@ use super::feature::{get_rmk_features, is_feature_enabled};
 use super::import::expand_custom_imports;
 use super::input_device::expand_input_device_config;
 use super::keyboard_config::{expand_keyboard_info, expand_vial_config, read_keyboard_toml_config};
-use super::layout::expand_default_keymap;
+use super::keymap::expand_default_keymap;
 use super::matrix::{expand_bootmagic_check, expand_matrix_config};
 use super::registered_processor::expand_registered_processor_init;
 use super::split::central::expand_split_central_config;
@@ -41,6 +41,9 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
     let behavior = keyboard_config
         .behavior()
         .expect("failed to resolve behavior config");
+    let keymap = keyboard_config
+        .keymap()
+        .expect("failed to resolve keymap config");
     let layout = keyboard_config
         .layout()
         .expect("failed to resolve layout config");
@@ -55,13 +58,14 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
 
     // Generate imports and statics
     let imports_and_statics =
-        expand_imports_and_constants(&identity, &host, &hardware, &behavior, &layout);
+        expand_imports_and_constants(&identity, &host, &hardware, &behavior, &keymap);
 
     // Generate main function body
     let main_function = expand_main(
         &host,
         &hardware,
         &behavior,
+        &keymap,
         &layout,
         item_mod,
         &rmk_features,
@@ -115,12 +119,12 @@ pub(crate) fn expand_imports_and_constants(
     host: &Host,
     hardware: &Hardware,
     behavior: &Behavior,
-    layout: &Layout,
+    keymap: &Keymap,
 ) -> TokenStream2 {
     // Generate keyboard info and number of rows/cols/layers
-    let keyboard_info_static_var = expand_keyboard_info(identity, layout);
+    let keyboard_info_static_var = expand_keyboard_info(identity, keymap);
     // Generate default keymap
-    let default_keymap = expand_default_keymap(layout, behavior);
+    let default_keymap = expand_default_keymap(keymap, behavior);
     // Generate vial config
     let vial_static_var = expand_vial_config(host);
 
@@ -262,6 +266,7 @@ fn expand_main(
     host: &Host,
     hardware: &Hardware,
     behavior: &Behavior,
+    keymap: &Keymap,
     layout: &Layout,
     item_mod: syn::ItemMod,
     rmk_features: &Option<Vec<String>>,
@@ -276,7 +281,7 @@ fn expand_main(
     let matrix_config = expand_matrix_config(hardware, rmk_features);
     let output_config = expand_output_config(hardware);
     let (ble_config, set_ble_config) = expand_ble_config(hardware);
-    let keymap_and_storage = expand_keymap_and_storage(hardware, layout);
+    let keymap_and_storage = expand_keymap_and_storage(hardware, keymap);
     let split_central_config = expand_split_central_config(hardware);
     let (input_device_config, devices, processors) = expand_input_device_config(hardware);
     let matrix_and_keyboard = expand_matrix_and_keyboard_init(hardware);
@@ -301,7 +306,15 @@ fn expand_main(
         quote! {}
     };
 
-    let host_service_init = if host.vial_enabled || host.rynk_enabled {
+    let host_service_init = if host.rynk_enabled {
+        // Bake the opaque physical-layout blob and hand it to the rynk service
+        // (built-in `GetLayout`). The blob is produced by rmk-config's cursor walk.
+        let blob_lit = proc_macro2::Literal::byte_string(&layout.blob);
+        quote! {
+            static LAYOUT_BLOB: &[u8] = #blob_lit;
+            let host_service = ::rmk::host::HostService::new(&keymap, &rmk_config).with_layout_blob(LAYOUT_BLOB);
+        }
+    } else if host.vial_enabled {
         quote! {
             let host_service = ::rmk::host::HostService::new(&keymap, &rmk_config);
         }
@@ -423,12 +436,12 @@ fn expand_main(
 }
 
 // TODO: move this function to a separate folder
-pub(crate) fn expand_keymap_and_storage(hardware: &Hardware, layout: &Layout) -> TokenStream2 {
-    let row = layout.rows as usize;
-    let col = layout.cols as usize;
+pub(crate) fn expand_keymap_and_storage(hardware: &Hardware, keymap: &Keymap) -> TokenStream2 {
+    let row = keymap.rows as usize;
+    let col = keymap.cols as usize;
 
-    let initialize_positional_config = if layout.key_info.is_empty()
-        || layout.key_info.iter().all(|row| {
+    let initialize_positional_config = if keymap.key_info.is_empty()
+        || keymap.key_info.iter().all(|row| {
             row.iter().all(|key| {
                 key.hand != 'L'
                     && key.hand != 'l'
@@ -437,16 +450,16 @@ pub(crate) fn expand_keymap_and_storage(hardware: &Hardware, layout: &Layout) ->
                     && key.hand != '*'
             })
         })
-        || layout.key_info.len() != row
-        || layout.key_info[0].len() != col
+        || keymap.key_info.len() != row
+        || keymap.key_info[0].len() != col
     {
         quote! { let per_key_config = ::rmk::config::PositionalConfig::default(); }
     } else {
-        let key_info_config = expand_key_info(&layout.key_info);
+        let key_info_config = expand_key_info(&keymap.key_info);
         quote! { let per_key_config = ::rmk::config::PositionalConfig::new(#key_info_config); }
     };
 
-    let total_num_encoders: usize = layout.encoder_counts.iter().sum();
+    let total_num_encoders: usize = keymap.encoder_counts.iter().sum();
 
     let keymap_data_init = if total_num_encoders == 0 {
         quote! {

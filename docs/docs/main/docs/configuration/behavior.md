@@ -241,7 +241,7 @@ A profile contains the following fields:
 - `enable_flow_tap`: Enables HRM (Home Row Mod) mode. When enabled, the `prior_idle_time` setting becomes functional. Defaults to `false`.
 - `prior_idle_time`: If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter is effective only when enable_flow_tap is set to `true`. Defaults to 120ms.
 
-- `unilateral_tap`: (Experimental) Enables unilateral tap mode. When enabled, tap action will be triggered when a key from "same" hand is pressed. In current experimental version, the "same" hand is calculated using the `<hand>`, which can be given in `matrix_map`. This option is recommended to set to true when `enable_flow_tap` is set to true.
+- `unilateral_tap`: (Experimental) Enables unilateral tap mode. When enabled, tap action will be triggered when a key from "same" hand is pressed. In current experimental version, the "same" hand is calculated using the `<hand>`, which can be given in `layout.map`. This option is recommended to set to true when `enable_flow_tap` is set to true.
 
 - The morse mode, which can be set by enabling one of these:
   - `permissive_hold`: Enables permissive hold mode. When enabled, hold action will be triggered when a key is pressed and released during tap-hold decision. This option is recommended to set to true when `enable_flow_tap` is set to true.
@@ -284,7 +284,7 @@ gap_timeout = "250ms"
 
 In the `morse.profiles` sub-table you can define individual key profiles. Each profile has an associated name, which can be referred
 
-- from the layout.matrix_map (the name is case sensitive), to override the defaults in certain key positions
+- from the layout.map (the name is case sensitive), to override the defaults in certain key positions
 - from the tap hold keys in the key map if the third optional parameter is filled:
   - `TH(key-tap, key-hold, <profile_name>)`,
   - `MT(key, modifier, <profile_name>)`,
@@ -309,7 +309,7 @@ MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_
 Then you can reference the profile in layer config:
 
 ```toml
-[[layer]]
+[[keymap.layer]]
 keys = """
 MT(A, LShift, HRM)
 LT(1, A, FH)

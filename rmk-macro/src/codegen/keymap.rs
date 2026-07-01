@@ -4,29 +4,29 @@ use std::collections::HashMap;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use rmk_config::resolved::behavior::MorseProfile;
-use rmk_config::resolved::{Behavior, Layout};
+use rmk_config::resolved::{Behavior, Keymap};
 
 use super::action_parser::parse_key;
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
 /// Also add `get_default_encoder_map`
-pub(crate) fn expand_default_keymap(layout: &Layout, behavior: &Behavior) -> TokenStream2 {
+pub(crate) fn expand_default_keymap(keymap: &Keymap, behavior: &Behavior) -> TokenStream2 {
     let profiles: Option<HashMap<String, MorseProfile>> = behavior
         .morse
         .as_ref()
         .map(|m| m.profiles.clone())
         .filter(|p| !p.is_empty());
 
-    let num_encoder: usize = layout.encoder_counts.iter().sum();
+    let num_encoder: usize = keymap.encoder_counts.iter().sum();
 
     let mut layers = vec![];
     let mut encoder_map = vec![];
 
-    for layer in &layout.keymap {
+    for layer in &keymap.keymap {
         layers.push(expand_layer(layer.clone(), &profiles));
     }
 
-    for encoder_layer in &layout.encoder_map {
+    for encoder_layer in &keymap.encoder_map {
         encoder_map.push(expand_encoder_layer(
             encoder_layer.clone(),
             num_encoder,
@@ -34,7 +34,7 @@ pub(crate) fn expand_default_keymap(layout: &Layout, behavior: &Behavior) -> Tok
         ));
     }
     encoder_map.resize(
-        layout.keymap.len(),
+        keymap.keymap.len(),
         quote! { [::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)); NUM_ENCODER] },
     );
 

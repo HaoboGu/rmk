@@ -19,6 +19,7 @@ use rmk_types::protocol::rynk::{
 };
 
 use crate::driver::{Client, RynkHostError, TopicFrame};
+use crate::layout::LayoutInfo;
 
 /// A firmware topic push (server → host), delivered by [`Client::next_event`].
 ///
@@ -176,6 +177,48 @@ impl<T: Read + Write> Client<T> {
     pub async fn set_keymap_bulk(&mut self, request: SetKeymapBulkRequest) -> Result<(), RynkHostError> {
         self.require_bulk_transfer(Cmd::SetKeymapBulk)?;
         self.request::<command::SetKeymapBulk>(&request).await
+    }
+
+    // ── layout (geometry) ──
+
+    /// Read the physical layout geometry. The firmware serves it as an opaque,
+    /// compressed blob paged over `GetLayout`; this reassembles every page (by
+    /// byte offset), inflates the blob, and decodes it into [`LayoutInfo`]. An
+    /// empty blob (firmware built without a `[layout].map`) yields an empty
+    /// [`LayoutInfo`], not an error.
+    pub async fn get_layout(&mut self) -> Result<LayoutInfo, RynkHostError> {
+        let mut collected: Vec<u8> = Vec::new();
+        let mut total: Option<usize> = None;
+        loop {
+            let chunk = self.request::<command::GetLayout>(&(collected.len() as u32)).await?;
+            let total_len = *total.get_or_insert(chunk.total_len as usize);
+            // An empty page can't make progress — stop (also the empty-blob case).
+            if chunk.bytes.is_empty() {
+                break;
+            }
+            collected.extend_from_slice(&chunk.bytes);
+            // Reached the advertised length (a device ignoring `offset` and looping
+            // the same page also lands here rather than spinning forever).
+            if collected.len() >= total_len {
+                break;
+            }
+        }
+        // Trust total_len: a device that over-reports a page length can't make us
+        // inflate more than the advertised blob.
+        collected.truncate(total.unwrap_or(0));
+        // No geometry: the producer emits an empty blob, which can't be inflated.
+        if collected.is_empty() {
+            return Ok(LayoutInfo {
+                default_variant: 0,
+                variants: Vec::new(),
+                encoders: Vec::new(),
+            });
+        }
+        // Raw DEFLATE, matching the firmware's `miniz_oxide` compressor.
+        let inflated = miniz_oxide::inflate::decompress_to_vec(&collected)
+            .map_err(|e| RynkHostError::Layout(format!("inflate failed: {e}")))?;
+        postcard::from_bytes::<LayoutInfo>(&inflated)
+            .map_err(|e| RynkHostError::Layout(format!("decode failed: {e}")))
     }
 
     // ── combos / forks / morse / macros ──

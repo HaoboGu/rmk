@@ -50,6 +50,12 @@ impl<'a> RynkService<'a> {
         }
     }
 
+    /// Attach the opaque physical-layout blob served by `GetLayout`.
+    pub fn with_layout_blob(mut self, blob: &'static [u8]) -> Self {
+        self.ctx.layout_blob = blob;
+        self
+    }
+
     /// Process one inbound message in place.
     /// Always writes a response envelope (Ok or Err) into `msg`.
     /// `cmd` and `seq` are echoed verbatim.
@@ -122,6 +128,9 @@ impl<'a> RynkService<'a> {
             Cmd::GetWpm => Handle::<command::GetWpm>::handle_message(self, msg).await,
             Cmd::GetSleepState => Handle::<command::GetSleepState>::handle_message(self, msg).await,
             Cmd::GetLedIndicator => Handle::<command::GetLedIndicator>::handle_message(self, msg).await,
+
+            // Layout
+            Cmd::GetLayout => Handle::<command::GetLayout>::handle_message(self, msg).await,
 
             // Topic CMDs are server→host push only. `run_session` drops
             // topic-range frames before dispatch; this arm is defense for

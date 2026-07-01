@@ -125,16 +125,33 @@ key_action = _{ // Consume surrounding whitespace/comments implicitly
 key_map = { SOI ~ key_action* ~ EOI }
 
 // ============================================================================
-// rules for matrix_map parsing
+// rules for the `[layout].map` arrangement string
+//
+// `layout_map` is compound-atomic (`$`): the global WHITESPACE (which includes
+// newlines) is NOT applied inside it, so `newline` is a *significant* row break.
+// Spaces/tabs between tokens are consumed explicitly via `hws`. The keycode
+// grammar above is untouched and keeps using the global WHITESPACE.
 
 left_hand = { ^"L" | ^"LH" | ^"Left" }
 right_hand = { ^"R" | ^"RH" | ^"Right" }
 bilateral_hand = { "*" | ^"Bilateral" }
 hand = _{ left_hand | right_hand | bilateral_hand }
 
-// Define the key_info structure, capturing row and col numbers, and optionally some extra key information
-keypos_info = { "(" ~ number ~ "," ~ number ~ ("," ~ hand)? ~ ")" }
+// Geometry tokens (all local to layout_map).
+unit = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }                 // non-negative float, for [n]
+signed_unit = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }   // may be negative, for [y=n]
+shape_name = @{ (ASCII_ALPHANUMERIC | "_" | ".")+ }              // stock (2u/1.5u) or custom (iso_enter)
+shape_ref = ${ "@" ~ shape_name }                                // @name into [layout.shapes]
+hws = _{ " " | "\t" }                                            // spaces/tabs between tokens (silent)
+newline = @{ "\r"? ~ "\n" }                                      // significant row break
+spacer = ${ "[" ~ hws? ~ unit ~ hws? ~ "]" }                     // gap
+vertical = ${ "[" ~ hws? ~ "y" ~ hws? ~ "=" ~ hws? ~ signed_unit ~ hws? ~ "]" } // extra y for next row
 
-// The main rule: Start, zero or more key_info or whitespace occurrences, End.
-// This ensures the entire string consists *only* of valid key_info tuples and whitespace.
-matrix_map = { SOI ~ (keypos_info | WHITESPACE)* ~ EOI }
+// A key: (row, col[, hand][, @shape]). `hws?` between fields so `(0, 1)` parses too.
+keypos_info = ${ "(" ~ hws? ~ number ~ hws? ~ "," ~ hws? ~ number ~ (hws? ~ "," ~ hws? ~ hand)? ~ (hws? ~ "," ~ hws? ~ shape_ref)? ~ hws? ~ ")" }
+// An encoder: (e, id[, @shape]).
+encoder_info = ${ "(" ~ hws? ~ "e" ~ hws? ~ "," ~ hws? ~ number ~ (hws? ~ "," ~ hws? ~ shape_ref)? ~ hws? ~ ")" }
+
+// The whole string: significant newlines, explicit hws. Order matters:
+// vertical before spacer (both start `[`), encoder before keypos (both start `(`).
+layout_map = ${ SOI ~ (hws | newline | vertical | spacer | encoder_info | keypos_info)* ~ EOI }

@@ -62,27 +62,27 @@ phase = "default"
 
 ### Define Encoder Actions
 
-To define the actions triggered by encoder rotation, add a `encoders` field under each `[[layer]]` section, or add a `encoder_map` field under the `[layout]` section. The former method is preferred and the latter will be deprecated in the future.
+To define the actions triggered by encoder rotation, add a `encoders` field under each `[[keymap.layer]]` section, or add a `encoder_map` field under the `[keymap]` section. The former method is preferred and the latter will be deprecated in the future.
 
-A `encoders` field under `[[layer]]` is a 2D array where each entry corresponds to an encoder in the same order they are defined. Each entry is a 2-element array `[CW_action, CCW_action]`, representing the actions for clockwise and counter-clockwise rotations respectively for that encoder on that layer.
+A `encoders` field under `[[keymap.layer]]` is a 2D array where each entry corresponds to an encoder in the same order they are defined. Each entry is a 2-element array `[CW_action, CCW_action]`, representing the actions for clockwise and counter-clockwise rotations respectively for that encoder on that layer.
 
-The `encoder_map` under `[layout]` is a 3D array where each entry is a 2D array as described above, representing the encoder actions for that layer.
+The `encoder_map` under `[keymap]` is a 3D array where each entry is a 2D array as described above, representing the encoder actions for that layer.
 
 **Structure**:
 
 ```toml
-[[layer]]  # Layer 0
+[[keymap.layer]]  # Layer 0
 encoders = [[CW, CCW], [CW, CCW], ...]  # Encoder 0, encoder 1, ...
 
-[[layer]]  # Layer 1
+[[keymap.layer]]  # Layer 1
 encoders = [[CW, CCW], [CW, CCW], ...]  # Encoder 0, encoder 1, ...
 
-[[layer]]  # More layers...
+[[keymap.layer]]  # More layers...
 encoders = [...]
 
 # Alternatively, use encoder_map:
 
-[layout]
+[keymap]
 encoder_map = [
   [ [CW, CCW], [CW, CCW], ... ],  # Layer 0: encoder 0, encoder 1, ...
   [ [CW, CCW], [CW, CCW], ... ],  # Layer 1: encoder 0, encoder 1, ...
@@ -102,11 +102,11 @@ encoder_map = [
 #   - Encoder 0: No action ("_")
 #   - Encoder 1: CW -> BrightnessUp, CCW -> BrightnessDown
 
-[[layer]]  # Layer 0
+[[keymap.layer]]  # Layer 0
 # ... keys ...
 encoders = [["AudioVolUp", "AudioVolDown"], ["PageDown", "PageUp"]]
 
-[[layer]]  # Layer 1
+[[keymap.layer]]  # Layer 1
 # ... keys ...
 encoders = [["_", "_"], ["BrightnessUp", "BrightnessDown"]]
 
@@ -115,8 +115,10 @@ encoders = [["_", "_"], ["BrightnessUp", "BrightnessDown"]]
 [layout]
 rows = 5
 cols = 4
+# ... layout.map ...
+
+[keymap]
 layers = 2
-# ... matrix_map ...
 encoder_map = [
   [["AudioVolUp", "AudioVolDown"], ["PageDown", "PageUp"]],
   [["_", "_"], ["BrightnessUp", "BrightnessDown"]]

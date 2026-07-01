@@ -16,16 +16,22 @@ col_pins = ["P1_05", "P1_06", "P1_03", "P1_04"]
 [layout]
 rows = 5
 cols = 4
-layers = 2
-matrix_map = """
+# Physical layout is built-in: `@2uv` (2u tall) and `@2u` (2u wide) are stock
+# shapes, so the numpad's Plus/Enter span two rows and the zero is double-wide
+# with no `[layout.shapes]` block at all. See rynk-layout-geometry.md for the
+# full shape catalog and `[[layout.variant]]` multi-layout support.
+map = """
 (0,0) (0,1) (0,2) (0,3)
-(1,0) (1,1) (1,2) (1,3)
+(1,0) (1,1) (1,2) (1,3,@2uv)
 (2,0) (2,1) (2,2)
-(3,0) (3,1) (3,2) (3,3)
-    (4,0)    (4,1)
+(3,0) (3,1) (3,2) (3,3,@2uv)
+    (4,0,@2u)    (4,1)
 """
 
-[[layer]]
+[keymap]
+layers = 2
+
+[[keymap.layer]]
 name = "base_layer"
 keys = """
 NumLock KpSlash KpAsterisk KpMinus
@@ -37,7 +43,7 @@ Kp1     Kp2     Kp3        Enter
 # Encoder 0 - CW: AudioVolUp, CCW: AudioVolDown
 encoders = [["AudioVolUp", "AudioVolDown"]]
 
-[[layer]]
+[[keymap.layer]]
 name = "second_layer"
 keys = """
 TD(1)  TO(0)        WM(W,LShift)         No

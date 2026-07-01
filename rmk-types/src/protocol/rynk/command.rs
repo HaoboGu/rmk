@@ -10,9 +10,9 @@
 use super::endpoint::{Endpoint, Topic, max_const};
 use super::message::RynkMessage;
 use super::{
-    BehaviorConfig, DeviceCapabilities, GetEncoderRequest, GetMacroRequest, KeyPosition, MacroData, MatrixState,
-    ProtocolVersion, RynkError, SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetMacroRequest,
-    SetMorseRequest, StorageResetMode,
+    BehaviorConfig, DeviceCapabilities, GetEncoderRequest, GetMacroRequest, KeyPosition, LayoutChunk, MacroData,
+    MatrixState, ProtocolVersion, RynkError, SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest,
+    SetMacroRequest, SetMorseRequest, StorageResetMode,
 };
 #[cfg(feature = "bulk")]
 use super::{
@@ -202,6 +202,8 @@ endpoints! {
     Reboot = 0x0003: () => ();
     BootloaderJump = 0x0004: () => ();
     StorageReset = 0x0005: StorageResetMode => ();
+    /// Get layout blob chunk. `u32` is the byte offset.
+    GetLayout = 0x0009: u32 => LayoutChunk;
 
     // ── Keymap (0x01xx) — includes encoder ──
     GetKeyAction = 0x0101: KeyPosition => KeyAction;
