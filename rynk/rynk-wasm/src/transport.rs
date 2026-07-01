@@ -1,8 +1,8 @@
 //! `WasmTransport` adapts a JS-owned byte link to `rynk::io::Read`/`Write`.
 
-use futures_channel::mpsc::{self, UnboundedReceiver};
-use futures_util::StreamExt;
-use futures_util::future::{AbortHandle, Abortable};
+use std::future::Future;
+use std::pin::Pin;
+
 use js_sys::Uint8Array;
 use rynk::io::{ErrorKind, ErrorType, Read, Write};
 use wasm_bindgen::prelude::*;
@@ -23,47 +23,23 @@ extern "C" {
     async fn close(this: &JsByteLink) -> Result<(), JsValue>;
 }
 
-/// Buffered transport; a pump owns `recv()` so `read()` is cancel-safe.
+/// One in-flight `recv()` call, boxed so it can be parked in the transport.
+type RecvFuture = Pin<Box<dyn Future<Output = Result<JsValue, JsValue>>>>;
+
+/// Buffered transport over a JS byte link.
 pub struct WasmTransport {
     link: JsByteLink,
-    /// Stops the pump task when the transport drops.
-    pump: AbortHandle,
-    rx: UnboundedReceiver<Vec<u8>>,
+    recv: Option<RecvFuture>,
     pending: Vec<u8>,
     pos: usize,
 }
 
 impl WasmTransport {
-    /// Start the receive pump for an already-open link.
+    /// Wrap an already-open link.
     pub fn new(link: JsByteLink) -> Self {
-        let (tx, rx) = mpsc::unbounded();
-        // Clone the JsValue handle and cast it back to JsByteLink.
-        let read_link: JsByteLink = link.clone().unchecked_into();
-        // Dropping tx makes the next read report EOF.
-        let (pump, registration) = AbortHandle::new_pair();
-        spawn_local(async move {
-            let _ = Abortable::new(
-                async move {
-                    while let Ok(value) = read_link.recv().await {
-                        let Ok(chunk) = value.dyn_into::<Uint8Array>() else {
-                            break; // invalid link implementation
-                        };
-                        if chunk.length() == 0 {
-                            break; // EOF
-                        }
-                        if tx.unbounded_send(chunk.to_vec()).is_err() {
-                            break; // transport dropped
-                        }
-                    }
-                },
-                registration,
-            )
-            .await;
-        });
         Self {
             link,
-            pump,
-            rx,
+            recv: None,
             pending: Vec::new(),
             pos: 0,
         }
@@ -71,9 +47,8 @@ impl WasmTransport {
 }
 
 impl Drop for WasmTransport {
-    /// Abort the pump and close the JS link.
+    /// Close the JS link.
     fn drop(&mut self) {
-        self.pump.abort();
         let link: JsByteLink = self.link.clone().unchecked_into();
         spawn_local(async move {
             let _ = link.close().await;
@@ -87,13 +62,23 @@ impl ErrorType for WasmTransport {
 
 impl Read for WasmTransport {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        // Refill from the pump once the current chunk is drained.
+        // Refill once the current chunk is drained.
         while self.pos >= self.pending.len() {
-            // Closed channel = EOF; `rynk` maps `Ok(0)` to `Disconnected`.
-            let Some(chunk) = self.rx.next().await else {
-                return Ok(0);
+            if self.recv.is_none() {
+                // Clone the handle into the future so it owns all it borrows.
+                let link: JsByteLink = self.link.clone().unchecked_into();
+                self.recv = Some(Box::pin(async move { link.recv().await }));
+            }
+            // Poll in place: a cancelled read() leaves the future parked in `self`.
+            let value = self.recv.as_mut().unwrap().await.map_err(|_| ErrorKind::Other)?;
+            self.recv = None;
+            let Ok(chunk) = value.dyn_into::<Uint8Array>() else {
+                return Ok(0); // invalid link implementation; `rynk` maps Ok(0) to Disconnected
             };
-            self.pending = chunk;
+            if chunk.length() == 0 {
+                return Ok(0); // EOF
+            }
+            self.pending = chunk.to_vec();
             self.pos = 0;
         }
         let n = buf.len().min(self.pending.len() - self.pos);

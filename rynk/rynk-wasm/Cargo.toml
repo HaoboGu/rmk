@@ -22,5 +22,3 @@ log = "0.4"
 # JS values use serde-wasm-bindgen.
 serde = "1"
 serde-wasm-bindgen = "0.6"
-futures-channel = "0.3"
-futures-util = "0.3"
