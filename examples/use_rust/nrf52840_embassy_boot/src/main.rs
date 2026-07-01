@@ -97,7 +97,10 @@ async fn main(_spawner: Spawner) {
         dfu_size,
     ));
 
-    rmk::dfu::set_led(Some(Output::new(p.P0_15, Level::Low, OutputDrive::Standard)));
+    let mut dfu_led_processor = rmk::processor::builtin::dfu_led::DfuLedProcessor::new(
+        Output::new(p.P0_15, Level::Low, OutputDrive::Standard),
+        false,
+    );
 
     let keyboard_device_config = DeviceConfig {
         vid: 0x4c4b,
@@ -160,7 +163,8 @@ async fn main(_spawner: Spawner) {
         usb_transport,
         wpm_processor,
         keyboard,
-        host_service // , dfu_lock
+        host_service,
+        dfu_led_processor, // , dfu_lock
     )
     .await;
 }

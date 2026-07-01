@@ -1,20 +1,24 @@
 use core::cell::RefCell;
 
 use embassy_boot::BlockingFirmwareState;
-use embassy_nrf::{gpio::Output, nvmc::Nvmc, peripherals::NVMC};
+use embassy_embedded_hal::flash::partition::BlockingPartition;
+use embassy_nrf::{nvmc::Nvmc, peripherals::NVMC};
 use embassy_nrf::Peri;
 use embassy_sync::blocking_mutex::{Mutex, raw::CriticalSectionRawMutex};
 use embassy_sync::once_lock::OnceLock;
 use static_cell::StaticCell;
 
-use super::{DfuFlashManager, MutexType, PartitionType};
+use super::DfuFlashManager;
 
 /// Flash write granularity — 4 for nRF NVMC.
 pub const DFU_WRITE_SIZE: usize = 4;
 
+pub(super) type FlashType = Nvmc<'static>;
+pub(super) type MutexType = Mutex<CriticalSectionRawMutex, RefCell<FlashType>>;
+pub(super) type PartitionType = BlockingPartition<'static, CriticalSectionRawMutex, FlashType>;
+
 static FLASH_CELL: StaticCell<MutexType> = StaticCell::new();
 static MANAGER: OnceLock<DfuFlashManager> = OnceLock::new();
-static LED: OnceLock<Mutex<CriticalSectionRawMutex, RefCell<Option<Output<'static>>>>> = OnceLock::new();
 
 /// Initialize the blocking flash, create the DFU manager and store it globally.
 pub fn init_flash(
@@ -57,18 +61,4 @@ pub fn mark_booted() {
 /// Get a reference to the global DFU flash manager.
 pub fn get_manager() -> Option<&'static DfuFlashManager> {
     MANAGER.try_get()
-}
-
-/// Store an optional DFU LED pin globally.
-pub fn set_led(led: Option<Output<'static>>) {
-    let _ = LED.init(Mutex::new(RefCell::new(led)));
-}
-
-/// Run a closure with the global DFU LED, if configured.
-pub fn with_led<F, R>(f: F) -> Option<R>
-where
-    F: FnOnce(&mut Output<'static>) -> R,
-{
-    LED.try_get()
-        .and_then(|m| m.lock(|cell| cell.borrow_mut().as_mut().map(f)))
 }

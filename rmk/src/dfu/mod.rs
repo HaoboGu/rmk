@@ -1,8 +1,7 @@
-use core::cell::RefCell;
 #[cfg(feature = "dfu_lock")]
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use embassy_sync::blocking_mutex::Mutex;
+#[cfg(feature = "dfu_lock")]
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 #[cfg(feature = "dfu_lock")]
 use embassy_sync::signal::Signal;
@@ -25,41 +24,25 @@ mod rp;
 mod nrf;
 
 #[cfg(feature = "dfu_rp")]
-pub use self::rp::{init_flash, set_led, with_led, mark_booted, get_manager, DFU_WRITE_SIZE};
+pub use self::rp::{init_flash, mark_booted, get_manager, DFU_WRITE_SIZE};
 #[cfg(feature = "dfu_nrf")]
-pub use self::nrf::{init_flash, set_led, with_led, mark_booted, get_manager, DFU_WRITE_SIZE};
+pub use self::nrf::{init_flash, mark_booted, get_manager, DFU_WRITE_SIZE};
 
 // ---------------------------------------------------------------------------
 // Chip-specific type aliases
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "dfu_rp")]
-use embassy_rp::{
-    flash::{Blocking, Flash},
-    peripherals::FLASH,
-};
-#[cfg(feature = "dfu_nrf")]
-use embassy_nrf::nvmc::Nvmc;
-
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-use embassy_embedded_hal::flash::partition::BlockingPartition;
-
 /// DFU transfer block size in bytes. Larger values speed up firmware
 /// downloads. Must match the USB control buffer size used by the host.
 pub const BLOCK_SIZE_DFU: usize = 512;
 
-#[cfg(feature = "dfu_rp")]
-pub const FLASH_SIZE: usize = 16 * 1024 * 1024;
+#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+use embassy_embedded_hal::flash::partition::BlockingPartition;
 
 #[cfg(feature = "dfu_rp")]
-type FlashType = Flash<'static, FLASH, Blocking, FLASH_SIZE>;
+use self::rp::{MutexType, PartitionType};
 #[cfg(feature = "dfu_nrf")]
-type FlashType = Nvmc<'static>;
-
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-type MutexType = Mutex<CriticalSectionRawMutex, RefCell<FlashType>>;
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-pub(super) type PartitionType = BlockingPartition<'static, CriticalSectionRawMutex, FlashType>;
+use self::nrf::{MutexType, PartitionType};
 
 // ---------------------------------------------------------------------------
 // DfuFlashManager — shared by RP2040 and nRF
@@ -133,16 +116,6 @@ impl Handler for DfuStringProvider {
 }
 
 // ---------------------------------------------------------------------------
-// with_led — platform LED helper or no-op
-// ---------------------------------------------------------------------------
-
-/// No-op fallback when DFU is built without an LED-capable platform driver.
-#[cfg(all(feature = "dfu", not(any(feature = "dfu_rp", feature = "dfu_nrf"))))]
-fn with_led<F, R>(_: F) -> Option<R> {
-    None
-}
-
-// ---------------------------------------------------------------------------
 // DFU lock state
 // ---------------------------------------------------------------------------
 
@@ -167,6 +140,11 @@ use embassy_usb::class::dfu::{consts::Status, dfu_mode::{self, DfuState}};
 
 /// DFU handler wrapper that blinks an LED during transfer and checks the
 /// DFU lock (if `dfu_lock` feature is enabled).
+#[cfg(any(feature = "dfu", feature = "dfu_lock"))]
+use crate::event::publish_event;
+#[cfg(any(feature = "dfu", feature = "dfu_lock"))]
+use rmk_types::dfu::DfuStatus;
+
 #[cfg(feature = "dfu")]
 struct RmkDfuHandler<H> {
     inner: H,
@@ -184,23 +162,24 @@ impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
         #[cfg(feature = "dfu_lock")]
         DFU_STARTED.store(true, Ordering::Release);
         info!("dfu: DFU download started");
-        with_led(|led| led.set_high());
+        publish_event(crate::event::DfuStatusEvent::new(DfuStatus::Started));
         self.inner.start()
     }
 
     fn write(&mut self, data: &[u8]) -> Result<(), Status> {
-        with_led(|led| led.toggle());
+        publish_event(crate::event::DfuStatusEvent::new(DfuStatus::Downloading));
         self.inner.write(data)
     }
 
     fn finish(&mut self) -> Result<(), Status> {
         let res = self.inner.finish();
-        with_led(|led| led.set_low());
+        publish_event(crate::event::DfuStatusEvent::new(
+            if res.is_ok() { DfuStatus::Finished } else { DfuStatus::Error },
+        ));
         res
     }
 
     fn system_reset(&mut self) {
-        with_led(|led| led.set_low());
         self.inner.system_reset()
     }
 }
@@ -324,7 +303,7 @@ impl<'a> DfuLock<'a> {
 
         info!("dfu_lock: DFU activity detected, unlock window open for 10 s");
         info!("dfu_lock: waiting for unlock keys");
-        with_led(|led| led.set_high());
+        publish_event(crate::event::DfuStatusEvent::new(DfuStatus::LockWaiting));
         let deadline = embassy_time::Instant::now() + embassy_time::Duration::from_secs(10);
         loop {
             let all_pressed = self
@@ -335,78 +314,34 @@ impl<'a> DfuLock<'a> {
                 self.unlocked.store(true, Ordering::Release);
                 DFU_LOCKED.store(false, Ordering::Release);
                 info!("dfu_lock: unlock keys pressed, DFU unlocked for 10 s");
+                publish_event(crate::event::DfuStatusEvent::new(DfuStatus::LockUnlocked));
                 break;
             }
             if embassy_time::Instant::now() >= deadline {
                 info!("dfu_lock: unlock window expired (10 s timeout)");
                 DFU_LOCKED.store(true, Ordering::Release);
-                with_led(|led| led.set_low());
+                publish_event(crate::event::DfuStatusEvent::new(DfuStatus::Idle));
                 return;
             }
             embassy_time::Timer::after_millis(50).await;
         }
 
-        info!("dfu_lock: unlocked, signalling with Morse DFU");
+        info!("dfu_lock: unlocked, waiting for DFU download");
         let deadline = embassy_time::Instant::now() + embassy_time::Duration::from_secs(10);
         loop {
             if DFU_STARTED.load(Ordering::Acquire) {
                 info!("dfu_lock: DFU download started, staying unlocked");
-                with_led(|led| led.set_high());
                 break;
             }
             if embassy_time::Instant::now() >= deadline {
                 info!("dfu_lock: unlock expired (10 s timeout)");
                 DFU_LOCKED.store(true, Ordering::Release);
                 self.unlocked.store(false, Ordering::Release);
-                with_led(|led| led.set_low());
+                publish_event(crate::event::DfuStatusEvent::new(DfuStatus::Idle));
                 break;
             }
-            Self::morse_blink_dfu().await;
+            embassy_time::Timer::after_millis(200).await;
         }
-    }
-
-    async fn morse_blink_dfu() {
-        use embassy_time::Timer;
-
-        const DOT: u64 = 100;
-        const DASH: u64 = 300;
-        const PAUSE_ELEMENT: u64 = 100;
-        const PAUSE_LETTER: u64 = 300;
-
-        macro_rules! dot {
-            () => {
-                with_led(|led| led.set_high());
-                Timer::after_millis(DOT).await;
-                with_led(|led| led.set_low());
-                Timer::after_millis(PAUSE_ELEMENT).await;
-            };
-        }
-        macro_rules! dash {
-            () => {
-                with_led(|led| led.set_high());
-                Timer::after_millis(DASH).await;
-                with_led(|led| led.set_low());
-                Timer::after_millis(PAUSE_ELEMENT).await;
-            };
-        }
-        macro_rules! letter_gap {
-            () => {
-                Timer::after_millis(PAUSE_LETTER - PAUSE_ELEMENT).await;
-            };
-        }
-
-        dash!();
-        dot!();
-        dot!();
-        letter_gap!();
-        dot!();
-        dot!();
-        dash!();
-        dot!();
-        letter_gap!();
-        dot!();
-        dot!();
-        dash!();
     }
 }
 

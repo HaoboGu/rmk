@@ -48,5 +48,7 @@ _ble = []
 split = []
 display = []
 passkey_entry = []
+# DFU firmware update support
+dfu = []
 # Stenography (Plover HID) support: `StenoKey` + `Action::Steno` variant.
 steno = []

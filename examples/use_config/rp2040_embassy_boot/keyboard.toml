@@ -50,7 +50,7 @@ keymap = [
 # dfu_size = 528384
 
 [dfu]
-led = "PIN_16"
+led = "PIN_25"
 # Optional DFU lock — physical keys to press simultaneously to unlock DFU firmware download.
 # Requires the `dfu_lock` Cargo feature (not enabled by default).
 unlock_keys = [[0, 0], [1, 1]]

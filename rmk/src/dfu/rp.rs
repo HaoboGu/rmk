@@ -1,27 +1,34 @@
 use core::cell::RefCell;
 
 use embassy_boot::BlockingFirmwareState;
-use embassy_rp::{
-    flash::{Blocking, Flash},
-    gpio::Output,
-    peripherals::FLASH,
-};
+use embassy_embedded_hal::flash::partition::BlockingPartition;
+use embassy_rp::{flash::{Blocking, Flash}, peripherals::FLASH};
 use embassy_rp::Peri;
 use embassy_sync::blocking_mutex::{Mutex, raw::CriticalSectionRawMutex};
 use embassy_sync::once_lock::OnceLock;
 use static_cell::StaticCell;
 
-use super::{DfuFlashManager, MutexType, PartitionType};
+use super::DfuFlashManager;
 
 /// Total flash size passed to the embassy-rp Flash const generic.
+///
+/// Set to 16 MB (the maximum common RP2040 flash size) so that the same
+/// binary works on boards with 2, 4, 8 or 16 MB flash.  `new_blocking()`
+/// ignores this value at runtime — it is only used for software bounds
+/// checking inside embassy-rp.  Because all flash access goes through
+/// `BlockingPartition` (which has its own partition-sized bounds checks),
+/// overshooting the const generic is safe.
 pub const FLASH_SIZE: usize = 16 * 1024 * 1024;
 
 /// Flash write granularity — 1 for RP2040.
 pub const DFU_WRITE_SIZE: usize = 1;
 
+pub(super) type FlashType = Flash<'static, FLASH, Blocking, FLASH_SIZE>;
+pub(super) type MutexType = Mutex<CriticalSectionRawMutex, RefCell<FlashType>>;
+pub(super) type PartitionType = BlockingPartition<'static, CriticalSectionRawMutex, FlashType>;
+
 static FLASH_CELL: StaticCell<MutexType> = StaticCell::new();
 static MANAGER: OnceLock<DfuFlashManager> = OnceLock::new();
-static LED: OnceLock<Mutex<CriticalSectionRawMutex, RefCell<Option<Output<'static>>>>> = OnceLock::new();
 
 /// Initialize the blocking flash, create the DFU manager and store it globally.
 pub fn init_flash(
@@ -64,18 +71,4 @@ pub fn mark_booted() {
 /// Get a reference to the global DFU flash manager.
 pub fn get_manager() -> Option<&'static DfuFlashManager> {
     MANAGER.try_get()
-}
-
-/// Store an optional DFU LED pin globally.
-pub fn set_led(led: Option<Output<'static>>) {
-    let _ = LED.init(Mutex::new(RefCell::new(led)));
-}
-
-/// Run a closure with the global DFU LED, if configured.
-pub fn with_led<F, R>(f: F) -> Option<R>
-where
-    F: FnOnce(&mut Output<'static>) -> R,
-{
-    LED.try_get()
-        .and_then(|m| m.lock(|cell| cell.borrow_mut().as_mut().map(f)))
 }

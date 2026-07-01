@@ -228,7 +228,7 @@ adafruit_bl = ["_nrf_ble"]
 zsa_voyager_bl = []
 
 ## Enable DFU firmware update support (USB DFU interface)
-dfu = ["dep:embassy-usb-dfu", "dep:embassy-embedded-hal"]
+dfu = ["dep:embassy-usb-dfu", "dep:embassy-embedded-hal", "rmk-types/dfu"]
 ## Enable RP2040-specific DFU with embassy-boot-rp (implies `dfu` and `rp2040`)
 dfu_rp = ["dfu", "dep:embassy-boot-rp", "dep:embassy-boot", "rp2040", "rmk-macro/dfu_rp"]
 ## Enable nRF DFU firmware update support (add a chip feature like `nrf52840` too)

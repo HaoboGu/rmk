@@ -405,6 +405,8 @@ define_event_config!(
     central_connected,
     peripheral_battery,
     clear_peer,
+    // DFU events
+    dfu_status,
     // Action events
     action,
 );

@@ -93,7 +93,10 @@ async fn main(_spawner: Spawner) {
         dfu_size,
     ));
 
-    rmk::dfu::set_led(Some(Output::new(p.PIN_25, Level::Low)));
+    let mut dfu_led_processor = rmk::processor::builtin::dfu_led::DfuLedProcessor::new(
+        Output::new(p.PIN_25, Level::Low),
+        false,
+    );
 
     let keyboard_device_config = DeviceConfig {
         vid: 0x4c4b,
@@ -159,7 +162,8 @@ async fn main(_spawner: Spawner) {
         wpm_processor,
         keyboard,
         host_service,
-        watchdog_runner // , dfu_lock
+        watchdog_runner,
+        dfu_led_processor, // , dfu_lock
     )
     .await;
 }

@@ -7,8 +7,6 @@ use rmk_config::resolved::Hardware;
 use rmk_config::resolved::hardware::ChipSeries;
 
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-use super::gpio::convert_gpio_str_to_output_pin;
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 use rmk_config::resolved::hardware::DfuConfig;
 
 pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
@@ -61,17 +59,6 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                     let state_size = dfu.state_size;
                     let dfu_offset = dfu.dfu_offset;
                     let dfu_size = dfu.dfu_size;
-                    let dfu_led = match &dfu.led {
-                        Some(c) if c.pin == "none" => None,
-                        Some(c) => Some(convert_gpio_str_to_output_pin(&hardware.chip, c.pin.clone(), false)),
-                        None => Some(convert_gpio_str_to_output_pin(&hardware.chip, "P0_15".to_string(), false)),
-                    };
-                    let dfu_led_init = match dfu_led {
-                        Some(pin) => quote! {
-                            ::rmk::dfu::set_led(Some(#pin));
-                        },
-                        None => quote! {},
-                    };
                     let dfu_unlock_keys = expand_dfu_unlock_keys(dfu);
                     quote! {
                         #dfu_unlock_keys
@@ -86,7 +73,6 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                                 #dfu_size,
                             )
                         );
-                        #dfu_led_init
                     }
                 };
                 #[cfg(not(feature = "dfu_nrf"))]
@@ -118,17 +104,6 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                 let state_size = dfu.state_size;
                 let dfu_offset = dfu.dfu_offset;
                 let dfu_size = dfu.dfu_size;
-                let dfu_led = match &dfu.led {
-                    Some(c) if c.pin == "none" => None,
-                    Some(c) => Some(convert_gpio_str_to_output_pin(&hardware.chip, c.pin.clone(), false)),
-                    None => Some(convert_gpio_str_to_output_pin(&hardware.chip, "PIN_25".to_string(), false)),
-                };
-                let dfu_led_init = match dfu_led {
-                    Some(pin) => quote! {
-                        ::rmk::dfu::set_led(Some(#pin));
-                    },
-                    None => quote! {},
-                };
                 let dfu_unlock_keys = expand_dfu_unlock_keys(dfu);
                 quote! {
                     #dfu_unlock_keys
@@ -143,7 +118,6 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                             #dfu_size,
                         )
                     );
-                    #dfu_led_init
                 }
             }
             }

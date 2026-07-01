@@ -86,3 +86,9 @@ subs = 0
 channel_size = 16
 pubs = 1
 subs = 0
+
+# DFU events
+[event.dfu_status]
+channel_size = 2
+pubs = 1
+subs = 1
