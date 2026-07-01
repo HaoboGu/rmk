@@ -470,6 +470,57 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow_mut().toggle_layer(layer_num);
     }
 
+    /// Activate `layer_num` only if it is currently inactive.
+    ///
+    /// Returns `true` if this call performed the activation, `false` if the
+    /// layer was already active (or the index is out of range). Folds the
+    /// "check then activate" sequence into a single borrow so callers can't
+    /// accidentally race against other layer mutations.
+    pub(crate) fn activate_layer_if_inactive(&self, layer_num: u8) -> bool {
+        let mut inner = self.inner.borrow_mut();
+        let idx = layer_num as usize;
+        if idx >= inner.num_layer || inner.layer_state[idx] {
+            return false;
+        }
+        inner.layer_state[idx] = true;
+        inner.update_tri_layer();
+        true
+    }
+
+    /// Symmetric counterpart to [`Self::activate_layer_if_inactive`]: only
+    /// deactivates when the layer is currently active. Skips the
+    /// `update_tri_layer` call (which would publish a `LayerChangeEvent`) when
+    /// the layer is already inactive, avoiding a redundant event publish.
+    pub(crate) fn deactivate_layer_if_active(&self, layer_num: u8) {
+        let mut inner = self.inner.borrow_mut();
+        let idx = layer_num as usize;
+        if idx >= inner.num_layer || !inner.layer_state[idx] {
+            return;
+        }
+        inner.layer_state[idx] = false;
+        inner.update_tri_layer();
+    }
+
+    pub(crate) fn auto_mouse_layer_configs(
+        &self,
+    ) -> heapless::Vec<crate::config::AutoMouseLayerConfig, { crate::AUTO_MOUSE_LAYER_MAX_NUM }> {
+        self.inner.borrow().behavior.auto_mouse_layer.clone()
+    }
+
+    /// Whether `layer_num` is set in the layer mask.
+    ///
+    /// Unlike [`Self::active_layer`] (which returns only the topmost), this
+    /// reports each layer individually.
+    pub(crate) fn is_layer_active(&self, layer_num: u8) -> bool {
+        let inner = self.inner.borrow();
+        let idx = layer_num as usize;
+        idx < inner.num_layer && inner.layer_state[idx]
+    }
+
+    pub(crate) fn num_layer(&self) -> usize {
+        self.inner.borrow().num_layer
+    }
+
     pub(crate) fn get_activated_layer(&self) -> u8 {
         self.inner.borrow().get_activated_layer()
     }
@@ -788,5 +839,40 @@ mod test {
         fill_vec(&mut forks);
 
         assert_eq!(forks.len(), FORK_MAX_NUM);
+    }
+
+    #[test]
+    fn is_layer_active_reports_individual_layer_state() {
+        use crate::config::{BehaviorConfig, PositionalConfig};
+        use crate::keymap::{KeyMap, KeymapData};
+
+        let mut data = KeymapData::<1, 1, 4>::new([[[k!(A)]], [[k!(B)]], [[k!(C)]], [[k!(D)]]]);
+        let mut behavior = BehaviorConfig::default();
+        let positional = PositionalConfig::<1, 1>::default();
+        let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
+
+        // Layer 0 is the default but not explicitly set in the mask.
+        assert!(!keymap.is_layer_active(0));
+        assert!(!keymap.is_layer_active(3));
+        // Out-of-range returns false (no panic).
+        assert!(!keymap.is_layer_active(99));
+
+        assert!(keymap.activate_layer_if_inactive(2));
+        assert!(keymap.is_layer_active(2));
+        assert!(!keymap.is_layer_active(1));
+        assert!(!keymap.is_layer_active(3));
+        assert!(!keymap.activate_layer_if_inactive(2));
+
+        keymap.deactivate_layer_if_active(2);
+        assert!(!keymap.is_layer_active(2));
+        keymap.deactivate_layer_if_active(2);
+        assert!(!keymap.is_layer_active(2));
+
+        // Mirrors the auto-mouse Either3::Third guard.
+        assert!(keymap.activate_layer_if_inactive(2));
+        let self_activated = true;
+        assert!(!(self_activated && !keymap.is_layer_active(2)));
+        keymap.deactivate_layer_if_active(2);
+        assert!(self_activated && !keymap.is_layer_active(2));
     }
 }

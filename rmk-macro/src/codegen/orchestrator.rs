@@ -265,6 +265,7 @@ fn expand_main(
     let run_rmk = expand_rmk_entry(
         hardware,
         host,
+        behavior,
         &item_mod,
         devices,
         processors,

@@ -40,6 +40,10 @@ pub use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 pub use embassy_time;
 pub use futures;
 pub use heapless;
+// Re-exported here so generated code from `#[rmk_keyboard]` and pure-Rust API
+// users can spawn the auto mouse layer task without depending on internal
+// module paths.
+pub use keyboard::auto_mouse_layer::run_auto_mouse_layer_if_enabled;
 use keymap::KeyMap;
 pub use keymap::KeymapData;
 pub use rmk_macro as macros;

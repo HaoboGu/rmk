@@ -2,14 +2,16 @@ use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::resolved::hardware::{BoardConfig, CommunicationConfig};
-use rmk_config::resolved::{Hardware, Host};
+use rmk_config::resolved::{Behavior, Hardware, Host};
 use syn::{ItemFn, ItemMod};
 
 use super::override_helper::Overwritten;
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn expand_rmk_entry(
     hardware: &Hardware,
     host: &Host,
+    behavior: &Behavior,
     item_mod: &ItemMod,
     devices: Vec<TokenStream2>,
     processors: Vec<TokenStream2>,
@@ -32,6 +34,7 @@ pub(crate) fn expand_rmk_entry(
             .unwrap_or(rmk_entry_select(
                 hardware,
                 host,
+                behavior,
                 devices,
                 processors,
                 registered_processors,
@@ -41,6 +44,7 @@ pub(crate) fn expand_rmk_entry(
         rmk_entry_select(
             hardware,
             host,
+            behavior,
             devices,
             processors,
             registered_processors,
@@ -59,16 +63,26 @@ fn override_rmk_entry(item_fn: &ItemFn) -> TokenStream2 {
 pub(crate) fn rmk_entry_select(
     hardware: &Hardware,
     host: &Host,
+    behavior: &Behavior,
     devices: Vec<TokenStream2>,
     processors: Vec<TokenStream2>,
     registered_processors: Vec<TokenStream2>,
     watchdog_task: Option<TokenStream2>,
 ) -> TokenStream2 {
+    let auto_mouse_layer_enabled = !behavior.auto_mouse_layer.is_empty();
+    let auto_mouse_layer_prelude = auto_mouse_layer_enabled.then(|| {
+        quote! {
+            let mut auto_mouse_layer = ::rmk::run_auto_mouse_layer_if_enabled(&keymap);
+        }
+    });
     let devices_task = {
         let mut devs = devices.clone();
         devs.push(quote! {matrix});
         if hardware.storage.is_some() {
             devs.push(quote! {storage});
+        }
+        if auto_mouse_layer_enabled {
+            devs.push(quote! {auto_mouse_layer});
         }
         quote! {
             ::rmk::run_all! (
@@ -133,6 +147,7 @@ pub(crate) fn rmk_entry_select(
                 let joined = join_all_tasks(tasks);
                 quote! {
                     #transport_prelude
+                    #auto_mouse_layer_prelude
                     #joined
                 }
             } else if split_config.connection == "serial" {
@@ -167,6 +182,7 @@ pub(crate) fn rmk_entry_select(
                 let joined = join_all_tasks(tasks);
                 quote! {
                     #transport_prelude
+                    #auto_mouse_layer_prelude
                     #joined
                 }
             } else {
@@ -178,6 +194,7 @@ pub(crate) fn rmk_entry_select(
         }
         BoardConfig::UniBody(_) => rmk_entry_unibody(
             transport_prelude,
+            auto_mouse_layer_prelude,
             transport_tasks,
             host_service_task,
             devices_task,
@@ -193,8 +210,10 @@ pub(crate) fn rmk_entry_select(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn rmk_entry_unibody(
     transport_prelude: TokenStream2,
+    auto_mouse_layer_prelude: Option<TokenStream2>,
     transport_tasks: Vec<TokenStream2>,
     host_service_task: Option<TokenStream2>,
     devices_task: TokenStream2,
@@ -221,6 +240,7 @@ pub(crate) fn rmk_entry_unibody(
     let joined = join_all_tasks(tasks);
     quote! {
         #transport_prelude
+        #auto_mouse_layer_prelude
         #joined
     }
 }
