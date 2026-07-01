@@ -18,6 +18,17 @@ cargo +stable test -p rynk --doc
 
 log_section "Wasm smoke check"
 cargo +stable check -p rynk --lib --target wasm32-unknown-unknown
+cargo +stable check -p rynk-wasm --target wasm32-unknown-unknown
+
+log_section "TS type contract"
+# bindings/rynk.d.ts is the checked-in Rust↔TS contract; regenerating it must be
+# a no-op, else the committed copy is stale.
+rynk-wasm/scripts/gen-types.sh >/dev/null
+git diff --exit-code -- rynk-wasm/bindings/rynk.d.ts || {
+    echo "::error::rynk-wasm/bindings/rynk.d.ts is out of date — run rynk/rynk-wasm/scripts/gen-types.sh and commit"
+    exit 1
+}
 
 log_section "Clippy"
 cargo +stable clippy --workspace --lib --tests --examples -- -D warnings
+cargo +stable clippy -p rynk-wasm --target wasm32-unknown-unknown -- -D warnings

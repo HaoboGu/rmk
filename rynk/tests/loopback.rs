@@ -32,7 +32,7 @@ use rmk_types::action::KeyAction;
 use rmk_types::combo::Combo;
 use rmk_types::constants::{MACRO_DATA_SIZE, RYNK_BUFFER_SIZE};
 use rmk_types::protocol::rynk::{MacroData, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, StorageResetMode};
-use rynk::{Client, IncomingTopic, RequestError, TopicEvent};
+use rynk::{Client, IncomingTopic, RynkHostError, TopicEvent};
 
 /// One direction of the in-memory link. Sized to a full Rynk buffer so any
 /// single legal frame fits without the writer blocking on an un-polled reader.
@@ -92,10 +92,10 @@ async fn client_against_run_session() {
         let mut client = Client::connect(transport).await.expect("handshake should succeed");
 
         // Handshake: both halves must agree on the protocol version.
-        assert_eq!(client.protocol_version(), ProtocolVersion::CURRENT);
+        assert_eq!(client.get_version().await.unwrap(), ProtocolVersion::CURRENT);
 
         // Capabilities reflect the live keymap …
-        let caps = *client.capabilities();
+        let caps = client.get_capabilities().await.unwrap();
         assert_eq!((caps.num_layers, caps.num_rows, caps.num_cols), (2, 2, 2));
         // … and the negotiated payload limit the client consumes equals the
         // firmware's own buffer floor (header + max_payload == RYNK_BUFFER_SIZE).
@@ -145,11 +145,11 @@ async fn client_against_run_session() {
         let _ = client.get_connection_type().await.unwrap();
         let _ = client.get_led_indicator().await.unwrap();
 
-        // A device rejection must flatten to RequestError::Rejected end to end:
+        // A device rejection must flatten to RynkHostError::Rejected end to end:
         // the firmware implements only StorageResetMode::Full.
         let rejected = client.storage_reset(StorageResetMode::LayoutOnly).await;
         assert!(
-            matches!(rejected, Err(RequestError::Rejected(RynkError::Unimplemented))),
+            matches!(rejected, Err(RynkHostError::Rejected(RynkError::Unimplemented))),
             "expected Rejected(Unimplemented), got {rejected:?}"
         );
 

@@ -7,6 +7,8 @@ use crate::combo::Combo;
 
 /// Request payload for `SetCombo`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct SetComboRequest {
     pub index: u8,
     pub config: Combo,
@@ -26,6 +28,8 @@ mod bulk {
 
     /// Request payload for `GetComboBulk`.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct GetComboBulkRequest {
         pub start_index: u8,
         pub count: u8,
@@ -33,8 +37,11 @@ mod bulk {
 
     /// Bulk request payload for setting multiple combos at once.
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct SetComboBulkRequest {
         pub start_index: u8,
+        #[cfg_attr(feature = "wasm", tsify(type = "Combo[]"))]
         pub configs: Vec<Combo, BULK_SIZE>,
     }
 
@@ -44,7 +51,10 @@ mod bulk {
 
     /// Bulk response for getting multiple combos at once.
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct GetComboBulkResponse {
+        #[cfg_attr(feature = "wasm", tsify(type = "Combo[]"))]
         pub configs: Vec<Combo, BULK_SIZE>,
     }
 

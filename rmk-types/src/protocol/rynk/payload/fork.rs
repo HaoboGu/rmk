@@ -7,6 +7,8 @@ use crate::fork::Fork;
 
 /// Request payload for `SetFork`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct SetForkRequest {
     pub index: u8,
     pub config: Fork,

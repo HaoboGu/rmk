@@ -13,7 +13,10 @@ pub const MATRIX_BITMAP_SIZE: usize = 32;
 /// Total meaningful bytes = num_rows * ceil(num_cols / 8).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct MatrixState {
+    #[cfg_attr(feature = "wasm", tsify(type = "number[]"))]
     pub pressed_bitmap: heapless::Vec<u8, MATRIX_BITMAP_SIZE>,
 }
 
@@ -25,6 +28,8 @@ impl MaxSize for MatrixState {
 #[cfg(all(feature = "_ble", feature = "split"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct PeripheralStatus {
     pub connected: bool,
     pub battery: crate::battery::BatteryStatus,

@@ -28,7 +28,7 @@
 //!   [`Client::resync`].
 //! - `read` may return arbitrary chunk boundaries; the client reassembles
 //!   frames. `Ok(0)` means the link is gone and surfaces as
-//!   [`TransportError::Disconnected`].
+//!   [`RynkHostError::Disconnected`].
 //!
 //! ## Multi-version dispatch
 //!
@@ -43,7 +43,7 @@ mod driver;
 
 pub use api::IncomingTopic;
 pub use device::RynkDevice;
-pub use driver::{Client, ConnectError, RequestError, TopicFrame, TransportError};
+pub use driver::{Client, RynkHostError, TopicFrame};
 pub use embedded_io_async as io;
 pub use rmk_types;
 /// The decoded topic union carried by [`IncomingTopic::Topic`]

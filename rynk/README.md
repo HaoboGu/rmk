@@ -43,7 +43,7 @@ println!("L0(0,0) = {key:?}");
 ```
 
 Each method returns the response value directly; a device rejection surfaces as
-`RequestError::Rejected`, so `?` propagates both transport and firmware errors.
+`RynkHostError::Rejected`, so `?` propagates both transport and firmware errors.
 
 ## License
 

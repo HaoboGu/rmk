@@ -87,6 +87,10 @@ jobs:
         with:
           components: clippy
           targets: wasm32-unknown-unknown
+      # For the TS type-contract drift check in host.sh (gen-types.sh runs wasm-pack).
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-host

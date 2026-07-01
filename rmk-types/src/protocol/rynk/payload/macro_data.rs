@@ -8,7 +8,10 @@ use crate::constants::MACRO_DATA_SIZE;
 
 /// Raw macro data for a single macro chunk.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct MacroData {
+    #[cfg_attr(feature = "wasm", tsify(type = "number[]"))]
     pub data: Vec<u8, MACRO_DATA_SIZE>,
 }
 
@@ -18,6 +21,8 @@ impl MaxSize for MacroData {
 
 /// Request payload for `GetMacro`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct GetMacroRequest {
     pub index: u8,
     pub offset: u16,
@@ -28,6 +33,8 @@ pub struct GetMacroRequest {
 /// Writes are by `offset`; chunk length carries no end-of-macro meaning, and
 /// writes past the macro region are truncated by the firmware.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct SetMacroRequest {
     pub index: u8,
     pub offset: u16,

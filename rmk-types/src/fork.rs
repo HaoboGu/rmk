@@ -15,6 +15,8 @@ use crate::mouse_button::MouseButtons;
 /// A zero (default) value means "match nothing" — no modifiers, LEDs, or mouse buttons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct StateBits {
     /// Active modifier combination to match.
     pub modifiers: ModifierCombination,
@@ -73,6 +75,8 @@ impl StateBits {
 /// and `match_none` to decide between `positive_output` and `negative_output`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct Fork {
     /// The key action that activates this fork. Should not be `KeyAction::Transparent`.
     pub trigger: KeyAction,

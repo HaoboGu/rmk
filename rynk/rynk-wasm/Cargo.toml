@@ -1,0 +1,23 @@
+[package]
+name = "rynk-wasm"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Rynk host support compiled to a wasm package: typed `rynk` Client plus JS byte-link transport, built with wasm-pack"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+
+# Built by `wasm-pack build --target web`. 
+# Native checks compile an empty crate because `src/lib.rs` is wasm32-gated.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+rynk = { path = "..", features = ["wasm"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+console_error_panic_hook = "0.1"
+console_log = "1"
+log = "0.4"
+serde-wasm-bindgen = "0.6"
