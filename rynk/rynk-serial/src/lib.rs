@@ -250,7 +250,7 @@ mod tests {
     #[test]
     fn rynk_serial_ports_enumerates() {
         // Returns marked ports the host has (maybe none in CI); must not error.
-        SerialTransport::rynk_serial_ports().expect("enumeration must not error");
+        SerialDevice::rynk_serial_ports().expect("enumeration must not error");
     }
 
     #[tokio::test]

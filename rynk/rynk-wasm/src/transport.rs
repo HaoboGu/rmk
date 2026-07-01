@@ -32,7 +32,6 @@ pub struct WasmTransport {
     label: String,
     recv: Option<RecvFuture>,
     pending: Vec<u8>,
-    pos: usize,
 }
 
 impl WasmTransport {
@@ -43,7 +42,6 @@ impl WasmTransport {
             label,
             recv: None,
             pending: Vec::new(),
-            pos: 0,
         }
     }
 
@@ -70,7 +68,7 @@ impl ErrorType for WasmTransport {
 impl Read for WasmTransport {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         // Refill once the current chunk is drained.
-        while self.pos >= self.pending.len() {
+        while self.pending.is_empty() {
             if self.recv.is_none() {
                 // Clone the handle into the future so it owns all it borrows.
                 let link: JsByteLink = self.link.clone().unchecked_into();
@@ -86,11 +84,10 @@ impl Read for WasmTransport {
                 return Ok(0); // EOF
             }
             self.pending = chunk.to_vec();
-            self.pos = 0;
         }
-        let n = buf.len().min(self.pending.len() - self.pos);
-        buf[..n].copy_from_slice(&self.pending[self.pos..self.pos + n]);
-        self.pos += n;
+        let n = buf.len().min(self.pending.len());
+        buf[..n].copy_from_slice(&self.pending[..n]);
+        self.pending.drain(..n);
         Ok(n)
     }
 }
