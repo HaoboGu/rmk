@@ -93,10 +93,8 @@ async fn main(_spawner: Spawner) {
         dfu_size,
     ));
 
-    let mut dfu_led_processor = rmk::processor::builtin::dfu_led::DfuLedProcessor::new(
-        Output::new(p.PIN_25, Level::Low),
-        false,
-    );
+    let mut dfu_led_processor =
+        rmk::processor::builtin::dfu_led::DfuLedProcessor::new(Output::new(p.PIN_25, Level::Low), false);
 
     let keyboard_device_config = DeviceConfig {
         vid: 0x4c4b,

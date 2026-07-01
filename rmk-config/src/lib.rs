@@ -120,9 +120,10 @@ impl KeyboardTomlConfig {
     /// and should not require `[keyboard.board]`/`[keyboard.chip]`.
     pub fn new_from_toml_path_with_event_defaults<P: AsRef<Path>>(config_toml_path: P) -> Self {
         let mut config = Self::parse_from_toml_path(config_toml_path, None);
-        config.storage_user_set = config.storage.as_ref().map_or(false, |s| {
-            s.start_addr.is_some() || s.num_sectors.is_some()
-        });
+        config.storage_user_set = config
+            .storage
+            .as_ref()
+            .is_some_and(|s| s.start_addr.is_some() || s.num_sectors.is_some());
         config.auto_calculate_parameters();
         config
     }
@@ -142,9 +143,10 @@ impl KeyboardTomlConfig {
         // 2. Chip-specific default config
         // 3. User config (highest priority)
         let mut config = Self::parse_from_toml_path(path, Some(default_config_str));
-        config.storage_user_set = user_config.storage.as_ref().map_or(false, |s| {
-            s.start_addr.is_some() || s.num_sectors.is_some()
-        });
+        config.storage_user_set = user_config
+            .storage
+            .as_ref()
+            .is_some_and(|s| s.start_addr.is_some() || s.num_sectors.is_some());
 
         config.auto_calculate_parameters();
 

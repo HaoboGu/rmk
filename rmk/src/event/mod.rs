@@ -56,9 +56,9 @@ mod state;
 
 pub use action::ActionEvent;
 pub use battery::{BatteryAdcEvent, BatteryStatusEvent, ChargingStateEvent};
+pub use connection::{ConnectionStatus, ConnectionStatusChangeEvent, ConnectionType};
 #[cfg(feature = "dfu")]
 pub use dfu::DfuStatusEvent;
-pub use connection::{ConnectionStatus, ConnectionStatusChangeEvent, ConnectionType};
 pub use input::{
     Axis, AxisEvent, AxisValType, KeyPos, KeyboardEvent, KeyboardEventPos, ModifierEvent, PointingEvent,
     PointingProcessorEvent, PointingSetCpiEvent, RotaryEncoderPos,

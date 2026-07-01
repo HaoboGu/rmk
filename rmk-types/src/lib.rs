@@ -35,9 +35,9 @@ pub mod battery;
 pub mod ble;
 pub mod combo;
 pub mod connection;
+pub mod constants;
 #[cfg(feature = "dfu")]
 pub mod dfu;
-pub mod constants;
 pub mod fmt;
 pub mod fork;
 pub mod keycode;

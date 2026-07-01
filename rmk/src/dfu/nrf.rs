@@ -2,9 +2,11 @@ use core::cell::RefCell;
 
 use embassy_boot::BlockingFirmwareState;
 use embassy_embedded_hal::flash::partition::BlockingPartition;
-use embassy_nrf::{nvmc::Nvmc, peripherals::NVMC};
 use embassy_nrf::Peri;
-use embassy_sync::blocking_mutex::{Mutex, raw::CriticalSectionRawMutex};
+use embassy_nrf::nvmc::Nvmc;
+use embassy_nrf::peripherals::NVMC;
+use embassy_sync::blocking_mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::once_lock::OnceLock;
 use static_cell::StaticCell;
 

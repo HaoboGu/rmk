@@ -231,7 +231,7 @@ fn expand_main(
     let (input_device_config, devices, processors) = expand_input_device_config(hardware);
     let matrix_and_keyboard = expand_matrix_and_keyboard_init(hardware);
     let (registered_processor_initializers, mut registered_processors) =
-        expand_registered_processor_init(hardware, &item_mod);
+        expand_registered_processor_init(hardware, &item_mod, rmk_features);
 
     // Declare dfu_lock (if enabled) so it can be pushed as a Runnable task.
     // Check the feature at macro-expansion time so we never emit `#[cfg]`

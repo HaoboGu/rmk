@@ -9,7 +9,6 @@ use syn::ItemMod;
 
 use super::central::expand_serial_init;
 use crate::codegen::chip::chip_init::expand_chip_init;
-use rmk_config::resolved::Identity;
 use crate::codegen::chip::flash::expand_flash_init;
 use crate::codegen::chip::gpio::expand_output_initialization;
 use crate::codegen::display::{expand_display_config, expand_display_interrupt};
@@ -28,6 +27,7 @@ use crate::codegen::matrix::{
 use crate::codegen::orchestrator::get_debouncer_type;
 use crate::codegen::registered_processor::expand_registered_processor_init;
 use crate::codegen::watchdog::expand_watchdog_init;
+use rmk_config::resolved::Identity;
 
 /// Parse split peripheral mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_split_peripheral_mod(
@@ -48,8 +48,8 @@ pub(crate) fn parse_split_peripheral_mod(
         .identity()
         .expect("failed to resolve identity config");
 
-    let dfu_enabled = is_feature_enabled(&rmk_features, "dfu_rp")
-        || is_feature_enabled(&rmk_features, "dfu_nrf");
+    let dfu_enabled =
+        is_feature_enabled(&rmk_features, "dfu_rp") || is_feature_enabled(&rmk_features, "dfu_nrf");
     let device_config = if dfu_enabled {
         let vid = identity.vendor_id;
         let pid = identity.product_id;
@@ -71,7 +71,8 @@ pub(crate) fn parse_split_peripheral_mod(
 
     let main_function = expand_split_peripheral(id, &identity, &hardware, item_mod, &rmk_features);
 
-    let bind_interrupts = expand_bind_interrupt_for_split_peripheral(&hardware.chip, &hardware, id, &rmk_features);
+    let bind_interrupts =
+        expand_bind_interrupt_for_split_peripheral(&hardware.chip, &hardware, id, &rmk_features);
 
     let chip = &hardware.chip;
     let main_function_sig = if chip.series == ChipSeries::Esp32 {
@@ -336,8 +337,8 @@ fn expand_split_peripheral(
         chip_init.extend(quote! { #flash_init });
     }
 
-    let dfu_enabled = is_feature_enabled(rmk_features, "dfu_rp")
-        || is_feature_enabled(rmk_features, "dfu_nrf");
+    let dfu_enabled =
+        is_feature_enabled(rmk_features, "dfu_rp") || is_feature_enabled(rmk_features, "dfu_nrf");
 
     // Mark booted when DFU is enabled so the bootloader doesn't
     // revert the previous update.
@@ -459,7 +460,7 @@ fn expand_split_peripheral(
 
     // Add processor support for peripherals
     let (registered_processor_initializers, mut registered_processors) =
-        expand_registered_processor_init(hardware, &item_mod);
+        expand_registered_processor_init(hardware, &item_mod, rmk_features);
 
     // Display configuration for this peripheral
     let display_init = if let Some(display_config) = &peripheral_config.display {

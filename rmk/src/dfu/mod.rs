@@ -18,15 +18,15 @@ use crate::core_traits::Runnable;
 // Chip modules
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "dfu_rp")]
-mod rp;
 #[cfg(feature = "dfu_nrf")]
 mod nrf;
-
 #[cfg(feature = "dfu_rp")]
-pub use self::rp::{init_flash, mark_booted, get_manager, DFU_WRITE_SIZE};
+mod rp;
+
 #[cfg(feature = "dfu_nrf")]
-pub use self::nrf::{init_flash, mark_booted, get_manager, DFU_WRITE_SIZE};
+pub use self::nrf::{DFU_WRITE_SIZE, get_manager, init_flash, mark_booted};
+#[cfg(feature = "dfu_rp")]
+pub use self::rp::{DFU_WRITE_SIZE, get_manager, init_flash, mark_booted};
 
 // ---------------------------------------------------------------------------
 // Chip-specific type aliases
@@ -39,10 +39,10 @@ pub const BLOCK_SIZE_DFU: usize = 512;
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 use embassy_embedded_hal::flash::partition::BlockingPartition;
 
-#[cfg(feature = "dfu_rp")]
-use self::rp::{MutexType, PartitionType};
 #[cfg(feature = "dfu_nrf")]
 use self::nrf::{MutexType, PartitionType};
+#[cfg(feature = "dfu_rp")]
+use self::rp::{MutexType, PartitionType};
 
 // ---------------------------------------------------------------------------
 // DfuFlashManager — shared by RP2040 and nRF
@@ -136,14 +136,17 @@ pub fn is_dfu_unlocked() -> bool {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "dfu")]
-use embassy_usb::class::dfu::{consts::Status, dfu_mode::{self, DfuState}};
+use embassy_usb::class::dfu::{
+    consts::Status,
+    dfu_mode::{self, DfuState},
+};
+#[cfg(any(feature = "dfu", feature = "dfu_lock"))]
+use rmk_types::dfu::DfuStatus;
 
 /// DFU handler wrapper that blinks an LED during transfer and checks the
 /// DFU lock (if `dfu_lock` feature is enabled).
 #[cfg(any(feature = "dfu", feature = "dfu_lock"))]
 use crate::event::publish_event;
-#[cfg(any(feature = "dfu", feature = "dfu_lock"))]
-use rmk_types::dfu::DfuStatus;
 
 #[cfg(feature = "dfu")]
 struct RmkDfuHandler<H> {
@@ -173,9 +176,11 @@ impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
 
     fn finish(&mut self) -> Result<(), Status> {
         let res = self.inner.finish();
-        publish_event(crate::event::DfuStatusEvent::new(
-            if res.is_ok() { DfuStatus::Finished } else { DfuStatus::Error },
-        ));
+        publish_event(crate::event::DfuStatusEvent::new(if res.is_ok() {
+            DfuStatus::Finished
+        } else {
+            DfuStatus::Error
+        }));
         res
     }
 
@@ -189,7 +194,10 @@ impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
 // ---------------------------------------------------------------------------
 
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-use {embassy_boot::{BlockingFirmwareUpdater, FirmwareUpdaterConfig}, embassy_usb_dfu::{ResetImmediate, dfu::FirmwareHandler}};
+use {
+    embassy_boot::{BlockingFirmwareUpdater, FirmwareUpdaterConfig},
+    embassy_usb_dfu::{ResetImmediate, dfu::FirmwareHandler},
+};
 
 /// Register a DFU interface on the USB builder.
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]

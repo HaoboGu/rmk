@@ -2,9 +2,11 @@ use core::cell::RefCell;
 
 use embassy_boot::BlockingFirmwareState;
 use embassy_embedded_hal::flash::partition::BlockingPartition;
-use embassy_rp::{flash::{Blocking, Flash}, peripherals::FLASH};
 use embassy_rp::Peri;
-use embassy_sync::blocking_mutex::{Mutex, raw::CriticalSectionRawMutex};
+use embassy_rp::flash::{Blocking, Flash};
+use embassy_rp::peripherals::FLASH;
+use embassy_sync::blocking_mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::once_lock::OnceLock;
 use static_cell::StaticCell;
 
