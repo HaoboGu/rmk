@@ -21,8 +21,8 @@ impl Nrf52Watchdog {
     pub fn default_runner(wdt: Peri<'static, WDT>) -> WatchdogRunner<Self> {
         let mut config = wdt::Config::default();
         config.timeout_ticks = 327680; // 10s at 32768 Hz
-        config.action_during_debug_halt = wdt::HaltConfig::PAUSE;
-        config.action_during_sleep = wdt::SleepConfig::RUN;
+        config.action_during_debug_halt = wdt::HaltConfig::Pause;
+        config.action_during_sleep = wdt::SleepConfig::Run;
         let (_driver, [handle]) = wdt::Watchdog::try_new(wdt, config).expect("WDT already active");
         WatchdogRunner::new(Self::new(handle), Duration::from_secs(5))
     }

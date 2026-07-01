@@ -16,7 +16,7 @@ use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{Input, InputConfig, Level, Output, OutputConfig, Pull};
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::otg_fs::Usb;
-use esp_hal::otg_fs::asynch::{Config, Driver};
+use esp_hal::otg_fs::embassy_usb_device::{Config, Driver};
 use esp_hal::rng::TrngSource;
 use esp_hal::timer::timg::TimerGroup;
 use esp_radio::ble::controller::BleConnector;
@@ -47,17 +47,16 @@ async fn main(_s: Spawner) {
     let software_interrupt = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start(timg0.timer0, software_interrupt.software_interrupt0);
     let _trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
-    let mut rng = esp_hal::rng::Trng::try_new().unwrap();
 
     let connector = BleConnector::new(peripherals.BT, Default::default()).unwrap();
     let controller: ExternalController<_, 20> = ExternalController::new(connector);
     let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
     let mut host_resources = HostResources::new();
-    let stack = build_ble_stack(controller, central_addr, &mut rng, &mut host_resources).await;
+    let stack = build_ble_stack(controller, central_addr, &mut host_resources).await;
 
     // Initialize USB
     static mut EP_MEMORY: [u8; 1024] = [0; 1024];
-    let usb = Usb::new(peripherals.USB0, peripherals.GPIO20, peripherals.GPIO19);
+    let usb = Usb::new(peripherals.USB_FS, peripherals.GPIO20, peripherals.GPIO19);
     // Create the driver, from the HAL.
     let config = Config::default();
     let usb_driver = Driver::new(usb, unsafe { &mut *addr_of_mut!(EP_MEMORY) }, config);
