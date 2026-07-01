@@ -157,6 +157,8 @@ macro_rules! topics {
         /// topic table above — generated from it. `Serialize` lets the host
         /// re-emit a decoded topic as JSON (every payload is already a wire type).
         #[derive(Debug, Clone, serde::Serialize)]
+        #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+        #[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
         pub enum TopicEvent {
             $( $(#[$meta])* $name($payload), )*
         }

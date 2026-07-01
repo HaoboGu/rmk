@@ -24,6 +24,8 @@ pub const PLOVER_HID_REPORT_ID: u8 = 0x50;
 /// Plover HID key chart. See module docs for the full list.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct StenoKey(pub u8);
 
 impl StenoKey {

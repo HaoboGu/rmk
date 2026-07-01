@@ -11,6 +11,8 @@ use crate::morse::MorseProfile;
 #[derive(Debug, Copy, Clone, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum KeyAction {
     /// No action
     No,

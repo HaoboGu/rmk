@@ -7,6 +7,8 @@ use crate::action::EncoderAction;
 
 /// Request payload for `GetEncoderAction`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct GetEncoderRequest {
     pub encoder_id: u8,
     pub layer: u8,
@@ -14,6 +16,8 @@ pub struct GetEncoderRequest {
 
 /// Request payload for `SetEncoderAction`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct SetEncoderRequest {
     pub encoder_id: u8,
     pub layer: u8,

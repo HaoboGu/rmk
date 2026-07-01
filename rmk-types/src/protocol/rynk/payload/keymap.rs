@@ -7,6 +7,8 @@ use crate::action::KeyAction;
 
 /// Identifies a specific key position in the keymap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct KeyPosition {
     pub layer: u8,
     pub row: u8,
@@ -15,6 +17,8 @@ pub struct KeyPosition {
 
 /// Request payload for `SetKeyAction` endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct SetKeyRequest {
     pub position: KeyPosition,
     pub action: KeyAction,
@@ -38,6 +42,8 @@ mod bulk {
     /// `count` is the number of keys to read; iteration wraps to subsequent
     /// rows when the end of a row is reached.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct GetKeymapBulkRequest {
         pub layer: u8,
         pub start_row: u8,
@@ -47,7 +53,10 @@ mod bulk {
 
     /// Bulk response for getting multiple key actions at once.
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct GetKeymapBulkResponse {
+        #[cfg_attr(feature = "wasm", tsify(type = "KeyAction[]"))]
         pub actions: Vec<KeyAction, BULK_SIZE>,
     }
 
@@ -61,10 +70,13 @@ mod bulk {
     /// Iteration wraps to subsequent rows when the end of a row is reached.
     /// The number of keys to write is derived from `actions.len()`.
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct SetKeymapBulkRequest {
         pub layer: u8,
         pub start_row: u8,
         pub start_col: u8,
+        #[cfg_attr(feature = "wasm", tsify(type = "KeyAction[]"))]
         pub actions: Vec<KeyAction, BULK_SIZE>,
     }
 

@@ -10,6 +10,8 @@ use super::KeyAction;
 /// Both fields default to `KeyAction::No` (no action).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct EncoderAction {
     /// Action triggered when the encoder is rotated clockwise.
     pub clockwise: KeyAction,

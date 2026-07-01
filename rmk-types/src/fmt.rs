@@ -34,11 +34,9 @@ macro_rules! impl_debug_list {
     };
 }
 
-/// Bridges Rust `#[bitfield(u8)]` types with non-bitfield TypeScript objects.
-/// With `feature = "wasm"`, emits the TypeScript object type.
-///
-/// Also implements Serialize/Deserialize so Rust values can be converted to
-/// TypeScript objects seamlessly.
+/// Bridges a `#[bitfield(u8)]` type to a non-bitfield TypeScript object: Serialize /
+/// Deserialize (a named-bool object for human-readable formats, the packed `u8` on the
+/// wire), the `.d.ts` decl, and the self-describing wasm ABI — all from one field table.
 #[macro_export]
 macro_rules! bitfield_named_serde {
     ($bitfield:ident, { $( $field:ident = $setter:ident ),+ $(,)? }) => {
@@ -76,6 +74,62 @@ macro_rules! bitfield_named_serde {
                 $( " ", stringify!($field), ": boolean;", )+
                 " };"
             );
+        };
+
+        // Self-describing wasm ABI, marshaled via the human-readable `Serialize` object.
+        $crate::wasm_object_abi!($bitfield);
+    };
+}
+
+/// Gives a type the wasm ABI to be returned to JS as an object, keeping its own name
+/// in the generated `.d.ts` — so a `#[wasm_bindgen]` fn returning it needs no
+/// `unchecked_return_type`.
+///
+/// The value is converted with `serde_wasm_bindgen`, so the type must impl
+/// `Serialize`/`Deserialize` (whose human-readable form is that object) and declare
+/// its TS shape with a `typescript_custom_section` (`export type <Type> = …`).
+#[macro_export]
+macro_rules! wasm_object_abi {
+    ($ty:ident) => {
+        #[cfg(feature = "wasm")]
+        const _: () = {
+            use ::wasm_bindgen::convert::{IntoWasmAbi, OptionIntoWasmAbi};
+            use ::wasm_bindgen::describe::{inform, WasmDescribe, NAMED_EXTERNREF};
+            use ::wasm_bindgen::prelude::*;
+
+            impl From<$ty> for JsValue {
+                #[inline]
+                fn from(value: $ty) -> Self {
+                    ::serde_wasm_bindgen::to_value(&value).unwrap_throw()
+                }
+            }
+
+            impl WasmDescribe for $ty {
+                #[inline]
+                fn describe() {
+                    let name = stringify!($ty);
+                    inform(NAMED_EXTERNREF);
+                    inform(name.len() as u32);
+                    for c in name.chars() {
+                        inform(c as u32);
+                    }
+                }
+            }
+
+            impl IntoWasmAbi for $ty {
+                type Abi = <JsValue as IntoWasmAbi>::Abi;
+                #[inline]
+                fn into_abi(self) -> Self::Abi {
+                    JsValue::from(self).into_abi()
+                }
+            }
+
+            impl OptionIntoWasmAbi for $ty {
+                #[inline]
+                fn none() -> Self::Abi {
+                    <JsValue as OptionIntoWasmAbi>::none()
+                }
+            }
         };
     };
 }

@@ -7,6 +7,8 @@ use crate::morse::Morse;
 
 /// Request payload for `SetMorse`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct SetMorseRequest {
     pub index: u8,
     pub config: Morse,
@@ -26,6 +28,8 @@ mod bulk {
 
     /// Request payload for `GetMorseBulk`.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct GetMorseBulkRequest {
         pub start_index: u8,
         pub count: u8,
@@ -33,8 +37,11 @@ mod bulk {
 
     /// Bulk request payload for setting multiple morse configs at once.
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct SetMorseBulkRequest {
         pub start_index: u8,
+        #[cfg_attr(feature = "wasm", tsify(type = "Morse[]"))]
         pub configs: Vec<Morse, BULK_SIZE>,
     }
 
@@ -44,7 +51,10 @@ mod bulk {
 
     /// Bulk response for getting multiple morse configs at once.
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct GetMorseBulkResponse {
+        #[cfg_attr(feature = "wasm", tsify(type = "Morse[]"))]
         pub configs: Vec<Morse, BULK_SIZE>,
     }
 
