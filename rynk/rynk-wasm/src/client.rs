@@ -14,11 +14,12 @@ use rynk::rmk_types::morse::Morse;
 use rynk::rmk_types::protocol::rynk::{
     BehaviorConfig, MacroData, SetComboBulkRequest, SetKeymapBulkRequest, SetMorseBulkRequest, StorageResetMode,
 };
-use rynk::{Client, ConnectError, IncomingTopic, RequestError, TransportError};
+use rynk::{Client, ConnectError, IncomingTopic, RequestError, RynkDevice, TransportError};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use wasm_bindgen::prelude::*;
 
+use crate::device::WebDevice;
 use crate::transport::{JsByteLink, WasmTransport};
 
 // Error/value marshaling.
@@ -76,34 +77,35 @@ fn encode<T: Serialize>(r: Result<T, RequestError>) -> Result<JsValue, JsValue> 
 /// transports get from the compiler). Dropping the handle, or closing the JS
 /// link, ends the session.
 #[wasm_bindgen]
-pub struct RynkClient {
-    client: Client<WasmTransport>,
-    caps: JsValue,
-    version: JsValue,
-}
+pub struct RynkClient(Client<WasmTransport>);
 
-/// Handshake over an already-open JS link and return a client.
+/// Handshake over an already-open JS link and return a client. Routes through
+/// [`WebDevice`] — the web transport's [`RynkDevice`] — so the browser path uses
+/// the same connect lifecycle as the native serial/BLE transports. `label` is the
+/// display name the page showed in its picker (WebHID `productName`, or a derived
+/// string); omit it or pass `null` for a default.
 #[wasm_bindgen]
-pub async fn connect(link: JsByteLink) -> Result<RynkClient, JsValue> {
-    let client = Client::connect(WasmTransport::new(link))
-        .await
-        .map_err(|e| connect_err(&e))?;
-    let caps = serde_wasm_bindgen::to_value(client.capabilities()).map_err(|e| js_err("Serialize", &e.to_string()))?;
-    let version =
-        serde_wasm_bindgen::to_value(&client.protocol_version()).map_err(|e| js_err("Serialize", &e.to_string()))?;
-    Ok(RynkClient { client, caps, version })
+pub async fn connect(link: JsByteLink, label: Option<String>) -> Result<RynkClient, JsValue> {
+    let client = WebDevice::new(link, label).connect().await.map_err(|e| connect_err(&e))?;
+    Ok(RynkClient(client))
 }
 
 #[wasm_bindgen]
 impl RynkClient {
-    /// The capabilities cached at connect time (no wire traffic).
-    pub fn capabilities(&self) -> JsValue {
-        self.caps.clone()
+    /// The display name the page supplied at connect time (WebHID `productName`,
+    /// a page-derived string, or the default when none was given).
+    pub fn label(&self) -> String {
+        self.0.transport().label().to_string()
     }
 
-    /// The protocol version negotiated at connect time.
-    pub fn protocol_version(&self) -> JsValue {
-        self.version.clone()
+    /// Device capabilities from the connect handshake — local read, no wire traffic.
+    pub fn capabilities(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(self.0.capabilities()).map_err(|e| js_err("Serialize", &e.to_string()))
+    }
+
+    /// Protocol version from the connect handshake — local read, no wire traffic.
+    pub fn protocol_version(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.0.protocol_version()).map_err(|e| js_err("Serialize", &e.to_string()))
     }
 
     /// Pull the next recognized topic push (server→host). Parks until one
@@ -111,7 +113,7 @@ impl RynkClient {
     /// skipped. JS drives this in a loop, like the native `next_event()` pull.
     pub async fn next_event(&mut self) -> Result<JsValue, JsValue> {
         loop {
-            match self.client.next_event().await {
+            match self.0.next_event().await {
                 Ok(IncomingTopic::Topic(t)) => {
                     return serde_wasm_bindgen::to_value(&t).map_err(|e| js_err("Serialize", &e.to_string()));
                 }
@@ -124,12 +126,12 @@ impl RynkClient {
 
     /// Drop a stalled partial frame so the next request starts clean.
     pub fn resync(&mut self) {
-        self.client.resync();
+        self.0.resync();
     }
 
     /// Topic pushes the driver dropped (queue full). `f64` so JS gets a `number`.
     pub fn events_dropped(&self) -> f64 {
-        self.client.events_dropped() as f64
+        self.0.events_dropped() as f64
     }
 }
 
@@ -141,7 +143,7 @@ macro_rules! endpoints {
             $(
                 pub async fn $name(&mut self, $($s: $sty,)* $($j: JsValue)?) -> Result<JsValue, JsValue> {
                     $( let $j: $jty = parse($j)?; )?
-                    encode(self.client.$name($($s,)* $($j)?).await)
+                    encode(self.0.$name($($s,)* $($j)?).await)
                 }
             )*
         }

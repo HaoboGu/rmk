@@ -29,20 +29,27 @@ type RecvFuture = Pin<Box<dyn Future<Output = Result<JsValue, JsValue>>>>;
 /// Buffered transport over a JS byte link.
 pub struct WasmTransport {
     link: JsByteLink,
+    label: String,
     recv: Option<RecvFuture>,
     pending: Vec<u8>,
     pos: usize,
 }
 
 impl WasmTransport {
-    /// Wrap an already-open link.
-    pub fn new(link: JsByteLink) -> Self {
+    /// Wrap an already-open link labeled with the page's device name.
+    pub fn new(link: JsByteLink, label: String) -> Self {
         Self {
             link,
+            label,
             recv: None,
             pending: Vec::new(),
             pos: 0,
         }
+    }
+
+    /// The display name the page supplied for this device.
+    pub fn label(&self) -> &str {
+        &self.label
     }
 }
 

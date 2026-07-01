@@ -278,10 +278,12 @@
           core = await loadCore(major);
           await core.default();            // wasm-bindgen init (idempotent)
 
-          client = await core.connect(l);
+          // WebHID exposes the device name; WebSerial's getInfo() has only VID/PID,
+          // so serial passes null and the wasm side falls back to a default.
+          client = await core.connect(l, device?.productName || null);
           const caps = client.capabilities();
           connected = true;
-          log(`✓ connected via ${label} — ${caps.num_layers}×${caps.num_rows}×${caps.num_cols} keymap, `
+          log(`✓ connected via ${label} (${client.label()}) — ${caps.num_layers}×${caps.num_rows}×${caps.num_cols} keymap, `
             + `${caps.max_combos} combos, ${caps.max_forks} forks, ${caps.max_morse} morse, `
             + `${caps.max_macros} macros, ble=${caps.ble_enabled}\n`);
 

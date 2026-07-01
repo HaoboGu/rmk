@@ -31,24 +31,22 @@ pub struct SerialTransport {
 }
 
 impl SerialTransport {
-    /// List the USB CDC port paths whose serial number carries the Rynk marker.
-    fn rynk_serial_ports() -> Result<Vec<String>, TransportError> {
+    /// List the USB CDC ports whose serial number carries the Rynk marker.
+    fn rynk_serial_ports() -> Result<Vec<SerialPortInfo>, TransportError> {
         let ports = tokio_serial::available_ports().map_err(|e| TransportError::Io(e.to_string()))?;
-        let mut paths: Vec<String> = ports
-            .into_iter()
-            .filter(Self::serial_is_rynk)
-            .map(|p| p.port_name)
+        let mut ports: Vec<SerialPortInfo> = ports.into_iter().filter(Self::serial_is_rynk).collect();
+        // macOS exposes one USB CDC device as both `/dev/cu.*` and `/dev/tty.*`:
+        // keep only the `cu.*` node. Other platforms have no `cu.*` sibling.
+        let cu_nodes: std::collections::HashSet<String> = ports
+            .iter()
+            .map(|p| p.port_name.clone())
+            .filter(|p| p.starts_with("/dev/cu."))
             .collect();
-        // macOS exposes one USB CDC device as both `/dev/cu.*` and
-        // `/dev/tty.*`: keep only the `cu.*`` node.
-        // Other platforms have no `cu.*` sibling and are left untouched.
-        let cu_nodes: std::collections::HashSet<String> =
-            paths.iter().filter(|p| p.starts_with("/dev/cu.")).cloned().collect();
-        paths.retain(|p| match p.strip_prefix("/dev/tty.") {
+        ports.retain(|p| match p.port_name.strip_prefix("/dev/tty.") {
             Some(suffix) => !cu_nodes.contains(&format!("/dev/cu.{suffix}")),
             None => true,
         });
-        Ok(paths)
+        Ok(ports)
     }
 
     /// Helper function for checking whether a serial port has Rynk marker
@@ -102,29 +100,48 @@ impl Write for SerialTransport {
 }
 
 /// A Rynk keyboard found by [`SerialDevice::discover`], for building a device
-/// picker. Carries only the port path — version and capabilities are read by
-/// [`connect`](RynkDevice::connect), which is the first time the port is opened.
+/// picker. Carries the port path and the USB product name (the display
+/// [`label`](RynkDevice::label)); version and capabilities are read by
+/// [`connect`](RynkDevice::connect), the first time the port is opened.
 pub struct SerialDevice {
     pub path: String,
+    /// USB product string from the device descriptor, if it carried one.
+    pub name: Option<String>,
+}
+
+impl SerialDevice {
+    /// List the marked USB CDC ports — one [`SerialDevice`] per Rynk keyboard,
+    /// recognized by [`RYNK_SERIAL_MAGIC`] without opening any port. Discovery is
+    /// transport-specific, so it's an inherent call, not part of [`RynkDevice`].
+    pub async fn discover() -> Result<Vec<Self>, TransportError> {
+        Ok(SerialTransport::rynk_serial_ports()?
+            .into_iter()
+            .map(|port| {
+                let name = match port.port_type {
+                    SerialPortType::UsbPort(info) => info.product,
+                    _ => None,
+                };
+                SerialDevice {
+                    path: port.port_name,
+                    name,
+                }
+            })
+            .collect())
+    }
 }
 
 impl RynkDevice for SerialDevice {
     type Transport = SerialTransport;
 
-    /// List the marked USB CDC ports — one [`SerialDevice`] per Rynk keyboard,
-    /// recognized by [`RYNK_SERIAL_MAGIC`] without opening any port.
-    async fn discover() -> Result<Vec<Self>, TransportError> {
-        let paths = SerialTransport::rynk_serial_ports()?;
-        Ok(paths.into_iter().map(|path| SerialDevice { path }).collect())
-    }
-
+    /// The USB product name, falling back to the port path when the descriptor
+    /// carried none.
     fn label(&self) -> String {
-        self.path.clone()
+        self.name.clone().unwrap_or_else(|| self.path.clone())
     }
 
     /// Open the port. A device unplugged since discovery surfaces as a normal
     /// [`TransportError`].
-    async fn open(&self) -> Result<SerialTransport, TransportError> {
+    async fn open(self) -> Result<SerialTransport, TransportError> {
         SerialTransport::open(&self.path).await
     }
 }

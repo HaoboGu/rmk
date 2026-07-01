@@ -83,24 +83,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .format_target(false)
         .init();
 
-    // The transport is the one type-level branch; the sweep below is generic.
+    // Discovery is the one transport-specific call; connect + the command sweep
+    // below are generic over `RynkDevice`.
     match std::env::args().nth(1).as_deref().unwrap_or("usb") {
-        "usb" => sweep::<SerialDevice>("USB CDC serial", false).await,
-        "ble" => sweep::<BleDevice>("BLE GATT", true).await,
+        "usb" => run_first("USB CDC serial", SerialDevice::discover().await?, false).await,
+        "ble" => run_first("BLE GATT", BleDevice::discover().await?, true).await,
         other => Err(format!("unknown transport {other:?}; use 'usb' (default) or 'ble'").into()),
     }
 }
 
-/// discover → pick the first device → connect → run the command sweep, over any
-/// transport. A real picker would let the user choose from the full list.
-async fn sweep<D: RynkDevice>(what: &str, over_ble: bool) -> Result<(), Box<dyn std::error::Error>> {
+/// pick the first discovered device → connect → run the command sweep, generic
+/// over any [`RynkDevice`]. A real picker would let the user choose from the full
+/// list; discovery itself is each transport's own inherent call.
+async fn run_first<D: RynkDevice>(
+    what: &str,
+    devices: Vec<D>,
+    over_ble: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     info!("connecting over {what}…");
-    let devices = D::discover().await?;
+    let count = devices.len();
     let device = devices
-        .first()
+        .into_iter()
+        .next()
         .ok_or_else(|| format!("no Rynk keyboard found over {what}"))?;
-    if devices.len() > 1 {
-        info!("{} keyboards found; connecting to {}", devices.len(), device.label());
+    if count > 1 {
+        info!("{count} keyboards found; connecting to {}", device.label());
     }
     // The lifecycle's `connect` is runtime-free and carries no handshake timeout;
     // bound it here so a silent peer can't hang the tool.

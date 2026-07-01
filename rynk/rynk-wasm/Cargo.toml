@@ -12,7 +12,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # Browser transports are owned by JS, which forwards bytes to `rynk`.
-rynk = { path = ".." }
+# `wasm` turns on rmk-types' tsify TS-type generation for the emitted `.d.ts`.
+rynk = { path = "..", features = ["wasm"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"

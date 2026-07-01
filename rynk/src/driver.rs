@@ -1042,18 +1042,21 @@ mod tests {
         use crate::RynkDevice;
 
         // A device whose `open` hands back a scripted transport (handshake + one
-        // reply). Proves a generic `D: RynkDevice` consumer drives discover →
-        // connect → request without naming the transport.
+        // reply). Proves a generic `D: RynkDevice` consumer drives connect →
+        // request without naming the transport; discovery is the transport's own
+        // inherent call, not part of the trait.
         struct MockDevice;
-        impl RynkDevice for MockDevice {
-            type Transport = MockTransport;
+        impl MockDevice {
             async fn discover() -> Result<Vec<Self>, TransportError> {
                 Ok(vec![MockDevice])
             }
+        }
+        impl RynkDevice for MockDevice {
+            type Transport = MockTransport;
             fn label(&self) -> String {
                 "mock".into()
             }
-            async fn open(&self) -> Result<MockTransport, TransportError> {
+            async fn open(self) -> Result<MockTransport, TransportError> {
                 Ok(MockTransport::new(vec![
                     Step::Chunk(reply(Cmd::GetVersion, 1, ProtocolVersion::CURRENT)),
                     Step::Chunk(reply(Cmd::GetCapabilities, 2, caps())),
@@ -1062,13 +1065,14 @@ mod tests {
             }
         }
 
-        async fn drive<D: RynkDevice>(d: &D) -> u16 {
+        async fn drive<D: RynkDevice>(d: D) -> u16 {
             assert_eq!(d.label(), "mock");
             let mut client = d.connect().await.unwrap();
             client.get_wpm().await.unwrap()
         }
 
         let devices = MockDevice::discover().await.unwrap();
-        assert_eq!(drive(&devices[0]).await, 7);
+        let device = devices.into_iter().next().unwrap();
+        assert_eq!(drive(device).await, 7);
     }
 }

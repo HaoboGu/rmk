@@ -6,6 +6,7 @@
 #![cfg(target_arch = "wasm32")]
 
 pub mod client;
+pub mod device;
 pub mod transport;
 
 use wasm_bindgen::prelude::*;

@@ -105,6 +105,33 @@ impl BleDevice {
         self.device.id()
     }
 
+    /// List already-connected Rynk keyboards (those exposing the service) — no scan,
+    /// no attach. Requires Bluetooth permission; a denied/off adapter hangs in
+    /// `wait_available` rather than erroring. Discovery is transport-specific, so
+    /// it's an inherent call, not part of [`RynkDevice`].
+    pub async fn discover() -> Result<Vec<Self>, TransportError> {
+        let adapter = Adapter::default()
+            .await
+            .ok_or_else(|| TransportError::DeviceNotFound("no BLE adapter".into()))?;
+        adapter
+            .wait_available()
+            .await
+            .map_err(|e| TransportError::Io(e.to_string()))?;
+
+        let connected = adapter
+            .connected_devices_with_services(&[RYNK_SERVICE_UUID])
+            .await
+            .map_err(|e| TransportError::Io(e.to_string()))?;
+        Ok(connected
+            .into_iter()
+            .map(|device| BleDevice {
+                name: device.name().ok(),
+                adapter: adapter.clone(),
+                device,
+            })
+            .collect())
+    }
+
     // Discover the Rynk service and its input/output characteristics.
     async fn discover_characteristic(&self) -> Result<(Characteristic, Characteristic), TransportError> {
         let service = self
@@ -184,39 +211,13 @@ impl BleDevice {
 impl RynkDevice for BleDevice {
     type Transport = BleTransport;
 
-    /// List already-connected Rynk keyboards (those exposing the service) — no scan,
-    /// no attach. Requires Bluetooth permission; a denied/off adapter hangs in
-    /// `wait_available` rather than erroring.
-    async fn discover() -> Result<Vec<Self>, TransportError> {
-        let adapter = Adapter::default()
-            .await
-            .ok_or_else(|| TransportError::DeviceNotFound("no BLE adapter".into()))?;
-        adapter
-            .wait_available()
-            .await
-            .map_err(|e| TransportError::Io(e.to_string()))?;
-
-        let connected = adapter
-            .connected_devices_with_services(&[RYNK_SERVICE_UUID])
-            .await
-            .map_err(|e| TransportError::Io(e.to_string()))?;
-        Ok(connected
-            .into_iter()
-            .map(|device| BleDevice {
-                name: device.name().ok(),
-                adapter: adapter.clone(),
-                device,
-            })
-            .collect())
-    }
-
     fn label(&self) -> String {
         self.name.clone().unwrap_or_else(|| format!("{:?}", self.id()))
     }
 
     /// Connect, discover characteristics, and subscribe — once, no retry. A failure
     /// means the device is gone or isn't a Rynk keyboard.
-    async fn open(&self) -> Result<BleTransport, TransportError> {
+    async fn open(self) -> Result<BleTransport, TransportError> {
         // Bound connect + discovery; `attach` bounds its own subscribe step.
         let (input, output) = tokio::time::timeout(GATT_TIMEOUT, async {
             self.adapter

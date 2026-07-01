@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use log::{error, info, warn};
 use rynk::{Client, RequestError, RynkDevice, TransportError};
-use rynk_serial::SerialDevice;
+use rynk_serial::{SerialDevice, SerialTransport};
 
 /// Per-request ceiling. A half-open link (a frame header with no payload behind
 /// it) can't stall the request — and so the whole loop — longer than this.
@@ -29,7 +29,7 @@ async fn main() {
         .format_target(false)
         .init();
 
-    let mut client = connect::<SerialDevice>().await;
+    let mut client = connect().await;
     let mut poll = tokio::time::interval(Duration::from_secs(2));
 
     loop {
@@ -38,7 +38,7 @@ async fn main() {
             // the poll branch wins, this future is dropped with no ill effect.
             event = client.next_event() => match event {
                 Ok(ev) => info!("topic {ev:?}"),
-                Err(TransportError::Disconnected) => client = reconnect::<SerialDevice>(client).await,
+                Err(TransportError::Disconnected) => client = reconnect(client).await,
                 Err(e) => warn!("event error: {e}"),
             },
             // Periodic request, issued only after select! returns. Bounded by a
@@ -47,7 +47,7 @@ async fn main() {
             // the stalled partial frame so the next tick starts clean.
             _ = poll.tick() => match tokio::time::timeout(REQUEST_TIMEOUT, client.get_wpm()).await {
                 Ok(Ok(wpm)) => info!("wpm = {wpm}"),
-                Ok(Err(RequestError::Transport(TransportError::Disconnected))) => client = reconnect::<SerialDevice>(client).await,
+                Ok(Err(RequestError::Transport(TransportError::Disconnected))) => client = reconnect(client).await,
                 Ok(Err(e)) => warn!("get_wpm failed: {e}"),
                 Err(_elapsed) => {
                     warn!("request timed out — resyncing");
@@ -58,19 +58,21 @@ async fn main() {
     }
 }
 
-/// Connect, retrying every second until a keyboard answers. Generic over the
-/// transport; with several keyboards attached a real app lists `D::discover()` and
-/// lets the user pick — this demo just takes the first discovered device.
-async fn connect<D: RynkDevice>() -> Client<D::Transport> {
+/// Connect, retrying every second until a keyboard answers. Serial-specific:
+/// discovery is [`SerialDevice`]'s own inherent call. With several keyboards
+/// attached a real app lists them and lets the user pick — this demo just takes
+/// the first discovered device.
+async fn connect() -> Client<SerialTransport> {
     loop {
-        match D::discover().await {
+        match SerialDevice::discover().await {
             Ok(devices) if !devices.is_empty() => {
-                let device = &devices[0];
+                let device = devices.into_iter().next().unwrap();
+                let label = device.label();
                 // `connect` is runtime-free and unbounded; cap the handshake so a
                 // silent peer can't wedge this loop.
                 match tokio::time::timeout(HANDSHAKE_TIMEOUT, device.connect()).await {
                     Ok(Ok(client)) => {
-                        info!("connected to {}", device.label());
+                        info!("connected to {label}");
                         return client;
                     }
                     Ok(Err(e)) => warn!("connect failed ({e}); retrying in 1s"),
@@ -86,8 +88,8 @@ async fn connect<D: RynkDevice>() -> Client<D::Transport> {
 
 /// The link died — drop the old client and build a fresh one. Re-handshaking is
 /// required: the reconnected device may differ.
-async fn reconnect<D: RynkDevice>(old: Client<D::Transport>) -> Client<D::Transport> {
+async fn reconnect(old: Client<SerialTransport>) -> Client<SerialTransport> {
     error!("link lost — reconnecting");
     drop(old);
-    connect::<D>().await
+    connect().await
 }

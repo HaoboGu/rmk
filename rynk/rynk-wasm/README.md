@@ -151,10 +151,13 @@ Call `requestPort()` inside a user gesture such as a button click.
 
 ## RynkClient API
 
-`connect()` performs the Rynk handshake and returns a live `RynkClient` that
-owns the `rynk::Client` protocol state machine directly. Each method borrows it
-for one await, so await one call before issuing the next — the same single-borrow
-rule the native serial/BLE consumers get from the compiler.
+`connect(link, label?)` performs the Rynk handshake and returns a live
+`RynkClient` that owns the `rynk::Client` protocol state machine directly. The
+optional `label` is the display name the page showed in its picker (WebHID
+`productName`, or a string the page derived for WebSerial); read it back with
+`client.label()`. Each method borrows the client for one await, so await one call
+before issuing the next — the same single-borrow rule the native serial/BLE
+consumers get from the compiler.
 
 Topic pushes are pulled, not delivered by callback: drive `next_event()` in a
 loop. It parks until the next recognized topic and rejects with `Disconnected`
