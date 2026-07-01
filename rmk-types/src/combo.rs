@@ -18,7 +18,10 @@ use crate::constants::COMBO_SIZE;
 /// `COMBO_MAX_LENGTH` (from `keyboard.toml`), on host it's a fixed upper bound.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct Combo {
+    #[cfg_attr(feature = "wasm", tsify(type = "KeyAction[]"))]
     pub actions: Vec<KeyAction, COMBO_SIZE>,
     pub output: KeyAction,
     pub layer: Option<u8>,

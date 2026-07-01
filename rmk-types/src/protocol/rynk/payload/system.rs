@@ -69,6 +69,8 @@ pub struct DeviceCapabilities {
 
 /// Current lock/unlock state of the device.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct LockStatus {
     pub locked: bool,
     pub awaiting_keys: bool,
@@ -77,7 +79,10 @@ pub struct LockStatus {
 
 /// Challenge returned by the Unlock endpoint containing physical key positions to press.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct UnlockChallenge {
+    #[cfg_attr(feature = "wasm", tsify(type = "[number, number][]"))]
     pub key_positions: Vec<(u8, u8), UNLOCK_KEYS_SIZE>,
 }
 
@@ -88,6 +93,8 @@ impl MaxSize for UnlockChallenge {
 /// Storage reset mode for the `StorageReset` endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[non_exhaustive]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum StorageResetMode {
     /// Reset all stored data — including keymap and BLE bonds.
     Full,
@@ -97,6 +104,8 @@ pub enum StorageResetMode {
 
 /// Protocol-facing behavior configuration (global timing settings).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct BehaviorConfig {
     pub combo_timeout_ms: u16,
     pub oneshot_timeout_ms: u16,
