@@ -1,14 +1,14 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::config::{BehaviorConfig, OneShotModifiersConfig};
+use rmk::config::{BehaviorConfig, StickyKeyConfig};
 use rmk::types::modifier::ModifierCombination;
 
 mod one_shot_test {
-    use rmk::config::{OneShotConfig, PositionalConfig};
+    use rmk::config::PositionalConfig;
     use rmk::keyboard::Keyboard;
     use rmk::types::action::KeyAction;
-    use rmk::{k, osl, osm, th, wm};
+    use rmk::{k, sk_layer, sk_mod, th, wm};
 
     use super::*;
     use crate::common::{KC_LCTRL, KC_LGUI, KC_LSHIFT, wrap_keymap};
@@ -20,21 +20,21 @@ mod one_shot_test {
     const KEYMAP: [[[KeyAction; 6]; 1]; 2] = [
         [[
             // Layer 0
-            osm!(ModifierCombination::new_from(false, false, false, true, false)), // OSM LShift
-            osl!(1),                                                               // OSL Layer 1
-            k!(A),                                                                 // Regular key A
-            th!(B, C),                                                             // Tap-hold key B, C
-            osm!(ModifierCombination::new_from(false, false, false, false, true)), // OSM LCtrl
-            wm!(B, ModifierCombination::new_from(false, true, false, false, false)), // WM B with LGUI
+            sk_mod!(ModifierCombination::new_from(false, false, false, true, false)), // OSM LShift
+            sk_layer!(1),                                                             // OSL Layer 1
+            k!(A),                                                                    // Regular key A
+            th!(B, C),                                                                // Tap-hold key B, C
+            sk_mod!(ModifierCombination::new_from(false, false, false, false, true)), // OSM LCtrl
+            wm!(B, ModifierCombination::new_from(false, true, false, false, false)),  // WM B with LGUI
         ]],
         [[
             // Layer 1
-            osm!(ModifierCombination::new_from(false, false, false, true, true)), // OSM LShift + LCtrl
-            k!(No),                                                               // No action
-            k!(C),                                                                // Layer 1 key C
-            k!(D),                                                                // Layer 1 key D
-            k!(E),                                                                // Layer 1 key E
-            k!(F),                                                                // Layer 1 key F
+            sk_mod!(ModifierCombination::new_from(false, false, false, true, true)), // OSM LShift + LCtrl
+            k!(No),                                                                  // No action
+            k!(C),                                                                   // Layer 1 key C
+            k!(D),                                                                   // Layer 1 key D
+            k!(E),                                                                   // Layer 1 key E
+            k!(F),                                                                   // Layer 1 key F
         ]],
     ];
 
@@ -50,9 +50,9 @@ mod one_shot_test {
         Keyboard::new(wrap_keymap(KEYMAP, per_key_config, behavior_config))
     }
 
-    fn create_test_keyboard_with_one_shot_modifiers_config(config: OneShotModifiersConfig) -> Keyboard<'static> {
+    fn create_test_keyboard_with_sticky_key_config(config: StickyKeyConfig) -> Keyboard<'static> {
         let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
-            one_shot_modifiers: config,
+            sticky_key: config,
             ..BehaviorConfig::default()
         }));
         let per_key_config: &'static PositionalConfig<1, 6> = Box::leak(Box::new(PositionalConfig::default()));
@@ -109,9 +109,9 @@ mod one_shot_test {
         key_sequence_test! {
             keyboard: create_test_keyboard_with_behavior_config(
                 BehaviorConfig {
-                    one_shot: OneShotConfig {
+                    sticky_key: StickyKeyConfig {
                         timeout: Duration::from_millis(100),
-                        ..OneShotConfig::default()
+                        ..StickyKeyConfig::default()
                     },
                     ..BehaviorConfig::default()
                 }
@@ -328,9 +328,9 @@ mod one_shot_test {
     #[test]
     fn test_osm_activate_on_keypress() {
         key_sequence_test! {
-            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+            keyboard: create_test_keyboard_with_sticky_key_config(StickyKeyConfig {
                 activate_on_keypress: true,
-                ..OneShotModifiersConfig::default()
+                ..StickyKeyConfig::default()
             }),
             sequence: [
                 [0, 0, true, 10],   // Press OSM LShift
@@ -365,9 +365,9 @@ mod one_shot_test {
     #[test]
     fn test_osm_combined_modifiers_with_activate_on_keypress() {
         key_sequence_test! {
-            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+            keyboard: create_test_keyboard_with_sticky_key_config(StickyKeyConfig {
                 activate_on_keypress: true,
-                ..OneShotModifiersConfig::default()
+                ..StickyKeyConfig::default()
             }),
             sequence: [
                 // Press and Release OSM LShift
@@ -429,12 +429,9 @@ mod one_shot_test {
         key_sequence_test! {
             keyboard: create_test_keyboard_with_behavior_config(
                 BehaviorConfig {
-                    one_shot: OneShotConfig {
+                    sticky_key: StickyKeyConfig {
                         timeout: Duration::from_millis(100),
-                        ..OneShotConfig::default()
-                    },
-                    one_shot_modifiers: OneShotModifiersConfig {
-                        ..OneShotModifiersConfig::default()
+                        ..StickyKeyConfig::default()
                     },
                     ..BehaviorConfig::default()
                 }
@@ -516,12 +513,9 @@ mod one_shot_test {
         key_sequence_test! {
             keyboard: create_test_keyboard_with_behavior_config(
                 BehaviorConfig {
-                    one_shot: OneShotConfig {
+                    sticky_key: StickyKeyConfig {
                         timeout: Duration::from_millis(100),
-                        ..OneShotConfig::default()
-                    },
-                    one_shot_modifiers: OneShotModifiersConfig {
-                        ..OneShotModifiersConfig::default()
+                        ..StickyKeyConfig::default()
                     },
                     ..BehaviorConfig::default()
                 }
@@ -545,9 +539,9 @@ mod one_shot_test {
     #[test]
     fn test_osm_chain_mode_basic() {
         key_sequence_test! {
-            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+            keyboard: create_test_keyboard_with_sticky_key_config(StickyKeyConfig {
                 quick_release: false,
-                ..OneShotModifiersConfig::default()
+                ..StickyKeyConfig::default()
             }),
             sequence: [
                 [0, 0, true, 10],   // Press OSM LShift
@@ -566,9 +560,9 @@ mod one_shot_test {
     #[test]
     fn test_osm_chain_mode_multiple_keys() {
         key_sequence_test! {
-            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+            keyboard: create_test_keyboard_with_sticky_key_config(StickyKeyConfig {
                 quick_release: false,
-                ..OneShotModifiersConfig::default()
+                ..StickyKeyConfig::default()
             }),
             sequence: [
                 [0, 0, true, 10],   // Press OSM LShift
@@ -591,10 +585,10 @@ mod one_shot_test {
     #[test]
     fn test_osm_chain_mode_activate_on_keypress() {
         key_sequence_test! {
-            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+            keyboard: create_test_keyboard_with_sticky_key_config(StickyKeyConfig {
                 activate_on_keypress: true,
                 quick_release: false,
-                ..OneShotModifiersConfig::default()
+                ..StickyKeyConfig::default()
             }),
             sequence: [
                 [0, 0, true, 10],   // Press OSM LShift
@@ -615,9 +609,9 @@ mod one_shot_test {
     #[test]
     fn test_osm_quick_release_basic() {
         key_sequence_test! {
-            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+            keyboard: create_test_keyboard_with_sticky_key_config(StickyKeyConfig {
                 quick_release: true,
-                ..OneShotModifiersConfig::default()
+                ..StickyKeyConfig::default()
             }),
             sequence: [
                 [0, 0, true, 10],   // Press OSM LShift
@@ -636,9 +630,9 @@ mod one_shot_test {
     #[test]
     fn test_osm_quick_release_multiple_keys() {
         key_sequence_test! {
-            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+            keyboard: create_test_keyboard_with_sticky_key_config(StickyKeyConfig {
                 quick_release: true,
-                ..OneShotModifiersConfig::default()
+                ..StickyKeyConfig::default()
             }),
             sequence: [
                 [0, 0, true, 10],   // Press OSM LShift
@@ -664,9 +658,9 @@ mod one_shot_test {
     #[test]
     fn test_osm_quick_release_combined_modifiers() {
         key_sequence_test! {
-            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+            keyboard: create_test_keyboard_with_sticky_key_config(StickyKeyConfig {
                 quick_release: true,
-                ..OneShotModifiersConfig::default()
+                ..StickyKeyConfig::default()
             }),
             sequence: [
                 [0, 0, true, 10],   // Press OSM LShift
@@ -687,9 +681,9 @@ mod one_shot_test {
     #[test]
     fn test_osm_quick_release_with_wm() {
         key_sequence_test! {
-            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+            keyboard: create_test_keyboard_with_sticky_key_config(StickyKeyConfig {
                 quick_release: true,
-                ..OneShotModifiersConfig::default()
+                ..StickyKeyConfig::default()
             }),
             sequence: [
                 [0, 0, true, 10],   // Press OSM LShift
@@ -710,10 +704,10 @@ mod one_shot_test {
     #[test]
     fn test_osm_quick_release_activate_on_keypress() {
         key_sequence_test! {
-            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+            keyboard: create_test_keyboard_with_sticky_key_config(StickyKeyConfig {
                 activate_on_keypress: true,
                 quick_release: true,
-                ..OneShotModifiersConfig::default()
+                ..StickyKeyConfig::default()
             }),
             sequence: [
                 [0, 0, true, 10],   // Press OSM LShift
@@ -733,10 +727,10 @@ mod one_shot_test {
     #[test]
     fn test_osm_quick_release_combined_activate_on_keypress() {
         key_sequence_test! {
-            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
+            keyboard: create_test_keyboard_with_sticky_key_config(StickyKeyConfig {
                 activate_on_keypress: true,
                 quick_release: true,
-                ..OneShotModifiersConfig::default()
+                ..StickyKeyConfig::default()
             }),
             sequence: [
                 [0, 0, true, 10],   // Press OSM LShift

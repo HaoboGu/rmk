@@ -31,6 +31,22 @@ use crate::modifier::ModifierCombination;
 #[cfg(feature = "steno")]
 use crate::steno::StenoKey;
 
+/// Parameters for the StickyKey action.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
+pub struct StickyKeyAction {
+    /// Key sent on each SK press. `KeyCode::Hid(HidKeyCode::No)` selects the pure-mod (OSM) shape
+    /// when `layer` is `None`; otherwise it's the tap-key (alt-tab) shape.
+    pub key: KeyCode,
+    /// Modifiers held between presses (0 = none). Unused for the layer (OSL) shape.
+    pub keep: ModifierCombination,
+    /// `Some(n)` = one-shot-layer (OSL) shape activating layer `n`.
+    /// `None` + `key == KeyCode::Hid(HidKeyCode::No)` = pure-mod (OSM) shape.
+    /// `None` + `key != KeyCode::Hid(HidKeyCode::No)` = tap-key (alt-tab) shape.
+    pub layer: Option<u8>,
+}
+
 /// A single basic action that a keyboard can execute.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -61,10 +77,6 @@ pub enum Action {
     TriLayerUpper,
     /// Triggers the Macro at the 'index'.
     TriggerMacro(u8),
-    /// Oneshot layer, keep the layer active until the next key is triggered.
-    OneShotLayer(u8),
-    /// Oneshot modifier, keep the modifier active until the next key is triggered.
-    OneShotModifier(ModifierCombination),
     /// Oneshot key, keep the key active until the next key is triggered.
     OneShotKey(KeyCode),
     /// Actions for controlling lights
@@ -75,6 +87,9 @@ pub enum Action {
     Special(SpecialKey),
     /// User Keys
     User(u8),
+    /// Sticky key: a unified one-shot action whose shape (pure-mod, tap-key, or
+    /// one-shot-layer) is determined by the [`StickyKeyAction`] payload.
+    StickyKey(StickyKeyAction),
     /// Set the default layer and persist it to storage; restored on next boot.
     ///
     /// Runtime behavior matches [`Action::DefaultLayer`]; additionally persisted to flash.

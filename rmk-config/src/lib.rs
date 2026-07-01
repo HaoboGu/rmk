@@ -569,13 +569,12 @@ pub struct KeyInfo {
 #[serde(deny_unknown_fields)]
 pub(crate) struct BehaviorConfig {
     pub tri_layer: Option<TriLayerConfig>,
-    pub one_shot: Option<OneShotConfig>,
-    pub one_shot_modifiers: Option<OneShotModifiersConfig>,
     pub combo: Option<CombosConfig>,
     #[serde(alias = "macro")]
     pub macros: Option<MacrosConfig>,
     pub fork: Option<ForksConfig>,
     pub morse: Option<MorsesConfig>,
+    pub sticky_key: Option<StickyKeyConfig>,
 }
 
 /// Per Key configurations profiles for morse, tap-hold, etc.
@@ -609,19 +608,20 @@ pub(crate) struct TriLayerConfig {
     pub adjust: u8,
 }
 
-/// Configurations for oneshot modifiers/layers
-#[derive(Clone, Debug, Deserialize)]
+/// Configurations for sticky key
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct OneShotConfig {
+pub struct StickyKeyConfig {
+    /// Timeout before an unused sticky key auto-releases (e.g., "1000ms", "1s"). Default 1s.
     pub timeout: Option<DurationMillis>,
-}
-
-/// Configurations for oneshot modifiers
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct OneShotModifiersConfig {
+    /// Pure-modifier sticky keys only: activate on the next key press instead of release. Default false.
     pub activate_on_keypress: Option<bool>,
+    /// Pure-modifier sticky keys only: release the modifier as soon as the next key is pressed. Default false.
     pub quick_release: Option<bool>,
+    /// Max number of held keys the sticky modifier applies to; 0 = unlimited. Default 0.
+    pub max_repeat: Option<u16>,
+    /// Whether a layer change releases the sticky key. Default false (it survives layer changes).
+    pub release_on_layer_change: Option<bool>,
 }
 
 /// Configurations for combos
@@ -796,7 +796,7 @@ pub struct SerialConfig {
 
 /// Duration in milliseconds
 #[derive(Clone, Debug, Deserialize)]
-pub(crate) struct DurationMillis(#[serde(deserialize_with = "parse_duration_millis")] pub u64);
+pub struct DurationMillis(#[serde(deserialize_with = "parse_duration_millis")] pub u64);
 
 const fn default_true() -> bool {
     true
