@@ -4,7 +4,6 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::once_lock::OnceLock;
 #[cfg(feature = "dfu_lock")]
 use embassy_sync::signal::Signal;
 use embassy_usb::control::{InResponse, OutResponse, Request};
@@ -16,65 +15,41 @@ use static_cell::StaticCell;
 #[cfg(feature = "dfu_lock")]
 use crate::core_traits::Runnable;
 
-/// Simple USB string provider for the DFU interface, to show a product name in the host's device manager during DFU mode. The FirmwareHandler of embassy_usb_dfu doesn't use the string index from the interface descriptor, so we have to provide our own handler to return the string when requested by the host.
-/// This is the name string that gets shown with `dfu-util -l` option.
-struct DfuStringProvider {
-    string_idx: StringIndex,
-    string_val: &'static str,
-}
+// ---------------------------------------------------------------------------
+// Chip modules
+// ---------------------------------------------------------------------------
 
-impl Handler for DfuStringProvider {
-    fn control_out(&mut self, _req: Request, _data: &[u8]) -> Option<OutResponse> {
-        None
-    }
-    fn control_in<'a>(&'a mut self, _req: Request, _buf: &'a mut [u8]) -> Option<InResponse<'a>> {
-        None
-    }
-    fn get_string(&mut self, index: StringIndex, _lang_id: u16) -> Option<&'static str> {
-        (index == self.string_idx).then_some(self.string_val)
-    }
-}
-
-/// Total flash size passed to the embassy-rp Flash const generic.
-///
-/// Set to 16 MB (the maximum common RP2040 flash size) so that the same
-/// binary works on boards with 2, 4, 8 or 16 MB flash.  `new_blocking()`
-/// ignores this value at runtime — it is only used for software bounds
-/// checking inside embassy-rp.  Because all flash access goes through
-/// `BlockingPartition` (which has its own partition-sized bounds checks),
-/// overshooting the const generic is safe.
 #[cfg(feature = "dfu_rp")]
-pub const FLASH_SIZE: usize = 16 * 1024 * 1024;
+mod rp;
+#[cfg(feature = "dfu_nrf")]
+mod nrf;
+
+#[cfg(feature = "dfu_rp")]
+pub use self::rp::{init_flash, set_led, with_led, mark_booted, get_manager, DFU_WRITE_SIZE};
+#[cfg(feature = "dfu_nrf")]
+pub use self::nrf::{init_flash, set_led, with_led, mark_booted, get_manager, DFU_WRITE_SIZE};
+
+// ---------------------------------------------------------------------------
+// Chip-specific type aliases
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "dfu_rp")]
+use embassy_rp::{
+    flash::{Blocking, Flash},
+    peripherals::FLASH,
+};
+#[cfg(feature = "dfu_nrf")]
+use embassy_nrf::nvmc::Nvmc;
+
+#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+use embassy_embedded_hal::flash::partition::BlockingPartition;
 
 /// DFU transfer block size in bytes. Larger values speed up firmware
 /// downloads. Must match the USB control buffer size used by the host.
 pub const BLOCK_SIZE_DFU: usize = 512;
 
-/// Flash write granularity — 1 for RP2040, 4 for nRF NVMC.
 #[cfg(feature = "dfu_rp")]
-const DFU_WRITE_SIZE: usize = 1;
-#[cfg(feature = "dfu_nrf")]
-const DFU_WRITE_SIZE: usize = 4;
-
-#[cfg(feature = "dfu_nrf")]
-use embassy_nrf::{Peri, gpio::Output, nvmc::Nvmc, peripherals::NVMC};
-#[cfg(feature = "dfu_rp")]
-use embassy_rp::{
-    Peri,
-    flash::{Blocking, Flash},
-    gpio::Output,
-    peripherals::FLASH,
-};
-#[cfg(feature = "dfu")]
-use embassy_usb::class::dfu::{
-    consts::Status,
-    dfu_mode::{self, DfuState},
-};
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-use {
-    embassy_boot::{BlockingFirmwareState, BlockingFirmwareUpdater, FirmwareUpdaterConfig},
-    embassy_embedded_hal::flash::partition::BlockingPartition,
-};
+pub const FLASH_SIZE: usize = 16 * 1024 * 1024;
 
 #[cfg(feature = "dfu_rp")]
 type FlashType = Flash<'static, FLASH, Blocking, FLASH_SIZE>;
@@ -84,7 +59,11 @@ type FlashType = Nvmc<'static>;
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 type MutexType = Mutex<CriticalSectionRawMutex, RefCell<FlashType>>;
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-type PartitionType = BlockingPartition<'static, CriticalSectionRawMutex, FlashType>;
+pub(super) type PartitionType = BlockingPartition<'static, CriticalSectionRawMutex, FlashType>;
+
+// ---------------------------------------------------------------------------
+// DfuFlashManager — shared by RP2040 and nRF
+// ---------------------------------------------------------------------------
 
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 pub struct DfuFlashManager {
@@ -99,7 +78,7 @@ pub struct DfuFlashManager {
 
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 impl DfuFlashManager {
-    fn new(
+    pub(super) fn new(
         flash_mutex: &'static MutexType,
         storage_offset: u32,
         storage_size: u32,
@@ -132,29 +111,30 @@ impl DfuFlashManager {
     }
 }
 
-// Per-chip statics
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-static FLASH_CELL: StaticCell<MutexType> = StaticCell::new();
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-static MANAGER: OnceLock<DfuFlashManager> = OnceLock::new();
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-static LED: OnceLock<Mutex<CriticalSectionRawMutex, RefCell<Option<Output<'static>>>>> = OnceLock::new();
+// ---------------------------------------------------------------------------
+// DfuStringProvider
+// ---------------------------------------------------------------------------
 
-/// Store an optional DFU LED pin globally.
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-pub fn set_led(led: Option<Output<'static>>) {
-    let _ = LED.init(Mutex::new(RefCell::new(led)));
+struct DfuStringProvider {
+    string_idx: StringIndex,
+    string_val: &'static str,
 }
 
-/// Run a closure with the global DFU LED, if configured (platform-specific impl).
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-fn with_led<F, R>(f: F) -> Option<R>
-where
-    F: FnOnce(&mut Output<'static>) -> R,
-{
-    LED.try_get()
-        .and_then(|m| m.lock(|cell| cell.borrow_mut().as_mut().map(f)))
+impl Handler for DfuStringProvider {
+    fn control_out(&mut self, _req: Request, _data: &[u8]) -> Option<OutResponse> {
+        None
+    }
+    fn control_in<'a>(&'a mut self, _req: Request, _buf: &'a mut [u8]) -> Option<InResponse<'a>> {
+        None
+    }
+    fn get_string(&mut self, index: StringIndex, _lang_id: u16) -> Option<&'static str> {
+        (index == self.string_idx).then_some(self.string_val)
+    }
 }
+
+// ---------------------------------------------------------------------------
+// with_led — platform LED helper or no-op
+// ---------------------------------------------------------------------------
 
 /// No-op fallback when DFU is built without an LED-capable platform driver.
 #[cfg(all(feature = "dfu", not(any(feature = "dfu_rp", feature = "dfu_nrf"))))]
@@ -162,16 +142,14 @@ fn with_led<F, R>(_: F) -> Option<R> {
     None
 }
 
-/// DFU lock state (shared between keyboard loop and DFU handler).
+// ---------------------------------------------------------------------------
+// DFU lock state
+// ---------------------------------------------------------------------------
+
 #[cfg(feature = "dfu_lock")]
 static DFU_LOCKED: AtomicBool = AtomicBool::new(true);
-
-/// Set to true once `RmkDfuHandler::start()` begins a DFU download.
 #[cfg(feature = "dfu_lock")]
 static DFU_STARTED: AtomicBool = AtomicBool::new(false);
-
-/// Signaled by `RmkDfuHandler::start()` when a blocked DFU download is rejected.
-/// Triggers the unlock key polling window in `process_unlock`.
 #[cfg(feature = "dfu_lock")]
 static DFU_UNLOCK_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
@@ -179,6 +157,13 @@ static DFU_UNLOCK_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 pub fn is_dfu_unlocked() -> bool {
     !DFU_LOCKED.load(Ordering::Acquire)
 }
+
+// ---------------------------------------------------------------------------
+// RmkDfuHandler
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "dfu")]
+use embassy_usb::class::dfu::{consts::Status, dfu_mode::{self, DfuState}};
 
 /// DFU handler wrapper that blinks an LED during transfer and checks the
 /// DFU lock (if `dfu_lock` feature is enabled).
@@ -220,86 +205,12 @@ impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
     }
 }
 
-#[cfg(feature = "dfu_rp")]
-type FlashPeri = Peri<'static, FLASH>;
-#[cfg(feature = "dfu_nrf")]
-type FlashPeri = Peri<'static, NVMC>;
+// ---------------------------------------------------------------------------
+// register_dfu_interface
+// ---------------------------------------------------------------------------
 
-/// Initialize the blocking flash, create the DFU manager and store it globally.
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-pub fn init_flash(
-    flash_peri: FlashPeri,
-    storage_offset: u32,
-    storage_size: u32,
-    state_offset: u32,
-    state_size: u32,
-    dfu_offset: u32,
-    dfu_size: u32,
-) -> PartitionType {
-    #[cfg(feature = "dfu_nrf")]
-    let raw_flash = Nvmc::new(flash_peri);
-    #[cfg(feature = "dfu_rp")]
-    let raw_flash = Flash::<_, Blocking, FLASH_SIZE>::new_blocking(flash_peri);
-
-    let flash_mutex: &'static MutexType = FLASH_CELL.init(Mutex::new(RefCell::new(raw_flash)));
-    let mgr = DfuFlashManager::new(
-        flash_mutex,
-        storage_offset,
-        storage_size,
-        state_offset,
-        state_size,
-        dfu_offset,
-        dfu_size,
-    );
-    let partition = mgr.storage_partition();
-    MANAGER.init(mgr).ok();
-    partition
-}
-
-/// Mark firmware boot as successful so the bootloader doesn't revert on next reset.
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-pub fn mark_booted() {
-    if let Some(mgr) = get_manager() {
-        let state_part = mgr.state_partition();
-        static ALIGNED: StaticCell<[u8; DFU_WRITE_SIZE]> = StaticCell::new();
-        let aligned: &'static mut [u8] = ALIGNED.init([0; DFU_WRITE_SIZE]);
-        let mut state = BlockingFirmwareState::new(state_part, aligned);
-        state.mark_booted().ok();
-    }
-}
-
-/// Get a reference to the global DFU flash manager.
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-pub fn get_manager() -> Option<&'static DfuFlashManager> {
-    MANAGER.try_get()
-}
-
-/// Run a USB DFU-only device on the peripheral side of a split keyboard.
-///
-/// Creates a USB device with only a DFU interface (no HID/keyboard) so the
-/// peripheral can be firmware-updated via USB while the normal split
-/// communication (BLE or serial) continues running.
-#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-pub async fn run_peripheral_dfu<D: Driver<'static>>(
-    driver: D,
-    device_config: crate::config::DeviceConfig<'static>,
-) -> ! {
-    use crate::usb::new_usb_builder;
-
-    let mut builder = new_usb_builder(driver, device_config);
-
-    let product_name = device_config.product_name;
-    if let Some(mgr) = get_manager() {
-        register_dfu_interface(&mut builder, mgr, product_name);
-    }
-
-    let mut device = builder.build();
-
-    loop {
-        device.run_until_suspend().await;
-        device.wait_resume().await;
-    }
-}
+use {embassy_boot::{BlockingFirmwareUpdater, FirmwareUpdaterConfig}, embassy_usb_dfu::{ResetImmediate, dfu::FirmwareHandler}};
 
 /// Register a DFU interface on the USB builder.
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
@@ -309,8 +220,6 @@ pub fn register_dfu_interface<D: Driver<'static>>(
     product_name: &'static str,
 ) {
     use embassy_usb::class::dfu::consts::DfuAttributes;
-    use embassy_usb_dfu::ResetImmediate;
-    use embassy_usb_dfu::dfu::FirmwareHandler;
 
     let dfu_part = mgr.dfu_partition();
     let state_part = mgr.state_partition();
@@ -337,16 +246,16 @@ pub fn register_dfu_interface<D: Driver<'static>>(
 
     let mut func = builder.function(0x00, 0x00, 0x00);
     let mut iface = func.interface();
-    let mut alt = iface.alt_setting(0xFE, 0x01, 0x02, Some(string_idx)); // class-specific DFU interface with string descriptor for product name
+    let mut alt = iface.alt_setting(0xFE, 0x01, 0x02, Some(string_idx));
     alt.descriptor(
-        0x21, // DFU functional descriptor
+        0x21,
         &[
             attrs.bits(),
-            0xc4, // detach timeout in ms (09c4 = 2500 ms)
+            0xc4,
             0x09,
-            (BLOCK_SIZE_DFU & 0xff) as u8,        // transfer size low byte
-            ((BLOCK_SIZE_DFU >> 8) & 0xff) as u8, // transfer size high byte
-            0x10,                                 // DFU version 1.1 (BCD 0x0110)
+            (BLOCK_SIZE_DFU & 0xff) as u8,
+            ((BLOCK_SIZE_DFU >> 8) & 0xff) as u8,
+            0x10,
             0x01,
         ],
     );
@@ -362,7 +271,34 @@ pub fn register_dfu_interface<D: Driver<'static>>(
 }
 
 // ---------------------------------------------------------------------------
-// dfu_lock — physical key unlock for DFU firmware download
+// run_peripheral_dfu
+// ---------------------------------------------------------------------------
+
+/// Run a USB DFU-only device on the peripheral side of a split keyboard.
+#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+pub async fn run_peripheral_dfu<D: Driver<'static>>(
+    driver: D,
+    device_config: crate::config::DeviceConfig<'static>,
+) -> ! {
+    use crate::usb::new_usb_builder;
+
+    let mut builder = new_usb_builder(driver, device_config);
+
+    let product_name = device_config.product_name;
+    if let Some(mgr) = get_manager() {
+        register_dfu_interface(&mut builder, mgr, product_name);
+    }
+
+    let mut device = builder.build();
+
+    loop {
+        device.run_until_suspend().await;
+        device.wait_resume().await;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// dfu_lock
 // ---------------------------------------------------------------------------
 
 /// DfuLock state machine that checks a physical key combination to unlock DFU.
@@ -383,16 +319,9 @@ impl<'a> DfuLock<'a> {
         }
     }
 
-    /// One unlock cycle: block (yielded) on `DFU_UNLOCK_SIGNAL.wait()` until a
-    /// DFU download is rejected, then open a 10 s unlock window polling the
-    /// configured unlock keys at 50 ms. If the keys are pressed within that
-    /// window the lock is released and the LED blinks Morse "D F U".
     pub(crate) async fn process_unlock(&self) {
-        // Phase 1: wait (yielded) until a DFU unlock request arrives
         DFU_UNLOCK_SIGNAL.wait().await;
 
-        // Phase 2: start the 10 s unlock window, wait for keypress or timeout.
-        // LED solid on to signal "press unlock keys now".
         info!("dfu_lock: DFU activity detected, unlock window open for 10 s");
         info!("dfu_lock: waiting for unlock keys");
         with_led(|led| led.set_high());
@@ -417,8 +346,6 @@ impl<'a> DfuLock<'a> {
             embassy_time::Timer::after_millis(50).await;
         }
 
-        // Phase 3: unlocked — wait until DFU download starts or 10 s pass.
-        // LED blinks Morse "D F U" to signal "ready to flash".
         info!("dfu_lock: unlocked, signalling with Morse DFU");
         let deadline = embassy_time::Instant::now() + embassy_time::Duration::from_secs(10);
         loop {
@@ -438,11 +365,9 @@ impl<'a> DfuLock<'a> {
         }
     }
 
-    /// Blink "D F U" in Morse code on the DFU LED.
     async fn morse_blink_dfu() {
         use embassy_time::Timer;
 
-        /// Element timing in milliseconds
         const DOT: u64 = 100;
         const DASH: u64 = 300;
         const PAUSE_ELEMENT: u64 = 100;
@@ -470,18 +395,15 @@ impl<'a> DfuLock<'a> {
             };
         }
 
-        // D = -..
         dash!();
         dot!();
         dot!();
         letter_gap!();
-        // F = ..-.
         dot!();
         dot!();
         dash!();
         dot!();
         letter_gap!();
-        // U = ..-
         dot!();
         dot!();
         dash!();
