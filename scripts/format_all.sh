@@ -2,6 +2,22 @@
 
 set -e
 
+usage() {
+    echo "Usage: $0 [OPTION]"
+    echo "Format all Rust source files in the repository."
+    echo ""
+    echo "Options:"
+    echo "  --help              Show this help message and exit"
+    echo "  --touched           Format only .rs files changed in the working tree"
+    echo "  --touched-branch    Format only .rs files changed since branching off main"
+    echo "  --touched-since REF Format only .rs files changed since REF"
+}
+
+if [ "$1" = "--help" ]; then
+    usage
+    exit 0
+fi
+
 format_changed() {
     if [ -z "$1" ]; then
         exit 0

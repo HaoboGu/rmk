@@ -110,6 +110,7 @@ impl crate::KeyboardTomlConfig {
             central_connected,
             peripheral_battery,
             clear_peer,
+            dfu_status,
             action,
         );
 

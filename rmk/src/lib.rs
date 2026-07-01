@@ -60,6 +60,8 @@ pub mod channel;
 pub mod config;
 pub mod core_traits;
 pub mod debounce;
+#[cfg(feature = "dfu")]
+pub mod dfu;
 #[cfg(feature = "display")]
 pub mod display;
 pub mod driver;

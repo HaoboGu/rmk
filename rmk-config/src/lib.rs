@@ -15,6 +15,7 @@ pub mod resolved;
 pub mod usb_interrupt_map;
 pub(crate) mod behavior;
 pub(crate) mod board;
+pub(crate) mod dfu;
 pub(crate) mod display;
 pub(crate) mod host;
 pub(crate) mod keycode_alias;
@@ -63,6 +64,8 @@ pub struct KeyboardTomlConfig {
     light: Option<LightConfig>,
     /// Storage config
     storage: Option<StorageConfig>,
+    /// DFU partition config (embassy-boot)
+    dfu: Option<DfuTomlConfig>,
     /// Ble config
     pub(crate) ble: Option<BleConfig>,
     /// Chip-specific configs (e.g., [chip.nrf52840])
@@ -87,6 +90,9 @@ pub struct KeyboardTomlConfig {
     /// build.rs also loads event defaults via new_from_toml_path_with_event_defaults()
     #[serde(default)]
     pub(crate) event: EventConfig,
+    /// Whether the user explicitly set a [storage] section in keyboard.toml.
+    #[serde(skip)]
+    pub(crate) storage_user_set: bool,
 }
 
 impl KeyboardTomlConfig {
@@ -114,6 +120,10 @@ impl KeyboardTomlConfig {
     /// and should not require `[keyboard.board]`/`[keyboard.chip]`.
     pub fn new_from_toml_path_with_event_defaults<P: AsRef<Path>>(config_toml_path: P) -> Self {
         let mut config = Self::parse_from_toml_path(config_toml_path, None);
+        config.storage_user_set = config
+            .storage
+            .as_ref()
+            .is_some_and(|s| s.start_addr.is_some() || s.num_sectors.is_some());
         config.auto_calculate_parameters();
         config
     }
@@ -133,6 +143,10 @@ impl KeyboardTomlConfig {
         // 2. Chip-specific default config
         // 3. User config (highest priority)
         let mut config = Self::parse_from_toml_path(path, Some(default_config_str));
+        config.storage_user_set = user_config
+            .storage
+            .as_ref()
+            .is_some_and(|s| s.start_addr.is_some() || s.num_sectors.is_some());
 
         config.auto_calculate_parameters();
 
@@ -393,6 +407,8 @@ define_event_config!(
     central_connected,
     peripheral_battery,
     clear_peer,
+    // DFU events
+    dfu_status,
     // Action events
     action,
 );
@@ -479,6 +495,34 @@ pub(crate) struct StorageConfig {
     pub clear_storage: Option<bool>,
     // Clear on the layout at reboot, set this to true if you want to reset the layout
     pub clear_layout: Option<bool>,
+}
+
+/// Config for DFU partition layout (embassy-boot).
+///
+/// These values must match the bootloader's `memory.x` / linker script.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DfuTomlConfig {
+    /// Offset of the boot state partition
+    pub state_offset: Option<u32>,
+    /// Size of the boot state partition
+    pub state_size: Option<u32>,
+    /// Offset of the DFU download partition
+    pub dfu_offset: Option<u32>,
+    /// Size of the DFU download partition
+    pub dfu_size: Option<u32>,
+    /// Flash page size in bytes (e.g. 4096 for RP2040).
+    /// Used with `flash_size` to auto-calculate partition addresses.
+    pub page_size: Option<u32>,
+    /// Total flash size in bytes. When set, DFU partition addresses are
+    /// calculated automatically using the bootymcbootface formula.
+    /// Defaults to 2 MB (2097152) when omitted.
+    pub flash_size: Option<u32>,
+    /// Optional DFU activity LED pin, e.g. `"PIN_16"`. When set, the LED
+    /// is lit while a DFU download is in progress.
+    pub led: Option<String>,
+    /// Unlock keys for DFU lock (optional)
+    pub unlock_keys: Option<Vec<[u8; 2]>>,
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]

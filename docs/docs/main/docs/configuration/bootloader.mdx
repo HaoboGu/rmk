@@ -1,0 +1,264 @@
+# Bootloader Configuration (embassy-boot)
+
+RMK supports DFU firmware updates via [embassy-boot](https://github.com/embassy-rs/embassy/tree/main/embassy-boot) for **RP2040** and **nRF52840**. The bootloader splits flash into ACTIVE and DFU slots, providing safe updates with automatic rollback on failure.
+
+A pre-built bootloader called **bootymcbootface** is available for both platforms. The partition formula is identical:
+
+```text
+bootloader+state = 28K (fixed)
+storage = 128K (fixed — 32 sectors × 4K for persistent keymap storage)
+remaining = flash_size - 28K - 128K
+ACTIVE    = (remaining - 4K) / 2
+DFU       = ACTIVE + 4K
+```
+
+See the [flashing guide](../user_guide/flash_firmware/use_embassy_boot.mdx) for step-by-step instructions.
+
+## RP2040
+
+Add a `[dfu]` section to your `keyboard.toml` or use the Rust API directly.
+
+import { Tab, Tabs, Rust, Toml } from '@theme'
+
+<Tabs>
+<Tab label={<Toml />}>
+
+```toml title="keyboard.toml"
+[dfu]
+# (Optional) Total flash size in bytes. Used to auto-calculate partition addresses.
+# Defaults to 2 MB (2097152) when omitted.
+flash_size = 2097152
+
+# (Optional) Flash page size in bytes (4096 for RP2040).
+page_size = 4096
+
+# (Optional) DFU activity LED pin, default "PIN_25".
+led = "PIN_25"
+# led = "none" to omit DFU LED
+
+# (Optional) Unlock keys for dfu_lock (physical matrix positions). Only works with dfu_lock feature enabled in Cargo.toml.
+unlock_keys = [[0, 0], [1, 1]]
+
+# ── (Optional) Manual overrides (only if auto-calculation is not suitable) ──
+state_offset = 0x6000
+state_size   = 0x1000
+dfu_offset   = 0x87000
+dfu_size     = 528384
+```
+
+</Tab>
+<Tab label={<Rust />}>
+
+```rust title="main.rs"
+// Flash layout using the bootymcbootface formula:
+//   state at 0x6000 (4K), active from 0x7000 (size: (flash_size - 28K (= BOOT2 size + embassy-boot + embassy-boot state) - STORAGE_SIZE (= 128K) - page_size (= 4K)) / 2),
+//   dfu follows active (active_size + page_size (= 4K))
+//
+// All offsets (DFU_OFFSET, DFU_SIZE, STORAGE_OFFSET, etc.) are derived
+// automatically from FLASH_SIZE below — change only that constant when using bootymcbootface.
+//
+// ⚠  You can define your own FLASH_SIZE and addresses, but then you must build and
+//    flash a custom embassy-boot bootloader with a matching memory.x!
+const FLASH_SIZE: u32 = 2 * 1024 * 1024; // 2 MB (default)
+// const FLASH_SIZE: u32 = 4 * 1024 * 1024;    // 4 MB
+// const FLASH_SIZE: u32 = 8 * 1024 * 1024;    // 8 MB
+// const FLASH_SIZE: u32 = 16 * 1024 * 1024;   // 16 MB
+const PAGE_SIZE: u32 = 4 * 1024;
+const STORAGE_SIZE: u32 = 128 * 1024; // 32 sectors × 4K after ACTIVE+DFU
+const STATE_OFFSET: u32 = 0x6000;
+const STATE_SIZE: u32 = 0x1000;
+const ACTIVE_OFFSET: u32 = 0x7000; // after 28K bootloader + state
+let remaining: u32 = FLASH_SIZE
+    - 28 * 1024 // size of boot 2 + embassy-boot + embassy-boot state
+    - STORAGE_SIZE;
+let active_size: u32 = (remaining - PAGE_SIZE) / 2; // DFU = ACTIVE + 1 page (embassy-boot requirement)
+let dfu_size: u32 = active_size + PAGE_SIZE; // embassy-boot needs that extra page for swap info
+let dfu_offset: u32 = ACTIVE_OFFSET + active_size; // dfu after active
+let storage_offset: u32 = dfu_offset + dfu_size; // storage after active + dfu
+assert!(storage_offset + STORAGE_SIZE == FLASH_SIZE); // sanity check that we fit everything in flash
+
+info!(
+    "Flash layout: state @ 0x{:04X} ({}K), active @ 0x{:04X} ({}K), dfu @ 0x{:04X} ({}K), storage @ 0x{:04X} ({}K)",
+    STATE_OFFSET,
+    STATE_SIZE / 1024,
+    ACTIVE_OFFSET,
+    active_size / 1024,
+    dfu_offset,
+    dfu_size / 1024,
+    storage_offset,
+    STORAGE_SIZE / 1024
+);
+
+let flash = async_flash_wrapper(rmk::dfu::init_flash(
+    p.FLASH,
+    storage_offset,
+    STORAGE_SIZE,
+    STATE_OFFSET,
+    STATE_SIZE,
+    dfu_offset,
+    dfu_size,
+));
+
+// Optional: assign a DFU activity LED
+rmk::dfu::set_led(Some(Output::new(p.PIN_25, Level::Low)));
+
+// Mark boot as successful (so bootloader doesn't revert on reset)
+rmk::dfu::mark_booted();
+
+// Optional: DFU lock with physical key unlock. Requires the `dfu_lock` Cargo feature.
+let unlock_keys: &[(u8, u8)] = &[(0, 0), (1, 1)];
+let mut dfu_lock = ::rmk::dfu::DfuLock::new(unlock_keys, &keymap);
+// Then add dfu_lock in run_all!()
+// ...
+	run_all!(
+		// other processors ... 
+		dfu_lock,
+	)
+```
+
+</Tab>
+</Tabs>
+
+## nRF52840
+
+Add a `[dfu]` section to your `keyboard.toml` or use the Rust API directly.
+
+<Tabs>
+<Tab label={<Toml />}>
+
+```toml title="keyboard.toml"
+[dfu]
+# (Optional) Total flash size in bytes. Used to auto-calculate partition addresses.
+# 1 MB flash — auto-calculates ACTIVE (432K) and DFU (436K)
+flash_size = 1048576
+
+# (Optional) Flash page size in bytes (4096 for RP2040).
+page_size = 4096
+
+# (Optional) DFU activity LED pin, default "P0_15".
+led = "P0_15"
+# led = "none" to omit DFU LED
+
+# (Optional) Unlock keys for dfu_lock (physical matrix positions). Only works with dfu_lock feature enabled in Cargo.toml.
+unlock_keys = [[0, 0], [1, 1]]
+
+# ── (Optional) Manual overrides (only if auto-calculation is not suitable) ──
+state_offset = 0x6000
+state_size   = 0x1000
+dfu_offset   = 0x87000
+dfu_size     = 528384
+```
+
+</Tab>
+<Tab label={<Rust />}>
+
+```rust title="main.rs"
+// Flash layout using the bootymcbootface formula:
+//   state at 0x6000 (4K), active from 0x7000 (size: (flash_size - 28K (= embassy-boot + embassy-boot state) - STORAGE_SIZE (= 64K) - page_size (= 4K)) / 2),
+//   dfu follows active (active_size + page_size (= 4K))
+//
+// All offsets (DFU_OFFSET, DFU_SIZE, STORAGE_OFFSET, etc.) are derived
+// automatically from FLASH_SIZE below — change only that constant when using
+// bootymcbootface.
+//
+// ⚠  You can define your own FLASH_SIZE and addresses, but then you must build and
+//    flash a custom embassy-boot bootloader with a matching memory.x!
+const FLASH_SIZE: u32 = 1024 * 1024; // 1 MB (nRF52840)
+const PAGE_SIZE: u32 = 4 * 1024;
+const STORAGE_SIZE: u32 = 128 * 1024; // 32 sectors × 4K after ACTIVE+DFU
+const STATE_OFFSET: u32 = 0x6000;
+const STATE_SIZE: u32 = 0x1000;
+const ACTIVE_OFFSET: u32 = 0x7000;
+let remaining: u32 = FLASH_SIZE
+    - 28 * 1024 // bootloader (24K) + state (4K)
+    - STORAGE_SIZE;
+let active_size: u32 = (remaining - PAGE_SIZE) / 2;
+let dfu_size: u32 = active_size + PAGE_SIZE;
+let dfu_offset: u32 = ACTIVE_OFFSET + active_size;
+let storage_offset: u32 = dfu_offset + dfu_size;
+assert!(storage_offset + STORAGE_SIZE == FLASH_SIZE);
+
+info!(
+    "Flash layout: state @ 0x{:04X} ({}K), active @ 0x{:04X} ({}K), dfu @ 0x{:04X} ({}K), storage @ 0x{:04X} ({}K)",
+    STATE_OFFSET,
+    STATE_SIZE / 1024,
+    ACTIVE_OFFSET,
+    active_size / 1024,
+    dfu_offset,
+    dfu_size / 1024,
+    storage_offset,
+    STORAGE_SIZE / 1024
+);
+
+let flash = async_flash_wrapper(rmk::dfu::init_flash(
+    p.NVMC,
+    storage_offset,
+    STORAGE_SIZE,
+    STATE_OFFSET,
+    STATE_SIZE,
+    dfu_offset,
+    dfu_size,
+));
+
+rmk::dfu::set_led(Some(Output::new(p.P0_15, Level::Low, OutputDrive::Standard)));
+
+// Optional: assign a DFU activity LED
+rmk::dfu::set_led(Some(Output::new(p.P0_15, Level::Low, OutputDrive::Standard)));
+
+// Mark boot as successful (so bootloader doesn't revert on reset)
+rmk::dfu::mark_booted();
+
+// Optional: DFU lock with physical key unlock. Requires the `dfu_lock` Cargo feature.
+let unlock_keys: &[(u8, u8)] = &[(0, 0), (1, 1)];
+let mut dfu_lock = ::rmk::dfu::DfuLock::new(unlock_keys, &keymap);
+
+// Then add dfu_lock in run_all!()
+// ...
+run_all!(
+	// other processors ... 
+	dfu_lock,
+)
+```
+
+</Tab>
+</Tabs>
+
+## Partition layout
+
+The bootloader divides flash into regions. The defaults follow the [bootymcbootface](https://codeberg.org/Schievel/bootymcbootface/) convention and are automatically calculated from `flash_size`:
+
+| Region          | Offset         | Size                                 |
+|-----------------|----------------|--------------------------------------|
+| Bootloader(s)   | `0x0000000`    | 28 KB                                |
+| Boot state      | `0x6000`       | 4 KB                                 |
+| Active firmware | `0x7000`       | `(flash_size - 28K - 128K - 4K) / 2` |
+| DFU download    | follows active | `active_size + 4K`                   |
+| Storage         | follows DFU    | 128 KB                               |
+
+The DFU partition size follows embassy-boot guidelines, the additional page is used for status information during flashing.
+
+All `[dfu]` fields are optional. The partition values are auto-calculated from `flash_size` and `page_size` using the bootymcbootface formula. If you supply any of `state_offset`, `state_size`, `dfu_offset`, or `dfu_size` directly, auto-calculation is disabled and your values are used as-is.
+
+Your `memory.x` must match this partition layout — see the [flashing guide](../user_guide/flash_firmware/use_embassy_boot.mdx) for details.
+
+## DFU LED (optional)
+
+A GPIO pin for the DFU LED.
+
+| Platform | Default LED pin | Example configuration |
+|----------|----------------|----------------------|
+| RP2040   | `PIN_25`       | `led = "PIN_25"`     |
+| nRF52840 | `P0_15`        | `led = "P0_15"`      |
+
+See the [LED behavior table](../user_guide/flash_firmware/use_embassy_boot.mdx#led-behavior-during-dfu-transfer-optional) for the full state machine.
+
+## DFU lock (optional, feature `dfu_lock`)
+
+Physical key positions that unlock DFU firmware downloads. Requires the `dfu_lock` Cargo feature. Keys are identified by matrix position `(row, col)`, not by keycode.
+
+See the [DFU lock section](../user_guide/flash_firmware/use_embassy_boot.mdx#unlocking-dfu-optional-dfu_lock) for the unlock workflow.
+
+::: tip
+Choose keys that are easy to press simultaneously but not commonly pressed together accidentally.
+:::
+

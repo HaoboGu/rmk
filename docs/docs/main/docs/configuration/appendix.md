@@ -233,6 +233,8 @@ low_active = false
 # Whether the storage is enabled
 enabled = true
 # The start address of storage
+# Note: When the `dfu_rp` feature is enabled, this value is ignored.
+# The storage partition is automatically placed after the DFU download slot.
 start_addr = 0xA0000
 # Number of sectors used for storage, >= 2
 num_sectors = 16
