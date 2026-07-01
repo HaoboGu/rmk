@@ -12,7 +12,7 @@ use bluest::{Adapter, Characteristic, Device, DeviceId, Uuid};
 use futures_util::{StreamExt, stream::BoxStream};
 use rmk_types::protocol::rynk::RYNK_BLE_CHUNK_SIZE;
 use rynk::io::{Read, Write};
-use rynk::{RynkDevice, TransportError};
+use rynk::{RynkDevice, RynkHostError};
 
 const RYNK_SERVICE_UUID: Uuid = Uuid::from_u128(rmk_types::protocol::rynk::RYNK_SERVICE_UUID);
 const RYNK_INPUT_CHAR_UUID: Uuid = Uuid::from_u128(rmk_types::protocol::rynk::RYNK_INPUT_CHAR_UUID);
@@ -109,19 +109,19 @@ impl BleDevice {
     /// no attach. Requires Bluetooth permission; a denied/off adapter hangs in
     /// `wait_available` rather than erroring. Discovery is transport-specific, so
     /// it's an inherent call, not part of [`RynkDevice`].
-    pub async fn discover() -> Result<Vec<Self>, TransportError> {
+    pub async fn discover() -> Result<Vec<Self>, RynkHostError> {
         let adapter = Adapter::default()
             .await
-            .ok_or_else(|| TransportError::DeviceNotFound("no BLE adapter".into()))?;
+            .ok_or_else(|| RynkHostError::DeviceNotFound("no BLE adapter".into()))?;
         adapter
             .wait_available()
             .await
-            .map_err(|e| TransportError::Io(e.to_string()))?;
+            .map_err(|e| RynkHostError::Io(e.to_string()))?;
 
         let connected = adapter
             .connected_devices_with_services(&[RYNK_SERVICE_UUID])
             .await
-            .map_err(|e| TransportError::Io(e.to_string()))?;
+            .map_err(|e| RynkHostError::Io(e.to_string()))?;
         Ok(connected
             .into_iter()
             .map(|device| BleDevice {
@@ -133,21 +133,21 @@ impl BleDevice {
     }
 
     // Discover the Rynk service and its input/output characteristics.
-    async fn discover_characteristic(&self) -> Result<(Characteristic, Characteristic), TransportError> {
+    async fn discover_characteristic(&self) -> Result<(Characteristic, Characteristic), RynkHostError> {
         let service = self
             .device
             .discover_services_with_uuid(RYNK_SERVICE_UUID)
             .await
-            .map_err(|e| TransportError::Io(e.to_string()))?
+            .map_err(|e| RynkHostError::Io(e.to_string()))?
             .into_iter()
             .next()
-            .ok_or_else(|| TransportError::DeviceNotFound("Rynk GATT service not found".into()))?;
+            .ok_or_else(|| RynkHostError::DeviceNotFound("Rynk GATT service not found".into()))?;
         let mut input_char = None;
         let mut output_char = None;
         for c in service
             .discover_characteristics()
             .await
-            .map_err(|e| TransportError::Io(e.to_string()))?
+            .map_err(|e| RynkHostError::Io(e.to_string()))?
         {
             match c.uuid() {
                 u if u == RYNK_INPUT_CHAR_UUID => input_char = Some(c),
@@ -155,9 +155,9 @@ impl BleDevice {
                 _ => {}
             }
         }
-        let input = input_char.ok_or_else(|| TransportError::DeviceNotFound("input characteristic missing".into()))?;
+        let input = input_char.ok_or_else(|| RynkHostError::DeviceNotFound("input characteristic missing".into()))?;
         let output =
-            output_char.ok_or_else(|| TransportError::DeviceNotFound("output characteristic missing".into()))?;
+            output_char.ok_or_else(|| RynkHostError::DeviceNotFound("output characteristic missing".into()))?;
         Ok((input, output))
     }
 
@@ -167,7 +167,7 @@ impl BleDevice {
     /// Its synthetic empty first chunk acks that the subscription is live; consuming
     /// it here means `attach` returns only once subscribed, the order the firmware
     /// needs before the client's first write (bounded; a silent device never acks).
-    async fn attach(&self, input: Characteristic, output: Characteristic) -> Result<BleTransport, TransportError> {
+    async fn attach(&self, input: Characteristic, output: Characteristic) -> Result<BleTransport, RynkHostError> {
         // Cap writes to the characteristic's capacity.
         let write_chunk = output
             .max_write_len()
@@ -192,8 +192,8 @@ impl BleDevice {
         // Block on the readiness ack (bounded) so we return only once live.
         match tokio::time::timeout(GATT_TIMEOUT, input.next()).await {
             Ok(Some(_)) => {}
-            Ok(None) => return Err(TransportError::Disconnected),
-            Err(_) => return Err(TransportError::Io("notify subscribe timed out".into())),
+            Ok(None) => return Err(RynkHostError::Disconnected),
+            Err(_) => return Err(RynkHostError::Io("notify subscribe timed out".into())),
         }
 
         Ok(BleTransport {
@@ -217,17 +217,17 @@ impl RynkDevice for BleDevice {
 
     /// Connect, discover characteristics, and subscribe — once, no retry. A failure
     /// means the device is gone or isn't a Rynk keyboard.
-    async fn open(self) -> Result<BleTransport, TransportError> {
+    async fn open(self) -> Result<BleTransport, RynkHostError> {
         // Bound connect + discovery; `attach` bounds its own subscribe step.
         let (input, output) = tokio::time::timeout(GATT_TIMEOUT, async {
             self.adapter
                 .connect_device(&self.device)
                 .await
-                .map_err(|e| TransportError::Io(format!("connect_device: {e}")))?;
+                .map_err(|e| RynkHostError::Io(format!("connect_device: {e}")))?;
             self.discover_characteristic().await
         })
         .await
-        .map_err(|_| TransportError::Io("connect/discovery timed out".into()))??;
+        .map_err(|_| RynkHostError::Io("connect/discovery timed out".into()))??;
 
         self.attach(input, output).await
     }

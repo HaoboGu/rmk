@@ -51,20 +51,6 @@ const EVENT_QUEUE_CAPACITY: usize = 64;
 /// RX scratch filled per `read`; larger frames accumulate across reads.
 const READ_SCRATCH_SIZE: usize = 4096;
 
-/// Transport-level failures, normalized from each transport's own error type:
-/// `Ok(0)` reads become [`Disconnected`](Self::Disconnected), I/O errors become
-/// [`Io`](Self::Io). [`DeviceNotFound`](Self::DeviceNotFound) comes from the
-/// transport crates' discovery helpers.
-#[derive(Debug, Error)]
-pub enum TransportError {
-    #[error("transport disconnected")]
-    Disconnected,
-    #[error("io error: {0}")]
-    Io(String),
-    #[error("device not found: {0}")]
-    DeviceNotFound(String),
-}
-
 /// A raw topic frame (server → host push), delivered by
 /// [`Client::next_event`](crate::Client::next_event).
 #[derive(Debug, Clone)]
@@ -73,11 +59,30 @@ pub struct TopicFrame {
     pub payload: Vec<u8>,
 }
 
-/// Errors from one request round trip.
+/// Errors from Rynk host.
 #[derive(Debug, Error)]
-pub enum RequestError {
-    #[error(transparent)]
-    Transport(#[from] TransportError),
+pub enum RynkHostError {
+    #[error("transport disconnected")]
+    Disconnected,
+    #[error("io error: {0}")]
+    Io(String),
+    #[error("device not found: {0}")]
+    DeviceNotFound(String),
+
+    /// Protocol version mismatch.
+    #[error(
+        "protocol major version mismatch — firmware speaks v{firmware_major}.{firmware_minor}, this tool speaks \
+         v{host_major}.x (currently v{host_major}.{host_max_minor}). Use a tool matching major {firmware_major}, or \
+         flash firmware that matches this one."
+    )]
+    VersionMismatch {
+        firmware_major: u8,
+        firmware_minor: u8,
+        host_major: u8,
+        host_max_minor: u8,
+    },
+
+    // ── request round trip ──
     /// Firmware accepted the request but answered with an error.
     #[error("device rejected {0:?}")]
     Rejected(RynkError),
@@ -104,26 +109,29 @@ pub enum RequestError {
     Unsupported(Cmd, &'static str),
 }
 
-/// Errors from [`Client::connect`].
-#[derive(Debug, Error)]
-pub enum ConnectError {
-    #[error("transport error: {0}")]
-    Transport(#[from] TransportError),
-    #[error("handshake request failed: {0}")]
-    Request(#[from] RequestError),
-    /// Protocol **major** mismatch. Connect via `&mut transport` to retry the
-    /// same link with a client built for the firmware's major.
-    #[error(
-        "protocol major version mismatch — firmware speaks v{firmware_major}.{firmware_minor}, this tool speaks \
-         v{host_major}.x (currently v{host_major}.{host_max_minor}). Use a tool matching major {firmware_major}, or \
-         flash firmware that matches this one."
-    )]
-    VersionMismatch {
-        firmware_major: u8,
-        firmware_minor: u8,
-        host_major: u8,
-        host_max_minor: u8,
-    },
+/// Bridge host errors into a JS `Error` whose `name` is a stable kind string the
+/// web client switches on, so wasm methods can surface `RynkHostError` with `?`.
+#[cfg(feature = "wasm")]
+impl From<RynkHostError> for wasm_bindgen::JsValue {
+    fn from(e: RynkHostError) -> Self {
+        let kind = match &e {
+            RynkHostError::Disconnected => "Disconnected",
+            RynkHostError::Io(_) => "TransportError",
+            RynkHostError::DeviceNotFound(_) => "DeviceNotFound",
+            RynkHostError::Rejected(_) => "Rejected",
+            RynkHostError::Unsupported(..) => "Unsupported",
+            RynkHostError::VersionMismatch { .. } => "VersionMismatch",
+            RynkHostError::Encode(_) => "RequestEncodeError",
+            RynkHostError::TooLarge { .. } => "RequestTooLarge",
+            RynkHostError::Deserialize { .. } => "ResponseDecodeError",
+            RynkHostError::TrailingBytes { .. } => "ResponseTrailingBytes",
+            RynkHostError::CmdMismatch { .. } => "ResponseCommandMismatch",
+            RynkHostError::TopicCmd(_) => "InvalidRequestCommand",
+        };
+        let err = js_sys::Error::new(&e.to_string());
+        err.set_name(kind);
+        err.into()
+    }
 }
 
 /// Rynk client over any byte link implementing the embedded-io-async
@@ -149,8 +157,6 @@ pub struct Client<T: Read + Write> {
     events_dropped: u64,
     /// Reusable TX scratch.
     tx_buf: Vec<u8>,
-    /// Firmware protocol version, from the handshake.
-    protocol_version: ProtocolVersion,
     /// Handshake capability snapshot. Until `connect` fills it, holds the
     /// protocol floor: all flags off, `max_payload_size` at the pre-handshake
     /// frame limit.
@@ -170,8 +176,7 @@ impl<T: Read + Write> Client<T> {
             events: VecDeque::new(),
             events_dropped: 0,
             tx_buf: vec![0u8; RYNK_MIN_BUFFER_SIZE],
-            // Placeholders; `connect` overwrites both from the handshake.
-            protocol_version: ProtocolVersion::CURRENT,
+            // Placeholder; `connect` overwrites it from the handshake.
             capabilities: DeviceCapabilities {
                 max_payload_size: (RYNK_MIN_BUFFER_SIZE - RYNK_HEADER_SIZE) as u16,
                 ..Default::default()
@@ -192,13 +197,13 @@ impl<T: Read + Write> Client<T> {
     /// keeps the transport with the caller: after a `VersionMismatch` the
     /// `GetVersion` round trip has completed, leaving the stream clean to retry
     /// with a client built for the firmware's major.
-    pub async fn connect(transport: T) -> Result<Self, ConnectError> {
+    pub async fn connect(transport: T) -> Result<Self, RynkHostError> {
         let mut client = Self::new(transport);
         let version: ProtocolVersion = client.request_raw(Cmd::GetVersion, &()).await?;
 
         let supported = ProtocolVersion::CURRENT;
         if version.major != supported.major {
-            return Err(ConnectError::VersionMismatch {
+            return Err(RynkHostError::VersionMismatch {
                 firmware_major: version.major,
                 firmware_minor: version.minor,
                 host_major: supported.major,
@@ -215,8 +220,6 @@ impl<T: Read + Write> Client<T> {
                 supported.minor
             );
         }
-        client.protocol_version = version;
-
         client.capabilities = client.request_raw(Cmd::GetCapabilities, &()).await?;
         // Grow TX scratch to the negotiated limit so any in-spec request encodes.
         let max_frame = client.max_frame_size();
@@ -226,14 +229,10 @@ impl<T: Read + Write> Client<T> {
         Ok(client)
     }
 
-    /// Cached capability snapshot from connect time.
-    pub fn capabilities(&self) -> &DeviceCapabilities {
+    /// Cached capability snapshot from connect. Crate-internal: capability gating
+    /// reads it; consumers read capabilities via the `get_capabilities` command.
+    pub(crate) fn capabilities(&self) -> &DeviceCapabilities {
         &self.capabilities
-    }
-
-    /// Firmware protocol version reported at connect time.
-    pub fn protocol_version(&self) -> ProtocolVersion {
-        self.protocol_version
     }
 
     /// The owned transport, e.g. to read connection identity.
@@ -266,12 +265,12 @@ impl<T: Read + Write> Client<T> {
     /// counterpart of [`next_event`](crate::Client::next_event), paired with
     /// [`request_raw`](Self::request_raw) for topics with no typed `IncomingTopic`
     /// yet. Queued topics come first. Cancel-safe.
-    pub async fn next_topic_frame(&mut self) -> Result<TopicFrame, TransportError> {
+    pub async fn next_topic_frame(&mut self) -> Result<TopicFrame, RynkHostError> {
         if let Some(frame) = self.events.pop_front() {
             return Ok(frame);
         }
         if self.dead {
-            return Err(TransportError::Disconnected);
+            return Err(RynkHostError::Disconnected);
         }
         loop {
             let (header, payload) = self.next_frame().await?;
@@ -288,20 +287,20 @@ impl<T: Read + Write> Client<T> {
     /// One request/response round trip, typed by the shared command table:
     /// `E` pins the `Cmd` and both payload types to the same definitions the
     /// firmware handlers compile against.
-    pub async fn request<E: Endpoint>(&mut self, req: &E::Request) -> Result<E::Response, RequestError> {
+    pub async fn request<E: Endpoint>(&mut self, req: &E::Request) -> Result<E::Response, RynkHostError> {
         self.request_raw(E::CMD, req).await
     }
 
     /// Like [`request`](Self::request) but untyped — for experimental or future
     /// `Cmd`s the table doesn't carry yet. Unwraps the response envelope:
-    /// `Ok(v)` on accept, `Err(RequestError::Rejected)` on device rejection.
+    /// `Ok(v)` on accept, `Err(RynkHostError::Rejected)` on device rejection.
     pub async fn request_raw<Req: Serialize, Resp: DeserializeOwned>(
         &mut self,
         cmd: Cmd,
         req: &Req,
-    ) -> Result<Resp, RequestError> {
+    ) -> Result<Resp, RynkHostError> {
         if cmd.is_topic() {
-            return Err(RequestError::TopicCmd(cmd));
+            return Err(RynkHostError::TopicCmd(cmd));
         }
         let seq = self.send_request(cmd, req).await?;
 
@@ -322,18 +321,18 @@ impl<T: Read + Write> Client<T> {
                 });
             } else if header.seq == seq {
                 if header.cmd != cmd {
-                    return Err(RequestError::CmdMismatch {
+                    return Err(RynkHostError::CmdMismatch {
                         sent: cmd,
                         got: header.cmd,
                     });
                 }
                 // A response longer than its type means a wire mismatch; reject the tail.
                 let (env, rest) = postcard::take_from_bytes::<Result<Resp, RynkError>>(&payload)
-                    .map_err(|source| RequestError::Deserialize { cmd, source })?;
+                    .map_err(|source| RynkHostError::Deserialize { cmd, source })?;
                 if !rest.is_empty() {
-                    return Err(RequestError::TrailingBytes { cmd });
+                    return Err(RynkHostError::TrailingBytes { cmd });
                 }
-                return env.map_err(RequestError::Rejected);
+                return env.map_err(RynkHostError::Rejected);
             }
             // Stale response.
         }
@@ -341,27 +340,27 @@ impl<T: Read + Write> Client<T> {
 
     /// Send one request frame without waiting for a reply — for commands whose
     /// effect prevents one (reboot, bootloader jump).
-    pub async fn send_no_reply<E: Endpoint>(&mut self, req: &E::Request) -> Result<(), RequestError> {
+    pub async fn send_no_reply<E: Endpoint>(&mut self, req: &E::Request) -> Result<(), RynkHostError> {
         self.send_request(E::CMD, req).await.map(|_| ())
     }
 
     /// Encode one request into the TX scratch, write it, and return its SEQ
     /// (cycling `1..=255`).
-    async fn send_request<Req: Serialize>(&mut self, cmd: Cmd, req: &Req) -> Result<u8, RequestError> {
+    async fn send_request<Req: Serialize>(&mut self, cmd: Cmd, req: &Req) -> Result<u8, RynkHostError> {
         if self.dead || self.send_in_flight {
             // `send_in_flight` still set means that a prior send future was cancelled
             // mid-write, leaving a partial frame on the wire. Unrecoverable.
             self.dead = true;
-            return Err(TransportError::Disconnected.into());
+            return Err(RynkHostError::Disconnected);
         }
         let seq = self.next_seq;
         self.next_seq = self.next_seq.checked_add(1).unwrap_or(1);
         let frame_len = RynkMessage::build(&mut self.tx_buf, cmd, seq, req)
-            .map_err(|_| RequestError::Encode(cmd))?
+            .map_err(|_| RynkHostError::Encode(cmd))?
             .frame_len();
         let max = self.max_frame_size();
         if frame_len > max {
-            return Err(RequestError::TooLarge { cmd, frame_len, max });
+            return Err(RynkHostError::TooLarge { cmd, frame_len, max });
         }
         // Latch across the await: if this future is dropped mid-write, the flag
         // stays set and the next wire op marks the link dead.
@@ -370,18 +369,18 @@ impl<T: Read + Write> Client<T> {
         self.send_in_flight = false;
         if let Err(e) = result {
             self.dead = true;
-            return Err(TransportError::Io(format!("{e:?}")).into());
+            return Err(RynkHostError::Io(format!("{e:?}")));
         }
         Ok(seq)
     }
 
     /// Read the next complete frame. A read failure or EOF marks the link
     /// dead — a partially read frame has no recovery point short of reconnect.
-    async fn next_frame(&mut self) -> Result<(RynkHeader, Vec<u8>), TransportError> {
+    async fn next_frame(&mut self) -> Result<(RynkHeader, Vec<u8>), RynkHostError> {
         if self.send_in_flight {
             // A prior send was cancelled mid-write; the stream is desynced.
             self.dead = true;
-            return Err(TransportError::Disconnected);
+            return Err(RynkHostError::Disconnected);
         }
         loop {
             let header = self.rx_buf.first_chunk::<RYNK_HEADER_SIZE>().map(RynkHeader::parse);
@@ -409,12 +408,12 @@ impl<T: Read + Write> Client<T> {
             let n = match self.transport.read(&mut self.read_scratch[..]).await {
                 Ok(0) => {
                     self.dead = true;
-                    return Err(TransportError::Disconnected);
+                    return Err(RynkHostError::Disconnected);
                 }
                 Ok(n) => n,
                 Err(e) => {
                     self.dead = true;
-                    return Err(TransportError::Io(format!("{e:?}")));
+                    return Err(RynkHostError::Io(format!("{e:?}")));
                 }
             };
             self.rx_buf.extend_from_slice(&self.read_scratch[..n]);
@@ -569,7 +568,7 @@ mod tests {
             &Err::<(), RynkError>(RynkError::Invalid),
         ))]);
         let r = c.set_default_layer(9).await;
-        assert!(matches!(r, Err(RequestError::Rejected(RynkError::Invalid))));
+        assert!(matches!(r, Err(RynkHostError::Rejected(RynkError::Invalid))));
     }
 
     #[tokio::test]
@@ -580,14 +579,14 @@ mod tests {
         chunk.extend_from_slice(&[0xAA, 0xBB]);
         let mut c = raw_client(vec![Step::Chunk(chunk)]);
         let r = c.get_wpm().await;
-        assert!(matches!(r, Err(RequestError::TrailingBytes { cmd: Cmd::GetWpm })));
+        assert!(matches!(r, Err(RynkHostError::TrailingBytes { cmd: Cmd::GetWpm })));
     }
 
     #[tokio::test]
     async fn topic_cmd_to_request_rejected() {
         let mut c = raw_client(vec![]);
         let r = c.request_raw::<(), u8>(Cmd::LayerChange, &()).await;
-        assert!(matches!(r, Err(RequestError::TopicCmd(Cmd::LayerChange))));
+        assert!(matches!(r, Err(RynkHostError::TopicCmd(Cmd::LayerChange))));
     }
 
     #[tokio::test]
@@ -620,7 +619,7 @@ mod tests {
         let r = c.get_wpm().await;
         assert!(matches!(
             r,
-            Err(RequestError::CmdMismatch {
+            Err(RynkHostError::CmdMismatch {
                 sent: Cmd::GetWpm,
                 got,
             }) if got == Cmd::from_raw(0x7fff)
@@ -658,12 +657,12 @@ mod tests {
     async fn link_death_fails_fast() {
         let mut c = raw_client(vec![]);
         let r1 = c.get_wpm().await;
-        assert!(matches!(r1, Err(RequestError::Transport(TransportError::Disconnected))));
+        assert!(matches!(r1, Err(RynkHostError::Disconnected)));
         assert!(!c.is_alive());
         let r2 = c.get_wpm().await;
-        assert!(matches!(r2, Err(RequestError::Transport(TransportError::Disconnected))));
+        assert!(matches!(r2, Err(RynkHostError::Disconnected)));
         let ev = c.next_event().await;
-        assert!(matches!(ev, Err(TransportError::Disconnected)));
+        assert!(matches!(ev, Err(RynkHostError::Disconnected)));
     }
 
     #[tokio::test]
@@ -671,11 +670,11 @@ mod tests {
         let mut c = raw_client(vec![Step::Chunk(reply(Cmd::GetWpm, 1, 42u16))]);
         c.transport.fail_send = true;
         let r = c.get_wpm().await;
-        assert!(matches!(r, Err(RequestError::Transport(TransportError::Io(_)))));
+        assert!(matches!(r, Err(RynkHostError::Io(_))));
         assert!(!c.is_alive(), "a failed send is unrecoverable");
         // Even with a readable reply queued, the dead link fails fast.
         let r2 = c.get_wpm().await;
-        assert!(matches!(r2, Err(RequestError::Transport(TransportError::Disconnected))));
+        assert!(matches!(r2, Err(RynkHostError::Disconnected)));
     }
 
     #[tokio::test(start_paused = true)]
@@ -694,7 +693,7 @@ mod tests {
 
         c.transport.hang_send = false;
         let r = c.get_wpm().await;
-        assert!(matches!(r, Err(RequestError::Transport(TransportError::Disconnected))));
+        assert!(matches!(r, Err(RynkHostError::Disconnected)));
         assert!(!c.is_alive(), "a cancelled mid-send must latch the link dead");
     }
 
@@ -710,7 +709,7 @@ mod tests {
 
         c.transport.hang_send = false;
         let ev = c.next_event().await;
-        assert!(matches!(ev, Err(TransportError::Disconnected)));
+        assert!(matches!(ev, Err(RynkHostError::Disconnected)));
         assert!(!c.is_alive());
     }
 
@@ -747,7 +746,7 @@ mod tests {
         let r = c.get_wpm().await;
         assert!(matches!(
             r,
-            Err(RequestError::CmdMismatch {
+            Err(RynkHostError::CmdMismatch {
                 sent: Cmd::GetWpm,
                 got: Cmd::GetSleepState,
             })
@@ -802,7 +801,6 @@ mod tests {
         ]);
         let mut client = Client::connect(t).await.unwrap();
         assert_eq!(client.capabilities().num_cols, 14);
-        assert_eq!(client.protocol_version(), ProtocolVersion::CURRENT);
         assert_eq!(client.get_wpm().await.unwrap(), 37);
     }
 
@@ -818,7 +816,7 @@ mod tests {
         let mut client = Client::connect(t).await.unwrap();
         assert!(!client.capabilities().ble_enabled);
         let r = client.get_battery_status().await;
-        assert!(matches!(r, Err(RequestError::Unsupported(Cmd::GetBatteryStatus, _))));
+        assert!(matches!(r, Err(RynkHostError::Unsupported(Cmd::GetBatteryStatus, _))));
         assert!(client.is_alive(), "a locally-gated reject must not kill the link");
     }
 
@@ -837,7 +835,7 @@ mod tests {
         let r = client.set_key(0, 0, 0, KeyAction::Morse(3)).await;
         assert!(matches!(
             r,
-            Err(RequestError::TooLarge {
+            Err(RynkHostError::TooLarge {
                 cmd: Cmd::SetKeyAction,
                 ..
             })
@@ -874,27 +872,27 @@ mod tests {
 
         assert!(matches!(
             client.get_keymap_bulk(0, 0, 0, 1).await,
-            Err(RequestError::Unsupported(Cmd::GetKeymapBulk, _))
+            Err(RynkHostError::Unsupported(Cmd::GetKeymapBulk, _))
         ));
         assert!(matches!(
             client.set_keymap_bulk(keymap_req).await,
-            Err(RequestError::Unsupported(Cmd::SetKeymapBulk, _))
+            Err(RynkHostError::Unsupported(Cmd::SetKeymapBulk, _))
         ));
         assert!(matches!(
             client.get_combo_bulk(0, 1).await,
-            Err(RequestError::Unsupported(Cmd::GetComboBulk, _))
+            Err(RynkHostError::Unsupported(Cmd::GetComboBulk, _))
         ));
         assert!(matches!(
             client.set_combo_bulk(combo_req).await,
-            Err(RequestError::Unsupported(Cmd::SetComboBulk, _))
+            Err(RynkHostError::Unsupported(Cmd::SetComboBulk, _))
         ));
         assert!(matches!(
             client.get_morse_bulk(0, 1).await,
-            Err(RequestError::Unsupported(Cmd::GetMorseBulk, _))
+            Err(RynkHostError::Unsupported(Cmd::GetMorseBulk, _))
         ));
         assert!(matches!(
             client.set_morse_bulk(morse_req).await,
-            Err(RequestError::Unsupported(Cmd::SetMorseBulk, _))
+            Err(RynkHostError::Unsupported(Cmd::SetMorseBulk, _))
         ));
         assert!(client.is_alive(), "locally-gated bulk rejects must not kill the link");
     }
@@ -988,13 +986,13 @@ mod tests {
         };
         let t = MockTransport::new(vec![Step::Chunk(reply(Cmd::GetVersion, 1, newer))]);
         let err = Client::connect(t).await.err().expect("connect must fail");
-        assert!(matches!(err, ConnectError::VersionMismatch { .. }));
+        assert!(matches!(err, RynkHostError::VersionMismatch { .. }));
     }
 
     #[tokio::test]
     async fn connect_accepts_newer_minor() {
-        // Same major, newer minor: minor is informational, the connect must
-        // succeed and report the firmware's version.
+        // Same major, newer minor: minor is informational, so connect must
+        // succeed (rejection is major-only). get_version coverage lives in loopback.
         let newer = ProtocolVersion {
             major: ProtocolVersion::CURRENT.major,
             minor: ProtocolVersion::CURRENT.minor + 1,
@@ -1003,8 +1001,7 @@ mod tests {
             Step::Chunk(reply(Cmd::GetVersion, 1, newer)),
             Step::Chunk(reply(Cmd::GetCapabilities, 2, caps())),
         ]);
-        let client = Client::connect(t).await.expect("same-major newer-minor must connect");
-        assert_eq!(client.protocol_version(), newer);
+        Client::connect(t).await.expect("same-major newer-minor must connect");
     }
 
     #[tokio::test]
@@ -1023,9 +1020,8 @@ mod tests {
             Step::Chunk(reply(Cmd::GetCapabilities, 2, caps())),
         ]);
         let err = Client::connect(&mut t).await.err().expect("newer major must mismatch");
-        assert!(matches!(err, ConnectError::VersionMismatch { .. }));
-        let client = Client::connect(&mut t).await.expect("retry over the same transport");
-        assert_eq!(client.protocol_version(), ProtocolVersion::CURRENT);
+        assert!(matches!(err, RynkHostError::VersionMismatch { .. }));
+        Client::connect(&mut t).await.expect("retry over the same transport");
     }
 
     #[tokio::test(start_paused = true)]
@@ -1047,7 +1043,7 @@ mod tests {
         // inherent call, not part of the trait.
         struct MockDevice;
         impl MockDevice {
-            async fn discover() -> Result<Vec<Self>, TransportError> {
+            async fn discover() -> Result<Vec<Self>, RynkHostError> {
                 Ok(vec![MockDevice])
             }
         }
@@ -1056,7 +1052,7 @@ mod tests {
             fn label(&self) -> String {
                 "mock".into()
             }
-            async fn open(self) -> Result<MockTransport, TransportError> {
+            async fn open(self) -> Result<MockTransport, RynkHostError> {
                 Ok(MockTransport::new(vec![
                     Step::Chunk(reply(Cmd::GetVersion, 1, ProtocolVersion::CURRENT)),
                     Step::Chunk(reply(Cmd::GetCapabilities, 2, caps())),

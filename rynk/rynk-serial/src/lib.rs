@@ -15,7 +15,7 @@
 use embedded_io_adapters::tokio_1::FromTokio;
 use rmk_types::protocol::rynk::RYNK_SERIAL_MAGIC;
 use rynk::io::{Read, Write};
-use rynk::{RynkDevice, TransportError};
+use rynk::{RynkDevice, RynkHostError};
 use tokio_serial::{ClearBuffer, SerialPort as _, SerialPortBuilderExt, SerialPortInfo, SerialPortType, SerialStream};
 
 /// Required by serial APIs; ignored by USB CDC-ACM devices.
@@ -26,14 +26,61 @@ const CDC_BAUD_RATE: u32 = 115_200;
 /// Dropping this (with the owning `Client`) ends the Rynk **session** only:
 /// the keyboard stays connected and usable.
 pub struct SerialTransport {
-    stream: FromTokio<SerialStream>,
-    path: String,
+    io: FromTokio<SerialStream>,
 }
 
-impl SerialTransport {
+impl rynk::io::ErrorType for SerialTransport {
+    type Error = std::io::Error;
+}
+
+impl Read for SerialTransport {
+    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+        self.io.read(buf).await
+    }
+}
+
+impl Write for SerialTransport {
+    async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        self.io.write(buf).await
+    }
+
+    async fn flush(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+/// A Rynk keyboard found by [`SerialDevice::discover`], for building a device
+/// picker. Carries the port path and the USB product name (the display
+/// [`label`](RynkDevice::label)); version and capabilities are read by
+/// [`connect`](RynkDevice::connect), the first time the port is opened.
+pub struct SerialDevice {
+    pub path: String,
+    /// USB product string from the device descriptor, if it carried one.
+    pub name: Option<String>,
+}
+
+impl SerialDevice {
+    /// List the marked USB CDC ports — one [`SerialDevice`] per Rynk keyboard,
+    /// recognized by [`RYNK_SERIAL_MAGIC`] without opening any port.
+    pub async fn discover() -> Result<Vec<Self>, RynkHostError> {
+        Ok(Self::rynk_serial_ports()?
+            .into_iter()
+            .map(|port| {
+                let name = match port.port_type {
+                    SerialPortType::UsbPort(info) => info.product,
+                    _ => None,
+                };
+                SerialDevice {
+                    path: port.port_name,
+                    name,
+                }
+            })
+            .collect())
+    }
+
     /// List the USB CDC ports whose serial number carries the Rynk marker.
-    fn rynk_serial_ports() -> Result<Vec<SerialPortInfo>, TransportError> {
-        let ports = tokio_serial::available_ports().map_err(|e| TransportError::Io(e.to_string()))?;
+    fn rynk_serial_ports() -> Result<Vec<SerialPortInfo>, RynkHostError> {
+        let ports = tokio_serial::available_ports().map_err(|e| RynkHostError::Io(e.to_string()))?;
         let mut ports: Vec<SerialPortInfo> = ports.into_iter().filter(Self::serial_is_rynk).collect();
         // macOS exposes one USB CDC device as both `/dev/cu.*` and `/dev/tty.*`:
         // keep only the `cu.*` node. Other platforms have no `cu.*` sibling.
@@ -59,75 +106,6 @@ impl SerialTransport {
             _ => false,
         }
     }
-
-    /// Open a specific serial port path.
-    async fn open(path: &str) -> Result<Self, TransportError> {
-        let stream = tokio_serial::new(path, CDC_BAUD_RATE)
-            .open_native_async()
-            .map_err(|e| TransportError::Io(format!("open {path}: {e}")))?;
-        // Best-effort cleanup of stale bytes from an old session.
-        let _ = stream.clear(ClearBuffer::Input);
-        Ok(Self {
-            stream: FromTokio::new(stream),
-            path: path.to_string(),
-        })
-    }
-
-    /// The port path this transport is connected to.
-    pub fn path(&self) -> &str {
-        &self.path
-    }
-}
-
-impl rynk::io::ErrorType for SerialTransport {
-    type Error = std::io::Error;
-}
-
-impl Read for SerialTransport {
-    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        self.stream.read(buf).await
-    }
-}
-
-impl Write for SerialTransport {
-    async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        self.stream.write(buf).await
-    }
-
-    async fn flush(&mut self) -> Result<(), Self::Error> {
-        Ok(())
-    }
-}
-
-/// A Rynk keyboard found by [`SerialDevice::discover`], for building a device
-/// picker. Carries the port path and the USB product name (the display
-/// [`label`](RynkDevice::label)); version and capabilities are read by
-/// [`connect`](RynkDevice::connect), the first time the port is opened.
-pub struct SerialDevice {
-    pub path: String,
-    /// USB product string from the device descriptor, if it carried one.
-    pub name: Option<String>,
-}
-
-impl SerialDevice {
-    /// List the marked USB CDC ports — one [`SerialDevice`] per Rynk keyboard,
-    /// recognized by [`RYNK_SERIAL_MAGIC`] without opening any port. Discovery is
-    /// transport-specific, so it's an inherent call, not part of [`RynkDevice`].
-    pub async fn discover() -> Result<Vec<Self>, TransportError> {
-        Ok(SerialTransport::rynk_serial_ports()?
-            .into_iter()
-            .map(|port| {
-                let name = match port.port_type {
-                    SerialPortType::UsbPort(info) => info.product,
-                    _ => None,
-                };
-                SerialDevice {
-                    path: port.port_name,
-                    name,
-                }
-            })
-            .collect())
-    }
 }
 
 impl RynkDevice for SerialDevice {
@@ -140,9 +118,16 @@ impl RynkDevice for SerialDevice {
     }
 
     /// Open the port. A device unplugged since discovery surfaces as a normal
-    /// [`TransportError`].
-    async fn open(self) -> Result<SerialTransport, TransportError> {
-        SerialTransport::open(&self.path).await
+    /// [`RynkHostError`].
+    async fn open(self) -> Result<SerialTransport, RynkHostError> {
+        let stream = tokio_serial::new(&self.path, CDC_BAUD_RATE)
+            .open_native_async()
+            .map_err(|e| RynkHostError::Io(format!("open {}: {}", &self.path, e)))?;
+        // Best-effort cleanup of stale bytes from an old session.
+        let _ = stream.clear(ClearBuffer::Input);
+        Ok(SerialTransport {
+            io: FromTokio::new(stream),
+        })
     }
 }
 
@@ -181,8 +166,7 @@ mod tests {
 
     fn transport(stream: SerialStream) -> SerialTransport {
         SerialTransport {
-            stream: FromTokio::new(stream),
-            path: "<pty>".into(),
+            io: FromTokio::new(stream),
         }
     }
 
@@ -274,9 +258,10 @@ mod tests {
         let (peer, ours) = pty_pair();
         let device = scripted_firmware(peer, ProtocolVersion::CURRENT);
 
-        let client = Client::connect(transport(ours)).await.unwrap();
-        assert_eq!(client.protocol_version(), ProtocolVersion::CURRENT);
-        assert_eq!(client.capabilities().num_cols, 14);
+        // The serial transport carries the GetVersion+GetCapabilities handshake;
+        // connect succeeding proves the full round trip. The negotiated values are
+        // asserted against the real firmware in the core driver's loopback test.
+        Client::connect(transport(ours)).await.unwrap();
         device.await.unwrap();
     }
 

@@ -17,6 +17,12 @@ postcard.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 log.workspace = true
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+
+[features]
+# Enable rmk-types' wasm/TS type generation (tsify). Turned on by the rynk-wasm build.
+wasm = ["rmk-types/wasm", "dep:wasm-bindgen", "dep:js-sys"]
 
 [dev-dependencies]
 rmk = { path = "../rmk", default-features = false, features = [
