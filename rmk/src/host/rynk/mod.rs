@@ -87,8 +87,12 @@ pub struct RynkService<'a> {
 
 impl<'a> RynkService<'a> {
     pub fn new(keymap: &'a KeyMap<'a>, config: &RmkConfig<'static>) -> Self {
+        let mut ctx = KeyboardContext::new(keymap);
+        // The layout blob is a fixed compile-time const, baked into `RmkConfig`
+        // by the macro (like Vial's keyboard-def) — not a runtime knob.
+        ctx.layout_blob = config.layout_blob;
         Self {
-            ctx: KeyboardContext::new(keymap),
+            ctx,
             device: config.device_config,
             // `unlock_keys` is `&'static`, so the `HostLock<'a>` borrow holds via `'static: 'a`.
             locker: HostLock::new(
@@ -124,12 +128,6 @@ impl<'a> RynkService<'a> {
             Cmd::SetKeymapBulk | Cmd::SetComboBulk | Cmd::SetMorseBulk => self.write_requires_unlock,
             _ => false,
         }
-    }
-
-    /// Attach the opaque physical-layout blob served by `GetLayout`.
-    pub fn with_layout_blob(mut self, blob: &'static [u8]) -> Self {
-        self.ctx.layout_blob = blob;
-        self
     }
 
     /// Process one inbound message in place.

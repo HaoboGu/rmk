@@ -328,15 +328,20 @@ fn expand_main(
         quote! {}
     };
 
-    let host_service_init = if host.rynk_enabled {
-        // Bake the opaque physical-layout blob and hand it to the rynk service
-        // (built-in `GetLayout`). The blob is produced by rmk-config's cursor walk.
+    // Bake the opaque physical-layout blob as a compile-time const and thread it
+    // through `RmkConfig` (exactly like Vial's keyboard-def) — no runtime setter.
+    // The blob is produced by rmk-config's cursor walk over `[layout].map`.
+    let (layout_blob_static, rynk_layout_field) = if host.rynk_enabled {
         let blob_lit = proc_macro2::Literal::byte_string(&layout.blob);
-        quote! {
-            static LAYOUT_BLOB: &[u8] = #blob_lit;
-            let host_service = ::rmk::host::HostService::new(&keymap, &rmk_config).with_layout_blob(LAYOUT_BLOB);
-        }
-    } else if host.vial_enabled {
+        (
+            quote! { static LAYOUT_BLOB: &[u8] = #blob_lit; },
+            quote! { layout_blob: LAYOUT_BLOB, },
+        )
+    } else {
+        (quote! {}, quote! {})
+    };
+
+    let host_service_init = if host.rynk_enabled || host.vial_enabled {
         quote! {
             let host_service = ::rmk::host::HostService::new(&keymap, &rmk_config);
         }
@@ -376,6 +381,7 @@ fn expand_main(
                 device_config: KEYBOARD_DEVICE_CONFIG,
                 #vial_config
                 #lock_config
+                #rynk_layout_field
                 storage_config,
                 #set_ble_config
                 ..Default::default()
@@ -388,6 +394,7 @@ fn expand_main(
                 device_config: KEYBOARD_DEVICE_CONFIG,
                 #vial_config
                 #lock_config
+                #rynk_layout_field
                 #set_ble_config
                 ..Default::default()
             };
@@ -432,6 +439,9 @@ fn expand_main(
 
             // Initialize ble config as `ble_battery_config`
             #ble_config
+
+            // Bake the physical-layout blob (rynk) as a compile-time const
+            #layout_blob_static
 
             // Set all keyboard config
             #rmk_config

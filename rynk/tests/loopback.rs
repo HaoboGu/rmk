@@ -115,7 +115,8 @@ async fn client_against_run_session() {
     };
     let raw = postcard::to_allocvec(&layout_info).unwrap();
     let blob: &'static [u8] = Box::leak(miniz_oxide::deflate::compress_to_vec(&raw, 6).into_boxed_slice());
-    let service = RynkService::new(&keymap, &config).with_layout_blob(blob);
+    config.layout_blob = blob;
+    let service = RynkService::new(&keymap, &config);
 
     // ── in-memory duplex: h2d carries requests, d2h carries responses + topics ──
     let h2d = Link::new();
