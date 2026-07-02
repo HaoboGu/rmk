@@ -428,21 +428,34 @@ You can use both `Morse` and `TD` to represent a morse key in your keymap, you c
 [layout]
 rows = 4
 cols = 3
+map = """
+(0,0) (0,1) (0,2)
+(1,0) (1,1) (1,2)
+(2,0) (2,1) (2,2)
+(3,0) (3,1) (3,2)
+"""
+
+[keymap]
 layers = 2
-keymap = [
-    [
-        ["A", "B", "C"],
-        ["TD(0)", "TD(1)", "TD(2)"],  # Use morse dances 0, 1, and 2
-        ["LCtrl", "MO(1)", "LShift"],
-        ["OSL(1)", "LT(2, Kc9, PN)", "LM(1, LShift | LGui)"]  # PN is a morse profile name here
-    [
-        ["_", "TT(1)", "TG(2)"],
-        ["_", "_", "_"],
-        ["_", "_", "_"],
-        ["_", "_", "_"]
-    ],
-]
+
+[[keymap.layer]]
+keys = """
+A      B              C
+TD(0)  TD(1)          TD(2)
+LCtrl  MO(1)          LShift
+OSL(1) LT(2, Kc9, PN) LM(1, LShift | LGui)
+"""
+
+[[keymap.layer]]
+keys = """
+_ TT(1) TG(2)
+_ _     _
+_ _     _
+_ _     _
+"""
 ```
+
+Here `TD(0)`, `TD(1)`, and `TD(2)` reference morse dances by index, and the trailing `PN` in `LT(2, Kc9, PN)` names a morse profile (defined above). `keys` and `map` blocks hold data only — put any annotations in normal TOML `#` comments outside the `"""…"""` string.
 
 ## Fork
 

@@ -3,7 +3,12 @@ use crate::{BehaviorConfig, MacroOperation};
 impl crate::KeyboardTomlConfig {
     pub(crate) fn get_behavior_config(&self) -> Result<BehaviorConfig, String> {
         let default = self.behavior.clone().unwrap_or_default();
-        let num_layers = self.keymap.as_ref().map(|k| k.layers).unwrap_or_default();
+        // `layers` defaults to the number of `[[keymap.layer]]` blocks (see get_keymap_config).
+        let num_layers = self
+            .keymap
+            .as_ref()
+            .map(|k| k.layers.unwrap_or(k.layer.len() as u8))
+            .unwrap_or_default();
         match self.behavior.clone() {
             Some(mut behavior) => {
                 behavior.tri_layer = match behavior.tri_layer {

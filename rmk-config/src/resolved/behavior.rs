@@ -286,12 +286,13 @@ mod tests {
 [layout]
 rows = 1
 cols = 1
+map = "(0,0)"
+
+[keymap]
 layers = 1
-keymap = [
-  [
-    ["A"],
-  ],
-]
+
+[[keymap.layer]]
+keys = "A"
 
 [behavior.morse]
 enable_flow_tap = true

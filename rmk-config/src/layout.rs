@@ -163,12 +163,16 @@ fn stock_shapes() -> HashMap<String, Shape> {
     m
 }
 
-// ── Token stream ──────────────────────────────────────────────────────────────
+// ── Map token stream ──────────────────────────────────────────────────────────
 
-enum Token {
+/// One token of the `[layout].map` grammar. The single shared representation:
+/// keymap resolution takes the `Key` write-order + `hand`, the geometry walk
+/// takes every token (and ignores `hand`).
+pub(crate) enum MapToken {
     Key {
         row: u8,
         col: u8,
+        hand: char,
         shape: Option<String>,
     },
     Encoder {
@@ -200,10 +204,15 @@ fn shape_name_of(pair: pest::iterators::Pair<Rule>) -> String {
         .unwrap_or_default()
 }
 
-fn parse_tokens(map: &str) -> Result<Vec<Token>, String> {
+/// Parse the `[layout].map` string into its token stream, validating that every
+/// key coordinate is in bounds and unique. This is the single source of truth for
+/// both keymap resolution (`get_keymap_config`) and the geometry walk, so the two
+/// can never disagree on which positions are keys or in what order.
+pub(crate) fn parse_map(map: &str, rows: u8, cols: u8) -> Result<Vec<MapToken>, String> {
     let pairs =
         ConfigParser::parse(Rule::layout_map, map).map_err(|e| format!("keyboard.toml: Error in `layout.map`: {e}"))?;
     let mut tokens = Vec::new();
+    let mut seen: HashSet<(u8, u8)> = HashSet::new();
     for pair in pairs {
         if pair.as_rule() != Rule::layout_map {
             continue;
@@ -214,13 +223,30 @@ fn parse_tokens(map: &str) -> Result<Vec<Token>, String> {
                     let mut it = inner.into_inner();
                     let row = parse_u8(it.next().ok_or("missing row")?.as_str(), "row")?;
                     let col = parse_u8(it.next().ok_or("missing col")?.as_str(), "col")?;
+                    let mut hand = 'C';
                     let mut shape = None;
                     for part in it {
-                        if part.as_rule() == Rule::shape_ref {
-                            shape = Some(shape_name_of(part));
+                        match part.as_rule() {
+                            Rule::left_hand => hand = 'L',
+                            Rule::right_hand => hand = 'R',
+                            Rule::bilateral_hand => hand = '*',
+                            Rule::shape_ref => shape = Some(shape_name_of(part)),
+                            _ => {}
                         }
                     }
-                    tokens.push(Token::Key { row, col, shape });
+                    if row >= rows || col >= cols {
+                        return Err(format!(
+                            "keyboard.toml: layout.map coordinate ({row},{col}) is out of bounds ([0..{}], [0..{}])",
+                            rows.saturating_sub(1),
+                            cols.saturating_sub(1)
+                        ));
+                    }
+                    if !seen.insert((row, col)) {
+                        return Err(format!(
+                            "keyboard.toml: duplicate coordinate ({row},{col}) in layout.map"
+                        ));
+                    }
+                    tokens.push(MapToken::Key { row, col, hand, shape });
                 }
                 Rule::encoder_info => {
                     let mut it = inner.into_inner();
@@ -231,17 +257,17 @@ fn parse_tokens(map: &str) -> Result<Vec<Token>, String> {
                             shape = Some(shape_name_of(part));
                         }
                     }
-                    tokens.push(Token::Encoder { id, shape });
+                    tokens.push(MapToken::Encoder { id, shape });
                 }
                 Rule::spacer => {
                     let u = inner.into_inner().next().ok_or("missing gap")?.as_str();
-                    tokens.push(Token::Gap(parse_f32(u, "gap")?));
+                    tokens.push(MapToken::Gap(parse_f32(u, "gap")?));
                 }
                 Rule::vertical => {
                     let u = inner.into_inner().next().ok_or("missing y-step")?.as_str();
-                    tokens.push(Token::VStep(parse_f32(u, "y-step")?));
+                    tokens.push(MapToken::VStep(parse_f32(u, "y-step")?));
                 }
-                Rule::newline => tokens.push(Token::Newline),
+                Rule::newline => tokens.push(MapToken::Newline),
                 _ => {}
             }
         }
@@ -299,7 +325,7 @@ fn resolve_shape(name: Option<&str>, shapes: &HashMap<String, Shape>) -> Result<
 /// (so following keys reflow). Returns this variant's keys and encoders — a
 /// hidden key before an encoder reflows the encoder along with the keys.
 fn walk(
-    tokens: &[Token],
+    tokens: &[MapToken],
     shapes: &HashMap<String, Shape>,
     overrides: &HashMap<(u8, u8), String>,
     hidden: &HashSet<(u8, u8)>,
@@ -309,12 +335,12 @@ fn walk(
     let mut encoders = Vec::new();
     for tok in tokens {
         match tok {
-            Token::Newline => {
+            MapToken::Newline => {
                 if w.row_has_content {
                     w.break_pending = true;
                 }
             }
-            Token::VStep(n) => {
+            MapToken::VStep(n) => {
                 // `[y=n]` adjusts the gap above the NEXT row break. A marker with no
                 // row to attach to (e.g. before the first key) has nothing to adjust,
                 // so drop it rather than leak it into a later break.
@@ -322,11 +348,11 @@ fn walk(
                     w.pending_vstep += n;
                 }
             }
-            Token::Gap(g) => {
+            MapToken::Gap(g) => {
                 w.advance_if_pending();
                 w.cursor_x += g;
             }
-            Token::Key { row, col, shape } => {
+            MapToken::Key { row, col, shape, .. } => {
                 w.advance_if_pending();
                 // Hidden: removed from the walk — advances nothing, so following keys reflow.
                 if hidden.contains(&(*row, *col)) {
@@ -355,7 +381,7 @@ fn walk(
                 w.cursor_x += s.w;
                 w.row_has_content = true;
             }
-            Token::Encoder { id, shape } => {
+            MapToken::Encoder { id, shape } => {
                 w.advance_if_pending();
                 let s = resolve_shape(shape.as_deref(), shapes)?;
                 let cx = w.cursor_x + s.w / 2.0 + s.x;
@@ -421,28 +447,17 @@ fn build_layout_info(
     let Some(map) = &layout.map else {
         return Ok(None);
     };
-    let tokens = parse_tokens(map)?;
+    let tokens = parse_map(map, layout.rows, layout.cols)?;
 
-    // Collect the real key coordinates, bounds-checking each and rejecting
-    // duplicates (mirroring get_keymap_config) so the blob path can't emit two
-    // keys for one cell; variant overlays are validated against this set too.
-    let mut key_coords: HashSet<(u8, u8)> = HashSet::new();
-    for tok in &tokens {
-        if let Token::Key { row, col, .. } = tok {
-            if *row >= layout.rows || *col >= layout.cols {
-                return Err(format!(
-                    "keyboard.toml: layout.map coordinate ({row},{col}) is out of bounds ([0..{}], [0..{}])",
-                    layout.rows.saturating_sub(1),
-                    layout.cols.saturating_sub(1)
-                ));
-            }
-            if !key_coords.insert((*row, *col)) {
-                return Err(format!(
-                    "keyboard.toml: duplicate coordinate ({row},{col}) in layout.map"
-                ));
-            }
-        }
-    }
+    // Real key coordinates (already bounds-checked + de-duped by `parse_map`);
+    // variant overlays are validated against this set below.
+    let key_coords: HashSet<(u8, u8)> = tokens
+        .iter()
+        .filter_map(|tok| match tok {
+            MapToken::Key { row, col, .. } => Some((*row, *col)),
+            _ => None,
+        })
+        .collect();
 
     let mut shapes = stock_shapes();
     if let Some(user) = &layout.shapes {

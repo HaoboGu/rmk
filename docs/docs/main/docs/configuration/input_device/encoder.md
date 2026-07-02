@@ -62,11 +62,9 @@ phase = "default"
 
 ### Define Encoder Actions
 
-To define the actions triggered by encoder rotation, add a `encoders` field under each `[[keymap.layer]]` section, or add a `encoder_map` field under the `[keymap]` section. The former method is preferred and the latter will be deprecated in the future.
+To define the actions triggered by encoder rotation, add an `encoders` field under each `[[keymap.layer]]` section.
 
-A `encoders` field under `[[keymap.layer]]` is a 2D array where each entry corresponds to an encoder in the same order they are defined. Each entry is a 2-element array `[CW_action, CCW_action]`, representing the actions for clockwise and counter-clockwise rotations respectively for that encoder on that layer.
-
-The `encoder_map` under `[keymap]` is a 3D array where each entry is a 2D array as described above, representing the encoder actions for that layer.
+An `encoders` field is a 2D array where each entry corresponds to an encoder in the same order they are defined. Each entry is a 2-element array `[CW_action, CCW_action]`, representing the actions for clockwise and counter-clockwise rotations respectively for that encoder on that layer.
 
 **Structure**:
 
@@ -79,15 +77,6 @@ encoders = [[CW, CCW], [CW, CCW], ...]  # Encoder 0, encoder 1, ...
 
 [[keymap.layer]]  # More layers...
 encoders = [...]
-
-# Alternatively, use encoder_map:
-
-[keymap]
-encoder_map = [
-  [ [CW, CCW], [CW, CCW], ... ],  # Layer 0: encoder 0, encoder 1, ...
-  [ [CW, CCW], [CW, CCW], ... ],  # Layer 1: encoder 0, encoder 1, ...
-  ...
-]
 ```
 
 **Example:**
@@ -109,25 +98,11 @@ encoders = [["AudioVolUp", "AudioVolDown"], ["PageDown", "PageUp"]]
 [[keymap.layer]]  # Layer 1
 # ... keys ...
 encoders = [["_", "_"], ["BrightnessUp", "BrightnessDown"]]
-
-# Alternatively, use encoder_map:
-
-[layout]
-rows = 5
-cols = 4
-# ... layout.map ...
-
-[keymap]
-layers = 2
-encoder_map = [
-  [["AudioVolUp", "AudioVolDown"], ["PageDown", "PageUp"]],
-  [["_", "_"], ["BrightnessUp", "BrightnessDown"]]
-]
 ```
 
 **Notes:**
 
-- If the actions for an encoder are not specified in `encoders` or `encoder_map`, they will default to no action.
+- If the actions for an encoder are not specified in `encoders`, they will default to no action.
 - The number of encoder entries should match the number of physical encoders defined in `[[input_device.encoder]]`.
 
 ## Rust configuration

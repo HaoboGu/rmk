@@ -3,9 +3,6 @@
 // Define default whitespace handling (space, tab, newline, carriage return)
 WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
 
-// Optional comments
-COMMENT = _{ "//" ~ (!"\n" ~ ANY)* } 
-
 // --- Helper Rules ---
 
 strict_identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }

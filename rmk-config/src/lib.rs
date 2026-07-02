@@ -467,11 +467,9 @@ pub(crate) struct VariantToml {
 #[serde(deny_unknown_fields)]
 #[allow(unused)]
 pub(crate) struct KeymapTomlConfig {
-    pub layers: u8,
-    /// Deprecated nested-array keymap; superseded by `[[keymap.layer]]`.
-    pub keymap: Option<Vec<Vec<Vec<String>>>>,
-    /// Deprecated, paired with `keymap`.
-    pub encoder_map: Option<Vec<Vec<[String; 2]>>>,
+    /// Total layer count. Optional — defaults to the number of `[[keymap.layer]]`
+    /// blocks; set it larger to reserve extra empty layers (e.g. for Vial/Rynk).
+    pub layers: Option<u8>,
     /// Per-layer key actions: `[[keymap.layer]]`.
     #[serde(default)]
     pub layer: Vec<LayerTomlConfig>,

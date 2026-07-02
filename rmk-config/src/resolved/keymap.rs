@@ -18,6 +18,19 @@ impl crate::KeyboardTomlConfig {
         let (keymap_config, key_info) = self.get_keymap_config()?;
         let board = self.get_board_config()?;
         let encoder_counts = board.get_num_encoder();
+
+        // A layer may list fewer encoders than the hardware has (the rest default to No),
+        // but listing more is an unambiguous mistake that codegen would otherwise silently drop.
+        let total_encoders: usize = encoder_counts.iter().sum();
+        for (i, encoders) in keymap_config.encoder_map.iter().enumerate() {
+            if encoders.len() > total_encoders {
+                return Err(format!(
+                    "keyboard.toml: [[keymap.layer]] #{i} lists {} encoders but the board has {total_encoders}",
+                    encoders.len()
+                ));
+            }
+        }
+
         Ok(Keymap {
             rows: keymap_config.rows,
             cols: keymap_config.cols,
