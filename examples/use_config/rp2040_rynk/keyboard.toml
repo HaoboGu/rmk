@@ -1,0 +1,59 @@
+[keyboard]
+name = "RMK Keyboard"
+product_name = "RMK Keyboard"
+vendor_id = 0x4c4b
+product_id = 0x4643
+manufacturer = "haobo"
+chip = "rp2040"
+
+[host]
+# Use RMK's native Rynk protocol instead of Vial. The two are mutually
+# exclusive (their rmk Cargo features conflict), so Vial is turned off here.
+vial_enabled = false
+rynk_enabled = true
+
+[matrix]
+# Row and col pins are mandatory
+row_pins = ["PIN_6", "PIN_7", "PIN_8", "PIN_9"]
+col_pins = ["PIN_19", "PIN_20", "PIN_21"]
+# RMK uses col2row as the default matrix diode direction, if you want to use a row2col matrix, add `row2col = true`
+# row2col = true
+
+[layout]
+# The physical key layout. For Rynk this is also compiled into the opaque,
+# compressed blob served over `GetLayout` — see docs/rynk-layout-geometry.md.
+rows = 4
+cols = 3
+map = """
+(0,0) (0,1) (0,2)
+(1,0) (1,1) (1,2)
+(2,0) (2,1) (2,2)
+(3,0) (3,1) (3,2)
+"""
+
+[keymap]
+layers = 2
+
+[[keymap.layer]]
+keys = """
+A B C
+Kc1 Kc2 Kc3
+LCtrl MO(1) LShift
+OSL(1) LT(2, Kc9) LM(1, LShift | LGui)
+"""
+
+[[keymap.layer]]
+keys = """
+_ TT(1) TG(2)
+_ _ _
+_ _ _
+_ _ _
+"""
+
+[storage]
+# Storage feature is enabled by default
+# enabled = false
+
+[rmk]
+morse_max_num = 8
+max_patterns_per_key = 8
