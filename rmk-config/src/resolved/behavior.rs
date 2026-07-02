@@ -1,5 +1,13 @@
 use std::collections::HashMap;
 
+pub struct StickyKeyConfig {
+    pub timeout_ms: Option<u64>,
+    pub activate_on_keypress: Option<bool>,
+    pub quick_release: Option<bool>,
+    pub max_repeat: Option<u16>,
+    pub release_on_layer_change: Option<bool>,
+}
+
 /// Resolved behavioral configuration.
 pub struct Behavior {
     pub tri_layer: Option<[u8; 3]>,
@@ -7,11 +15,7 @@ pub struct Behavior {
     pub macros: Option<Macros>,
     pub forks: Option<Forks>,
     pub morse: Option<Morse>,
-    pub sticky_key_timeout_ms: Option<u64>,
-    pub sticky_key_activate_on_keypress: Option<bool>,
-    pub sticky_key_quick_release: Option<bool>,
-    pub sticky_key_max_repeat: Option<u16>,
-    pub sticky_key_release_on_layer_change: Option<bool>,
+    pub sticky_key: Option<StickyKeyConfig>,
 }
 
 pub struct Combos {
@@ -192,12 +196,13 @@ impl crate::KeyboardTomlConfig {
             }
         });
 
-        let sticky_key = toml_behavior.sticky_key;
-        let sticky_key_timeout_ms = sticky_key.as_ref().and_then(|s| s.timeout.as_ref().map(|t| t.0));
-        let sticky_key_activate_on_keypress = sticky_key.as_ref().and_then(|s| s.activate_on_keypress);
-        let sticky_key_quick_release = sticky_key.as_ref().and_then(|s| s.quick_release);
-        let sticky_key_max_repeat = sticky_key.as_ref().and_then(|s| s.max_repeat);
-        let sticky_key_release_on_layer_change = sticky_key.as_ref().and_then(|s| s.release_on_layer_change);
+        let sticky_key = toml_behavior.sticky_key.map(|s| StickyKeyConfig {
+            timeout_ms: s.timeout.as_ref().map(|t| t.0),
+            activate_on_keypress: s.activate_on_keypress,
+            quick_release: s.quick_release,
+            max_repeat: s.max_repeat,
+            release_on_layer_change: s.release_on_layer_change,
+        });
 
         Ok(Behavior {
             tri_layer,
@@ -205,11 +210,7 @@ impl crate::KeyboardTomlConfig {
             macros,
             forks,
             morse,
-            sticky_key_timeout_ms,
-            sticky_key_activate_on_keypress,
-            sticky_key_quick_release,
-            sticky_key_max_repeat,
-            sticky_key_release_on_layer_change,
+            sticky_key,
         })
     }
 }

@@ -3,10 +3,8 @@
 use std::collections::HashMap;
 
 use quote::quote;
+use rmk_config::resolved::behavior::{Combos, Forks, MacroOperation, Macros, Morse, MorseActionPair, MorseKey, MorseProfile};
 use rmk_config::resolved::Behavior;
-use rmk_config::resolved::behavior::{
-    Combos, Forks, MacroOperation, Macros, Morse, MorseActionPair, MorseKey, MorseProfile,
-};
 
 use super::action_parser::{expand_profile, expand_profile_name, get_key_with_alias, parse_key};
 
@@ -23,14 +21,17 @@ fn expand_tri_layer(tri_layer: &Option<[u8; 3]>) -> proc_macro2::TokenStream {
 }
 
 fn expand_sticky_key(behavior: &Behavior) -> proc_macro2::TokenStream {
-    let timeout = match behavior.sticky_key_timeout_ms {
-        Some(millis) => quote! { ::rmk::embassy_time::Duration::from_millis(#millis) },
+    let timeout = match &behavior.sticky_key {
+        Some(sk) => match sk.timeout_ms {
+            Some(millis) => quote! { ::rmk::embassy_time::Duration::from_millis(#millis) },
+            None => quote! { ::rmk::embassy_time::Duration::from_secs(1) },
+        },
         None => quote! { ::rmk::embassy_time::Duration::from_secs(1) },
     };
-    let activate_on_keypress = behavior.sticky_key_activate_on_keypress.unwrap_or(false);
-    let quick_release = behavior.sticky_key_quick_release.unwrap_or(false);
-    let max_repeat = behavior.sticky_key_max_repeat.unwrap_or(0);
-    let release_on_layer_change = behavior.sticky_key_release_on_layer_change.unwrap_or(false);
+    let activate_on_keypress = behavior.sticky_key.as_ref().and_then(|sk| sk.activate_on_keypress).unwrap_or(false);
+    let quick_release = behavior.sticky_key.as_ref().and_then(|sk| sk.quick_release).unwrap_or(false);
+    let max_repeat = behavior.sticky_key.as_ref().and_then(|sk| sk.max_repeat).unwrap_or(0);
+    let release_on_layer_change = behavior.sticky_key.as_ref().and_then(|sk| sk.release_on_layer_change).unwrap_or(false);
 
     quote! {
         ::rmk::config::StickyKeyConfig {
