@@ -219,9 +219,9 @@ fn expand_main(
     // Expand components of main function
     let imports = expand_custom_imports(&item_mod);
     let bind_interrupt = expand_bind_interrupt(hardware, &item_mod);
-    let chip_init = expand_chip_init(hardware, None, &item_mod);
+    let chip_init = expand_chip_init(hardware, None, &item_mod, &hardware.chip, &hardware.chip_config);
     let usb_init = expand_usb_init(hardware, &item_mod);
-    let flash_init = expand_flash_init(hardware);
+    let flash_init = expand_flash_init(hardware, &hardware.chip);
     let behavior_config = expand_behavior_config(behavior);
     let matrix_config = expand_matrix_config(hardware, rmk_features);
     let output_config = expand_output_config(hardware);
@@ -260,7 +260,7 @@ fn expand_main(
         quote! {}
     };
 
-    let (watchdog_init, watchdog_task) = expand_watchdog_init(hardware);
+    let (watchdog_init, watchdog_task) = expand_watchdog_init(&hardware.chip);
 
     let run_rmk = expand_rmk_entry(
         hardware,

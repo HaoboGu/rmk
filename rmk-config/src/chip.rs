@@ -1,4 +1,4 @@
-use crate::{ChipConfig, KeyboardTomlConfig};
+use crate::{ChipConfig, KeyboardTomlConfig, SplitBoardConfig};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum ChipSeries {
@@ -59,6 +59,56 @@ impl ChipModel {
     }
 }
 
+/// Build a `ChipModel` from a raw chip name string.
+pub fn parse_chip_model(chip: &str) -> Result<ChipModel, String> {
+    let lower = chip.to_lowercase();
+    if lower.starts_with("stm32") {
+        Ok(ChipModel {
+            series: ChipSeries::Stm32,
+            chip: chip.to_string(),
+            board: None,
+        })
+    } else if lower.starts_with("nrf52") {
+        Ok(ChipModel {
+            series: ChipSeries::Nrf52,
+            chip: chip.to_string(),
+            board: None,
+        })
+    } else if lower.starts_with("rp2040") {
+        Ok(ChipModel {
+            series: ChipSeries::Rp2040,
+            chip: chip.to_string(),
+            board: None,
+        })
+    } else if lower.starts_with("esp32") {
+        Ok(ChipModel {
+            series: ChipSeries::Esp32,
+            chip: chip.to_string(),
+            board: None,
+        })
+    } else {
+        Err(format!("Unsupported chip: {}", chip))
+    }
+}
+
+/// Build a `ChipModel` from a supported board name.
+fn chip_model_from_board(board: &str) -> Result<ChipModel, String> {
+    match board {
+        "nice!nano" | "nice!nano_v1" | "nicenano" | "nice!nano_v2" | "nice!nano v2" | "XIAO BLE"
+        | "nrfmicro" | "bluemicro840" | "puchi_ble" => Ok(ChipModel {
+            series: ChipSeries::Nrf52,
+            chip: "nrf52840".to_string(),
+            board: Some(board.to_string()),
+        }),
+        "Pi Pico W" | "Pico W" | "pi_pico_w" | "pico_w" => Ok(ChipModel {
+            series: ChipSeries::Rp2040,
+            chip: "rp2040".to_string(),
+            board: Some(board.to_string()),
+        }),
+        _ => Err(format!("Unsupported board: {}", board)),
+    }
+}
+
 impl KeyboardTomlConfig {
     pub(crate) fn get_chip_model(&self) -> Result<ChipModel, String> {
         let keyboard = self.keyboard.as_ref().unwrap();
@@ -66,50 +116,10 @@ impl KeyboardTomlConfig {
             return Err("Either \"board\" or \"chip\" should be set in keyboard.toml, but not both".to_string());
         }
 
-        // Check board type
         if let Some(board) = keyboard.board.clone() {
-            match board.as_str() {
-                "nice!nano" | "nice!nano_v1" | "nicenano" | "nice!nano_v2" | "nice!nano v2" | "XIAO BLE"
-                | "nrfmicro" | "bluemicro840" | "puchi_ble" => Ok(ChipModel {
-                    series: ChipSeries::Nrf52,
-                    chip: "nrf52840".to_string(),
-                    board: Some(board),
-                }),
-                "Pi Pico W" | "Pico W" | "pi_pico_w" | "pico_w" => Ok(ChipModel {
-                    series: ChipSeries::Rp2040,
-                    chip: "rp2040".to_string(),
-                    board: Some(board),
-                }),
-                _ => Err(format!("Unsupported board: {}", board)),
-            }
+            chip_model_from_board(&board)
         } else if let Some(chip) = keyboard.chip.clone() {
-            if chip.to_lowercase().starts_with("stm32") {
-                Ok(ChipModel {
-                    series: ChipSeries::Stm32,
-                    chip,
-                    board: None,
-                })
-            } else if chip.to_lowercase().starts_with("nrf52") {
-                Ok(ChipModel {
-                    series: ChipSeries::Nrf52,
-                    chip,
-                    board: None,
-                })
-            } else if chip.to_lowercase().starts_with("rp2040") {
-                Ok(ChipModel {
-                    series: ChipSeries::Rp2040,
-                    chip,
-                    board: None,
-                })
-            } else if chip.to_lowercase().starts_with("esp32") {
-                Ok(ChipModel {
-                    series: ChipSeries::Esp32,
-                    chip,
-                    board: None,
-                })
-            } else {
-                Err(format!("Unsupported chip: {}", chip))
-            }
+            parse_chip_model(&chip)
         } else {
             Err("Neither board nor chip is specified".to_string())
         }
@@ -117,10 +127,30 @@ impl KeyboardTomlConfig {
 
     pub(crate) fn get_chip_config(&self) -> ChipConfig {
         let chip_name = &self.get_chip_model().unwrap().chip;
+        self.get_chip_config_for(chip_name)
+    }
+
+    pub(crate) fn get_chip_config_for(&self, chip_name: &str) -> ChipConfig {
         self.chip
             .as_ref()
             .and_then(|chip_configs| chip_configs.get(chip_name))
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// Resolve the chip model for a split board.
+    ///
+    /// If the board defines its own `chip`, use it; otherwise fall back to the
+    /// top-level keyboard chip model.
+    pub fn resolve_split_board_chip(
+        &self,
+        board_config: &SplitBoardConfig,
+        fallback: &ChipModel,
+    ) -> ChipModel {
+        board_config
+            .chip
+            .as_ref()
+            .map(|chip| parse_chip_model(chip).expect("Invalid split board chip"))
+            .unwrap_or_else(|| fallback.clone())
     }
 }

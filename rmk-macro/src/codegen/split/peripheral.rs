@@ -2,7 +2,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::resolved::Hardware;
 use rmk_config::resolved::hardware::{
-    BleConfig, BoardConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig,
+    BleConfig, BoardConfig, ChipConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig,
     MatrixType, SplitBoardConfig, SplitConfig,
 };
 use syn::ItemMod;
@@ -39,17 +39,32 @@ pub(crate) fn parse_split_peripheral_mod(
         panic!("\"split\" feature of RMK should be enabled");
     }
 
-    let toml_config = read_keyboard_toml_config();
-    let hardware = toml_config
+    let hardware = read_keyboard_toml_config()
         .hardware()
         .expect("failed to resolve hardware config");
 
-    let main_function = expand_split_peripheral(id, &hardware, item_mod, &rmk_features);
+    let peripheral_config = match &hardware.board {
+        BoardConfig::Split(split) => split
+            .peripheral
+            .get(id)
+            .expect("Missing peripheral config"),
+        _ => panic!("No `split` field in `keyboard.toml`"),
+    };
+    let (peripheral_chip, peripheral_chip_config) = hardware.chip_for_split_board(peripheral_config);
 
-    let bind_interrupts = expand_bind_interrupt_for_split_peripheral(&hardware.chip, &hardware, id);
+    let main_function = expand_split_peripheral(
+        id,
+        &hardware,
+        &peripheral_chip,
+        &peripheral_chip_config,
+        item_mod,
+        &rmk_features,
+    );
 
-    let chip = &hardware.chip;
-    let main_function_sig = if chip.series == ChipSeries::Esp32 {
+    let bind_interrupts =
+        expand_bind_interrupt_for_split_peripheral(&peripheral_chip, &hardware, id);
+
+    let main_function_sig = if peripheral_chip.series == ChipSeries::Esp32 {
         quote! {
             use esp_alloc as _;
             use esp_backtrace as _;
@@ -241,6 +256,8 @@ fn expand_bind_interrupt_for_split_peripheral(
 fn expand_split_peripheral(
     id: usize,
     hardware: &Hardware,
+    chip: &ChipModel,
+    chip_config: &ChipConfig,
     item_mod: ItemMod,
     rmk_features: &Option<Vec<String>>,
 ) -> TokenStream2 {
@@ -258,10 +275,10 @@ fn expand_split_peripheral(
         .expect("Missing peripheral config");
 
     let imports = expand_custom_imports(&item_mod);
-    let mut chip_init = expand_chip_init(hardware, Some(id), &item_mod);
+    let mut chip_init = expand_chip_init(hardware, Some(id), &item_mod, chip, chip_config);
     if split_config.connection == "ble" {
         // Add storage when using BLE split
-        let flash_init = expand_flash_init(hardware);
+        let flash_init = expand_flash_init(hardware, chip);
         chip_init.extend(quote! {
             #flash_init
             let mut storage = ::rmk::storage::new_storage_for_split_peripheral(flash, storage_config).await;
@@ -274,7 +291,6 @@ fn expand_split_peripheral(
 
     // Matrix config
     let async_matrix = is_feature_enabled(rmk_features, "async_matrix");
-    let chip = &hardware.chip;
     let mut matrix_config = proc_macro2::TokenStream::new();
     let bootmagic = expand_bootmagic_check(&peripheral_config.matrix);
     let debouncer_type = get_debouncer_type(&peripheral_config.matrix);
@@ -334,7 +350,7 @@ fn expand_split_peripheral(
 
     // Get peripheral device and processor configuration
     let (device_initialization, devices, processors) =
-        expand_peripheral_input_device_config(id, hardware);
+        expand_peripheral_input_device_config(id, hardware, chip);
 
     let needs_keymap = peripheral_config
         .input_device
@@ -378,7 +394,7 @@ fn expand_split_peripheral(
         quote! {}
     };
 
-    let (watchdog_init, watchdog_task) = expand_watchdog_init(hardware);
+    let (watchdog_init, watchdog_task) = expand_watchdog_init(chip);
 
     let runnable_import = if !registered_processors.is_empty() || watchdog_task.is_some() {
         quote! { use ::rmk::core_traits::Runnable; }
@@ -510,6 +526,7 @@ fn expand_split_peripheral_entry(
 pub(crate) fn expand_peripheral_input_device_config(
     id: usize,
     hardware: &Hardware,
+    chip: &ChipModel,
 ) -> (TokenStream2, Vec<TokenStream2>, Vec<TokenStream2>) {
     let mut initializations = TokenStream2::new();
     let mut devices = Vec::new();
@@ -523,7 +540,6 @@ pub(crate) fn expand_peripheral_input_device_config(
         _ => None,
     };
     let board = &hardware.board;
-    let chip = &hardware.chip;
 
     // Create peripheral-specific BLE config for battery
     // Only use peripheral's own battery config, do NOT fallback to top-level BLE config
