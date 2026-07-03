@@ -156,15 +156,15 @@ impl Runnable for Keyboard<'_> {
                 self.process_buffered_key(key).await
             } else {
                 // Race subscriber against the nearest pending deadline.
-                let deadline = self.sticky_key_state
+                let deadline = self
+                    .sticky_key_state
                     .deadline()
                     .into_iter()
                     .chain(self.mouse.next_deadline())
                     .reduce(|a, b| a.min(b));
                 if let Some(deadline) = deadline {
                     let event_result =
-                        with_deadline(deadline, self.keyboard_event_subscriber.next_message_pure())
-                            .await;
+                        with_deadline(deadline, self.keyboard_event_subscriber.next_message_pure()).await;
                     match event_result {
                         Ok(event) => {
                             self.process_inner(event).await;

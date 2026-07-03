@@ -115,7 +115,10 @@ impl Keyboard<'_> {
             // existing pure-mod latch, but REPLACES any other shape (layer or tap-key).
             // Releasing the foreign latch first deactivates a held layer and drops its mods
             // cleanly, so only a same-shape (pure-mod) latch can reach the accumulate arm below.
-            if self.sticky_key_state.is_active() && !self.sticky_key_state.is_pure_mod() && !self.sticky_key_state.is_layer() {
+            if self.sticky_key_state.is_active()
+                && !self.sticky_key_state.is_pure_mod()
+                && !self.sticky_key_state.is_layer()
+            {
                 self.release_sticky_key_if_active().await;
             }
             match &mut self.sticky_key_state {
@@ -192,11 +195,7 @@ impl Keyboard<'_> {
                     self.keymap.deactivate_layer(prev_layer);
                     (phase, mods)
                 }
-                StickyKeyState::Active {
-                    mods,
-                    phase,
-                    ..
-                } => (phase, mods),
+                StickyKeyState::Active { mods, phase, .. } => (phase, mods),
                 _ => (SkPhase::Pressed, ModifierCombination::new()),
             };
 
@@ -395,7 +394,9 @@ impl Keyboard<'_> {
                 ..
             }
         ) {
-            debug!("StickyKey timeout fired while key is still held — clearing deadline, deferring to physical release");
+            debug!(
+                "StickyKey timeout fired while key is still held — clearing deadline, deferring to physical release"
+            );
             if let StickyKeyState::Active { deadline, .. } = &mut self.sticky_key_state {
                 *deadline = None;
             }
