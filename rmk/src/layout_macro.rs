@@ -380,6 +380,32 @@ macro_rules! sk_layer {
     };
 }
 
+/// Create a one-shot modifier action (alias for `sk_mod!`).
+///
+/// # Example
+/// ```ignore
+/// osm!(ModifierCombination::LSHIFT)  // equivalent to sk_mod!(ModifierCombination::LSHIFT)
+/// ```
+#[macro_export]
+macro_rules! osm {
+    ($m:expr) => {
+        $crate::sk_mod!($m)
+    };
+}
+
+/// Create a one-shot layer action (alias for `sk_layer!`).
+///
+/// # Example
+/// ```ignore
+/// osl!(1)  // equivalent to sk_layer!(1)
+/// ```
+#[macro_export]
+macro_rules! osl {
+    ($n:literal) => {
+        $crate::sk_layer!($n)
+    };
+}
+
 /// Create a layer toggle action.
 ///
 /// This macro creates a key that toggles a layer on/off with each press.
