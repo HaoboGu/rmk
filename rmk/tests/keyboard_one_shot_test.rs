@@ -483,7 +483,7 @@ mod one_shot_test {
                 [0, 2, false, 10],  // Release key
             ],
             expected_reports: [
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // C from layer 1 with LShift
+                [KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // C from layer 1 with LShift
                 [0, [0, 0, 0, 0, 0, 0]], // All released
             ]
         };
@@ -496,13 +496,13 @@ mod one_shot_test {
             sequence: [
                 [0, 1, true, 10],   // Press OSL Layer 1
                 [0, 1, false, 10],  // Release OSL Layer 1
-                [0, 0, true, 10],   // Press OSM LShift (from layer 1, but No action)
-                [0, 0, false, 10],  // Release OSM LShift (gets from layer 0 due to transparent)
-                [0, 2, true, 10],   // Press key at (0,2), should get A from layer 0 with shift + ctrl
+                [0, 0, true, 10],   // Press OSM LShift|LCtrl from layer 1 (layer 1 latched by previous OSL)
+                [0, 0, false, 10],  // Release OSM LShift|LCtrl
+                [0, 2, true, 10],   // Press key at (0,2), should get C from layer 1 with shift + ctrl
                 [0, 2, false, 10],  // Release key
             ],
             expected_reports: [
-                [KC_LSHIFT | KC_LCTRL, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A from layer 0 with shift + ctrl
+                [KC_LSHIFT | KC_LCTRL, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // C from layer 1 with LShift+LCtrl
                 [0, [0, 0, 0, 0, 0, 0]], // All released
             ]
         };

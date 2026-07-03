@@ -115,7 +115,7 @@ impl Keyboard<'_> {
             // existing pure-mod latch, but REPLACES any other shape (layer or tap-key).
             // Releasing the foreign latch first deactivates a held layer and drops its mods
             // cleanly, so only a same-shape (pure-mod) latch can reach the accumulate arm below.
-            if self.sticky_key_state.is_active() && !self.sticky_key_state.is_pure_mod() {
+            if self.sticky_key_state.is_active() && !self.sticky_key_state.is_pure_mod() && !self.sticky_key_state.is_layer() {
                 self.release_sticky_key_if_active().await;
             }
             match &mut self.sticky_key_state {
@@ -182,21 +182,27 @@ impl Keyboard<'_> {
             // drop any latched mods/tap-key. A layer-on-layer press keeps the existing phase
             // (mirrors old `process_action_osl` lines 51-56); any other shape becomes a fresh
             // Pressed latch.
-            let prev_phase = match self.sticky_key_state {
+            let (prev_phase, existing_mods) = match self.sticky_key_state {
                 StickyKeyState::Active {
                     layer: Some(prev_layer),
                     phase,
+                    mods,
                     ..
                 } => {
                     self.keymap.deactivate_layer(prev_layer);
-                    phase
+                    (phase, mods)
                 }
-                _ => SkPhase::Pressed,
+                StickyKeyState::Active {
+                    mods,
+                    phase,
+                    ..
+                } => (phase, mods),
+                _ => (SkPhase::Pressed, ModifierCombination::new()),
             };
 
             self.keymap.activate_layer(layer_num);
             self.sticky_key_state = StickyKeyState::Active {
-                mods: params.keep,
+                mods: existing_mods | params.keep,
                 key: params.key,
                 layer: Some(layer_num),
                 phase: prev_phase,
@@ -342,6 +348,15 @@ impl Keyboard<'_> {
                 *phase = SkPhase::Held;
                 *deadline = None;
                 false
+            }
+            StickyKeyState::Active {
+                phase: SkPhase::Latched,
+                layer: Some(layer_num),
+                ..
+            } if quick_release && event.pressed => {
+                self.keymap.deactivate_layer(*layer_num);
+                self.sticky_key_state = StickyKeyState::None;
+                true
             }
             StickyKeyState::Active {
                 phase: SkPhase::Latched,

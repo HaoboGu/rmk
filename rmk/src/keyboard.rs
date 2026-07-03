@@ -1397,7 +1397,7 @@ impl<'a> Keyboard<'a> {
         //   mode (key pressed while SK still physically held), where the modifier behaves
         //   like a normal held modifier and stays applied until the SK itself is released.
         if let StickyKeyState::Active { mods, phase, .. } = self.sticky_key_state {
-            if self.sticky_key_state.is_pure_mod() {
+            if self.sticky_key_state.is_pure_mod() || self.sticky_key_state.is_layer() {
                 if pressed || phase == SkPhase::Held {
                     result |= mods;
                 }
