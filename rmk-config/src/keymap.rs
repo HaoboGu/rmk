@@ -6,7 +6,6 @@ use pest_derive::Parser;
 use crate::layout::{MapToken, parse_map};
 use crate::{KeyInfo, KeyboardTomlConfig, KeymapConfig, LayerTomlConfig};
 
-// Pest parser using the grammar files
 #[derive(Parser)]
 #[grammar = "keymap.pest"]
 pub(crate) struct ConfigParser;
@@ -15,6 +14,18 @@ pub(crate) struct ConfigParser;
 const MAX_ALIAS_RESOLUTION_DEPTH: usize = 10;
 
 impl KeyboardTomlConfig {
+    /// The resolved layer count: explicit `[keymap].layers`, else the number of
+    /// `[[keymap.layer]]` blocks (0 when there's no `[keymap]`). The check that an
+    /// explicit count isn't *below* the block count lives in [`get_keymap_config`].
+    ///
+    /// [`get_keymap_config`]: Self::get_keymap_config
+    pub(crate) fn num_layers(&self) -> u8 {
+        self.keymap
+            .as_ref()
+            .map(|k| k.layers.unwrap_or(k.layer.len() as u8))
+            .unwrap_or_default()
+    }
+
     /// Resolve `[keymap]` into a dense per-layer action grid plus per-key info.
     ///
     /// `[layout].map` fixes the write-order of keys; each `[[keymap.layer]]` lists its
@@ -22,8 +33,13 @@ impl KeyboardTomlConfig {
     /// beyond those defined are padded transparent up to `[keymap].layers`.
     pub(crate) fn get_keymap_config(&self) -> Result<(KeymapConfig, Vec<Vec<KeyInfo>>), String> {
         let aliases = self.aliases.clone().unwrap_or_default();
-        let keymap_cfg = self.keymap.clone().expect("keymap config is required");
-        let layout = self.layout.clone().expect("layout config is required");
+        let keymap_cfg = self.keymap.as_ref().ok_or_else(|| {
+            "keyboard.toml: [keymap] section is required — add `[keymap]` with at least one [[keymap.layer]]"
+                .to_string()
+        })?;
+        let layout = self.layout.as_ref().ok_or_else(|| {
+            "keyboard.toml: [layout] section is required — add `[layout]` with `rows`, `cols` and a `map`".to_string()
+        })?;
         let layers = &keymap_cfg.layer;
 
         // Aliases are referenced as `@name`, so a name with whitespace can't be matched.
@@ -36,19 +52,18 @@ impl KeyboardTomlConfig {
             }
         }
 
-        // `layers` defaults to the number of `[[keymap.layer]]` blocks; an explicit value may
-        // only *reserve extra* empty layers, never fewer than are defined.
-        let num_layers = match keymap_cfg.layers {
-            Some(n) if (layers.len() as u8) > n => {
-                return Err(format!(
-                    "keyboard.toml: {} [[keymap.layer]] entries exceed [keymap].layers = {}",
-                    layers.len(),
-                    n
-                ));
-            }
-            Some(n) => n,
-            None => layers.len() as u8,
-        };
+        // `layers` defaults to the number of `[[keymap.layer]]` blocks (see `num_layers`);
+        // an explicit value may only *reserve extra* empty layers, never fewer than are defined.
+        if let Some(n) = keymap_cfg.layers
+            && (layers.len() as u8) > n
+        {
+            return Err(format!(
+                "keyboard.toml: {} [[keymap.layer]] entries exceed [keymap].layers = {}",
+                layers.len(),
+                n
+            ));
+        }
+        let num_layers = self.num_layers();
 
         // `[layout].map` is the sole source for placing keys, so it's required whenever a
         // layer is defined; with no layers the default keymap is simply transparent.
@@ -57,12 +72,14 @@ impl KeyboardTomlConfig {
             Some(map) => {
                 let (sequence_to_grid, key_info) = Self::build_key_grid(map, layout.rows, layout.cols)?;
                 let layer_names = Self::collect_layer_names(layers)?;
-                for layer in layers {
+                for (index, layer) in layers.iter().enumerate() {
                     keymap.push(Self::build_layer_grid(
+                        index,
                         layer,
                         &sequence_to_grid,
                         &aliases,
                         &layer_names,
+                        num_layers,
                         layout.rows,
                         layout.cols,
                     )?);
@@ -97,7 +114,7 @@ impl KeyboardTomlConfig {
     }
 
     /// Build the write-order → grid-coordinate sequence and per-key info (hand) from
-    /// `[layout].map`. `parse_map` (shared with the geometry blob) already bounds-checks
+    /// `[layout].map`. `parse_map` (shared with the layout blob) already bounds-checks
     /// and de-dupes the coordinates, so here we just keep the `Key` tokens in order.
     fn build_key_grid(map: &str, rows: u8, cols: u8) -> Result<(Vec<(u8, u8)>, Vec<Vec<KeyInfo>>), String> {
         let mut key_info = vec![vec![KeyInfo::default(); cols as usize]; rows as usize];
@@ -128,21 +145,28 @@ impl KeyboardTomlConfig {
     }
 
     /// Scatter one layer's alias-resolved key sequence onto a `rows × cols` grid in the
-    /// order fixed by `[layout].map`. Positions without a key stay `"No"`.
+    /// order fixed by `[layout].map`. An exact count match is required: an under-filled
+    /// layer silently shifting every following action onto the wrong key is the worst
+    /// keymap failure mode, so missing positions must be explicit (`_`).
     fn build_layer_grid(
+        index: usize,
         layer: &LayerTomlConfig,
         sequence_to_grid: &[(u8, u8)],
         aliases: &HashMap<String, String>,
         layer_names: &HashMap<String, u32>,
+        num_layers: u8,
         rows: u8,
         cols: u8,
     ) -> Result<Vec<Vec<String>>, String> {
-        let key_actions = Self::keymap_parser(&layer.keys, aliases, layer_names)
-            .map_err(|e| format!("keyboard.toml: Error in `[[keymap.layer]]`: {}", e))?;
-        if key_actions.len() > sequence_to_grid.len() {
+        let layer_display = match &layer.name {
+            Some(name) => format!("layer {index} ('{name}')"),
+            None => format!("layer {index}"),
+        };
+        let key_actions = Self::keymap_parser(&layer.keys, aliases, layer_names, num_layers)
+            .map_err(|e| format!("keyboard.toml: Error in `[[keymap.layer]]` {layer_display}: {e}"))?;
+        if key_actions.len() != sequence_to_grid.len() {
             return Err(format!(
-                "keyboard.toml: layer '{}' has {} keys but `layout.map` defines {} positions",
-                layer.name.clone().unwrap_or_default(),
+                "keyboard.toml: {layer_display} has {} keys but `layout.map` defines {} positions — every mapped position needs an action (use `_` for transparent)",
                 key_actions.len(),
                 sequence_to_grid.len()
             ));
@@ -180,18 +204,17 @@ impl KeyboardTomlConfig {
         loop {
             let mut next_keys = String::with_capacity(current_keys.capacity());
             let mut made_replacement = false;
-            let mut last_index = 0; // Keep track of where we are in current_keys
+            let mut last_index = 0;
 
             while let Some(at_index) = current_keys[last_index..].find('@') {
                 let start_index = last_index + at_index;
 
-                // Append the text before the '@'
                 next_keys.push_str(&current_keys[last_index..start_index]);
 
-                // Check if it's a valid alias start (@ followed by a non whitespace)
+                // `@` starts an alias only when followed by a non-whitespace char; a bare
+                // or trailing `@` is kept literally.
                 if let Some(first_char) = current_keys.as_bytes().get(start_index + 1) {
                     if !first_char.is_ascii_whitespace() {
-                        // Find the end of the alias identifier
                         let mut end_index = start_index + 2;
                         while let Some(c) = current_keys.as_bytes().get(end_index) {
                             if c.is_ascii_whitespace() {
@@ -201,10 +224,7 @@ impl KeyboardTomlConfig {
                             }
                         }
 
-                        // Extract the alias key (except the starting '@')
                         let alias_key = &current_keys[start_index + 1..end_index];
-
-                        // Look up and replace
                         match aliases.get(alias_key) {
                             Some(value) => {
                                 next_keys.push_str(value);
@@ -212,37 +232,32 @@ impl KeyboardTomlConfig {
                             }
                             None => return Err(format!("Undefined alias: {}", alias_key)),
                         }
-                        last_index = end_index; // Move past the processed alias
+                        last_index = end_index;
                     } else {
-                        // Not a valid alias start, treat '@' literally
                         next_keys.push('@');
                         last_index = start_index + 1;
                     }
                 } else {
-                    // '@' was the last character, treat it literally
                     next_keys.push('@');
                     last_index = start_index + 1;
-                    break; // No more characters after '@'
+                    break;
                 }
             }
 
-            // Append any remaining part of the string after the last '@' or if no '@' was found
             next_keys.push_str(&current_keys[last_index..]);
 
-            // Check for termination conditions
             iterations += 1;
             if iterations >= MAX_ALIAS_RESOLUTION_DEPTH {
                 return Err(format!(
                     "Alias resolution exceeded maximum depth ({}), potential infinite loop detected in '{}'",
                     MAX_ALIAS_RESOLUTION_DEPTH, keys
-                )); // Show original keys for context
+                ));
             }
 
             if !made_replacement {
-                break; // No more replacements needed
+                break;
             }
 
-            // Prepare for the next iteration
             current_keys = next_keys;
         }
 
@@ -259,10 +274,11 @@ impl KeyboardTomlConfig {
     fn resolve_layer_names(
         pair: &pest::iterators::Pair<Rule>,
         layer_names: &HashMap<String, u32>,
+        num_layers: u8,
     ) -> Result<String, String> {
         let base = pair.as_span().start();
         let mut replacements: Vec<(usize, usize, String)> = Vec::new();
-        Self::collect_layer_name_spans(pair.clone(), layer_names, &mut replacements)?;
+        Self::collect_layer_name_spans(pair.clone(), layer_names, num_layers, &mut replacements)?;
 
         // Apply right-to-left so earlier byte offsets stay valid.
         replacements.sort_by_key(|(start, _, _)| *start);
@@ -274,25 +290,45 @@ impl KeyboardTomlConfig {
     }
 
     /// Recursively collect `(start, end, resolved_number)` for every `layer_name`
-    /// in the subtree, validating each against the known layer names.
+    /// in the subtree, validating each against the known layer names. Numeric
+    /// layer references are range-checked on the same walk — an out-of-range
+    /// index would otherwise compile fine and produce a dead key at runtime.
     fn collect_layer_name_spans(
         pair: pest::iterators::Pair<Rule>,
         layer_names: &HashMap<String, u32>,
+        num_layers: u8,
         out: &mut Vec<(usize, usize, String)>,
     ) -> Result<(), String> {
-        if pair.as_rule() == Rule::layer_name {
-            let layer_name = pair.as_str();
-            match layer_names.get(layer_name) {
-                Some(layer_number) => {
-                    let span = pair.as_span();
-                    out.push((span.start(), span.end(), layer_number.to_string()));
+        match pair.as_rule() {
+            Rule::layer_name => {
+                let layer_name = pair.as_str();
+                match layer_names.get(layer_name) {
+                    Some(layer_number) => {
+                        let span = pair.as_span();
+                        out.push((span.start(), span.end(), layer_number.to_string()));
+                    }
+                    None => return Err(format!("Invalid layer name: {}", layer_name)),
                 }
-                None => return Err(format!("Invalid layer name: {}", layer_name)),
+                return Ok(());
             }
-            return Ok(());
+            Rule::layer_number => {
+                let n: u32 = pair
+                    .as_str()
+                    .parse()
+                    .map_err(|_| format!("Invalid layer number: {}", pair.as_str()))?;
+                if n >= num_layers as u32 {
+                    return Err(format!(
+                        "layer {n} in `{}` is out of range — the keymap defines {num_layers} layer(s), valid indices are 0..={}",
+                        pair.as_str(),
+                        num_layers.saturating_sub(1)
+                    ));
+                }
+                return Ok(());
+            }
+            _ => {}
         }
         for inner in pair.into_inner() {
-            Self::collect_layer_name_spans(inner, layer_names, out)?;
+            Self::collect_layer_name_spans(inner, layer_names, num_layers, out)?;
         }
         Ok(())
     }
@@ -301,30 +337,30 @@ impl KeyboardTomlConfig {
         layer_keys: &str,
         aliases: &HashMap<String, String>,
         layer_names: &HashMap<String, u32>,
+        num_layers: u8,
     ) -> Result<Vec<String>, String> {
-        //resolve aliases first
+        // Resolve aliases first, since the grammar below doesn't know about them.
         let layer_keys = Self::alias_resolver(layer_keys, aliases)?;
 
         let mut key_action_sequence = Vec::new();
 
-        // Parse the keymap using Pest
         match ConfigParser::parse(Rule::key_map, &layer_keys) {
             Ok(pairs) => {
-                // The top-level pair is 'key_map'. We need to iterate its inner content.
                 for pair in pairs {
-                    // Should only be one pair matching Rule::key_map
                     if pair.as_rule() == Rule::key_map {
                         for inner_pair in pair.into_inner() {
                             match inner_pair.as_rule() {
-                                Rule::EOI | Rule::WHITESPACE => {
-                                    // Ignore End of input marker
-                                }
+                                Rule::EOI | Rule::WHITESPACE => {}
                                 // Every key action is forwarded as its (alias-resolved) source
                                 // text, with any named layer references resolved to indices.
                                 // This handles layer names nested at any depth, e.g. the tap
                                 // slot of `TH(MO(nav), A)`.
                                 _ => {
-                                    key_action_sequence.push(Self::resolve_layer_names(&inner_pair, layer_names)?);
+                                    key_action_sequence.push(Self::resolve_layer_names(
+                                        &inner_pair,
+                                        layer_names,
+                                        num_layers,
+                                    )?);
                                 }
                             }
                         }
@@ -425,7 +461,7 @@ mod tests {
 
         // Test parsing a keymap string with "No" actions
         let keymap = "A B No C No NoUsSlash NonUsSlash D No";
-        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names, 8);
 
         assert!(result.is_ok());
         let actions = result.unwrap();
@@ -441,7 +477,7 @@ mod tests {
         let layer_names = HashMap::new();
 
         let keymap = "A , SHIFTED(,) B";
-        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names, 8);
 
         assert!(result.is_ok());
         let actions = result.unwrap();
@@ -455,7 +491,7 @@ mod tests {
 
         // Comma keeps working as argument separator in multi-argument actions.
         let keymap = "TH(A, B) TH(Comma, B) TH(A, Comma)";
-        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names, 8);
 
         assert!(result.is_ok());
         let actions = result.unwrap();
@@ -478,7 +514,7 @@ mod tests {
         // build (keymap_parser used to `panic!` on the pest error).
         let aliases = HashMap::new();
         let layer_names = HashMap::new();
-        let result = KeyboardTomlConfig::keymap_parser("TH(A, ,)", &aliases, &layer_names);
+        let result = KeyboardTomlConfig::keymap_parser("TH(A, ,)", &aliases, &layer_names, 8);
         assert!(result.is_err(), "unparseable keymap must be Err, not a panic");
     }
 
@@ -499,7 +535,7 @@ mod tests {
 
         // Test parsing a keymap string with TD actions
         let keymap = "A TD(0) B TD(1) C TD(255)";
-        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names, 8);
 
         assert!(result.is_ok());
         let actions = result.unwrap();
@@ -513,7 +549,7 @@ mod tests {
 
         // Test parsing a keymap string with macro trigger actions
         let keymap = "A Macro(0) B MACRO(1) C macro(255)";
-        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names, 8);
 
         assert!(result.is_ok());
         let actions = result.unwrap();
@@ -614,7 +650,7 @@ mod tests {
         // A single-action form (here WM) can appear in the tap/hold slots of
         // MT/TH/LT and is forwarded verbatim for the proc-macro to expand.
         let keymap = "MT(WM(P, RAlt), LShift, HRM) TH(WM(A, LShift), MO(2)) LT(1, WM(Q, LGui))";
-        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names, 8);
 
         assert!(result.is_ok(), "{:?}", result);
         assert_eq!(
@@ -635,7 +671,7 @@ mod tests {
 
         // Layer names are resolved to indices even when nested inside a slot.
         let keymap = "MO(nav) TH(A, MO(nav))";
-        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names, 8);
 
         assert!(result.is_ok(), "{:?}", result);
         assert_eq!(result.unwrap(), vec!["MO(3)", "TH(A, MO(3))"]);
@@ -658,7 +694,7 @@ mod tests {
         let aliases = HashMap::new();
         let layer_names = HashMap::new();
         // `keys` is data-only now: `//` is no longer a comment, just (garbage) tokens.
-        let result = KeyboardTomlConfig::keymap_parser("A // B", &aliases, &layer_names);
+        let result = KeyboardTomlConfig::keymap_parser("A // B", &aliases, &layer_names, 8);
         assert_eq!(result.unwrap(), vec!["A", "//", "B"]);
     }
 
@@ -739,5 +775,30 @@ mod tests {
     fn layer_with_no_encoders_is_accepted() {
         // Omitting `encoders` on a layer means every encoder defaults to No — always allowed.
         assert!(two_encoder_config("").keymap().is_ok());
+    }
+
+    #[test]
+    fn numeric_layer_reference_must_be_in_range() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+        // MO(2) with only 2 layers (indices 0..=1) would be a dead key at runtime
+        let err = KeyboardTomlConfig::keymap_parser("MO(2)", &aliases, &layer_names, 2).unwrap_err();
+        assert!(err.contains("out of range"), "{err}");
+        // In-range references pass, including nested ones
+        assert!(KeyboardTomlConfig::keymap_parser("MO(1) LT(0, A) TH(MO(1), B)", &aliases, &layer_names, 2).is_ok());
+    }
+
+    #[test]
+    fn under_filled_layer_is_rejected() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+        let layer = LayerTomlConfig {
+            name: None,
+            keys: "A B".to_string(),
+            encoders: None,
+        };
+        let seq = vec![(0u8, 0u8), (0, 1), (0, 2)];
+        let err = KeyboardTomlConfig::build_layer_grid(0, &layer, &seq, &aliases, &layer_names, 1, 1, 3).unwrap_err();
+        assert!(err.contains("has 2 keys but `layout.map` defines 3 positions"), "{err}");
     }
 }

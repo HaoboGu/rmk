@@ -79,16 +79,18 @@ Rynk works over the connection you already use:
 
 - **USB** — plug the keyboard in. Host tools find RMK keyboards automatically, so
   you don't have to hunt for the right serial port.
-- **Bluetooth** — native tools connect to an already-paired keyboard.
-- **Browser** — Chromium browsers (Chrome or Edge) connect over USB or Bluetooth.
-  Firefox and Safari are not supported.
+- **Bluetooth** — native tools connect to an already-connected keyboard (the OS
+  must have it bonded and currently connected).
+- **Browser** — Chromium browsers (Chrome or Edge) connect over USB (Web Serial)
+  or Bluetooth (WebHID). Firefox and Safari are not supported.
 
 Rynk tooling is still young. Today you have two options:
 
 - **A browser demo** — the `rynk-wasm` package ships a reference web page
   (`index.html`) you build and serve locally; follow the steps in its README.
 - **Rust libraries** — the `rynk`, `rynk-serial`, and `rynk-ble` crates let you
-  build your own tool (see [For tool authors](#for-tool-authors) below).
+  build a native tool (see [For tool authors](#for-tool-authors) below). The
+  browser build is a separate package, `rynk-wasm`.
 
 A ready-made desktop app is not available yet.
 
@@ -158,6 +160,8 @@ Rynk's firmware buffers size themselves automatically and rarely need touching.
 If you are tight on RAM or want faster whole-keymap transfers, a few knobs live
 in the [`[rmk]`](../configuration/rmk_config#rynk-protocol-configuration) section:
 `protocol_max_bulk_size`, `protocol_macro_chunk_size`, and `rynk_buffer_size`.
+Of these, `protocol_max_bulk_size` only takes effect when the `bulk` Cargo
+feature is on (below); the other two apply to every Rynk build.
 
 The optional `bulk` Cargo feature turns on faster bulk transfers at the cost of
 extra RAM. Enable it on boards that have room to spare:

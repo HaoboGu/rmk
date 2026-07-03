@@ -207,9 +207,9 @@ impl<T: Read + Write> Client<T> {
         self.request::<command::SetKeymapBulk>(&request).await
     }
 
-    // ── layout (geometry) ──
+    // ── layout ──
 
-    /// Read the physical layout geometry. The firmware serves it as an opaque,
+    /// Read the physical layout. The firmware serves it as an opaque,
     /// compressed blob paged over `GetLayout`; this reassembles every page (by
     /// byte offset), inflates the blob, and decodes it into [`LayoutInfo`]. An
     /// empty blob (firmware built without a `[layout].map`) yields an empty

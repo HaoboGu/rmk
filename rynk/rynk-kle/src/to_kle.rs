@@ -1,7 +1,7 @@
 //! Reverse conversion: an RMK/Rynk `[layout]` back into a Vial `layouts.keymap`
 //! (KLE) — the inverse of `kle`/`layout`.
 //!
-//! The layout's canonical geometry is the decoded blob ([`rynk::layout::LayoutInfo`]):
+//! The layout's canonical rendered layout is the decoded blob ([`rynk::layout::LayoutInfo`]):
 //! each key's absolute center, size, and rotation. We emit each key on its own KLE
 //! row placed absolutely, with the **rotation origin at the key's own center** —
 //! reset the cursor to the center with `rx`/`ry`, step back to the unrotated
@@ -37,7 +37,14 @@ fn kle_key(cx: f32, cy: f32, w: f32, h: f32, r: f32, legend: String) -> Value {
 }
 
 fn key_row(k: &Key) -> Value {
-    kle_key(k.x, k.y, k.w, k.h, k.r, format!("{},{}", k.row, k.col))
+    kle_key(
+        k.rect.x,
+        k.rect.y,
+        k.rect.w,
+        k.rect.h,
+        k.r,
+        format!("{},{}", k.row, k.col),
+    )
 }
 
 fn encoder_rows(e: &Encoder) -> [Value; 2] {
@@ -45,8 +52,8 @@ fn encoder_rows(e: &Encoder) -> [Value; 2] {
     // CW (`id,1`) side by side — both must exist for Vial to offer both bindings.
     let legend = |dir: u8| format!("{},{dir}\n\n\n\n\n\n\n\n\ne", e.id);
     [
-        kle_key(e.x - 0.5, e.y, 1.0, 1.0, e.r, legend(0)),
-        kle_key(e.x + 0.5, e.y, 1.0, 1.0, e.r, legend(1)),
+        kle_key(e.x - 0.5, e.y, 1.0, 1.0, 0.0, legend(0)),
+        kle_key(e.x + 0.5, e.y, 1.0, 1.0, 0.0, legend(1)),
     ]
 }
 
@@ -77,7 +84,7 @@ pub fn keyboard_toml_to_vial(text: &str) -> Result<Value, String> {
     let body = toml::to_string(layout).map_err(|e| e.to_string())?;
     let blob = rmk_config::layout_blob_from_toml(&body)?;
     if blob.is_empty() {
-        return Err("[layout] has no `map`, so there is no geometry to convert".into());
+        return Err("[layout] has no `map`, so there is no rendered layout to convert".into());
     }
     let info = LayoutInfo::from_compressed_blob(&blob).map_err(|e| format!("decode layout blob: {e}"))?;
     let variant = info

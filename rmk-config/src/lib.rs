@@ -21,7 +21,7 @@ pub(crate) mod host;
 pub(crate) mod keycode_alias;
 pub(crate) mod keymap;
 pub(crate) mod layout;
-pub use layout::layout_blob_from_toml;
+pub use layout::{STOCK_WIDTHS, layout_blob_from_toml};
 pub(crate) mod light;
 pub(crate) mod storage;
 
@@ -47,6 +47,7 @@ pub mod protocol_limits {
 
 /// Configurations for RMK keyboard.
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[allow(unused)]
 pub struct KeyboardTomlConfig {
     /// Basic keyboard info
@@ -57,7 +58,7 @@ pub struct KeyboardTomlConfig {
     aliases: Option<HashMap<String, String>>,
     /// Keymap config: layer count and the per-layer key actions (`[[keymap.layer]]`).
     keymap: Option<KeymapTomlConfig>,
-    /// Layout config: the physical key arrangement (`map`) plus geometry.
+    /// Layout config: the physical key arrangement (`map`) plus the rendered layout.
     /// For split keyboards, the total row/col is defined in this section.
     layout: Option<LayoutTomlConfig>,
     /// Behavior config
@@ -137,7 +138,10 @@ impl KeyboardTomlConfig {
         // This allows user's keyboard.toml to omit [event] section.
         let user_config = Self::parse_from_toml_path(path, None);
 
-        let default_config_str = user_config.get_chip_model().unwrap().get_default_config_str().unwrap();
+        let default_config_str = user_config
+            .get_chip_model()
+            .and_then(|chip| chip.get_default_config_str())
+            .unwrap_or_else(|e| panic!("❌ keyboard.toml error: {e}"));
 
         // Second pass: load with all three config sources
         // Config priority (later sources override earlier ones):
@@ -254,7 +258,7 @@ pub(crate) struct RmkConstantsConfig {
     /// The number of available BLE profiles
     #[serde_inline_default(3)]
     pub ble_profiles_num: usize,
-    /// BLE Split Central sleep timeout in minutes (0 = disabled)
+    /// BLE Split Central sleep timeout in seconds (0 = disabled)
     #[serde_inline_default(0)]
     pub split_central_sleep_timeout_seconds: u32,
     /// Maximum number of key actions in a bulk keymap transfer (protocol).
@@ -278,7 +282,9 @@ where
 {
     let value = Deserialize::deserialize(deserializer)?;
     if value > 256 {
-        panic!("❌ Parse `keyboard.toml` error: combo_max_num must be between 0 and 256, got {value}");
+        return Err(de::Error::custom(format!(
+            "combo_max_num must be between 0 and 256, got {value}"
+        )));
     }
     Ok(value)
 }
@@ -289,7 +295,9 @@ where
 {
     let value = Deserialize::deserialize(deserializer)?;
     if value > 256 {
-        panic!("❌ Parse `keyboard.toml` error: morse_max_num must be between 0 and 256, got {value}");
+        return Err(de::Error::custom(format!(
+            "morse_max_num must be between 0 and 256, got {value}"
+        )));
     }
     Ok(value)
 }
@@ -300,7 +308,9 @@ where
 {
     let value = Deserialize::deserialize(deserializer)?;
     if !(4..=65536).contains(&value) {
-        panic!("❌ Parse `keyboard.toml` error: max_patterns_per_key must be between 4 and 65536, got {value}");
+        return Err(de::Error::custom(format!(
+            "max_patterns_per_key must be between 4 and 65536, got {value}"
+        )));
     }
     Ok(value)
 }
@@ -311,7 +321,9 @@ where
 {
     let value = Deserialize::deserialize(deserializer)?;
     if value > 256 {
-        panic!("❌ Parse `keyboard.toml` error: fork_max_num must be between 0 and 256, got {value}");
+        return Err(de::Error::custom(format!(
+            "fork_max_num must be between 0 and 256, got {value}"
+        )));
     }
     Ok(value)
 }
@@ -421,7 +433,7 @@ define_event_config!(
     action,
 );
 
-/// The `[layout]` section: the physical key arrangement plus geometry.
+/// The `[layout]` section: the physical key arrangement plus the rendered layout.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[allow(unused)]
@@ -432,16 +444,17 @@ pub(crate) struct LayoutTomlConfig {
     /// optional hand, shape (`@2u`), gaps (`[1.5]`), row-steps (`[y=]`), and
     /// encoders (`(e,0)`). Its order also defines the order of `[[keymap.layer]]`.
     pub map: Option<String>,
-    // Physical layout geometry.
+    // Rendered-layout fields.
     pub default_variant: Option<String>,
     pub shapes: Option<HashMap<String, ShapeToml>>,
     pub variant: Option<Vec<VariantToml>>,
 }
 
-/// A named geometry shape from `[layout.shapes]`. Every field optional; widths/
+/// A named shape from `[layout.shapes]`. Every field optional; widths/
 /// heights default to 1u, nudges/rotation to 0, and `w2/h2/x2/y2` are an
 /// optional second rectangle for L-shaped caps.
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ShapeToml {
     pub w: Option<f32>,
     pub h: Option<f32>,
@@ -456,6 +469,7 @@ pub(crate) struct ShapeToml {
 
 /// One `[[layout.variant]]` render overlay: reshape some keys, hide others.
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct VariantToml {
     pub name: String,
     pub shapes: Option<HashMap<String, String>>,
@@ -476,6 +490,7 @@ pub(crate) struct KeymapTomlConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[allow(unused)]
 pub(crate) struct LayerTomlConfig {
     pub name: Option<String>,
@@ -485,6 +500,7 @@ pub(crate) struct LayerTomlConfig {
 
 /// Configurations for keyboard info
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct KeyboardInfo {
     /// Keyboard name
     pub name: String,
@@ -515,7 +531,16 @@ pub enum MatrixType {
     DirectPin,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum DebouncerType {
+    #[default]
+    Default,
+    Fast,
+}
+
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MatrixConfig {
     #[serde(default)]
     pub matrix_type: MatrixType,
@@ -526,7 +551,8 @@ pub struct MatrixConfig {
     pub direct_pin_low_active: bool,
     #[serde(default = "default_false")]
     pub row2col: bool,
-    pub debouncer: Option<String>,
+    #[serde(default)]
+    pub debouncer: DebouncerType,
     pub bootmagic: Option<(u8, u8)>,
 }
 
@@ -596,6 +622,15 @@ pub const DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS: u32 = 120;
 /// Minimum passkey entry timeout in seconds.
 pub const MIN_PASSKEY_ENTRY_TIMEOUT_SECS: u32 = 30;
 
+/// nRF52840 DCDC REG0 output voltage
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+pub enum DcdcReg0Voltage {
+    #[serde(rename = "3V3")]
+    V3_3,
+    #[serde(rename = "1V8")]
+    V1_8,
+}
+
 /// Config for chip-specific settings
 #[derive(Clone, Default, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -605,8 +640,7 @@ pub struct ChipConfig {
     /// DCDC regulator 1 enabled (for nrf52840, nrf52833)
     pub dcdc_reg1: Option<bool>,
     /// DCDC regulator 0 voltage (for nrf52840)
-    /// Values: "3V3" or "1V8"
-    pub dcdc_reg0_voltage: Option<String>,
+    pub dcdc_reg0_voltage: Option<DcdcReg0Voltage>,
 }
 
 /// Config for lights
@@ -697,6 +731,7 @@ pub(crate) struct AutoMouseLayerConfig {
 /// Per Key configurations profiles for morse, tap-hold, etc.
 /// overrides the defaults given in TapHoldConfig
 #[derive(Clone, Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct MorseProfile {
     pub enable_flow_tap: Option<bool>,
 
@@ -752,6 +787,7 @@ pub(crate) struct CombosConfig {
 
 /// Configurations for combo
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ComboConfig {
     pub actions: Vec<String>,
     pub output: String,
@@ -767,6 +803,7 @@ pub(crate) struct MacrosConfig {
 
 /// Configurations for macro
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct MacroConfig {
     pub operations: Vec<MacroOperation>,
 }
@@ -859,18 +896,29 @@ pub(crate) struct MorseActionPair {
     pub action: String,  // "B"
 }
 
+/// Split connection transport
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum SplitConnection {
+    #[default]
+    Ble,
+    Serial,
+}
+
 /// Configurations for split keyboards
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SplitConfig {
-    pub connection: String,
+    pub connection: SplitConnection,
     pub central: SplitBoardConfig,
     pub peripheral: Vec<SplitBoardConfig>,
 }
 
 /// Configurations for each split board
 ///
-/// Either ble_addr or serial must be set, but not both.
+/// The transport field must match `split.connection`: `serial` is required for
+/// serial splits and forbidden for BLE splits; `ble_addr` is optional for BLE
+/// splits (dongle setups omit it) and forbidden for serial splits.
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SplitBoardConfig {
@@ -904,6 +952,7 @@ pub struct SplitBoardConfig {
 
 /// Serial port config
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SerialConfig {
     pub instance: String,
     pub tx_pin: String,
@@ -1145,10 +1194,12 @@ pub struct EncoderConfig {
     // Phase is the working mode of the rotary encoders.
     // Available mode:
     // - default: resolution = 1
+    // - e8h7: phase table tuned for E8H7 encoders
     // - resolution: customized resolution, the resolution value and reverse should be specified
     //   A typical [EC11 encoder](https://tech.alpsalpine.com/cms.media/product_catalog_ec_01_ec11e_en_611f078659.pdf)'s resolution is 2
     //   In resolution mode, you can also specify the number of detent and pulses, the resolution will be calculated by `pulse * 4 / detent`
-    pub phase: Option<String>,
+    #[serde(default)]
+    pub phase: EncoderPhase,
     // Resolution
     pub resolution: Option<EncoderResolution>,
     // The number of detent
@@ -1163,6 +1214,16 @@ pub struct EncoderConfig {
     // Debounce interval in milliseconds. Suppresses spurious events from mechanical contact bounce.
     // Defaults to 0 (disabled) if not specified.
     pub debounce_ms: Option<u16>,
+}
+
+/// Rotary encoder phase (decoding) mode
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum EncoderPhase {
+    #[default]
+    Default,
+    E8h7,
+    Resolution,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1194,6 +1255,7 @@ pub enum CommunicationProtocol {
 
 /// SPI config
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SpiConfig {
     pub instance: String,
     pub sck: String,
@@ -1207,6 +1269,7 @@ pub struct SpiConfig {
 
 /// I2C config
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct I2cConfig {
     pub instance: String,
     pub sda: String,

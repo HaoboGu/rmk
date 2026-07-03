@@ -32,8 +32,6 @@ adjust = 3
 
 In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 3 (`adjust`) will also be enabled.
 
-Note that `"#layer_name"` could also be used in place of layer numbers.
-
 ## One-Shot
 
 The `one_shot` sub-table contains common one-shot configuration (for both OSM and OSL)
@@ -239,7 +237,7 @@ The `profile` of a morse key contains all tunable configurations of this morse k
 A profile contains the following fields:
 
 - `enable_flow_tap`: Enables HRM (Home Row Mod) mode. When enabled, the `prior_idle_time` setting becomes functional. Defaults to `false`. Profiles may set this to override the global `[behavior.morse]` value; omitting it inherits the global value.
-- `prior_idle_time`: If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter is configured globally in `[behavior.morse]` and is effective only when `enable_flow_tap` is enabled for the key. Defaults to 120ms.
+- `prior_idle_time`: *(global only)* If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter lives in `[behavior.morse]` (not in a per-key profile) and is effective only when `enable_flow_tap` is enabled for the key. Defaults to 120ms.
 
 - `unilateral_tap`: (Experimental) Enables unilateral tap mode. When enabled, tap action will be triggered when a key from "same" hand is pressed. In current experimental version, the "same" hand is calculated using the `<hand>`, which can be given in `layout.map`. This option is recommended to set to true when `enable_flow_tap` is set to true.
 
@@ -284,12 +282,11 @@ gap_timeout = "250ms"
 
 In the `morse.profiles` sub-table you can define individual key profiles. Each profile has an associated name, which can be referred
 
-- from the layout.map (the name is case sensitive), to override the defaults in certain key positions
 - from the tap hold keys in the key map if the third optional parameter is filled:
   - `TH(key-tap, key-hold, <profile_name>)`,
   - `MT(key, modifier, <profile_name>)`,
   - `LT(n, key, <profile_name>)`
-- the Morse keys may also have their per key profile overrides (which is stronger than the positional override) by setting the `profile` field.
+- the Morse keys may also have their per key profile overrides by setting the `profile` field.
 
 The following examples are the typical default configurations:
 
@@ -455,7 +452,7 @@ _ _     _
 """
 ```
 
-Here `TD(0)`, `TD(1)`, and `TD(2)` reference morse dances by index, and the trailing `PN` in `LT(2, Kc9, PN)` names a morse profile (defined above). `keys` and `map` blocks hold data only — put any annotations in normal TOML `#` comments outside the `"""…"""` string.
+Here `TD(0)`, `TD(1)`, and `TD(2)` reference morse dances by index, and the trailing `PN` in `LT(2, Kc9, PN)` names a morse profile (defined above). `keys` and `map` blocks hold data only. 
 
 ## Fork
 

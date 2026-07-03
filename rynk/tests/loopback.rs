@@ -32,7 +32,7 @@ use rmk_types::action::KeyAction;
 use rmk_types::combo::Combo;
 use rmk_types::constants::{MACRO_DATA_SIZE, RYNK_BUFFER_SIZE};
 use rmk_types::protocol::rynk::{MacroData, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, StorageResetMode};
-use rynk::layout::{Key, Variant};
+use rynk::layout::{Key, Rect, Variant};
 use rynk::{Client, IncomingTopic, LayoutInfo, RynkHostError, TopicEvent};
 
 /// One direction of the in-memory link. Sized to a full Rynk buffer so any
@@ -91,10 +91,12 @@ async fn client_against_run_session() {
     let k = |row: u8, col: u8, x: f32| Key {
         row,
         col,
-        x,
-        y: 0.5,
-        w: 1.0,
-        h: 1.0,
+        rect: Rect {
+            x,
+            y: 0.5,
+            w: 1.0,
+            h: 1.0,
+        },
         r: 0.0,
         rect2: None,
     };
@@ -192,10 +194,13 @@ async fn client_against_run_session() {
             "expected Rejected(Unimplemented), got {rejected:?}"
         );
 
-        // The built-in geometry blob: paged over GetLayout, inflated, and
+        // The built-in layout blob: paged over GetLayout, inflated, and
         // postcard-decoded end to end — the full serve→fetch→inflate→decode seam.
         let layout = client.get_layout().await.unwrap();
-        assert_eq!(layout, layout_info, "geometry round-trips through the real stack");
+        assert_eq!(
+            layout, layout_info,
+            "the layout blob round-trips through the real stack"
+        );
         assert_eq!(layout.variants.len(), 2, "two render variants");
         assert_eq!(layout.variants[1].keys.len(), 2, "variant b hides one key");
 

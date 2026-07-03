@@ -1,4 +1,6 @@
-use crate::{InputDeviceConfig, KeyboardTomlConfig, MatrixConfig, MatrixType, SplitConfig};
+use crate::{
+    InputDeviceConfig, KeyboardTomlConfig, LayoutTomlConfig, MatrixConfig, MatrixType, SplitConfig, SplitConnection,
+};
 
 #[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]
@@ -21,7 +23,7 @@ impl Default for BoardConfig {
 
 impl BoardConfig {
     /// Get number of peripherals
-    pub fn get_num_periphreal(&self) -> usize {
+    pub fn get_num_peripheral(&self) -> usize {
         match self {
             BoardConfig::Split(split_config) => split_config.peripheral.len(),
             BoardConfig::UniBody(_) => 0,
@@ -109,6 +111,90 @@ fn validate_matrix_dims(matrix: &MatrixConfig, rows: usize, cols: usize, ctx: &s
     Ok(())
 }
 
+/// Split invariants that per-board dimension checks don't cover: the transport
+/// fields must be consistent with `split.connection`, and every board's region
+/// of the unified matrix must fit `[layout]` without overlapping another board.
+fn validate_split_config(split: &SplitConfig, layout: Option<&LayoutTomlConfig>) -> Result<(), String> {
+    let boards = || {
+        std::iter::once((&split.central, "[split.central]".to_string())).chain(
+            split
+                .peripheral
+                .iter()
+                .enumerate()
+                .map(|(i, p)| (p, format!("[[split.peripheral]] #{i}"))),
+        )
+    };
+
+    match split.connection {
+        SplitConnection::Serial => {
+            for (board, ctx) in boards() {
+                if board.ble_addr.is_some() {
+                    return Err(format!(
+                        "keyboard.toml: {ctx} sets `ble_addr`, but split.connection = \"serial\""
+                    ));
+                }
+            }
+            let central_ports = split.central.serial.as_ref().map_or(0, |s| s.len());
+            if central_ports < split.peripheral.len() {
+                return Err(format!(
+                    "keyboard.toml: [split.central] defines {central_ports} serial port(s) for {} peripheral(s) — one port per peripheral is required, in peripheral order",
+                    split.peripheral.len()
+                ));
+            }
+            for (i, peri) in split.peripheral.iter().enumerate() {
+                let n = peri.serial.as_ref().map_or(0, |s| s.len());
+                if n != 1 {
+                    return Err(format!(
+                        "keyboard.toml: [[split.peripheral]] #{i} must define exactly 1 serial port, got {n}"
+                    ));
+                }
+            }
+        }
+        SplitConnection::Ble => {
+            for (board, ctx) in boards() {
+                if board.serial.is_some() {
+                    return Err(format!(
+                        "keyboard.toml: {ctx} sets `serial`, but split.connection = \"ble\""
+                    ));
+                }
+            }
+        }
+    }
+
+    let regions: Vec<_> = boards()
+        .map(|(b, ctx)| {
+            (
+                b.row_offset,
+                b.row_offset + b.rows,
+                b.col_offset,
+                b.col_offset + b.cols,
+                ctx,
+            )
+        })
+        .collect();
+    if let Some(layout) = layout {
+        let (rows, cols) = (layout.rows as usize, layout.cols as usize);
+        for (r0, r1, c0, c1, ctx) in &regions {
+            if *r1 > rows || *c1 > cols {
+                return Err(format!(
+                    "keyboard.toml: {ctx} occupies rows {r0}..{r1}, cols {c0}..{c1}, which exceeds [layout] ({rows} rows x {cols} cols)"
+                ));
+            }
+        }
+    }
+    for (i, a) in regions.iter().enumerate() {
+        for b in &regions[i + 1..] {
+            if a.0 < b.1 && b.0 < a.1 && a.2 < b.3 && b.2 < a.3 {
+                return Err(format!(
+                    "keyboard.toml: {} and {} overlap in the unified matrix — adjust row_offset/col_offset",
+                    a.4, b.4
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 impl KeyboardTomlConfig {
     pub(crate) fn get_board_config(&self) -> Result<BoardConfig, String> {
         let matrix = self.matrix.clone();
@@ -116,6 +202,7 @@ impl KeyboardTomlConfig {
         let input_device = self.input_device.clone();
         match (matrix, split) {
             (None, Some(s)) => {
+                validate_split_config(&s, self.layout.as_ref())?;
                 validate_matrix_dims(&s.central.matrix, s.central.rows, s.central.cols, "[split.central]")?;
                 for (i, peri) in s.peripheral.iter().enumerate() {
                     validate_matrix_dims(&peri.matrix, peri.rows, peri.cols, &format!("[[split.peripheral]] #{i}"))?;
@@ -149,8 +236,10 @@ impl KeyboardTomlConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_matrix_dims;
-    use crate::{MatrixConfig, MatrixType};
+    use super::{validate_matrix_dims, validate_split_config};
+    use crate::{
+        LayoutTomlConfig, MatrixConfig, MatrixType, SerialConfig, SplitBoardConfig, SplitConfig, SplitConnection,
+    };
 
     fn normal(rows: &[&str], cols: &[&str]) -> MatrixConfig {
         MatrixConfig {
@@ -189,5 +278,97 @@ mod tests {
             ..Default::default()
         };
         assert!(validate_matrix_dims(&m, 2, 2, "[matrix]").is_err());
+    }
+
+    fn board(rows: usize, cols: usize, row_offset: usize, col_offset: usize) -> SplitBoardConfig {
+        SplitBoardConfig {
+            rows,
+            cols,
+            row_offset,
+            col_offset,
+            ..Default::default()
+        }
+    }
+
+    fn ble_split() -> SplitConfig {
+        SplitConfig {
+            connection: SplitConnection::Ble,
+            central: board(2, 2, 0, 0),
+            peripheral: vec![board(2, 1, 2, 2)],
+        }
+    }
+
+    fn layout_4x3() -> LayoutTomlConfig {
+        LayoutTomlConfig {
+            rows: 4,
+            cols: 3,
+            map: None,
+            default_variant: None,
+            shapes: None,
+            variant: None,
+        }
+    }
+
+    #[test]
+    fn ble_split_without_addr_is_valid() {
+        // Dongle-style setups omit ble_addr entirely
+        assert!(validate_split_config(&ble_split(), Some(&layout_4x3())).is_ok());
+    }
+
+    #[test]
+    fn transport_must_match_connection() {
+        let mut split = ble_split();
+        split.peripheral[0].serial = Some(vec![SerialConfig::default()]);
+        let err = validate_split_config(&split, None).unwrap_err();
+        assert!(err.contains("sets `serial`"), "{err}");
+
+        let mut split = ble_split();
+        split.connection = SplitConnection::Serial;
+        split.central.serial = Some(vec![SerialConfig::default()]);
+        split.peripheral[0].serial = Some(vec![SerialConfig::default()]);
+        split.peripheral[0].ble_addr = Some([0; 6]);
+        let err = validate_split_config(&split, None).unwrap_err();
+        assert!(err.contains("sets `ble_addr`"), "{err}");
+    }
+
+    #[test]
+    fn serial_ports_must_cover_peripherals() {
+        let mut split = ble_split();
+        split.connection = SplitConnection::Serial;
+        split.central.serial = Some(vec![SerialConfig::default()]);
+        split.peripheral = vec![board(2, 1, 2, 2), board(2, 1, 2, 0)];
+        split.peripheral[0].serial = Some(vec![SerialConfig::default()]);
+        split.peripheral[1].serial = Some(vec![SerialConfig::default()]);
+        let err = validate_split_config(&split, None).unwrap_err();
+        assert!(err.contains("1 serial port(s) for 2 peripheral(s)"), "{err}");
+
+        // Extra central ports beyond the peripheral count are fine
+        split.central.serial = Some(vec![SerialConfig::default(); 3]);
+        assert!(validate_split_config(&split, None).is_ok());
+    }
+
+    #[test]
+    fn peripheral_needs_exactly_one_serial_port() {
+        let mut split = ble_split();
+        split.connection = SplitConnection::Serial;
+        split.central.serial = Some(vec![SerialConfig::default()]);
+        let err = validate_split_config(&split, None).unwrap_err();
+        assert!(err.contains("exactly 1 serial port, got 0"), "{err}");
+    }
+
+    #[test]
+    fn regions_must_fit_layout() {
+        let mut split = ble_split();
+        split.peripheral[0].row_offset = 3; // rows 3..5 exceeds 4
+        let err = validate_split_config(&split, Some(&layout_4x3())).unwrap_err();
+        assert!(err.contains("exceeds [layout]"), "{err}");
+    }
+
+    #[test]
+    fn overlapping_regions_are_rejected() {
+        let mut split = ble_split();
+        split.peripheral.push(board(2, 1, 2, 2)); // identical to peripheral #0
+        let err = validate_split_config(&split, Some(&layout_4x3())).unwrap_err();
+        assert!(err.contains("overlap"), "{err}");
     }
 }

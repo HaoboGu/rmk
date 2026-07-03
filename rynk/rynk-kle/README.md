@@ -6,7 +6,7 @@ Convert a physical keyboard layout between [KLE](http://www.keyboard-layout-edit
 - **Reverse** — `to_kle::keyboard_toml_to_vial(&str)`: a `keyboard.toml`'s `[layout]` back into a minimal `vial.json` (default variant, encoders as Vial CW/CCW switch pairs).
 - **Decode** — `decode_layout(&str)`: any `[layout]` TOML into `layout::LayoutInfo` (re-exported from `rynk`), via the real wire path — `rmk-config` builds the same compressed blob the firmware serves over `GetLayout`, then it is inflated and postcard-decoded with the host types. What you get is exactly what a Rynk host sees.
 
-Every generated `[layout]` round-trips through `rmk_config::layout_blob_from_toml` — the same builder the firmware uses — and the fixture suite verifies geometry is preserved through `vial.json → [layout] → vial.json`.
+Every generated `[layout]` round-trips through `rmk_config::layout_blob_from_toml` — the same builder the firmware uses — and the fixture suite verifies the rendered layout is preserved through `vial.json → [layout] → vial.json`.
 
 ## Web
 
@@ -14,4 +14,4 @@ Every generated `[layout]` round-trips through `rmk_config::layout_blob_from_tom
 wasm-pack build --target web --features wasm
 ```
 
-exports string-in / plain-object-out bindings: `convert_kle(json)`, `keyboard_toml_to_vial(toml)`, and `decode_layout(toml)` (a `LayoutInfo` object for drawing a geometry preview).
+exports string-in / plain-object-out bindings: `convert_kle(json)`, `keyboard_toml_to_vial(toml)`, and `decode_layout(toml)` (a `LayoutInfo` object for drawing a preview).

@@ -3,10 +3,12 @@
 //! RMK's `[layout].map` is the same kind of cursor walk KLE is: the row top maps
 //! to KLE `y`, the column cursor to KLE `x`, and a key's center is `cursor +
 //! size/2`. So the conversion is nearly one-to-one — horizontal offsets become
-//! `[gap]` tokens, per-row vertical offsets become `[y=n]`, and any non-1u
-//! width/height/rotation/L-shape becomes an `@shape` (reusing RMK's stock shapes
-//! where they fit, generating `[layout.shapes]` entries otherwise). VIA layout
-//! options become best-effort `[[layout.variant]]` overlays.
+//! `[gap]` tokens, per-row vertical offsets become `[y=n]`, a KLE rotation
+//! cluster `(r, rx, ry)` becomes an `[r=deg@(px,py)]` region (keys keep their
+//! clean flat coordinates), and any non-1u width/height/L-shape becomes an
+//! `@shape` (reusing RMK's stock shapes where they fit, generating
+//! `[layout.shapes]` entries otherwise). VIA layout options become best-effort
+//! `[[layout.variant]]` overlays.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -134,19 +136,6 @@ impl ShapeDesc {
     }
 }
 
-/// RMK's shipped stock widths (`@Nu`), matched to skip a `[layout.shapes]` entry.
-const STOCK_WIDTHS: &[(f64, &str)] = &[
-    (1.25, "1.25u"),
-    (1.5, "1.5u"),
-    (1.75, "1.75u"),
-    (2.0, "2u"),
-    (2.25, "2.25u"),
-    (2.75, "2.75u"),
-    (3.0, "3u"),
-    (6.25, "6.25u"),
-    (7.0, "7u"),
-];
-
 /// Assigns a shape name to each descriptor: a stock name when one fits (no entry
 /// emitted), otherwise a generated `sN` recorded for `[layout.shapes]`.
 struct ShapeRegistry {
@@ -170,14 +159,14 @@ impl ShapeRegistry {
         // Stock shapes: only pure width/height changes, no nudge/rotation/L-shape.
         if approx(d.x, 0.0) && approx(d.y, 0.0) && approx(d.r, 0.0) && d.rect2.is_none() {
             if approx(d.h, 1.0) {
-                for (w, name) in STOCK_WIDTHS {
-                    if approx(d.w, *w) {
+                for &(name, w) in rmk_config::STOCK_WIDTHS {
+                    if approx(d.w, w as f64) {
                         return name.to_string();
                     }
                 }
             }
             if approx(d.w, 1.0) && approx(d.h, 2.0) {
-                return "2uv".to_string();
+                return "2u_tall".to_string();
             }
         }
         let key = d.key();
@@ -208,31 +197,50 @@ fn has_rect2(k: &SerialKey<f64>) -> bool {
         || (k.height2.abs() > E && (k.height2 - k.height).abs() > E)
 }
 
-/// The top-left corner a key *displays* at, resolving KLE cluster rotation.
+/// A key's KLE rotation cluster — `(angle, pivot_x, pivot_y)` — or `None` when
+/// the key is unrotated (an angle of 0 makes any stale KLE `rx`/`ry` moot).
+/// Maps one-to-one onto an RMK `[r=angle@(px,py)]` region.
+fn rot_of(k: &SerialKey<f64>) -> Option<(f64, f64, f64)> {
+    (!approx(k.rotation, 0.0)).then(|| (k.rotation, k.rx, k.ry))
+}
+
+/// Rotate `(x, y)` about `(px, py)` by `deg` — KLE/CSS convention: positive is
+/// clockwise in screen space.
+fn swing(x: f64, y: f64, deg: f64, px: f64, py: f64) -> (f64, f64) {
+    let (sin, cos) = deg.to_radians().sin_cos();
+    let (dx, dy) = (x - px, y - py);
+    (px + dx * cos - dy * sin, py + dx * sin + dy * cos)
+}
+
+/// The top-left corner to lay a key at in `region`'s flat frame, so that the
+/// region's `[r=deg@(px,py)]` swing lands it exactly where KLE renders it.
 ///
-/// KLE rotates the whole key by `r` about the cluster origin `(rx, ry)`, so the
-/// cap ends up tilted by `r` about a *moved* center. RMK tilts each key about its
-/// own center — the very same rectangle — as long as that center sits at the
-/// rotated position. So we rotate the key's center about `(rx, ry)` (CSS/KLE
-/// convention: positive `r` clockwise in screen space) and hand back the matching
-/// top-left. Unrotated keys return their plain `(x, y)`.
-fn display_top_left(k: &SerialKey<f64>) -> (f64, f64) {
-    if approx(k.rotation, 0.0) {
+/// A key inside its own cluster (every key the map walk places) is simply its
+/// flat KLE `(x, y)` — that is the whole point of emitting regions: the clean
+/// pre-rotation coordinates survive. A frame mismatch (a layout-option
+/// alternate rotated differently than the map's canonical key) un-swings the
+/// true rendered center back into the region's flat frame instead.
+fn region_top_left(k: &SerialKey<f64>, region: Option<(f64, f64, f64)>) -> (f64, f64) {
+    if rot_of(k) == region {
         return (k.x, k.y);
     }
     let (cx, cy) = (k.x + k.width / 2.0, k.y + k.height / 2.0);
-    let (sin, cos) = k.rotation.to_radians().sin_cos();
-    let (dx, dy) = (cx - k.rx, cy - k.ry);
-    let rcx = k.rx + dx * cos - dy * sin;
-    let rcy = k.ry + dx * sin + dy * cos;
-    (rcx - k.width / 2.0, rcy - k.height / 2.0)
+    let (cx, cy) = match rot_of(k) {
+        Some((deg, px, py)) => swing(cx, cy, deg, px, py),
+        None => (cx, cy),
+    };
+    let (cx, cy) = match region {
+        Some((deg, px, py)) => swing(cx, cy, -deg, px, py),
+        None => (cx, cy),
+    };
+    (cx - k.width / 2.0, cy - k.height / 2.0)
 }
 
-/// KLE geometry of one key → an RMK shape (relative to its row's baseline `y`).
-/// `x_nudge` carries any horizontal offset the row's `[gap]` tokens can't (a
-/// backward shift, e.g. between two rotated keys whose caps overlap in x).
+/// KLE position of one key → an RMK shape (relative to its row's baseline `y`),
+/// laid out in `region`'s flat frame. `x_nudge` carries any horizontal offset
+/// the row's `[gap]` tokens can't (a backward shift between overlapping caps).
 /// Returns `None` for a plain 1u key that needs no shape at all.
-fn shape_desc(k: &SerialKey<f64>, baseline: f64, x_nudge: f64) -> Option<ShapeDesc> {
+fn shape_desc(k: &SerialKey<f64>, baseline: f64, x_nudge: f64, region: Option<(f64, f64, f64)>) -> Option<ShapeDesc> {
     let rect2 = has_rect2(k).then(|| {
         let w2 = if approx(k.width2, 0.0) { k.width } else { k.width2 };
         let h2 = if approx(k.height2, 0.0) { k.height } else { k.height2 };
@@ -246,10 +254,12 @@ fn shape_desc(k: &SerialKey<f64>, baseline: f64, x_nudge: f64) -> Option<ShapeDe
         w: k.width,
         h: k.height,
         x: x_nudge,
-        // The vertical part of the (possibly rotation-adjusted) position; the
-        // horizontal part is carried by `[gap]` tokens plus `x_nudge`.
-        y: display_top_left(k).1 - baseline,
-        r: k.rotation,
+        // The vertical part of the flat-frame position; the horizontal part is
+        // carried by `[gap]` tokens plus `x_nudge`.
+        y: region_top_left(k, region).1 - baseline,
+        // The region carries the cluster angle, so a key in its own cluster has
+        // r = 0 here; only a frame mismatch leaves a delta (angles add at decode).
+        r: k.rotation - region.map_or(0.0, |(deg, ..)| deg),
         rect2,
     };
     (!d.is_plain()).then_some(d)
@@ -300,7 +310,7 @@ fn variant_name(labels: Option<&Value>, g: u32, c: u32, used: &mut HashSet<Strin
     name
 }
 
-struct EncoderGeom {
+struct EncoderRender {
     id: u32,
     key: SerialKey<f64>,
     row_index: usize,
@@ -399,11 +409,18 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
             }
         }
     }
-    let mut encoders: Vec<EncoderGeom> = Vec::new();
+    let mut encoders: Vec<EncoderRender> = Vec::new();
     for (i, sw) in enc_switches.iter().enumerate() {
         let id = enc_order[i];
-        if sw.iter().any(|&si| !approx(input.keys[si].rotation, 0.0)) {
-            warnings.push(format!("encoder {id} is rotated — its position is approximate"));
+        // Switches in one rotation cluster → the knob rides the same `[r=...]`
+        // region and its position is exact; mixed clusters have no single flat
+        // frame, so the knob falls back to the flat bounding box.
+        let cluster = rot_of(&input.keys[sw[0]]);
+        let uniform = sw.iter().all(|&si| rot_of(&input.keys[si]) == cluster);
+        if !uniform {
+            warnings.push(format!(
+                "encoder {id} mixes rotation clusters — its position is approximate"
+            ));
         }
         let min_x = sw.iter().map(|&si| input.keys[si].x).fold(f64::INFINITY, f64::min);
         let min_y = sw.iter().map(|&si| input.keys[si].y).fold(f64::INFINITY, f64::min);
@@ -420,9 +437,15 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
         } else {
             (input.keys[sw[0]].width, input.keys[sw[0]].height)
         };
-        encoders.push(EncoderGeom {
+        let mut key = synthetic_key((min_x + max_x) / 2.0 - w / 2.0, (min_y + max_y) / 2.0 - h / 2.0, w, h);
+        if let (true, Some((deg, px, py))) = (uniform, cluster) {
+            key.rotation = deg;
+            key.rx = px;
+            key.ry = py;
+        }
+        encoders.push(EncoderRender {
             id,
-            key: synthetic_key((min_x + max_x) / 2.0 - w / 2.0, (min_y + max_y) / 2.0 - h / 2.0, w, h),
+            key,
             row_index: annotation(sw[0]).row_index,
         });
     }
@@ -480,21 +503,21 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
             }
         }
     }
-    struct UnitGeom<'a> {
+    struct UnitRender<'a> {
         key: &'a SerialKey<f64>,
         row_index: usize,
         option: Option<(u32, u32)>,
     }
-    let unit_geom = |u: &Unit| match u {
+    let unit_render = |u: &Unit| match u {
         Unit::Key(ci) => {
             let ki = canonical(&cells[*ci]);
-            UnitGeom {
+            UnitRender {
                 key: &input.keys[ki],
                 row_index: annotation(ki).row_index,
                 option: annotation(ki).option,
             }
         }
-        Unit::Enc(ei) => UnitGeom {
+        Unit::Enc(ei) => UnitRender {
             key: &encoders[*ei].key,
             row_index: encoders[*ei].row_index,
             option: None,
@@ -502,17 +525,32 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
     };
     let mut buckets: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     for (ui, u) in units.iter().enumerate() {
-        buckets.entry(unit_geom(u).row_index).or_default().push(ui);
+        buckets.entry(unit_render(u).row_index).or_default().push(ui);
     }
 
     let mut reg = ShapeRegistry::new();
     let mut map_lines: Vec<String> = Vec::new();
     let mut map_shape: Vec<Option<String>> = vec![None; cells.len()];
     let mut cell_baseline: Vec<f64> = vec![0.0; cells.len()];
+    let mut cell_region: Vec<Option<(f64, f64, f64)>> = vec![None; cells.len()];
     let mut prev_baseline: Option<f64> = None;
+    // The `[r=...]` region in effect — sticky across lines, mirroring the walk.
+    let mut active_region: Option<(f64, f64, f64)> = None;
+    // The map's y origin: the first row's baseline decodes as 0, so a pivot's
+    // absolute y must be translated by -y0 into the map frame (x needs no
+    // shift — the cursor starts at the sheet's x = 0 and gaps reproduce it).
+    let y0 = buckets
+        .values()
+        .next()
+        .map(|idxs| unit_render(&units[idxs[0]]).key.y)
+        .unwrap_or(0.0);
 
     for unit_idxs in buckets.values() {
-        let baseline = display_top_left(unit_geom(&units[unit_idxs[0]]).key).1;
+        // Everything is laid out in KLE's *flat* (pre-rotation) frame; a key's
+        // cluster becomes an `[r=deg@(px,py)]` region and the build-time walk
+        // re-applies the swing. Flat coordinates are the clean ones the KLE
+        // author typed, so the emitted gaps and steps stay readable.
+        let baseline = unit_render(&units[unit_idxs[0]]).key.y;
         if let Some(pb) = prev_baseline {
             let vstep = baseline - pb - 1.0;
             if !approx(vstep, 0.0) {
@@ -522,12 +560,19 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
         let mut cursor_x = 0.0;
         let mut row_tokens = Vec::new();
         for &ui in unit_idxs {
-            // Position by the *displayed* top-left (rotation already resolved). A
-            // forward gap is a `[gap]` token; a backward one (overlapping caps, e.g.
-            // adjacent rotated keys) rides `x_nudge` — except layout-option
-            // alternates, which the variant re-walk reflows instead.
-            let g = unit_geom(&units[ui]);
-            let ex = display_top_left(g.key).0;
+            // A forward gap is a `[gap]` token; a backward one (overlapping
+            // caps) rides `x_nudge` — except layout-option alternates, which
+            // the variant re-walk reflows instead.
+            let g = unit_render(&units[ui]);
+            let region = rot_of(g.key);
+            if region != active_region {
+                row_tokens.push(match region {
+                    Some((deg, px, py)) => format!("[r={}@({},{})]", fmt(deg), fmt(px), fmt(py - y0)),
+                    None => "[r=0]".to_string(),
+                });
+                active_region = region;
+            }
+            let ex = g.key.x;
             let gap = ex - cursor_x;
             let mut x_nudge = 0.0;
             if gap > EPS {
@@ -539,8 +584,9 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
                 Unit::Key(ci) => {
                     let ci = *ci;
                     cell_baseline[ci] = baseline;
+                    cell_region[ci] = region;
                     let (r, c) = order[ci];
-                    let token = match shape_desc(g.key, baseline, x_nudge) {
+                    let token = match shape_desc(g.key, baseline, x_nudge, region) {
                         None => format!("({r},{c})"),
                         Some(d) => {
                             let name = reg.name_for(&d);
@@ -551,12 +597,8 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
                     row_tokens.push(token);
                 }
                 Unit::Enc(ei) => {
-                    let id = encoders[*ei].id;
-                    let token = match shape_desc(g.key, baseline, x_nudge) {
-                        None => format!("(e,{id})"),
-                        Some(d) => format!("(e,{id},@{})", reg.name_for(&d)),
-                    };
-                    row_tokens.push(token);
+                    // Encoders are a fixed 1u knob: no shape, ever — just `(e,id)`.
+                    row_tokens.push(format!("(e,{})", encoders[*ei].id));
                 }
             }
             // Mirror rmk-config's walk: a shape's `x` shifts only the center,
@@ -624,7 +666,11 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
                 match chosen {
                     None => hidden.push(order[ci]),
                     Some(ki) => {
-                        let name_opt = shape_desc(&input.keys[ki], cell_baseline[ci], 0.0).map(|d| reg.name_for(&d));
+                        // The alternate is laid out in the map cell's region
+                        // frame; `region_top_left` un-swings a mismatched
+                        // cluster so the rendered position stays exact.
+                        let name_opt = shape_desc(&input.keys[ki], cell_baseline[ci], 0.0, cell_region[ci])
+                            .map(|d| reg.name_for(&d));
                         if name_opt != map_shape[ci] {
                             let ov = name_opt.unwrap_or_else(|| reg.name_for(&ShapeDesc::plain()));
                             shapes.push((order[ci], ov));
@@ -750,6 +796,19 @@ mod tests {
     use super::*;
     use crate::kle::{ParsedKeymap, parse_keymap};
 
+    /// The top-left corner a key *displays* at — KLE's ground truth, used to
+    /// verify the converted layout: the key's center swung about its own
+    /// cluster origin, handed back as a top-left.
+    fn display_top_left(k: &SerialKey<f64>) -> (f64, f64) {
+        match rot_of(k) {
+            None => (k.x, k.y),
+            Some((deg, px, py)) => {
+                let (cx, cy) = swing(k.x + k.width / 2.0, k.y + k.height / 2.0, deg, px, py);
+                (cx - k.width / 2.0, cy - k.height / 2.0)
+            }
+        }
+    }
+
     fn gen_layout(v: Value, rows: u32, cols: u32) -> Generated {
         let parsed = parse_keymap(&v).unwrap();
         gen_parsed(&parsed, rows, cols)
@@ -783,7 +842,7 @@ mod tests {
         assert!(g.display_toml.contains("cols = 3"));
         assert!(g.display_toml.contains("(0,0) (0,1) (0,2)"));
         assert!(g.display_toml.contains("(1,0) (1,1) (1,2)"));
-        // KLE carries no keycodes — the output is geometry only, no [keymap].
+        // KLE carries no keycodes — the output is render-only, no [keymap].
         assert!(!g.display_toml.contains("[keymap]"));
         assert!(!g.display_toml.contains("[layout.shapes]")); // all 1u
         assert_valid(&g);
@@ -800,9 +859,9 @@ mod tests {
     }
 
     #[test]
-    fn tall_key_uses_2uv() {
+    fn tall_key_uses_2u_tall() {
         let g = gen_layout(json!([[{"h": 2.0}, "0,0"]]), 1, 1);
-        assert!(g.display_toml.contains("(0,0,@2uv)"));
+        assert!(g.display_toml.contains("(0,0,@2u_tall)"));
         assert_valid(&g);
     }
 
@@ -889,10 +948,33 @@ mod tests {
     }
 
     #[test]
-    fn rotated_key_keeps_its_angle_and_validates() {
-        // A tilted key becomes a shape carrying its rotation, and still builds.
-        let g = gen_layout(json!([[{"r": 30, "rx": 3, "ry": 1}, "0,0"]]), 1, 1);
-        assert!(g.display_toml.contains("r = 30"));
+    fn rotated_key_becomes_a_rotation_region() {
+        // A KLE cluster maps onto an `[r=deg@(px,py)]` region with the key at
+        // its clean flat coordinates — no baked shape, no floats. The pivot's y
+        // is translated into the map frame (the first baseline decodes as 0).
+        let g = gen_layout(json!([[{"r": 30, "rx": 3, "ry": 1, "x": 1}, "0,0"]]), 1, 1);
+        assert!(
+            g.display_toml.contains("[r=30.0@(3.0,0.0)] [4.0] (0,0)"),
+            "{}",
+            g.display_toml
+        );
+        assert!(!g.display_toml.contains("[layout.shapes]"), "{}", g.display_toml);
+        assert_valid(&g);
+    }
+
+    #[test]
+    fn corne_thumbs_emit_readable_regions() {
+        // The corne fixture's four rotated thumb keys each carry a KLE cluster;
+        // the map reproduces them as regions and no shape bakes an angle.
+        let (parsed, rows, cols) = load_fixture("corne.json");
+        let g = gen_parsed(&parsed, rows, cols);
+        assert!(g.display_toml.contains("[r=15.0@(4.5,8.1)]"), "{}", g.display_toml);
+        assert!(g.display_toml.contains("[r=-15.0@(12.0,8.1)]"), "{}", g.display_toml);
+        assert!(
+            !g.display_toml.contains("r ="),
+            "no baked rotation shapes:\n{}",
+            g.display_toml
+        );
         assert_valid(&g);
     }
 
@@ -921,7 +1003,7 @@ mod tests {
     // ── Faithfulness: convert → blob → decode → compare back to kle-serial ──────
     // `assert_valid` only proves the map parses. These decode the built blob the
     // exact way the host does (inflate + postcard into rynk's wire types) and
-    // check each key's center/size/rotation actually matches the input geometry.
+    // check each key's center/size/rotation actually matches the input positions.
 
     /// The canonical (default-shown) instance of a cell — mirrors `generate`.
     fn canon(insts: &[usize], parsed: &ParsedKeymap) -> usize {
@@ -937,10 +1019,10 @@ mod tests {
     }
 
     /// (row,col) → (center_x, center_y, w, h, r) as kle-serial sees it.
-    type ExpectedGeom = HashMap<(u32, u32), (f64, f64, f64, f64, f64)>;
+    type ExpectedRender = HashMap<(u32, u32), (f64, f64, f64, f64, f64)>;
 
     /// What kle-serial says each default-shown key's center/size/rotation is.
-    fn expected_default(parsed: &ParsedKeymap) -> ExpectedGeom {
+    fn expected_default(parsed: &ParsedKeymap) -> ExpectedRender {
         let mut idx: HashMap<(u32, u32), usize> = HashMap::new();
         let mut cells: Vec<Vec<usize>> = Vec::new();
         for (ki, key) in parsed.keys.iter().enumerate() {
@@ -989,35 +1071,35 @@ mod tests {
             .keys
     }
 
-    /// The decoded default variant reproduces kle-serial's geometry, up to one
+    /// The decoded default variant reproduces kle-serial's rendering, up to one
     /// whole-board translation (the display frame's origin is free).
-    fn assert_faithful(decoded: &[rynk::layout::Key], expected: &ExpectedGeom, ctx: &str) {
+    fn assert_faithful(decoded: &[rynk::layout::Key], expected: &ExpectedRender, ctx: &str) {
         assert_eq!(decoded.len(), expected.len(), "{ctx}: key count");
         let close = |a: f64, b: f64| (a - b).abs() < 5e-3;
         let k0 = &decoded[0];
         let e0 = expected[&(k0.row as u32, k0.col as u32)];
-        let (ox, oy) = (k0.x as f64 - e0.0, k0.y as f64 - e0.1);
+        let (ox, oy) = (k0.rect.x as f64 - e0.0, k0.rect.y as f64 - e0.1);
         for k in decoded {
             let e = expected
                 .get(&(k.row as u32, k.col as u32))
                 .unwrap_or_else(|| panic!("{ctx}: decoded ({},{}) absent from kle set", k.row, k.col));
             assert!(
-                close(k.x as f64 - e.0, ox) && close(k.y as f64 - e.1, oy),
+                close(k.rect.x as f64 - e.0, ox) && close(k.rect.y as f64 - e.1, oy),
                 "{ctx}: center ({},{}) decoded ({:.4},{:.4}) vs kle ({:.4},{:.4}), frame off ({ox:.4},{oy:.4})",
                 k.row,
                 k.col,
-                k.x,
-                k.y,
+                k.rect.x,
+                k.rect.y,
                 e.0,
                 e.1
             );
             assert!(
-                close(k.w as f64, e.2) && close(k.h as f64, e.3) && close(k.r as f64, e.4),
+                close(k.rect.w as f64, e.2) && close(k.rect.h as f64, e.3) && close(k.r as f64, e.4),
                 "{ctx}: size/rot ({},{}) decoded (w{},h{},r{}) vs kle (w{},h{},r{})",
                 k.row,
                 k.col,
-                k.w,
-                k.h,
+                k.rect.w,
+                k.rect.h,
                 k.r,
                 e.2,
                 e.3,
@@ -1079,10 +1161,10 @@ mod tests {
         // non-default one.
         let split = info.variants.iter().find(|v| v.name != "default").unwrap();
         let at = |r, c| split.keys.iter().find(|k| k.row == r && k.col == c).unwrap();
-        assert!((at(0, 13).w - 1.0).abs() < 5e-3, "split (0,13) shrank to 1u");
-        assert!((at(0, 14).w - 1.0).abs() < 5e-3, "split (0,14) present");
+        assert!((at(0, 13).rect.w - 1.0).abs() < 5e-3, "split (0,13) shrank to 1u");
+        assert!((at(0, 14).rect.w - 1.0).abs() < 5e-3, "split (0,14) present");
         assert!(
-            (at(0, 14).x - at(0, 13).x - 1.0).abs() < 5e-3,
+            (at(0, 14).rect.x - at(0, 13).rect.x - 1.0).abs() < 5e-3,
             "split key reflowed adjacent"
         );
     }
@@ -1109,7 +1191,6 @@ mod tests {
         // centered at (1, 1.5), knob 1 a 0.5u gap further right.
         assert_eq!(dv.encoders.len(), 2);
         let e = |id| dv.encoders.iter().find(|e| e.id == id).unwrap();
-        assert!((e(0).w - 1.0).abs() < 5e-3 && (e(0).h - 1.0).abs() < 5e-3);
         assert!(
             (e(0).x - 1.0).abs() < 5e-3 && (e(0).y - 1.5).abs() < 5e-3,
             "e0 at ({},{})",
@@ -1232,7 +1313,7 @@ mod tests {
     }
 
     /// Full `vial.json → keyboard.toml → vial.json`: forward to the RMK layout,
-    /// reverse it back to KLE, re-parse, and require the geometry to match the
+    /// reverse it back to KLE, re-parse, and require the render to match the
     /// original (up to one whole-board translation — the display frame is free).
     fn assert_vial_roundtrip(parsed0: &ParsedKeymap, rows: u32, cols: u32, ctx: &str) {
         let info = decode_info(parsed0, rows, cols);
@@ -1335,7 +1416,7 @@ mod tests {
                 .filter_map(|annotation| annotation.encoder.map(|(id, _)| id))
                 .collect();
             assert_eq!(dv.encoders.len(), enc_ids.len(), "{ctx}: encoder count");
-            // Full round-trip: vial.json → toml → vial.json preserves the geometry.
+            // Full round-trip: vial.json → toml → vial.json preserves the rendered layout.
             assert_vial_roundtrip(&parsed, dim("rows"), dim("cols"), &ctx);
         }
     }

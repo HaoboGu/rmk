@@ -1,4 +1,5 @@
 [keyboard]
+# Example identity — replace name, vendor_id and product_id with your keyboard's own
 name = "RMK Keyboard"
 product_name = "RMK Keyboard"
 vendor_id = 0x4c4b
@@ -10,29 +11,29 @@ chip = "rp2040"
 rows = 4
 cols = 3
 map = """
-(0,0) (0,1) (0,2)
-(1,0) (1,1) (1,2)
-(2,0) (2,1) (2,2)
-(3,0) (3,1) (3,2)
+(0,0)  (0,1)  (0,2)
+(1,0)  (1,1)  (1,2)
+(2,0)  (2,1)  (2,2)
+(3,0)  (3,1)  (3,2)
 """
 
 [keymap]
-layers = 2
+layers = 3
 
-[[keymap.layer]]
+[[keymap.layer]] # layer 0
 keys = """
-A B C
-Kc1 Kc2 Kc3
-LCtrl MO(1) LShift
-OSL(1) LT(2, Kc9) LM(1, LShift | LGui)
+A       B           C
+Kc1     Kc2         Kc3
+LCtrl   MO(1)       LShift
+OSL(1)  LT(2, Kc9)  LM(1, LShift | LGui)
 """
 
-[[keymap.layer]]
+[[keymap.layer]] # layer 1
 keys = """
-_ TT(1) TG(2)
-_ _ _
-_ _ _
-_ _ _
+_  TT(1)  TG(2)
+_  _      _
+_  _      _
+_  _      _
 """
 
 [storage]

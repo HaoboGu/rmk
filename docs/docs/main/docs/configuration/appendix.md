@@ -49,7 +49,7 @@ direct_pin_low_active = true
 rows = 5
 # Number of cols. For a split keyboard, this is the total number of cols for all splits
 cols = 4
-# keypad example: (for the key in position (2,1) the `H1` profile is activated)
+# keypad example
 # ┌───┬───┬───┬───┐
 # │NUM│ / │ * │ - │ <-- row 0, col 0..4
 # ├───┼───┼───┼───┤
@@ -62,11 +62,11 @@ cols = 4
 # │   0   │ . │ T │
 # └───────┴───┴───┘
 map = """
-(0,0,R) (0,1,R)    (0,2,R) (0,3,R)
-(1,0,R) (1,1,R)    (1,2,R) (1,3,R)
-(2,0,R) (2,1,R:H1) (2,2,R)
-(3,0,R) (3,1,R)    (3,2,R) (3,3,R)
-(4,0,R)            (4,1,R)
+(0,0,R)  (0,1,R)  (0,2,R)  (0,3,R)
+(1,0,R)  (1,1,R)  (1,2,R)  (1,3,R)
+(2,0,R)  (2,1,R)  (2,2,R)
+(3,0,R)  (3,1,R)  (3,2,R)  (3,3,R)
+(4,0,R)           (4,1,R)
 """
 
 [keymap]
@@ -133,7 +133,7 @@ one_shot_modifiers = {
 enable_flow_tap = true
 prior_idle_time = "120ms"
 hold_on_other_press = true
-unilateral_false = false
+unilateral_tap = false
 hold_timeout = "250ms"
 gap_timeout = "250ms"
 
@@ -187,7 +187,8 @@ morses = [
 ]
 
 [behavior.morse.profiles]
-# the layout.map may refer these to override the defaults given in [behavior.morse] for some key positions - this example is a home row mod
+# Named overrides of the [behavior.morse] defaults, referenced by name from a morse key
+# (profile = "...") or a tap-hold action's optional profile arg — e.g. a home row mod is MT(key, mod, H1).
 H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
 H2 = { enable_flow_tap = false, permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
 MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_timeout = "200ms" }

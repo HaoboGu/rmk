@@ -61,7 +61,10 @@ impl ChipModel {
 
 impl KeyboardTomlConfig {
     pub(crate) fn get_chip_model(&self) -> Result<ChipModel, String> {
-        let keyboard = self.keyboard.as_ref().unwrap();
+        let keyboard = self
+            .keyboard
+            .as_ref()
+            .ok_or_else(|| "[keyboard] section is required in keyboard.toml".to_string())?;
         if keyboard.board.is_none() == keyboard.chip.is_none() {
             return Err("Either \"board\" or \"chip\" should be set in keyboard.toml, but not both".to_string());
         }
@@ -80,7 +83,9 @@ impl KeyboardTomlConfig {
                     chip: "rp2040".to_string(),
                     board: Some(board),
                 }),
-                _ => Err(format!("Unsupported board: {}", board)),
+                _ => Err(format!(
+                    "Unsupported board \"{board}\" — supported boards are nice!nano, nice!nano_v2, XIAO BLE, nrfmicro, bluemicro840, puchi_ble and Pi Pico W; for other hardware set `chip` instead"
+                )),
             }
         } else if let Some(chip) = keyboard.chip.clone() {
             if chip.to_lowercase().starts_with("stm32") {
@@ -108,7 +113,9 @@ impl KeyboardTomlConfig {
                     board: None,
                 })
             } else {
-                Err(format!("Unsupported chip: {}", chip))
+                Err(format!(
+                    "Unsupported chip \"{chip}\" — supported chip families are stm32*, nrf52*, rp2040 and esp32*"
+                ))
             }
         } else {
             Err("Neither board nor chip is specified".to_string())
@@ -116,10 +123,14 @@ impl KeyboardTomlConfig {
     }
 
     pub(crate) fn get_chip_config(&self) -> ChipConfig {
-        let chip_name = &self.get_chip_model().unwrap().chip;
+        // An unresolvable chip is reported by the resolution entry points; here it just
+        // means there is no chip-specific config to look up.
+        let Ok(chip_model) = self.get_chip_model() else {
+            return ChipConfig::default();
+        };
         self.chip
             .as_ref()
-            .and_then(|chip_configs| chip_configs.get(chip_name))
+            .and_then(|chip_configs| chip_configs.get(&chip_model.chip))
             .cloned()
             .unwrap_or_default()
     }

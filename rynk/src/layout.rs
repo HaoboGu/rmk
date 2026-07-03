@@ -18,29 +18,25 @@ pub struct Rect {
     pub h: f32,
 }
 
-/// One key's placement: matrix position, center, size, rotation, and an
-/// optional second rectangle for L-shaped keys (ISO/big-ass Enter).
+/// One key's placement: matrix position, outline `rect` (center + size),
+/// rotation, and an optional second rectangle for L-shaped keys (ISO/big-ass
+/// Enter). `r` rotates the whole key, `rect2` included.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Key {
     pub row: u8,
     pub col: u8,
-    pub x: f32,
-    pub y: f32,
-    pub w: f32,
-    pub h: f32,
+    pub rect: Rect,
     pub r: f32,
     pub rect2: Option<Rect>,
 }
 
-/// One encoder's placement within a variant.
+/// One encoder's placement within a variant: a fixed 1u knob, so just its
+/// center — never resized, rotated, or L-shaped.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Encoder {
     pub id: u8,
     pub x: f32,
     pub y: f32,
-    pub w: f32,
-    pub h: f32,
-    pub r: f32,
 }
 
 /// One render variant (e.g. ANSI / ISO): its own keys and encoders. A hidden key
@@ -72,7 +68,7 @@ impl LayoutInfo {
     /// Decode the compressed `GetLayout` payload produced by `rmk-config`.
     ///
     /// The blob is raw DEFLATE containing postcard-encoded [`LayoutInfo`]. An
-    /// empty blob is a valid "no geometry" layout.
+    /// empty blob is a valid "empty" layout.
     pub fn from_compressed_blob(blob: &[u8]) -> Result<Self, String> {
         if blob.is_empty() {
             return Ok(Self::empty());
@@ -85,7 +81,7 @@ impl LayoutInfo {
 
 #[cfg(test)]
 mod tests {
-    use super::{Key, LayoutInfo, Variant};
+    use super::{Key, LayoutInfo, Rect, Variant};
 
     #[test]
     fn empty_blob_decodes_to_empty_layout() {
@@ -101,10 +97,12 @@ mod tests {
                 keys: vec![Key {
                     row: 0,
                     col: 1,
-                    x: 1.5,
-                    y: 0.5,
-                    w: 1.0,
-                    h: 1.0,
+                    rect: Rect {
+                        x: 1.5,
+                        y: 0.5,
+                        w: 1.0,
+                        h: 1.0,
+                    },
                     r: 0.0,
                     rect2: None,
                 }],

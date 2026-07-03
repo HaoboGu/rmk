@@ -1,5 +1,6 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use rmk_config::DebouncerType;
 use rmk_config::resolved::hardware::{
     BoardConfig, ChipSeries, KeyInfo, MatrixConfig, MatrixType, UniBodyConfig,
 };
@@ -637,13 +638,8 @@ fn expand_key_info_row(row: &Vec<KeyInfo>) -> proc_macro2::TokenStream {
 
 /// Get debouncer type
 pub(crate) fn get_debouncer_type(matrix_config: &MatrixConfig) -> TokenStream2 {
-    match matrix_config
-        .debouncer
-        .clone()
-        .unwrap_or("default".to_string())
-    {
-        s if s == "fast" => quote! { ::rmk::debounce::fast_debouncer::FastDebouncer },
-        s if s == "default" => quote! { ::rmk::debounce::default_debouncer::DefaultDebouncer },
-        _ => panic!("Invalid debouncer type, supported debouncer types are `default` and `fast`"),
+    match matrix_config.debouncer {
+        DebouncerType::Fast => quote! { ::rmk::debounce::fast_debouncer::FastDebouncer },
+        DebouncerType::Default => quote! { ::rmk::debounce::default_debouncer::DefaultDebouncer },
     }
 }

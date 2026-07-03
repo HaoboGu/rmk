@@ -129,7 +129,7 @@ mod wasm {
     }
 
     /// `[layout]` TOML text → the decoded `LayoutInfo` as a plain JS object,
-    /// for rendering a geometry preview.
+    /// for rendering a preview.
     #[wasm_bindgen]
     pub fn decode_layout(toml_text: &str) -> Result<JsValue, JsError> {
         serde_wasm_bindgen::to_value(&crate::decode_layout(toml_text).map_err(js_err)?).map_err(js_err)
@@ -168,7 +168,7 @@ mod tests {
     #[test]
     fn decode_layout_accepts_full_keyboard_toml() {
         // Only [layout] is read — the rest of the config (chip, matrix, …) is
-        // irrelevant to geometry and must not be required.
+        // irrelevant to the rendered layout and must not be required.
         let info = decode_layout("[keyboard]\nname = \"x\"\n\n[layout]\nrows = 1\ncols = 1\nmap = \"(0,0)\"").unwrap();
         assert_eq!(info.variants.len(), 1);
         assert_eq!(info.variants[0].keys.len(), 1);
