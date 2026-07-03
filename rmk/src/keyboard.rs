@@ -162,14 +162,16 @@ impl Runnable for Keyboard<'_> {
                     .chain(self.mouse.next_deadline())
                     .reduce(|a, b| a.min(b));
                 if let Some(deadline) = deadline {
-                    if with_deadline(deadline, async {
-                        let event = self.keyboard_event_subscriber.next_message_pure().await;
-                        self.process_inner(event).await
-                    })
-                    .await
-                    .is_err()
-                    {
-                        // timeout only, handled by post-check below
+                    let event_result =
+                        with_deadline(deadline, self.keyboard_event_subscriber.next_message_pure())
+                            .await;
+                    match event_result {
+                        Ok(event) => {
+                            self.process_inner(event).await;
+                        }
+                        Err(_) => {
+                            // timeout only, handled by post-check below
+                        }
                     }
                 } else {
                     let event = self.keyboard_event_subscriber.next_message_pure().await;

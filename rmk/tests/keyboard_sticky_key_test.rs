@@ -245,10 +245,11 @@ fn create_test_keyboard_with_behavior_config(config: BehaviorConfig) -> Keyboard
                 [KC_LCTRL | KC_LSHIFT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]], // SK press: Ctrl+Shift+Tab
                 [KC_LCTRL | KC_LSHIFT, [0, 0, 0, 0, 0, 0]],             // SK release: Ctrl+Shift held
                 [KC_LCTRL, [0, 0, 0, 0, 0, 0]],                          // Shift release: Ctrl held
-                [0, [0, 0, 0, 0, 0, 0]],                                  // MO release: SK cleaned up
+                [0, [0, 0, 0, 0, 0, 0]],                        // MO release: SK cleaned up
             ]
         };
     }
+
 
     /// StickyKey Test 4: Rapid presses — 3x SK press/release while MO held
     ///
@@ -304,10 +305,11 @@ fn create_test_keyboard_with_behavior_config(config: BehaviorConfig) -> Keyboard
             expected_reports: [
                 [KC_LCTRL | KC_LSHIFT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],  // SK press: Ctrl+Shift+Tab
                 [KC_LCTRL | KC_LSHIFT, [0, 0, 0, 0, 0, 0]],                 // SK release: Ctrl+Shift held
-                [0, [0, 0, 0, 0, 0, 0]],                                      // MO release: SK cleaned up
+                [0, [0, 0, 0, 0, 0, 0]],                        // MO release: SK cleaned up
             ]
         };
     }
+
 
     /// StickyKey Test 6: Timeout — modifier auto-releases after inactivity
     ///
@@ -669,7 +671,65 @@ fn create_test_keyboard_with_behavior_config(config: BehaviorConfig) -> Keyboard
         };
     }
 
-    /// StickyKey Test 16: `quick_release` is IGNORED for tap-key SKs.
+    /// KEYMAP_PUREMOD_SK: pure-mod SK at col 4, basic keys at cols 0-2, for testing "timeout while held".
+const KEYMAP_PUREMOD_SK: [[[KeyAction; 6]; 1]; 1] = [[[
+    k!(A),                                // col 0: A
+    k!(B),                                // col 1: B
+    k!(C),                                // col 2: C
+    a!(No),                               // col 3: No
+    sk_mod!(ModifierCombination::LSHIFT), // col 4: SK(LShift)
+    a!(No),                               // col 5: No
+]]];
+
+fn create_test_keyboard_puremod_sk() -> Keyboard<'static> {
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
+        sticky_key: StickyKeyConfig {
+            timeout: Duration::from_millis(10),
+            ..StickyKeyConfig::default()
+        },
+        ..BehaviorConfig::default()
+    }));
+    let per_key_config: &'static PositionalConfig<1, 6> = Box::leak(Box::new(PositionalConfig::default()));
+    Keyboard::new(wrap_keymap(KEYMAP_PUREMOD_SK, per_key_config, behavior_config))
+}
+
+/// StickyKey Test 17: Timeout fires while SK is still physically held (Pressed phase).
+///
+/// The guard in `release_sticky_key_if_active()` must prevent the latch from being
+/// cleared. After release the SK transitions to Latched (deadline refreshed), so the
+/// next key press still gets the modifier applied. Then the next key press after that
+/// does NOT have the modifier (latched-only-for-one-key behavior).
+///
+/// Sequence:
+/// - Press SK(LShift) → Active(Pressed, deadline = t+10ms, no report since activate_on_keypress=false)
+/// - Hold 20ms (past 10ms timeout) → timeout fires, guard clears deadline, returns; state stays
+/// - Release SK → Pressed→Latched, deadline refreshed
+/// - Press A → register A, modifier applied (pressed=true), report: LShift + A
+/// - Release A → update_sticky_key consumes Latched (quick_release=false, !pressed), state→None
+/// - Press B → no modifier, report: B only
+/// - Release B
+#[test]
+fn test_sk_timeout_while_held() {
+    key_sequence_test! {
+        keyboard: create_test_keyboard_puremod_sk(),
+        sequence: [
+            [0, 4, true,  0],   // Press SK(LShift) — state=Pressed, deadline=t+10ms
+            [0, 4, false, 20],  // Hold 20ms (>10ms timeout), then release
+            [0, 0, true,  0],   // Press A
+            [0, 0, false, 0],   // Release A
+            [0, 1, true,  0],   // Press B
+            [0, 1, false, 0],   // Release B
+        ],
+        expected_reports: [
+            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],  // A press: LShift applied through terminating key
+            [0, [0, 0, 0, 0, 0, 0]],                       // A release: LShift consumed with the key
+            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],           // B press: no modifier (SK already consumed)
+            [0, [0, 0, 0, 0, 0, 0]],                        // B release
+        ]
+    };
+}
+
+/// StickyKey Test 16: `quick_release` is IGNORED for tap-key SKs.
     ///
     /// Docs: `quick_release` is "honored only for pure-mod SKs" and is "silently
     /// ignored for tap-key SKs". Its pure-mod semantics (release the modifier on
