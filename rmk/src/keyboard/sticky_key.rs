@@ -146,9 +146,12 @@ impl Keyboard<'_> {
                     phase: SkPhase::Pressed,
                     ..
                 } => {
-                    // Released before any other key → arm it for the next key.
-                    if let StickyKeyState::Active { phase, .. } = &mut self.sticky_key_state {
+                    // Released before any other key → arm it for the next key. Refresh the
+                    // deadline on release-to-Latched so the timeout is measured from release
+                    // time (not press time). Mirrors the layer shape behavior at line 214.
+                    if let StickyKeyState::Active { phase, deadline: d, .. } = &mut self.sticky_key_state {
                         *phase = SkPhase::Latched;
+                        *d = deadline;
                     }
                 }
                 StickyKeyState::Active {
@@ -362,6 +365,24 @@ impl Keyboard<'_> {
         if !self.sticky_key_state.is_active() {
             return;
         }
+
+        // If the SK is still physically held (Pressed phase), the deadline fired but the
+        // key hasn't been released yet. Don't clear the latch — the physical release
+        // handler (process_sticky_*) will transition Held→None cleanly. For pure-mod,
+        // the deadline was set on press (→ Held on any other key press), so this can
+        // only happen when the key is held and idle. For layer and tap-key shapes, the
+        // deadline fires in the same scenario.
+        if matches!(
+            self.sticky_key_state,
+            StickyKeyState::Active {
+                phase: SkPhase::Pressed,
+                ..
+            }
+        ) {
+            debug!("StickyKey timeout fired while key is still held — deferring to physical release");
+            return;
+        }
+
         debug!("Releasing StickyKey");
 
         // Decide whether the release needs its own HID report. A report is only meaningful
