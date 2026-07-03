@@ -372,6 +372,7 @@ impl Keyboard<'_> {
         // the deadline was set on press (→ Held on any other key press), so this can
         // only happen when the key is held and idle. For layer and tap-key shapes, the
         // deadline fires in the same scenario.
+        // Clear the deadline to avoid busy-looping on every iteration.
         if matches!(
             self.sticky_key_state,
             StickyKeyState::Active {
@@ -379,7 +380,10 @@ impl Keyboard<'_> {
                 ..
             }
         ) {
-            debug!("StickyKey timeout fired while key is still held — deferring to physical release");
+            debug!("StickyKey timeout fired while key is still held — clearing deadline, deferring to physical release");
+            if let StickyKeyState::Active { deadline, .. } = &mut self.sticky_key_state {
+                *deadline = None;
+            }
             return;
         }
 

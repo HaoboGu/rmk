@@ -145,7 +145,7 @@ impl Runnable for Keyboard<'_> {
             // (`#[cfg(feature = "split")]`, see below) pushes events here for re-processing.
             // Do NOT delete the queue or this consumer.
             // (The OSM/OSL producers were removed once those behaviors moved to the SK engine,
-            // whose timeout is now driven by the deadline race below rather than an inline select.)
+            // whose timeout is now driven by the inline race below.)
             if !self.unprocessed_events.is_empty() {
                 // Process unprocessed events
                 let e = self.unprocessed_events.remove(0);
@@ -155,33 +155,36 @@ impl Runnable for Keyboard<'_> {
                 // Process buffered held key
                 self.process_buffered_key(key).await
             } else {
-                // Race subscriber against any pending deadlines (mouse repeat, SK timeout)
-                let sk_deadline = self.sticky_key_state.deadline();
-                let mouse_deadline = self.mouse.next_deadline();
-                let combined_deadline = [sk_deadline, mouse_deadline]
+                // Race subscriber against the nearest pending deadline.
+                let deadline = self.sticky_key_state
+                    .deadline()
                     .into_iter()
-                    .flatten()
+                    .chain(self.mouse.next_deadline())
                     .reduce(|a, b| a.min(b));
-                let event = if let Some(deadline) = combined_deadline {
-                    match with_deadline(deadline, self.keyboard_event_subscriber.next_message_pure()).await {
-                        Ok(event) => event,
-                        Err(_) => {
-                            let now = Instant::now();
-                            if sk_deadline.is_some_and(|d| now >= d) {
-                                self.release_sticky_key_if_active().await;
-                            }
-                            if mouse_deadline.is_some_and(|d| now >= d) {
-                                self.fire_mouse_repeat().await;
-                            }
-                            continue;
-                        }
+                if let Some(deadline) = deadline {
+                    if with_deadline(deadline, async {
+                        let event = self.keyboard_event_subscriber.next_message_pure().await;
+                        self.process_inner(event).await
+                    })
+                    .await
+                    .is_err()
+                    {
+                        // timeout only, handled by post-check below
                     }
                 } else {
-                    // No deadlines pending, wait indefinitely
-                    self.keyboard_event_subscriber.next_message_pure().await
-                };
-                self.process_inner(event).await
+                    let event = self.keyboard_event_subscriber.next_message_pure().await;
+                    self.process_inner(event).await
+                }
             };
+
+            // Check deadlines after processing / timeout.
+            let now = Instant::now();
+            if self.sticky_key_state.deadline().is_some_and(|d| now >= d) {
+                self.release_sticky_key_if_active().await;
+            }
+            if self.mouse.next_deadline().is_some_and(|d| now >= d) {
+                self.fire_mouse_repeat().await;
+            }
         }
     }
 }
@@ -1596,6 +1599,9 @@ impl<'a> Keyboard<'a> {
         // Change layer state only when the key's state is changed
         if event.pressed {
             self.keymap.activate_layer(layer_num);
+            if self.keymap.sticky_key_config().release_on_layer_change {
+                self.release_sticky_key_if_active().await;
+            }
         } else {
             self.keymap.deactivate_layer(layer_num);
             if self.keymap.sticky_key_config().release_on_layer_change {
