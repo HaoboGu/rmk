@@ -1,6 +1,9 @@
 target
 node_modules
 
+# wasm-pack output
+pkg
+
 .DS_Store
 
 *.bin

@@ -17,7 +17,7 @@ pub(crate) fn expand_default_keymap(keymap: &Keymap, behavior: &Behavior) -> Tok
         .map(|m| m.profiles.clone())
         .filter(|p| !p.is_empty());
 
-    let num_encoder: usize = keymap.encoder_counts.iter().sum();
+    let num_encoder = keymap.num_encoder;
 
     let mut layers = vec![];
     let mut encoder_map = vec![];

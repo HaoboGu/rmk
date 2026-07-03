@@ -8,6 +8,8 @@ RMK splits the keyboard description into three sections:
 - `[layout]` — the **physical** arrangement: the grid size (`rows`/`cols`) and the `map` of key positions.
 - `[keymap]` — the **logical** assignments: the layer count and what each key does.
 
+If your keyboard already has a [KLE](http://www.keyboard-layout-editor.com/) layout or a Vial `vial.json`, the `[layout]` section can be generated from it — see [converting from KLE or Vial](#converting-from-kle-or-vial).
+
 ```toml
 [layout]
 rows = 5
@@ -184,3 +186,22 @@ The optional `<hand>` marker on each `[layout].map` position tells RMK which han
 - `*` — bilateral; treated as the opposite hand no matter which hand's modifier was held
 
 The marker is the third element of the position tuple, e.g. `(0, 0, L)`. See the split ortho example above for a full map with hand information filled in.
+
+## Converting from KLE or Vial
+
+If your keyboard already has a [KLE](http://www.keyboard-layout-editor.com/) layout or a [Vial](https://get.vial.today/) definition, you don't have to write the `[layout]` section by hand: `rmkit layout convert` (part of [rmkit](https://github.com/haobogu/rmkit)) converts both. It accepts a raw KLE JSON export ("Download JSON" on keyboard-layout-editor.com) or a `vial.json` (which embeds the same KLE data in `layouts.keymap`), and emits the equivalent `[layout]`:
+
+```bash
+rmkit layout convert path/to/vial.json -o layout.toml   # vial.json → [layout]
+rmkit layout convert path/to/kle_export.json            # a raw KLE export works too
+rmkit layout convert --to-vial keyboard.toml            # reverse: [layout] → vial.json
+```
+
+Key positions, cap sizes, split gaps, rotation, ISO/L-shaped caps, encoders, and VIA layout options are all converted (to `map` tokens plus `[layout.shapes]` / `[[layout.variant]]` entries as needed), and the result is round-tripped through RMK's own layout builder before it is printed, so it is guaranteed to build.
+
+Two things to review in the output:
+
+- **Matrix positions** are taken from the VIA-style `row,col` legends. A plain KLE export usually has key labels instead (`Esc`, `Q`, …) — the converter then assigns positions row-major and prints a warning; adjust them to match your `[matrix]` wiring.
+- **No keycodes are converted** (KLE and `vial.json` carry none), so author the `[keymap]` yourself: each layer's `keys` follow the map's key order, plus one `["cw", "ccw"]` pair per encoder in `encoders`.
+
+The reverse direction (`--to-vial`) turns a `keyboard.toml`'s `[layout]` into a starting `vial.json` for [Vial support](../features/vial_support). To check the geometry without flashing, render it in the terminal with `rmkit layout show` — it takes a `keyboard.toml`, or a `vial.json` / KLE export directly.

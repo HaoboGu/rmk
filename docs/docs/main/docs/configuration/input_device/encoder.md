@@ -102,8 +102,9 @@ encoders = [["_", "_"], ["BrightnessUp", "BrightnessDown"]]
 
 **Notes:**
 
-- If the actions for an encoder are not specified in `encoders`, they will default to no action.
-- The number of encoder entries should match the number of physical encoders defined in `[[input_device.encoder]]`.
+- A layer must list actions for **every** encoder, or omit the `encoders` field entirely. Listing only some of the board's encoders is rejected, because the unlisted ones would silently stop working on that layer. To keep an encoder inactive on a given layer, give it an explicit `["_", "_"]` (transparent) or `["No", "No"]` entry — as shown for encoder 0 on layer 1 above.
+- When `encoders` is omitted from a layer, every encoder defaults to no action on that layer.
+- The number of encoder entries must match the number of physical encoders defined in `[[input_device.encoder]]`. On split keyboards this is the total across all halves, in the order they are defined (central first, then each peripheral).
 
 ## Rust configuration
 

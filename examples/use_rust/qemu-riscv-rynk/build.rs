@@ -8,10 +8,7 @@ fn main() {
 
     // Copy memory.x to OUT_DIR so the linker can find it.
     for (name, bytes) in [("memory.x", include_bytes!("memory.x").as_slice())] {
-        File::create(out.join(name))
-            .unwrap()
-            .write_all(bytes)
-            .unwrap();
+        File::create(out.join(name)).unwrap().write_all(bytes).unwrap();
         println!("cargo:rerun-if-changed={name}");
     }
     println!("cargo:rustc-link-search={}", out.display());

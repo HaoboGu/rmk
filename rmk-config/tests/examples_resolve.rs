@@ -41,5 +41,9 @@ fn all_use_config_examples_resolve() {
     }
     let _ = std::panic::take_hook();
 
-    assert!(failures.is_empty(), "examples failed to resolve:\n{}", failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "examples failed to resolve:\n{}",
+        failures.join("\n")
+    );
 }

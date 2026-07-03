@@ -43,7 +43,14 @@ It's important to understand the difference:
 
 :::
 
-Once you have your `vial.json` file, simply place it in the root directory of your RMK firmware project. RMK will automatically handle the rest.
+::: tip Generate vial.json from your keyboard.toml
+
+If your `keyboard.toml` already defines the [`[layout]`](../configuration/layout) section, [rmkit](https://github.com/haobogu/rmkit) can generate a matching `vial.json` for you: run `rmkit layout convert --to-vial path/to/keyboard.toml`. The geometry is decoded from the exact layout the firmware builds, so it cannot drift from the firmware — just fill in the Vial-specific fields (USB `vendorId`/`productId`, `lighting`, `customKeycodes`, …) yourself. The same command also works in the forward direction, converting an existing `vial.json` or KLE export into the `[layout]` section — see [converting from KLE or Vial](../configuration/layout#converting-from-kle-or-vial).
+
+:::
+
+Once you have your `vial.json` file, simply place it in the root directory of your RMK firmware
+project. RMK will automatically handle the rest.
 
 ## Disable Vial
 

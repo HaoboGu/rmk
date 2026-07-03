@@ -9,23 +9,25 @@ pub struct Keymap {
     pub keymap: Vec<Vec<Vec<String>>>,
     pub encoder_map: Vec<Vec<[String; 2]>>,
     pub key_info: Vec<Vec<KeyInfo>>,
-    pub encoder_counts: Vec<usize>,
+    /// Total number of encoders on the board.
+    pub num_encoder: usize,
 }
 
 impl crate::KeyboardTomlConfig {
     /// Resolve the keymap configuration from TOML config.
     pub fn keymap(&self) -> Result<Keymap, String> {
         let (keymap_config, key_info) = self.get_keymap_config()?;
-        let board = self.get_board_config()?;
-        let encoder_counts = board.get_num_encoder();
+        // Encoders may be spread across split halves; only the board-wide total is used downstream.
+        let num_encoder: usize = self.get_board_config()?.get_num_encoder().iter().sum();
 
-        // A layer may list fewer encoders than the hardware has (the rest default to No),
-        // but listing more is an unambiguous mistake that codegen would otherwise silently drop.
-        let total_encoders: usize = encoder_counts.iter().sum();
+        // Encoder count is a board-wide constant, so a layer wires every encoder or none
+        // (matching the [layout].map all-or-nothing rule). A partial list would silently
+        // leave the unlisted encoders dead on that layer; too many would be truncated.
         for (i, encoders) in keymap_config.encoder_map.iter().enumerate() {
-            if encoders.len() > total_encoders {
+            if !encoders.is_empty() && encoders.len() != num_encoder {
                 return Err(format!(
-                    "keyboard.toml: [[keymap.layer]] #{i} lists {} encoders but the board has {total_encoders}",
+                    "keyboard.toml: [[keymap.layer]] #{i} lists {} encoders but the board has \
+                     {num_encoder} (configure all {num_encoder} or none)",
                     encoders.len()
                 ));
             }
@@ -38,7 +40,7 @@ impl crate::KeyboardTomlConfig {
             keymap: keymap_config.keymap,
             encoder_map: keymap_config.encoder_map,
             key_info,
-            encoder_counts,
+            num_encoder,
         })
     }
 }

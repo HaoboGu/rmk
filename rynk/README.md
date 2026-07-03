@@ -6,7 +6,10 @@ forks, morse, macros, and behavior, and to observe live status.
 
 This crate owns the protocol state machine only. Device discovery, connection,
 and byte I/O live in separate transport crates such as `rynk-serial` and
-`rynk-ble`.
+`rynk-ble`. The `rynk-kle` crate converts KLE exports / Vial `vial.json` ↔
+RMK's `[layout]` and decodes layouts into `rynk::layout` types — natively and,
+via its `wasm` feature, on the web; the `rmkit layout` CLI in
+[rmkit](https://github.com/haobogu/rmkit) wraps it.
 
 ## Concepts
 

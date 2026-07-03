@@ -23,8 +23,7 @@ pub(crate) fn expand_keyboard_info(
     let num_col = keymap.cols as usize;
     let num_row = keymap.rows as usize;
     let num_layer = keymap.layers as usize;
-    let num_encoder = &keymap.encoder_counts;
-    let total_num_encoder: usize = num_encoder.iter().sum();
+    let total_num_encoder = keymap.num_encoder;
     quote! {
         pub(crate) const COL: usize = #num_col;
         pub(crate) const ROW: usize = #num_row;

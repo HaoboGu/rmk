@@ -140,13 +140,15 @@ fn stock_shapes() -> HashMap<String, Shape> {
         },
     );
     // ISO Enter: a 1.25×2 bar + a 1.5×1 top overhang (true L, two rects).
+    // rect2 offsets are center-to-center, NOT KLE's top-left x2/y2: the
+    // overhang sits on the bar's upper row with the right edges flush.
     m.insert(
         "iso_enter".to_string(),
         Shape {
             w: 1.25,
             h: 2.0,
             y: -1.0,
-            rect2: Some((1.5, 1.0, -0.25, 0.0)),
+            rect2: Some((1.5, 1.0, -0.125, -0.5)),
             ..Shape::default()
         },
     );
@@ -636,6 +638,29 @@ mod tests {
     }
 
     #[test]
+    fn stock_iso_enter_is_a_true_l() {
+        // The 1.5u overhang sits on the upper of the bar's two rows with the
+        // right edges flush — rect2 offsets are center-to-center, so KLE's
+        // top-left (-0.25, 0) becomes (-0.125, -0.5) here.
+        let info = info_of("rows = 1\ncols = 1\nmap = \"(0,0,@iso_enter)\"");
+        let k = key(&info.variants[0], 0, 0);
+        let r2 = k.rect2.expect("two rects");
+        assert!(approx(r2.w, 1.5) && approx(r2.h, 1.0));
+        assert!(
+            approx(k.x + k.w / 2.0, r2.x + r2.w / 2.0),
+            "right edges flush: bar {} vs overhang {}",
+            k.x + k.w / 2.0,
+            r2.x + r2.w / 2.0
+        );
+        assert!(
+            approx(r2.y, k.y - 0.5),
+            "overhang on the upper row: {} vs {}",
+            r2.y,
+            k.y - 0.5
+        );
+    }
+
+    #[test]
     fn y_step_is_one_shot_and_lazy() {
         // Row 1 lands 1 + 0.25 = 1.25 below row 0 despite the marker on its own line.
         let info = info_of("rows = 2\ncols = 2\nmap = \"\"\"\n(0,0) (0,1)\n[y=0.25]\n(1,0) (1,1)\n\"\"\"");
@@ -908,7 +933,7 @@ bsl = { w = 1.0 }
 tab = { w = 1.5 }
 caps = { w = 1.75 }
 enter = { w = 2.25 }
-isoenter = { w = 1.25, h = 2.0, y = -1.0, w2 = 1.5, h2 = 1.0, x2 = -0.25 }
+isoenter = { w = 1.25, h = 2.0, y = -1.0, w2 = 1.5, h2 = 1.0, x2 = -0.125, y2 = -0.5 }
 lsft = { w = 2.25 }
 lsft_iso = { w = 1.25 }
 isokey = { w = 1.0 }

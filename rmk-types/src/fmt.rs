@@ -94,7 +94,7 @@ macro_rules! wasm_object_abi {
         #[cfg(feature = "wasm")]
         const _: () = {
             use ::wasm_bindgen::convert::{IntoWasmAbi, OptionIntoWasmAbi};
-            use ::wasm_bindgen::describe::{inform, WasmDescribe, NAMED_EXTERNREF};
+            use ::wasm_bindgen::describe::{NAMED_EXTERNREF, WasmDescribe, inform};
             use ::wasm_bindgen::prelude::*;
 
             impl From<$ty> for JsValue {

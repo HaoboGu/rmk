@@ -708,4 +708,36 @@ mod tests {
         );
         assert!(cfg.keymap().is_err());
     }
+
+    /// A board with two physical encoders (declared via top-level `[[input_device.encoder]]`).
+    fn two_encoder_config(encoders_line: &str) -> KeyboardTomlConfig {
+        config(&format!(
+            "[matrix]\nrow_pins = [\"r0\"]\ncol_pins = [\"c0\"]\n\
+             [layout]\nrows = 1\ncols = 1\nmap = \"(0,0)\"\n\
+             [keymap]\n[[keymap.layer]]\nkeys = \"A\"\n{encoders_line}\n\
+             [[input_device.encoder]]\npin_a = \"a0\"\npin_b = \"b0\"\n\
+             [[input_device.encoder]]\npin_a = \"a1\"\npin_b = \"b1\"\n"
+        ))
+    }
+
+    #[test]
+    fn layer_with_partial_encoders_is_rejected() {
+        // Board has 2 encoders; a layer listing only 1 would silently kill the second → rejected.
+        assert!(two_encoder_config("encoders = [[\"Up\", \"Down\"]]").keymap().is_err());
+    }
+
+    #[test]
+    fn layer_with_all_encoders_is_accepted() {
+        assert!(
+            two_encoder_config("encoders = [[\"Up\", \"Down\"], [\"Left\", \"Right\"]]")
+                .keymap()
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn layer_with_no_encoders_is_accepted() {
+        // Omitting `encoders` on a layer means every encoder defaults to No — always allowed.
+        assert!(two_encoder_config("").keymap().is_ok());
+    }
 }

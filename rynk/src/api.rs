@@ -241,17 +241,7 @@ impl<T: Read + Write> Client<T> {
         // Trust total_len: a device that over-reports a page length can't make us
         // inflate more than the advertised blob.
         collected.truncate(total.unwrap_or(0));
-        // No geometry: the producer emits an empty blob, which can't be inflated.
-        if collected.is_empty() {
-            return Ok(LayoutInfo {
-                default_variant: 0,
-                variants: Vec::new(),
-            });
-        }
-        // Raw DEFLATE, matching the firmware's `miniz_oxide` compressor.
-        let inflated = miniz_oxide::inflate::decompress_to_vec(&collected)
-            .map_err(|e| RynkHostError::Layout(format!("inflate failed: {e}")))?;
-        postcard::from_bytes::<LayoutInfo>(&inflated).map_err(|e| RynkHostError::Layout(format!("decode failed: {e}")))
+        LayoutInfo::from_compressed_blob(&collected).map_err(RynkHostError::Layout)
     }
 
     // ── combos / forks / morse / macros ──

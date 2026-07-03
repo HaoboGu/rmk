@@ -503,7 +503,7 @@ pub(crate) fn expand_keymap_and_storage(hardware: &Hardware, keymap: &Keymap) ->
         quote! { let per_key_config = ::rmk::config::PositionalConfig::new(#key_info_config); }
     };
 
-    let total_num_encoders: usize = keymap.encoder_counts.iter().sum();
+    let total_num_encoders = keymap.num_encoder;
 
     let keymap_data_init = if total_num_encoders == 0 {
         quote! {

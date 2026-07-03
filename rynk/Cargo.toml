@@ -55,11 +55,13 @@ members = [
     "rynk-serial",
     "rynk-ble",
     "rynk-wasm",
+    "rynk-kle",
 ]
 default-members = [
     ".",
     "rynk-serial",
     "rynk-ble",
+    "rynk-kle",
 ]
 
 [workspace.package]
