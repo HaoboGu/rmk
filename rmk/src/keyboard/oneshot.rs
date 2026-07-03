@@ -167,7 +167,7 @@ impl<'a> Keyboard<'a> {
                         let now = Instant::now();
                         if now >= deadline {
                             // Timeout, deactivate layer
-                            self.keymap.deactivate_layer(layer_num);
+                            self.keymap.deactivate_layer(l);
                             self.osl_state = OneShotState::None;
                             break;
                         }
@@ -175,7 +175,7 @@ impl<'a> Keyboard<'a> {
                         match select(timeout, self.keyboard_event_subscriber.next_message_pure()).await {
                             Either::First(_) => {
                                 // Timeout, deactivate layer
-                                self.keymap.deactivate_layer(layer_num);
+                                self.keymap.deactivate_layer(l);
                                 self.osl_state = OneShotState::None;
                                 break;
                             }
