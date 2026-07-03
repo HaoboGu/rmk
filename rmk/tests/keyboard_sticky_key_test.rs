@@ -6,9 +6,9 @@ use rmk::keyboard::Keyboard;
 use rmk::types::action::KeyAction;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{a, k, mo, sk, sk_layer, sk_mod};
-use rusty_fork::rusty_fork_test;
 
 use crate::common::{KC_LALT, KC_LCTRL, KC_LGUI, KC_LSHIFT, wrap_keymap};
+
 
 // KEYMAP (release_on_layer_change=true is set in the helper config, not per-key)
 // Layer 0: A             B             C             MO(1)         LShift        No
@@ -150,8 +150,7 @@ fn create_test_keyboard_with_behavior_config(config: BehaviorConfig) -> Keyboard
     Keyboard::new(wrap_keymap(KEYMAP, per_key_config, behavior_config))
 }
 
-rusty_fork_test! {
-    /// StickyKey Test 1: Basic SK flow — press SK twice while MO held
+/// StickyKey Test 1: Basic SK flow — press SK twice while MO held
     ///
     /// Sequence:
     /// - Press MO(1) → layer activates, no report
@@ -705,4 +704,3 @@ rusty_fork_test! {
             ]
         };
     }
-}
