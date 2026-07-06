@@ -24,6 +24,8 @@ GetCurrentLayer reply Ok(1)                                             01 08 01
 GetCurrentLayer request ()                                              01 08 01 00 00
 GetDefaultLayer reply Ok(2)                                             03 01 01 02 00 00 02
 GetDefaultLayer request ()                                              03 01 01 00 00
+GetDeviceInfo reply Ok(DeviceInfo{1.2.3,4,5,RMK,..})                    0a 00 01 21 00 00 01 02 03 04 05 03 52 4d 4b 0c 52 4d 4b 20 4b 65 79 62 6f 61 72 64 09 72 79 6e 6b 3a 30 30 30 31
+GetDeviceInfo request ()                                                0a 00 01 00 00
 GetEncoderAction reply Ok(EncoderAction{Morse(3),No})                   05 01 01 04 00 00 05 03 00
 GetEncoderAction request GetEncoderRequest{1,2}                         05 01 01 02 00 01 02
 GetFork reply Ok(Fork{Single(A),No,Morse(2)})                           01 05 01 10 00 00 02 01 00 04 00 05 02 01 02 01 00 00 00 02 01

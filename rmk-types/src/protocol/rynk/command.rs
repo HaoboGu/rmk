@@ -10,9 +10,9 @@
 use super::endpoint::{Endpoint, Topic, max_const};
 use super::message::RynkMessage;
 use super::{
-    BehaviorConfig, DeviceCapabilities, GetEncoderRequest, GetMacroRequest, KeyPosition, MacroData, MatrixState,
-    ProtocolVersion, RynkError, SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetMacroRequest,
-    SetMorseRequest, StorageResetMode,
+    BehaviorConfig, DeviceCapabilities, DeviceInfo, GetEncoderRequest, GetMacroRequest, KeyPosition, MacroData,
+    MatrixState, ProtocolVersion, RynkError, SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest,
+    SetMacroRequest, SetMorseRequest, StorageResetMode,
 };
 #[cfg(feature = "bulk")]
 use super::{
@@ -196,12 +196,14 @@ macro_rules! topics {
 
 // Define endpoints: `Name = value: Request => Response;`
 endpoints! {
-    // ── System (0x00xx); 0x0006..=0x0008 reserved for the lock gate ──
+    // ── System (0x00xx); 0x0006..=0x0008 reserved for the lock gate, 0x0009 for layout ──
     GetVersion = 0x0001: () => ProtocolVersion;
     GetCapabilities = 0x0002: () => DeviceCapabilities;
     Reboot = 0x0003: () => ();
     BootloaderJump = 0x0004: () => ();
     StorageReset = 0x0005: StorageResetMode => ();
+    /// Identity strings and USB ids; feature gating stays in `GetCapabilities`.
+    GetDeviceInfo = 0x000A: () => DeviceInfo;
 
     // ── Keymap (0x01xx) — includes encoder ──
     GetKeyAction = 0x0101: KeyPosition => KeyAction;

@@ -141,15 +141,15 @@ impl<'a> TryFrom<&'a mut [u8]> for RynkMessage<'a> {
 mod tests {
     use postcard::experimental::max_size::MaxSize;
 
-    use super::super::DeviceCapabilities;
+    use super::super::DeviceInfo;
     use super::*;
 
     #[test]
     fn rynk_min_buffer_size_covers_largest_known_response() {
-        // `DeviceCapabilities` is one of the largest single-message responses
-        // when bulk is disabled; the min buffer must hold its wrapped form
-        // plus header.
-        let wrapped = <Result<DeviceCapabilities, RynkError> as MaxSize>::POSTCARD_MAX_SIZE;
+        // `DeviceInfo` (three 32-byte strings) is the largest single-message
+        // response when bulk is disabled; the min buffer must hold its wrapped
+        // form plus header.
+        let wrapped = <Result<DeviceInfo, RynkError> as MaxSize>::POSTCARD_MAX_SIZE;
         assert!(RYNK_MAX_PAYLOAD >= wrapped);
         assert!(RYNK_MIN_BUFFER_SIZE >= wrapped + RYNK_HEADER_SIZE);
     }
