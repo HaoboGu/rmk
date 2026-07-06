@@ -1,5 +1,5 @@
-use rmk_types::action::{Action, KeyAction, KeyboardAction};
-use rmk_types::keycode::{KeyCode, SpecialKey};
+use rmk_types::action::{Action, KeyAction, KeyboardAction, StickyKeyAction};
+use rmk_types::keycode::{HidKeyCode, KeyCode, SpecialKey};
 use rmk_types::modifier::ModifierCombination;
 
 pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
@@ -87,6 +87,12 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                 }
             },
             Action::User(id) => (id as u16 & 0xF) | 0x7E00,
+            Action::StickyKey(sk) => {
+                match sk.layer {
+                    Some(l) => 0x5280 | (l as u16),  // OSL, VIA range (same as old OneShotLayer)
+                    None => 0x52A0 | ((sk.keep.into_packed_bits() & 0x1F) as u16),  // OSM, VIA range (same as old OneShotModifier)
+                }
+            }
             _ => {
                 warn!("Action: {:?} in vial is not supported yet", a);
                 0
@@ -217,6 +223,24 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x7C77 => KeyAction::Single(Action::TriLayerLower),
         0x7C78 => KeyAction::Single(Action::TriLayerUpper),
         0x7C79 => KeyAction::Single(Action::Special(SpecialKey::Repeat)),
+        // OSL(layer) — one-shot layer (VIA range 0x5280..0x529F, matching old OneShotLayer)
+        0x5280..=0x529F => {
+            let layer = via_keycode as u8 & 0x1F;
+            KeyAction::Single(Action::StickyKey(StickyKeyAction {
+                key: KeyCode::Hid(HidKeyCode::No),
+                keep: ModifierCombination::new(),
+                layer: Some(layer),
+            }))
+        }
+        // OSM(mod) — one-shot modifier (VIA range 0x52A0..0x52BF, matching old OneShotModifier)
+        0x52A0..=0x52BF => {
+            let m = ModifierCombination::from_packed_bits((via_keycode & 0x1F) as u8);
+            KeyAction::Single(Action::StickyKey(StickyKeyAction {
+                key: KeyCode::Hid(HidKeyCode::No),
+                keep: m,
+                layer: None,
+            }))
+        }
         0x7C02..=0x7C5F => {
             // TODO: Reset/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro
             // - [Space Cadet](https://docs.qmk.fm/#/feature_space_cadet)
@@ -636,5 +660,66 @@ mod test {
 
         assert_eq!(to_ascii(keycode, shifted), ascii);
         assert_eq!(from_ascii(ascii), (keycode, shifted));
+    }
+
+    #[test]
+    fn test_vial_osm_round_trip() {
+        // OSM(LCtrl) — VIA range 0x52A0 + packed_bits
+        let osm_ctrl = KeyAction::Single(Action::StickyKey(StickyKeyAction {
+            key: KeyCode::Hid(HidKeyCode::No),
+            keep: ModifierCombination::LCTRL,
+            layer: None,
+        }));
+        let via = to_via_keycode(osm_ctrl);
+        assert_eq!(via, 0x52A1); // 0x52A0 | LCtrl packed bits (0x01)
+        let roundtrip = from_via_keycode(via);
+        assert_eq!(roundtrip, osm_ctrl);
+
+        // OSM(LShift)
+        let osm_shift = KeyAction::Single(Action::StickyKey(StickyKeyAction {
+            key: KeyCode::Hid(HidKeyCode::No),
+            keep: ModifierCombination::LSHIFT,
+            layer: None,
+        }));
+        let via = to_via_keycode(osm_shift);
+        assert_eq!(via, 0x52A2); // 0x52A0 | LShift packed bits (0x02)
+        let roundtrip = from_via_keycode(via);
+        assert_eq!(roundtrip, osm_shift);
+
+        // OSM(LAlt) — uses VIA range 0x52A0, round-trips through packed bits cleanly now
+        let osm_alt = KeyAction::Single(Action::StickyKey(StickyKeyAction {
+            key: KeyCode::Hid(HidKeyCode::No),
+            keep: ModifierCombination::LALT,
+            layer: None,
+        }));
+        let via = to_via_keycode(osm_alt);
+        assert_eq!(via, 0x52A4); // 0x52A0 | LAlt packed bits (0x04)
+        let roundtrip = from_via_keycode(via);
+        assert_eq!(roundtrip, osm_alt);
+    }
+
+    #[test]
+    fn test_vial_osl_round_trip() {
+        // OSL(0) — VIA range 0x5280 + layer
+        let osl_0 = KeyAction::Single(Action::StickyKey(StickyKeyAction {
+            key: KeyCode::Hid(HidKeyCode::No),
+            keep: ModifierCombination::new(),
+            layer: Some(0),
+        }));
+        let via = to_via_keycode(osl_0);
+        assert_eq!(via, 0x5280);
+        let roundtrip = from_via_keycode(via);
+        assert_eq!(roundtrip, osl_0);
+
+        // OSL(5)
+        let osl_5 = KeyAction::Single(Action::StickyKey(StickyKeyAction {
+            key: KeyCode::Hid(HidKeyCode::No),
+            keep: ModifierCombination::new(),
+            layer: Some(5),
+        }));
+        let via = to_via_keycode(osl_5);
+        assert_eq!(via, 0x5285);
+        let roundtrip = from_via_keycode(via);
+        assert_eq!(roundtrip, osl_5);
     }
 }
