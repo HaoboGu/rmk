@@ -1,6 +1,8 @@
 //! Keymap and encoder handlers (encoder is part of keymap's `0x01xx` Cmd group).
 
 use rmk_types::action::{EncoderAction, KeyAction};
+#[cfg(feature = "bulk")]
+use rmk_types::constants::BULK_SIZE;
 use rmk_types::protocol::rynk::command::{
     GetDefaultLayer, GetEncoderAction, GetKeyAction, SetDefaultLayer, SetEncoderAction, SetKeyAction,
 };
@@ -87,15 +89,56 @@ impl RynkService<'_> {
 }
 
 #[cfg(feature = "bulk")]
+impl RynkService<'_> {
+    /// Bounds check shared by both bulk keymap handlers: a valid start key and
+    /// a row-major run of `count` keys ending within the same layer — bulk
+    /// never wraps across layers. Returns the start key's row-major offset.
+    fn check_keymap_run(&self, layer: u8, start_row: u8, start_col: u8, count: usize) -> Result<usize, RynkError> {
+        self.check_key_position(&KeyPosition {
+            layer,
+            row: start_row,
+            col: start_col,
+        })?;
+        let (rows, cols, _) = self.ctx.keymap_dimensions();
+        let start = start_row as usize * cols + start_col as usize;
+        if count == 0 || count > BULK_SIZE || start + count > rows * cols {
+            return Err(RynkError::Invalid);
+        }
+        Ok(start)
+    }
+}
+
+#[cfg(feature = "bulk")]
 impl Handle<GetKeymapBulk> for RynkService<'_> {
-    async fn handle(&self, _req: GetKeymapBulkRequest) -> Result<GetKeymapBulkResponse, RynkError> {
-        Err(RynkError::Unimplemented)
+    async fn handle(&self, req: GetKeymapBulkRequest) -> Result<GetKeymapBulkResponse, RynkError> {
+        let count = req.count as usize;
+        let start = self.check_keymap_run(req.layer, req.start_row, req.start_col, count)?;
+        let (_, cols, _) = self.ctx.keymap_dimensions();
+        let mut actions = heapless::Vec::new();
+        for offset in start..start + count {
+            actions
+                .push(
+                    self.ctx
+                        .get_action(req.layer, (offset / cols) as u8, (offset % cols) as u8),
+                )
+                .map_err(|_| RynkError::Internal)?;
+        }
+        Ok(GetKeymapBulkResponse { actions })
     }
 }
 
 #[cfg(feature = "bulk")]
 impl Handle<SetKeymapBulk> for RynkService<'_> {
-    async fn handle(&self, _req: SetKeymapBulkRequest) -> Result<(), RynkError> {
-        Err(RynkError::Unimplemented)
+    async fn handle(&self, req: SetKeymapBulkRequest) -> Result<(), RynkError> {
+        // Bounds are fully validated before the first write, so the run either
+        // applies whole or the keymap stays untouched.
+        let start = self.check_keymap_run(req.layer, req.start_row, req.start_col, req.actions.len())?;
+        let (_, cols, _) = self.ctx.keymap_dimensions();
+        for (offset, action) in (start..).zip(req.actions.iter()) {
+            self.ctx
+                .set_action(req.layer, (offset / cols) as u8, (offset % cols) as u8, *action)
+                .await;
+        }
+        Ok(())
     }
 }

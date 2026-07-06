@@ -1,6 +1,8 @@
 //! Combo handlers.
 
 use rmk_types::combo::Combo as ComboConfig;
+#[cfg(feature = "bulk")]
+use rmk_types::constants::BULK_SIZE;
 use rmk_types::protocol::rynk::command::{GetCombo, SetCombo};
 #[cfg(feature = "bulk")]
 use rmk_types::protocol::rynk::command::{GetComboBulk, SetComboBulk};
@@ -40,14 +42,45 @@ impl Handle<SetCombo> for RynkService<'_> {
 
 #[cfg(feature = "bulk")]
 impl Handle<GetComboBulk> for RynkService<'_> {
-    async fn handle(&self, _req: GetComboBulkRequest) -> Result<GetComboBulkResponse, RynkError> {
-        Err(RynkError::Unimplemented)
+    async fn handle(&self, req: GetComboBulkRequest) -> Result<GetComboBulkResponse, RynkError> {
+        let start = req.start_index as usize;
+        let count = req.count as usize;
+        // Same slot mapping as the single Get: empty slots read back as the
+        // empty config, only out-of-range indices are errors.
+        self.ctx.with_combos(|combos| {
+            if count == 0 || count > BULK_SIZE || start + count > combos.len() {
+                return Err(RynkError::Invalid);
+            }
+            let mut configs = heapless::Vec::new();
+            for slot in &combos[start..start + count] {
+                configs
+                    .push(
+                        slot.as_ref()
+                            .map(|c| c.config.clone())
+                            .unwrap_or_else(ComboConfig::empty),
+                    )
+                    .map_err(|_| RynkError::Internal)?;
+            }
+            Ok(GetComboBulkResponse { configs })
+        })
     }
 }
 
 #[cfg(feature = "bulk")]
 impl Handle<SetComboBulk> for RynkService<'_> {
-    async fn handle(&self, _req: SetComboBulkRequest) -> Result<(), RynkError> {
-        Err(RynkError::Unimplemented)
+    async fn handle(&self, req: SetComboBulkRequest) -> Result<(), RynkError> {
+        let start = req.start_index as usize;
+        // Bounds are fully validated before the first write, so the run either
+        // applies whole or the combos stay untouched.
+        let num_combos = self.ctx.with_combos(|combos| combos.len());
+        if req.configs.is_empty() || start + req.configs.len() > num_combos {
+            return Err(RynkError::Invalid);
+        }
+        for (idx, config) in (start..).zip(req.configs.iter()) {
+            if !self.ctx.set_combo(idx as u8, config.clone()).await {
+                return Err(RynkError::Invalid);
+            }
+        }
+        Ok(())
     }
 }

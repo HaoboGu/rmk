@@ -86,6 +86,36 @@ fn service_with_encoders() -> RynkService<'static> {
     RynkService::new(km, insecure_config())
 }
 
+/// A 3-row 4-col keymap for the bulk endpoints: 12 keys per layer holds a
+/// max-capacity run (`BULK_SIZE` is 8 in test builds) and 4-key rows make a
+/// run wrap a row boundary early.
+#[cfg(feature = "bulk")]
+fn service_3x4() -> RynkService<'static> {
+    let behavior: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
+    let per_key: &'static PositionalConfig<3, 4> = Box::leak(Box::new(PositionalConfig::default()));
+    let keymap = [[[KeyAction::No; 4]; 3]; 1];
+    let km = wrap_keymap(keymap, per_key, behavior);
+    let config: &'static RmkConfig<'static> = Box::leak(Box::new(RmkConfig::default()));
+    RynkService::new(km, config)
+}
+
+/// Distinct action per bulk slot, so a write landing in the wrong position
+/// shows up as the wrong keycode rather than a lucky match.
+#[cfg(feature = "bulk")]
+fn bulk_action(i: usize) -> KeyAction {
+    const CODES: [HidKeyCode; 8] = [
+        HidKeyCode::A,
+        HidKeyCode::B,
+        HidKeyCode::C,
+        HidKeyCode::D,
+        HidKeyCode::E,
+        HidKeyCode::F,
+        HidKeyCode::G,
+        HidKeyCode::H,
+    ];
+    KeyAction::Single(Action::Key(KeyCode::Hid(CODES[i])))
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // System  (0x00xx)
 // ─────────────────────────────────────────────────────────────────────────
@@ -125,11 +155,12 @@ fn get_capabilities() {
         assert_eq!(caps.storage_enabled, cfg!(feature = "storage"));
         assert_eq!(caps.ble_enabled, cfg!(feature = "_ble"));
         assert_eq!(caps.is_split, cfg!(feature = "split"));
-        // Bulk transfer reads as fully absent — flag AND count — until the
-        // handlers are implemented (today they all answer `Unimplemented`);
-        // both flip back to tracking the `bulk` feature together
-        // with the handlers.
-        assert!(!caps.bulk_transfer_supported);
+        // Bulk advertisement tracks the compiled feature — the flag and the
+        // per-message item budget move together (both derive from BULK_SIZE).
+        assert_eq!(caps.bulk_transfer_supported, cfg!(feature = "bulk"));
+        #[cfg(feature = "bulk")]
+        assert_eq!(caps.max_bulk_keys as usize, rmk_types::constants::BULK_SIZE);
+        #[cfg(not(feature = "bulk"))]
         assert_eq!(caps.max_bulk_keys, 0);
     });
 }
@@ -438,29 +469,173 @@ fn get_set_encoder_round_trip() {
 
 #[cfg(feature = "bulk")]
 #[test]
-fn keymap_bulk_is_unimplemented() {
-    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, SetKeymapBulkRequest};
-    let service = service();
+fn keymap_bulk_round_trip_wraps_row_boundary() {
+    use rmk_types::constants::BULK_SIZE;
+    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
+    let service = service_3x4();
     link_session(&service, async |client| {
+        // A 4-key run from (0,2) on 4-col rows covers (0,2) (0,3) (1,0) (1,1) —
+        // the row-major order both bulk endpoints must agree on.
+        let mut actions: HVec<KeyAction, BULK_SIZE> = HVec::new();
+        for i in 0..4 {
+            actions.push(bulk_action(i)).unwrap();
+        }
+        let set = SetKeymapBulkRequest {
+            layer: 0,
+            start_row: 0,
+            start_col: 2,
+            actions: actions.clone(),
+        };
+        assert_eq!(client.request::<_, ()>(Cmd::SetKeymapBulk, 0x16, &set).await, Ok(()));
+
+        let get = GetKeymapBulkRequest {
+            layer: 0,
+            start_row: 0,
+            start_col: 2,
+            count: 4,
+        };
+        let got = client
+            .request::<_, GetKeymapBulkResponse>(Cmd::GetKeymapBulk, 0x17, &get)
+            .await
+            .expect("Ok envelope");
+        assert_eq!(got.actions, actions, "bulk get reads back the bulk set, in order");
+
+        // The single-key endpoint agrees on where the run wrapped: item 2
+        // crossed the row boundary onto (1,0).
+        let wrapped = KeyPosition {
+            layer: 0,
+            row: 1,
+            col: 0,
+        };
+        let single = client.request::<_, KeyAction>(Cmd::GetKeyAction, 0x18, &wrapped).await;
+        assert_eq!(single, Ok(bulk_action(2)));
+    });
+}
+
+#[cfg(feature = "bulk")]
+#[test]
+fn keymap_bulk_max_capacity_round_trip() {
+    use rmk_types::constants::BULK_SIZE;
+    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
+    let service = service_3x4();
+    link_session(&service, async |client| {
+        // The largest legal run: BULK_SIZE keys, still inside the 12-key layer.
+        let mut actions: HVec<KeyAction, BULK_SIZE> = HVec::new();
+        for i in 0..BULK_SIZE {
+            actions.push(bulk_action(i)).unwrap();
+        }
+        let set = SetKeymapBulkRequest {
+            layer: 0,
+            start_row: 0,
+            start_col: 0,
+            actions: actions.clone(),
+        };
+        assert_eq!(client.request::<_, ()>(Cmd::SetKeymapBulk, 0x19, &set).await, Ok(()));
+
         let get = GetKeymapBulkRequest {
             layer: 0,
             start_row: 0,
             start_col: 0,
-            count: 1,
+            count: BULK_SIZE as u8,
+        };
+        let got = client
+            .request::<_, GetKeymapBulkResponse>(Cmd::GetKeymapBulk, 0x1A, &get)
+            .await
+            .expect("Ok envelope");
+        assert_eq!(got.actions, actions);
+    });
+}
+
+#[cfg(feature = "bulk")]
+#[test]
+fn keymap_bulk_rejects_invalid_runs() {
+    use rmk_types::constants::BULK_SIZE;
+    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
+    let service = service_3x4();
+    link_session(&service, async |client| {
+        // A zero-item run is a host bug in either direction.
+        let get = GetKeymapBulkRequest {
+            layer: 0,
+            start_row: 0,
+            start_col: 0,
+            count: 0,
         };
         let r = client
-            .request::<_, rmk_types::protocol::rynk::GetKeymapBulkResponse>(Cmd::GetKeymapBulk, 0x16, &get)
+            .request::<_, GetKeymapBulkResponse>(Cmd::GetKeymapBulk, 0x1B, &get)
             .await;
-        assert_eq!(r, Err(RynkError::Unimplemented));
-
+        assert_eq!(r, Err(RynkError::Invalid));
         let set = SetKeymapBulkRequest {
             layer: 0,
             start_row: 0,
             start_col: 0,
             actions: HVec::new(),
         };
-        let r = client.request::<_, ()>(Cmd::SetKeymapBulk, 0x17, &set).await;
-        assert_eq!(r, Err(RynkError::Unimplemented));
+        assert_eq!(
+            client.request::<_, ()>(Cmd::SetKeymapBulk, 0x1C, &set).await,
+            Err(RynkError::Invalid)
+        );
+
+        // A run past the layer's last key: start (2,2) is offset 10 of 12, so
+        // 3 keys would cross into the next layer — never wrapped, rejected.
+        let get = GetKeymapBulkRequest {
+            layer: 0,
+            start_row: 2,
+            start_col: 2,
+            count: 3,
+        };
+        let r = client
+            .request::<_, GetKeymapBulkResponse>(Cmd::GetKeymapBulk, 0x1D, &get)
+            .await;
+        assert_eq!(r, Err(RynkError::Invalid));
+
+        // The Set twin is validated before any write: the whole run is
+        // rejected and the in-range prefix stays untouched.
+        let mut actions: HVec<KeyAction, BULK_SIZE> = HVec::new();
+        for i in 0..3 {
+            actions.push(bulk_action(i)).unwrap();
+        }
+        let set = SetKeymapBulkRequest {
+            layer: 0,
+            start_row: 2,
+            start_col: 2,
+            actions,
+        };
+        assert_eq!(
+            client.request::<_, ()>(Cmd::SetKeymapBulk, 0x1E, &set).await,
+            Err(RynkError::Invalid)
+        );
+        let start = KeyPosition {
+            layer: 0,
+            row: 2,
+            col: 2,
+        };
+        let untouched = client.request::<_, KeyAction>(Cmd::GetKeyAction, 0x1F, &start).await;
+        assert_eq!(untouched, Ok(KeyAction::No), "rejected set must not write its prefix");
+
+        // count over BULK_SIZE is rejected even though 9 keys would still fit
+        // the 12-key layer — the per-message budget, not the span, trips.
+        let get = GetKeymapBulkRequest {
+            layer: 0,
+            start_row: 0,
+            start_col: 0,
+            count: (BULK_SIZE + 1) as u8,
+        };
+        let r = client
+            .request::<_, GetKeymapBulkResponse>(Cmd::GetKeymapBulk, 0x21, &get)
+            .await;
+        assert_eq!(r, Err(RynkError::Invalid));
+
+        // A start position outside the keymap geometry (layer 1 of 1).
+        let get = GetKeymapBulkRequest {
+            layer: 1,
+            start_row: 0,
+            start_col: 0,
+            count: 1,
+        };
+        let r = client
+            .request::<_, GetKeymapBulkResponse>(Cmd::GetKeymapBulk, 0x22, &get)
+            .await;
+        assert_eq!(r, Err(RynkError::Invalid));
     });
 }
 
@@ -546,24 +721,106 @@ fn combo_rejects_out_of_range() {
 
 #[cfg(feature = "bulk")]
 #[test]
-fn combo_bulk_is_unimplemented() {
+fn combo_bulk_round_trip_with_empty_slots() {
+    use rmk_types::constants::BULK_SIZE;
     use rmk_types::protocol::rynk::{GetComboBulkRequest, GetComboBulkResponse, SetComboBulkRequest};
     let service = service();
     link_session(&service, async |client| {
+        // Two distinct combos written at slots 3 and 4.
+        let combo = |out| {
+            ComboConfig::new(
+                [KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A)))],
+                KeyAction::Single(Action::Key(KeyCode::Hid(out))),
+                None,
+            )
+        };
+        let mut configs: HVec<ComboConfig, BULK_SIZE> = HVec::new();
+        configs.push(combo(HidKeyCode::B)).unwrap();
+        configs.push(combo(HidKeyCode::C)).unwrap();
+        let set = SetComboBulkRequest {
+            start_index: 3,
+            configs: configs.clone(),
+        };
+        assert_eq!(client.request::<_, ()>(Cmd::SetComboBulk, 0x37, &set).await, Ok(()));
+
+        // A window starting one slot before the write: the untouched slot
+        // reads back as the empty config, matching the single Get's mapping.
+        let get = GetComboBulkRequest {
+            start_index: 2,
+            count: 3,
+        };
+        let got = client
+            .request::<_, GetComboBulkResponse>(Cmd::GetComboBulk, 0x38, &get)
+            .await
+            .expect("Ok envelope");
+        assert_eq!(got.configs.len(), 3);
+        assert_eq!(got.configs[0], ComboConfig::empty());
+        assert_eq!(got.configs[1], configs[0]);
+        assert_eq!(got.configs[2], configs[1]);
+
+        // The single-item endpoint sees the bulk write at slot 4.
+        let single = client.request::<u8, ComboConfig>(Cmd::GetCombo, 0x39, &4u8).await;
+        assert_eq!(single, Ok(configs[1].clone()));
+    });
+}
+
+#[cfg(feature = "bulk")]
+#[test]
+fn combo_bulk_rejects_invalid_runs() {
+    use rmk_types::constants::BULK_SIZE;
+    use rmk_types::protocol::rynk::{GetComboBulkRequest, GetComboBulkResponse, SetComboBulkRequest};
+    let service = service();
+    link_session(&service, async |client| {
+        // A zero-item run is a host bug in either direction.
         let get = GetComboBulkRequest {
             start_index: 0,
-            count: 1,
+            count: 0,
         };
         let r = client
-            .request::<_, GetComboBulkResponse>(Cmd::GetComboBulk, 0x37, &get)
+            .request::<_, GetComboBulkResponse>(Cmd::GetComboBulk, 0x3A, &get)
             .await;
-        assert_eq!(r, Err(RynkError::Unimplemented));
+        assert_eq!(r, Err(RynkError::Invalid));
         let set = SetComboBulkRequest {
             start_index: 0,
             configs: HVec::new(),
         };
-        let r = client.request::<_, ()>(Cmd::SetComboBulk, 0x38, &set).await;
-        assert_eq!(r, Err(RynkError::Unimplemented));
+        assert_eq!(
+            client.request::<_, ()>(Cmd::SetComboBulk, 0x3B, &set).await,
+            Err(RynkError::Invalid)
+        );
+
+        // A run past the last slot (8 combos): 7 + 2 > 8, on both endpoints.
+        let get = GetComboBulkRequest {
+            start_index: 7,
+            count: 2,
+        };
+        let r = client
+            .request::<_, GetComboBulkResponse>(Cmd::GetComboBulk, 0x3C, &get)
+            .await;
+        assert_eq!(r, Err(RynkError::Invalid));
+        let mut configs: HVec<ComboConfig, BULK_SIZE> = HVec::new();
+        let combo = ComboConfig::new(
+            [KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A)))],
+            KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::B))),
+            None,
+        );
+        configs.push(combo.clone()).unwrap();
+        configs.push(combo).unwrap();
+        let set = SetComboBulkRequest {
+            start_index: 7,
+            configs,
+        };
+        assert_eq!(
+            client.request::<_, ()>(Cmd::SetComboBulk, 0x3D, &set).await,
+            Err(RynkError::Invalid)
+        );
+        // Validated before any write: the in-range slot 7 stays untouched.
+        let single = client.request::<u8, ComboConfig>(Cmd::GetCombo, 0x3E, &7u8).await;
+        assert_eq!(
+            single,
+            Ok(ComboConfig::empty()),
+            "rejected set must not write its prefix"
+        );
     });
 }
 
@@ -619,24 +876,95 @@ fn morse_rejects_out_of_range() {
 
 #[cfg(feature = "bulk")]
 #[test]
-fn morse_bulk_is_unimplemented() {
+fn morse_bulk_round_trip() {
+    use rmk_types::protocol::rynk::{GetMorseBulkRequest, GetMorseBulkResponse, SetMorseBulkRequest};
+    let service = service();
+    // `Morse` has no trivial constructor (see `get_set_morse_round_trip`), so
+    // bulk-read two slots, give each a distinct profile, and bulk-write them back.
+    link_session(&service, async |client| {
+        let get = GetMorseBulkRequest {
+            start_index: 1,
+            count: 2,
+        };
+        let mut fetched = client
+            .request::<_, GetMorseBulkResponse>(Cmd::GetMorseBulk, 0x48, &get)
+            .await
+            .expect("slots 1..3 exist (morses filled to capacity)");
+        fetched.configs[0].profile =
+            MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(111), Some(11));
+        fetched.configs[1].profile =
+            MorseProfile::new(Some(false), Some(MorseMode::HoldOnOtherPress), Some(222), Some(22));
+
+        let set = SetMorseBulkRequest {
+            start_index: 1,
+            configs: fetched.configs.clone(),
+        };
+        assert_eq!(client.request::<_, ()>(Cmd::SetMorseBulk, 0x49, &set).await, Ok(()));
+
+        let read = client
+            .request::<_, GetMorseBulkResponse>(Cmd::GetMorseBulk, 0x4A, &get)
+            .await
+            .expect("Ok envelope");
+        assert_eq!(
+            read.configs, fetched.configs,
+            "bulk get reads back the bulk set, in order"
+        );
+
+        // The single-item endpoint sees the second bulk write at slot 2.
+        let single = client.request::<u8, Morse>(Cmd::GetMorse, 0x4B, &2u8).await;
+        assert_eq!(single, Ok(fetched.configs[1].clone()));
+    });
+}
+
+#[cfg(feature = "bulk")]
+#[test]
+fn morse_bulk_rejects_invalid_runs() {
     use rmk_types::protocol::rynk::{GetMorseBulkRequest, GetMorseBulkResponse, SetMorseBulkRequest};
     let service = service();
     link_session(&service, async |client| {
+        // A zero-item run is a host bug in either direction.
         let get = GetMorseBulkRequest {
             start_index: 0,
-            count: 1,
+            count: 0,
         };
         let r = client
-            .request::<_, GetMorseBulkResponse>(Cmd::GetMorseBulk, 0x48, &get)
+            .request::<_, GetMorseBulkResponse>(Cmd::GetMorseBulk, 0x4C, &get)
             .await;
-        assert_eq!(r, Err(RynkError::Unimplemented));
+        assert_eq!(r, Err(RynkError::Invalid));
         let set = SetMorseBulkRequest {
             start_index: 0,
             configs: HVec::new(),
         };
-        let r = client.request::<_, ()>(Cmd::SetMorseBulk, 0x49, &set).await;
-        assert_eq!(r, Err(RynkError::Unimplemented));
+        assert_eq!(
+            client.request::<_, ()>(Cmd::SetMorseBulk, 0x4D, &set).await,
+            Err(RynkError::Invalid)
+        );
+
+        // A run past the last slot (8 morses): 7 + 2 > 8, on both endpoints.
+        let get = GetMorseBulkRequest {
+            start_index: 7,
+            count: 2,
+        };
+        let r = client
+            .request::<_, GetMorseBulkResponse>(Cmd::GetMorseBulk, 0x4E, &get)
+            .await;
+        assert_eq!(r, Err(RynkError::Invalid));
+        let fetch = GetMorseBulkRequest {
+            start_index: 0,
+            count: 2,
+        };
+        let fetched = client
+            .request::<_, GetMorseBulkResponse>(Cmd::GetMorseBulk, 0x4F, &fetch)
+            .await
+            .expect("Ok envelope");
+        let set = SetMorseBulkRequest {
+            start_index: 7,
+            configs: fetched.configs,
+        };
+        assert_eq!(
+            client.request::<_, ()>(Cmd::SetMorseBulk, 0x51, &set).await,
+            Err(RynkError::Invalid)
+        );
     });
 }
 

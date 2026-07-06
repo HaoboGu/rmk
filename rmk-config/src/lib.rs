@@ -43,6 +43,10 @@ pub mod protocol_limits {
     pub const MAX_MACRO_DATA_SIZE: usize = 256;
     /// Max items per bulk transfer message — ceiling for `BULK_SIZE`
     pub const MAX_BULK_SIZE: usize = 16;
+
+    // `DeviceCapabilities::max_bulk_keys` reports `BULK_SIZE` as a u8 on the
+    // wire, so the ceiling must stay within that width.
+    const _: () = assert!(MAX_BULK_SIZE <= u8::MAX as usize);
 }
 
 /// Configurations for RMK keyboard.
