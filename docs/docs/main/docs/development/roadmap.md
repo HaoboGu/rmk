@@ -63,6 +63,9 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
 - [ ] Making vial and default keymap consistent automatically
 - [ ] 🔴🔵 GUI keymap configurator which supports windows/macos/linux/web
 - [ ] Default bootloader
-- [ ] USB DFU/OTA
+- [x] USB DFU
+- [ ] Flashing peripherals from the central via uart
+- [ ] Flashing peripherals from the central via ble
+- [ ] OTA updates
 
 If you want to contribute, please feel free to open an issue or PR, or just ping me! Any forms of contribution are welcome :D

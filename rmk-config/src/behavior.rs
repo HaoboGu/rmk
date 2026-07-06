@@ -78,6 +78,55 @@ impl crate::KeyboardTomlConfig {
                             .to_string(),
                     );
                 }
+                behavior.auto_mouse_layer = behavior.auto_mouse_layer.or(default.auto_mouse_layer);
+                if let Some(entries) = &behavior.auto_mouse_layer {
+                    if entries.len() > crate::resolved::behavior::AUTO_MOUSE_LAYER_MAX_NUM {
+                        return Err(format!(
+                            "keyboard.toml: at most {} [[behavior.auto_mouse_layer]] entries are allowed, got {}",
+                            crate::resolved::behavior::AUTO_MOUSE_LAYER_MAX_NUM,
+                            entries.len()
+                        ));
+                    }
+                    let mut seen_device_ids: Vec<Option<u8>> = Vec::new();
+                    for entry in entries {
+                        if entry.target_layer >= layout.layers {
+                            return Err(format!(
+                                "keyboard.toml: [[behavior.auto_mouse_layer]].target_layer must be a valid layer index (< [layout.layers] = {}), got {}",
+                                layout.layers, entry.target_layer
+                            ));
+                        }
+                        if entry.threshold == Some(0) {
+                            return Err(
+                                "keyboard.toml: [[behavior.auto_mouse_layer]].threshold must be at least 1".to_string(),
+                            );
+                        }
+                        if let Some(timeout) = &entry.timeout {
+                            let timeout_ms = timeout.0;
+                            if timeout_ms == 0 {
+                                return Err(
+                                    "keyboard.toml: [[behavior.auto_mouse_layer]].timeout must be at least 1ms"
+                                        .to_string(),
+                                );
+                            }
+                            if timeout_ms > u32::MAX as u64 {
+                                return Err(format!(
+                                    "keyboard.toml: [[behavior.auto_mouse_layer]].timeout must be <= {}ms (~49 days), got {}ms",
+                                    u32::MAX,
+                                    timeout_ms
+                                ));
+                            }
+                        }
+                        if seen_device_ids.contains(&entry.device_id) {
+                            return Err(match entry.device_id {
+                                Some(id) => format!(
+                                    "keyboard.toml: duplicate [[behavior.auto_mouse_layer]] entries for device_id = {id}"
+                                ),
+                                None => "keyboard.toml: multiple [[behavior.auto_mouse_layer]] entries without device_id; only one fallback is allowed".to_string(),
+                            });
+                        }
+                        seen_device_ids.push(entry.device_id);
+                    }
+                }
                 behavior.morse = behavior.morse.or(default.morse);
                 if let Some(morse) = &behavior.morse
                     && let Some(morses) = &morse.morses

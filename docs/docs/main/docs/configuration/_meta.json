@@ -16,6 +16,7 @@
   "host_config",
   "output",
   "chip_config",
+  "bootloader",
   {
     "type": "dir",
     "name": "input_device",

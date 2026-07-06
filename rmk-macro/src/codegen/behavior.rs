@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use quote::quote;
 use rmk_config::resolved::Behavior;
 use rmk_config::resolved::behavior::{
-    Combos, Forks, MacroOperation, Macros, Morse, MorseActionPair, MorseKey, MorseProfile, OneShot,
+    AutoMouseLayer, Combos, Forks, MacroOperation, Macros, Morse, MorseActionPair, MorseKey,
+    MorseProfile, OneShot,
 };
 
 use super::action_parser::{expand_profile, expand_profile_name, get_key_with_alias, parse_key};
@@ -482,6 +483,32 @@ fn expand_forks(
     }
 }
 
+fn expand_auto_mouse_layer(auto_mouse_layer: &[AutoMouseLayer]) -> proc_macro2::TokenStream {
+    if auto_mouse_layer.is_empty() {
+        return quote! { ::core::default::Default::default() };
+    }
+    let entries = auto_mouse_layer.iter().map(|cfg| {
+        let target_layer = cfg.target_layer;
+        let timeout_ms = cfg.timeout_ms;
+        let threshold = cfg.threshold;
+        let device_id = match cfg.device_id {
+            Some(id) => quote! { ::core::option::Option::Some(#id) },
+            None => quote! { ::core::option::Option::None },
+        };
+        quote! {
+            ::rmk::config::AutoMouseLayerConfig {
+                device_id: #device_id,
+                target_layer: #target_layer,
+                timeout: ::embassy_time::Duration::from_millis(#timeout_ms),
+                threshold: #threshold,
+            }
+        }
+    });
+    quote! {
+        ::rmk::heapless::Vec::from_iter([#(#entries),*])
+    }
+}
+
 pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenStream {
     let profiles = behavior
         .morse
@@ -496,6 +523,7 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
     let macros = expand_macros(&behavior.macros);
     let forks = expand_forks(&behavior.forks, &profiles);
     let morse = expand_morse(&behavior.morse);
+    let auto_mouse_layer = expand_auto_mouse_layer(&behavior.auto_mouse_layer);
 
     quote! {
         #[allow(clippy::needless_update)]
@@ -509,6 +537,7 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
             keyboard_macros: #macros,
             mouse_key: ::rmk::config::MouseKeyConfig::default(),
             tap: ::rmk::config::TapConfig::default(),
+            auto_mouse_layer: #auto_mouse_layer,
             ..Default::default()
         };
     }

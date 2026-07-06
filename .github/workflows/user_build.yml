@@ -81,6 +81,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     needs: get_chip_name
+    # Only esp32s3 (Xtensa) needs the espup toolchain in build_esp;
+    # RISC-V esp32 chips build here with the standard toolchain.
     if: needs.get_chip_name.outputs.chip_name != 'esp32s3'
     steps:
       - uses: cargo-bins/cargo-binstall@main
@@ -111,15 +113,47 @@ jobs:
         working-directory: ./rmk
         run: cargo make uf2 --release
       - name: Upload uf2 artifacts
+        if: ${{ !startsWith(needs.get_chip_name.outputs.chip_name, 'esp32') }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ needs.get_chip_name.outputs.artifact_prefix }}${{ needs.get_chip_name.outputs.project_name }}-firmware_uf2
           path: rmk/*.uf2
       - name: Upload hex artifacts
+        if: ${{ !startsWith(needs.get_chip_name.outputs.chip_name, 'esp32') }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ needs.get_chip_name.outputs.artifact_prefix }}${{ needs.get_chip_name.outputs.project_name }}-firmware_hex
           path: rmk/*.hex
+      - name: Upload bin artifacts
+        # espflash produces .bin images for esp32 chips instead of uf2/hex
+        if: ${{ startsWith(needs.get_chip_name.outputs.chip_name, 'esp32') }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ needs.get_chip_name.outputs.artifact_prefix }}${{ needs.get_chip_name.outputs.project_name }}-firmware_bin
+          path: rmk/*.bin
+      - name: Stage ELF
+        # Expose the raw ELF(s) for debugging (probe-rs/gdb); esp32 flashes it directly.
+        # Name them like the other firmware: <name>.elf, or <name>-central/-peripheral.elf
+        # for splits (whose bin targets are named central/peripheral, not <name>).
+        working-directory: ./rmk
+        env:
+          PROJECT_NAME: ${{ needs.get_chip_name.outputs.project_name }}
+        run: |
+          for f in target/*/release/*; do
+            if [ -f "$f" ] && [ -x "$f" ]; then
+              bin=$(basename "$f")
+              case "$bin" in
+                central|peripheral) name="${PROJECT_NAME}-${bin}" ;;
+                *)                  name="$bin" ;;
+              esac
+              cp "$f" "${name}.elf"
+            fi
+          done
+      - name: Upload elf artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ needs.get_chip_name.outputs.artifact_prefix }}${{ needs.get_chip_name.outputs.project_name }}-firmware_elf
+          path: rmk/*.elf
   build_esp:
     runs-on: ubuntu-latest
     needs: get_chip_name
@@ -165,3 +199,26 @@ jobs:
         with:
           name: ${{ needs.get_chip_name.outputs.artifact_prefix }}${{ needs.get_chip_name.outputs.project_name }}-firmware_bin
           path: rmk/*.bin
+      - name: Stage esp32 ELF
+        # espflash can flash the raw ELF directly, so expose it as an artifact.
+        # Name them like the other firmware: <name>.elf, or <name>-central/-peripheral.elf
+        # for splits (whose bin targets are named central/peripheral, not <name>).
+        working-directory: ./rmk
+        env:
+          PROJECT_NAME: ${{ needs.get_chip_name.outputs.project_name }}
+        run: |
+          for f in target/*/release/*; do
+            if [ -f "$f" ] && [ -x "$f" ]; then
+              bin=$(basename "$f")
+              case "$bin" in
+                central|peripheral) name="${PROJECT_NAME}-${bin}" ;;
+                *)                  name="$bin" ;;
+              esac
+              cp "$f" "${name}.elf"
+            fi
+          done
+      - name: Upload elf artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ needs.get_chip_name.outputs.artifact_prefix }}${{ needs.get_chip_name.outputs.project_name }}-firmware_elf
+          path: rmk/*.elf

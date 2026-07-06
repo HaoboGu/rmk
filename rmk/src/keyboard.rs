@@ -35,6 +35,7 @@ use crate::keymap::KeyMap;
 use crate::split::ble::central::update_activity_time;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, boot};
 
+pub(crate) mod auto_mouse_layer;
 pub mod combo;
 pub(crate) mod fork;
 pub(crate) mod held_buffer;
