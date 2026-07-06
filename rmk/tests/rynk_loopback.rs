@@ -514,6 +514,69 @@ fn keymap_bulk_round_trip_wraps_row_boundary() {
 
 #[cfg(feature = "bulk")]
 #[test]
+fn keymap_bulk_round_trip_wraps_layer_boundary() {
+    use rmk_types::constants::BULK_SIZE;
+    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
+    // 2 layers × 2 rows × 2 cols = 8 keys. Starting on layer 0's last key
+    // (offset 3) and running 2 keys steps across the layer-0→layer-1 boundary:
+    // the flat keymap is contiguous across layers, so bulk never stops at one.
+    let service = service_2_layers();
+    link_session(&service, async |client| {
+        let mut actions: HVec<KeyAction, BULK_SIZE> = HVec::new();
+        actions.push(bulk_action(0)).unwrap();
+        actions.push(bulk_action(1)).unwrap();
+        let set = SetKeymapBulkRequest {
+            layer: 0,
+            start_row: 1,
+            start_col: 1,
+            actions: actions.clone(),
+        };
+        assert_eq!(client.request::<_, ()>(Cmd::SetKeymapBulk, 0x30, &set).await, Ok(()));
+
+        let get = GetKeymapBulkRequest {
+            layer: 0,
+            start_row: 1,
+            start_col: 1,
+            count: 2,
+        };
+        let got = client
+            .request::<_, GetKeymapBulkResponse>(Cmd::GetKeymapBulk, 0x31, &get)
+            .await
+            .expect("Ok envelope");
+        assert_eq!(
+            got.actions, actions,
+            "bulk run reads back across the layer boundary, in order"
+        );
+
+        // The single-key endpoint agrees on where the run crossed: item 1
+        // landed on layer 1's first key (1,0,0), item 0 on layer 0's last (0,1,1).
+        let first_of_layer1 = KeyPosition {
+            layer: 1,
+            row: 0,
+            col: 0,
+        };
+        assert_eq!(
+            client
+                .request::<_, KeyAction>(Cmd::GetKeyAction, 0x32, &first_of_layer1)
+                .await,
+            Ok(bulk_action(1))
+        );
+        let last_of_layer0 = KeyPosition {
+            layer: 0,
+            row: 1,
+            col: 1,
+        };
+        assert_eq!(
+            client
+                .request::<_, KeyAction>(Cmd::GetKeyAction, 0x33, &last_of_layer0)
+                .await,
+            Ok(bulk_action(0))
+        );
+    });
+}
+
+#[cfg(feature = "bulk")]
+#[test]
 fn keymap_bulk_max_capacity_round_trip() {
     use rmk_types::constants::BULK_SIZE;
     use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
@@ -575,8 +638,8 @@ fn keymap_bulk_rejects_invalid_runs() {
             Err(RynkError::Invalid)
         );
 
-        // A run past the layer's last key: start (2,2) is offset 10 of 12, so
-        // 3 keys would cross into the next layer — never wrapped, rejected.
+        // A run past the keymap's last key: start (2,2) is offset 10 of 12, so
+        // 3 keys would run off the end of the (single-layer) keymap — rejected.
         let get = GetKeymapBulkRequest {
             layer: 0,
             start_row: 2,

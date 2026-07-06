@@ -90,18 +90,21 @@ impl RynkService<'_> {
 
 #[cfg(feature = "bulk")]
 impl RynkService<'_> {
-    /// Bounds check shared by both bulk keymap handlers: a valid start key and
-    /// a row-major run of `count` keys ending within the same layer — bulk
-    /// never wraps across layers. Returns the start key's row-major offset.
+    /// Bounds check shared by both bulk keymap handlers. The keymap is one flat,
+    /// row-major, layer-major array (`layer * rows * cols + row * cols + col`),
+    /// so a `count`-key run may cross row *and* layer boundaries freely: it need
+    /// only start at a valid key and stay within the keymap's total size. This
+    /// lets a host stream the whole keymap as one contiguous sequence rather
+    /// than restarting the run at every layer. Returns the start key's flat offset.
     fn check_keymap_run(&self, layer: u8, start_row: u8, start_col: u8, count: usize) -> Result<usize, RynkError> {
         self.check_key_position(&KeyPosition {
             layer,
             row: start_row,
             col: start_col,
         })?;
-        let (rows, cols, _) = self.ctx.keymap_dimensions();
-        let start = start_row as usize * cols + start_col as usize;
-        if count == 0 || count > BULK_SIZE || start + count > rows * cols {
+        let (rows, cols, num_layers) = self.ctx.keymap_dimensions();
+        let start = (layer as usize * rows + start_row as usize) * cols + start_col as usize;
+        if count == 0 || count > BULK_SIZE || start + count > num_layers * rows * cols {
             return Err(RynkError::Invalid);
         }
         Ok(start)
@@ -113,14 +116,10 @@ impl Handle<GetKeymapBulk> for RynkService<'_> {
     async fn handle(&self, req: GetKeymapBulkRequest) -> Result<GetKeymapBulkResponse, RynkError> {
         let count = req.count as usize;
         let start = self.check_keymap_run(req.layer, req.start_row, req.start_col, count)?;
-        let (_, cols, _) = self.ctx.keymap_dimensions();
         let mut actions = heapless::Vec::new();
         for offset in start..start + count {
             actions
-                .push(
-                    self.ctx
-                        .get_action(req.layer, (offset / cols) as u8, (offset % cols) as u8),
-                )
+                .push(self.ctx.get_action_flat(offset))
                 .map_err(|_| RynkError::Internal)?;
         }
         Ok(GetKeymapBulkResponse { actions })
@@ -133,11 +132,12 @@ impl Handle<SetKeymapBulk> for RynkService<'_> {
         // Bounds are fully validated before the first write, so the run either
         // applies whole or the keymap stays untouched.
         let start = self.check_keymap_run(req.layer, req.start_row, req.start_col, req.actions.len())?;
-        let (_, cols, _) = self.ctx.keymap_dimensions();
+        let (rows, cols, _) = self.ctx.keymap_dimensions();
         for (offset, action) in (start..).zip(req.actions.iter()) {
-            self.ctx
-                .set_action(req.layer, (offset / cols) as u8, (offset % cols) as u8, *action)
-                .await;
+            let layer = (offset / (rows * cols)) as u8;
+            let row = (offset / cols % rows) as u8;
+            let col = (offset % cols) as u8;
+            self.ctx.set_action(layer, row, col, *action).await;
         }
         Ok(())
     }

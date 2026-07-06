@@ -38,9 +38,10 @@ mod bulk {
 
     /// Request payload for `GetKeymapBulk` endpoint.
     ///
-    /// Keys are linearized in row-major order starting from `(start_row, start_col)`.
-    /// `count` is the number of keys to read; iteration wraps to subsequent
-    /// rows when the end of a row is reached.
+    /// The keymap is addressed as one flat, row-major, layer-major array. The
+    /// run starts at `(layer, start_row, start_col)` and reads `count` consecutive
+    /// keys, continuing into later rows and layers as needed — it stops only at
+    /// the end of the keymap, never at a layer boundary.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
     #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
     #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
@@ -66,9 +67,9 @@ mod bulk {
 
     /// Request payload for `SetKeymapBulk` endpoint.
     ///
-    /// Keys are linearized in row-major order starting from `(start_row, start_col)`.
-    /// Iteration wraps to subsequent rows when the end of a row is reached.
-    /// The number of keys to write is derived from `actions.len()`.
+    /// The keymap is addressed as one flat, row-major, layer-major array. Writing
+    /// starts at `(layer, start_row, start_col)` and continues into later rows and
+    /// layers as needed. The number of keys to write is derived from `actions.len()`.
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
     #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
