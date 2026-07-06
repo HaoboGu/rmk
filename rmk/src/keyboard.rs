@@ -180,11 +180,10 @@ impl Runnable for Keyboard<'_> {
             };
 
             // Check deadlines after processing / timeout.
-            let now = Instant::now();
-            if self.sticky_key_state.deadline().is_some_and(|d| now >= d) {
+            if self.sticky_key_state.deadline().is_some_and(|d| Instant::now() >= d) {
                 self.release_sticky_key_if_active().await;
             }
-            if self.mouse.next_deadline().is_some_and(|d| now >= d) {
+            if self.mouse.next_deadline().is_some_and(|d| Instant::now() >= d) {
                 self.fire_mouse_repeat().await;
             }
         }
