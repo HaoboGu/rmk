@@ -19,14 +19,14 @@ use embassy_futures::select::{Either, select};
 use embedded_io_async::{Read, Write};
 use rmk_types::constants::RYNK_BUFFER_SIZE;
 use rmk_types::protocol::rynk::{
-    Cmd, RYNK_HEADER_SIZE, RYNK_MIN_BUFFER_SIZE, RynkError, RynkHeader, RynkMessage, command,
+    Cmd, FirmwareVersion, RYNK_HEADER_SIZE, RYNK_MIN_BUFFER_SIZE, RynkError, RynkHeader, RynkMessage, command,
 };
 #[allow(unused_imports)] // re-exported at `crate::host` for downstream users
 pub use uart::run_rynk_uart;
 
 use self::handlers::Handle;
 use super::context::KeyboardContext;
-use crate::config::RmkConfig;
+use crate::config::{DeviceConfig, RmkConfig};
 use crate::keymap::KeyMap;
 
 // Use `core::assert!` explicitly: in a `defmt` build the crate-level `assert!`
@@ -38,15 +38,37 @@ const _: () = core::assert!(
      floor",
 );
 
+const RMK_VERSION: FirmwareVersion = {
+    const fn component(s: &str) -> u8 {
+        let bytes = s.as_bytes();
+        let mut i = 0;
+        let mut value = 0u8;
+        while i < bytes.len() {
+            value = value * 10 + (bytes[i] - b'0');
+            i += 1;
+        }
+        value
+    }
+
+    FirmwareVersion {
+        major: component(env!("CARGO_PKG_VERSION_MAJOR")),
+        minor: component(env!("CARGO_PKG_VERSION_MINOR")),
+        patch: component(env!("CARGO_PKG_VERSION_PATCH")),
+    }
+};
+
 /// Transport-agnostic Rynk service.
 pub struct RynkService<'a> {
     pub(super) ctx: KeyboardContext<'a>,
+    /// Device identity served by `GetDeviceInfo`.
+    device: DeviceConfig<'static>,
 }
 
 impl<'a> RynkService<'a> {
-    pub fn new(keymap: &'a KeyMap<'a>, _config: &RmkConfig<'static>) -> Self {
+    pub fn new(keymap: &'a KeyMap<'a>, config: &RmkConfig<'static>) -> Self {
         Self {
             ctx: KeyboardContext::new(keymap),
+            device: config.device_config,
         }
     }
 
@@ -61,6 +83,7 @@ impl<'a> RynkService<'a> {
             Cmd::Reboot => Handle::<command::Reboot>::handle_message(self, msg).await,
             Cmd::BootloaderJump => Handle::<command::BootloaderJump>::handle_message(self, msg).await,
             Cmd::StorageReset => Handle::<command::StorageReset>::handle_message(self, msg).await,
+            Cmd::GetDeviceInfo => Handle::<command::GetDeviceInfo>::handle_message(self, msg).await,
 
             // Keymap (incl. encoder)
             Cmd::GetKeyAction => Handle::<command::GetKeyAction>::handle_message(self, msg).await,

@@ -195,6 +195,7 @@ fn encode_frame<T: serde::Serialize>(cmd: Cmd, seq: u8, val: &T) -> alloc::vec::
 struct Exemplars {
     matrix: MatrixState,
     capabilities: DeviceCapabilities,
+    device_info: DeviceInfo,
     behavior: BehaviorConfig,
     connection: ConnectionStatus,
     state_bits: StateBits,
@@ -233,6 +234,19 @@ fn exemplars() -> Exemplars {
         max_bulk_keys: 15,
         macro_chunk_size: 16,
         bulk_transfer_supported: true,
+    };
+    // Ascending version/id values; distinct strings so a field swap shows.
+    let device_info = DeviceInfo {
+        rmk_version: FirmwareVersion {
+            major: 1,
+            minor: 2,
+            patch: 3,
+        },
+        vendor_id: 4,
+        product_id: 5,
+        manufacturer: heapless::String::try_from("RMK").unwrap(),
+        product_name: heapless::String::try_from("RMK Keyboard").unwrap(),
+        serial_number: heapless::String::try_from("rynk:0001").unwrap(),
     };
     let behavior = BehaviorConfig {
         combo_timeout_ms: 50,
@@ -285,6 +299,7 @@ fn exemplars() -> Exemplars {
     Exemplars {
         matrix,
         capabilities,
+        device_info,
         behavior,
         connection,
         state_bits,
@@ -442,6 +457,7 @@ fn wire_values_locked() {
         // --- Status / system responses ---
         ("MatrixState{[0x05,0x00,0x20]}", encode(&ex.matrix)),
         ("DeviceCapabilities{1..16}", encode(&ex.capabilities)),
+        ("DeviceInfo{1.2.3,4,5,RMK,..}", encode(&ex.device_info)),
         ("BehaviorConfig{50,500,200,20}", encode(&ex.behavior)),
         ("ConnectionStatus{Configured,{1,Adv},Ble}", encode(&ex.connection)),
         ("ProtocolVersion{1,0}", encode(&ProtocolVersion { major: 1, minor: 0 })),
@@ -627,6 +643,15 @@ fn wire_frames_locked() {
         (
             "StorageReset reply Ok(())",
             encode_frame(Cmd::StorageReset, SEQ, &Ok::<(), RynkError>(()))
+        ),
+        ("GetDeviceInfo request ()", encode_frame(Cmd::GetDeviceInfo, SEQ, &())),
+        (
+            "GetDeviceInfo reply Ok(DeviceInfo{1.2.3,4,5,RMK,..})",
+            encode_frame(
+                Cmd::GetDeviceInfo,
+                SEQ,
+                &Ok::<DeviceInfo, RynkError>(ex.device_info.clone())
+            ),
         ),
         // ── Keymap / encoder (0x01xx) ──
         (

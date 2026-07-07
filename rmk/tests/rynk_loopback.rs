@@ -36,18 +36,17 @@ use rmk_types::fork::Fork;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::morse::{Morse, MorseMode, MorseProfile};
 use rmk_types::protocol::rynk::{
-    BehaviorConfig as WireBehaviorConfig, Cmd, DeviceCapabilities, GetEncoderRequest, GetMacroRequest, KeyPosition,
-    MacroData, MatrixState, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, SetComboRequest, SetEncoderRequest,
-    SetForkRequest, SetKeyRequest, SetMacroRequest, SetMorseRequest, StorageResetMode,
+    BehaviorConfig as WireBehaviorConfig, Cmd, DeviceCapabilities, DeviceInfo, GetEncoderRequest, GetMacroRequest,
+    KeyPosition, MacroData, MatrixState, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, SetComboRequest,
+    SetEncoderRequest, SetForkRequest, SetKeyRequest, SetMacroRequest, SetMorseRequest, StorageResetMode,
 };
 
 use crate::common::rynk_link::{link_session, link_two_sessions};
 use crate::common::{wrap_keymap, wrap_keymap_with_encoders};
 
 /// Build a `RynkService` over a tiny 1-layer 2-row 2-col keymap, so the tests
-/// don't depend on the size of the helper module's default keyboard. The
-/// config is unused by the dispatch core but required by `RynkService::new`;
-/// leak a default so the returned service can be `'static`.
+/// don't depend on the size of the helper module's default keyboard. Leak a
+/// default config so the returned service can be `'static`.
 fn service() -> RynkService<'static> {
     let behavior: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
     let per_key: &'static PositionalConfig<2, 2> = Box::leak(Box::new(PositionalConfig::default()));
@@ -126,6 +125,27 @@ fn get_capabilities() {
         // with the handlers.
         assert!(!caps.bulk_transfer_supported);
         assert_eq!(caps.max_bulk_keys, 0);
+    });
+}
+
+#[test]
+fn get_device_info() {
+    let service = service();
+    link_session(&service, async |client| {
+        let info = client
+            .request::<(), DeviceInfo>(Cmd::GetDeviceInfo, 0x08, &())
+            .await
+            .expect("Ok envelope");
+        // service() passes RmkConfig::default(), so the identity is the default
+        // DeviceConfig, and rmk_version tracks this crate's own version.
+        assert_eq!(info.vendor_id, 0x4c4b);
+        assert_eq!(info.product_id, 0x4643);
+        assert_eq!(info.manufacturer.as_str(), "RMK");
+        assert_eq!(info.product_name.as_str(), "RMK Keyboard");
+        assert_eq!(info.serial_number.as_str(), "vial:f64c2b3c:000001");
+        assert_eq!(info.rmk_version.major, env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap());
+        assert_eq!(info.rmk_version.minor, env!("CARGO_PKG_VERSION_MINOR").parse().unwrap());
+        assert_eq!(info.rmk_version.patch, env!("CARGO_PKG_VERSION_PATCH").parse().unwrap());
     });
 }
 

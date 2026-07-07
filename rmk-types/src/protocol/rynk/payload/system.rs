@@ -2,12 +2,15 @@
 //!
 //! Types for protocol handshake, device discovery, security, and global configuration.
 
-use heapless::Vec;
+use heapless::{String, Vec};
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 /// Maximum number of key positions in an unlock challenge.
 pub const UNLOCK_KEYS_SIZE: usize = 2;
+
+/// Maximum byte length of each `DeviceInfo` string field.
+pub const DEVICE_INFO_STRING_SIZE: usize = 32;
 
 /// Protocol version advertised during the connection handshake.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
@@ -65,6 +68,44 @@ pub struct DeviceCapabilities {
     pub max_bulk_keys: u8,
     pub macro_chunk_size: u16,
     pub bulk_transfer_supported: bool,
+}
+
+/// Version of the `rmk` crate baked into the firmware, so hosts can key
+/// version-specific behavior off the library release, not the user's app.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct FirmwareVersion {
+    pub major: u8,
+    pub minor: u8,
+    pub patch: u8,
+}
+
+/// Device identity for display and per-device host profiles.
+///
+/// Complements [`DeviceCapabilities`]: capabilities answer "what can you do"
+/// for feature gating, identity answers "which device is this".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct DeviceInfo {
+    pub rmk_version: FirmwareVersion,
+    pub vendor_id: u16,
+    pub product_id: u16,
+    #[cfg_attr(feature = "wasm", tsify(type = "string"))]
+    pub manufacturer: String<DEVICE_INFO_STRING_SIZE>,
+    #[cfg_attr(feature = "wasm", tsify(type = "string"))]
+    pub product_name: String<DEVICE_INFO_STRING_SIZE>,
+    #[cfg_attr(feature = "wasm", tsify(type = "string"))]
+    pub serial_number: String<DEVICE_INFO_STRING_SIZE>,
+}
+
+impl MaxSize for DeviceInfo {
+    // A str encodes as varint length + UTF-8 bytes — the same wire shape as
+    // `Vec<u8, N>`, so the Vec bound covers each string field.
+    const POSTCARD_MAX_SIZE: usize = FirmwareVersion::POSTCARD_MAX_SIZE
+        + 2 * u16::POSTCARD_MAX_SIZE
+        + 3 * crate::heapless_vec_max_size::<u8, DEVICE_INFO_STRING_SIZE>();
 }
 
 /// Current lock/unlock state of the device.
@@ -173,6 +214,29 @@ mod tests {
             macro_chunk_size: 0,
             bulk_transfer_supported: false,
         });
+    }
+
+    #[test]
+    fn round_trip_device_info() {
+        // Max-capacity case: each string filled to 32 bytes with 4-byte chars
+        // and both ids at u16::MAX, so every varint takes its full width and
+        // the bound is genuinely exercised.
+        let full: String<DEVICE_INFO_STRING_SIZE> = String::try_from("🦀🦀🦀🦀🦀🦀🦀🦀").unwrap();
+        assert_eq!(full.len(), DEVICE_INFO_STRING_SIZE);
+        let info = DeviceInfo {
+            rmk_version: FirmwareVersion {
+                major: 255,
+                minor: 255,
+                patch: 255,
+            },
+            vendor_id: u16::MAX,
+            product_id: u16::MAX,
+            manufacturer: full.clone(),
+            product_name: full.clone(),
+            serial_number: full,
+        };
+        round_trip(&info);
+        assert_max_size_bound(&info);
     }
 
     #[test]
