@@ -13,14 +13,12 @@ use crate::{MACRO_SPACE_SIZE, boot};
 
 pub(crate) mod keycode_convert;
 mod vial;
-#[cfg(feature = "vial_lock")]
-mod vial_lock;
 
 pub struct VialService<'a> {
     ctx: KeyboardContext<'a>,
     vial_config: VialConfig<'static>,
     #[cfg(feature = "vial_lock")]
-    locker: vial_lock::VialLock<'a>,
+    locker: crate::host::lock::HostLock<'a>,
 }
 
 impl<'a> VialService<'a> {
@@ -28,11 +26,13 @@ impl<'a> VialService<'a> {
         Self {
             ctx: KeyboardContext::new(keymap),
             vial_config: config.vial_config,
+            // Vial's poll cadence is ~100 ms (`VialCommand::UnlockPoll`).
             #[cfg(feature = "vial_lock")]
-            locker: vial_lock::VialLock::new(
+            locker: crate::host::lock::HostLock::new(
                 config.vial_config.unlock_keys,
                 keymap,
-                config.vial_config.vial_insecure,
+                config.vial_config.insecure,
+                embassy_time::Duration::from_millis(100),
             ),
         }
     }

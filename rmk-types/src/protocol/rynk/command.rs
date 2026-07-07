@@ -10,9 +10,9 @@
 use super::endpoint::{Endpoint, Topic, max_const};
 use super::message::RynkMessage;
 use super::{
-    BehaviorConfig, DeviceCapabilities, DeviceInfo, GetEncoderRequest, GetMacroRequest, KeyPosition, MacroData,
-    MatrixState, ProtocolVersion, RynkError, SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest,
-    SetMacroRequest, SetMorseRequest, StorageResetMode,
+    BehaviorConfig, DeviceCapabilities, DeviceInfo, GetEncoderRequest, GetMacroRequest, KeyPosition, LockStatus,
+    MacroData, MatrixState, ProtocolVersion, RynkError, SetComboRequest, SetEncoderRequest, SetForkRequest,
+    SetKeyRequest, SetMacroRequest, SetMorseRequest, StorageResetMode,
 };
 #[cfg(feature = "bulk")]
 use super::{
@@ -196,12 +196,19 @@ macro_rules! topics {
 
 // Define endpoints: `Name = value: Request => Response;`
 endpoints! {
-    // ── System (0x00xx); 0x0006..=0x0008 reserved for the lock gate, 0x0009 for layout ──
+    // ── System (0x00xx); 0x0009 reserved for layout ──
     GetVersion = 0x0001: () => ProtocolVersion;
     GetCapabilities = 0x0002: () => DeviceCapabilities;
     Reboot = 0x0003: () => ();
     BootloaderJump = 0x0004: () => ();
     StorageReset = 0x0005: StorageResetMode => ();
+    // Lock gate. All three stay dispatchable while locked.
+    /// Pure read of the current lock state — no side effects.
+    GetLockStatus = 0x0006: () => LockStatus;
+    /// Arms/refreshes the unlock attempt and samples the held challenge keys.
+    UnlockPoll = 0x0007: () => LockStatus;
+    /// Relock immediately.
+    Lock = 0x0008: () => ();
     /// Identity strings and USB ids; feature gating stays in `GetCapabilities`.
     GetDeviceInfo = 0x000A: () => DeviceInfo;
 

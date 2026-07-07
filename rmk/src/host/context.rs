@@ -371,9 +371,9 @@ impl<'a> KeyboardContext<'a> {
         valid
     }
 
-    // ── Matrix state (host_security) ─────────────────────────────────────
+    // ── Matrix state (host_lock) ─────────────────────────────────────
 
-    #[cfg(feature = "host_security")]
+    #[cfg(feature = "host_lock")]
     pub fn read_matrix_state(&self, target: &mut [u8]) {
         self.keymap.read_matrix_state(target);
     }

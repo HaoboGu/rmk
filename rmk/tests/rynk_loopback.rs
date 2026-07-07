@@ -37,23 +37,31 @@ use rmk_types::led_indicator::LedIndicator;
 use rmk_types::morse::{Morse, MorseMode, MorseProfile};
 use rmk_types::protocol::rynk::{
     BehaviorConfig as WireBehaviorConfig, Cmd, DeviceCapabilities, DeviceInfo, GetEncoderRequest, GetMacroRequest,
-    KeyPosition, MacroData, MatrixState, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, SetComboRequest,
+    KeyPosition, LockStatus, MacroData, MatrixState, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, SetComboRequest,
     SetEncoderRequest, SetForkRequest, SetKeyRequest, SetMacroRequest, SetMorseRequest, StorageResetMode,
 };
 
 use crate::common::rynk_link::{link_session, link_two_sessions};
 use crate::common::{wrap_keymap, wrap_keymap_with_encoders};
 
+/// Leak an `insecure` (always-unlocked) config so these loopback cases exercise
+/// protocol mechanics without the lock gate intercepting `BootloaderJump` /
+/// `StorageReset` / `GetMatrixState`. The gate itself is covered by the
+/// `host::rynk` and `host::lock` unit tests.
+fn insecure_config() -> &'static RmkConfig<'static> {
+    let mut config = RmkConfig::default();
+    config.lock_config.insecure = true;
+    Box::leak(Box::new(config))
+}
+
 /// Build a `RynkService` over a tiny 1-layer 2-row 2-col keymap, so the tests
-/// don't depend on the size of the helper module's default keyboard. Leak a
-/// default config so the returned service can be `'static`.
+/// don't depend on the size of the helper module's default keyboard.
 fn service() -> RynkService<'static> {
     let behavior: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
     let per_key: &'static PositionalConfig<2, 2> = Box::leak(Box::new(PositionalConfig::default()));
     let keymap = [[[KeyAction::No; 2]; 2]; 1];
     let km = wrap_keymap(keymap, per_key, behavior);
-    let config: &'static RmkConfig<'static> = Box::leak(Box::new(RmkConfig::default()));
-    RynkService::new(km, config)
+    RynkService::new(km, insecure_config())
 }
 
 /// A 2-layer variant, so SetDefaultLayer can move the default off layer 0 and
@@ -64,8 +72,7 @@ fn service_2_layers() -> RynkService<'static> {
     let per_key: &'static PositionalConfig<2, 2> = Box::leak(Box::new(PositionalConfig::default()));
     let keymap = [[[KeyAction::No; 2]; 2]; 2];
     let km = wrap_keymap(keymap, per_key, behavior);
-    let config: &'static RmkConfig<'static> = Box::leak(Box::new(RmkConfig::default()));
-    RynkService::new(km, config)
+    RynkService::new(km, insecure_config())
 }
 
 /// A keymap with 2 encoders, so `GetCapabilities` can report a non-zero
@@ -76,8 +83,7 @@ fn service_with_encoders() -> RynkService<'static> {
     let keymap = [[[KeyAction::No; 2]; 2]; 1];
     let encoder_map = [[EncoderAction::default(); 2]; 1];
     let km = wrap_keymap_with_encoders(keymap, encoder_map, per_key, behavior);
-    let config: &'static RmkConfig<'static> = Box::leak(Box::new(RmkConfig::default()));
-    RynkService::new(km, config)
+    RynkService::new(km, insecure_config())
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -801,7 +807,8 @@ fn get_matrix_state() {
             .request::<(), MatrixState>(Cmd::GetMatrixState, 0x80, &())
             .await
             .expect("Ok envelope");
-        // No `host_security` feature → zero bitmap (no key pressed).
+        // The insecure harness is unlocked, so the gate passes and the real
+        // bitmap is returned — all-zero here since the test presses no keys.
         assert!(state.pressed_bitmap.iter().all(|&b| b == 0));
     });
 }
@@ -903,21 +910,21 @@ fn drops_battery_topic_cmd_from_host() {
 #[test]
 fn unknown_cmd_over_the_wire_gets_unknown_cmd_reply() {
     let service = service();
-    // Cmd tags this build does not handle, one per range. 0x0006 (a
-    // v2-reserved request slot, standing in for a feature-gated-out or newer
-    // peer's command): dispatch answers UnknownCmd, not Malformed, because the
-    // frame itself was sound. 0xFFFF (topic range): dropped without a reply,
-    // like every topic-range request. Neither desyncs the session.
+    // Cmd tags this build does not handle, one per range. 0x00FF (an
+    // unassigned System-range slot, standing in for a feature-gated-out or
+    // newer peer's command): dispatch answers UnknownCmd, not Malformed,
+    // because the frame itself was sound. 0xFFFF (topic range): dropped without
+    // a reply, like every topic-range request. Neither desyncs the session.
     link_session(&service, async |client| {
         let mut header = [0u8; RYNK_HEADER_SIZE];
-        header[0..2].copy_from_slice(&0x0006u16.to_le_bytes());
+        header[0..2].copy_from_slice(&0x00FFu16.to_le_bytes());
         header[2] = 0x21; // seq — echoed on the error reply
         // payload_len stays 0
         client.send_raw(&header).await;
         let reply = client.recv_response(0x21).await;
         assert_eq!(
             reply.header.cmd,
-            Cmd::from_raw(0x0006),
+            Cmd::from_raw(0x00FF),
             "error reply echoes the unknown cmd bytes"
         );
         assert_eq!(reply.envelope::<()>(), Err(RynkError::UnknownCmd));
@@ -930,6 +937,40 @@ fn unknown_cmd_over_the_wire_gets_unknown_cmd_reply() {
         // The session is still in sync afterwards, with no stray reply.
         let version = client.request::<(), ProtocolVersion>(Cmd::GetVersion, 0x23, &()).await;
         assert_eq!(version, Ok(ProtocolVersion::CURRENT));
+    });
+}
+
+#[test]
+fn lock_endpoints_dispatch() {
+    // The loopback harness runs `insecure`, so the device is always unlocked and
+    // the three lock arms are reachable over the wire. The gate and the
+    // physical-unlock ceremony are covered by the `host::rynk` / `host::lock`
+    // unit tests, which can drive the matrix and the mock clock.
+    let service = service();
+    link_session(&service, async |client| {
+        // GetLockStatus: insecure ⇒ never locked, no challenge configured.
+        let status = client
+            .request::<(), LockStatus>(Cmd::GetLockStatus, 0x01, &())
+            .await
+            .expect("lock status");
+        assert!(!status.locked);
+        assert!(status.key_positions.is_empty());
+
+        // A wire `Lock` is a no-op on an insecure device (is_unlocked stays true).
+        assert_eq!(client.request::<(), ()>(Cmd::Lock, 0x02, &()).await, Ok(()));
+        let status = client
+            .request::<(), LockStatus>(Cmd::GetLockStatus, 0x03, &())
+            .await
+            .expect("lock status");
+        assert!(!status.locked, "insecure device ignores wire Lock");
+
+        // UnlockPoll with no keys configured warns and refuses — nothing to hold.
+        let polled = client
+            .request::<(), LockStatus>(Cmd::UnlockPoll, 0x04, &())
+            .await
+            .expect("unlock poll");
+        assert!(!polled.unlocking);
+        assert_eq!(polled.remaining_keys, 0);
     });
 }
 

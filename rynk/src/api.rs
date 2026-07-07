@@ -13,9 +13,9 @@ use rmk_types::morse::Morse;
 use rmk_types::protocol::rynk::{
     BehaviorConfig, Cmd, DeviceCapabilities, GetComboBulkRequest, GetComboBulkResponse, GetEncoderRequest,
     GetKeymapBulkRequest, GetKeymapBulkResponse, GetMacroRequest, GetMorseBulkRequest, GetMorseBulkResponse,
-    KeyPosition, MacroData, MatrixState, PeripheralStatus, ProtocolVersion, SetComboBulkRequest, SetComboRequest,
-    SetEncoderRequest, SetForkRequest, SetKeyRequest, SetKeymapBulkRequest, SetMacroRequest, SetMorseBulkRequest,
-    SetMorseRequest, StorageResetMode, TopicEvent, command,
+    KeyPosition, LockStatus, MacroData, MatrixState, PeripheralStatus, ProtocolVersion, SetComboBulkRequest,
+    SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetKeymapBulkRequest, SetMacroRequest,
+    SetMorseBulkRequest, SetMorseRequest, StorageResetMode, TopicEvent, command,
 };
 
 use crate::driver::{Client, RynkHostError, TopicFrame};
@@ -105,6 +105,34 @@ impl<T: Read + Write> Client<T> {
             return Err(RynkHostError::Unsupported(Cmd::StorageReset, "storage not enabled"));
         }
         self.request::<command::StorageReset>(&mode).await
+    }
+
+    // ── lock gate ──
+
+    /// Read the current lock state without side effects.
+    ///
+    /// [`LockStatus::key_positions`] is the challenge to hold; empty while
+    /// [`locked`](LockStatus::locked) means the device is permanently locked
+    /// (no `unlock_keys` configured in keyboard.toml).
+    pub async fn get_lock_status(&mut self) -> Result<LockStatus, RynkHostError> {
+        self.request::<command::GetLockStatus>(&()).await
+    }
+
+    /// Arm/refresh a physical-presence unlock attempt and sample the held
+    /// challenge keys.
+    ///
+    /// Poll every ~150 ms while the user holds the challenge keys:
+    /// [`remaining_keys`](LockStatus::remaining_keys) counts down, and the
+    /// attempt succeeds ([`locked`](LockStatus::locked) `== false`) once all
+    /// are held simultaneously. The firmware window lapses ~500 ms after polls
+    /// stop, so a cancel is just "stop polling".
+    pub async fn unlock_poll(&mut self) -> Result<LockStatus, RynkHostError> {
+        self.request::<command::UnlockPoll>(&()).await
+    }
+
+    /// Relock immediately. A no-op on an `insecure` device.
+    pub async fn lock(&mut self) -> Result<(), RynkHostError> {
+        self.request::<command::Lock>(&()).await
     }
 
     // ── keymap ──

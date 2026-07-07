@@ -17,7 +17,9 @@ use super::entry::expand_rmk_entry;
 use super::feature::{get_rmk_features, is_feature_enabled};
 use super::import::expand_custom_imports;
 use super::input_device::expand_input_device_config;
-use super::keyboard_config::{expand_keyboard_info, expand_vial_config, read_keyboard_toml_config};
+use super::keyboard_config::{
+    expand_keyboard_info, expand_lock_config, expand_vial_config, read_keyboard_toml_config,
+};
 use super::layout::expand_default_keymap;
 use super::matrix::{expand_bootmagic_check, expand_matrix_config};
 use super::registered_processor::expand_registered_processor_init;
@@ -123,6 +125,8 @@ pub(crate) fn expand_imports_and_constants(
     let default_keymap = expand_default_keymap(layout, behavior);
     // Generate vial config
     let vial_static_var = expand_vial_config(host);
+    // Generate rynk lock-gate config
+    let lock_static_var = expand_lock_config(host);
 
     // Generate extra imports, panic handler and logger
     let imports = match hardware.chip.series {
@@ -161,6 +165,7 @@ pub(crate) fn expand_imports_and_constants(
 
         #keyboard_info_static_var
         #vial_static_var
+        #lock_static_var
         #default_keymap
     }
 }
@@ -345,12 +350,19 @@ fn expand_main(
         quote! {}
     };
 
+    let lock_config = if host.rynk_enabled {
+        quote! { lock_config: LOCK_CONFIG,}
+    } else {
+        quote! {}
+    };
+
     let rmk_config = if hardware.storage.is_some() {
         quote! {
             #[allow(clippy::needless_update)]
             let rmk_config = ::rmk::config::RmkConfig {
                 device_config: KEYBOARD_DEVICE_CONFIG,
                 #vial_config
+                #lock_config
                 storage_config,
                 #set_ble_config
                 ..Default::default()
@@ -362,6 +374,7 @@ fn expand_main(
             let rmk_config = ::rmk::config::RmkConfig {
                 device_config: KEYBOARD_DEVICE_CONFIG,
                 #vial_config
+                #lock_config
                 #set_ble_config
                 ..Default::default()
             };

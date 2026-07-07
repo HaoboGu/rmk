@@ -16,9 +16,9 @@ use rynk::rmk_types::fork::Fork;
 use rynk::rmk_types::led_indicator::LedIndicator;
 use rynk::rmk_types::morse::Morse;
 use rynk::rmk_types::protocol::rynk::{
-    BehaviorConfig, DeviceCapabilities, GetComboBulkResponse, GetKeymapBulkResponse, GetMorseBulkResponse, MacroData,
-    MatrixState, PeripheralStatus, ProtocolVersion, SetComboBulkRequest, SetKeymapBulkRequest, SetMorseBulkRequest,
-    StorageResetMode,
+    BehaviorConfig, DeviceCapabilities, GetComboBulkResponse, GetKeymapBulkResponse, GetMorseBulkResponse, LockStatus,
+    MacroData, MatrixState, PeripheralStatus, ProtocolVersion, SetComboBulkRequest, SetKeymapBulkRequest,
+    SetMorseBulkRequest, StorageResetMode,
 };
 use rynk::{Client, IncomingTopic, RynkDevice, TopicEvent};
 use wasm_bindgen::prelude::*;
@@ -103,6 +103,10 @@ endpoints! {
     reboot() -> (),
     bootloader_jump() -> (),
     storage_reset(; mode: StorageResetMode) -> (),
+    // lock gate
+    get_lock_status() -> LockStatus,
+    unlock_poll() -> LockStatus,
+    lock() -> (),
     // keymap
     get_key(layer: u8, row: u8, col: u8) -> KeyAction,
     set_key(layer: u8, row: u8, col: u8; action: KeyAction) -> (),

@@ -57,7 +57,7 @@ KeyCode::Hid(A)                           00 04
 KeyCode::SystemControl(Sleep)             02 02
 KeyPosition{layer:0,row:5,col:13}         00 05 0d
 LedIndicator(Num|Scroll)                  05
-LockStatus{true,false,3}                  01 00 03
+LockStatus{true,false,2,[(1,2),(3,4)]}    01 00 02 02 01 02 03 04
 MacroData{[0x01,0x02,0x03]}               03 01 02 03
 MatrixState{[0x05,0x00,0x20]}             03 05 00 20
 ModifierCombination(LCtrl|RGui)           81
@@ -70,6 +70,7 @@ Result<(),RynkError>::Err(StorageFault)   01 02
 Result<(),RynkError>::Ok                  00
 RynkError::Internal                       03
 RynkError::Invalid                        05
+RynkError::Locked                         07
 RynkError::Malformed                      00
 RynkError::NotReady                       01
 RynkError::StorageFault                   02
@@ -84,7 +85,6 @@ SetMorseRequest{0,morse}                  00 00 01 02 01 00 04
 StateBits{LCtrl,Caps,B1}                  01 02 01
 StorageResetMode::Full                    00
 StorageResetMode::LayoutOnly              01
-UnlockChallenge{[(1,2),(3,4)]}            02 01 02 03 04
 UsbState::Configured                      02
 UsbState::Disabled                        00
 UsbState::Enabled                         01
