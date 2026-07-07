@@ -642,7 +642,6 @@ pub(crate) struct AutoMouseLayerConfig {
     /// Defaults to `1` (any motion). Helpful to filter out sensor noise.
     pub threshold: Option<u16>,
 }
-}
 
 /// Per Key configurations profiles for morse, tap-hold, etc.
 /// overrides the defaults given in TapHoldConfig
