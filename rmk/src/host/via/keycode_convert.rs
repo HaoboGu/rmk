@@ -89,8 +89,8 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             Action::User(id) => (id as u16 & 0xF) | 0x7E00,
             Action::StickyKey(sk) => {
                 match sk.layer {
-                    Some(l) => 0x5280 | (l as u16),  // OSL, VIA range (same as old OneShotLayer)
-                    None => 0x52A0 | ((sk.keep.into_packed_bits() & 0x1F) as u16),  // OSM, VIA range (same as old OneShotModifier)
+                    Some(l) => 0x5280 | (l as u16), // OSL, VIA range (same as old OneShotLayer)
+                    None => 0x52A0 | ((sk.keep.into_packed_bits() & 0x1F) as u16), // OSM, VIA range (same as old OneShotModifier)
                 }
             }
             _ => {
