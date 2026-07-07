@@ -41,19 +41,41 @@ pub enum MorseMode {
 ///
 /// Bit layout of the inner `u32`:
 /// ```text
-/// 31  30 | 29      16 | 15  14 | 13       0
-/// mode   | gap_timeout | uni_tap| hold_timeout
-///  (2b)  |   (14b ms)  |  (2b)  |  (14b ms)
+/// 31  30 | 29       17 | 16  15 | 14  13   | 12       0
+/// mode   | gap_timeout | uni_tap| flow_tap | hold_timeout
+///  (2b)  |   (13b ms)  |  (2b)  |   (2b)   |  (13b ms)
 /// ```
 ///
 /// - `mode` (bits 31-30): `00` = None, `01` = PermissiveHold, `10` = HoldOnOtherPress, `11` = Normal
-/// - `gap_timeout` (bits 29-16): gap timeout in ms (0 = None, max 16383)
-/// - `uni_tap` (bits 15-14): `00`/`01` = None, `10` = Some(false), `11` = Some(true)
-/// - `hold_timeout` (bits 13-0): hold timeout in ms (0 = None, max 16383)
+/// - `flow_tap` (bits 14, 13): `00`/`01` = None, `10` = Some(false), `11` = Some(true)
+/// - `gap_timeout` (bits 29-17): gap timeout in ms (0 = None, max 8191)
+/// - `uni_tap` (bits 16-15): `00`/`01` = None, `10` = Some(false), `11` = Some(true)
+/// - `hold_timeout` (bits 12-0): hold timeout in ms (0 = None, max 8191)
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub struct MorseProfile(u32);
+
+const TIMEOUT_MASK: u32 = 0x1FFF;
+const TIMEOUT_MAX_MS: u16 = TIMEOUT_MASK as u16;
+const GAP_TIMEOUT_SHIFT: u32 = 17;
+const HOLD_TIMEOUT_MASK: u32 = TIMEOUT_MASK;
+const GAP_TIMEOUT_MASK: u32 = TIMEOUT_MASK << GAP_TIMEOUT_SHIFT;
+const UNI_TAP_LOW_BIT: u32 = 0x0000_8000;
+const UNI_TAP_HIGH_BIT: u32 = 0x0001_0000;
+const UNI_TAP_MASK: u32 = UNI_TAP_LOW_BIT | UNI_TAP_HIGH_BIT;
+const FLOW_TAP_LOW_BIT: u32 = 0x0000_2000;
+const FLOW_TAP_HIGH_BIT: u32 = 0x0000_4000;
+const FLOW_TAP_MASK: u32 = FLOW_TAP_LOW_BIT | FLOW_TAP_HIGH_BIT;
+const MODE_MASK: u32 = 0xC000_0000;
+
+const fn encode_timeout_ms(t: u16) -> u32 {
+    if t > TIMEOUT_MAX_MS {
+        TIMEOUT_MAX_MS as u32
+    } else {
+        t as u32
+    }
+}
 
 impl MorseProfile {
     pub const fn const_default() -> Self {
@@ -62,19 +84,39 @@ impl MorseProfile {
 
     /// If the previous key is on the same "hand", the current key will be determined as a tap
     pub fn unilateral_tap(self) -> Option<bool> {
-        match self.0 & 0x0000_C000 {
-            0x0000_C000 => Some(true),
-            0x0000_8000 => Some(false),
+        match (self.0 & UNI_TAP_MASK) >> 15 {
+            3 => Some(true),
+            2 => Some(false),
             _ => None,
         }
     }
 
     pub const fn with_unilateral_tap(self, b: Option<bool>) -> Self {
         Self(
-            (self.0 & 0xFFFF_3FFF)
+            (self.0 & !UNI_TAP_MASK)
                 | match b {
-                    Some(true) => 0x0000_C000,
-                    Some(false) => 0x0000_8000,
+                    Some(true) => UNI_TAP_MASK,
+                    Some(false) => UNI_TAP_HIGH_BIT,
+                    None => 0,
+                },
+        )
+    }
+
+    /// Per-profile override for flow tap. `None` inherits the global morse setting.
+    pub fn enable_flow_tap(self) -> Option<bool> {
+        match (self.0 & FLOW_TAP_MASK) >> 13 {
+            3 => Some(true),
+            2 => Some(false),
+            _ => None,
+        }
+    }
+
+    pub const fn with_enable_flow_tap(self, b: Option<bool>) -> Self {
+        Self(
+            (self.0 & !FLOW_TAP_MASK)
+                | match b {
+                    Some(true) => FLOW_TAP_MASK,
+                    Some(false) => FLOW_TAP_HIGH_BIT,
                     None => 0,
                 },
         )
@@ -82,8 +124,8 @@ impl MorseProfile {
 
     /// The decision mode of the morse/tap-hold key
     pub fn mode(self) -> Option<MorseMode> {
-        match self.0 & 0xC000_0000 {
-            0xC000_0000 => Some(MorseMode::Normal),
+        match self.0 & MODE_MASK {
+            MODE_MASK => Some(MorseMode::Normal),
             0x8000_0000 => Some(MorseMode::HoldOnOtherPress),
             0x4000_0000 => Some(MorseMode::PermissiveHold),
             _ => None,
@@ -92,9 +134,9 @@ impl MorseProfile {
 
     pub const fn with_mode(self, m: Option<MorseMode>) -> Self {
         Self(
-            (self.0 & 0x3FFF_FFFF)
+            (self.0 & !MODE_MASK)
                 | match m {
-                    Some(MorseMode::Normal) => 0xC000_0000,
+                    Some(MorseMode::Normal) => MODE_MASK,
                     Some(MorseMode::HoldOnOtherPress) => 0x8000_0000,
                     Some(MorseMode::PermissiveHold) => 0x4000_0000,
                     None => 0,
@@ -104,37 +146,37 @@ impl MorseProfile {
 
     /// If the key is pressed longer than this, it is accepted as `hold` (in milliseconds)
     pub fn hold_timeout_ms(self) -> Option<u16> {
-        let t = (self.0 & 0x3FFF) as u16;
+        let t = (self.0 & HOLD_TIMEOUT_MASK) as u16;
         if t == 0 { None } else { Some(t) }
     }
 
     pub const fn with_hold_timeout_ms(self, t: Option<u16>) -> Self {
         if let Some(t) = t {
-            Self((self.0 & 0xFFFF_C000) | (t as u32 & 0x3FFF))
+            Self((self.0 & !HOLD_TIMEOUT_MASK) | encode_timeout_ms(t))
         } else {
-            Self(self.0 & 0xFFFF_C000)
+            Self(self.0 & !HOLD_TIMEOUT_MASK)
         }
     }
 
     pub const fn set_hold_timeout_ms(&mut self, t: u16) {
-        self.0 = (self.0 & 0xFFFF_C000) | (t as u32 & 0x3FFF)
+        self.0 = (self.0 & !HOLD_TIMEOUT_MASK) | encode_timeout_ms(t)
     }
 
     pub const fn set_gap_timeout_ms(&mut self, t: u16) {
-        self.0 = (self.0 & 0xC000_FFFF) | ((t as u32 & 0x3FFF) << 16)
+        self.0 = (self.0 & !GAP_TIMEOUT_MASK) | (encode_timeout_ms(t) << GAP_TIMEOUT_SHIFT)
     }
 
     /// The time elapsed from the last release of a key is longer than this, it will break the morse pattern (in milliseconds)
     pub fn gap_timeout_ms(self) -> Option<u16> {
-        let t = ((self.0 >> 16) & 0x3FFF) as u16;
+        let t = ((self.0 & GAP_TIMEOUT_MASK) >> GAP_TIMEOUT_SHIFT) as u16;
         if t == 0 { None } else { Some(t) }
     }
 
     pub const fn with_gap_timeout_ms(self, t: Option<u16>) -> Self {
         if let Some(t) = t {
-            Self((self.0 & 0xC000_FFFF) | ((t as u32 & 0x3FFF) << 16))
+            Self((self.0 & !GAP_TIMEOUT_MASK) | (encode_timeout_ms(t) << GAP_TIMEOUT_SHIFT))
         } else {
-            Self(self.0 & 0xC000_FFFF)
+            Self(self.0 & !GAP_TIMEOUT_MASK)
         }
     }
 
@@ -146,17 +188,17 @@ impl MorseProfile {
     ) -> Self {
         let mut v = 0u32;
         if let Some(t) = hold_timeout_ms {
-            v = (t & 0x3FFF) as u32;
+            v = encode_timeout_ms(t);
         }
         if let Some(t) = gap_timeout_ms {
-            v |= ((t & 0x3FFF) as u32) << 16;
+            v |= encode_timeout_ms(t) << GAP_TIMEOUT_SHIFT;
         }
         if let Some(b) = unilateral_tap {
-            v |= if b { 0x0000_C000 } else { 0x0000_8000 };
+            v |= if b { UNI_TAP_MASK } else { UNI_TAP_HIGH_BIT };
         }
         if let Some(m) = mode {
             v |= match m {
-                MorseMode::Normal => 0xC000_0000,
+                MorseMode::Normal => MODE_MASK,
                 MorseMode::HoldOnOtherPress => 0x8000_0000,
                 MorseMode::PermissiveHold => 0x4000_0000,
             };
@@ -634,15 +676,70 @@ mod tests {
         assert_eq!(profile.unilateral_tap(), Some(true));
         assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
 
-        profile.set_hold_timeout_ms(0x3FFF);
-        profile.set_gap_timeout_ms(0x3FFF);
-        assert_eq!(profile.hold_timeout_ms(), Some(0x3FFF));
-        assert_eq!(profile.gap_timeout_ms(), Some(0x3FFF));
+        profile.set_hold_timeout_ms(0xFFFF);
+        profile.set_gap_timeout_ms(0xFFFF);
+        assert_eq!(profile.hold_timeout_ms(), Some(TIMEOUT_MAX_MS));
+        assert_eq!(profile.gap_timeout_ms(), Some(TIMEOUT_MAX_MS));
 
         profile.set_hold_timeout_ms(0);
         profile.set_gap_timeout_ms(0);
         assert_eq!(profile.hold_timeout_ms(), None);
         assert_eq!(profile.gap_timeout_ms(), None);
+    }
+
+    #[test]
+    fn test_morse_profile_packed_layout_matches_docs() {
+        let profile = MorseProfile::new(
+            Some(false),
+            Some(MorseMode::HoldOnOtherPress),
+            Some(0x0123),
+            Some(0x0456),
+        )
+        .with_enable_flow_tap(Some(false));
+        assert_eq!(
+            u32::from(profile),
+            0x8000_0000 | (0x0456u32 << 17) | 0x0001_0000 | 0x0000_4000 | 0x0123
+        );
+        assert_eq!(profile.unilateral_tap(), Some(false));
+        assert_eq!(profile.enable_flow_tap(), Some(false));
+
+        let profile = MorseProfile::new(Some(true), Some(MorseMode::Normal), Some(0x0123), Some(0x0456))
+            .with_enable_flow_tap(Some(true));
+        assert_eq!(
+            u32::from(profile),
+            0xC000_0000 | (0x0456u32 << 17) | 0x0001_8000 | 0x0000_6000 | 0x0123
+        );
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.enable_flow_tap(), Some(true));
+    }
+
+    #[test]
+    fn test_morse_profile_enable_flow_tap_accessors_preserve_packed_fields() {
+        assert_eq!(core::mem::size_of::<MorseProfile>(), 4);
+        assert_eq!(MorseProfile::POSTCARD_MAX_SIZE, u32::POSTCARD_MAX_SIZE);
+        assert_eq!(MorseProfile::const_default().enable_flow_tap(), None);
+
+        let profile = MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(1000), Some(2000));
+        let profile = profile.with_enable_flow_tap(Some(true));
+        assert_eq!(profile.enable_flow_tap(), Some(true));
+        assert_eq!(profile.hold_timeout_ms(), Some(1000));
+        assert_eq!(profile.gap_timeout_ms(), Some(2000));
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
+
+        let profile = profile.with_enable_flow_tap(Some(false));
+        assert_eq!(profile.enable_flow_tap(), Some(false));
+        assert_eq!(profile.hold_timeout_ms(), Some(1000));
+        assert_eq!(profile.gap_timeout_ms(), Some(2000));
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
+
+        let profile = profile.with_enable_flow_tap(None);
+        assert_eq!(profile.enable_flow_tap(), None);
+        assert_eq!(profile.hold_timeout_ms(), Some(1000));
+        assert_eq!(profile.gap_timeout_ms(), Some(2000));
+        assert_eq!(profile.unilateral_tap(), Some(true));
+        assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
     }
 
     /// Validates that the manual Schema impl matches the actual serde wire format.

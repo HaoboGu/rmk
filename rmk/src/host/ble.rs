@@ -13,7 +13,7 @@ pub(crate) async fn run_ble_host<P: PacketPool>(
     loop {
         let buf = HOST_BLE_REPLY.receive().await;
         debug!("Sending via report: {:?}", buf);
-        if let Err(e) = input.notify(conn, &buf).await {
+        if let Err(e) = input.notify(conn, &buf, true).await {
             error!("Failed to notify via report: {:?}", e);
         }
     }

@@ -5,12 +5,14 @@ use rmk_config::resolved::hardware::{ChipModel, PinConfig};
 use syn::ItemMod;
 
 use super::chip::gpio::convert_gpio_str_to_output_pin;
+use crate::codegen::feature::is_feature_enabled;
 
 /// Expand processor init/exec blocks from keyboard config.
 /// Returns (initializers, executors).
 pub(crate) fn expand_registered_processor_init(
     hardware: &Hardware,
     item_mod: &ItemMod,
+    rmk_features: &Option<Vec<String>>,
 ) -> (TokenStream, Vec<TokenStream>) {
     let mut initializers = TokenStream::new();
     let mut executors = vec![];
@@ -18,6 +20,10 @@ pub(crate) fn expand_registered_processor_init(
     let (i, e) = expand_light_indicator_processors(hardware);
     initializers.extend(i);
     executors.extend(e);
+
+    if is_feature_enabled(rmk_features, "dfu_rp") || is_feature_enabled(rmk_features, "dfu_nrf") {
+        create_dfu_led_processor(hardware, &mut initializers, &mut executors);
+    }
 
     // Custom processors declared in the module.
     if let Some((_, items)) = &item_mod.content {
@@ -126,6 +132,35 @@ fn create_keyboard_indicator_processor(
         };
         initializers.extend(processor_init);
         executors.push(quote! { #processor_ident.run() });
+    }
+}
+
+fn create_dfu_led_processor(
+    hardware: &Hardware,
+    initializers: &mut TokenStream,
+    executors: &mut Vec<TokenStream>,
+) {
+    use rmk_config::resolved::hardware::ChipSeries;
+    let chip = &hardware.chip;
+    if let Some(dfu) = &hardware.dfu {
+        let pin_str = match &dfu.led {
+            Some(c) if c.pin == "none" => return,
+            Some(c) => c.pin.clone(),
+            None => match chip.series {
+                ChipSeries::Nrf52 => "P0_15".to_string(),
+                ChipSeries::Rp2040 => "PIN_25".to_string(),
+                _ => return,
+            },
+        };
+        let p = convert_gpio_str_to_output_pin(chip, pin_str, false);
+        let processor_init = quote! {
+            let mut dfu_led_processor = ::rmk::processor::builtin::dfu_led::DfuLedProcessor::new(
+                #p,
+                false,
+            );
+        };
+        initializers.extend(processor_init);
+        executors.push(quote! { dfu_led_processor.run() });
     }
 }
 

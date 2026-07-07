@@ -160,16 +160,22 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     usb_config.device_protocol = 0x01;
     usb_config.composite_with_iads = true;
 
-    // Extra HID interfaces (usb_log, steno) overflow the 128-byte config descriptor buffer.
-    #[cfg(any(feature = "usb_log", feature = "steno"))]
+    // Extra interfaces (usb_log, steno, dfu) overflow the 128-byte config descriptor buffer.
+    #[cfg(any(feature = "usb_log", feature = "steno", feature = "dfu"))]
     const USB_BUF_SIZE: usize = 256;
-    #[cfg(not(any(feature = "usb_log", feature = "steno")))]
+    #[cfg(not(any(feature = "usb_log", feature = "steno", feature = "dfu")))]
     const USB_BUF_SIZE: usize = 128;
+
+    // Control buffer must be large enough for the largest DFU transfer block.
+    #[cfg(feature = "dfu")]
+    const CONTROL_BUF_SIZE: usize = ::rmk::dfu::BLOCK_SIZE_DFU;
+    #[cfg(not(feature = "dfu"))]
+    const CONTROL_BUF_SIZE: usize = USB_BUF_SIZE;
 
     static CONFIG_DESC: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
     static BOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
     static MSOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
-    static CONTROL_BUF: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
+    static CONTROL_BUF: StaticCell<[u8; CONTROL_BUF_SIZE]> = StaticCell::new();
 
     let mut builder = Builder::new(
         driver,
@@ -177,7 +183,7 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
         &mut CONFIG_DESC.init([0; USB_BUF_SIZE])[..],
         &mut BOS_DESC.init([0; 16])[..],
         &mut MSOS_DESC.init([0; 16])[..],
-        &mut CONTROL_BUF.init([0; USB_BUF_SIZE])[..],
+        &mut CONTROL_BUF.init([0; CONTROL_BUF_SIZE])[..],
     );
 
     static device_handler: StaticCell<UsbDeviceHandler> = StaticCell::new();
@@ -233,6 +239,14 @@ impl<D: Driver<'static>> UsbTransport<D> {
         #[cfg(feature = "usb_log")]
         let logger = Some(add_usb_logger!(&mut builder));
 
+        #[cfg(feature = "dfu")]
+        {
+            let product_name = device_config.product_name;
+            #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+            if let Some(mgr) = ::rmk::dfu::get_manager() {
+                ::rmk::dfu::register_dfu_interface(&mut builder, mgr, product_name);
+            }
+        }
         let (keyboard_reader, keyboard_writer) = keyboard_rw.split();
         let device = builder.build();
 

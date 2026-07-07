@@ -1,0 +1,75 @@
+[package]
+name = "rmk-esp32h2"
+version = "0.2.0"
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Keyboard firmware written in Rust"
+homepage = "https://github.com/haobogu/rmk"
+repository = "https://github.com/haobogu/rmk"
+readme = "../../README.md"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+rmk = { path = "../../../rmk", default-features = false, features = [
+    "esp32h2_ble",
+    "log",
+    "storage",
+    "vial",
+] }
+embassy-executor = { version = "0.10" }
+esp-backtrace = { version = "0.19", features = [
+    "esp32h2",
+    "panic-handler",
+    "println",
+] }
+esp-storage = { version = "0.9", features = ["esp32h2"] }
+esp-hal = { version = "1.1", features = ["esp32h2", "unstable"] }
+esp-alloc = { version = "0.10" }
+esp-println = { version = "0.17", features = ["esp32h2", "log-04"] }
+esp-radio = { version = "0.18", features = ["esp32h2", "unstable", "ble"] }
+esp-rtos = { version = "0.3", features = ["esp32h2", "esp-radio", "embassy"] }
+esp-bootloader-esp-idf = { version = "0.5", features = ["esp32h2", "log-04"] }
+bt-hci = { version = "0.9" }
+
+[build-dependencies]
+xz2 = "0.1.7"
+json = "0.12"
+const-gen = "1.6"
+embuild = "0.33"
+cc = "1.2.9"
+
+[[bin]]
+name = "rmk-esp32h2"
+test = false
+bench = false
+
+[profile.dev.package.esp-storage]
+opt-level = 3
+
+[profile.dev]
+# Rust debug is too slow.
+# For debug builds always builds with some optimization
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1        # LLVM can perform better optimizations using a single thread
+debug = 2
+debug-assertions = false
+incremental = false
+lto = 'thin'
+opt-level = 3
+overflow-checks = false
+
+# esp-radio (crates.io 0.18) still pins bt-hci 0.8, but rmk/trouble-host need bt-hci 0.9.
+# Pin the esp-hal graph to the embassy-rs/esp-hal fork (esp-radio 0.18 + bt-hci 0.9) —
+# the same rev trouble's own esp CI uses. Drop once esp-radio ships bt-hci 0.9.
+[patch.crates-io]
+esp-alloc = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+esp-backtrace = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+esp-bootloader-esp-idf = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+esp-hal = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+esp-println = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+esp-radio = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+esp-rtos = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+esp-storage = { git = "https://github.com/embassy-rs/esp-hal.git", rev = "b7eec0fe94aa62d49dfc12d3bf87ca038a8d119f" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "1d3c3dec8edbf37450d0174b312f8d3d6cc0bf12" }

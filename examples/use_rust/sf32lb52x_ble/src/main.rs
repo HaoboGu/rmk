@@ -22,8 +22,6 @@ use keymap::{COL, ROW, SIZE};
 use lcd_async::Builder;
 use lcd_async::models::GC9107;
 use panic_probe as _;
-use rand_chacha::ChaCha12Rng;
-use rand_core::SeedableRng;
 use renderers::KeyLabelRenderer;
 use rmk::ble::{BleTransport, build_ble_stack};
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
@@ -42,7 +40,6 @@ use sifli_hal::efuse::Efuse;
 use sifli_hal::gpio::{Input, Level, Output};
 use sifli_hal::mpi::{BlockingNorFlash, BuiltInProfile, NorConfig, ProfileSource};
 use sifli_hal::peripherals::{EFUSEC, USBC};
-use sifli_hal::rng::Rng;
 use sifli_hal::usb::{Driver, InterruptHandler as UsbInterruptHandler};
 use sifli_hal::{bind_interrupts, ipc, pmu};
 use sifli_radio::bluetooth::{BleController, BleInitConfig};
@@ -147,10 +144,8 @@ async fn main(_spawner: Spawner) {
             }
         }
     };
-    let mut rng = Rng::new_blocking(p.TRNG);
-    let mut rng_gen = ChaCha12Rng::from_rng(&mut rng).unwrap();
     let mut host_resources = HostResources::new();
-    let stack = build_ble_stack(controller, ble_addr, &mut rng_gen, &mut host_resources).await;
+    let stack = build_ble_stack(controller, ble_addr, &mut host_resources).await;
 
     // Initialize USB driver (dual-mode USB + BLE). PA35/PA36 are the USB D+/D- pins.
     let usb_driver = Driver::new(p.USBC, Irqs, p.PA35, p.PA36);

@@ -3,7 +3,7 @@ use rmk_types::led_indicator::LedIndicator;
 use crate::channel::LED_SIGNAL;
 use crate::hid::{HidError, HidReaderTrait};
 
-pub(crate) struct BleLedReader {}
+pub(crate) struct BleLedReader;
 
 impl HidReaderTrait for BleLedReader {
     type ReportType = LedIndicator;

@@ -60,13 +60,13 @@ impl<P: PacketPool> Runnable for BleBatteryServer<'_, '_, '_, P> {
         let first_report = async {
             if let BatteryStatus::Available { level: Some(level), .. } =
                 crate::input_device::battery::current_battery_status()
-                && self.battery_level.notify(self.conn, &level).await.is_ok()
+                && self.battery_level.notify(self.conn, &level, true).await.is_ok()
             {
                 return;
             }
             loop {
                 if let BatteryStatus::Available { level: Some(level), .. } = self.sub.next_message_pure().await.0 {
-                    if let Err(e) = self.battery_level.notify(self.conn, &level).await {
+                    if let Err(e) = self.battery_level.notify(self.conn, &level, true).await {
                         error!("Failed to notify battery level: {:?}", e);
                     } else {
                         // The first report is sent, return to continue
@@ -87,7 +87,7 @@ impl<P: PacketPool> Runnable for BleBatteryServer<'_, '_, '_, P> {
             // Check if there's a newer event, if not, use original battery status event
             let state = self.sub.try_next_message_pure().unwrap_or(battery_status);
             if let BatteryStatus::Available { level: Some(level), .. } = state.0
-                && let Err(e) = self.battery_level.notify(self.conn, &level).await
+                && let Err(e) = self.battery_level.notify(self.conn, &level, true).await
             {
                 error!("Failed to notify battery level: {:?}", e);
             }

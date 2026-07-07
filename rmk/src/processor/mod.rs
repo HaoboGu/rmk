@@ -9,6 +9,7 @@
 pub mod builtin;
 
 use embassy_futures::select::{Either, select};
+use embassy_time::{Instant, Timer};
 
 use crate::core_traits::Runnable;
 use crate::event::EventSubscriber;
@@ -104,6 +105,45 @@ pub trait PollingProcessor: Processor {
             match select(ticker.next(), sub.next_event()).await {
                 Either::First(_) => self.update().await,
                 Either::Second(event) => self.process(event).await,
+            }
+        }
+    }
+}
+
+/// Trait for processors driven by a dynamic timeout in addition to events.
+///
+/// Unlike [`PollingProcessor`], whose tick fires at a fixed interval, a
+/// deadline processor produces the next deadline on demand from its own
+/// state -- motion may extend it, external state may clear it. When
+/// [`deadline`](Self::deadline) returns `None`, the loop simply waits for the
+/// next event.
+///
+/// [`deadline_loop`](Self::deadline_loop) is the driver: call it from your
+/// [`Runnable::run`] implementation (marking the struct with
+/// `#[::rmk::macros::runnable_generated]` so the `#[processor]` macro does
+/// not emit its own `Runnable`).
+pub trait DeadlineProcessor: Processor {
+    /// The next moment at which [`on_deadline`](Self::on_deadline) should
+    /// fire, or `None` when no timeout is currently armed.
+    fn deadline(&self) -> Option<Instant>;
+
+    /// Called when the deadline returned by [`deadline`](Self::deadline)
+    /// elapses without an intervening event.
+    async fn on_deadline(&mut self);
+
+    /// Loop that interleaves event processing with a dynamic deadline timer.
+    async fn deadline_loop(&mut self) -> ! {
+        let mut sub = Self::subscriber();
+        loop {
+            match self.deadline() {
+                Some(deadline) => match select(Timer::at(deadline), sub.next_event()).await {
+                    Either::First(_) => self.on_deadline().await,
+                    Either::Second(event) => self.process(event).await,
+                },
+                None => {
+                    let event = sub.next_event().await;
+                    self.process(event).await;
+                }
             }
         }
     }

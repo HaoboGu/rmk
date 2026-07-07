@@ -73,9 +73,9 @@ matrix_map = """
 
 # here are the aliases for the example layer.keys below
 [aliases]
-my_cut = "WM(X, LCtrl)"
-my_copy = "WM(C, LCtrl)"
-my_paste = "WM(V, LCtrl)"
+MyCut = "WM(X, LCtrl)"
+MyCopy = "WM(C, LCtrl)"
+MyPaste = "WM(V, LCtrl)"
 
 # Key map definitions per layer:
 # The number (and order) of entries on each layer should be
@@ -185,7 +185,7 @@ morses = [
 [behavior.morse.profiles]
 # matrix_map may refer these to override the defaults given in [behavior.morse] for some key positions - this example is a home row mod
 H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
-H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
+H2 = { enable_flow_tap = false, permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
 MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_timeout = "200ms" }
 
 # Combo configuration
@@ -231,9 +231,11 @@ low_active = false
 # Whether the storage is enabled
 enabled = true
 # The start address of storage
+# Note: When the `dfu_rp` feature is enabled, this value is ignored.
+# The storage partition is automatically placed after the DFU download slot.
 start_addr = 0xA0000
 # Number of sectors used for storage, >= 2
-start_addr = 16
+num_sectors = 16
 # Clear storage at keyboard boot.
 # Set it to true will reset the storage(including keymap, BLE bond info, etc.) at each reboot.
 # This option is useful when testing the firmware.

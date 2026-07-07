@@ -35,6 +35,7 @@ use crate::keymap::KeyMap;
 use crate::split::ble::central::update_activity_time;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, boot};
 
+pub(crate) mod auto_mouse_layer;
 pub mod combo;
 pub(crate) mod fork;
 pub(crate) mod held_buffer;
@@ -452,6 +453,16 @@ impl<'a> Keyboard<'a> {
                 self.process_key_action_inner(key_action, event, event_time).await
             }
             KeyBehaviorDecision::FlowTap => {
+                let key_action = if keyboard_state_updated && !is_combo {
+                    &self.keymap.get_action_with_layer_cache(event)
+                } else {
+                    key_action
+                };
+                if !key_action.is_morse() || !Self::is_flow_tap_enabled(self.keymap, key_action) {
+                    self.process_key_action_inner(key_action, event, event_time).await;
+                    return;
+                }
+
                 let action = Self::action_from_pattern(self.keymap, key_action, TAP); //tap action
                 self.process_key_action_normal(action, event).await;
                 // Drop any existing held entry at this position (e.g. an EarlyFired entry left by
@@ -669,8 +680,8 @@ impl<'a> Keyboard<'a> {
 
         // When pressing a morse key, check flow tap first.
         if event.pressed
-            && self.keymap.morse_enable_flow_tap()
             && key_action.is_morse()
+            && Self::is_flow_tap_enabled(self.keymap, key_action)
             && self.last_press_time.elapsed() < self.keymap.morse_prior_idle_time()
         {
             // It's in key streak, trigger the first tap action
@@ -721,6 +732,7 @@ impl<'a> Keyboard<'a> {
 
                         if decision_for_current_key == KeyBehaviorDecision::FlowTap
                             && matches!(held_key.state, KeyState::Pressed(_))
+                            && Self::is_flow_tap_enabled(self.keymap, &held_key.action)
                         {
                             debug!("Flow tap triggered, resolve buffered morse key as tapping");
                             // If flow tap of current key is triggered, tapping all held keys

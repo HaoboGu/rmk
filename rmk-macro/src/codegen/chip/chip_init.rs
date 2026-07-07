@@ -129,8 +129,6 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                         p.PPI_CH27, p.PPI_CH28, p.PPI_CH29,
                     );
                     let mut rng = ::embassy_nrf::rng::Rng::new(p.RNG, Irqs);
-                    use rand_core::SeedableRng;
-                    let mut rng_gen = ::rand_chacha::ChaCha12Rng::from_rng(&mut rng).unwrap();
                     let mut sdc_mem = ::nrf_sdc::Mem::<#sdc_mem_size>::new();
                     let sdc = ::defmt::unwrap!(build_sdc(sdc_p, &mut rng, &*mpsl, &mut sdc_mem));
                     let ble_addr = #ble_addr;
@@ -138,7 +136,6 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                     let stack = ::rmk::ble::build_ble_stack(
                         sdc,
                         ble_addr,
-                        &mut rng_gen,
                         &mut host_resources,
                     )
                     .await;
@@ -194,6 +191,7 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                         p.PIN_24,
                         p.PIN_29,
                         ::embassy_rp::dma::Channel::new(p.DMA_CH0, Irqs),
+                        ::embassy_rp::dma::Channel::new(p.DMA_CH2, Irqs),
                     );
 
                     static STATE: ::static_cell::StaticCell<::cyw43::State> = ::static_cell::StaticCell::new();
@@ -205,13 +203,9 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                     let controller: ::bt_hci::controller::ExternalController<_, 10> = ::bt_hci::controller::ExternalController::new(bt_device);
                     let ble_addr = #ble_addr;
                     let mut host_resources = ::rmk::HostResources::new();
-                    let mut rosc_rng = ::embassy_rp::clocks::RoscRng {};
-                    use rand_core::SeedableRng;
-                    let mut rng = ::rand_chacha::ChaCha12Rng::from_rng(&mut rosc_rng).unwrap();
                     let stack = ::rmk::ble::build_ble_stack(
                         controller,
                         ble_addr,
-                        &mut rng,
                         &mut host_resources,
                     )
                     .await;
@@ -234,7 +228,6 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                 let software_interrupt = ::esp_hal::interrupt::software::SoftwareInterruptControl::new(p.SW_INTERRUPT);
                 ::esp_rtos::start(timg0.timer0, software_interrupt.software_interrupt0);
                 let _trng_source = ::esp_hal::rng::TrngSource::new(p.RNG, p.ADC1);
-                let mut rng = ::esp_hal::rng::Trng::try_new().unwrap();
                 let connector = ::esp_radio::ble::controller::BleConnector::new(p.BT, Default::default()).unwrap();
                 let controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
                 let ble_addr = #ble_addr;
@@ -242,7 +235,6 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                 let stack = ::rmk::ble::build_ble_stack(
                     controller,
                     ble_addr,
-                    &mut rng,
                     &mut host_resources,
                 )
                 .await;

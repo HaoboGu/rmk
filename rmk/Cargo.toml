@@ -58,18 +58,17 @@ display-interface-i2c = { version = "0.5", optional = true }
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { git = "https://github.com/haobogu/trouble", rev = "690373fd1166d16225b875435dd0600c92570e7d", features = [
+trouble-host = { version = "0.7", features = [
     "gatt",
     "scan",
     "derive",
     "security",
     "serde",
 ], optional = true }
-rand_core = { version = "0.6", optional = true }
-bt-hci = { version = "0.8", optional = true }
+bt-hci = { version = "0.9", optional = true }
 
 # nRF dependencies
-embassy-nrf = { version = "0.10", features = [
+embassy-nrf = { version = "0.11", features = [
     "unstable-pac",
     "time",
 ], optional = true }
@@ -77,15 +76,19 @@ embassy-nrf = { version = "0.10", features = [
 # RP2040 dependencies
 embassy-rp = { version = "0.10", optional = true }
 embassy-hal-internal = { version = "0.5.0", optional = true }
-rp-pac = { version = "7.0.0", optional = true }
 pio = { version = "0.3.0", optional = true }
 fixed = { version = "1.28.0", optional = true }
+embassy-boot-rp = { version = "0.10.0", optional = true }
+embassy-boot = { version = "0.7", optional = true, default-features = false }
 
 # ESP32 dependencies
 esp-hal = { version = "1.1", optional = true }
 
 # Document feature
 document-features = "0.2"
+
+# for DFU firmware update
+embassy-usb-dfu = { version = "0.3.0", optional = true, features = ["cortex-m", "dfu"] }
 
 [dev-dependencies]
 # A hack for enabling 'std' feature in testing, ref: https://github.com/rust-lang/cargo/issues/2911
@@ -119,6 +122,9 @@ vial = ["host"]
 
 ## Enable vial lock feature
 vial_lock = ["vial", "host_security"]
+
+## Enable DFU lock feature — physical key unlock for DFU firmware download
+dfu_lock = ["host_security"]
 
 ## Enable physical key unlock and matrix state tracking (shared between vial_lock and rmk_protocol)
 host_security = []
@@ -207,8 +213,8 @@ split = [
 ## Enable feature to use rp2040 specific features, like PIO and bootrom
 rp2040 = [
     "dep:embassy-rp",
+    "embassy-rp/unstable-pac",
     "dep:embassy-hal-internal",
-    "dep:rp-pac",
     "dep:pio",
     "dep:fixed",
 ]
@@ -218,6 +224,13 @@ adafruit_bl = ["_nrf_ble"]
 
 ## Enable feature if you're using the ZSA Voyager ignition DFU bootloader
 zsa_voyager_bl = []
+
+## Enable DFU firmware update support (USB DFU interface)
+dfu = ["dep:embassy-usb-dfu", "dep:embassy-embedded-hal", "rmk-types/dfu"]
+## Enable RP2040-specific DFU with embassy-boot-rp (implies `dfu` and `rp2040`)
+dfu_rp = ["dfu", "dep:embassy-boot-rp", "dep:embassy-boot", "rp2040", "rmk-macro/dfu_rp"]
+## Enable nRF DFU firmware update support (add a chip feature like `nrf52840` too)
+dfu_nrf = ["dfu", "dep:embassy-boot", "dep:embassy-nrf", "rmk-macro/dfu_nrf"]
 
 ## Enable Plover HID stenography support: adds the steno HID descriptor,
 ## the steno USB writer endpoint, and the `Action::Steno` variant.
@@ -249,6 +262,8 @@ _nrf_ble = ["_ble", "dep:embassy-nrf"]
 esp32c3_ble = ["_esp_ble", "_no_usb"]
 ## Enable feature if you want to use ESP32C6 with BLE.
 esp32c6_ble = ["_esp_ble", "_no_usb"]
+## Enable feature if you want to use ESP32H2 with BLE.
+esp32h2_ble = ["_esp_ble", "_no_usb"]
 ## Enable feature if you want to use ESP32S3 with BLE.
 esp32s3_ble = ["_esp_ble"]
 _esp_ble = ["_ble", "dep:esp-hal"]
@@ -263,8 +278,11 @@ sf32lb52x_ble = ["_ble"]
 passkey_entry = ["_ble", "rmk-types/passkey_entry"]
 
 ## Enable feature if you want to use trouble BLE stack
-_ble = ["dep:trouble-host", "dep:rand_core", "dep:bt-hci", "storage", "rmk-types/_ble"]
+_ble = ["dep:trouble-host", "dep:bt-hci", "storage", "rmk-types/_ble"]
 
 [lib]
 # Don't run doctest for lib
 doctest = false
+[workspace.dependencies]
+embassy-nrf = { version = "0.10", features = ["nrf52840"] }
+

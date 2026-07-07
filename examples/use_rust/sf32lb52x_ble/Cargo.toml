@@ -32,16 +32,14 @@ sifli-radio = { git = "https://github.com/OpenSiFli/sifli-rs", rev = "8b9da60c61
     "defmt",
 ] }
 
-trouble-host = { git = "https://github.com/haobogu/trouble", rev = "48e409858586546272a405525b134f8c9ab29320", features = [
+trouble-host = { version = "0.7", features = [
     "defmt",
     "peripheral",
     "gatt",
     "derive",
     "security",
 ] }
-bt-hci = { version = "0.8", features = ["defmt"] }
-rand_core = { version = "0.6", default-features = false }
-rand_chacha = { version = "0.3", default-features = false }
+bt-hci = { version = "0.9", features = ["defmt"] }
 
 embassy-time = { version = "0.5", features = [
     "defmt",
@@ -54,7 +52,7 @@ embassy-executor = { version = "0.10", features = [
     "executor-thread",
 ] }
 embassy-futures = { version = "0.1" }
-embassy-sync = { version = "0.7" }
+embassy-sync = { version = "0.8" }
 cortex-m-rt = { version = "0.7.3", features = ["set-sp", "set-vtor"] }
 portable-atomic = { version = "1.11" }
 defmt = "1.0"

@@ -1,6 +1,25 @@
 #!/bin/bash
+set -euo pipefail
 
-set -e
+source "$(dirname "${BASH_SOURCE[0]}")/../.github/ci/_lib.sh"
+
+echo "Keep nightly up-to-date so rustfmt matches CI: rustup update nightly --force"
+
+usage() {
+    echo "Usage: $0 [OPTION]"
+    echo "Format all Rust source files in the repository."
+    echo ""
+    echo "Options:"
+    echo "  --help              Show this help message and exit"
+    echo "  --touched           Format only .rs files changed in the working tree"
+    echo "  --touched-branch    Format only .rs files changed since branching off main"
+    echo "  --touched-since REF Format only .rs files changed since REF"
+}
+
+if [ "${1:-}" = "--help" ]; then
+    usage
+    exit 0
+fi
 
 format_changed() {
     if [ -z "$1" ]; then
@@ -10,14 +29,14 @@ format_changed() {
 }
 
 # If --touched is passed, only format .rs files changed in the working tree
-if [ "$1" = "--touched" ]; then
+if [ "${1:-}" = "--touched" ]; then
     CHANGED=$(git status --porcelain | awk '/^[? MARC][? MARC] .*\.rs$/ { print $2 }')
     format_changed $CHANGED
     exit 0
 fi
 
 # If --touched-branch is passed, only format .rs files changed since branching off main
-if [ "$1" = "--touched-branch" ]; then
+if [ "${1:-}" = "--touched-branch" ]; then
     BASE=$(git merge-base HEAD main 2>/dev/null || true)
     if [ -z "$BASE" ]; then
         exit 0
@@ -28,8 +47,8 @@ if [ "$1" = "--touched-branch" ]; then
 fi
 
 # If --touched-since <ref> is passed, only format .rs files changed since the given ref
-if [ "$1" = "--touched-since" ]; then
-    if [ -z "$2" ]; then
+if [ "${1:-}" = "--touched-since" ]; then
+    if [ -z "${2:-}" ]; then
         echo "Usage: $0 --touched-since <ref>"
         exit 1
     fi
@@ -38,26 +57,12 @@ if [ "$1" = "--touched-since" ]; then
     exit 0
 fi
 
-# Format rmk and rmk-macro
-cd rmk && cargo +nightly fmt && cd ..
-cd rmk-macro && cargo +nightly fmt && cd ..
-cd rmk-config && cargo +nightly fmt && cd ..
-cd rmk-types && cargo +nightly fmt && cd ..
-
-# Format all directories under examples/use_rust
-for dir in examples/use_rust/*/; do
-    if [ -d "$dir" ] && [ -d "$dir/src" ]; then
-        cd "$dir"
-        cargo +nightly fmt
-        cd ../../..
-    fi
+log_section "Formatting workspace crates"
+for crate in rmk rmk-config rmk-macro rmk-types; do
+    cargo +nightly fmt --manifest-path "$crate/Cargo.toml"
 done
 
-# Format all directories under examples/use_config
-for dir in examples/use_config/*/; do
-    if [ -d "$dir" ] && [ -d "$dir/src" ]; then
-        cd "$dir"
-        cargo +nightly fmt
-        cd ../../..
-    fi
-done
+log_section "Formatting examples"
+while IFS= read -r manifest; do
+    cargo +nightly fmt --manifest-path "$manifest"
+done < <(list_example_manifests)
