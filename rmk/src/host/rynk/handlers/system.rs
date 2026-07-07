@@ -51,11 +51,15 @@ impl Handle<GetCapabilities> for RynkService<'_> {
             // Protocol limits
             max_payload_size: (constants::RYNK_BUFFER_SIZE - RYNK_HEADER_SIZE) as u16,
             macro_chunk_size: constants::MACRO_DATA_SIZE as u16,
-            // BULK_SIZE only exists under `bulk`, hence #[cfg] over cfg!().
+            // The BULK_* constants only exist under `bulk`, hence #[cfg] over cfg!().
             #[cfg(feature = "bulk")]
-            max_bulk_keys: constants::BULK_SIZE as u8,
+            max_bulk_keys: constants::BULK_KEYMAP_SIZE as u8,
             #[cfg(not(feature = "bulk"))]
             max_bulk_keys: 0,
+            #[cfg(feature = "bulk")]
+            max_bulk_configs: constants::BULK_SIZE as u8,
+            #[cfg(not(feature = "bulk"))]
+            max_bulk_configs: 0,
             bulk_transfer_supported: cfg!(feature = "bulk"),
         })
     }

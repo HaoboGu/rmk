@@ -159,9 +159,9 @@ attacker who reaches it another way.
 Rynk's firmware buffers size themselves automatically and rarely need touching.
 If you are tight on RAM or want faster whole-keymap transfers, a few knobs live
 in the [`[rmk]`](../configuration/rmk_config#rynk-protocol-configuration) section:
-`protocol_max_bulk_size`, `protocol_macro_chunk_size`, and `rynk_buffer_size`.
-Of these, `protocol_max_bulk_size` only takes effect when the `bulk` Cargo
-feature is on (below); the other two apply to every Rynk build.
+`protocol_max_bulk_keymap_size` (keys per keymap transfer — the main throughput
+knob), `protocol_max_bulk_size` (combos/morses per transfer),
+`protocol_macro_chunk_size`, and `rynk_buffer_size`.
 
 The optional `bulk` Cargo feature turns on faster bulk transfers at the cost of
 extra RAM. Enable it on boards that have room to spare:

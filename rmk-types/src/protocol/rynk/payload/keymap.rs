@@ -34,7 +34,7 @@ mod bulk {
     use serde::{Deserialize, Serialize};
 
     use crate::action::KeyAction;
-    use crate::constants::BULK_SIZE;
+    use crate::constants::BULK_KEYMAP_SIZE;
 
     /// Request payload for `GetKeymapBulk` endpoint.
     ///
@@ -58,11 +58,11 @@ mod bulk {
     #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct GetKeymapBulkResponse {
         #[cfg_attr(feature = "wasm", tsify(type = "KeyAction[]"))]
-        pub actions: Vec<KeyAction, BULK_SIZE>,
+        pub actions: Vec<KeyAction, BULK_KEYMAP_SIZE>,
     }
 
     impl MaxSize for GetKeymapBulkResponse {
-        const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<KeyAction, BULK_SIZE>();
+        const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<KeyAction, BULK_KEYMAP_SIZE>();
     }
 
     /// Request payload for `SetKeymapBulk` endpoint.
@@ -78,12 +78,12 @@ mod bulk {
         pub start_row: u8,
         pub start_col: u8,
         #[cfg_attr(feature = "wasm", tsify(type = "KeyAction[]"))]
-        pub actions: Vec<KeyAction, BULK_SIZE>,
+        pub actions: Vec<KeyAction, BULK_KEYMAP_SIZE>,
     }
 
     impl MaxSize for SetKeymapBulkRequest {
         // 3 bytes for layer + start_row + start_col (each `u8::POSTCARD_MAX_SIZE == 1`).
-        const POSTCARD_MAX_SIZE: usize = 3 + crate::heapless_vec_max_size::<KeyAction, BULK_SIZE>();
+        const POSTCARD_MAX_SIZE: usize = 3 + crate::heapless_vec_max_size::<KeyAction, BULK_KEYMAP_SIZE>();
     }
 }
 
@@ -122,7 +122,7 @@ mod tests {
 
         use super::super::*;
         use crate::action::{Action, KeyAction};
-        use crate::constants::BULK_SIZE;
+        use crate::constants::BULK_KEYMAP_SIZE;
         use crate::keycode::{HidKeyCode, KeyCode};
         use crate::modifier::ModifierCombination;
         use crate::morse::MorseProfile;
@@ -150,7 +150,7 @@ mod tests {
 
         #[test]
         fn round_trip_set_keymap_bulk_request() {
-            let mut actions: Vec<KeyAction, BULK_SIZE> = Vec::new();
+            let mut actions: Vec<KeyAction, BULK_KEYMAP_SIZE> = Vec::new();
             actions.push(KeyAction::No).unwrap();
             round_trip(&SetKeymapBulkRequest {
                 layer: 0,
@@ -162,8 +162,8 @@ mod tests {
 
         #[test]
         fn round_trip_set_keymap_bulk_request_max_capacity() {
-            let mut actions: Vec<KeyAction, BULK_SIZE> = Vec::new();
-            for _ in 0..BULK_SIZE {
+            let mut actions: Vec<KeyAction, BULK_KEYMAP_SIZE> = Vec::new();
+            for _ in 0..BULK_KEYMAP_SIZE {
                 actions.push(worst_key_action()).unwrap();
             }
             let req = SetKeymapBulkRequest {
@@ -178,8 +178,8 @@ mod tests {
 
         #[test]
         fn round_trip_get_keymap_bulk_response_max_capacity() {
-            let mut actions: Vec<KeyAction, BULK_SIZE> = Vec::new();
-            for _ in 0..BULK_SIZE {
+            let mut actions: Vec<KeyAction, BULK_KEYMAP_SIZE> = Vec::new();
+            for _ in 0..BULK_KEYMAP_SIZE {
                 actions.push(worst_key_action()).unwrap();
             }
             let resp = GetKeymapBulkResponse { actions };

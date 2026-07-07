@@ -233,7 +233,8 @@ fn exemplars() -> Exemplars {
         num_ble_profiles: 13,
         max_payload_size: 14,
         max_bulk_keys: 15,
-        macro_chunk_size: 16,
+        max_bulk_configs: 16,
+        macro_chunk_size: 17,
         bulk_transfer_supported: true,
     };
     // Ascending version/id values; distinct strings so a field swap shows.
@@ -461,7 +462,7 @@ fn wire_values_locked() {
         ("MacroData{[0x01,0x02,0x03]}", encode(&ex.macro_data)),
         // --- Status / system responses ---
         ("MatrixState{[0x05,0x00,0x20]}", encode(&ex.matrix)),
-        ("DeviceCapabilities{1..16}", encode(&ex.capabilities)),
+        ("DeviceCapabilities{1..17}", encode(&ex.capabilities)),
         ("DeviceInfo{1.2.3,4,5,RMK,..}", encode(&ex.device_info)),
         ("BehaviorConfig{50,500,200,20}", encode(&ex.behavior)),
         ("ConnectionStatus{Configured,{1,Adv},Ble}", encode(&ex.connection)),
@@ -625,7 +626,7 @@ fn wire_frames_locked() {
             encode_frame(Cmd::GetCapabilities, SEQ, &())
         ),
         (
-            "GetCapabilities reply Ok(DeviceCapabilities{1..16})",
+            "GetCapabilities reply Ok(DeviceCapabilities{1..17})",
             encode_frame(
                 Cmd::GetCapabilities,
                 SEQ,

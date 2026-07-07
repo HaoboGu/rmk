@@ -65,7 +65,11 @@ pub struct DeviceCapabilities {
 
     // -- Protocol limits --
     pub max_payload_size: u16,
+    /// Keys per `GetKeymapBulk`/`SetKeymapBulk` message.
     pub max_bulk_keys: u8,
+    /// Combos or morses per bulk message. Separate from `max_bulk_keys` because
+    /// config items are far larger than keys, so they chunk in smaller runs.
+    pub max_bulk_configs: u8,
     pub macro_chunk_size: u16,
     pub bulk_transfer_supported: bool,
 }
@@ -193,7 +197,8 @@ mod tests {
             ble_enabled: true,
             num_ble_profiles: 4,
             max_payload_size: 256,
-            max_bulk_keys: 8,
+            max_bulk_keys: 32,
+            max_bulk_configs: 8,
             macro_chunk_size: 64,
             bulk_transfer_supported: true,
         });
@@ -217,6 +222,7 @@ mod tests {
             num_ble_profiles: 0,
             max_payload_size: 0,
             max_bulk_keys: 0,
+            max_bulk_configs: 0,
             macro_chunk_size: 0,
             bulk_transfer_supported: false,
         });

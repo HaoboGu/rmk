@@ -298,8 +298,10 @@ split_peripherals_num = 0
 ble_profiles_num = 3
 # BLE Split Central sleep timeout in seconds (0 = disabled)
 split_central_sleep_timeout_seconds = 0
-# Maximum number of keymap/combo/morse items in one Rynk bulk transfer
+# Maximum number of combos/morses in one Rynk bulk transfer
 protocol_max_bulk_size = 8
+# Maximum number of keymap keys in one Rynk bulk transfer
+protocol_max_bulk_keymap_size = 32
 # Maximum macro data bytes in one Rynk macro request or response
 protocol_macro_chunk_size = 64
 # Optional Rynk RX/TX buffer size override in bytes.

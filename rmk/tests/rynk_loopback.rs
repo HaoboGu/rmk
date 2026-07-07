@@ -86,9 +86,9 @@ fn service_with_encoders() -> RynkService<'static> {
     RynkService::new(km, insecure_config())
 }
 
-/// A 3-row 4-col keymap for the bulk endpoints: 12 keys per layer holds a
-/// max-capacity run (`BULK_SIZE` is 8 in test builds) and 4-key rows make a
-/// run wrap a row boundary early.
+/// A single-layer 3-row 4-col keymap (12 keys) for the bulk endpoints: small
+/// enough that runs hit the keymap's edge, and 4-key rows make a run wrap a row
+/// boundary early. Larger runs use `service_3x4x4`.
 #[cfg(feature = "bulk")]
 fn service_3x4() -> RynkService<'static> {
     let behavior: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
@@ -99,21 +99,26 @@ fn service_3x4() -> RynkService<'static> {
     RynkService::new(km, config)
 }
 
+/// A 4-layer 3-row 4-col keymap: 48 keys total, more than one `BULK_KEYMAP_SIZE`
+/// run, so the max-capacity and over-budget tests can exercise a full run (and a
+/// run one past the budget) without the keymap's total size being the limiter.
+#[cfg(feature = "bulk")]
+fn service_3x4x4() -> RynkService<'static> {
+    let behavior: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
+    let per_key: &'static PositionalConfig<3, 4> = Box::leak(Box::new(PositionalConfig::default()));
+    let keymap = [[[KeyAction::No; 4]; 3]; 4];
+    let km = wrap_keymap(keymap, per_key, behavior);
+    let config: &'static RmkConfig<'static> = Box::leak(Box::new(RmkConfig::default()));
+    RynkService::new(km, config)
+}
+
 /// Distinct action per bulk slot, so a write landing in the wrong position
-/// shows up as the wrong keycode rather than a lucky match.
+/// shows up as the wrong keycode rather than a lucky match. HID usage 4 is `A`,
+/// so slots 0.. map to A, B, C, … — distinct across a full `BULK_KEYMAP_SIZE`
+/// run (usages 4..=0x73 are all valid keys).
 #[cfg(feature = "bulk")]
 fn bulk_action(i: usize) -> KeyAction {
-    const CODES: [HidKeyCode; 8] = [
-        HidKeyCode::A,
-        HidKeyCode::B,
-        HidKeyCode::C,
-        HidKeyCode::D,
-        HidKeyCode::E,
-        HidKeyCode::F,
-        HidKeyCode::G,
-        HidKeyCode::H,
-    ];
-    KeyAction::Single(Action::Key(KeyCode::Hid(CODES[i])))
+    KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::from(4 + i as u8))))
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -155,13 +160,20 @@ fn get_capabilities() {
         assert_eq!(caps.storage_enabled, cfg!(feature = "storage"));
         assert_eq!(caps.ble_enabled, cfg!(feature = "_ble"));
         assert_eq!(caps.is_split, cfg!(feature = "split"));
-        // Bulk advertisement tracks the compiled feature — the flag and the
-        // per-message item budget move together (both derive from BULK_SIZE).
+        // Bulk advertisement tracks the compiled feature — the flag and both
+        // per-message budgets move together. Keys and configs have separate
+        // budgets (keys are far smaller, so they chunk in larger runs).
         assert_eq!(caps.bulk_transfer_supported, cfg!(feature = "bulk"));
         #[cfg(feature = "bulk")]
-        assert_eq!(caps.max_bulk_keys as usize, rmk_types::constants::BULK_SIZE);
+        {
+            assert_eq!(caps.max_bulk_keys as usize, rmk_types::constants::BULK_KEYMAP_SIZE);
+            assert_eq!(caps.max_bulk_configs as usize, rmk_types::constants::BULK_SIZE);
+        }
         #[cfg(not(feature = "bulk"))]
-        assert_eq!(caps.max_bulk_keys, 0);
+        {
+            assert_eq!(caps.max_bulk_keys, 0);
+            assert_eq!(caps.max_bulk_configs, 0);
+        }
     });
 }
 
@@ -470,13 +482,13 @@ fn get_set_encoder_round_trip() {
 #[cfg(feature = "bulk")]
 #[test]
 fn keymap_bulk_round_trip_wraps_row_boundary() {
-    use rmk_types::constants::BULK_SIZE;
+    use rmk_types::constants::BULK_KEYMAP_SIZE;
     use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
     let service = service_3x4();
     link_session(&service, async |client| {
         // A 4-key run from (0,2) on 4-col rows covers (0,2) (0,3) (1,0) (1,1) —
         // the row-major order both bulk endpoints must agree on.
-        let mut actions: HVec<KeyAction, BULK_SIZE> = HVec::new();
+        let mut actions: HVec<KeyAction, BULK_KEYMAP_SIZE> = HVec::new();
         for i in 0..4 {
             actions.push(bulk_action(i)).unwrap();
         }
@@ -515,14 +527,14 @@ fn keymap_bulk_round_trip_wraps_row_boundary() {
 #[cfg(feature = "bulk")]
 #[test]
 fn keymap_bulk_round_trip_wraps_layer_boundary() {
-    use rmk_types::constants::BULK_SIZE;
+    use rmk_types::constants::BULK_KEYMAP_SIZE;
     use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
     // 2 layers × 2 rows × 2 cols = 8 keys. Starting on layer 0's last key
     // (offset 3) and running 2 keys steps across the layer-0→layer-1 boundary:
     // the flat keymap is contiguous across layers, so bulk never stops at one.
     let service = service_2_layers();
     link_session(&service, async |client| {
-        let mut actions: HVec<KeyAction, BULK_SIZE> = HVec::new();
+        let mut actions: HVec<KeyAction, BULK_KEYMAP_SIZE> = HVec::new();
         actions.push(bulk_action(0)).unwrap();
         actions.push(bulk_action(1)).unwrap();
         let set = SetKeymapBulkRequest {
@@ -578,13 +590,14 @@ fn keymap_bulk_round_trip_wraps_layer_boundary() {
 #[cfg(feature = "bulk")]
 #[test]
 fn keymap_bulk_max_capacity_round_trip() {
-    use rmk_types::constants::BULK_SIZE;
+    use rmk_types::constants::BULK_KEYMAP_SIZE;
     use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
-    let service = service_3x4();
+    // The largest legal run is BULK_KEYMAP_SIZE keys; the 48-key keymap holds it
+    // and the run spans several layers (12 keys each).
+    let service = service_3x4x4();
     link_session(&service, async |client| {
-        // The largest legal run: BULK_SIZE keys, still inside the 12-key layer.
-        let mut actions: HVec<KeyAction, BULK_SIZE> = HVec::new();
-        for i in 0..BULK_SIZE {
+        let mut actions: HVec<KeyAction, BULK_KEYMAP_SIZE> = HVec::new();
+        for i in 0..BULK_KEYMAP_SIZE {
             actions.push(bulk_action(i)).unwrap();
         }
         let set = SetKeymapBulkRequest {
@@ -599,7 +612,7 @@ fn keymap_bulk_max_capacity_round_trip() {
             layer: 0,
             start_row: 0,
             start_col: 0,
-            count: BULK_SIZE as u8,
+            count: BULK_KEYMAP_SIZE as u8,
         };
         let got = client
             .request::<_, GetKeymapBulkResponse>(Cmd::GetKeymapBulk, 0x1A, &get)
@@ -612,7 +625,7 @@ fn keymap_bulk_max_capacity_round_trip() {
 #[cfg(feature = "bulk")]
 #[test]
 fn keymap_bulk_rejects_invalid_runs() {
-    use rmk_types::constants::BULK_SIZE;
+    use rmk_types::constants::BULK_KEYMAP_SIZE;
     use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
     let service = service_3x4();
     link_session(&service, async |client| {
@@ -653,7 +666,7 @@ fn keymap_bulk_rejects_invalid_runs() {
 
         // The Set twin is validated before any write: the whole run is
         // rejected and the in-range prefix stays untouched.
-        let mut actions: HVec<KeyAction, BULK_SIZE> = HVec::new();
+        let mut actions: HVec<KeyAction, BULK_KEYMAP_SIZE> = HVec::new();
         for i in 0..3 {
             actions.push(bulk_action(i)).unwrap();
         }
@@ -675,19 +688,6 @@ fn keymap_bulk_rejects_invalid_runs() {
         let untouched = client.request::<_, KeyAction>(Cmd::GetKeyAction, 0x1F, &start).await;
         assert_eq!(untouched, Ok(KeyAction::No), "rejected set must not write its prefix");
 
-        // count over BULK_SIZE is rejected even though 9 keys would still fit
-        // the 12-key layer — the per-message budget, not the span, trips.
-        let get = GetKeymapBulkRequest {
-            layer: 0,
-            start_row: 0,
-            start_col: 0,
-            count: (BULK_SIZE + 1) as u8,
-        };
-        let r = client
-            .request::<_, GetKeymapBulkResponse>(Cmd::GetKeymapBulk, 0x21, &get)
-            .await;
-        assert_eq!(r, Err(RynkError::Invalid));
-
         // A start position outside the keymap geometry (layer 1 of 1).
         let get = GetKeymapBulkRequest {
             layer: 1,
@@ -697,6 +697,29 @@ fn keymap_bulk_rejects_invalid_runs() {
         };
         let r = client
             .request::<_, GetKeymapBulkResponse>(Cmd::GetKeymapBulk, 0x22, &get)
+            .await;
+        assert_eq!(r, Err(RynkError::Invalid));
+    });
+}
+
+#[cfg(feature = "bulk")]
+#[test]
+fn keymap_bulk_rejects_over_budget_run() {
+    use rmk_types::constants::BULK_KEYMAP_SIZE;
+    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse};
+    // The 48-key keymap has room for BULK_KEYMAP_SIZE + 1 keys, so a run that
+    // long is rejected by the per-message budget, not by the keymap's span.
+    assert!(BULK_KEYMAP_SIZE < 48, "fixture must hold more than one full run");
+    let service = service_3x4x4();
+    link_session(&service, async |client| {
+        let get = GetKeymapBulkRequest {
+            layer: 0,
+            start_row: 0,
+            start_col: 0,
+            count: (BULK_KEYMAP_SIZE + 1) as u8,
+        };
+        let r = client
+            .request::<_, GetKeymapBulkResponse>(Cmd::GetKeymapBulk, 0x21, &get)
             .await;
         assert_eq!(r, Err(RynkError::Invalid));
     });

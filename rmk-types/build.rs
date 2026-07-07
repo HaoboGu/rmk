@@ -125,6 +125,10 @@ fn generate_constants(bc: &BuildConstants) -> String {
         "pub const MAX_BULK_SIZE: usize = {};",
         protocol_limits::MAX_BULK_SIZE
     ));
+    lines.push(format!(
+        "pub const MAX_BULK_KEYMAP_SIZE: usize = {};",
+        protocol_limits::MAX_BULK_KEYMAP_SIZE
+    ));
 
     if is_host {
         // Host: Vec capacities equal protocol ceilings for wire compatibility with any firmware.
@@ -145,6 +149,10 @@ fn generate_constants(bc: &BuildConstants) -> String {
             "pub const BULK_SIZE: usize = {};",
             protocol_limits::MAX_BULK_SIZE
         ));
+        lines.push(format!(
+            "pub const BULK_KEYMAP_SIZE: usize = {};",
+            protocol_limits::MAX_BULK_KEYMAP_SIZE
+        ));
     } else {
         // Firmware: per-item constants from keyboard.toml / defaults.
         lines.push(format!("pub const COMBO_SIZE: usize = {};", bc.combo_max_length));
@@ -161,10 +169,15 @@ fn generate_constants(bc: &BuildConstants) -> String {
             lines.push("const _: () = assert!(MACRO_DATA_SIZE <= MAX_MACRO_DATA_SIZE, \"firmware MACRO_DATA_SIZE exceeds protocol ceiling MAX_MACRO_DATA_SIZE\");".to_string());
         }
 
-        // Bulk constant only when bulk feature is active
+        // Bulk constants only when bulk feature is active
         if is_bulk {
             lines.push(format!("pub const BULK_SIZE: usize = {};", bc.protocol_max_bulk_size));
             lines.push("const _: () = assert!(BULK_SIZE <= MAX_BULK_SIZE, \"firmware BULK_SIZE exceeds protocol ceiling MAX_BULK_SIZE\");".to_string());
+            lines.push(format!(
+                "pub const BULK_KEYMAP_SIZE: usize = {};",
+                bc.protocol_max_bulk_keymap_size
+            ));
+            lines.push("const _: () = assert!(BULK_KEYMAP_SIZE <= MAX_BULK_KEYMAP_SIZE, \"firmware BULK_KEYMAP_SIZE exceeds protocol ceiling MAX_BULK_KEYMAP_SIZE\");".to_string());
         }
     }
 

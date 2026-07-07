@@ -2,7 +2,7 @@
 
 use rmk_types::action::{EncoderAction, KeyAction};
 #[cfg(feature = "bulk")]
-use rmk_types::constants::BULK_SIZE;
+use rmk_types::constants::BULK_KEYMAP_SIZE;
 use rmk_types::protocol::rynk::command::{
     GetDefaultLayer, GetEncoderAction, GetKeyAction, SetDefaultLayer, SetEncoderAction, SetKeyAction,
 };
@@ -104,7 +104,7 @@ impl RynkService<'_> {
         })?;
         let (rows, cols, num_layers) = self.ctx.keymap_dimensions();
         let start = (layer as usize * rows + start_row as usize) * cols + start_col as usize;
-        if count == 0 || count > BULK_SIZE || start + count > num_layers * rows * cols {
+        if count == 0 || count > BULK_KEYMAP_SIZE || start + count > num_layers * rows * cols {
             return Err(RynkError::Invalid);
         }
         Ok(start)

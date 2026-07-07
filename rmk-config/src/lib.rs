@@ -41,12 +41,20 @@ pub mod protocol_limits {
     pub const MAX_MORSE_SIZE: usize = 32;
     /// Max bytes per macro data chunk — ceiling for `MACRO_DATA_SIZE`
     pub const MAX_MACRO_DATA_SIZE: usize = 256;
-    /// Max items per bulk transfer message — ceiling for `BULK_SIZE`
+    /// Max combos/morses per bulk transfer message — ceiling for `BULK_SIZE`.
+    /// These configs are large (a `Combo` is ~17× a keymap key), so the count
+    /// stays small; there are only ever `combo_max_num`/`morse_max_num` slots.
     pub const MAX_BULK_SIZE: usize = 16;
+    /// Max keys per bulk keymap message — ceiling for `BULK_KEYMAP_SIZE`.
+    /// Kept separate from `MAX_BULK_SIZE` because keymap keys are tiny: a large
+    /// keymap chunk fits within the buffer the (larger) combo/morse messages
+    /// already require, so keymap throughput is decoupled from combo RAM.
+    pub const MAX_BULK_KEYMAP_SIZE: usize = 64;
 
-    // `DeviceCapabilities::max_bulk_keys` reports `BULK_SIZE` as a u8 on the
-    // wire, so the ceiling must stay within that width.
+    // Both counts are reported as a u8 in `DeviceCapabilities`, so the ceilings
+    // must stay within that width.
     const _: () = assert!(MAX_BULK_SIZE <= u8::MAX as usize);
+    const _: () = assert!(MAX_BULK_KEYMAP_SIZE <= u8::MAX as usize);
 }
 
 /// Configurations for RMK keyboard.
@@ -265,10 +273,17 @@ pub(crate) struct RmkConstantsConfig {
     /// BLE Split Central sleep timeout in seconds (0 = disabled)
     #[serde_inline_default(0)]
     pub split_central_sleep_timeout_seconds: u32,
-    /// Maximum number of key actions in a bulk keymap transfer (protocol).
+    /// Combos or morses per bulk transfer message (protocol). Only ever needs
+    /// to reach `combo_max_num` / `morse_max_num`, since that many slots exist.
     /// Smaller values reduce firmware RAM usage but require more round-trips.
     #[serde_inline_default(8)]
     pub protocol_max_bulk_size: usize,
+    /// Keys per bulk keymap message (protocol). The keymap is the large table,
+    /// so this is the throughput knob; keys are small enough that a big chunk
+    /// fits the buffer the combo/morse messages already require. Smaller values
+    /// reduce firmware RAM usage but require more round-trips.
+    #[serde_inline_default(32)]
+    pub protocol_max_bulk_keymap_size: usize,
     /// Maximum macro data chunk size for protocol transfers (bytes).
     /// Smaller values reduce firmware RAM usage but require more round-trips.
     #[serde_inline_default(64)]
@@ -352,6 +367,7 @@ impl Default for RmkConstantsConfig {
             ble_profiles_num: 3,
             split_central_sleep_timeout_seconds: 0,
             protocol_max_bulk_size: 8,
+            protocol_max_bulk_keymap_size: 32,
             protocol_macro_chunk_size: 64,
             rynk_buffer_size: None,
         }

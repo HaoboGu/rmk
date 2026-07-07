@@ -36,8 +36,10 @@ split_peripherals_num = 0
 ble_profiles_num = 3
 # BLE Split Central sleep timeout in seconds (0 = disabled)
 split_central_sleep_timeout_seconds = 0
-# Maximum number of keymap/combo/morse items in one Rynk bulk transfer
+# Maximum number of combos/morses in one Rynk bulk transfer
 protocol_max_bulk_size = 8
+# Maximum number of keymap keys in one Rynk bulk transfer
+protocol_max_bulk_keymap_size = 32
 # Maximum macro data bytes in one Rynk macro request or response
 protocol_macro_chunk_size = 64
 # Optional Rynk RX/TX buffer size override in bytes.
@@ -83,7 +85,8 @@ In RMK there are several channels used for communication between tasks. The leng
 
 These tune the [Rynk](../features/rynk) protocol and rarely need changing.
 
-- `protocol_max_bulk_size`: How many keymap, combo, or morse entries a single bulk transfer can carry, default value is 8. Only used when the `bulk` feature is enabled.
+- `protocol_max_bulk_size`: How many combos or morses a single bulk transfer can carry, default value is 8. There are only ever as many slots as `combo_max_num` / `morse_max_num`, so it rarely needs raising. Only used when the `bulk` feature is enabled.
+- `protocol_max_bulk_keymap_size`: How many keymap keys a single bulk transfer can carry, default value is 32. The keymap is the large table, so this is the throughput knob; keys are small enough that a big chunk fits the buffer the combo/morse transfers already require. Only used when the `bulk` feature is enabled.
 - `protocol_macro_chunk_size`: How many macro bytes a single macro transfer can carry, default value is 64. Smaller chunks use less firmware RAM but need more back-and-forth with the host.
 - `rynk_buffer_size`: Optional size, in bytes, of Rynk's send/receive buffer. Leave it unset and RMK picks the smallest size that fits your configuration; only set it if you have a specific reason to, and it must be at least that automatic minimum.
 
