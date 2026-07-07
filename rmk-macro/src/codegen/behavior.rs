@@ -3,11 +3,11 @@
 use std::collections::HashMap;
 
 use quote::quote;
+use rmk_config::resolved::Behavior;
 use rmk_config::resolved::behavior::{
     AutoMouseLayer, Combos, Forks, MacroOperation, Macros, Morse, MorseActionPair, MorseKey,
     MorseProfile,
 };
-use rmk_config::resolved::Behavior;
 
 use super::action_parser::{expand_profile, expand_profile_name, get_key_with_alias, parse_key};
 
