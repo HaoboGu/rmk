@@ -408,10 +408,12 @@ vial_enabled = true
 # Rynk and Vial are mutually exclusive and must match Cargo features.
 rynk_enabled = false
 # The unlock keys are the combo of the row 0, col 0 key and
-# the row 0, col 1 key. Used only by Vial.
+# the row 0, col 1 key. Shared by the Vial lock and the Rynk lock gate.
 unlock_keys = [[0, 0], [0, 1]]
-# Start Vial unlocked. Used only by Vial with the `vial_lock` feature.
-vial_insecure = false
+# Start (and stay) unlocked. Renamed from `vial_insecure` (still parses).
+insecure = false
+# Rynk only: move config writes into the locked tier (default: false).
+write_requires_unlock = false
 
 # Chip-specific configuration
 # To use the default configuration, ignore this section completely

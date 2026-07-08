@@ -119,17 +119,20 @@ host = ["dep:byteorder"]
 ## Enable vial support
 vial = ["host"]
 
-## Enable vial lock feature. TODO: remove it, use `host_security`
-vial_lock = ["vial", "host_security"]
+## Enable vial lock feature. TODO: remove it, use `host_lock`
+vial_lock = ["vial", "host_lock"]
 
 ## Enable DFU lock feature — physical key unlock for DFU firmware download
-dfu_lock = ["host_security"]
+dfu_lock = ["host_lock"]
 
-## Enable physical key unlock and matrix state tracking (shared between vial_lock and rmk_protocol)
-host_security = []
+## Enable physical key unlock and matrix state tracking — the shared base of the
+## lock features (`vial_lock`, `dfu_lock`, and `rynk` all imply it).
+host_lock = []
 
-## Enable Rynk protocol support (new RMK-native protocol, mutually exclusive with vial)
-rynk = ["host", "rmk-types/rynk"]
+## Enable Rynk protocol support (new RMK-native protocol, mutually exclusive with vial).
+## Pulls in `host_lock`: the lock gate needs matrix-state tracking, and a
+## security gate that silently compiles out is exactly the hole it removes.
+rynk = ["host", "host_lock", "rmk-types/rynk"]
 
 ## Enable bulk transfer endpoints for the Rynk protocol on MCUs with sufficient RAM
 bulk = ["rynk", "rmk-types/bulk"]

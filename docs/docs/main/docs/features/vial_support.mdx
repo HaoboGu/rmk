@@ -80,11 +80,11 @@ unlock_keys = [[0, 0], [0, 1]]  # Keys at (row=0,col=0) and (row=0,col=1)
 
 By default Vial starts **locked**: security-sensitive operations are unavailable until the keyboard is unlocked by holding the configured `unlock_keys`. This includes the Matrix Tester and saving Tap Dance entries (called _morse_ in RMK) — Vial requires the keyboard to be unlocked before these can be used. The lock is part of [Vial's security model](https://get.vial.today/docs/security.html), which prevents a host from silently reading what you type before you explicitly authorize it.
 
-For development and testing it can be convenient to skip this step. Setting `vial_insecure = true` under the `[host]` section starts Vial in the unlocked state, so the Matrix Tester, Tap Dance saving, and other secured operations are available immediately without pressing the unlock combo.
+For development and testing it can be convenient to skip this step. Setting `insecure = true` under the `[host]` section starts Vial in the unlocked state, so the Matrix Tester, Tap Dance saving, and other secured operations are available immediately without pressing the unlock combo.
 
 ```toml title="keyboard.toml"
 [host]
-vial_insecure = true
+insecure = true
 ```
 
-::: Note `vial_insecure` only takes effect with the `vial_lock` Cargo feature. Since v0.9 `vial_lock` is no longer a default feature, so enable it explicitly in `Cargo.toml` (it also pulls in `vial`). It does not replace `unlock_keys`: the host can still lock and re-unlock a session that started unlocked, so you may keep `unlock_keys` configured alongside it. :::
+::: Note `insecure` (formerly `vial_insecure`; the old name still parses) only takes effect for Vial with the `vial_lock` Cargo feature. Since v0.9 `vial_lock` is no longer a default feature, so enable it explicitly in `Cargo.toml` (it also pulls in `vial`). It does not replace `unlock_keys`: the host can still lock and re-unlock a session that started unlocked, so you may keep `unlock_keys` configured alongside it. :::

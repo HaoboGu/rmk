@@ -20,14 +20,19 @@ rynk_enabled = true
 # Disable Vial when using Rynk. Rynk and Vial are mutually exclusive.
 vial_enabled = false
 
-# Unlock keys for Vial security (optional)
-# Keys must be pressed simultaneously to unlock Vial configuration.
-# This is used only when Vial is enabled.
+# Physical keys (row, col) held simultaneously to unlock dangerous operations
+# (optional, up to 4). Shared by the Vial lock and the Rynk lock gate. See the
+# "Locking dangerous operations" section of the Rynk feature page.
 unlock_keys = [[0, 0], [0, 1]]  # Keys at (row=0,col=0) and (row=0,col=1)
 
-# Start Vial unlocked, bypassing the unlock-key combo (default: false)
-# Used only with Vial and the `vial_lock` Cargo feature.
-vial_insecure = false
+# Start (and stay) unlocked, bypassing the unlock-key combo (default: false).
+# A development escape hatch — don't ship it. Renamed from `vial_insecure`,
+# which still parses.
+insecure = false
+
+# Rynk only: move config writes (SetKeyAction, SetMacro, …) into the locked
+# tier so they also require unlock (default: false).
+write_requires_unlock = false
 ```
 
 ## Common Setups

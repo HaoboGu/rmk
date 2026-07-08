@@ -92,6 +92,66 @@ Rynk tooling is still young. Today you have two options:
 
 A ready-made desktop app is not available yet.
 
+## Locking dangerous operations
+
+By default Rynk locks the operations that could plant a persistent implant or
+leak what you type, so a background process — or a web page you granted access
+to once — can't quietly reflash your keyboard or read your keystrokes. To use a
+locked operation you prove you're physically present by holding a key combo.
+
+There are three tiers:
+
+- **Open** — everything you normally reach for: read the keymap, change keys,
+  layers, combos, macros, switch BLE profiles, reboot. These stay available so
+  on-the-fly configuration is friction-free.
+- **Locked** — the dangerous ones, always gated: entering the bootloader,
+  resetting stored settings and bonds, reading the live key matrix (a keylogger
+  if left open), and clearing a BLE bond. A host tool gets a "locked" error
+  until you unlock.
+- **Config writes** — open by default, because on-the-fly configuration is the
+  point. Set `write_requires_unlock = true` to move every write (keymap, macros,
+  …) into the locked tier as well.
+
+### Unlocking
+
+Set the keys the owner holds to unlock in `[host].unlock_keys` (up to four):
+
+```toml title="keyboard.toml"
+[host]
+rynk_enabled = true
+unlock_keys = [[0, 0], [3, 12]]  # hold (row 0, col 0) and (row 3, col 12)
+```
+
+When you trigger a locked action, the host tool reads the challenge and shows
+"hold these keys". Hold them together; the tool polls briefly until the device
+unlocks, and the session stays unlocked until it ends. Unplugging, a Bluetooth
+disconnect, or an explicit lock re-locks the device.
+
+If you leave `unlock_keys` unset, the locked operations can never be unlocked —
+a safe default, but it means a fresh config can't enter the bootloader over Rynk
+or use the matrix tester until you add the keys.
+
+For local development you can bypass the gate entirely:
+
+```toml title="keyboard.toml"
+[host]
+insecure = true  # start and stay unlocked — don't ship this
+```
+
+::: warning Macros and combos are readable
+Config _reads_ stay open, so anything that can reach the protocol can read your
+stored macros. Don't put passwords or other secrets in a macro.
+:::
+
+::: tip Two different `unlock_keys`
+`[host].unlock_keys` guards this Rynk lock gate. A separate `[dfu].unlock_keys`
+guards the firmware _download_ once the device is already in the bootloader (the
+`dfu_lock` feature). They're independent — set either, both, or neither. A setup
+that cares most about firmware replacement wants both: the Rynk gate blocks the
+remote route into the bootloader, and `dfu_lock` covers a physically-present
+attacker who reaches it another way.
+:::
+
 ## Advanced tuning
 
 Rynk's firmware buffers size themselves automatically and rarely need touching.

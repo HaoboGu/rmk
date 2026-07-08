@@ -58,10 +58,15 @@ pub(crate) struct Server {
 #[cfg(feature = "rynk")]
 #[gatt_service(uuid = RYNK_SERVICE_UUID)]
 pub(crate) struct RynkService {
+    // `permissions(encrypted)` enforces the encrypted-link requirement inside
+    // the ATT server, so it survives any refactor of the app event loop. The
+    // app-level drop-before-pipe guard in `gatt_events_task` stays as the
+    // data-path filter (write-without-response carries data regardless of the
+    // ATT reply).
     #[descriptor(uuid = "2908", read, value = [0u8, 1u8])]
-    #[characteristic(uuid = RYNK_INPUT_CHAR_UUID, read, notify)]
+    #[characteristic(uuid = RYNK_INPUT_CHAR_UUID, read, notify, permissions(encrypted))]
     pub(crate) input_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
-    #[characteristic(uuid = RYNK_OUTPUT_CHAR_UUID, read, write, write_without_response)]
+    #[characteristic(uuid = RYNK_OUTPUT_CHAR_UUID, read, write, write_without_response, permissions(encrypted))]
     pub(crate) output_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
 }
 
@@ -79,11 +84,13 @@ pub(crate) struct RynkHidService {
     pub(crate) hid_control_point: u8,
     #[characteristic(uuid = "2a4e", read, write_without_response, value = 1)]
     pub(crate) protocol_mode: u8,
+    // Report characteristics carry rynk frames — require an encrypted link at
+    // the ATT layer (the app guard in `gatt_events_task` remains the data-path filter).
     #[descriptor(uuid = "2908", read, value = [0u8, 1u8])]
-    #[characteristic(uuid = "2a4d", read, notify)]
+    #[characteristic(uuid = "2a4d", read, notify, permissions(encrypted))]
     pub(crate) input_data: [u8; RYNK_HID_REPORT_SIZE],
     #[descriptor(uuid = "2908", read, value = [0u8, 2u8])]
-    #[characteristic(uuid = "2a4d", read, write, write_without_response)]
+    #[characteristic(uuid = "2a4d", read, write, write_without_response, permissions(encrypted))]
     pub(crate) output_data: [u8; RYNK_HID_REPORT_SIZE],
 }
 

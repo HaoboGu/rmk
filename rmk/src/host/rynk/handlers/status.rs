@@ -30,10 +30,9 @@ impl Handle<GetMatrixState> for RynkService<'_> {
         let mut bitmap: heapless::Vec<u8, MATRIX_BITMAP_SIZE> = heapless::Vec::new();
         bitmap.resize_default(MATRIX_BITMAP_SIZE).expect("bitmap size matches");
 
-        // Matrix tracking is gated on `host_security`. Without it, return
-        // the zero bitmap so the wire shape stays consistent and tools
-        // degrade cleanly to "no key pressed".
-        #[cfg(feature = "host_security")]
+        // Keystroke exfiltration is hard-locked (see the gate in `dispatch`);
+        // reaching here means the device is unlocked. `rynk` implies
+        // `host_lock`, so matrix tracking is always compiled in.
         self.ctx.read_matrix_state(&mut bitmap);
 
         Ok(MatrixState { pressed_bitmap: bitmap })

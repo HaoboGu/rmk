@@ -7,7 +7,7 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 /// Maximum number of key positions in an unlock challenge.
-pub const UNLOCK_KEYS_SIZE: usize = 2;
+pub const UNLOCK_KEYS_SIZE: usize = 4;
 
 /// Maximum byte length of each `DeviceInfo` string field.
 pub const DEVICE_INFO_STRING_SIZE: usize = 32;
@@ -108,27 +108,33 @@ impl MaxSize for DeviceInfo {
         + 3 * crate::heapless_vec_max_size::<u8, DEVICE_INFO_STRING_SIZE>();
 }
 
-/// Current lock/unlock state of the device.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+/// Current lock/unlock state of the device — the single response type for all
+/// three lock endpoints (`GetLockStatus`, `UnlockPoll`, `Lock`).
+///
+/// Loses `Copy` and derived `MaxSize` (both forbidden by the `heapless::Vec`
+/// field): handlers return it by value, and the bound is hand-written below.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct LockStatus {
     pub locked: bool,
-    pub awaiting_keys: bool,
+    /// An unlock attempt is armed (host is polling; window not yet lapsed).
+    pub unlocking: bool,
+    /// Challenge keys not currently held; `== key_positions.len()` when no
+    /// attempt is armed.
     pub remaining_keys: u8,
-}
-
-/// Challenge returned by the Unlock endpoint containing physical key positions to press.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-pub struct UnlockChallenge {
+    /// The challenge itself: physical `(row, col)` the user must hold. Empty
+    /// while `locked` ⇒ permanently locked (no `unlock_keys` configured).
     #[cfg_attr(feature = "wasm", tsify(type = "[number, number][]"))]
     pub key_positions: Vec<(u8, u8), UNLOCK_KEYS_SIZE>,
 }
 
-impl MaxSize for UnlockChallenge {
-    const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<(u8, u8), UNLOCK_KEYS_SIZE>();
+// `#[derive(MaxSize)]` doesn't support `heapless::Vec` (see `crate` root), so
+// hand-write the bound: two bools + one u8 + the key-position vec.
+impl MaxSize for LockStatus {
+    const POSTCARD_MAX_SIZE: usize = 2 * bool::POSTCARD_MAX_SIZE
+        + u8::POSTCARD_MAX_SIZE
+        + crate::heapless_vec_max_size::<(u8, u8), UNLOCK_KEYS_SIZE>();
 }
 
 /// Storage reset mode for the `StorageReset` endpoint.
@@ -241,37 +247,38 @@ mod tests {
 
     #[test]
     fn round_trip_lock_status() {
-        round_trip(&LockStatus {
-            locked: true,
-            awaiting_keys: false,
-            remaining_keys: 0,
-        });
-        round_trip(&LockStatus {
-            locked: false,
-            awaiting_keys: true,
-            remaining_keys: 3,
-        });
-    }
-
-    #[test]
-    fn round_trip_unlock_challenge() {
+        // Locked, no attempt armed, challenge advertised.
         let mut kp = Vec::new();
         kp.push((1, 2)).unwrap();
         kp.push((3, 4)).unwrap();
-        round_trip(&UnlockChallenge { key_positions: kp });
-        round_trip(&UnlockChallenge {
+        round_trip(&LockStatus {
+            locked: true,
+            unlocking: false,
+            remaining_keys: 2,
+            key_positions: kp,
+        });
+        // Unlocked / no challenge configured.
+        round_trip(&LockStatus {
+            locked: false,
+            unlocking: true,
+            remaining_keys: 0,
             key_positions: Vec::new(),
         });
 
-        // Max-capacity case: every (u8, u8) at u8::MAX so each varint takes
-        // its full width and the bound is genuinely exercised.
+        // Max-capacity case: every (u8, u8) at u8::MAX so each varint takes its
+        // full width and the hand-written `MaxSize` bound is genuinely exercised.
         let mut full = Vec::new();
         for _ in 0..UNLOCK_KEYS_SIZE {
             full.push((u8::MAX, u8::MAX)).unwrap();
         }
-        let challenge = UnlockChallenge { key_positions: full };
-        round_trip(&challenge);
-        assert_max_size_bound(&challenge);
+        let status = LockStatus {
+            locked: true,
+            unlocking: true,
+            remaining_keys: u8::MAX,
+            key_positions: full,
+        };
+        round_trip(&status);
+        assert_max_size_bound(&status);
     }
 
     #[test]

@@ -913,12 +913,18 @@ pub(crate) struct HostConfig {
     /// with `vial_enabled` (the underlying Cargo features conflict).
     #[serde_inline_default(false)]
     pub rynk_enabled: bool,
-    /// Unlock keys for Vial (optional)
+    /// Physical keys (row, col) held simultaneously to unlock (optional).
+    /// Shared by the Vial lock and the Rynk lock gate.
     pub unlock_keys: Option<Vec<[u8; 2]>>,
-    /// Start Vial unlocked, bypassing the unlock-key combo (default: false).
-    /// Only has effect with the `vial_lock` feature.
+    /// Start (and stay) unlocked, bypassing the unlock-key combo (default:
+    /// false). Renamed from `vial_insecure`; the old name still parses.
+    #[serde(alias = "vial_insecure")]
     #[serde_inline_default(false)]
-    pub vial_insecure: bool,
+    pub insecure: bool,
+    /// Move the Rynk config-write tier (`SetKeyAction`, `SetMacro`, …) into the
+    /// locked set, so writes also require unlock (default: false).
+    #[serde_inline_default(false)]
+    pub write_requires_unlock: bool,
 }
 
 impl Default for HostConfig {
@@ -927,7 +933,8 @@ impl Default for HostConfig {
             vial_enabled: true,
             rynk_enabled: false,
             unlock_keys: None,
-            vial_insecure: false,
+            insecure: false,
+            write_requires_unlock: false,
         }
     }
 }

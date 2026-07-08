@@ -170,6 +170,7 @@ fn round_trip_rynk_error_and_result() {
     round_trip(&RynkError::Unimplemented);
     round_trip(&RynkError::Invalid);
     round_trip(&RynkError::UnknownCmd);
+    round_trip(&RynkError::Locked);
     let ok: Result<(), RynkError> = Ok(());
     let err: Result<(), RynkError> = Err(RynkError::StorageFault);
     let _ = round_trip(&ok);
@@ -332,7 +333,10 @@ fn wire_values_locked() {
     let mut unlock_keys: heapless::Vec<(u8, u8), UNLOCK_KEYS_SIZE> = heapless::Vec::new();
     unlock_keys.push((1, 2)).unwrap();
     unlock_keys.push((3, 4)).unwrap();
-    let unlock = UnlockChallenge {
+    let lock_status = LockStatus {
+        locked: true,
+        unlocking: false,
+        remaining_keys: 2,
         key_positions: unlock_keys,
     };
     let profile = MorseProfile::new(None, Some(MorseMode::Normal), Some(200), Some(150));
@@ -348,6 +352,7 @@ fn wire_values_locked() {
         ("Result<(),RynkError>::Ok", encode::<Result<(), RynkError>>(&Ok(()))),
         ("RynkError::Internal", encode(&RynkError::Internal)),
         ("RynkError::Invalid", encode(&RynkError::Invalid)),
+        ("RynkError::Locked", encode(&RynkError::Locked)),
         ("RynkError::Malformed", encode(&RynkError::Malformed)),
         ("RynkError::NotReady", encode(&RynkError::NotReady)),
         ("RynkError::StorageFault", encode(&RynkError::StorageFault)),
@@ -462,15 +467,7 @@ fn wire_values_locked() {
         ("ConnectionStatus{Configured,{1,Adv},Ble}", encode(&ex.connection)),
         ("ProtocolVersion{1,0}", encode(&ProtocolVersion { major: 1, minor: 0 })),
         ("ProtocolVersion::CURRENT", encode(&ProtocolVersion::CURRENT)),
-        (
-            "LockStatus{true,false,3}",
-            encode(&LockStatus {
-                locked: true,
-                awaiting_keys: false,
-                remaining_keys: 3
-            }),
-        ),
-        ("UnlockChallenge{[(1,2),(3,4)]}", encode(&unlock)),
+        ("LockStatus{true,false,2,[(1,2),(3,4)]}", encode(&lock_status),),
         ("BatteryStatus::Unavailable", encode(&BatteryStatus::Unavailable)),
         (
             "BatteryStatus::Available{Discharging,85}",
@@ -602,6 +599,15 @@ fn wire_frames_locked() {
         action: KeyAction::Morse(7),
     };
     let led = LedIndicator::NUM_LOCK | LedIndicator::SCROLL_LOCK;
+    let mut unlock_keys: heapless::Vec<(u8, u8), UNLOCK_KEYS_SIZE> = heapless::Vec::new();
+    unlock_keys.push((1, 2)).unwrap();
+    unlock_keys.push((3, 4)).unwrap();
+    let lock_status = LockStatus {
+        locked: true,
+        unlocking: false,
+        remaining_keys: 2,
+        key_positions: unlock_keys,
+    };
 
     let entries: alloc::vec::Vec<(&str, alloc::vec::Vec<u8>)> = alloc::vec![
         // ── System (0x00xx) ──
@@ -643,6 +649,25 @@ fn wire_frames_locked() {
         (
             "StorageReset reply Ok(())",
             encode_frame(Cmd::StorageReset, SEQ, &Ok::<(), RynkError>(()))
+        ),
+        ("GetLockStatus request ()", encode_frame(Cmd::GetLockStatus, SEQ, &())),
+        (
+            "GetLockStatus reply Ok(LockStatus{true,false,2,[(1,2),(3,4)]})",
+            encode_frame(
+                Cmd::GetLockStatus,
+                SEQ,
+                &Ok::<LockStatus, RynkError>(lock_status.clone())
+            ),
+        ),
+        ("UnlockPoll request ()", encode_frame(Cmd::UnlockPoll, SEQ, &())),
+        (
+            "UnlockPoll reply Ok(LockStatus{true,false,2,[(1,2),(3,4)]})",
+            encode_frame(Cmd::UnlockPoll, SEQ, &Ok::<LockStatus, RynkError>(lock_status.clone())),
+        ),
+        ("Lock request ()", encode_frame(Cmd::Lock, SEQ, &())),
+        (
+            "Lock reply Ok(())",
+            encode_frame(Cmd::Lock, SEQ, &Ok::<(), RynkError>(()))
         ),
         ("GetDeviceInfo request ()", encode_frame(Cmd::GetDeviceInfo, SEQ, &())),
         (

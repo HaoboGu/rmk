@@ -76,7 +76,11 @@ async fn client_against_run_session() {
     let positional: PositionalConfig<2, 2> = PositionalConfig::default();
     let mut data: KeymapData<2, 2, 2, 0> = KeymapData::new([[[KeyAction::No; 2]; 2]; 2]);
     let keymap = KeyMap::new(&mut data, &mut behavior, &positional).await;
-    let config: RmkConfig<'static> = RmkConfig::default();
+    // `insecure` keeps the lock gate open so this case exercises protocol
+    // mechanics (incl. `StorageReset`); the gate itself is covered by
+    // `lock_gate_rejects_and_reports` and the firmware `host::lock` tests.
+    let mut config: RmkConfig<'static> = RmkConfig::default();
+    config.lock_config.insecure = true;
     let service = RynkService::new(&keymap, &config);
 
     // ── in-memory duplex: h2d carries requests, d2h carries responses + topics ──
@@ -165,6 +169,69 @@ async fn client_against_run_session() {
     // Drive the session + flash-channel drainer concurrently with the script. The
     // pipes never EOF, so the session would loop forever; it is dropped once the
     // script returns. If the session resolves first, that's a framing bug.
+    let device = select(
+        service.run_session(&mut dev_rx, &mut dev_tx),
+        rmk::channel::drain_flash_channel_for_test(),
+    );
+    match select(device, script).await {
+        Either::First(_) => panic!("run_session ended before the client script finished"),
+        Either::Second(()) => {}
+    }
+}
+
+/// The lock gate, end to end through the real client: a locked device refuses a
+/// gated command with `RynkError::Locked` flattened to
+/// [`RynkHostError::Rejected`], advertises its challenge over the wire, and
+/// serves the three lock endpoints. The physical-key-hold → unlock transition
+/// (which needs matrix simulation the external test can't reach) is covered by
+/// the firmware `host::lock` / `host::rynk` tests.
+#[tokio::test(flavor = "current_thread")]
+async fn lock_gate_rejects_and_reports() {
+    let mut behavior = BehaviorConfig::default();
+    let positional: PositionalConfig<2, 2> = PositionalConfig::default();
+    let mut data: KeymapData<2, 2, 1, 0> = KeymapData::new([[[KeyAction::No; 2]; 2]; 1]);
+    let keymap = KeyMap::new(&mut data, &mut behavior, &positional).await;
+
+    // Challenge configured but never held (the test can't drive the matrix), so
+    // the device stays locked throughout.
+    const UNLOCK_KEYS: &[(u8, u8)] = &[(0, 0)];
+    let mut config: RmkConfig<'static> = RmkConfig::default();
+    config.lock_config.unlock_keys = UNLOCK_KEYS;
+    let service = RynkService::new(&keymap, &config);
+
+    let h2d = Link::new();
+    let d2h = Link::new();
+    let mut dev_rx: &Link = &h2d;
+    let mut dev_tx: &Link = &d2h;
+    let transport = Duplex { rx: &d2h, tx: &h2d };
+
+    let script = async {
+        let mut client = Client::connect(transport).await.expect("handshake should succeed");
+
+        // GetLockStatus is open and advertises the challenge across the wire
+        // (the `heapless::Vec<(u8,u8)>` round-trips intact).
+        let status = client.get_lock_status().await.unwrap();
+        assert!(status.locked);
+        assert!(!status.unlocking);
+        assert_eq!(status.key_positions.as_slice(), &[(0, 0)]);
+
+        // A hard-locked command flattens `RynkError::Locked` to `Rejected` end to end.
+        let gated = client.get_matrix_state().await;
+        assert!(
+            matches!(gated, Err(RynkHostError::Rejected(RynkError::Locked))),
+            "expected Rejected(Locked), got {gated:?}"
+        );
+
+        // UnlockPoll arms the attempt; with no key held it counts down but stays locked.
+        let polled = client.unlock_poll().await.unwrap();
+        assert!(polled.locked);
+        assert!(polled.unlocking);
+        assert_eq!(polled.remaining_keys, 1);
+
+        // Lock is always dispatchable.
+        client.lock().await.unwrap();
+    };
+
     let device = select(
         service.run_session(&mut dev_rx, &mut dev_tx),
         rmk::channel::drain_flash_channel_for_test(),

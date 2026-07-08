@@ -2,10 +2,10 @@
 
 use rmk_types::constants;
 use rmk_types::protocol::rynk::command::{
-    BootloaderJump, GetCapabilities, GetDeviceInfo, GetVersion, Reboot, StorageReset,
+    BootloaderJump, GetCapabilities, GetDeviceInfo, GetLockStatus, GetVersion, Lock, Reboot, StorageReset, UnlockPoll,
 };
 use rmk_types::protocol::rynk::{
-    DEVICE_INFO_STRING_SIZE, DeviceCapabilities, DeviceInfo, ProtocolVersion, RYNK_HEADER_SIZE, RynkError,
+    DEVICE_INFO_STRING_SIZE, DeviceCapabilities, DeviceInfo, LockStatus, ProtocolVersion, RYNK_HEADER_SIZE, RynkError,
     StorageResetMode,
 };
 
@@ -81,6 +81,28 @@ impl Handle<StorageReset> for RynkService<'_> {
             return Err(RynkError::Unimplemented);
         }
         self.ctx.reset_storage().await;
+        Ok(())
+    }
+}
+
+// ── Lock gate ── all three stay dispatchable while locked (see the gate in
+// `RynkService::dispatch`).
+
+impl Handle<GetLockStatus> for RynkService<'_> {
+    async fn handle(&self, _: ()) -> Result<LockStatus, RynkError> {
+        Ok(self.locker.status())
+    }
+}
+
+impl Handle<UnlockPoll> for RynkService<'_> {
+    async fn handle(&self, _: ()) -> Result<LockStatus, RynkError> {
+        Ok(self.locker.poll())
+    }
+}
+
+impl Handle<Lock> for RynkService<'_> {
+    async fn handle(&self, _: ()) -> Result<(), RynkError> {
+        self.locker.lock();
         Ok(())
     }
 }

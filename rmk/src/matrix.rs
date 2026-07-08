@@ -16,7 +16,7 @@ pub mod direct_pin;
 pub mod hc595_matrix;
 
 /// Recording the matrix pressed state
-#[cfg(feature = "host_security")]
+#[cfg(feature = "host_lock")]
 pub struct MatrixState {
     // 30 bytes is the limit by Vial and 240 keys is enough for most keyboards
     state: [u8; 30],
@@ -25,7 +25,7 @@ pub struct MatrixState {
     row_len: usize,
 }
 
-#[cfg(feature = "host_security")]
+#[cfg(feature = "host_lock")]
 impl MatrixState {
     pub fn new(row: usize, col: usize) -> Self {
         let row_len = col.div_ceil(8);
