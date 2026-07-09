@@ -94,6 +94,10 @@ pub enum RynkHostError {
     TooLarge { cmd: Cmd, frame_len: usize, max: usize },
     #[error("response decode failed for {cmd:?}: {source}")]
     Deserialize { cmd: Cmd, source: postcard::Error },
+    /// The assembled `GetLayout` blob failed to inflate or postcard-decode into
+    /// `LayoutInfo` — distinct from a single frame's [`Deserialize`](Self::Deserialize).
+    #[error("layout blob decode failed: {0}")]
+    Layout(String),
     #[error("response for {cmd:?} had trailing bytes")]
     TrailingBytes { cmd: Cmd },
     #[error("response cmd mismatch: sent {sent:?}, got {got:?}")]
@@ -124,6 +128,7 @@ impl From<RynkHostError> for wasm_bindgen::JsValue {
             RynkHostError::Encode(_) => "RequestEncodeError",
             RynkHostError::TooLarge { .. } => "RequestTooLarge",
             RynkHostError::Deserialize { .. } => "ResponseDecodeError",
+            RynkHostError::Layout(_) => "LayoutDecodeError",
             RynkHostError::TrailingBytes { .. } => "ResponseTrailingBytes",
             RynkHostError::CmdMismatch { .. } => "ResponseCommandMismatch",
             RynkHostError::TopicCmd(_) => "InvalidRequestCommand",

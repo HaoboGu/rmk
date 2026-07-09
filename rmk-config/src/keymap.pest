@@ -3,9 +3,6 @@
 // Define default whitespace handling (space, tab, newline, carriage return)
 WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
 
-// Optional comments
-COMMENT = _{ "//" ~ (!"\n" ~ ANY)* } 
-
 // --- Helper Rules ---
 
 strict_identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
@@ -125,16 +122,37 @@ key_action = _{ // Consume surrounding whitespace/comments implicitly
 key_map = { SOI ~ key_action* ~ EOI }
 
 // ============================================================================
-// rules for matrix_map parsing
+// rules for the `[layout].map` arrangement string
+//
+// `layout_map` is compound-atomic (`$`): the global WHITESPACE (which includes
+// newlines) is NOT applied inside it, so `newline` is a *significant* row break.
+// Spaces/tabs between tokens are consumed explicitly via `hws`. The keycode
+// grammar above is untouched and keeps using the global WHITESPACE.
 
 left_hand = { ^"L" | ^"LH" | ^"Left" }
 right_hand = { ^"R" | ^"RH" | ^"Right" }
 bilateral_hand = { "*" | ^"Bilateral" }
 hand = _{ left_hand | right_hand | bilateral_hand }
 
-// Define the key_info structure, capturing row and col numbers, and optionally some extra key information
-keypos_info = { "(" ~ number ~ "," ~ number ~ ("," ~ hand)? ~ ")" }
+// Layout-map tokens (positions, shapes, gaps).
+unit = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }                 // non-negative float, for [n]
+signed_unit = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }   // may be negative, for [y=n]
+shape_name = @{ (ASCII_ALPHANUMERIC | "_" | ".")+ }              // stock (2u/1.5u) or custom (iso_enter)
+shape_ref = ${ "@" ~ shape_name }                                // @name into [layout.shapes]
+hws = _{ " " | "\t" }                                            // spaces/tabs between tokens (silent)
+newline = @{ "\r"? ~ "\n" }                                      // significant row break
+spacer = ${ "[" ~ hws? ~ unit ~ hws? ~ "]" }                     // gap
+vertical = ${ "[" ~ hws? ~ "y" ~ hws? ~ "=" ~ hws? ~ signed_unit ~ hws? ~ "]" } // extra y for next row
+// A rotation region: [r=deg@(x,y)] — everything after it rotates `deg` clockwise
+// about the pivot (x,y) until the next [r=...]; the pivot may be omitted only
+// for [r=0] (which ends a region).
+rotation = ${ "[" ~ hws? ~ "r" ~ hws? ~ "=" ~ hws? ~ signed_unit ~ (hws? ~ "@" ~ hws? ~ "(" ~ hws? ~ signed_unit ~ hws? ~ "," ~ hws? ~ signed_unit ~ hws? ~ ")")? ~ hws? ~ "]" }
 
-// The main rule: Start, zero or more key_info or whitespace occurrences, End.
-// This ensures the entire string consists *only* of valid key_info tuples and whitespace.
-matrix_map = { SOI ~ (keypos_info | WHITESPACE)* ~ EOI }
+// A key: (row, col[, hand][, @shape]). `hws?` between fields so `(0, 1)` parses too.
+keypos_info = ${ "(" ~ hws? ~ number ~ hws? ~ "," ~ hws? ~ number ~ (hws? ~ "," ~ hws? ~ hand)? ~ (hws? ~ "," ~ hws? ~ shape_ref)? ~ hws? ~ ")" }
+// An encoder: (e, id). A fixed 1u knob — no shape, so no `@shape`.
+encoder_info = ${ "(" ~ hws? ~ "e" ~ hws? ~ "," ~ hws? ~ number ~ hws? ~ ")" }
+
+// The whole string: significant newlines, explicit hws. Order matters:
+// vertical/rotation before spacer (all start `[`), encoder before keypos (both start `(`).
+layout_map = ${ SOI ~ (hws | newline | vertical | rotation | spacer | encoder_info | keypos_info)* ~ EOI }

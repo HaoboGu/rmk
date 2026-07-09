@@ -19,6 +19,7 @@ use rmk_types::protocol::rynk::{
 };
 
 use crate::driver::{Client, RynkHostError, TopicFrame};
+use crate::layout::LayoutInfo;
 
 /// A firmware topic push (server → host), delivered by [`Client::next_event`].
 ///
@@ -204,6 +205,43 @@ impl<T: Read + Write> Client<T> {
     pub async fn set_keymap_bulk(&mut self, request: SetKeymapBulkRequest) -> Result<(), RynkHostError> {
         self.require_bulk_transfer(Cmd::SetKeymapBulk)?;
         self.request::<command::SetKeymapBulk>(&request).await
+    }
+
+    // ── layout ──
+
+    /// Read the physical layout. The firmware serves it as an opaque,
+    /// compressed blob paged over `GetLayout`; this reassembles every page (by
+    /// byte offset), inflates the blob, and decodes it into [`LayoutInfo`]. An
+    /// empty blob (firmware built without a `[layout].map`) yields an empty
+    /// [`LayoutInfo`], not an error.
+    pub async fn get_layout(&mut self) -> Result<LayoutInfo, RynkHostError> {
+        // 64KB is a reasonable upper bound for a compressed layout blob.
+        const MAX_LAYOUT_BLOB_LEN: usize = 64 * 1024;
+        let mut collected: Vec<u8> = Vec::new();
+        let mut total: Option<usize> = None;
+        loop {
+            let chunk = self.request::<command::GetLayout>(&(collected.len() as u32)).await?;
+            let total_len = *total.get_or_insert(chunk.total_len as usize);
+            if total_len > MAX_LAYOUT_BLOB_LEN {
+                return Err(RynkHostError::Layout(format!(
+                    "advertised layout blob length {total_len} exceeds maximum {MAX_LAYOUT_BLOB_LEN}"
+                )));
+            }
+            // An empty page can't make progress — stop (also the empty-blob case).
+            if chunk.bytes.is_empty() {
+                break;
+            }
+            collected.extend_from_slice(&chunk.bytes);
+            // Reached the advertised length (a device ignoring `offset` and looping
+            // the same page also lands here rather than spinning forever).
+            if collected.len() >= total_len {
+                break;
+            }
+        }
+        // Trust total_len: a device that over-reports a page length can't make us
+        // inflate more than the advertised blob.
+        collected.truncate(total.unwrap_or(0));
+        LayoutInfo::from_compressed_blob(&collected).map_err(RynkHostError::Layout)
     }
 
     // ── combos / forks / morse / macros ──

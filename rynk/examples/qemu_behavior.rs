@@ -142,6 +142,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(!caps.is_split);
     assert!(!caps.bulk_transfer_supported);
 
+    assert_eq!(client.get_capabilities().await?, caps);
+
     assert_eq!(client.get_default_layer().await?, 0);
     client.set_default_layer(1).await?;
     assert_eq!(client.get_default_layer().await?, 1);

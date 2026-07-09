@@ -22,9 +22,9 @@ impl crate::KeyboardTomlConfig {
                 unlock_keys.len()
             );
         }
-        // Every position must be inside the matrix. Skip when the layout can't
-        // resolve — that error is surfaced by the layout resolver itself.
-        if let Ok((layout, _)) = self.get_layout_config() {
+        // Every position must be inside the matrix. Skip when `[layout]` is
+        // absent — that error is surfaced by the layout resolver itself.
+        if let Some(layout) = self.layout.as_ref() {
             for key in &unlock_keys {
                 let (row, col) = (key[0], key[1]);
                 if row >= layout.rows || col >= layout.cols {

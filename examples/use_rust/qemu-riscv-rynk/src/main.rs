@@ -3,6 +3,7 @@
 
 use core::convert::Infallible;
 use core::ptr::NonNull;
+
 use embassy_executor::Spawner;
 use embassy_futures::yield_now;
 use embedded_io_async::{Read, Write};

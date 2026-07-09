@@ -3,17 +3,17 @@ use crate::{BehaviorConfig, MacroOperation};
 impl crate::KeyboardTomlConfig {
     pub(crate) fn get_behavior_config(&self) -> Result<BehaviorConfig, String> {
         let default = self.behavior.clone().unwrap_or_default();
-        let (layout, _) = self.get_layout_config().unwrap();
+        let num_layers = self.num_layers();
         match self.behavior.clone() {
             Some(mut behavior) => {
                 behavior.tri_layer = match behavior.tri_layer {
                     Some(tri_layer) => {
-                        if tri_layer.upper >= layout.layers {
-                            return Err("keyboard.toml: Tri layer upper is larger than [layout.layers]".to_string());
-                        } else if tri_layer.lower >= layout.layers {
-                            return Err("keyboard.toml: Tri layer lower is larger than [layout.layers]".to_string());
-                        } else if tri_layer.adjust >= layout.layers {
-                            return Err("keyboard.toml: Tri layer adjust is larger than [layout.layers]".to_string());
+                        if tri_layer.upper >= num_layers {
+                            return Err("keyboard.toml: Tri layer upper is larger than [keymap].layers".to_string());
+                        } else if tri_layer.lower >= num_layers {
+                            return Err("keyboard.toml: Tri layer lower is larger than [keymap].layers".to_string());
+                        } else if tri_layer.adjust >= num_layers {
+                            return Err("keyboard.toml: Tri layer adjust is larger than [keymap].layers".to_string());
                         }
                         Some(tri_layer)
                     }
@@ -34,10 +34,10 @@ impl crate::KeyboardTomlConfig {
                             ));
                         }
                         if let Some(layer) = c.layer
-                            && layer >= layout.layers
+                            && layer >= num_layers
                         {
                             return Err(format!(
-                                "keyboard.toml: layer in combo #{} is greater than [layout.layers]",
+                                "keyboard.toml: layer in combo #{} is greater than [keymap].layers",
                                 i
                             ));
                         }
@@ -89,10 +89,10 @@ impl crate::KeyboardTomlConfig {
                     }
                     let mut seen_device_ids: Vec<Option<u8>> = Vec::new();
                     for entry in entries {
-                        if entry.target_layer >= layout.layers {
+                        if entry.target_layer >= num_layers {
                             return Err(format!(
-                                "keyboard.toml: [[behavior.auto_mouse_layer]].target_layer must be a valid layer index (< [layout.layers] = {}), got {}",
-                                layout.layers, entry.target_layer
+                                "keyboard.toml: [[behavior.auto_mouse_layer]].target_layer must be a valid layer index (< [keymap].layers = {}), got {}",
+                                num_layers, entry.target_layer
                             ));
                         }
                         if entry.threshold == Some(0) {

@@ -1,6 +1,7 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+use rmk_config::SplitConnection;
 use rmk_config::resolved::hardware::{BoardConfig, CommunicationConfig};
 use rmk_config::resolved::{Behavior, Hardware, Host};
 use syn::{ItemFn, ItemMod};
@@ -115,73 +116,71 @@ pub(crate) fn rmk_entry_select(
             if let Some(t) = &watchdog_task {
                 tasks.push(t.clone());
             }
-            if split_config.connection == "ble" {
-                if !processors.is_empty() {
-                    tasks.push(processors_task);
-                };
-                split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
-                    let row = p.rows;
-                    let col = p.cols;
-                    let row_offset = p.row_offset;
-                    let col_offset = p.col_offset;
-                    tasks.push(quote! {
-                        ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
-                            #idx,
-                            &peripheral_addrs,
-                            &stack,
-                        )
+            match split_config.connection {
+                SplitConnection::Ble => {
+                    if !processors.is_empty() {
+                        tasks.push(processors_task);
+                    };
+                    split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
+                        let row = p.rows;
+                        let col = p.cols;
+                        let row_offset = p.row_offset;
+                        let col_offset = p.col_offset;
+                        tasks.push(quote! {
+                            ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
+                                #idx,
+                                &peripheral_addrs,
+                                &stack,
+                            )
+                        });
                     });
-                });
-                let scan_task = quote! {
-                    ::rmk::split::ble::central::scan_peripherals(&stack, &peripheral_addrs)
-                };
-                tasks.push(scan_task);
-                let joined = join_all_tasks(tasks);
-                quote! {
-                    #transport_prelude
-                    #auto_mouse_layer_prelude
-                    #joined
+                    let scan_task = quote! {
+                        ::rmk::split::ble::central::scan_peripherals(&stack, &peripheral_addrs)
+                    };
+                    tasks.push(scan_task);
+                    let joined = join_all_tasks(tasks);
+                    quote! {
+                        #transport_prelude
+                        #auto_mouse_layer_prelude
+                        #joined
+                    }
                 }
-            } else if split_config.connection == "serial" {
-                if !processors.is_empty() {
-                    tasks.push(processors_task);
-                };
-                let central_serials = split_config
-                    .central
-                    .serial
-                    .clone()
-                    .expect("No serial defined for central");
-                split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
-                    let row = p.rows;
-                    let col = p.cols;
-                    let row_offset = p.row_offset;
-                    let col_offset = p.col_offset;
-                    let uart_instance = format_ident!(
-                        "{}",
-                        central_serials
-                            .get(idx)
-                            .expect("No or not enough serial defined for peripheral in central")
-                            .instance
-                            .to_lowercase()
-                    );
-                    tasks.push(quote! {
-                        ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
-                            #idx,
-                            #uart_instance,
-                        )
+                SplitConnection::Serial => {
+                    if !processors.is_empty() {
+                        tasks.push(processors_task);
+                    };
+                    let central_serials = split_config
+                        .central
+                        .serial
+                        .clone()
+                        .expect("No serial defined for central");
+                    split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
+                        let row = p.rows;
+                        let col = p.cols;
+                        let row_offset = p.row_offset;
+                        let col_offset = p.col_offset;
+                        let uart_instance = format_ident!(
+                            "{}",
+                            central_serials
+                                .get(idx)
+                                .expect("No or not enough serial defined for peripheral in central")
+                                .instance
+                                .to_lowercase()
+                        );
+                        tasks.push(quote! {
+                            ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
+                                #idx,
+                                #uart_instance,
+                            )
+                        });
                     });
-                });
-                let joined = join_all_tasks(tasks);
-                quote! {
-                    #transport_prelude
-                    #auto_mouse_layer_prelude
-                    #joined
+                    let joined = join_all_tasks(tasks);
+                    quote! {
+                        #transport_prelude
+                        #auto_mouse_layer_prelude
+                        #joined
+                    }
                 }
-            } else {
-                panic!(
-                    "Invalid split connection type: {}, only \"ble\" and \"serial\" are supported",
-                    split_config.connection
-                );
             }
         }
         BoardConfig::UniBody(_) => rmk_entry_unibody(
