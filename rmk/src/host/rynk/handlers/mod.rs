@@ -11,6 +11,8 @@ use rmk_types::protocol::rynk::endpoint::Endpoint;
 use rmk_types::protocol::rynk::{RynkError, RynkMessage};
 
 pub(crate) mod behavior;
+#[cfg(feature = "bulk")]
+mod bulk;
 pub(crate) mod combo;
 pub(crate) mod connection;
 pub(crate) mod fork;

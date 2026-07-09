@@ -179,28 +179,30 @@ impl<T: Read + Write> Client<T> {
         self.request::<command::SetEncoderAction>(&req).await
     }
 
-    /// Read multiple key actions starting from one key position. Bulk firmware
-    /// only ([`DeviceCapabilities::bulk_transfer_supported`]); returns
+    /// Read one page of key actions starting at `(layer, start_row, start_col)`,
+    /// walking forward through the row-major, layer-major keymap: up to
+    /// `max_bulk_keys`, fewer at the keymap's end. An out-of-geometry position is
+    /// rejected with `RynkError::Invalid`. Bulk firmware only
+    /// ([`DeviceCapabilities::bulk_transfer_supported`]); returns
     /// [`RynkHostError::Unsupported`] otherwise, without touching the wire.
     pub async fn get_keymap_bulk(
         &mut self,
         layer: u8,
         start_row: u8,
         start_col: u8,
-        count: u8,
     ) -> Result<GetKeymapBulkResponse, RynkHostError> {
         self.require_bulk_transfer(Cmd::GetKeymapBulk)?;
         self.request::<command::GetKeymapBulk>(&GetKeymapBulkRequest {
             layer,
             start_row,
             start_col,
-            count,
         })
         .await
     }
 
-    /// Write multiple key actions starting from one key position. Bulk firmware
-    /// only ([`DeviceCapabilities::bulk_transfer_supported`]); returns
+    /// Write `request.actions` into the keymap starting at
+    /// `(request.layer, request.start_row, request.start_col)`. Bulk firmware only
+    /// ([`DeviceCapabilities::bulk_transfer_supported`]); returns
     /// [`RynkHostError::Unsupported`] otherwise, without touching the wire.
     pub async fn set_keymap_bulk(&mut self, request: SetKeymapBulkRequest) -> Result<(), RynkHostError> {
         self.require_bulk_transfer(Cmd::SetKeymapBulk)?;
@@ -257,17 +259,18 @@ impl<T: Read + Write> Client<T> {
             .await
     }
 
-    /// Read multiple combo entries starting at `start_index`. Bulk firmware
-    /// only ([`DeviceCapabilities::bulk_transfer_supported`]); returns
-    /// [`RynkHostError::Unsupported`] otherwise, without touching the wire.
-    pub async fn get_combo_bulk(&mut self, start_index: u8, count: u8) -> Result<GetComboBulkResponse, RynkHostError> {
+    /// Read one page of combos starting at slot `start_index`: up to
+    /// `max_bulk_configs`, fewer at the end, empty once `start_index` reaches the
+    /// slot count. Bulk firmware only ([`DeviceCapabilities::bulk_transfer_supported`]);
+    /// returns [`RynkHostError::Unsupported`] otherwise, without touching the wire.
+    pub async fn get_combo_bulk(&mut self, start_index: u8) -> Result<GetComboBulkResponse, RynkHostError> {
         self.require_bulk_transfer(Cmd::GetComboBulk)?;
-        self.request::<command::GetComboBulk>(&GetComboBulkRequest { start_index, count })
+        self.request::<command::GetComboBulk>(&GetComboBulkRequest { start_index })
             .await
     }
 
-    /// Write multiple combo entries starting at `request.start_index`. Bulk
-    /// firmware only ([`DeviceCapabilities::bulk_transfer_supported`]); returns
+    /// Write `request.configs` into the combo table at slot `request.start_index`.
+    /// Bulk firmware only ([`DeviceCapabilities::bulk_transfer_supported`]); returns
     /// [`RynkHostError::Unsupported`] otherwise, without touching the wire.
     pub async fn set_combo_bulk(&mut self, request: SetComboBulkRequest) -> Result<(), RynkHostError> {
         self.require_bulk_transfer(Cmd::SetComboBulk)?;
@@ -296,17 +299,18 @@ impl<T: Read + Write> Client<T> {
             .await
     }
 
-    /// Read multiple morse entries starting at `start_index`. Bulk firmware
-    /// only ([`DeviceCapabilities::bulk_transfer_supported`]); returns
-    /// [`RynkHostError::Unsupported`] otherwise, without touching the wire.
-    pub async fn get_morse_bulk(&mut self, start_index: u8, count: u8) -> Result<GetMorseBulkResponse, RynkHostError> {
+    /// Read one page of morses starting at slot `start_index`: up to
+    /// `max_bulk_configs`, fewer at the end, empty once `start_index` reaches the
+    /// slot count. Bulk firmware only ([`DeviceCapabilities::bulk_transfer_supported`]);
+    /// returns [`RynkHostError::Unsupported`] otherwise, without touching the wire.
+    pub async fn get_morse_bulk(&mut self, start_index: u8) -> Result<GetMorseBulkResponse, RynkHostError> {
         self.require_bulk_transfer(Cmd::GetMorseBulk)?;
-        self.request::<command::GetMorseBulk>(&GetMorseBulkRequest { start_index, count })
+        self.request::<command::GetMorseBulk>(&GetMorseBulkRequest { start_index })
             .await
     }
 
-    /// Write multiple morse entries starting at `request.start_index`. Bulk
-    /// firmware only ([`DeviceCapabilities::bulk_transfer_supported`]); returns
+    /// Write `request.configs` into the morse table at slot `request.start_index`.
+    /// Bulk firmware only ([`DeviceCapabilities::bulk_transfer_supported`]); returns
     /// [`RynkHostError::Unsupported`] otherwise, without touching the wire.
     pub async fn set_morse_bulk(&mut self, request: SetMorseBulkRequest) -> Result<(), RynkHostError> {
         self.require_bulk_transfer(Cmd::SetMorseBulk)?;
@@ -327,6 +331,131 @@ impl<T: Read + Write> Client<T> {
     pub async fn set_macro(&mut self, index: u8, offset: u16, data: MacroData) -> Result<(), RynkHostError> {
         self.request::<command::SetMacro>(&SetMacroRequest { index, offset, data })
             .await
+    }
+
+    // ── bulk pagers ──
+    // Read/write a WHOLE resource by paging the low-level `*_bulk` endpoints,
+    // sizing each loop from cached capabilities: totals bound the read cursor,
+    // the advertised page size chunks the write. Capability gating and range
+    // checks stay in the low-level calls these drive.
+
+    /// Read the whole keymap (every layer, row-major) by paging `GetKeymapBulk`.
+    pub async fn read_all_keymap(&mut self) -> Result<Vec<KeyAction>, RynkHostError> {
+        let caps = self.capabilities();
+        // The closure converts the flat cursor to a key position, so pull the
+        // geometry out of the borrowed caps before the pager takes `&mut self`.
+        let (rows, cols) = (caps.num_rows as u16, caps.num_cols as u16);
+        let total = caps.num_layers as usize * rows as usize * cols as usize;
+        self.read_all(total, async |c, start| {
+            let (layer, row, col) = keymap_pos(start, rows, cols);
+            c.get_keymap_bulk(layer, row, col).await.map(|r| r.actions)
+        })
+        .await
+    }
+
+    /// Read every combo slot by paging `GetComboBulk`.
+    pub async fn read_all_combos(&mut self) -> Result<Vec<Combo>, RynkHostError> {
+        let total = self.capabilities().max_combos as usize;
+        self.read_all(total, async |c, start| {
+            c.get_combo_bulk(start as u8).await.map(|r| r.configs)
+        })
+        .await
+    }
+
+    /// Read every morse slot by paging `GetMorseBulk`.
+    pub async fn read_all_morses(&mut self) -> Result<Vec<Morse>, RynkHostError> {
+        let total = self.capabilities().max_morse as usize;
+        self.read_all(total, async |c, start| {
+            c.get_morse_bulk(start as u8).await.map(|r| r.configs)
+        })
+        .await
+    }
+
+    /// Write the whole keymap by paging `SetKeymapBulk` in `max_bulk_keys` chunks.
+    pub async fn write_all_keymap(&mut self, actions: &[KeyAction]) -> Result<(), RynkHostError> {
+        let caps = self.capabilities();
+        // Same as the read side: capture the geometry the closure needs before the
+        // pager borrows `&mut self`.
+        let (rows, cols) = (caps.num_rows as u16, caps.num_cols as u16);
+        let page = caps.max_bulk_keys as usize;
+        self.write_all(page, actions, async |c, start, actions| {
+            let (layer, row, col) = keymap_pos(start, rows, cols);
+            c.set_keymap_bulk(SetKeymapBulkRequest {
+                layer,
+                start_row: row,
+                start_col: col,
+                actions,
+            })
+            .await
+        })
+        .await
+    }
+
+    /// Write every combo by paging `SetComboBulk` in `max_bulk_configs` chunks.
+    pub async fn write_all_combos(&mut self, configs: &[Combo]) -> Result<(), RynkHostError> {
+        let page = self.capabilities().max_bulk_configs as usize;
+        self.write_all(page, configs, async |c, start, configs| {
+            c.set_combo_bulk(SetComboBulkRequest {
+                start_index: start as u8,
+                configs,
+            })
+            .await
+        })
+        .await
+    }
+
+    /// Write every morse by paging `SetMorseBulk` in `max_bulk_configs` chunks.
+    pub async fn write_all_morses(&mut self, configs: &[Morse]) -> Result<(), RynkHostError> {
+        let page = self.capabilities().max_bulk_configs as usize;
+        self.write_all(page, configs, async |c, start, configs| {
+            c.set_morse_bulk(SetMorseBulkRequest {
+                start_index: start as u8,
+                configs,
+            })
+            .await
+        })
+        .await
+    }
+
+    /// Page a whole resource in: fetch from cursor 0 until `total` items are read
+    /// or a short/empty page marks the firmware's clamped end.
+    async fn read_all<Item>(
+        &mut self,
+        total: usize,
+        mut fetch: impl AsyncFnMut(&mut Self, u16) -> Result<Vec<Item>, RynkHostError>,
+    ) -> Result<Vec<Item>, RynkHostError> {
+        let mut out = Vec::new();
+        let mut start: u16 = 0;
+        while (start as usize) < total {
+            let page = fetch(self, start).await?;
+            if page.is_empty() {
+                break; // firmware paged out before reaching `total`
+            }
+            start += page.len() as u16;
+            out.extend(page);
+        }
+        Ok(out)
+    }
+
+    /// Page a whole resource out: send `items` in `page`-sized chunks, each a
+    /// bounded `Set*Bulk` at its flat cursor.
+    async fn write_all<Item: Clone>(
+        &mut self,
+        page: usize,
+        items: &[Item],
+        mut store: impl AsyncFnMut(&mut Self, u16, Vec<Item>) -> Result<(), RynkHostError>,
+    ) -> Result<(), RynkHostError> {
+        if items.is_empty() {
+            return Ok(());
+        }
+        // `page` is 0 only when bulk is unsupported; chunk by 1 so the first
+        // `store` hits the low-level gate instead of panicking in `chunks(0)`.
+        let mut start: u16 = 0;
+        for chunk in items.chunks(page.max(1)) {
+            store(self, start, chunk.to_vec()).await?;
+            start += chunk.len() as u16;
+        }
+        Ok(())
     }
 
     // ── behavior ──
@@ -423,4 +552,14 @@ impl<T: Read + Write> Client<T> {
         self.require_ble(Cmd::ClearBleProfile)?;
         self.request::<command::ClearBleProfile>(&slot).await
     }
+}
+
+/// Map a flat, row-major, layer-major key cursor to its `(layer, row, col)`
+/// address for the device's `rows`×`cols` geometry. `u16` arithmetic since the
+/// keymap can exceed 255 keys; the address components each fit in `u8`.
+fn keymap_pos(cursor: u16, rows: u16, cols: u16) -> (u8, u8, u8) {
+    let layer = cursor / (rows * cols);
+    let row = (cursor / cols) % rows;
+    let col = cursor % cols;
+    (layer as u8, row as u8, col as u8)
 }

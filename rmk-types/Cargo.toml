@@ -42,8 +42,8 @@ rynk = []
 # Bulk transfer endpoints for MCUs with sufficient RAM.
 # Enables multi-element bulk keymap/combo/morse endpoints and BULK_SIZE constant.
 bulk = ["rynk"]
-# Host tool: uses protocol ceiling values for Vec capacities.
-host = ["rynk", "bulk", "_ble", "split", "steno"]
+# Host tool
+host = ["rynk", "bulk", "_ble", "split", "steno", "serde/alloc"]
 # TypeScript type + wasm ABI export for the web client. Enabled by a codegen/wasm
 # build, never by firmware.
 wasm = ["dep:tsify", "dep:wasm-bindgen", "dep:serde-wasm-bindgen", "host"]

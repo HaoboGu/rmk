@@ -68,3 +68,4 @@ Config is loaded in three layers (later overrides earlier): `event_default.toml`
 - Don't add a small helper function (≤ 10 lines) that has only one call site — inline it at the call site
 - When writing code comments, follow the principles in [Best practices for writing code comments](https://stackoverflow.blog/2021/12/23/best-practices-for-writing-code-comments/)
 - When writing documentation and READMEs, follow the principles in [Best practices for GitHub Docs](https://docs.github.com/en/contributing/writing-for-github-docs/best-practices-for-github-docs)
+- If you need a paragraph-long comment to justify why the workaround is OK, the code is wrong — fix the code.

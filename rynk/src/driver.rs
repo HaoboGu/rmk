@@ -876,7 +876,7 @@ mod tests {
         };
 
         assert!(matches!(
-            client.get_keymap_bulk(0, 0, 0, 1).await,
+            client.get_keymap_bulk(0, 0, 0).await,
             Err(RynkHostError::Unsupported(Cmd::GetKeymapBulk, _))
         ));
         assert!(matches!(
@@ -884,7 +884,7 @@ mod tests {
             Err(RynkHostError::Unsupported(Cmd::SetKeymapBulk, _))
         ));
         assert!(matches!(
-            client.get_combo_bulk(0, 1).await,
+            client.get_combo_bulk(0).await,
             Err(RynkHostError::Unsupported(Cmd::GetComboBulk, _))
         ));
         assert!(matches!(
@@ -892,7 +892,7 @@ mod tests {
             Err(RynkHostError::Unsupported(Cmd::SetComboBulk, _))
         ));
         assert!(matches!(
-            client.get_morse_bulk(0, 1).await,
+            client.get_morse_bulk(0).await,
             Err(RynkHostError::Unsupported(Cmd::GetMorseBulk, _))
         ));
         assert!(matches!(
@@ -938,7 +938,7 @@ mod tests {
             })
             .await
             .unwrap();
-        assert_eq!(client.get_keymap_bulk(0, 0, 0, 1).await.unwrap(), keymap_resp);
+        assert_eq!(client.get_keymap_bulk(0, 0, 0).await.unwrap(), keymap_resp);
 
         client
             .set_combo_bulk(SetComboBulkRequest {
@@ -947,7 +947,7 @@ mod tests {
             })
             .await
             .unwrap();
-        assert_eq!(client.get_combo_bulk(0, 1).await.unwrap(), combo_resp);
+        assert_eq!(client.get_combo_bulk(0).await.unwrap(), combo_resp);
 
         client
             .set_morse_bulk(SetMorseBulkRequest {
@@ -956,7 +956,88 @@ mod tests {
             })
             .await
             .unwrap();
-        assert_eq!(client.get_morse_bulk(0, 1).await.unwrap(), morse_resp);
+        assert_eq!(client.get_morse_bulk(0).await.unwrap(), morse_resp);
+    }
+
+    #[tokio::test]
+    async fn read_all_keymap_concatenates_pages() {
+        // Keymap total = 1×1×10 = 10 keys at 4 per page: pages of 4, 4, then a
+        // short 2. The pager concatenates in order and stops once the cursor
+        // reaches the total.
+        let mut supported = caps();
+        supported.bulk_transfer_supported = true;
+        supported.max_bulk_keys = 4;
+        supported.num_layers = 1;
+        supported.num_rows = 1;
+        supported.num_cols = 10;
+
+        let page = |base: u8, n: u8| GetKeymapBulkResponse {
+            actions: (0..n).map(|i| KeyAction::Morse(base + i)).collect(),
+        };
+        let expected: Vec<KeyAction> = (0u8..10).map(KeyAction::Morse).collect();
+
+        let t = MockTransport::new(vec![
+            Step::Chunk(reply(Cmd::GetVersion, 1, ProtocolVersion::CURRENT)),
+            Step::Chunk(reply(Cmd::GetCapabilities, 2, supported)),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, page(0, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, page(4, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 5, page(8, 2))),
+            Step::Chunk(reply(Cmd::GetWpm, 6, 42u16)),
+        ]);
+        let mut client = Client::connect(t).await.unwrap();
+        assert_eq!(client.read_all_keymap().await.unwrap(), expected);
+        // The trailing reply lines up only if the pager stopped after 3 fetches.
+        assert_eq!(client.get_wpm().await.unwrap(), 42);
+    }
+
+    #[tokio::test]
+    async fn read_all_stops_on_clamped_empty_page() {
+        // Total says 10 keys, but the firmware clamps early: a full page then an
+        // empty page must end the read below `total`, not loop forever.
+        let mut supported = caps();
+        supported.bulk_transfer_supported = true;
+        supported.max_bulk_keys = 4;
+        supported.num_layers = 1;
+        supported.num_rows = 1;
+        supported.num_cols = 10;
+
+        let full = GetKeymapBulkResponse {
+            actions: (0u8..4).map(KeyAction::Morse).collect(),
+        };
+        let empty = GetKeymapBulkResponse { actions: vec![] };
+        let t = MockTransport::new(vec![
+            Step::Chunk(reply(Cmd::GetVersion, 1, ProtocolVersion::CURRENT)),
+            Step::Chunk(reply(Cmd::GetCapabilities, 2, supported)),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, full)),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, empty)),
+            Step::Chunk(reply(Cmd::GetWpm, 5, 7u16)),
+        ]);
+        let mut client = Client::connect(t).await.unwrap();
+        assert_eq!(client.read_all_keymap().await.unwrap().len(), 4);
+        // Reached only if the empty page halted the loop at 2 fetches.
+        assert_eq!(client.get_wpm().await.unwrap(), 7);
+    }
+
+    #[tokio::test]
+    async fn write_all_keymap_chunks_by_page_size() {
+        // 5 actions at 2 per page → 3 SetKeymapBulk writes (2, 2, 1). The
+        // trailing reply lines up only if exactly 3 chunks were sent.
+        let mut supported = caps();
+        supported.bulk_transfer_supported = true;
+        supported.max_bulk_keys = 2;
+
+        let t = MockTransport::new(vec![
+            Step::Chunk(reply(Cmd::GetVersion, 1, ProtocolVersion::CURRENT)),
+            Step::Chunk(reply(Cmd::GetCapabilities, 2, supported)),
+            Step::Chunk(reply(Cmd::SetKeymapBulk, 3, ())),
+            Step::Chunk(reply(Cmd::SetKeymapBulk, 4, ())),
+            Step::Chunk(reply(Cmd::SetKeymapBulk, 5, ())),
+            Step::Chunk(reply(Cmd::GetWpm, 6, 99u16)),
+        ]);
+        let mut client = Client::connect(t).await.unwrap();
+        let actions: Vec<KeyAction> = (0u8..5).map(KeyAction::Morse).collect();
+        client.write_all_keymap(&actions).await.unwrap();
+        assert_eq!(client.get_wpm().await.unwrap(), 99);
     }
 
     #[tokio::test]

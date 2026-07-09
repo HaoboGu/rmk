@@ -46,11 +46,9 @@ pub struct BuildConstants {
     pub split_peripherals_num: usize,
     pub ble_profiles_num: usize,
     pub split_central_sleep_timeout_seconds: u32,
-    pub protocol_max_bulk_size: usize,
-    pub protocol_max_bulk_keymap_size: usize,
     pub protocol_macro_chunk_size: usize,
-    /// Optional override for the Rynk RX/TX buffer size (bytes). `None`
-    /// instructs `rmk-types/build.rs` to fall back to `RYNK_MIN_BUFFER_SIZE`.
+    /// Optional Rynk RX/TX buffer size (bytes).
+    /// `None` to fall back to `RYNK_MIN_BUFFER_SIZE`.
     pub rynk_buffer_size: Option<usize>,
     pub events: Vec<EventChannel>,
     pub passkey: Option<Passkey>,
@@ -152,21 +150,6 @@ impl crate::KeyboardTomlConfig {
                 protocol_limits::MAX_MACRO_DATA_SIZE
             ));
         }
-        if rmk.protocol_max_bulk_size > protocol_limits::MAX_BULK_SIZE {
-            return Err(format!(
-                "protocol_max_bulk_size ({}) exceeds protocol ceiling MAX_BULK_SIZE ({})",
-                rmk.protocol_max_bulk_size,
-                protocol_limits::MAX_BULK_SIZE
-            ));
-        }
-        if rmk.protocol_max_bulk_keymap_size > protocol_limits::MAX_BULK_KEYMAP_SIZE {
-            return Err(format!(
-                "protocol_max_bulk_keymap_size ({}) exceeds protocol ceiling MAX_BULK_KEYMAP_SIZE ({})",
-                rmk.protocol_max_bulk_keymap_size,
-                protocol_limits::MAX_BULK_KEYMAP_SIZE
-            ));
-        }
-
         Ok(BuildConstants {
             combo_max_num: rmk.combo_max_num,
             combo_max_length: rmk.combo_max_length,
@@ -183,8 +166,6 @@ impl crate::KeyboardTomlConfig {
             split_peripherals_num,
             ble_profiles_num: rmk.ble_profiles_num,
             split_central_sleep_timeout_seconds: rmk.split_central_sleep_timeout_seconds,
-            protocol_max_bulk_size: rmk.protocol_max_bulk_size,
-            protocol_max_bulk_keymap_size: rmk.protocol_max_bulk_keymap_size,
             protocol_macro_chunk_size: rmk.protocol_macro_chunk_size,
             rynk_buffer_size: rmk.rynk_buffer_size,
             events,

@@ -29,19 +29,27 @@ pub struct SetKeyRequest {
 // repeating `#[cfg(feature = "bulk")]` on every type, impl, and import.
 #[cfg(feature = "bulk")]
 mod bulk {
-    use heapless::Vec;
     use postcard::experimental::max_size::MaxSize;
     use serde::{Deserialize, Serialize};
 
     use crate::action::KeyAction;
+    #[cfg(not(feature = "host"))]
     use crate::constants::BULK_KEYMAP_SIZE;
+
+    // Firmware sizes this Vec from the buffer (`BULK_KEYMAP_SIZE`, derived from
+    // `RYNK_BUFFER_SIZE`); the host leaves it unbounded (`alloc::Vec`) and bounds
+    // each transfer at runtime from the firmware-reported `max_bulk_keys`.
+    #[cfg(not(feature = "host"))]
+    type BulkActions = heapless::Vec<KeyAction, BULK_KEYMAP_SIZE>;
+    #[cfg(feature = "host")]
+    type BulkActions = alloc::vec::Vec<KeyAction>;
 
     /// Request payload for `GetKeymapBulk` endpoint.
     ///
-    /// The keymap is addressed as one flat, row-major, layer-major array. The
-    /// run starts at `(layer, start_row, start_col)` and reads `count` consecutive
-    /// keys, continuing into later rows and layers as needed — it stops only at
-    /// the end of the keymap, never at a layer boundary.
+    /// The run starts at key `(layer, start_row, start_col)` and reads forward
+    /// through the flat, row-major, layer-major keymap — crossing row and layer
+    /// boundaries freely. The firmware returns as many consecutive keys as fit
+    /// (`max_bulk_keys`), or fewer at the end of the keymap.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
     #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
     #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
@@ -49,7 +57,6 @@ mod bulk {
         pub layer: u8,
         pub start_row: u8,
         pub start_col: u8,
-        pub count: u8,
     }
 
     /// Bulk response for getting multiple key actions at once.
@@ -58,18 +65,41 @@ mod bulk {
     #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct GetKeymapBulkResponse {
         #[cfg_attr(feature = "wasm", tsify(type = "KeyAction[]"))]
-        pub actions: Vec<KeyAction, BULK_KEYMAP_SIZE>,
+        pub actions: BulkActions,
     }
 
+    // `@bulk` endpoints are excluded from the buffer-floor fold, so this `MaxSize`
+    // is decorative — it only satisfies the `Endpoint: MaxSize` bound. A bulk frame
+    // fits the buffer by construction, so the buffer size is a valid (if loose)
+    // bound that host and firmware can share.
     impl MaxSize for GetKeymapBulkResponse {
-        const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<KeyAction, BULK_KEYMAP_SIZE>();
+        const POSTCARD_MAX_SIZE: usize = crate::constants::RYNK_BUFFER_SIZE;
+    }
+
+    impl GetKeymapBulkResponse {
+        /// Build the response, collecting up to the bulk capacity.
+        #[cfg(not(feature = "host"))]
+        pub fn from_iter_bounded(actions: impl IntoIterator<Item = KeyAction>) -> Self {
+            let mut v = BulkActions::new();
+            for a in actions {
+                if v.push(a).is_err() {
+                    break;
+                }
+            }
+            Self { actions: v }
+        }
+        #[cfg(feature = "host")]
+        pub fn from_iter_bounded(actions: impl IntoIterator<Item = KeyAction>) -> Self {
+            Self {
+                actions: actions.into_iter().collect(),
+            }
+        }
     }
 
     /// Request payload for `SetKeymapBulk` endpoint.
     ///
-    /// The keymap is addressed as one flat, row-major, layer-major array. Writing
-    /// starts at `(layer, start_row, start_col)` and continues into later rows and
-    /// layers as needed. The number of keys to write is derived from `actions.len()`.
+    /// Writes `actions` into the flat, row-major, layer-major keymap starting at
+    /// key `(layer, start_row, start_col)`, continuing across rows and layers.
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
     #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
@@ -78,12 +108,11 @@ mod bulk {
         pub start_row: u8,
         pub start_col: u8,
         #[cfg_attr(feature = "wasm", tsify(type = "KeyAction[]"))]
-        pub actions: Vec<KeyAction, BULK_KEYMAP_SIZE>,
+        pub actions: BulkActions,
     }
 
     impl MaxSize for SetKeymapBulkRequest {
-        // 3 bytes for layer + start_row + start_col (each `u8::POSTCARD_MAX_SIZE == 1`).
-        const POSTCARD_MAX_SIZE: usize = 3 + crate::heapless_vec_max_size::<KeyAction, BULK_KEYMAP_SIZE>();
+        const POSTCARD_MAX_SIZE: usize = crate::constants::RYNK_BUFFER_SIZE;
     }
 }
 
@@ -116,7 +145,10 @@ mod tests {
         });
     }
 
-    #[cfg(feature = "bulk")]
+    // Firmware-only: these exercise the heapless capacity (`BULK_KEYMAP_SIZE`). On
+    // the host the field is an unbounded `alloc::Vec`, so a "max capacity" test is
+    // not meaningful; the wire format is identical and pinned by the snapshot tests.
+    #[cfg(all(feature = "bulk", not(feature = "host")))]
     mod bulk {
         use heapless::Vec;
 
@@ -144,7 +176,6 @@ mod tests {
                 layer: 2,
                 start_row: 0,
                 start_col: 0,
-                count: 32,
             });
         }
 

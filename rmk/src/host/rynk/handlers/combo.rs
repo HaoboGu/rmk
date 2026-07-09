@@ -12,6 +12,8 @@ use rmk_types::protocol::rynk::{RynkError, SetComboRequest};
 
 use super::super::RynkService;
 use super::Handle;
+#[cfg(feature = "bulk")]
+use super::bulk::{bulk_page, bulk_write_start};
 
 impl Handle<GetCombo> for RynkService<'_> {
     async fn handle(&self, idx: u8) -> Result<ComboConfig, RynkError> {
@@ -43,25 +45,16 @@ impl Handle<SetCombo> for RynkService<'_> {
 #[cfg(feature = "bulk")]
 impl Handle<GetComboBulk> for RynkService<'_> {
     async fn handle(&self, req: GetComboBulkRequest) -> Result<GetComboBulkResponse, RynkError> {
-        let start = req.start_index as usize;
-        let count = req.count as usize;
-        // Same slot mapping as the single Get: empty slots read back as the
-        // empty config, only out-of-range indices are errors.
+        // Empty slots read back as the empty config, same as the single Get; an
+        // out-of-range `start_index` yields an empty page.
         self.ctx.with_combos(|combos| {
-            if count == 0 || count > BULK_SIZE || start + count > combos.len() {
-                return Err(RynkError::Invalid);
-            }
-            let mut configs = heapless::Vec::new();
-            for slot in &combos[start..start + count] {
-                configs
-                    .push(
-                        slot.as_ref()
-                            .map(|c| c.config.clone())
-                            .unwrap_or_else(ComboConfig::empty),
-                    )
-                    .map_err(|_| RynkError::Internal)?;
-            }
-            Ok(GetComboBulkResponse { configs })
+            let page = bulk_page(req.start_index as usize, BULK_SIZE, combos.len());
+            Ok(GetComboBulkResponse::from_iter_bounded(page.map(|i| {
+                combos[i]
+                    .as_ref()
+                    .map(|c| c.config.clone())
+                    .unwrap_or_else(ComboConfig::empty)
+            })))
         })
     }
 }
@@ -69,17 +62,12 @@ impl Handle<GetComboBulk> for RynkService<'_> {
 #[cfg(feature = "bulk")]
 impl Handle<SetComboBulk> for RynkService<'_> {
     async fn handle(&self, req: SetComboBulkRequest) -> Result<(), RynkError> {
-        let start = req.start_index as usize;
-        // Bounds are fully validated before the first write, so the run either
-        // applies whole or the combos stay untouched.
+        // Validate the whole run first, so it applies whole or not at all. The
+        // range then stays in bounds, so `set_combo`'s success is guaranteed.
         let num_combos = self.ctx.with_combos(|combos| combos.len());
-        if req.configs.is_empty() || start + req.configs.len() > num_combos {
-            return Err(RynkError::Invalid);
-        }
+        let start = bulk_write_start(req.start_index as usize, req.configs.len(), num_combos)?;
         for (idx, config) in (start..).zip(req.configs.iter()) {
-            if !self.ctx.set_combo(idx as u8, config.clone()).await {
-                return Err(RynkError::Invalid);
-            }
+            self.ctx.set_combo(idx as u8, config.clone()).await;
         }
         Ok(())
     }

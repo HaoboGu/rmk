@@ -12,6 +12,8 @@ use rmk_types::protocol::rynk::{RynkError, SetMorseRequest};
 
 use super::super::RynkService;
 use super::Handle;
+#[cfg(feature = "bulk")]
+use super::bulk::{bulk_page, bulk_write_start};
 
 impl Handle<GetMorse> for RynkService<'_> {
     async fn handle(&self, idx: u8) -> Result<Morse, RynkError> {
@@ -36,30 +38,20 @@ impl Handle<SetMorse> for RynkService<'_> {
 #[cfg(feature = "bulk")]
 impl Handle<GetMorseBulk> for RynkService<'_> {
     async fn handle(&self, req: GetMorseBulkRequest) -> Result<GetMorseBulkResponse, RynkError> {
-        let start = req.start_index as usize;
-        let count = req.count as usize;
-        if count == 0 || count > BULK_SIZE || start + count > self.ctx.morses_len() {
-            return Err(RynkError::Invalid);
-        }
-        let mut configs = heapless::Vec::new();
-        for idx in start..start + count {
-            configs
-                .push(self.ctx.get_morse(idx as u8).ok_or(RynkError::Invalid)?)
-                .map_err(|_| RynkError::Internal)?;
-        }
-        Ok(GetMorseBulkResponse { configs })
+        // `bulk_page` keeps every index in range, so `get_morse` is always
+        // `Some`; `filter_map` unwraps without a fallback.
+        let page = bulk_page(req.start_index as usize, BULK_SIZE, self.ctx.morses_len());
+        Ok(GetMorseBulkResponse::from_iter_bounded(
+            page.filter_map(|idx| self.ctx.get_morse(idx as u8)),
+        ))
     }
 }
 
 #[cfg(feature = "bulk")]
 impl Handle<SetMorseBulk> for RynkService<'_> {
     async fn handle(&self, req: SetMorseBulkRequest) -> Result<(), RynkError> {
-        let start = req.start_index as usize;
-        // Bounds are fully validated before the first write, so the run either
-        // applies whole or the morses stay untouched.
-        if req.configs.is_empty() || start + req.configs.len() > self.ctx.morses_len() {
-            return Err(RynkError::Invalid);
-        }
+        // Validate the whole run first, so it applies whole or not at all.
+        let start = bulk_write_start(req.start_index as usize, req.configs.len(), self.ctx.morses_len())?;
         for (idx, config) in (start..).zip(req.configs.iter()) {
             self.ctx
                 .update_morse(idx as u8, |m| {

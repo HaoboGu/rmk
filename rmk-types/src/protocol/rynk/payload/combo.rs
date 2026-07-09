@@ -19,34 +19,48 @@ pub struct SetComboRequest {
 // repeating `#[cfg(feature = "bulk")]` on every type, impl, and import.
 #[cfg(feature = "bulk")]
 mod bulk {
-    use heapless::Vec;
     use postcard::experimental::max_size::MaxSize;
     use serde::{Deserialize, Serialize};
 
     use crate::combo::Combo;
+    #[cfg(not(feature = "host"))]
     use crate::constants::BULK_SIZE;
 
-    /// Request payload for `GetComboBulk`.
+    // Firmware sizes this Vec from the buffer (`BULK_SIZE`, derived from
+    // `RYNK_BUFFER_SIZE`); the host leaves it unbounded (`alloc::Vec`) and bounds
+    // each transfer at runtime from the firmware-reported `max_bulk_configs`.
+    #[cfg(not(feature = "host"))]
+    type BulkCombos = heapless::Vec<Combo, BULK_SIZE>;
+    #[cfg(feature = "host")]
+    type BulkCombos = alloc::vec::Vec<Combo>;
+
+    /// Request payload for `GetComboBulk`: read a page of combos starting at slot
+    /// `start_index`. The firmware returns as many as fit (`max_bulk_configs`),
+    /// fewer at the end, or an empty page once `start_index` reaches the slot count.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
     #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
     #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct GetComboBulkRequest {
         pub start_index: u8,
-        pub count: u8,
     }
 
-    /// Bulk request payload for setting multiple combos at once.
+    /// Bulk request payload for `SetComboBulk`: write `configs` starting at slot
+    /// `start_index`.
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
     #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct SetComboBulkRequest {
         pub start_index: u8,
         #[cfg_attr(feature = "wasm", tsify(type = "Combo[]"))]
-        pub configs: Vec<Combo, BULK_SIZE>,
+        pub configs: BulkCombos,
     }
 
+    // `@bulk` endpoints are excluded from the buffer-floor fold, so this `MaxSize`
+    // is decorative — it only satisfies the `Endpoint: MaxSize` bound. A bulk frame
+    // fits the buffer by construction, so the buffer size is a valid (if loose)
+    // bound that host and firmware can share.
     impl MaxSize for SetComboBulkRequest {
-        const POSTCARD_MAX_SIZE: usize = u8::POSTCARD_MAX_SIZE + crate::heapless_vec_max_size::<Combo, BULK_SIZE>();
+        const POSTCARD_MAX_SIZE: usize = crate::constants::RYNK_BUFFER_SIZE;
     }
 
     /// Bulk response for getting multiple combos at once.
@@ -55,11 +69,31 @@ mod bulk {
     #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct GetComboBulkResponse {
         #[cfg_attr(feature = "wasm", tsify(type = "Combo[]"))]
-        pub configs: Vec<Combo, BULK_SIZE>,
+        pub configs: BulkCombos,
     }
 
     impl MaxSize for GetComboBulkResponse {
-        const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<Combo, BULK_SIZE>();
+        const POSTCARD_MAX_SIZE: usize = crate::constants::RYNK_BUFFER_SIZE;
+    }
+
+    impl GetComboBulkResponse {
+        /// Build the response, collecting up to the bulk capacity.
+        #[cfg(not(feature = "host"))]
+        pub fn from_iter_bounded(configs: impl IntoIterator<Item = Combo>) -> Self {
+            let mut v = BulkCombos::new();
+            for c in configs {
+                if v.push(c).is_err() {
+                    break;
+                }
+            }
+            Self { configs: v }
+        }
+        #[cfg(feature = "host")]
+        pub fn from_iter_bounded(configs: impl IntoIterator<Item = Combo>) -> Self {
+            Self {
+                configs: configs.into_iter().collect(),
+            }
+        }
     }
 }
 
@@ -107,7 +141,10 @@ mod tests {
         assert_max_size_bound(&c);
     }
 
-    #[cfg(feature = "bulk")]
+    // Firmware-only: exercises the heapless capacity (`BULK_SIZE`). On the host the
+    // field is an unbounded `alloc::Vec`; the wire format is identical and pinned by
+    // the snapshot tests.
+    #[cfg(all(feature = "bulk", not(feature = "host")))]
     mod bulk {
         use heapless::Vec;
 

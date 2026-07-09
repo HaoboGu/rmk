@@ -95,8 +95,17 @@ const fn assert_unique(cmds: &[u16]) {
 }
 
 /// Macro for defining the endpoint (request/response) table.
+///
+/// A row may carry an optional `@bulk` marker before its name. Such an
+/// endpoint is generated like any other, but is left out of the
+/// `MAX_ENDPOINT_PAYLOAD` fold: its payload is sized dynamically (bulk transfer,
+/// whose element count tracks `RYNK_BUFFER_SIZE`), so it must not drive the
+/// buffer floor — the buffer drives it, not the other way around.
 macro_rules! endpoints {
-    ($( $(#[$meta:meta])* $name:ident = $cmd:literal : $req:ty => $resp:ty; )*) => {
+    // Fold contribution of one row: its max payload, or 0 when marked `@bulk`.
+    (@floor $name:ident) => { <$name as Endpoint>::MAX_PAYLOAD };
+    (@floor $marker:ident $name:ident) => { 0 };
+    ($( $(#[$meta:meta])* $(@ $marker:ident)? $name:ident = $cmd:literal : $req:ty => $resp:ty; )*) => {
         #[allow(non_upper_case_globals)]
         impl Cmd {
             $( $(#[$meta])* pub const $name: Self = Cmd::from_raw($cmd); )*
@@ -115,11 +124,11 @@ macro_rules! endpoints {
             $( core::assert!(!Cmd::from_raw($cmd).is_topic(), "request CMD value in the topic range"); )*
             assert_unique(&[$($cmd),*]);
         };
-        /// Largest payload across the whole endpoint table.
+        /// Largest non-bulk payload across the endpoint table — the buffer floor.
         #[allow(unused_doc_comments)] // row docs also land on the fold statements
         const MAX_ENDPOINT_PAYLOAD: usize = {
             let mut m = 0;
-            $( $(#[$meta])* { m = max_const(m, <$name as Endpoint>::MAX_PAYLOAD); } )*
+            $( $(#[$meta])* { m = max_const(m, endpoints!(@floor $($marker)? $name)); } )*
             m
         };
     };
@@ -222,9 +231,9 @@ endpoints! {
     GetEncoderAction = 0x0105: GetEncoderRequest => EncoderAction;
     SetEncoderAction = 0x0106: SetEncoderRequest => ();
     #[cfg(feature = "bulk")]
-    GetKeymapBulk = 0x0107: GetKeymapBulkRequest => GetKeymapBulkResponse;
+    @bulk GetKeymapBulk = 0x0107: GetKeymapBulkRequest => GetKeymapBulkResponse;
     #[cfg(feature = "bulk")]
-    SetKeymapBulk = 0x0108: SetKeymapBulkRequest => ();
+    @bulk SetKeymapBulk = 0x0108: SetKeymapBulkRequest => ();
 
     // ── Macro (0x02xx) ──
     GetMacro = 0x0201: GetMacroRequest => MacroData;
@@ -234,17 +243,17 @@ endpoints! {
     GetCombo = 0x0301: u8 => Combo;
     SetCombo = 0x0302: SetComboRequest => ();
     #[cfg(feature = "bulk")]
-    GetComboBulk = 0x0303: GetComboBulkRequest => GetComboBulkResponse;
+    @bulk GetComboBulk = 0x0303: GetComboBulkRequest => GetComboBulkResponse;
     #[cfg(feature = "bulk")]
-    SetComboBulk = 0x0304: SetComboBulkRequest => ();
+    @bulk SetComboBulk = 0x0304: SetComboBulkRequest => ();
 
     // ── Morse (0x04xx) ──
     GetMorse = 0x0401: u8 => Morse;
     SetMorse = 0x0402: SetMorseRequest => ();
     #[cfg(feature = "bulk")]
-    GetMorseBulk = 0x0403: GetMorseBulkRequest => GetMorseBulkResponse;
+    @bulk GetMorseBulk = 0x0403: GetMorseBulkRequest => GetMorseBulkResponse;
     #[cfg(feature = "bulk")]
-    SetMorseBulk = 0x0404: SetMorseBulkRequest => ();
+    @bulk SetMorseBulk = 0x0404: SetMorseBulkRequest => ();
 
     // ── Fork (0x05xx) ──
     GetFork = 0x0501: u8 => Fork;
@@ -292,10 +301,66 @@ topics! {
     BatteryStatusChange = 0x8006: BatteryStatus;
 }
 
-/// Maximum postcard-encoded payload size across every Rynk wire message,
-/// folded from the tables above so adding a command can never under-size
-/// the buffer.
+/// Maximum postcard-encoded payload size across every non-`@bulk` Rynk
+/// message, folded from the tables above so adding a command can never
+/// under-size the buffer. Bulk endpoints are excluded (see [`endpoints`]);
+/// their size derives from the buffer instead.
 pub const RYNK_MAX_PAYLOAD: usize = max_const(MAX_ENDPOINT_PAYLOAD, MAX_TOPIC_PAYLOAD);
+
+// Bulk transfer element counts are derived from the Rynk buffer size, not
+// configured: a bulk message exists to fill the buffer, so its count is whatever
+// fits. `rmk-types/build.rs` emits `BULK_SIZE`/`BULK_KEYMAP_SIZE` on the firmware
+// as calls to these `const fn`s over `RYNK_BUFFER_SIZE`, then reports them to the
+// host via `GetCapabilities`. They live here, not in `build.rs`, because they
+// need the payload types' `POSTCARD_MAX_SIZE`, which `build.rs` cannot see.
+#[cfg(feature = "bulk")]
+mod bulk_capacity {
+    use postcard::experimental::max_size::MaxSize;
+
+    use super::super::endpoint::{max_const, min_const};
+    use super::super::message::RYNK_HEADER_SIZE;
+    use crate::action::KeyAction;
+    use crate::combo::Combo;
+    use crate::morse::Morse;
+
+    /// Reported bulk counts are `u8`, so a single message never carries more
+    /// than this many elements regardless of how large the buffer is.
+    const BULK_COUNT_CEILING: usize = u8::MAX as usize;
+
+    /// Default Rynk RX/TX buffer size (bytes) when `rynk_buffer_size` is unset.
+    /// Because the bulk counts scale with the buffer, this also sets default bulk
+    /// throughput: 512 B holds several combos/morses and a long keymap run per
+    /// message while staying modest on RAM.
+    pub const RYNK_DEFAULT_BUFFER_SIZE: usize = 512;
+
+    /// Elements of `item_size` bytes that fit in one `buffer`-byte frame after
+    /// reserving the header, `fixed` non-element bytes, and the widest length
+    /// prefix a `u8` count can take (the varint of 255 is 2 bytes). Capped at
+    /// `u8::MAX`; may be 0 for a buffer too small to hold one element, which the
+    /// `BULK_SIZE >= 1` build assert then rejects with a clear message.
+    const fn items_that_fit(buffer: usize, item_size: usize, fixed: usize) -> usize {
+        let overhead = RYNK_HEADER_SIZE + fixed + crate::varint_max_size(BULK_COUNT_CEILING);
+        min_const(buffer.saturating_sub(overhead) / item_size, BULK_COUNT_CEILING)
+    }
+
+    /// Combos/morses per bulk frame. Sized by the larger of `Combo`/`Morse` so
+    /// both bulk endpoints fit; the one fixed byte is `start_index` on the
+    /// request / the `Result` tag on the response.
+    pub const fn bulk_size_for_buffer(buffer: usize) -> usize {
+        let item = max_const(Combo::POSTCARD_MAX_SIZE, Morse::POSTCARD_MAX_SIZE);
+        items_that_fit(buffer, item, 1)
+    }
+
+    /// Keymap keys per bulk frame. Keys (`KeyAction`) are far smaller than a
+    /// `Combo`, so a keymap run naturally outnumbers a combo/morse run in the
+    /// same buffer; the three fixed bytes are `layer`/`start_row`/`start_col`.
+    pub const fn bulk_keymap_size_for_buffer(buffer: usize) -> usize {
+        items_that_fit(buffer, KeyAction::POSTCARD_MAX_SIZE, 3)
+    }
+}
+
+#[cfg(feature = "bulk")]
+pub use bulk_capacity::{RYNK_DEFAULT_BUFFER_SIZE, bulk_keymap_size_for_buffer, bulk_size_for_buffer};
 
 #[cfg(test)]
 mod tests {
@@ -370,5 +435,48 @@ mod tests {
         let bare = <DeviceCapabilities as MaxSize>::POSTCARD_MAX_SIZE;
         let wrapped = <Result<DeviceCapabilities, RynkError> as MaxSize>::POSTCARD_MAX_SIZE;
         assert_eq!(wrapped, bare + 1);
+    }
+
+    /// The buffer-derived bulk counts stay within `[1, u8::MAX]`, grow with the
+    /// buffer, and — crucially — their worst-case encoded frame fits the buffer
+    /// they were derived from. That fit is what lets the firmware serve a full
+    /// bulk message out of its `RYNK_BUFFER_SIZE` buffer.
+    #[cfg(feature = "bulk")]
+    #[test]
+    fn bulk_counts_derive_from_buffer_and_fit() {
+        use super::{bulk_keymap_size_for_buffer, bulk_size_for_buffer};
+        use crate::action::KeyAction;
+        use crate::combo::Combo;
+        use crate::morse::Morse;
+        use crate::varint_max_size;
+
+        const U8_MAX: usize = u8::MAX as usize;
+        // Clamp to the u8 report width for a large buffer; 0 for a buffer too small
+        // to hold even one element (the `BULK_SIZE >= 1` build assert rejects that).
+        assert_eq!(bulk_size_for_buffer(usize::MAX / 2), U8_MAX);
+        assert_eq!(bulk_keymap_size_for_buffer(usize::MAX / 2), U8_MAX);
+        assert_eq!(bulk_size_for_buffer(0), 0);
+        assert_eq!(bulk_keymap_size_for_buffer(0), 0);
+
+        let combo_item = max_const(Combo::POSTCARD_MAX_SIZE, Morse::POSTCARD_MAX_SIZE);
+        let (mut prev_c, mut prev_k) = (0, 0);
+        for buffer in (0..=200_000).step_by(8) {
+            let c = bulk_size_for_buffer(buffer);
+            let k = bulk_keymap_size_for_buffer(buffer);
+            assert!(c >= prev_c && k >= prev_k, "counts must not shrink as the buffer grows");
+            (prev_c, prev_k) = (c, k);
+
+            // Every non-zero count's worst-case frame — header + the fixed
+            // request/response bytes + the widest u8 length prefix + elements —
+            // must fit the buffer it was derived from.
+            if c >= 1 {
+                let frame = RYNK_HEADER_SIZE + 1 + varint_max_size(c) + c * combo_item;
+                assert!(frame <= buffer, "combo/morse bulk frame {frame} > buffer {buffer}");
+            }
+            if k >= 1 {
+                let frame = RYNK_HEADER_SIZE + 3 + varint_max_size(k) + k * KeyAction::POSTCARD_MAX_SIZE;
+                assert!(frame <= buffer, "keymap bulk frame {frame} > buffer {buffer}");
+            }
+        }
     }
 }

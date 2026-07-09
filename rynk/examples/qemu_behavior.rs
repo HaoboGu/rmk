@@ -288,7 +288,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "storage_reset",
         client.storage_reset(StorageResetMode::LayoutOnly).await,
     );
-    expect_unsupported("typed get_keymap_bulk", client.get_keymap_bulk(0, 0, 0, 1).await);
+    expect_unsupported("typed get_keymap_bulk", client.get_keymap_bulk(0, 0, 0).await);
 
     expect_rejected(
         "raw get_keymap_bulk",
@@ -299,14 +299,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     layer: 0,
                     start_row: 0,
                     start_col: 0,
-                    count: 1,
                 },
             )
             .await,
         RynkError::Unimplemented,
     );
-    let mut bulk_actions = heapless::Vec::new();
-    bulk_actions.push(key(HidKeyCode::A)).unwrap();
+    let bulk_actions = vec![key(HidKeyCode::A)];
     expect_rejected(
         "raw set_keymap_bulk",
         client
@@ -325,18 +323,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     expect_rejected(
         "raw get_combo_bulk",
         client
-            .request_raw::<_, GetComboBulkResponse>(
-                Cmd::GetComboBulk,
-                &GetComboBulkRequest {
-                    start_index: 0,
-                    count: 1,
-                },
-            )
+            .request_raw::<_, GetComboBulkResponse>(Cmd::GetComboBulk, &GetComboBulkRequest { start_index: 0 })
             .await,
         RynkError::Unimplemented,
     );
-    let mut bulk_combos = heapless::Vec::new();
-    bulk_combos.push(Combo::empty()).unwrap();
+    let bulk_combos = vec![Combo::empty()];
     expect_rejected(
         "raw set_combo_bulk",
         client
@@ -353,18 +344,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     expect_rejected(
         "raw get_morse_bulk",
         client
-            .request_raw::<_, GetMorseBulkResponse>(
-                Cmd::GetMorseBulk,
-                &GetMorseBulkRequest {
-                    start_index: 0,
-                    count: 1,
-                },
-            )
+            .request_raw::<_, GetMorseBulkResponse>(Cmd::GetMorseBulk, &GetMorseBulkRequest { start_index: 0 })
             .await,
         RynkError::Unimplemented,
     );
-    let mut bulk_morses = heapless::Vec::new();
-    bulk_morses.push(empty_morse(MorseProfile::const_default())).unwrap();
+    let bulk_morses = vec![empty_morse(MorseProfile::const_default())];
     expect_rejected(
         "raw set_morse_bulk",
         client
