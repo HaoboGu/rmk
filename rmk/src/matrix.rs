@@ -1,11 +1,8 @@
-#[cfg(feature = "async_matrix")]
-use core::pin::pin;
-
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
 use rmk_macro::input_device;
 #[cfg(feature = "async_matrix")]
-use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
+use {embassy_futures::select::select_array, embedded_hal_async::digital::Wait};
 
 use crate::core_traits::Runnable;
 use crate::debounce::{DebounceState, DebouncerTrait};
@@ -284,12 +281,8 @@ impl<
 
     #[cfg(feature = "async_matrix")]
     async fn wait_input_pins(&mut self) {
-        let mut futs: Vec<_, ROW> = self
-            .get_input_pins_mut()
-            .iter_mut()
-            .map(|input_pin| input_pin.wait_for_high())
-            .collect();
-        let _ = select_slice(pin!(futs.as_mut_slice())).await;
+        let futs = self.row_pins.each_mut().map(|input_pin| input_pin.wait_for_high());
+        let _ = select_array(futs).await;
     }
 }
 
@@ -314,12 +307,8 @@ impl<
 
     #[cfg(feature = "async_matrix")]
     async fn wait_input_pins(&mut self) {
-        let mut futs: Vec<_, COL> = self
-            .get_input_pins_mut()
-            .iter_mut()
-            .map(|input_pin| input_pin.wait_for_high())
-            .collect();
-        let _ = select_slice(pin!(futs.as_mut_slice())).await;
+        let futs = self.col_pins.each_mut().map(|input_pin| input_pin.wait_for_high());
+        let _ = select_array(futs).await;
     }
 }
 
