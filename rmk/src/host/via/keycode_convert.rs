@@ -87,12 +87,16 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                 }
             },
             Action::User(id) => (id as u16 & 0xF) | 0x7E00,
-            Action::StickyKey(sk) => {
-                match sk.layer {
-                    Some(l) => 0x5280 | (l as u16), // OSL, VIA range (same as old OneShotLayer)
-                    None => 0x52A0 | ((sk.keep.into_packed_bits() & 0x1F) as u16), // OSM, VIA range (same as old OneShotModifier)
+            Action::StickyKey(sk) => match (sk.key, sk.layer) {
+                // OSL, VIA range (same as old OneShotLayer)
+                (_, Some(layer)) if layer < 32 => 0x5280 | layer as u16,
+                // OSM, VIA range (same as old OneShotModifier)
+                (KeyCode::Hid(HidKeyCode::No), None) => 0x52A0 | ((sk.keep.into_packed_bits() & 0x1F) as u16),
+                _ => {
+                    warn!("StickyKey {:?} is not supported by VIA", sk);
+                    0
                 }
-            }
+            },
             _ => {
                 warn!("Action: {:?} in vial is not supported yet", a);
                 0
@@ -721,5 +725,16 @@ mod test {
         assert_eq!(via, 0x5285);
         let roundtrip = from_via_keycode(via);
         assert_eq!(roundtrip, osl_5);
+    }
+
+    #[test]
+    fn test_vial_does_not_convert_tap_key_sticky_key_to_osm() {
+        let tap_key_sticky_key = KeyAction::Single(Action::StickyKey(StickyKeyAction {
+            key: KeyCode::Hid(HidKeyCode::Tab),
+            keep: ModifierCombination::LALT,
+            layer: None,
+        }));
+
+        assert_eq!(to_via_keycode(tap_key_sticky_key), 0);
     }
 }
