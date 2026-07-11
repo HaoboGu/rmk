@@ -46,6 +46,8 @@ pub(crate) enum StickyKeyState {
         /// `Some(n)` = OSL shape; `None` = pure-mod or tap-key shape.
         layer: Option<u8>,
         phase: SkPhase,
+        /// Whether the physical StickyKey switch is currently held down.
+        pressed: bool,
         repeat_count: u16,
         deadline: Option<Instant>,
     },
@@ -128,13 +130,20 @@ impl Keyboard<'_> {
                         key: params.key,
                         layer: None,
                         phase: SkPhase::Pressed,
+                        pressed: true,
                         repeat_count: 1,
                         deadline,
                     };
                 }
-                StickyKeyState::Active { mods, deadline: d, .. } => {
+                StickyKeyState::Active {
+                    mods,
+                    pressed,
+                    deadline: d,
+                    ..
+                } => {
                     // Same-shape pure-mod re-press: accumulate (3c) and refresh the deadline.
                     *mods |= params.keep;
+                    *pressed = true;
                     *d = deadline;
                 }
             }
@@ -144,6 +153,9 @@ impl Keyboard<'_> {
             }
         } else {
             // SK released.
+            if let StickyKeyState::Active { pressed, .. } = &mut self.sticky_key_state {
+                *pressed = false;
+            }
             match self.sticky_key_state {
                 StickyKeyState::Active {
                     phase: SkPhase::Pressed,
@@ -205,6 +217,7 @@ impl Keyboard<'_> {
                 key: params.key,
                 layer: Some(layer_num),
                 phase: prev_phase,
+                pressed: true,
                 repeat_count: 1,
                 deadline,
             };
@@ -217,8 +230,15 @@ impl Keyboard<'_> {
                 } => {
                     // Released before any other key → arm it for the next key and (re)arm the
                     // deadline so the run-loop race covers expiry.
-                    if let StickyKeyState::Active { phase, deadline: d, .. } = &mut self.sticky_key_state {
+                    if let StickyKeyState::Active {
+                        phase,
+                        pressed,
+                        deadline: d,
+                        ..
+                    } = &mut self.sticky_key_state
+                    {
                         *phase = SkPhase::Latched;
+                        *pressed = false;
                         *d = deadline;
                     }
                 }
@@ -259,11 +279,13 @@ impl Keyboard<'_> {
                         key: params.key,
                         layer: None,
                         phase: SkPhase::Latched,
+                        pressed: true,
                         repeat_count: 1,
                         deadline,
                     };
                 }
                 StickyKeyState::Active {
+                    pressed,
                     repeat_count,
                     deadline: d,
                     ..
@@ -274,6 +296,7 @@ impl Keyboard<'_> {
                     if config.max_repeat > 0 && *repeat_count > config.max_repeat {
                         should_deactivate = true;
                     } else {
+                        *pressed = true;
                         *d = deadline;
                     }
                 }
@@ -292,7 +315,8 @@ impl Keyboard<'_> {
             // Only unregister and report if SK was active (key was registered on press).
             // If max_repeat deactivated SK silently on the press event, the key was never
             // registered, so the release is a no-op.
-            if self.sticky_key_state.is_active() {
+            if let StickyKeyState::Active { pressed, .. } = &mut self.sticky_key_state {
+                *pressed = false;
                 if let KeyCode::Hid(hid_key) = params.key {
                     self.unregister_key(hid_key, event);
                 }
@@ -387,13 +411,7 @@ impl Keyboard<'_> {
         // only happen when the key is held and idle. For layer and tap-key shapes, the
         // deadline fires in the same scenario.
         // Clear the deadline to avoid busy-looping on every iteration.
-        if matches!(
-            self.sticky_key_state,
-            StickyKeyState::Active {
-                phase: SkPhase::Pressed,
-                ..
-            }
-        ) {
+        if matches!(self.sticky_key_state, StickyKeyState::Active { pressed: true, .. }) {
             debug!(
                 "StickyKey timeout fired while key is still held — clearing deadline, deferring to physical release"
             );

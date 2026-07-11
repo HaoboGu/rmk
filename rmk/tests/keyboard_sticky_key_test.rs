@@ -690,6 +690,21 @@ fn create_test_keyboard_puremod_sk() -> Keyboard<'static> {
     Keyboard::new(wrap_keymap(KEYMAP_PUREMOD_SK, per_key_config, behavior_config))
 }
 
+// KEYMAP_TAP_SK: tap-key SK at col 0 and a basic key at col 1, for testing a timeout while held.
+const KEYMAP_TAP_SK: [[[KeyAction; 2]; 1]; 1] = [[[sk!(Tab, ModifierCombination::LALT), k!(A)]]];
+
+fn create_test_keyboard_tap_sk() -> Keyboard<'static> {
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
+        sticky_key: StickyKeyConfig {
+            timeout: Duration::from_millis(10),
+            ..StickyKeyConfig::default()
+        },
+        ..BehaviorConfig::default()
+    }));
+    let per_key_config: &'static PositionalConfig<1, 2> = Box::leak(Box::new(PositionalConfig::default()));
+    Keyboard::new(wrap_keymap(KEYMAP_TAP_SK, per_key_config, behavior_config))
+}
+
 /// StickyKey Test 17: Timeout fires while SK is still physically held (Pressed phase).
 ///
 /// The guard in `release_sticky_key_if_active()` must prevent the latch from being
@@ -722,6 +737,26 @@ fn test_sk_timeout_while_held() {
             [0, [0, 0, 0, 0, 0, 0]],                       // A release: LShift consumed with the key
             [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],           // B press: no modifier (SK already consumed)
             [0, [0, 0, 0, 0, 0, 0]],                        // B release
+        ]
+    };
+}
+
+/// StickyKey Test 17b: Timeout fires while a tap-key SK is still physically held.
+///
+/// Tap-key SKs use the `Latched` phase while their physical key is down, so phase alone cannot
+/// tell the timeout handler whether clearing the state is safe. The physical-press flag must keep
+/// the state alive until release so that release unregisters Tab and retains the latched Alt.
+#[test]
+fn test_tap_sk_timeout_while_held() {
+    key_sequence_test! {
+        keyboard: create_test_keyboard_tap_sk(),
+        sequence: [
+            [0, 0, true,  0],  // Press SK(Tab, LAlt)
+            [0, 0, false, 20], // Hold past timeout, then release
+        ],
+        expected_reports: [
+            [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],
+            [KC_LALT, [0, 0, 0, 0, 0, 0]],
         ]
     };
 }
