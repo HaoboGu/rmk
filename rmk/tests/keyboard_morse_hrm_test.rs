@@ -1647,7 +1647,7 @@ fn test_rolling_release_order() {
             .release(0, 2) // Release mt!(C, LGui)
             .delay(100)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // FIXME: Maybe B-C-A is the expected order
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Resolve released B as tap first
             .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]))
             .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(A), 0, 0, 0, 0]))
             .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), kc_to_u8!(A), 0, 0, 0, 0]))
