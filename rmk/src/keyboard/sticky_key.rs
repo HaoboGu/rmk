@@ -32,6 +32,37 @@ pub(crate) enum SkPhase {
     Held,
 }
 
+/// An optional deadline stored without `Option<Instant>`'s extra discriminant.
+///
+/// `Duration::MAX` already means "no timeout" in sticky-key configuration, so
+/// `Instant::MAX` is reserved as the inactive sentinel here.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct StickyKeyDeadline(Instant);
+
+impl StickyKeyDeadline {
+    const NONE: Self = Self(Instant::MAX);
+
+    fn from_timeout(timeout: Duration) -> Self {
+        if timeout == Duration::MAX {
+            Self::NONE
+        } else {
+            Self(Instant::now() + timeout)
+        }
+    }
+
+    const fn get(self) -> Option<Instant> {
+        if self.0.as_ticks() == Instant::MAX.as_ticks() {
+            None
+        } else {
+            Some(self.0)
+        }
+    }
+
+    fn clear(&mut self) {
+        *self = Self::NONE;
+    }
+}
+
 /// State for the StickyKey action.
 #[derive(Clone, Copy, Default, Debug)]
 pub(crate) enum StickyKeyState {
@@ -51,8 +82,36 @@ pub(crate) enum StickyKeyState {
         /// Whether the physical StickyKey switch is currently held down.
         pressed: bool,
         repeat_count: u16,
-        deadline: Option<Instant>,
+        deadline: StickyKeyDeadline,
     },
+}
+
+#[cfg(test)]
+mod size_tests {
+    use core::mem::size_of;
+
+    use super::*;
+
+    #[allow(dead_code)]
+    enum StateWithOptionDeadline {
+        None,
+        Active {
+            source: KeyboardEventPos,
+            mods: ModifierCombination,
+            key: KeyCode,
+            layer: Option<u8>,
+            phase: SkPhase,
+            pressed: bool,
+            repeat_count: u16,
+            deadline: Option<Instant>,
+        },
+    }
+
+    #[test]
+    fn sentinel_deadline_reduces_sticky_key_state_size() {
+        assert_eq!(size_of::<StickyKeyDeadline>(), size_of::<Instant>());
+        assert!(size_of::<StickyKeyState>() < size_of::<StateWithOptionDeadline>());
+    }
 }
 
 impl StickyKeyState {
@@ -69,7 +128,7 @@ impl StickyKeyState {
 
     pub fn deadline(&self) -> Option<Instant> {
         match self {
-            StickyKeyState::Active { deadline, .. } => *deadline,
+            StickyKeyState::Active { deadline, .. } => deadline.get(),
             StickyKeyState::None => None,
         }
     }
@@ -112,7 +171,7 @@ impl Keyboard<'_> {
     /// terminating key, honor `activate_on_keypress`/`quick_release`.
     async fn process_sticky_pure_mod(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
         let config = self.keymap.sticky_key_config();
-        let deadline = (config.timeout != Duration::MAX).then(|| Instant::now() + config.timeout);
+        let deadline = StickyKeyDeadline::from_timeout(config.timeout);
 
         if event.pressed {
             // Single mutually-exclusive latch: a pure-mod press accumulates (3c) onto an
@@ -192,7 +251,7 @@ impl Keyboard<'_> {
     async fn process_sticky_layer(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
         let layer_num = params.layer.expect("layer shape requires a layer");
         let config = self.keymap.sticky_key_config();
-        let deadline = (config.timeout != Duration::MAX).then(|| Instant::now() + config.timeout);
+        let deadline = StickyKeyDeadline::from_timeout(config.timeout);
 
         if event.pressed {
             // Latch-replacement rule on a single mutually-exclusive latch: a layer SK press
@@ -270,7 +329,7 @@ impl Keyboard<'_> {
     /// `activate_on_keypress`/`quick_release`.
     async fn process_sticky_tap_key(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
         let config = self.keymap.sticky_key_config();
-        let deadline = (config.timeout != Duration::MAX).then(|| Instant::now() + config.timeout);
+        let deadline = StickyKeyDeadline::from_timeout(config.timeout);
 
         if event.pressed {
             // A repeated press of the same physical tap-key cycles it. A different tap-key, like
@@ -386,7 +445,7 @@ impl Keyboard<'_> {
                 // released (held-alt-tab use case). Clear the run-loop deadline so it does not
                 // spuriously time-out while held.
                 *phase = SkPhase::Held;
-                *deadline = None;
+                deadline.clear();
                 false
             }
             StickyKeyState::Active {
@@ -438,7 +497,7 @@ impl Keyboard<'_> {
                 "StickyKey timeout fired while key is still held — clearing deadline, deferring to physical release"
             );
             if let StickyKeyState::Active { deadline, .. } = &mut self.sticky_key_state {
-                *deadline = None;
+                deadline.clear();
             }
             return;
         }
