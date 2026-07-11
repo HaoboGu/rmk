@@ -158,21 +158,27 @@ impl StickyKeyState {
 
 impl Keyboard<'_> {
     pub(crate) async fn process_action_sticky_key(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
+        let config = self.keymap.sticky_key_config();
+        let deadline = StickyKeyDeadline::from_timeout(config.timeout);
+
         if params.layer.is_some() {
-            self.process_sticky_layer(params, event).await;
+            self.process_sticky_layer(params, event, deadline).await;
         } else if params.key == KeyCode::Hid(HidKeyCode::No) {
-            self.process_sticky_pure_mod(params, event).await;
+            self.process_sticky_pure_mod(params, event, config, deadline).await;
         } else {
-            self.process_sticky_tap_key(params, event).await;
+            self.process_sticky_tap_key(params, event, config, deadline).await;
         }
     }
 
     /// Pure-mod (OSM) shape: accumulate the modifier across taps, apply it through the
     /// terminating key, honor `activate_on_keypress`/`quick_release`.
-    async fn process_sticky_pure_mod(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
-        let config = self.keymap.sticky_key_config();
-        let deadline = StickyKeyDeadline::from_timeout(config.timeout);
-
+    async fn process_sticky_pure_mod(
+        &mut self,
+        params: StickyKeyAction,
+        event: KeyboardEvent,
+        config: crate::config::StickyKeyConfig,
+        deadline: StickyKeyDeadline,
+    ) {
         if event.pressed {
             // Single mutually-exclusive latch: a pure-mod press accumulates (3c) onto an
             // existing pure-mod latch, but REPLACES any other shape (layer or tap-key).
@@ -248,10 +254,13 @@ impl Keyboard<'_> {
     /// `process_action_osl`. The layer carries no modifier, so consuming it emits no HID
     /// report — the foreign key resolves on the active layer in `process_action_key` before
     /// the latch is consumed.
-    async fn process_sticky_layer(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
+    async fn process_sticky_layer(
+        &mut self,
+        params: StickyKeyAction,
+        event: KeyboardEvent,
+        deadline: StickyKeyDeadline,
+    ) {
         let layer_num = params.layer.expect("layer shape requires a layer");
-        let config = self.keymap.sticky_key_config();
-        let deadline = StickyKeyDeadline::from_timeout(config.timeout);
 
         if event.pressed {
             // Latch-replacement rule on a single mutually-exclusive latch: a layer SK press
@@ -327,10 +336,13 @@ impl Keyboard<'_> {
     /// Tap-key (alt-tab) shape: send `keep` mods + `key` on every press, hold the mods
     /// between presses, cycle on each press (`max_repeat`). Ignores
     /// `activate_on_keypress`/`quick_release`.
-    async fn process_sticky_tap_key(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
-        let config = self.keymap.sticky_key_config();
-        let deadline = StickyKeyDeadline::from_timeout(config.timeout);
-
+    async fn process_sticky_tap_key(
+        &mut self,
+        params: StickyKeyAction,
+        event: KeyboardEvent,
+        config: crate::config::StickyKeyConfig,
+        deadline: StickyKeyDeadline,
+    ) {
         if event.pressed {
             // A repeated press of the same physical tap-key cycles it. A different tap-key, like
             // any foreign StickyKey shape, replaces the active latch so it gets its own key and
